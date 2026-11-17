@@ -81,6 +81,9 @@ public class MedicationTimelineEntryDTO {
 
     /** E9 provenance — the hospital that prescribed or dispensed; equals the acting hospital for a local entry. */
     private UUID hospitalId;
+
+    /** D1573: when the prescriber signed a prescription row (null for fills and unsigned orders). */
+    private LocalDateTime signedAt;
     private String hospitalName;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")

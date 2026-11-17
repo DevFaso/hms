@@ -1,6 +1,12 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { isOrderCancellable } from '../shared/order-lifecycle';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
+import { DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Component,
   computed,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -10,7 +16,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { debounceTime, switchMap } from 'rxjs/operators';
 import {
   ConsultationService,
   ConsultationResponse,
@@ -21,7 +27,7 @@ import {
 } from '../services/consultation.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, isPhysician, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
@@ -30,7 +36,18 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverInstant, toServerDateTime } from '../shared/date-utils';
+import { hasValue, missingRequiredMessage } from '../shared/required-fields';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { labelledRefusalReason, refusalReason } from '../shared/refusal-reason';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthorshipService } from '../shared/authorship.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 /** Mirrors the @PreAuthorize on GET /consultations/mine. Update both together. */
 const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
 
@@ -38,6 +55,13 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
   selector: 'app-consultations',
   standalone: true,
   imports: [
+    DateTimePipe,
+    ListEscapeDirective,
+    SubmitGuardDirective,
+    PersonNamePipe,
+    ModalDialogDirective,
+    PatientSublinePipe,
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -50,7 +74,9 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
   styleUrl: './consultations.scss',
 })
 export class ConsultationsComponent implements OnInit {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly consultService = inject(ConsultationService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly staffService = inject(StaffService);
@@ -94,12 +120,17 @@ export class ConsultationsComponent implements OnInit {
   consultations = signal<ConsultationResponse[]>([]);
   filtered = signal<ConsultationResponse[]>([]);
   loading = signal(true);
+  readonly loadFailed = signal(false);
+  private readonly destroyRef = inject(DestroyRef);
+  private listRequest = 0;
   searchTerm = '';
   activeTab = signal<'all' | 'pending' | 'active' | 'completed' | 'mine' | 'overdue'>('all');
   selectedConsult = signal<ConsultationResponse | null>(null);
 
   stats = signal<ConsultationStats | null>(null);
   statsLoading = signal(false);
+  readonly statsFailed = signal(false);
+  private statsRequest = 0;
   showStats = signal(false);
 
   hospitals = signal<HospitalResponse[]>([]);
@@ -191,6 +222,10 @@ export class ConsultationsComponent implements OnInit {
    * the list and the summary stats under the new scope.
    */
   onScopeChange(_hospitalId: string | null): void {
+    this.selectedConsult.set(null);
+    this.searchTerm = '';
+    this.consultations.set([]);
+    this.filtered.set([]);
     this.load();
     this.loadStats();
   }
@@ -233,7 +268,6 @@ export class ConsultationsComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           // ── TENANT ISOLATION: scope patient search to active hospital ──
@@ -243,7 +277,8 @@ export class ConsultationsComponent implements OnInit {
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -285,7 +320,8 @@ export class ConsultationsComponent implements OnInit {
   }
 
   private patientSearchHospitalId(): string | undefined {
-    return this.form.hospitalId || this.roleContext.activeHospitalId || undefined;
+    // QA D912 (#967 review): the chip's hospital for a super-admin, not their home one.
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
   }
 
   openCreate(): void {
@@ -304,20 +340,78 @@ export class ConsultationsComponent implements OnInit {
     this.showModal.set(false);
   }
 
+  /** QA D890: the request's required fields, by the label the form shows them under. */
+  private static readonly FIELD_LABELS: Readonly<Record<string, string>> = {
+    patientId: 'PATIENTS.PATIENT',
+    hospitalId: 'ENCOUNTERS.HOSPITAL',
+    consultationType: 'CONSULTATIONS.TYPE',
+    urgency: 'CONSULTATIONS.URGENCY',
+    specialtyRequested: 'CONSULTATIONS.SPECIALTY_REQUESTED',
+    reasonForConsult: 'CONSULTATIONS.REASON_FOR_CONSULT',
+  };
+
   submitForm(): void {
+    // QA D890: an empty form was posted and answered with a generic toast.
+    const required = [
+      { id: 'con-patientSearch', labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
+      { id: 'con-hospitalId', labelKey: 'ENCOUNTERS.HOSPITAL', value: this.form.hospitalId },
+      { id: 'con-type', labelKey: 'CONSULTATIONS.TYPE', value: this.form.consultationType },
+      { id: 'con-urgency', labelKey: 'CONSULTATIONS.URGENCY', value: this.form.urgency },
+      {
+        id: 'con-specialty',
+        labelKey: 'CONSULTATIONS.SPECIALTY_REQUESTED',
+        value: this.form.specialtyRequested,
+      },
+      {
+        id: 'con-reason',
+        labelKey: 'CONSULTATIONS.REASON_FOR_CONSULT',
+        value: this.form.reasonForConsult,
+      },
+    ];
+    const allIds = required.map((f) => f.id);
+    const missing = missingRequiredMessage(this.translate, required);
+    if (missing) {
+      // QA D1306 (round 28): every blank field is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        required.filter((f) => !hasValue(f.value)).map((f) => f.id),
+        allIds,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
+      this.toast.error(missing);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], allIds, '');
     this.saving.set(true);
     this.consultService.create(this.form).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('CONSULTATIONS.CREATE_SUCCESS'));
         this.closeModal();
         this.saving.set(false);
-        this.load();
+        this.reload();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CONSULTATIONS.CREATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          labelledRefusalReason(err, this.translate, ConsultationsComponent.FIELD_LABELS) ??
+            this.translate.instant('CONSULTATIONS.CREATE_FAILED'),
+        );
         this.saving.set(false);
       },
     });
+  }
+
+  /**
+   * QA D891: after a change the list AND the stat cards are fetched again;
+   * the cards kept the counts of the page load until a reload.
+   */
+  reload(): void {
+    this.load();
+    this.loadStats();
+  }
+
+  /** QA D1081: a consultation request is withdrawn by the clinician who made it. */
+  canCancelConsultation(c: ConsultationResponse): boolean {
+    return isOrderCancellable(c.status) && this.authorship.isAuthor(c);
   }
 
   confirmCancel(c: ConsultationResponse): void {
@@ -341,16 +435,20 @@ export class ConsultationsComponent implements OnInit {
         this.toast.success(this.translate.instant('CONSULTATIONS.CANCEL_SUCCESS'));
         this.cancelDeleteAction();
         this.deleting.set(false);
-        this.load();
+        this.reload();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CONSULTATIONS.CANCEL_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('CONSULTATIONS.CANCEL_FAILED'),
+        );
         this.deleting.set(false);
       },
     });
   }
 
   load(): void {
+    const request = ++this.listRequest;
+    this.loadFailed.set(false);
     this.loading.set(true);
     const tab = this.activeTab();
     const source$ =
@@ -362,13 +460,16 @@ export class ConsultationsComponent implements OnInit {
             )
           : this.consultService.getAll();
 
-    source$.subscribe({
+    source$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (list) => {
+        if (request !== this.listRequest) return;
         this.consultations.set(Array.isArray(list) ? list : []);
         this.applyFilter();
         this.loading.set(false);
       },
       error: () => {
+        if (request !== this.listRequest) return;
+        this.loadFailed.set(true);
         this.toast.error(this.translate.instant('CONSULTATIONS.LOAD_FAILED'));
         this.loading.set(false);
       },
@@ -376,6 +477,9 @@ export class ConsultationsComponent implements OnInit {
   }
 
   loadStats(): void {
+    const request = ++this.statsRequest;
+    this.stats.set(null);
+    this.statsFailed.set(false);
     this.statsLoading.set(true);
     // effectiveHospitalIdForRequest, NOT activeHospitalId: the latter is the
     // JWT primary hospital and is non-null even for a super-admin in global
@@ -386,12 +490,18 @@ export class ConsultationsComponent implements OnInit {
     // query param.
     this.consultService
       .getStats(this.roleContext.effectiveHospitalIdForRequest() ?? undefined)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (s) => {
+          if (request !== this.statsRequest) return;
           this.stats.set(s);
           this.statsLoading.set(false);
         },
-        error: () => this.statsLoading.set(false),
+        error: () => {
+          if (request !== this.statsRequest) return;
+          this.statsFailed.set(true);
+          this.statsLoading.set(false);
+        },
       });
   }
 
@@ -419,9 +529,9 @@ export class ConsultationsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (c) =>
-          (c.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(c.patientName, term) ||
           (c.specialtyRequested ?? '').toLowerCase().includes(term) ||
-          (c.consultantName ?? '').toLowerCase().includes(term),
+          textMatches(c.consultantName, term),
       );
     }
     this.filtered.set(list);
@@ -501,7 +611,8 @@ export class ConsultationsComponent implements OnInit {
     this.assignStaffLoading.set(true);
     this.staffService.list(hospitalId).subscribe({
       next: (staff) => {
-        this.assignStaff.set(staff.filter((s) => s.active));
+        // QA D715: the backend accepts only a doctor at this hospital as consultant.
+        this.assignStaff.set(staff.filter((s) => s.active && isPhysician(s)));
         this.assignStaffLoading.set(false);
       },
       error: () => {
@@ -530,10 +641,12 @@ export class ConsultationsComponent implements OnInit {
           this.toast.success(this.translate.instant('CONSULTATIONS.REASSIGN_SUCCESS'));
           this.closeAssignModal();
           this.assigning.set(false);
-          this.load();
+          this.reload();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CONSULTATIONS.REASSIGN_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CONSULTATIONS.REASSIGN_FAILED'),
+          );
           this.assigning.set(false);
         },
       });
@@ -543,10 +656,12 @@ export class ConsultationsComponent implements OnInit {
           this.toast.success(this.translate.instant('CONSULTATIONS.ASSIGN_SUCCESS'));
           this.closeAssignModal();
           this.assigning.set(false);
-          this.load();
+          this.reload();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CONSULTATIONS.ASSIGN_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CONSULTATIONS.ASSIGN_FAILED'),
+          );
           this.assigning.set(false);
         },
       });
@@ -584,7 +699,8 @@ export class ConsultationsComponent implements OnInit {
   isOverdue(c: ConsultationResponse): boolean {
     if (!c.slaDueBy) return false;
     if (['COMPLETED', 'CANCELLED', 'DECLINED'].includes(c.status)) return false;
-    return new Date(c.slaDueBy) < new Date();
+    // #948 review: slaDueBy is a zone-less UTC server time.
+    return serverInstant(c.slaDueBy) < new Date();
   }
 
   getTimelineEvents(c: ConsultationResponse): { label: string; date: string }[] {
@@ -603,7 +719,7 @@ export class ConsultationsComponent implements OnInit {
     if (c.cancelledAt)
       events.push({ label: label('CONSULTATIONS.CANCELLED'), date: c.cancelledAt });
     if (c.declinedAt) events.push({ label: label('CONSULTATIONS.DECLINED'), date: c.declinedAt });
-    return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return events.sort((a, b) => serverInstant(a.date).getTime() - serverInstant(b.date).getTime());
   }
 
   /* ── Schedule workflow ── */
@@ -627,7 +743,7 @@ export class ConsultationsComponent implements OnInit {
     this.consultService
       .schedule(
         this.schedulingItem()!.id,
-        this.scheduleForm.scheduledAt,
+        toServerDateTime(this.scheduleForm.scheduledAt), // QA D777/D784: the picker gives local wall time; the server keeps UTC.
         this.scheduleForm.scheduleNote || undefined,
       )
       .subscribe({
@@ -635,10 +751,12 @@ export class ConsultationsComponent implements OnInit {
           this.toast.success(this.translate.instant('CONSULTATIONS.SCHEDULE_SUCCESS'));
           this.closeScheduleModal();
           this.scheduling.set(false);
-          this.load();
+          this.reload();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CONSULTATIONS.SCHEDULE_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CONSULTATIONS.SCHEDULE_FAILED'),
+          );
           this.scheduling.set(false);
         },
       });
@@ -649,9 +767,10 @@ export class ConsultationsComponent implements OnInit {
     this.consultService.acknowledge(c.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('CONSULTATIONS.ACK_SUCCESS'));
-        this.load();
+        this.reload();
       },
-      error: () => this.toast.error(this.translate.instant('CONSULTATIONS.ACK_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CONSULTATIONS.ACK_FAILED')),
     });
   }
 
@@ -660,9 +779,12 @@ export class ConsultationsComponent implements OnInit {
     this.consultService.start(c.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('CONSULTATIONS.START_SUCCESS'));
-        this.load();
+        this.reload();
       },
-      error: () => this.toast.error(this.translate.instant('CONSULTATIONS.START_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('CONSULTATIONS.START_FAILED'),
+        ),
     });
   }
 
@@ -701,10 +823,12 @@ export class ConsultationsComponent implements OnInit {
           this.toast.success(this.translate.instant('CONSULTATIONS.COMPLETE_SUCCESS'));
           this.closeCompleteModal();
           this.completing.set(false);
-          this.load();
+          this.reload();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CONSULTATIONS.COMPLETE_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CONSULTATIONS.COMPLETE_FAILED'),
+          );
           this.completing.set(false);
         },
       });
@@ -734,10 +858,12 @@ export class ConsultationsComponent implements OnInit {
         this.toast.success(this.translate.instant('CONSULTATIONS.DECLINE_SUCCESS'));
         this.closeDeclineModal();
         this.declining.set(false);
-        this.load();
+        this.reload();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CONSULTATIONS.DECLINE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('CONSULTATIONS.DECLINE_FAILED'),
+        );
         this.declining.set(false);
       },
     });

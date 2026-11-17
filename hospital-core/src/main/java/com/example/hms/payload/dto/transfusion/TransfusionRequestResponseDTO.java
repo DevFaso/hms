@@ -20,6 +20,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class TransfusionRequestResponseDTO {
 
+    /** Existing when a recorded death was disputed: a prescriber's review comes first. */
+    private boolean heldForReview;
+
     private UUID id;
     private UUID patientId;
     private String patientName;
@@ -32,6 +35,11 @@ public class TransfusionRequestResponseDTO {
     private TransfusionUrgency urgency;
     private TransfusionRequestStatus status;
     private String requestedByName;
+    /**
+     * QA D1081 (D995 class): the user the server's author check compares the caller with, so a
+     * list offers the author-only actions (cancel, edit, sign) on this row only to its author.
+     */
+    private java.util.UUID authorUserId;
     private LocalDateTime requestedAt;
     private LocalDateTime requiredBy;
     private String cancelReason;
@@ -46,5 +54,7 @@ public class TransfusionRequestResponseDTO {
 
     private List<BloodUnitResponseDTO> units;
     private List<CrossmatchResponseDTO> crossmatches;
+    /** Every emergency release on this request, newest first, one per bag; empty on a list row. */
+    private List<EmergencyBloodReleaseResponseDTO> emergencyReleases;
     private LocalDateTime createdAt;
 }

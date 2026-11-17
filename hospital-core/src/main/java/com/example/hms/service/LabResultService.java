@@ -49,13 +49,25 @@ public interface LabResultService {
 
     Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale);
 
+    /**
+     * QA D211: the staff list. {@code includeUnreleased} is true only for
+     * laboratory staff; {@code patientId} (nullable) narrows to one patient.
+     */
+    Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
+                                                 UUID patientId, boolean includeUnreleased);
+
+    /** QA D781: as above, also narrowed to one lab order when {@code labOrderId} is set. */
+    Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
+                                                 UUID patientId, UUID labOrderId, boolean includeUnreleased);
+
+    /** QA D211: an unreleased result is not found for a non-laboratory reader. */
+    LabResultResponseDTO getLabResultById(UUID id, Locale locale, boolean includeUnreleased);
+
     LabResultResponseDTO updateLabResult(UUID id, LabResultRequestDTO requestDTO, Locale locale);
 
     void deleteLabResult(UUID id, Locale locale);
 
     List<LabResultResponseDTO> getLabResultsByLabOrderId(UUID labOrderId, Locale locale);
-
-    List<LabResultResponseDTO> getLabResultsByPatientId(UUID patientId, Locale locale);
 
     void acknowledgeLabResult(UUID id, Locale locale);
 
@@ -71,7 +83,33 @@ public interface LabResultService {
         com.example.hms.payload.dto.CriticalValueReadBackRequestDTO request,
         Locale locale);
 
+    /**
+     * Releases a result. When the caller also entered it (a single-reviewer
+     * laboratory, D58) the release must be confirmed explicitly with
+     * {@code selfReleaseConfirmed}; it is then audited as a self-release.
+     */
+    LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, Locale locale);
+
+    /**
+     * QA D1092: as {@link #releaseLabResult(UUID, boolean, Locale)}; a result
+     * no range can grade (its unit matches no range and converts to none) is
+     * released only with {@code ungradedConfirmed}, and its in-basket item
+     * reaches the ordering clinician flagged for review.
+     */
+    LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed,
+                                          Locale locale);
+
+    /** A release that has not confirmed a self-release. */
     LabResultResponseDTO releaseLabResult(UUID id, Locale locale);
+
+    /**
+     * QA D938/D178: everything a release tells people (the ordering
+     * clinician's in-basket item, the patient's notification), for a result a
+     * path OUTSIDE this service released - today the HL7 auto-release. Call it
+     * inside the transaction that set {@code released}; the writes are
+     * registered for after its commit.
+     */
+    void announceReleasedResult(com.example.hms.model.LabResult result);
 
     /**
      * The release worklist of the caller's hospital: every result nobody
@@ -82,9 +120,24 @@ public interface LabResultService {
     LabResultResponseDTO signLabResult(UUID id, LabResultSignatureRequestDTO request, Locale locale);
 
     // Enhanced trending and comparison methods (Story #5)
-    LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale);
+    default LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale) {
+        return compareLabResults(currentResultId, locale, true);
+    }
 
-    List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale);
+    /**
+     * QA D211: {@code includeUnreleased} is false for a reader outside the
+     * laboratory, who then gets neither an unreleased compared result (404)
+     * nor unreleased points in its trend.
+     */
+    LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale, boolean includeUnreleased);
+
+    default List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale) {
+        return compareSequentialResults(patientId, testDefinitionId, locale, true);
+    }
+
+    /** QA D211: unreleased results are left out unless {@code includeUnreleased}. */
+    List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale,
+                                                          boolean includeUnreleased);
 
     List<LabResultResponseDTO> getCriticalResults(UUID hospitalId, LocalDateTime since, Locale locale);
 

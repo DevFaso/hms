@@ -10,14 +10,16 @@
       <span class="material-symbols-outlined card-icon total">receipt_long</span>
       <div class="card-info">
         <span class="card-value">{{ totalElements() }}</span
-        ><span class="card-label">{{ 'AUDIT.TOTAL_EVENTS' | translate }}</span>
+        >{{ ' ' }}
+        <span class="card-label">{{ 'AUDIT.TOTAL_EVENTS' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon types">category</span>
       <div class="card-info">
         <span class="card-value">{{ eventTypes().length }}</span
-        ><span class="card-label">{{ 'AUDIT.EVENT_TYPES' | translate }}</span>
+        >{{ ' ' }}
+        <span class="card-label">{{ 'AUDIT.EVENT_TYPES' | translate }}</span>
       </div>
     </div>
   </div>
@@ -45,6 +47,7 @@
       />
       <input
         type="datetime-local"
+        [attr.min]="fromDate || null"
         [(ngModel)]="toDate"
         class="filter-input"
         [attr.aria-label]="'AUDIT.DATE_TO' | translate"
@@ -62,10 +65,11 @@
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
+        [attr.aria-label]="'AUDIT.SEARCH' | translate"
         type="text"
         [placeholder]="'AUDIT.SEARCH' | translate"
         [(ngModel)]="searchTerm"
-        (input)="onEventTypeChange()"
+        (input)="onSearchInput()"
       />
     </div>
   </div>
@@ -75,14 +79,19 @@
       <p>{{ 'AUDIT.LOADING' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length === 0) {
+  @if (!loading() && logs().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">receipt_long</span>
-      <h3>{{ 'AUDIT.NO_LOGS' | translate }}</h3>
-      <p>{{ 'AUDIT.LOGS_WILL_APPEAR' | translate }}</p>
+      @if (searchTerm.trim() || selectedEventType) {
+        <h3>{{ 'AUDIT.NO_MATCHES' | translate }}</h3>
+        <p>{{ 'AUDIT.NO_MATCHES_HINT' | translate }}</p>
+      } @else {
+        <h3>{{ 'AUDIT.NO_LOGS' | translate }}</h3>
+        <p>{{ 'AUDIT.LOGS_WILL_APPEAR' | translate }}</p>
+      }
     </div>
   }
-  @if (!loading() && filtered().length > 0) {
+  @if (!loading() && logs().length > 0) {
     <div class="data-table">
       <table>
         <thead>
@@ -97,10 +106,10 @@
           </tr>
         </thead>
         <tbody>
-          @for (l of filtered(); track l.eventTimestamp + l.userName) {
+          @for (l of logs(); track l.eventTimestamp + l.userName) {
             <tr class="data-row">
               <td class="time-cell">
-                {{ l.eventTimestamp ? (l.eventTimestamp | date: 'medium') : '--' }}
+                {{ l.eventTimestamp ? (l.eventTimestamp | serverTime | dateTime) : '--' }}
               </td>
               <td>
                 <div class="cell-primary">{{ l.userName || '--' }}</div>
@@ -111,8 +120,8 @@
                   l.eventType | enumLabel: 'auditEventType'
                 }}</span>
               </td>
-              <td class="desc-cell">{{ l.eventDescription || '--' }}</td>
-              <td>{{ l.entityType || '--' }}</td>
+              <td class="desc-cell" [title]="l.eventDescription || ''">{{ describe(l) }}</td>
+              <td>{{ entityLabel(l.entityType) }}</td>
               <td>
                 <span class="status-badge {{ getStatusClass(l.status) }}">{{
                   l.status | enumLabel: 'auditStatus'

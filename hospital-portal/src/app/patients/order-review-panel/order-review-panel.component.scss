@@ -1,0 +1,26 @@
+.order-review {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #fff8e1;
+  border-left: 4px solid #b45309;
+
+  h2 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+  }
+}
+
+.order-review-hint {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+}
+
+.order-review-state {
+  font-size: 0.82rem;
+  font-weight: 600;
+
+  &.standing {
+    color: #b45309;
+  }
+}

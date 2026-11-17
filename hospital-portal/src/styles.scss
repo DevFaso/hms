@@ -130,6 +130,31 @@ body {
   line-height: 1.5;
 }
 
+/* QA r44: a long unbroken string typed into a note ("NNNN…", a pasted code or
+   URL) pushed out of its panel. Inherited by every element: a word breaks only
+   when it would otherwise overflow its line, so normal text is unchanged. */
+body {
+  overflow-wrap: break-word;
+}
+
+/* Free text shown as entered (notes, sources, reasons). "anywhere" also lowers
+   the box's minimum width, so it wraps inside a flex or grid cell too, where
+   break-word alone still overflows. Add .free-text to any new free-text display. */
+.free-text,
+.notes-content,
+.detail-notes,
+.range-notes,
+.saved-note,
+.notes-cell,
+.doc-notes,
+.note-history-item,
+.personal-notes,
+.study-notes,
+.vital-notes {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
 a {
   color: inherit;
 }
@@ -219,4 +244,80 @@ button {
   @page {
     margin: 1.5cm;
   }
+}
+
+/* Polish 2026-11-13 (shared/print/print-only.ts): one element printed alone,
+   such as the visit summary open in a dialog over a list. Everything that is
+   neither that element, one of its ancestors, nor inside it stays off paper. */
+@media print {
+  body.print-isolated *:not(:has(.print-root)):not(.print-root):not(.print-root *) {
+    display: none !important;
+  }
+}
+
+/* QA D1072: the message shared/forms/invalid-fields.ts shows under a field a
+   client-side check refused (inserted at run time, so it lives here, outside
+   any component's encapsulated styles). */
+.invalid-field-msg {
+  display: block;
+  margin-top: 4px;
+  color: #b42318;
+  font-size: 0.8rem;
+}
+
+/* QA D1124: the reason a guarded submit refused, on its own line in a button row. */
+.submit-guard-msg {
+  flex-basis: 100%;
+  margin-bottom: 0;
+}
+
+/* QA D1131 / D1190 / D1195 / D1208 (round 22): the question a dialog asks when
+   Escape is pressed over typed text (escape-keeps-typed-text.ts builds it at
+   run time, so its style lives here). */
+.dialog-discard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid #f0b37e;
+  border-radius: 6px;
+  background: #fff7ed;
+}
+
+.dialog-discard p {
+  margin: 0;
+  flex-basis: 100%;
+  color: #7a2e0e;
+  font-weight: 600;
+}
+
+/* QA D1480: a dialog's own .btn-danger is encapsulated in its component and never reaches these
+   buttons, which are built at run time. The shape and colours are the dialogs' own. */
+.dialog-discard button {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dialog-discard .btn-secondary {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.dialog-discard .btn-danger {
+  background: #b42318;
+  border: none;
+  color: #fff;
+}
+
+/* QA D1203 (round 22): a fieldset's default min-width is its content's
+   min-content, so a row of inputs inside one widened the dialog past the
+   screen. Every fieldset of the portal shrinks with its container. */
+fieldset {
+  min-width: 0;
 }

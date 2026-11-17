@@ -20,6 +20,12 @@ import java.util.UUID;
 public class EncounterNoteResponseDTO extends EncounterNoteBaseDTO {
     private UUID id;
     private LocalDateTime updatedAt;
+
+    /* QA D831: who wrote this entry. A stay holds one entry per progress note
+       and author, so each entry says whose it is. */
+    private UUID authorUserId;
+    private String authorName;
+    private String authorCredentials;
     private List<EncounterNoteAddendumResponseDTO> addenda;
     private List<EncounterLinkedArtifactDTO> linkedArtifacts;
 

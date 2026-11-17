@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { RestrictedRows } from './patient.service';
+import { backgroundRequestOptions } from './ws-transport';
 
 /**
  * Wire shapes for {@code GET /api/patients/:patientId/storyboard}.
@@ -81,9 +82,15 @@ export interface PatientStoryboard {
   allergies: StoryboardAllergy[];
   problems: StoryboardProblem[];
   activeEncounter?: StoryboardActiveEncounter | null;
+  /** QA D252: the latest finished visit, sent only when none is open. */
+  lastEncounter?: StoryboardActiveEncounter | null;
   codeStatus?: StoryboardCodeStatus | null;
   hasHighSeverityAllergy: boolean;
   hasChronicProblem: boolean;
+  /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
+  allergiesWithheld?: boolean;
+  /** QA D504 — the opt-out held back other hospitals' rows from every clinical list on this read. */
+  recordsWithheld?: boolean;
   /** E9 #64 — problems withheld under D3, per recording hospital. */
   restrictedRows?: RestrictedRows[];
   hospitalId?: string | null;
@@ -104,6 +111,10 @@ export class StoryboardService {
     if (hospitalId) {
       params = params.set('hospitalId', hospitalId);
     }
-    return this.http.get<PatientStoryboard>(`/patients/${patientId}/storyboard`, { params });
+    // QA D1524: a side panel's read; a 403 costs the banner, never the chart (background request).
+    return this.http.get<PatientStoryboard>(`/patients/${patientId}/storyboard`, {
+      params,
+      ...backgroundRequestOptions(),
+    });
   }
 }

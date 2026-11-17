@@ -1,17 +1,31 @@
-<div class="page-container">
+<div class="diagnostics-workspace page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">{{ 'LAB_APPROVAL.TITLE' | translate }}</h1>
+      <p class="diagnostics-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">fact_check</span
+        ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+      </p>
+      <h1 class="page-title" id="diagnostics-lab-approval-queue-title">
+        {{ 'LAB_APPROVAL.TITLE' | translate }}
+      </h1>
       <p class="page-subtitle">{{ 'LAB_APPROVAL.SUBTITLE' | translate }}</p>
     </div>
   </div>
 
+  <div class="diagnostics-context">
+    <p>
+      <strong>{{ loading() ? '—' : definitions().length }}</strong
+      ><span>{{ 'DIAGNOSTICS_WORKSPACE.LOADED_DEFINITIONS' | translate }}</span>
+    </p>
+    <p>{{ 'DIAGNOSTICS_WORKSPACE.APPROVAL_NOTE' | translate }}</p>
+  </div>
   <!-- Status filter tabs -->
   <div class="tabs">
     <button
       class="tab"
       [class.active]="activeStatusFilter() === 'ALL'"
       (click)="setStatusFilter('ALL')"
+      [attr.aria-pressed]="activeStatusFilter() === 'ALL'"
     >
       {{ 'LAB_APPROVAL.TAB.ALL' | translate }} ({{ definitions().length }})
     </button>
@@ -19,6 +33,7 @@
       class="tab"
       [class.active]="activeStatusFilter() === 'DRAFT'"
       (click)="setStatusFilter('DRAFT')"
+      [attr.aria-pressed]="activeStatusFilter() === 'DRAFT'"
     >
       {{ 'LAB_APPROVAL.TAB.DRAFT' | translate }} ({{ countByStatus('DRAFT') }})
     </button>
@@ -26,6 +41,7 @@
       class="tab"
       [class.active]="activeStatusFilter() === 'PENDING_QA_REVIEW'"
       (click)="setStatusFilter('PENDING_QA_REVIEW')"
+      [attr.aria-pressed]="activeStatusFilter() === 'PENDING_QA_REVIEW'"
     >
       {{ 'LAB_APPROVAL.TAB.PENDING_QA' | translate }} ({{ countByStatus('PENDING_QA_REVIEW') }})
     </button>
@@ -33,10 +49,27 @@
       class="tab"
       [class.active]="activeStatusFilter() === 'PENDING_DIRECTOR_APPROVAL'"
       (click)="setStatusFilter('PENDING_DIRECTOR_APPROVAL')"
+      [attr.aria-pressed]="activeStatusFilter() === 'PENDING_DIRECTOR_APPROVAL'"
     >
       {{ 'LAB_APPROVAL.TAB.PENDING_DIRECTOR' | translate }} ({{
         countByStatus('PENDING_DIRECTOR_APPROVAL')
       }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeStatusFilter() === 'APPROVED'"
+      (click)="setStatusFilter('APPROVED')"
+      [attr.aria-pressed]="activeStatusFilter() === 'APPROVED'"
+    >
+      {{ 'LAB_APPROVAL.TAB.APPROVED' | translate }} ({{ countByStatus('APPROVED') }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeStatusFilter() === 'REJECTED'"
+      (click)="setStatusFilter('REJECTED')"
+      [attr.aria-pressed]="activeStatusFilter() === 'REJECTED'"
+    >
+      {{ 'LAB_APPROVAL.TAB.REJECTED' | translate }} ({{ countByStatus('REJECTED') }})
     </button>
   </div>
 
@@ -59,7 +92,12 @@
   }
 
   @if (!loading() && filtered().length > 0) {
-    <div class="data-table">
+    <div
+      class="data-table"
+      tabindex="0"
+      role="region"
+      aria-labelledby="diagnostics-lab-approval-queue-title"
+    >
       <table>
         <thead>
           <tr>
@@ -74,7 +112,15 @@
         <tbody>
           @for (def of filtered(); track def.id) {
             <tr class="data-row">
-              <td class="order-code">{{ def.testCode }}</td>
+              <td class="order-code">
+                {{ def.testCode }}
+                @if ((def.versionNumber ?? 1) > 1) {
+                  <!-- QA D1120: a new version, which replaces the active one on activation -->
+                  <span class="code-badge" data-testid="approval-def-version">{{
+                    'LAB_TEST_CONFIG.VERSION_LABEL' | translate: { version: def.versionNumber }
+                  }}</span>
+                }
+              </td>
               <td>
                 <div class="cell-primary">{{ def.testName }}</div>
                 @if (def.description) {
@@ -82,10 +128,14 @@
                 }
               </td>
               <td>{{ def.category || '—' }}</td>
-              <td>{{ def.sampleType || '—' }}</td>
+              <td>
+                {{
+                  def.sampleType ? (def.sampleType | enumLabel: 'specimenType' : 'asTyped') : '—'
+                }}
+              </td>
               <td>
                 <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
-                  {{ def.approvalStatus | titlecase }}
+                  {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
                 </span>
               </td>
               <td>
@@ -94,13 +144,14 @@
                   <button
                     class="btn-action btn-view"
                     [title]="'LAB_APPROVAL.ACTION.VIEW_TITLE' | translate"
+                    [attr.aria-label]="'LAB_APPROVAL.ACTION.VIEW_TITLE' | translate"
                     (click)="viewDefinition(def)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
 
-                  <!-- DRAFT → submit for QA -->
-                  @if (def.approvalStatus === 'DRAFT') {
+                  <!-- DRAFT or REJECTED (QA D417: resubmission) → submit for QA -->
+                  @if (def.approvalStatus === 'DRAFT' || def.approvalStatus === 'REJECTED') {
                     <button
                       class="btn-action btn-submit"
                       [title]="'LAB_APPROVAL.ACTION.SUBMIT_TITLE' | translate"
@@ -116,14 +167,20 @@
                     def.approvalStatus === 'PENDING_QA_REVIEW' &&
                     (isQualityManager || isLabDirector || isSuperAdmin)
                   ) {
-                    <button
-                      class="btn-action btn-review"
-                      [title]="'LAB_APPROVAL.ACTION.QA_PASS_TITLE' | translate"
-                      (click)="openApprovalModal(def, 'COMPLETE_QA_REVIEW')"
-                    >
-                      <span class="material-symbols-outlined">fact_check</span>
-                      {{ 'LAB_APPROVAL.ACTION.QA_PASS' | translate }}
-                    </button>
+                    @if (!isOwnSubmission(def)) {
+                      <button
+                        class="btn-action btn-review"
+                        [title]="'LAB_APPROVAL.ACTION.QA_PASS_TITLE' | translate"
+                        (click)="openApprovalModal(def, 'COMPLETE_QA_REVIEW')"
+                      >
+                        <span class="material-symbols-outlined">fact_check</span>
+                        {{ 'LAB_APPROVAL.ACTION.QA_PASS' | translate }}
+                      </button>
+                    } @else {
+                      <span class="own-submission-hint" role="note">{{
+                        'LAB_APPROVAL.ACTION.OWN_SUBMISSION_HINT_QA' | translate
+                      }}</span>
+                    }
                     <button
                       class="btn-action btn-reject"
                       [title]="'LAB_APPROVAL.ACTION.REJECT_TITLE' | translate"
@@ -134,19 +191,58 @@
                     </button>
                   }
 
-                  <!-- PENDING_DIRECTOR_APPROVAL → approve / reject (LAB_DIRECTOR only) -->
+                  <!-- PENDING_DIRECTOR_APPROVAL → approve (LAB_DIRECTOR) / reject (QA D723: the
+                       quality manager too, as the server allows) -->
                   @if (
                     def.approvalStatus === 'PENDING_DIRECTOR_APPROVAL' &&
-                    (isLabDirector || isSuperAdmin)
+                    (isLabDirector || isQualityManager || isSuperAdmin)
                   ) {
+                    @if (isLabDirector || isSuperAdmin) {
+                      @if (canApprove(def)) {
+                        <button
+                          class="btn-action btn-approve"
+                          [title]="'LAB_APPROVAL.ACTION.APPROVE_TITLE' | translate"
+                          (click)="openApprovalModal(def, 'APPROVE')"
+                        >
+                          <span class="material-symbols-outlined">verified</span>
+                          {{ 'LAB_APPROVAL.ACTION.APPROVE' | translate }}
+                        </button>
+                      } @else {
+                        <span class="own-submission-hint" role="note">{{
+                          (isOwnReview(def)
+                            ? 'LAB_APPROVAL.ACTION.OWN_REVIEW_HINT_APPROVE'
+                            : 'LAB_APPROVAL.ACTION.OWN_SUBMISSION_HINT_APPROVE'
+                          ) | translate
+                        }}</span>
+                      }
+                    }
+                    <button
+                      class="btn-action btn-reject"
+                      [title]="'LAB_APPROVAL.ACTION.REJECT_TITLE' | translate"
+                      (click)="openApprovalModal(def, 'REJECT')"
+                    >
+                      <span class="material-symbols-outlined">cancel</span>
+                      {{ 'LAB_APPROVAL.ACTION.REJECT' | translate }}
+                    </button>
+                  }
+
+                  <!-- APPROVED → activate (D124: LAB_DIRECTOR, LAB_MANAGER) -->
+                  @if (def.approvalStatus === 'APPROVED' && canActivate) {
                     <button
                       class="btn-action btn-approve"
-                      [title]="'LAB_APPROVAL.ACTION.APPROVE_TITLE' | translate"
-                      (click)="openApprovalModal(def, 'APPROVE')"
+                      [title]="'LAB_APPROVAL.ACTION.ACTIVATE_TITLE' | translate"
+                      (click)="openApprovalModal(def, 'ACTIVATE')"
                     >
-                      <span class="material-symbols-outlined">verified</span>
-                      {{ 'LAB_APPROVAL.ACTION.APPROVE' | translate }}
+                      <span class="material-symbols-outlined">play_circle</span>
+                      {{ 'LAB_APPROVAL.ACTION.ACTIVATE' | translate }}
                     </button>
+                  }
+
+                  <!-- QA D417: an approved definition can be sent back for correction -->
+                  @if (
+                    def.approvalStatus === 'APPROVED' &&
+                    (isLabDirector || isQualityManager || isSuperAdmin)
+                  ) {
                     <button
                       class="btn-action btn-reject"
                       [title]="'LAB_APPROVAL.ACTION.REJECT_TITLE' | translate"
@@ -181,14 +277,23 @@
 <!-- ══ Definition Detail Panel ════════════════════════════════════════ -->
 @if (selectedDefinition(); as def) {
   <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-    <div class="detail-panel">
+    <div
+      class="detail-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-approval-dialog-title-1"
+      appModalDialog
+      (escaped)="closeDetail()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
       <div class="panel-header">
-        <h2>
+        <h2 id="lab-approval-dialog-title-1">
           {{ def.testName }} <span class="code-badge">{{ def.testCode }}</span>
         </h2>
         <button
           class="close-btn"
           [title]="'LAB_APPROVAL.ACTION.CLOSE_TITLE' | translate"
+          [attr.aria-label]="'LAB_APPROVAL.ACTION.CLOSE_TITLE' | translate"
           (click)="closeDetail()"
         >
           <span class="material-symbols-outlined">close</span>
@@ -204,12 +309,15 @@
           </div>
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.SAMPLE_TYPE' | translate }}</span>
-            <span class="field-value">{{ def.sampleType || '—' }}</span>
+            <span class="field-value">{{
+              def.sampleType ? (def.sampleType | enumLabel: 'specimenType' : 'asTyped') : '—'
+            }}</span>
           </div>
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.APPROVAL_STATUS' | translate }}</span>
-            <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
-              {{ def.approvalStatus | titlecase }}
+            {{ ' '
+            }}<span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
+              {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
             </span>
           </div>
           @if (def.rejectionReason) {
@@ -217,7 +325,7 @@
               <span class="field-label">{{
                 'LAB_APPROVAL.FIELD.REJECTION_REASON' | translate
               }}</span>
-              <span class="field-value rejection">{{ def.rejectionReason }}</span>
+              {{ ' ' }}<span class="field-value rejection">{{ def.rejectionReason }}</span>
             </div>
           }
         </div>
@@ -250,8 +358,11 @@
             @for (study of validationStudies(); track study.id) {
               <div class="study-card">
                 <div class="study-card-header">
-                  <span class="study-type">{{ study.studyType }}</span>
-                  <span class="status-badge" [class]="studyPassedClass(study.passed)">
+                  <span class="study-type">{{
+                    study.studyType | enumLabel: 'validationStudyType'
+                  }}</span>
+                  {{ ' '
+                  }}<span class="status-badge" [class]="studyPassedClass(study.passed)">
                     {{
                       (study.passed ? 'LAB_APPROVAL.STUDIES.PASSED' : 'LAB_APPROVAL.STUDIES.FAILED')
                         | translate
@@ -260,6 +371,7 @@
                   <button
                     class="btn-icon delete-btn"
                     [title]="'LAB_APPROVAL.STUDIES.DELETE_TITLE' | translate"
+                    [attr.aria-label]="'LAB_APPROVAL.STUDIES.DELETE_TITLE' | translate"
                     (click)="deleteStudy(study)"
                   >
                     <span class="material-symbols-outlined">delete</span>
@@ -269,7 +381,9 @@
                   <div class="study-meta">
                     <span
                       ><strong>{{ 'LAB_APPROVAL.STUDIES.DATE_LABEL' | translate }}</strong>
-                      {{ study.studyDate }}</span
+                      {{
+                        study.studyDate ? (study.studyDate | serverTime | date: 'mediumDate') : '—'
+                      }}</span
                     >
                     @if (study.performedByDisplay) {
                       <span
@@ -319,8 +433,9 @@
                 </span>
                 @if (!group.insufficient) {
                   <span class="qc-stats">
-                    Mean: {{ group.mean | number: '1.3-3' }} &nbsp;&middot;&nbsp; SD:
-                    {{ group.sd | number: '1.3-3' }}
+                    {{ 'LAB_QC.CHART.MEAN' | translate }}
+                    {{ group.mean | number: '1.3-3' }} &nbsp;&middot;&nbsp;
+                    {{ 'LAB_QC.CHART.SD' | translate }} {{ group.sd | number: '1.3-3' }}
                   </span>
                 }
               </div>
@@ -523,13 +638,22 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-approval-dialog-title-2"
+      appModalDialog
+      (escaped)="closeStudyModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_APPROVAL.STUDY_FORM.TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="closeStudyModal()">
+        <h2 id="lab-approval-dialog-title-2">{{ 'LAB_APPROVAL.STUDY_FORM.TITLE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeStudyModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -540,7 +664,7 @@
             <label for="study-type">{{ 'LAB_APPROVAL.STUDY_FORM.STUDY_TYPE' | translate }}</label>
             <select id="study-type" [(ngModel)]="studyForm.studyType" required>
               @for (t of studyTypes; track t) {
-                <option [value]="t">{{ t | titlecase }}</option>
+                <option [value]="t">{{ t | enumLabel: 'validationStudyType' }}</option>
               }
             </select>
           </div>
@@ -621,7 +745,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="savingStudy() || !studyForm.studyType || !studyForm.studyDate"
+          [disabled]="savingStudy()"
+          [appSubmitGuard]="!studyForm.studyType || !studyForm.studyDate"
+          [submitGuardFields]="['study-type', 'study-date']"
           (click)="saveStudy()"
         >
           @if (savingStudy()) {
@@ -644,12 +770,17 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-approval-dialog-title-3"
+      appModalDialog
+      (escaped)="closeApprovalModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-approval-dialog-title-3">
           @switch (approvalAction()) {
             @case ('SUBMIT_FOR_QA') {
               {{ 'LAB_APPROVAL.CONFIRM.TITLE_SUBMIT' | translate }}
@@ -663,12 +794,19 @@
             @case ('REJECT') {
               {{ 'LAB_APPROVAL.CONFIRM.TITLE_REJECT' | translate }}
             }
+            @case ('ACTIVATE') {
+              {{ 'LAB_APPROVAL.CONFIRM.TITLE_ACTIVATE' | translate }}
+            }
             @default {
               {{ 'LAB_APPROVAL.CONFIRM.TITLE_DEFAULT' | translate }}
             }
           }
         </h2>
-        <button class="modal-close" (click)="closeApprovalModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeApprovalModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -687,6 +825,7 @@
               }}</label>
               <textarea
                 id="rejection-reason"
+                required
                 rows="4"
                 [ngModel]="approvalRejectionReason()"
                 (ngModelChange)="approvalRejectionReason.set($event)"
@@ -704,9 +843,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="
-            processingApproval() || (approvalAction() === 'REJECT' && !approvalRejectionReason())
-          "
+          [disabled]="processingApproval()"
+          [appSubmitGuard]="approvalAction() === 'REJECT' && !approvalRejectionReason()"
+          [submitGuardFields]="['rejection-reason']"
           (click)="submitApprovalAction()"
         >
           @if (processingApproval()) {

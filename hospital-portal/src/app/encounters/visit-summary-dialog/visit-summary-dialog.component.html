@@ -1,0 +1,72 @@
+<div
+  class="avs-backdrop"
+  (click)="closed.emit()"
+  (keydown.escape)="closed.emit(); $event.stopPropagation()"
+  tabindex="-1"
+>
+  <section
+    #dialog
+    class="avs-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="avs-title"
+    aria-describedby="avs-patient"
+    appModalDialog
+    (escaped)="closed.emit()"
+    (click)="$event.stopPropagation()"
+    (keydown.escape)="$event.stopPropagation()"
+    tabindex="-1"
+    data-testid="visit-summary-dialog"
+  >
+    <header class="avs-header">
+      <span class="avs-document-icon material-symbols-outlined" aria-hidden="true"
+        >description</span
+      >
+      <div class="avs-heading">
+        <span class="avs-eyebrow">{{ 'VISIT_SUMMARY.EYEBROW' | translate }}</span>
+        <h2 id="avs-title">{{ 'ENCOUNTERS.AVS_TITLE' | translate }}</h2>
+      </div>
+      <button
+        type="button"
+        class="avs-close no-print"
+        (click)="closed.emit()"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+        data-testid="avs-close"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </header>
+    <div
+      class="avs-body"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'ENCOUNTERS.AVS_TITLE' | translate"
+    >
+      @if (summary().pendingSignature) {
+        <p class="avs-pending-signature" role="status" data-testid="avs-pending-signature">
+          <span class="material-symbols-outlined" aria-hidden="true">pending_actions</span>
+          {{ 'VISIT_SUMMARY.PENDING_SIGNATURE' | translate }}
+        </p>
+      }
+      <app-visit-summary-sections [summary]="summary()" audience="staff" />
+      @if (!hasSections()) {
+        <p class="avs-empty" role="status">{{ 'VISIT_SUMMARY.NO_SECTIONS' | translate }}</p>
+      }
+    </div>
+    <footer class="avs-footer">
+      <span data-testid="avs-read-only"
+        ><span class="material-symbols-outlined" aria-hidden="true">article</span>
+        {{ 'VISIT_SUMMARY.READ_ONLY' | translate }}</span
+      >
+      <span class="avs-actions no-print">
+        <button type="button" class="avs-print" (click)="print()" data-testid="avs-print">
+          <span class="material-symbols-outlined" aria-hidden="true">print</span>
+          {{ 'VISIT_SUMMARY.PRINT' | translate }}
+        </button>
+        <button type="button" class="avs-done" (click)="closed.emit()" data-testid="avs-done">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </span>
+    </footer>
+  </section>
+</div>

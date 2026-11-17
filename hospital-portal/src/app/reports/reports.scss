@@ -274,3 +274,13 @@
     transform: rotate(360deg);
   }
 }
+
+// QA D855: a refused recipient list, under its field.
+.form-textarea.invalid {
+  border-color: var(--danger, #b91c1c);
+}
+.field-error {
+  margin: 4px 0 0;
+  color: var(--danger, #b91c1c);
+  font-size: 0.85rem;
+}

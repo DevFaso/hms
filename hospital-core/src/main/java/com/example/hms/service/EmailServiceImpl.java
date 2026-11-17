@@ -1,5 +1,10 @@
 package com.example.hms.service;
 
+import com.example.hms.exception.NotificationTransportUnavailableException;
+import com.example.hms.service.mail.MailOutboxService;
+import com.example.hms.utility.ActivationDeliveryTracker;
+import com.example.hms.utility.EmailAddresses;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,6 +13,11 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.mail.internet.AddressException;
+import jakarta.mail.internet.InternetAddress;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -17,6 +27,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 /**
  * Composes every transactional mail from the message bundle.
@@ -39,6 +50,7 @@ public class EmailServiceImpl implements EmailService {
 
     private final JavaMailSender mailSender;
     private final MessageSource messageSource;
+    private final MailOutboxService mailOutbox;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -60,6 +72,70 @@ public class EmailServiceImpl implements EmailService {
     @Value("${spring.mail.properties.mail.smtp.auth:true}")
     private String smtpAuthProperty;
 
+    // The From and Reply-To every mail carries, read once at startup by
+    // initSender(). MAIL_FROM may be "addr" or "Name <addr>" (quote a name
+    // that contains a comma). Unset, no From header is set and the server
+    // supplies its own, exactly as before these settings existed. JavaMail
+    // also takes the SMTP envelope sender (bounces, SPF) from the From header
+    // unless spring.mail.properties.mail.smtp.from is set. Set MAIL_FROM only
+    // with a sender verified for its domain (a transactional provider with the
+    // domain's SPF/DKIM): a From the SMTP login is not authorised for fails
+    // DMARC alignment, and Gmail rewrites an unverified alias to the account.
+    // Keep e-keneya.com's DMARC at p=none until outbound mail is aligned.
+    @Value("${app.mail.from:}")
+    private String fromSetting;
+
+    @Value("${app.mail.from-name:e-Keneya}")
+    private String fromNameSetting;
+
+    @Value("${app.mail.reply-to:}")
+    private String replyToSetting;
+
+    private String senderAddress;
+    private String senderName;
+    private String replyToAddress;
+
+    /**
+     * Parses the sender settings once at startup. Mail is optional to the
+     * clinical application, so a bad value never stops the boot: it is logged
+     * as an ERROR naming the variable and ignored.
+     */
+    @PostConstruct
+    void initSender() {
+        InternetAddress from = StringUtils.hasText(fromSetting)
+            ? parseSingleOrNull("app.mail.from (MAIL_FROM)", fromSetting)
+            : null;
+        senderAddress = from != null ? from.getAddress() : null;
+        if (from != null && StringUtils.hasText(from.getPersonal())) {
+            senderName = from.getPersonal().trim();
+        } else {
+            senderName = StringUtils.hasText(fromNameSetting) ? fromNameSetting.trim() : null;
+        }
+        InternetAddress reply = StringUtils.hasText(replyToSetting)
+            ? parseSingleOrNull("app.mail.reply-to (MAIL_REPLY_TO)", replyToSetting)
+            : null;
+        replyToAddress = reply != null ? reply.getAddress() : null;
+        if (senderAddress != null && deliversRealEmail()) {
+            log.info("📧 Mail sender: {}{}", ActivationDeliveryTracker.maskEmail(senderAddress),
+                replyToAddress != null ? " (reply-to set)" : "");
+        }
+    }
+
+    /** One address that the recipients' own rule would accept, else null with an ERROR. */
+    private static InternetAddress parseSingleOrNull(String setting, String value) {
+        try {
+            InternetAddress[] parsed = InternetAddress.parse(value.trim(), true);
+            if (parsed.length == 1 && EmailAddresses.isDeliverable(parsed[0].getAddress())) {
+                return parsed[0];
+            }
+            log.error("📧 {} must be exactly one valid address (quote a display name that contains "
+                + "a comma); ignoring it", setting);
+        } catch (AddressException e) {
+            log.error("📧 {} is not a valid address; ignoring it", setting);
+        }
+        return null;
+    }
+
     private static final DateTimeFormatter CLOCK_TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     // Bundle keys used by more than one mail.
@@ -76,6 +152,7 @@ public class EmailServiceImpl implements EmailService {
     private static final String COLOR_BRAND_TINT = "#bfdbfe";
     private static final String KEY_BRAND = "email.common.brand";
     private static final String KEY_GREETING_HI = "email.common.greeting.hi";
+    private static final String KEY_ROLE_ASSIGNMENT_EXPIRY = "email.role.assignment.body.expiry";
     private static final String KEY_GREETING_DEAR = "email.common.greeting.dear";
     private static final String KEY_GREETING_ANONYMOUS = "email.common.greeting.anonymous";
     private static final String KEY_SIGNIN_BUTTON = "email.common.signin.button";
@@ -134,6 +211,27 @@ public class EmailServiceImpl implements EmailService {
         return s != null && !s.isBlank();
     }
 
+    /**
+     * A role in the mail's language: {@code ROLE_DOCTOR}, {@code DOCTOR} or
+     * {@code Doctor} all resolve {@code email.role.label.DOCTOR}. An unknown
+     * role falls back to a humanised code ("Lab Manager"), never the raw code.
+     */
+    String roleLabel(Locale locale, String role) {
+        if (!hasText(role)) {
+            return role;
+        }
+        String code = role.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
+        if (code.startsWith("ROLE_")) {
+            code = code.substring("ROLE_".length());
+        }
+        String humanised = java.util.Arrays.stream(code.split("_"))
+            .filter(w -> !w.isEmpty())
+            .map(w -> w.charAt(0) + w.substring(1).toLowerCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.joining(" "));
+        String label = messageSource.getMessage("email.role.label." + code, null, humanised, locale);
+        return label != null ? label : humanised;
+    }
+
     /** "Hi {name}," or the anonymous greeting when no name is known. */
     private String greetingHi(Locale locale, String displayName) {
         return hasText(displayName)
@@ -157,7 +255,7 @@ public class EmailServiceImpl implements EmailService {
                                                 String rescheduleLink, String cancelLink, Locale locale) {
         validateAddresses(List.of(to));
         Locale l = recipientLocale(locale);
-        log.info("📧 Sending appointment rescheduled email to: {}", to);
+        log.info("📧 Composing appointment rescheduled email for {}", ActivationDeliveryTracker.maskEmail(to));
         String subject = text(l, "email.appointment.rescheduled.subject");
         String body = heading(subject)
             + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
@@ -167,7 +265,7 @@ public class EmailServiceImpl implements EmailService {
             + appointmentLinks(l, "email.appointment.rescheduled.links.intro", rescheduleLink, cancelLink)
             + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Appointment rescheduled email sent to {}", to);
+        log.info("✅ Appointment rescheduled email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -176,7 +274,7 @@ public class EmailServiceImpl implements EmailService {
                                               String hospitalEmail, String hospitalPhone, Locale locale) {
         validateAddresses(List.of(to));
         Locale l = recipientLocale(locale);
-        log.info("📧 Sending appointment cancelled email to: {}", to);
+        log.info("📧 Composing appointment cancelled email for {}", ActivationDeliveryTracker.maskEmail(to));
         String subject = text(l, "email.appointment.cancelled.subject");
         String body = heading(subject)
             + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
@@ -184,7 +282,7 @@ public class EmailServiceImpl implements EmailService {
                 escapeHtml(appointmentDate), escapeHtml(appointmentTime)))
             + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Appointment cancelled email sent to {}", to);
+        log.info("✅ Appointment cancelled email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -193,7 +291,7 @@ public class EmailServiceImpl implements EmailService {
                                               String hospitalEmail, String hospitalPhone, Locale locale) {
         validateAddresses(List.of(to));
         Locale l = recipientLocale(locale);
-        log.info("📧 Sending appointment completed email to: {}", to);
+        log.info("📧 Composing appointment completed email for {}", ActivationDeliveryTracker.maskEmail(to));
         String subject = text(l, "email.appointment.completed.subject");
         String body = heading(subject)
             + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
@@ -201,7 +299,7 @@ public class EmailServiceImpl implements EmailService {
                 escapeHtml(appointmentDate), escapeHtml(appointmentTime)))
             + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Appointment completed email sent to {}", to);
+        log.info("✅ Appointment completed email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -210,7 +308,7 @@ public class EmailServiceImpl implements EmailService {
                                            String hospitalEmail, String hospitalPhone, Locale locale) {
         validateAddresses(List.of(to));
         Locale l = recipientLocale(locale);
-        log.info("📧 Sending appointment no-show email to: {}", to);
+        log.info("📧 Composing appointment no-show email for {}", ActivationDeliveryTracker.maskEmail(to));
         String subject = text(l, "email.appointment.noshow.subject");
         String body = heading(subject)
             + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
@@ -218,7 +316,7 @@ public class EmailServiceImpl implements EmailService {
                 escapeHtml(appointmentDate), escapeHtml(appointmentTime)))
             + paragraph(text(l, "email.appointment.noshow.contact", escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Appointment no-show email sent to {}", to);
+        log.info("✅ Appointment no-show email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -228,7 +326,7 @@ public class EmailServiceImpl implements EmailService {
                                                  String rescheduleLink, String cancelLink, Locale locale) {
         validateAddresses(List.of(to));
         Locale l = recipientLocale(locale);
-        log.info("📧 Sending appointment confirmation email to: {}", to);
+        log.info("📧 Composing appointment confirmation email for {}", ActivationDeliveryTracker.maskEmail(to));
         String subject = text(l, "email.appointment.confirmed.subject");
         String body = heading(subject)
             + paragraph(text(l, KEY_GREETING_DEAR, escapeHtml(patientName)))
@@ -237,7 +335,7 @@ public class EmailServiceImpl implements EmailService {
             + appointmentLinks(l, "email.appointment.links.intro", rescheduleLink, cancelLink)
             + paragraph(text(l, KEY_APPOINTMENT_CONTACT, escapeHtml(hospitalEmail), escapeHtml(hospitalPhone)));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Appointment confirmation email sent to {}", to);
+        log.info("✅ Appointment confirmation email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     private static String heading(String s) {
@@ -282,10 +380,24 @@ public class EmailServiceImpl implements EmailService {
             && configuredMailPassword != null && !configuredMailPassword.isBlank();
     }
 
+    /**
+     * Queues instead of sending: see {@link EmailService#sendHtml}. The body is
+     * composed here, on the caller's thread and in the caller's locale; only
+     * the SMTP conversation moves to the outbox sweep.
+     */
     @Override
     public void sendHtml(List<String> to, List<String> cc, List<String> bcc,
                          String subject, String htmlBody) {
-        sendWithAttachment(to, cc, bcc, subject, htmlBody, null, null, null);
+        validateAddresses(to);
+        if (!deliversRealEmail()) {
+            // Queueing mail no transport will ever carry would turn today's
+            // NOT_CONFIGURED report into a false QUEUED one.
+            throw new NotificationTransportUnavailableException(
+                "Mail transport is not configured on this deployment");
+        }
+        UUID id = mailOutbox.enqueue(to, cc, bcc, subject, htmlBody);
+        log.info("📧 Mail queued as outbox {} for {}", id,
+            to.stream().map(ActivationDeliveryTracker::maskEmail).toList());
     }
 
     @Override
@@ -293,10 +405,13 @@ public class EmailServiceImpl implements EmailService {
                                    String subject, String htmlBody,
                                    byte[] attachment, String filename, String contentType) {
         validateAddresses(to);
-        log.info("📧 Sending email to: {}, subject: {}", to, subject);
+        // No subject: some carry a patient's or a hospital's name.
+        log.info("📧 Sending email to: {}",
+            to.stream().map(ActivationDeliveryTracker::maskEmail).toList());
         mailSender.send(mime -> {
             var multipart = attachment != null;
             var helper = new MimeMessageHelper(mime, multipart, "UTF-8");
+            applySender(helper);
             helper.setTo(to.toArray(String[]::new));
             if (cc != null && !cc.isEmpty()) helper.setCc(cc.toArray(String[]::new));
             if (bcc != null && !bcc.isEmpty()) helper.setBcc(bcc.toArray(String[]::new));
@@ -309,6 +424,17 @@ public class EmailServiceImpl implements EmailService {
                 helper.addAttachment(filename, res, contentType != null ? contentType : "application/pdf");
             }
         });
+    }
+
+    /** The configured From and Reply-To; nothing when unset, as before. */
+    private void applySender(MimeMessageHelper helper) throws jakarta.mail.MessagingException,
+            java.io.UnsupportedEncodingException {
+        if (senderAddress != null) {
+            // The helper's UTF-8 encoding RFC 2047-encodes a non-ASCII name.
+            if (senderName != null) helper.setFrom(senderAddress, senderName);
+            else helper.setFrom(senderAddress);
+        }
+        if (replyToAddress != null) helper.setReplyTo(replyToAddress);
     }
 
     // -------------------------------------------------------------------------
@@ -330,7 +456,7 @@ public class EmailServiceImpl implements EmailService {
         // EmailService#DEFAULT_RECIPIENT_LOCALE). A patient at this point has
         // no medical history yet either, so the resolver would answer the same.
         Locale l = DEFAULT_RECIPIENT_LOCALE;
-        log.info("📧 Sending role assignment confirmation email to: {}", to);
+        log.info("📧 Composing role assignment confirmation email for {}", ActivationDeliveryTracker.maskEmail(to));
 
         boolean isPatient = roleDisplayName != null
                 && roleDisplayName.toUpperCase(Locale.ROOT).contains("PATIENT");
@@ -339,7 +465,7 @@ public class EmailServiceImpl implements EmailService {
             ? hospitalDisplayName : text(l, "email.role.assignment.fallback.hospital");
         String hospitalHtml = escapeHtml(hospitalPlain);
         // Only the staff mail names the role; the patient mail never did.
-        String roleHtml = hasText(roleDisplayName) ? escapeHtml(roleDisplayName) : text(l, "email.role.assignment.fallback.role");
+        String roleHtml = hasText(roleDisplayName) ? escapeHtml(roleLabel(l, roleDisplayName)) : text(l, "email.role.assignment.fallback.role");
         String codeHtml = escapeHtml(confirmationCode);
         String greeting = greetingHi(l, userName);
 
@@ -387,10 +513,15 @@ public class EmailServiceImpl implements EmailService {
                 + CLOSE_DIV
                 + "<p style=\"color:#666;font-size:13px;\">" + text(l, "email.patient.welcome.body.expiry") + CLOSE_PARAGRAPH;
         } else {
-            subject = text(l, KEY_ROLE_ASSIGNMENT_SUBJECT);
+            // QA D1840: a platform-wide assignment (no hospital) is worded as such,
+            // never "at GLOBAL" under a subject about a hospital.
+            boolean platformWide = !hasText(hospitalDisplayName);
+            subject = platformWide ? text(l, "email.role.assignment.subject.platform") : text(l, KEY_ROLE_ASSIGNMENT_SUBJECT);
             body = heading(text(l, "email.role.assignment.heading"))
                 + paragraph(greeting)
-                + paragraph(text(l, "email.role.assignment.body.assigned", roleHtml, hospitalHtml))
+                + paragraph(platformWide
+                    ? text(l, "email.role.assignment.body.assigned.platform", roleHtml)
+                    : text(l, "email.role.assignment.body.assigned", roleHtml, hospitalHtml))
                 + paragraph(text(l, "email.role.assignment.body.instructions"))
                 + "<p style=\"font-size: 24px; font-weight: bold; letter-spacing: 4px;\">" + codeHtml + CLOSE_PARAGRAPH
                 + paragraph(text(l, "email.role.assignment.body.reference", escapeHtml(assignmentCode)))
@@ -398,11 +529,11 @@ public class EmailServiceImpl implements EmailService {
                 + credentialsSection
                 + paragraph(HTML_STRONG_OPEN + text(l, "email.role.assignment.body.inactive") + HTML_STRONG_CLOSE)
                 + paragraph(text(l, "email.role.assignment.body.unexpected"))
-                + "<p style=\"color:#666\">" + text(l, "email.role.assignment.body.expiry") + CLOSE_PARAGRAPH;
+                + "<p style=\"color:#666\">" + text(l, KEY_ROLE_ASSIGNMENT_EXPIRY) + CLOSE_PARAGRAPH;
         }
 
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("✅ Role assignment confirmation email sent to {}", to);
+        log.info("✅ Role assignment confirmation email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     // -------------------------------------------------------------------------
@@ -421,7 +552,7 @@ public class EmailServiceImpl implements EmailService {
         Locale l = DEFAULT_RECIPIENT_LOCALE;
         var body = buildActivationEmailBody(l, activationLink, patientName, username, hospitalName);
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.activation.subject"), body);
-        log.info("✅ Activation email sent to {}", to);
+        log.info("✅ Activation email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -429,7 +560,7 @@ public class EmailServiceImpl implements EmailService {
         Locale l = DEFAULT_RECIPIENT_LOCALE;
         var body = buildResetEmailBody(l, resetLink);
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.password.reset.subject"), body);
-        log.info("✅ Password reset email sent to {}", to);
+        log.info("✅ Password reset email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -464,7 +595,7 @@ public class EmailServiceImpl implements EmailService {
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
 
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.password.changed.subject"), body);
-        log.info("✅ Password reset confirmation email sent to {}", to);
+        log.info("✅ Password reset confirmation email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -490,7 +621,7 @@ public class EmailServiceImpl implements EmailService {
 
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.account.restored.subject"), body);
-        log.info("✅ Account restored notification email sent to {}", to);
+        log.info("✅ Account restored notification email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
     @Override
@@ -522,7 +653,86 @@ public class EmailServiceImpl implements EmailService {
 
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.recovery.contact.subject"), body);
-        log.info("✅ Recovery contact verification email sent to {}", to);
+        log.info("✅ Recovery contact verification email queued for {}", ActivationDeliveryTracker.maskEmail(to));
+    }
+
+    /*
+     * The three self-service email-change mails. None pre-validates the
+     * address (sendHtml does, with the shared rule) and none logs it.
+     */
+
+    @Override
+    public void sendEmailChangeVerificationEmail(String to, String verificationCode, Locale locale) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        Locale l = recipientLocale(locale);
+        String escapedCode = escapeHtml(verificationCode);
+
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
+            "&#128274; " + text(l, "email.change.code.heading"));
+
+        String bodyContent = BODY_OPEN
+            + BODY_PARAGRAPH_OPEN + text(l, "email.change.code.body.intro") + CLOSE_PARAGRAPH
+            + HTML_CENTER_BLOCK
+            + "<div style=\"display:inline-block;background:#f1f5f9;border:2px dashed #94a3b8;"
+            + "border-radius:12px;padding:20px 40px;\">"
+            + "<span style=\"font-size:32px;font-weight:700;letter-spacing:8px;color:#1e293b;font-family:monospace;\">"
+            + escapedCode
+            + "</span>"
+            + CLOSE_DIV
+            + CLOSE_DIV
+            + "<p style=\"font-size:14px;color:#64748b;text-align:center;margin:0 0 24px;\">"
+            + text(l, "email.change.code.body.expiry")
+            + CLOSE_PARAGRAPH
+            + HR
+            + alertBox(text(l, KEY_UNEXPECTED_TITLE), text(l, "email.change.code.body.unexpected"))
+            + CLOSE_DIV;
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.code.subject"), body);
+        log.info("✅ Email-change verification code queued");
+    }
+
+    @Override
+    public void sendEmailChangedNoticeEmail(String to, String displayName, String maskedAddress, Locale locale) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        Locale l = recipientLocale(locale);
+        LocalDateTime changedAt = LocalDateTime.now(ZoneOffset.UTC);
+
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
+            "&#128274; " + text(l, "email.change.notice.heading"));
+
+        String bodyContent = BODY_OPEN
+            + GREETING_PARAGRAPH_OPEN + greetingHi(l, displayName) + CLOSE_PARAGRAPH
+            + BODY_PARAGRAPH_OPEN
+            + text(l, "email.change.notice.body.intro", escapeHtml(maskedAddress),
+                humanDate(changedAt.toLocalDate(), l), CLOCK_TIME.format(changedAt))
+            + CLOSE_PARAGRAPH
+            + HR
+            + alertBox(text(l, KEY_UNEXPECTED_TITLE), text(l, "email.change.notice.body.unexpected"))
+            + CLOSE_DIV;
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.notice.subject"), body);
+        log.info("✅ Email-changed notice queued for the previous address");
+    }
+
+    @Override
+    public void sendEmailAddressInUseNoticeEmail(String to, Locale locale) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        Locale l = recipientLocale(locale);
+
+        String header = brandHeader(l, GRADIENT_BLUE, COLOR_BRAND_TINT,
+            "&#128274; " + text(l, "email.change.inuse.heading"));
+
+        String bodyContent = BODY_OPEN
+            + BODY_PARAGRAPH_OPEN + text(l, "email.change.inuse.body.intro") + CLOSE_PARAGRAPH
+            + HR
+            + alertBox(text(l, KEY_UNEXPECTED_TITLE), text(l, "email.change.inuse.body.unexpected"))
+            + CLOSE_DIV;
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.change.inuse.subject"), body);
+        log.info("✅ Email-in-use notice queued");
     }
 
     @Override
@@ -535,7 +745,7 @@ public class EmailServiceImpl implements EmailService {
             + paragraph(text(l, "email.username.reminder.body.signin", anchor(loginUrl())))
             + "<p style=\"color:#666\">" + text(l, "email.username.reminder.body.unexpected") + CLOSE_PARAGRAPH;
         sendHtml(List.of(toEmail), List.of(), List.of(), subject, body);
-        log.info("✅ Username reminder email sent to {}", toEmail);
+        log.info("✅ Username reminder email queued for {}", ActivationDeliveryTracker.maskEmail(toEmail));
     }
 
     @Override
@@ -556,7 +766,7 @@ public class EmailServiceImpl implements EmailService {
             + paragraph(text(l, "email.password.rotation.reminder.body.action", anchor(loginUrl())))
             + paragraph(text(l, "email.password.rotation.reminder.body.ignore"));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("📧 Password rotation reminder sent to {} ({} day(s) remaining)", to, daysRemaining);
+        log.info("📧 Password rotation reminder queued for {} ({} day(s) remaining)", ActivationDeliveryTracker.maskEmail(to), daysRemaining);
     }
 
     @Override
@@ -574,7 +784,7 @@ public class EmailServiceImpl implements EmailService {
             + paragraph(text(l, "email.password.rotation.force.body.action", anchor(loginUrl())))
             + paragraph(text(l, "email.password.rotation.force.body.restricted"));
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
-        log.info("📧 Password rotation enforcement notice sent to {} ({} day(s) overdue)", to, daysOverdue);
+        log.info("📧 Password rotation enforcement notice queued for {} ({} day(s) overdue)", ActivationDeliveryTracker.maskEmail(to), daysOverdue);
     }
 
     private String buildActivationEmailBody(Locale l, String link, String patientName,
@@ -735,8 +945,12 @@ public class EmailServiceImpl implements EmailService {
              + HTML_P_DIV_CLOSE;
     }
 
+    /**
+     * The shared rule ({@link EmailAddresses#isDeliverable}), so an address a
+     * caller accepted is never refused here. Addresses are not logged: this
+     * runs for every mail and a recipient address is personal data.
+     */
     private static void validateAddresses(List<String> addresses) {
-        log.info("validateAddresses input: {}", addresses);
         if (addresses == null || addresses.isEmpty()) {
             throw new IllegalArgumentException("Recipient list cannot be empty");
         }
@@ -744,8 +958,7 @@ public class EmailServiceImpl implements EmailService {
             if (addr == null || addr.isBlank()) {
                 throw new IllegalArgumentException("Empty email address");
             }
-            // Simple RFC check — character-class exclusions prevent backtracking/ReDoS
-            if (!addr.matches("^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$")) {
+            if (!EmailAddresses.isDeliverable(addr)) {
                 throw new IllegalArgumentException("Invalid email format: " + addr);
             }
         }
@@ -762,13 +975,14 @@ public class EmailServiceImpl implements EmailService {
                                       String tempPassword,
                                       String roleName,
                                       String hospitalName,
-                                      String activationUrl) {
+                                      String activationUrl,
+                                      String confirmationCode) {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
         Locale l = DEFAULT_RECIPIENT_LOCALE;
-        log.info("📧 Sending admin welcome email to: {}", to);
+        log.info("📧 Composing admin welcome email for {}", ActivationDeliveryTracker.maskEmail(to));
 
-        String escapedRole     = hasText(roleName)     ? escapeHtml(roleName)     : text(l, "email.admin.welcome.fallback.role");
+        String escapedRole     = hasText(roleName)     ? escapeHtml(roleLabel(l, roleName)) : text(l, "email.admin.welcome.fallback.role");
         String escapedHospital = hasText(hospitalName) ? escapeHtml(hospitalName) : null;
         String escapedUsername = hasText(username)     ? escapeHtml(username)     : "—";
         String escapedPassword = hasText(tempPassword) ? escapeHtml(tempPassword) : "—";
@@ -794,15 +1008,29 @@ public class EmailServiceImpl implements EmailService {
             + "<p style=\"color:#bfdbfe;margin:6px 0 0;font-size:14px;\">" + text(l, "email.admin.welcome.tagline") + CLOSE_PARAGRAPH
             + CLOSE_DIV;
 
-        // The step names the assignment mail by its subject, resolved through
-        // the same key so the two mails agree in every language.
+        // With a code this is the new user's ONLY mail and carries the code
+        // itself. Without one (several roles: one assignment mail per code)
+        // the step names the assignment mail by its subject, resolved through
+        // the same key so the mails agree in every language.
+        boolean carriesCode = hasText(confirmationCode);
+        String step = carriesCode
+            ? text(l, "email.admin.welcome.body.step.code")
+            : text(l, "email.admin.welcome.body.step", text(l, KEY_ROLE_ASSIGNMENT_SUBJECT));
+        String codeBlock = carriesCode
+            ? "<p style=\"font-size:28px;font-weight:bold;letter-spacing:6px;text-align:center;"
+              + "background:#f8fafc;border:2px dashed #2563eb;border-radius:8px;padding:16px;margin:16px 0;\">"
+              + escapeHtml(confirmationCode) + CLOSE_PARAGRAPH
+              + "<p style=\"color:#64748b;font-size:13px;text-align:center;margin:0 0 16px;\">"
+              + text(l, KEY_ROLE_ASSIGNMENT_EXPIRY) + CLOSE_PARAGRAPH
+            : "";
         String bodyContent = "<div style=\"padding:32px 40px;\">"
             + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">" + greeting + CLOSE_PARAGRAPH
             + "<p style=\"color:#475569;line-height:1.6;\">"
             + created + ' '
-            + text(l, "email.admin.welcome.body.step", text(l, KEY_ROLE_ASSIGNMENT_SUBJECT)) + ' '
+            + step + ' '
             + text(l, "email.admin.welcome.body.keep")
             + CLOSE_PARAGRAPH
+            + codeBlock
             + "<div style=\"background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;"
             + "padding:20px 24px;margin:24px 0;\">"
             + "<p style=\"margin:0 0 12px;font-weight:700;color:#1e3a8a;font-size:14px;"
@@ -830,9 +1058,107 @@ public class EmailServiceImpl implements EmailService {
         String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
 
         sendHtml(List.of(to), List.of(), List.of(), text(l, "email.admin.welcome.subject"), body);
-        log.info("✅ Admin welcome email sent to {}", to);
+        log.info("✅ Admin welcome email queued for {}", ActivationDeliveryTracker.maskEmail(to));
     }
 
+    @Override
+    public void sendAdminWelcomeEmail(String to,
+                                      String displayName,
+                                      String username,
+                                      String tempPassword,
+                                      List<WelcomeRole> roles) {
+        if (roles == null || roles.isEmpty()) {
+            sendAdminWelcomeEmail(to, displayName, username, tempPassword, null, null, null, null);
+            return;
+        }
+        if (roles.size() == 1) {
+            WelcomeRole only = roles.get(0);
+            sendAdminWelcomeEmail(to, displayName, username, tempPassword, only.roleCode(),
+                only.hospitalName(), only.activationUrl(), only.confirmationCode());
+            return;
+        }
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        validateAddresses(List.of(to));
+        Locale l = DEFAULT_RECIPIENT_LOCALE;
+        log.info("📧 Composing multi-role admin welcome email ({} roles) for {}",
+            roles.size(), ActivationDeliveryTracker.maskEmail(to));
+
+        String escapedUsername = hasText(username)     ? escapeHtml(username)     : "—";
+        String escapedPassword = hasText(tempPassword) ? escapeHtml(tempPassword) : "—";
+        String greeting = hasText(displayName)
+            ? text(l, KEY_GREETING_HI, HTML_STRONG_OPEN + escapeHtml(displayName) + HTML_STRONG_CLOSE)
+            : text(l, KEY_GREETING_ANONYMOUS);
+
+        String header = HTML_DIV_BACKGROUND + GRADIENT_NAVY + ";"
+            + "padding:32px 40px;text-align:center;\">"
+            + "<div style=\"font-size:36px;margin-bottom:8px;\">&#127973;</div>"
+            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.5px;\">"
+            + text(l, "email.admin.welcome.heading") + "</h1>"
+            + "<p style=\"color:#bfdbfe;margin:6px 0 0;font-size:14px;\">" + text(l, "email.admin.welcome.tagline") + CLOSE_PARAGRAPH
+            + CLOSE_DIV;
+
+        StringBuilder roleBlocks = new StringBuilder();
+        for (WelcomeRole role : roles) {
+            roleBlocks.append(welcomeRoleBlock(l, role));
+        }
+
+        String bodyContent = "<div style=\"padding:32px 40px;\">"
+            + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">" + greeting + CLOSE_PARAGRAPH
+            + "<p style=\"color:#475569;line-height:1.6;\">"
+            + text(l, "email.admin.welcome.body.created.multi") + ' '
+            + text(l, "email.admin.welcome.body.step.codes") + ' '
+            + text(l, "email.admin.welcome.body.keep")
+            + CLOSE_PARAGRAPH
+            + roleBlocks
+            + "<p style=\"color:#64748b;font-size:13px;text-align:center;margin:0 0 16px;\">"
+            + text(l, KEY_ROLE_ASSIGNMENT_EXPIRY) + CLOSE_PARAGRAPH
+            + "<div style=\"background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;"
+            + "padding:20px 24px;margin:24px 0;\">"
+            + "<p style=\"margin:0 0 12px;font-weight:700;color:#1e3a8a;font-size:14px;"
+            + "text-transform:uppercase;letter-spacing:0.5px;\">" + text(l, "email.admin.welcome.credentials.title") + CLOSE_PARAGRAPH
+            + "<table style=\"border-collapse:collapse;width:100%;\">"
+            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">" + text(l, "email.admin.welcome.credentials.username") + "</td>"
+            + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
+            + escapedUsername + "</td></tr>"
+            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">" + text(l, "email.admin.welcome.credentials.password") + "</td>"
+            + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
+            + escapedPassword + "</td></tr>"
+            + "</table></div>"
+            + "<div style=\"background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 16px;"
+            + "border-radius:0 8px 8px 0;margin-top:24px;\">"
+            + "<p style=\"margin:0;font-size:14px;color:#92400e;\">"
+            + "<strong>&#9888; " + text(l, "email.admin.welcome.security.title") + HTML_STRONG_CLOSE_SP
+            + text(l, "email.admin.welcome.security.body")
+            + HTML_P_DIV_CLOSE
+            + CLOSE_DIV;
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter(l));
+        sendHtml(List.of(to), List.of(), List.of(), text(l, "email.admin.welcome.subject"), body);
+        log.info("✅ Multi-role admin welcome email queued for {}", ActivationDeliveryTracker.maskEmail(to));
+    }
+
+    /** One role of a multi-role welcome mail: label, hospital, its own code and its own link. */
+    private String welcomeRoleBlock(Locale l, WelcomeRole role) {
+        String label = hasText(role.roleCode())
+            ? escapeHtml(roleLabel(l, role.roleCode()))
+            : text(l, "email.admin.welcome.fallback.role");
+        String title = hasText(role.hospitalName())
+            ? text(l, "email.admin.welcome.role.at", label, escapeHtml(role.hospitalName()))
+            : label;
+        String link = hasText(role.activationUrl())
+            ? "<p style=\"text-align:center;margin:12px 0 0;\">" + HTML_A_OPEN + escapeHtml(role.activationUrl())
+              + "\" style=\"display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;"
+              + "padding:10px 22px;border-radius:8px;font-weight:600;\">"
+              + text(l, "email.admin.welcome.role.confirm") + "</a>" + CLOSE_PARAGRAPH
+            : "";
+        return "<div style=\"border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin:16px 0;\">"
+            + "<p style=\"margin:0;font-weight:700;color:#1e293b;\">" + title + CLOSE_PARAGRAPH
+            + "<p style=\"font-size:24px;font-weight:bold;letter-spacing:6px;text-align:center;"
+            + "background:#f8fafc;border:2px dashed #2563eb;border-radius:8px;padding:12px;margin:12px 0 0;\">"
+            + escapeHtml(role.confirmationCode()) + CLOSE_PARAGRAPH
+            + link
+            + CLOSE_DIV;
+    }
 
     /**
      * Activation-first call to action.

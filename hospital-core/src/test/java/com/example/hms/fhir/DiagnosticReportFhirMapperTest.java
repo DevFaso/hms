@@ -88,6 +88,11 @@ class DiagnosticReportFhirMapperTest {
             .isEqualTo(DiagnosticReport.DiagnosticReportStatus.REGISTERED);
         assertThat(mapper.toFhir(order(LabOrderStatus.CANCELLED), List.of(result(true))).getStatus())
             .isEqualTo(DiagnosticReport.DiagnosticReportStatus.CANCELLED);
+        // QA D820: a voided order's report is entered-in-error, released results or not.
+        assertThat(mapper.toFhir(order(LabOrderStatus.ENTERED_IN_ERROR), List.of(result(true))).getStatus())
+            .isEqualTo(DiagnosticReport.DiagnosticReportStatus.ENTEREDINERROR);
+        assertThat(mapper.toFhir(order(LabOrderStatus.ENTERED_IN_ERROR), List.of()).getStatus())
+            .isEqualTo(DiagnosticReport.DiagnosticReportStatus.ENTEREDINERROR);
     }
 
     @Test

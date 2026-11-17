@@ -7,6 +7,7 @@ import {
   HospitalLifecycleReason,
   HospitalLifecycleResponse,
 } from './hospital-lifecycle.model';
+import { stepUpRequestOptions } from './step-up';
 
 const BASE = '/super-admin/hospitals';
 
@@ -27,10 +28,12 @@ export class HospitalLifecycleService {
   suspend(
     hospitalId: string,
     body: HospitalLifecycleReason,
+    mfaCode?: string | null,
   ): Observable<HospitalLifecycleResponse> {
     return this.http.post<HospitalLifecycleResponse>(
       `${BASE}/${encodeURIComponent(hospitalId)}/suspend`,
       body,
+      stepUpRequestOptions(mfaCode?.trim()),
     );
   }
 
@@ -44,20 +47,24 @@ export class HospitalLifecycleService {
   archive(
     hospitalId: string,
     body: HospitalLifecycleReason,
+    mfaCode?: string | null,
   ): Observable<HospitalLifecycleResponse> {
     return this.http.post<HospitalLifecycleResponse>(
       `${BASE}/${encodeURIComponent(hospitalId)}/archive`,
       body,
+      stepUpRequestOptions(mfaCode?.trim()),
     );
   }
 
   schedulePurge(
     hospitalId: string,
     body: HospitalLifecyclePurgeSchedule,
+    mfaCode?: string | null,
   ): Observable<HospitalLifecycleResponse> {
     return this.http.post<HospitalLifecycleResponse>(
       `${BASE}/${encodeURIComponent(hospitalId)}/schedule-purge`,
       body,
+      stepUpRequestOptions(mfaCode?.trim()),
     );
   }
 

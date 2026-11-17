@@ -22,13 +22,10 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
-import com.example.hms.repository.InstrumentOutboxRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
-import com.example.hms.repository.PatientProblemHistoryRepository;
-import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
@@ -44,6 +41,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -87,6 +85,7 @@ class PatientPortalLabResultsIT extends BaseIT {
 
     private final AtomicInteger sequence = new AtomicInteger();
 
+    @Autowired private ApplicationContext applicationContext;
     @Autowired private MockMvc mockMvc;
     @Autowired private OrganizationRepository organizationRepository;
     @Autowired private HospitalRepository hospitalRepository;
@@ -96,12 +95,9 @@ class PatientPortalLabResultsIT extends BaseIT {
     @Autowired private StaffRepository staffRepository;
     @Autowired private PatientRepository patientRepository;
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
-    @Autowired private PatientProblemRepository patientProblemRepository;
-    @Autowired private PatientProblemHistoryRepository patientProblemHistoryRepository;
     @Autowired private LabTestDefinitionRepository labTestDefinitionRepository;
     @Autowired private LabOrderRepository labOrderRepository;
     @Autowired private LabResultRepository labResultRepository;
-    @Autowired private InstrumentOutboxRepository instrumentOutboxRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private LabResultService labResultService;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
@@ -119,26 +115,7 @@ class PatientPortalLabResultsIT extends BaseIT {
 
     @BeforeEach
     void seedAnUnreleasedAnalyzerResult() {
-        auditEventLogRepository.deleteAllInBatch();
-        labResultRepository.deleteAll();
-        // Releasing a result we created enqueues an outbound message that
-        // references the order, so it has to go before the orders do.
-        instrumentOutboxRepository.deleteAll();
-        labOrderRepository.deleteAll();
-        labTestDefinitionRepository.deleteAll();
-        registrationRepository.deleteAll();
-        // patient_problems (and their history) reference staff: a sibling IT
-        // that records a diagnosis leaves rows here, and deleting staff under
-        // them fails on fk_problem_staff. Children first.
-        patientProblemHistoryRepository.deleteAllInBatch();
-        patientProblemRepository.deleteAllInBatch();
-        patientRepository.deleteAll();
-        staffRepository.deleteAll();
-        assignmentRepository.deleteAll();
-        userRepository.deleteAll();
-        roleRepository.deleteAll();
-        hospitalRepository.deleteAll();
-        organizationRepository.deleteAll();
+        SharedClinicalRowsCleanup.deleteAll(applicationContext);
 
         Organization organization = organizationRepository.save(Organization.builder()
             .name("Test Health Network")
@@ -395,6 +372,50 @@ class PatientPortalLabResultsIT extends BaseIT {
                 .executeUpdate());
     }
 
+    /**
+     * QA D1213 (round 23), through the real chain and database: A2 had 21
+     * released results, two corrected away, 19 current; the list at limit 20
+     * showed 17 and dropped the oldest (a critical K 6.8 among them), and
+     * there was no way to page. Both reads now filter before they cut.
+     */
+    @Test
+    @DisplayName("QA D1213: every current result is reachable, by the list and by the pages")
+    void everyCurrentResultIsReachable() throws Exception {
+        labResultRepository.delete(result);
+        java.util.List<LabResult> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 21; i++) {
+            LabOrder own = labOrderRepository.save(LabOrder.builder()
+                .patient(patient).orderingStaff(order.getOrderingStaff()).labTestDefinition(hemoglobin)
+                .hospital(hospital).assignment(assignment)
+                .orderDatetime(LocalDateTime.now().minusDays(30))
+                .clinicalIndication("Suivi").status(LabOrderStatus.RESULTED).build());
+            rows.add(labResultRepository.save(LabResult.builder()
+                .labOrder(own).actorType(ActorType.SYSTEM).actorLabel("MLLP:SYSMEX/LAB_A")
+                .resultValue(String.valueOf(10 + i)).resultUnit("g/dL")
+                .resultDate(LocalDateTime.now().minusHours(2L + i))
+                .testCode("HGB").sourceSendingApplication("SYSMEX").sourceSendingFacility("LAB_A")
+                .sourceMessageControlId("MSG-D1213-" + i).sourceObservationSetId("1")
+                .observationResultStatus("F").released(true).build()));
+        }
+        rows.get(3).setSupersededByResultId(rows.get(2).getId());
+        rows.get(10).setSupersededByResultId(rows.get(9).getId());
+        labResultRepository.save(rows.get(3));
+        labResultRepository.save(rows.get(10));
+
+        mockMvc.perform(get(MY_LAB_RESULTS).param("limit", "20").contextPath(API).with(patient()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data", hasSize(19)));
+        mockMvc.perform(get(MY_LAB_RESULTS).param("offset", "0").param("limit", "11")
+                .contextPath(API).with(patient()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data", hasSize(11)));
+        mockMvc.perform(get(MY_LAB_RESULTS).param("offset", "10").param("limit", "11")
+                .contextPath(API).with(patient()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data", hasSize(9)))
+            .andExpect(jsonPath("$.data[8].id").value(rows.get(20).getId().toString()));
+    }
+
     @Test
     @DisplayName("the patient sees the released final alone, not a pending row beside it")
     void aReleasedFinalHidesItsPreliminaryFromThePatient() throws Exception {
@@ -443,8 +464,8 @@ class PatientPortalLabResultsIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("staff read keeps the preliminary value and labels it released=false")
-    void staffReadKeepsThePreliminaryValue() throws Exception {
+    @DisplayName("QA D160: a doctor's read shows the pending row, released=false, without the lab's preliminary value")
+    void doctorReadHidesThePreliminaryValue() throws Exception {
         mockMvc.perform(get(STAFF_LAB_RESULTS, patient.getId()).contextPath(API)
                 .param("hospitalId", hospital.getId().toString())
                 .with(doctor()))
@@ -452,7 +473,7 @@ class PatientPortalLabResultsIT extends BaseIT {
             .andExpect(jsonPath("$", hasSize(1)))
             .andExpect(jsonPath("$[0].status").value("PENDING"))
             .andExpect(jsonPath("$[0].released").value(false))
-            .andExpect(jsonPath("$[0].value").value(PRELIMINARY_VALUE));
+            .andExpect(jsonPath("$[0].value").doesNotExist());
     }
 
     private RequestPostProcessor patient() {

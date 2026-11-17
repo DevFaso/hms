@@ -22,8 +22,9 @@ import {
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
-import { currentLocale } from '../shared/i18n/app-locale';
+import { currentLocale, formatClockTime } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { serverDateOrInstant, localDateString } from '../shared/date-utils';
 
 type TabType = 'overview' | 'employment' | 'department' | 'schedule';
 
@@ -238,25 +239,10 @@ export class StaffDetailComponent implements OnInit {
     return name.substring(0, 2).toUpperCase();
   }
 
-  formatJobTitle(jobTitle?: string): string {
-    if (!jobTitle) return this.translate.instant('STAFF.TITLE');
-    return jobTitle
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
-  }
-
-  formatEmploymentType(type?: string): string {
-    if (!type) return '—';
-    return type
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
-  }
-
   formatDate(date?: string): string {
     if (!date) return '—';
-    return new Date(date).toLocaleDateString(currentLocale(), {
+    // #948 review: startDate/endDate are calendar dates, createdAt/updatedAt UTC times.
+    return serverDateOrInstant(date).toLocaleDateString(currentLocale(), {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -272,10 +258,7 @@ export class StaffDetailComponent implements OnInit {
 
   formatTime(time?: string): string {
     if (!time) return '—';
-    const [h, m] = time.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const hr = h % 12 || 12;
-    return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
+    return formatClockTime(time);
   }
 
   /**
@@ -288,14 +271,6 @@ export class StaffDetailComponent implements OnInit {
     const start = this.formatTime(shift.startTime);
     const end = this.formatTime(shift.endTime);
     return shift.crossMidnight ? `${start} – ${end} (+1)` : `${start} – ${end}`;
-  }
-
-  formatShiftType(type: string): string {
-    return type.charAt(0) + type.slice(1).toLowerCase();
-  }
-
-  formatLeaveType(type: string): string {
-    return type.charAt(0) + type.slice(1).toLowerCase();
   }
 
   shiftTypeIcon(type: string): string {
@@ -322,6 +297,6 @@ export class StaffDetailComponent implements OnInit {
   }
 
   private toISODate(d: Date): string {
-    return d.toISOString().split('T')[0];
+    return localDateString(d);
   }
 }

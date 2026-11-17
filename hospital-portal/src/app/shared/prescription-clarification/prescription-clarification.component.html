@@ -24,6 +24,7 @@
     [attr.data-testid]="'rx-clarification-modal-' + prescriptionId()"
   >
     <div
+      appModalDialog
       #dialog
       class="modal clarify-modal"
       role="dialog"
@@ -31,7 +32,7 @@
       [attr.aria-labelledby]="titleId()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="requestClose()"
+      (keydown.escape)="requestClose(); $event.stopPropagation()"
       [attr.data-testid]="'rx-clarification-dialog-' + prescriptionId()"
     >
       <div class="modal-header">
@@ -66,21 +67,18 @@
         }
 
         <!-- ── The exchange so far, pharmacy side ─────────────────────────
-             The work-queue projection carries only an attention flag, and
-             that flag is masked whenever the row also has a status or a
-             back order to report, so the words are fetched from the
-             prescription record every time the dialog opens. -->
-        <!-- Not gated on the resolved flag alone: that flag is masked
-             whenever the row also reports a status or a back order, so a
-             verifier would be shown a bare "ask a question" form with no
-             hint that an answer they cannot read is on the record. Any
-             attentionReason at all could be masking one; none means there
-             is nothing to hide, which keeps the note off a first question
-             on a freshly signed order. The note is a conditional: a reason
-             could be masking an exchange, it does not prove one exists. -->
-        @if (mayHideAnswer()) {
+             The work-queue projection carries the cue but never the words —
+             it is served to roles the prescription read refuses — so the
+             text is fetched from the prescription record on every open. -->
+        <!-- Stated when clarificationResolvedAt says an answer is waiting,
+             hedged on any other flagged row (the backend clears that
+             timestamp once the pharmacy acts, so an answered-then-filled row
+             carries a real exchange and no timestamp). Either way a verifier
+             — who may raise a question but is not on GET /prescriptions/{id}
+             — is told rather than shown a bare "ask a question" form. -->
+        @if (hiddenAnswerKey(); as hiddenKey) {
           <p class="clarify-note" data-testid="rx-clarification-unreadable">
-            {{ 'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE' | translate }}
+            {{ hiddenKey | translate }}
           </p>
         }
         @if (showExchange()) {
@@ -108,7 +106,7 @@
               @if (fetchedAskedAt()) {
                 <p class="clarify-stamp">
                   <span>{{ 'PRESCRIPTIONS.CLARIFICATION.ASKED_LABEL' | translate }}</span>
-                  <span>{{ fetchedAskedAt() | date: 'short' }}</span>
+                  <span>{{ fetchedAskedAt() | serverTime | date: 'short' }}</span>
                 </p>
               }
               <h3>{{ 'PRESCRIPTIONS.CLARIFICATION.ANSWER_LABEL' | translate }}</h3>
@@ -122,7 +120,7 @@
               @if (fetchedAnsweredAt()) {
                 <p class="clarify-stamp">
                   <span>{{ 'PRESCRIPTIONS.CLARIFICATION.ANSWERED_LABEL' | translate }}</span>
-                  <span>{{ fetchedAnsweredAt() | date: 'short' }}</span>
+                  <span>{{ fetchedAnsweredAt() | serverTime | date: 'short' }}</span>
                 </p>
               }
             </section>
@@ -143,20 +141,26 @@
             @if (askedAt()) {
               <p class="clarify-stamp">
                 <span>{{ 'PRESCRIPTIONS.CLARIFICATION.ASKED_LABEL' | translate }}</span>
-                <span>{{ askedAt() | date: 'short' }}</span>
+                <span>{{ askedAt() | serverTime | date: 'short' }}</span>
               </p>
             }
           </section>
         }
 
         <label class="field clarify-field">
-          <span>{{
-            (isPharmacy()
-              ? 'PRESCRIPTIONS.CLARIFICATION.REASON_LABEL'
-              : 'PRESCRIPTIONS.CLARIFICATION.ANSWER_INPUT_LABEL'
-            ) | translate
-          }}</span>
+          <span
+            >{{
+              (isPharmacy()
+                ? 'PRESCRIPTIONS.CLARIFICATION.REASON_LABEL'
+                : 'PRESCRIPTIONS.CLARIFICATION.ANSWER_INPUT_LABEL'
+              ) | translate
+            }}{{ isPharmacy() ? ' *' : '' }}</span
+          >
+          <!-- QA D1305: the pharmacist's question is required (declared and
+               starred); the prescriber's answer may be left blank. -->
           <textarea
+            [required]="isPharmacy()"
+            [id]="'rx-clarification-text-' + prescriptionId()"
             rows="4"
             maxlength="1000"
             name="clarificationText"
@@ -202,7 +206,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="submitting() || requiredTextMissing()"
+          [disabled]="submitting()"
+          [appSubmitGuard]="requiredTextMissing()"
+          [submitGuardFields]="['rx-clarification-text-' + prescriptionId()]"
           (click)="submit()"
           [attr.data-testid]="'rx-clarification-submit-' + prescriptionId()"
         >

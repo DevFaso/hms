@@ -18,6 +18,8 @@ public class LaborEpisodeResponseDTO {
     private UUID patientId;
     private String patientName;
     private UUID hospitalId;
+    /** QA D1631: the hospital that owns the record, so another hospital shows it as theirs, read only. */
+    private String hospitalName;
     private UUID registrationId;
     private UUID maternalHistoryId;
     private String admittedByStaffName;
@@ -38,4 +40,14 @@ public class LaborEpisodeResponseDTO {
 
     private long entryCount;
     private boolean deliveryRecorded;
+
+    /* Labour transfer between hospitals (provisional rule, 2026-11-12). */
+    /** On a closed episode (TRANSFERRED_OUT, LEFT_WITHOUT_HANDOVER): when, why, and where she went. */
+    private LocalDateTime transferredAt;
+    private String transferReason;
+    private UUID transferHospitalId;
+    private String transferHospitalName;
+    /** On the episode that took over: the episode it continues, and its hospital. */
+    private UUID transferredFromEpisodeId;
+    private String transferredFromHospitalName;
 }

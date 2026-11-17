@@ -32,8 +32,20 @@ public class PatientStoryboardDTO {
 
     private PatientHeaderDTO patient;
     private List<AllergySummaryDTO> allergies;
+    /** QA D504: the patient opted out of sharing and other hospitals' allergy rows are withheld here. */
+    private boolean allergiesWithheld;
+
+    /**
+     * QA D504: the patient opted out of record sharing and nothing here
+     * overrides it, so every clinical list on this read (problems, medications,
+     * labs, vitals, notes, encounters, imaging) holds this hospital's rows
+     * only. Says nothing about whether other rows exist.
+     */
+    private boolean recordsWithheld;
     private List<ProblemSummaryDTO> problems;
     private ActiveEncounterDTO activeEncounter;
+    /** QA D252: the most recent finished visit, filled only when none is open. */
+    private ActiveEncounterDTO lastEncounter;
     private CodeStatusDTO codeStatus;
     /**
      * E9 #64 — problems this read withheld under decision D3, per recording

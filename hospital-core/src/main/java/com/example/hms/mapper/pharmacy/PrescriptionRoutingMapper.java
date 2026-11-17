@@ -36,7 +36,17 @@ public class PrescriptionRoutingMapper {
                 .targetPharmacyName(entity.getTargetPharmacy() != null ? entity.getTargetPharmacy().getName() : null)
                 .decidedByUserId(entity.getDecidedByUser() != null ? entity.getDecidedByUser().getId() : null)
                 .patientId(entity.getDecidedForPatient() != null ? entity.getDecidedForPatient().getId() : null)
-                .reason(entity.getReason())
+                // The no-show fact travels as a flag plus the pharmacist's own
+                // words, never as a composed sentence: a sentence stored in
+                // English reaches a French or Spanish prescriber in English.
+                // Both have columns of their own since V167, which also moved
+                // every row written under the two older encodings (an English
+                // literal, then a marker inside the reason) onto them.
+                // QA D1000: stored keys and the English sentences older rows
+                // carry are rendered in the reader's language.
+                .reason(RoutingReasonText.readable(entity.getReason()))
+                .partnerNoShow(entity.isPartnerNoShow())
+                .noShowReason(entity.isPartnerNoShow() ? entity.getNoShowReason() : null)
                 .estimatedRestockDate(entity.getEstimatedRestockDate())
                 .remainingQuantity(entity.getRemainingQuantity())
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)

@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -8,11 +9,40 @@ import { OrganizationService, OrganizationResponse } from '../services/organizat
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
+
+type RequiredHospitalField = 'name' | 'phoneNumber' | 'country' | 'city' | 'address';
+
+/** The form's required fields, in the order they appear, with their input ids. */
+const REQUIRED_HOSPITAL_FIELDS: readonly {
+  key: RequiredHospitalField;
+  inputId: string;
+  /** The label the form shows for the field (QA D1358). */
+  labelKey: string;
+}[] = [
+  { key: 'name', inputId: 'hName', labelKey: 'DEPARTMENTS.NAME' },
+  { key: 'phoneNumber', inputId: 'hPhone', labelKey: 'PATIENTS.PHONE' },
+  { key: 'country', inputId: 'hCountry', labelKey: 'HOSPITALS.COUNTRY' },
+  { key: 'city', inputId: 'hCity', labelKey: 'HOSPITALS.CITY' },
+  { key: 'address', inputId: 'hAddress', labelKey: 'HOSPITALS.ADDRESS' },
+];
 
 @Component({
   selector: 'app-hospital-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    OrgTextPipe,
+  ],
   templateUrl: './hospital-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './hospital-list.scss',
@@ -44,6 +74,8 @@ export class HospitalListComponent implements OnInit {
   editing = signal<HospitalResponse | null>(null);
   saving = signal(false);
   form: HospitalRequest = this.emptyForm();
+  /** QA D817: set by a refused submit, so the empty required fields are marked. */
+  showMissing = signal(false);
 
   // Delete
   showDeleteConfirm = signal(false);
@@ -52,8 +84,9 @@ export class HospitalListComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadHospitals();
-    this.orgService.list(0, 100, true).subscribe({
-      next: (page) => this.organizations.set(page.content),
+    // QA D1347: every active organization (all pages), not the first 100.
+    allRows((page, size) => this.orgService.list(page, size, true)).subscribe({
+      next: (list) => this.organizations.set(list),
     });
   }
 
@@ -92,6 +125,7 @@ export class HospitalListComponent implements OnInit {
 
   // ---------- Create ----------
   openCreate(): void {
+    this.showMissing.set(false);
     this.form = this.emptyForm();
     this.editing.set(null);
     this.showModal.set(true);
@@ -99,6 +133,7 @@ export class HospitalListComponent implements OnInit {
 
   // ---------- Edit ----------
   openEdit(hospital: HospitalResponse): void {
+    this.showMissing.set(false);
     this.editing.set(hospital);
     this.form = {
       name: hospital.name,
@@ -125,11 +160,50 @@ export class HospitalListComponent implements OnInit {
     this.editing.set(null);
   }
 
+  /** QA D734/D747: a value counts only when it has more than spaces. */
+  hasText(value: string | null | undefined): boolean {
+    return !!value?.trim();
+  }
+
+  /** QA D817: the required fields still empty, in the order the form shows them. */
+  missingFields(): RequiredHospitalField[] {
+    return REQUIRED_HOSPITAL_FIELDS.filter((f) => !this.hasText(this.form[f.key])).map(
+      (f) => f.key,
+    );
+  }
+
+  /** Whether to mark this field: only after a refused submit, and only while empty. */
+  isMissing(field: RequiredHospitalField): boolean {
+    return this.showMissing() && !this.hasText(this.form[field]);
+  }
+
   submitForm(): void {
-    if (!this.form.name || !this.form.city || !this.form.country || !this.form.phoneNumber) {
-      this.toast.error(this.translate.instant('HOSPITALS.REQUIRED_FIELDS'));
+    // QA D734/D747: the street is required (a P.O. box no longer stands in
+    // for it); say so here instead of after the round trip.
+    // QA D817: the toast said a P.O. box could replace the street, and no
+    // field was marked. It now names the street, and the empty fields are
+    // highlighted with the first one focused.
+    const missing = this.missingFields();
+    if (missing.length > 0) {
+      this.showMissing.set(true);
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(
+          this.translate,
+          REQUIRED_HOSPITAL_FIELDS.map((f) => ({
+            labelKey: f.labelKey,
+            value: this.form[f.key]?.trim(),
+          })),
+        ) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
+      const first = REQUIRED_HOSPITAL_FIELDS.find((f) => f.key === missing[0]);
+      if (first) {
+        // After the change detection that applies the marks.
+        setTimeout(() => document.getElementById(first.inputId)?.focus());
+      }
       return;
     }
+    this.showMissing.set(false);
     this.saving.set(true);
 
     // Remove empty optional strings before sending

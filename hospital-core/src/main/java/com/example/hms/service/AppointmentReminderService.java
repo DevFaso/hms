@@ -13,13 +13,13 @@ import com.example.hms.repository.NotificationPreferenceRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import com.example.hms.service.i18n.PatientLocaleResolver;
+import com.example.hms.utility.DisplayDates;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -51,8 +51,6 @@ public class AppointmentReminderService {
     /** Hard cap — IKODDI gives no per-segment feedback, so keep bodies short. */
     static final int MAX_SMS_LENGTH = 320;
 
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private final AppointmentRepository appointmentRepository;
     private final ReminderClaimService reminderClaimService;
@@ -160,14 +158,13 @@ public class AppointmentReminderService {
         // who stated a language we can render gets it; everyone else is
         // unchanged.
         Locale locale = patientLocaleResolver.resolve(patient, Locale.forLanguageTag(reminderLocale));
-        String message = messageSource.getMessage(
-            "sms.appointment.reminder",
-            new Object[]{
-                startsAt.toLocalDate().format(DATE_FORMAT),
-                startsAt.toLocalTime().format(TIME_FORMAT),
-                hospitalName
-            },
-            locale);
+        Object[] reminderArgs = {
+            // QA D1234 class: the patient's own way of writing a date, not dd/MM/yyyy.
+            DisplayDates.date(startsAt.toLocalDate(), locale),
+            DisplayDates.time(startsAt.toLocalTime(), locale),
+            hospitalName
+        };
+        String message = messageSource.getMessage("sms.appointment.reminder", reminderArgs, locale);
         if (message.length() > MAX_SMS_LENGTH) {
             message = message.substring(0, MAX_SMS_LENGTH);
         }
@@ -177,7 +174,9 @@ public class AppointmentReminderService {
         if (portalUser != null && portalUser.getUsername() != null
             && channelEnabled(portalUser, NotificationChannel.IN_APP)) {
             try {
-                notificationService.createNotification(message, portalUser.getUsername(), "APPOINTMENT_REMINDER");
+                // The bell renders it in the reader's language when read (QA D665).
+                notificationService.createNotification("sms.appointment.reminder", reminderArgs,
+                    portalUser.getUsername(), "APPOINTMENT_REMINDER");
                 dispatched = true;
             } catch (RuntimeException ex) {
                 log.warn("In-app appointment reminder failed for {}: {}", appointment.getId(), ex.getMessage());

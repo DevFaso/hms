@@ -12,5 +12,8 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut, value: authManager.isAuthenticated)
+        // The brand teal as the app-wide tint (links, toolbar buttons,
+        // toggles), matching ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME.
+        .tint(Color("AccentColor"))
     }
 }

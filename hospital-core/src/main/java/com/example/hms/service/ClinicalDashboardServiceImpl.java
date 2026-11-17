@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.RefillStatus;
@@ -64,6 +63,13 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
     private final DigitalSignatureRepository digitalSignatureRepository;
     private final EncounterRepository encounterRepository;
     private final OnCallScheduleRepository onCallScheduleRepository;
+    /**
+     * Only {@link #getOnCallStatus} reads it (the on-call aggregate, shared with
+     * {@code OnCallScheduleServiceImpl}); the age, wait-time and today's
+     * appointment reads below belong to other aggregates and still use the
+     * system clock.
+     */
+    private final java.time.Clock clock;
 
     @Override
     public ClinicalDashboardResponseDTO getClinicalDashboard(UUID userId) {
@@ -156,23 +162,23 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                     for (Encounter enc : active) {
                         Patient p = enc.getPatient();
                         if (p == null) continue;
-                        String name = p.getFirstName() + " " + p.getLastName();
+                        String name = p.getFullName();
                         int age = p.getDateOfBirth() != null
                                 ? Period.between(p.getDateOfBirth(), LocalDate.now()).getYears()
                                 : 0;
-                        long waitMinutes = enc.getEncounterDate() != null
-                                ? ElapsedTime.minutesBetween(enc.getEncounterDate(), LocalDateTime.now())
-                                : 0;
+                        // QA D1039: from the arrival, never from the visit day's midnight.
+                        long waitMinutes = com.example.hms.utility.EncounterWait.minutes(enc, LocalDateTime.now(java.time.ZoneId.systemDefault()));
                         result.add(RoomedPatientDTO.builder()
                                 .id(p.getId())
                                 .encounterId(enc.getId())
                                 .patientName(name)
                                 .age(age)
                                 .sex(p.getGender())
-                                .mrn(p.getId().toString())
+                                // QA D1040: the hospital's MRN, never the patient's UUID.
+                                .mrn(enc.getHospital() != null ? p.getMrnForHospital(enc.getHospital().getId()) : null)
                                 .chiefComplaint(enc.getNotes())
                                 .waitTimeMinutes((int) Math.min(waitMinutes, Integer.MAX_VALUE))
-                                .arrivalTime(enc.getEncounterDate())
+                                .arrivalTime(com.example.hms.utility.EncounterWait.since(enc))
                                 .flags(Collections.emptyList())
                                 .prepStatus(RoomedPatientDTO.PrepStatusDTO.builder()
                                         .labsDrawn(false)
@@ -195,8 +201,9 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
         List<PatientResponse> result = new ArrayList<>();
         Set<UUID> seen = new LinkedHashSet<>();
         try {
+            // QA D791: patients seen in a visit; a prescription's anchor is not one.
             encounterRepository.findByStaff_Id(staff.getId()).stream()
-                    .filter(e -> e.getPatient() != null)
+                    .filter(e -> e.getPatient() != null && !e.isPrescriptionAnchor())
                     .sorted(Comparator.comparing(
                             e -> e.getEncounterDate() != null ? e.getEncounterDate() : LocalDateTime.MIN,
                             Comparator.reverseOrder()))
@@ -206,8 +213,10 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                         Patient p = e.getPatient();
                         PatientResponse dto = new PatientResponse();
                         dto.setId(p.getId());
-                        dto.setMrn(p.getId().toString());
+                        // QA D1040: the hospital's MRN, never the patient's UUID.
+                        dto.setMrn(e.getHospital() != null ? p.getMrnForHospital(e.getHospital().getId()) : null);
                         dto.setFirstName(p.getFirstName());
+                        dto.setMiddleName(p.getMiddleName());
                         dto.setLastName(p.getLastName());
                         dto.setDateOfBirth(p.getDateOfBirth());
                         dto.setGender(p.getGender());
@@ -233,7 +242,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                 return OnCallStatusDTO.builder().isOnCall(false).build();
             }
             UUID staffId = staffOpt.get().getId();
-            java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+            java.time.OffsetDateTime now = java.time.OffsetDateTime.now(clock);
             var schedules = onCallScheduleRepository.findActiveByStaffIdAt(staffId, now);
             if (!schedules.isEmpty()) {
                 var entry = schedules.get(0);

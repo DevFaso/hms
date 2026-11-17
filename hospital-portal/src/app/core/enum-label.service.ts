@@ -2,6 +2,9 @@ import { Injectable, OnDestroy, inject } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
+/** A UUID anywhere in a string (QA D672). */
+const UUID_IN_TEXT = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 /**
  * The enum-label vocabulary and its three-tier lookup, with no Angular
  * template machinery attached.
@@ -58,6 +61,36 @@ export class EnumLabelService implements OnDestroy {
    * under `PORTAL.ENUM.*`; this map exists so a missing translation key never
    * leaks into the UI. Keep groups alphabetically ordered within each section. */
   private static readonly LABELS: Record<string, Record<string, string>> = {
+    recoveryContactType: {
+      EMAIL: 'Email',
+      PHONE: 'Phone',
+      SECURITY_KEY: 'Security key',
+      PERSONAL_CONTACT: 'Personal contact',
+      OTHER: 'Other contact',
+    },
+    /* ── Staff specialisations (users/user-list.ts) ───────── */
+    specialization: {
+      CARDIOLOGY: 'Cardiology',
+      CLINICAL_PHARMACY: 'Clinical Pharmacy',
+      DERMATOLOGY: 'Dermatology',
+      GENERAL_NURSE: 'General Nursing',
+      GENERAL_PRACTICE: 'General Practice',
+      GYNECOLOGY: 'Gynecology',
+      HOSPITAL_PHARMACY: 'Hospital Pharmacy',
+      ICU_NURSE: 'ICU Nursing',
+      LAB_TECHNICIAN: 'Laboratory Technician',
+      MICROBIOLOGY: 'Microbiology',
+      NEUROLOGY: 'Neurology',
+      ONCOLOGY: 'Oncology',
+      ORTHOPEDICS: 'Orthopedics',
+      OTHER: 'Other',
+      PATHOLOGY: 'Pathology',
+      PEDIATRICS: 'Pediatrics',
+      PEDIATRIC_NURSE: 'Pediatric Nursing',
+      PSYCHIATRY: 'Psychiatry',
+      RADIOLOGY: 'Radiology',
+      SURGICAL_NURSE: 'Surgical Nursing',
+    },
     /* ── Vital sign types ─────────────────────────────────── */
     vitalType: {
       BLOOD_PRESSURE: 'Blood Pressure',
@@ -79,6 +112,10 @@ export class EnumLabelService implements OnDestroy {
       SELF_REPORTED: 'Self-Reported',
       DEVICE: 'Connected Device',
       TRIAGE: 'Triage',
+      OTHER: 'Other',
+      DELIVERY: 'Delivery room',
+      PATIENT_REPORTED: 'Reported by the patient',
+      MANUAL: 'Manual entry',
     },
 
     /* ── Encounter / visit types ──────────────────────────── */
@@ -149,7 +186,6 @@ export class EnumLabelService implements OnDestroy {
       DISPENSED: 'Dispensed',
       PARTIALLY_FILLED: 'Partially Filled',
       PENDING_STOCK: 'Pending Stock',
-      REQUIRES_EXTERNAL_FILL: 'Requires External Fill',
       SENT_TO_PARTNER: 'Sent to Partner',
       PARTNER_ACCEPTED: 'Partner Accepted',
       PARTNER_REJECTED: 'Partner Rejected',
@@ -206,6 +242,7 @@ export class EnumLabelService implements OnDestroy {
       READY_FOR_DISCHARGE: 'Ready for Discharge',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
+      LEFT_WITHOUT_BEING_SEEN: 'Left without being seen',
     },
 
     /* ── Phase 1 — Staff scheduling: leave + shift ─────────── */
@@ -244,16 +281,44 @@ export class EnumLabelService implements OnDestroy {
     },
 
     /* ── Phase 2 — Lab / admin / referrals / signatures ───── */
+    /** QA D963: LabOrderServiceImpl.LAB_PRIORITIES. */
+    labOrderPriority: {
+      ROUTINE: 'Routine',
+      URGENT: 'Urgent',
+      STAT: 'STAT (immediate)',
+    },
+    /** QA D963: LabOrderChannel. */
+    labOrderChannel: {
+      ELECTRONIC: 'Electronic',
+      PORTAL: 'Portal',
+      PHONE: 'Phone',
+      FAX: 'Fax',
+      EMAIL: 'Email',
+      WRITTEN: 'Written',
+      WALK_IN: 'Walk-In',
+      OTHER: 'Other',
+    },
+    /** QA D963 / D962: LabSpecimenStatus. */
+    labSpecimenStatus: {
+      PENDING: 'Pending',
+      COLLECTED: 'Collected',
+      IN_TRANSIT: 'In transit',
+      RECEIVED: 'Received',
+      PROCESSING: 'Processing',
+      COMPLETED: 'Completed',
+      REJECTED: 'Rejected',
+    },
     labOrderStatus: {
       ORDERED: 'Ordered',
       PENDING: 'Pending',
       COLLECTED: 'Collected',
       RECEIVED: 'Received',
       IN_PROGRESS: 'In Progress',
-      RESULTED: 'Resulted',
+      RESULTED: 'Awaiting validation',
       VERIFIED: 'Verified',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
+      ENTERED_IN_ERROR: 'Entered in error',
     },
     abnormalFlag: {
       NORMAL: 'Normal',
@@ -278,6 +343,7 @@ export class EnumLabelService implements OnDestroy {
       CANCELLED: 'Cancelled',
       TRANSFERRED: 'Transferred',
       DECEASED: 'Deceased',
+      CLOSED_IN_ERROR: 'Closed by a death entered in error',
     },
     bedStatus: {
       AVAILABLE: 'Available',
@@ -317,6 +383,37 @@ export class EnumLabelService implements OnDestroy {
       PLATELETS: 'Platelets',
       CRYOPRECIPITATE: 'Cryoprecipitate',
     },
+    /* Billing-money plan PR 2: the price list (fallbacks; the locales hold the labels). */
+    priceListCategory: {
+      CONSULTATION: 'Consultation',
+      LAB_TEST: 'Laboratory',
+      IMAGING: 'Imaging',
+      PROCEDURE: 'Procedure',
+      BED_DAY: 'Bed day',
+      TRANSFUSION: 'Transfusion',
+      DELIVERY: 'Delivery',
+      OTHER_SERVICE: 'Other (medicines, supplies, fees)',
+    },
+    priceListLinkType: {
+      SYSTEM: 'System',
+      LAB_TEST_DEFINITION: 'Lab test',
+      PROCEDURE_CODE: 'Procedure',
+      IMAGING_STUDY: 'Imaging study',
+      TRANSFUSION_PRODUCT: 'Blood product',
+      TREATMENT: 'Service',
+    },
+    priceListPriceStatus: {
+      SCHEDULED: 'Planned',
+      IN_FORCE: 'In force',
+      ENDED: 'Ended',
+      REPLACED: 'Replaced before it applied',
+    },
+    priceListSystemKey: {
+      CONSULTATION_DEFAULT: 'Default consultation',
+      BED_DAY: 'Bed day',
+      DELIVERY_VAGINAL: 'Vaginal delivery',
+      DELIVERY_CAESAREAN: 'Caesarean section',
+    },
     /* Acronym modalities (CT, MRI, PET, XRAY, DEXA) are mangled by the
      * Title-Case prettifier ("Ct", "Mri"), so they need explicit labels. */
     imagingModality: {
@@ -333,7 +430,7 @@ export class EnumLabelService implements OnDestroy {
       OTHER: 'Other',
     },
     dispenseStatus: {
-      PENDING: 'Pending',
+      PENDING: 'Ready for collection',
       COMPLETED: 'Completed',
       PARTIAL: 'Partial',
       CANCELLED: 'Cancelled',
@@ -362,6 +459,91 @@ export class EnumLabelService implements OnDestroy {
       SENT: 'Sent',
       FAILED: 'Failed',
     },
+    fulfillmentMode: {
+      OUTPATIENT_HOSPITAL: 'Outpatient hospital',
+      INPATIENT_DISPENSARY: 'Inpatient dispensary',
+      PARTNER_PHARMACY: 'Partner pharmacy',
+      COMMUNITY: 'Community pharmacy',
+      MAIL_ORDER: 'Mail order',
+      MOBILE_OUTREACH: 'Mobile unit',
+    },
+    // QA D1148: the chart banner's directive chips and code status.
+    advanceDirectiveType: {
+      LIVING_WILL: 'Living will',
+      DURABLE_POWER_OF_ATTORNEY: 'Durable power of attorney',
+      DO_NOT_RESUSCITATE: 'Do not resuscitate (DNR)',
+      PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT:
+        'Physician orders for life-sustaining treatment (POLST)',
+      OTHER: 'Other',
+    },
+    codeStatus: {
+      FULL_CODE: 'Full code',
+      DNR: 'Do not resuscitate (DNR)',
+      DNI: 'Do not intubate (DNI)',
+      COMFORT_ONLY: 'Comfort care only',
+      LIVING_WILL: 'Living will',
+      DURABLE_POWER_OF_ATTORNEY: 'Durable power of attorney',
+      DO_NOT_RESUSCITATE: 'Do not resuscitate (DNR)',
+      PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT:
+        'Physician orders for life-sustaining treatment (POLST)',
+      OTHER: 'Other',
+    },
+    imagingLaterality: {
+      LEFT: 'Left',
+      RIGHT: 'Right',
+      BILATERAL: 'Bilateral',
+      MIDLINE: 'Midline',
+      NOT_APPLICABLE: 'Not applicable',
+    },
+    imagingOrderPriority: {
+      ROUTINE: 'Routine',
+      URGENT: 'Urgent',
+      STAT: 'STAT (immediate)',
+    },
+    // Provisional rule 2 (2026-11-15): why an imaging order was placed despite the duplicate warning.
+    imagingDuplicateOverrideReason: {
+      CLINICAL_CHANGE: 'Clinical change',
+      PRIOR_INADEQUATE_OR_UNAVAILABLE: 'Previous study inadequate or unavailable',
+      DIFFERENT_REGION_OR_QUESTION: 'Different region or clinical question',
+      OTHER: 'Other',
+    },
+    admissionType: {
+      EMERGENCY: 'Emergency',
+      ELECTIVE: 'Elective',
+      URGENT: 'Urgent',
+      NEWBORN: 'Newborn',
+      TRANSFER: 'Transfer',
+      OBSERVATION: 'Observation',
+      DAY_CASE: 'Day case',
+      LABOR_DELIVERY: 'Labour and delivery',
+      PSYCHIATRIC: 'Psychiatric',
+    },
+    stockTransactionType: {
+      RECEIPT: 'Receipt',
+      DISPENSE: 'Dispense',
+      ADJUSTMENT: 'Adjustment',
+      TRANSFER: 'Transfer',
+      RETURN: 'Return',
+    },
+    pharmacyType: {
+      HOSPITAL_DISPENSARY: 'Hospital dispensary',
+      COMMUNITY_PHARMACY: 'Community pharmacy',
+      PARTNER_PHARMACY: 'Partner pharmacy',
+    },
+    procedureUrgency: {
+      ROUTINE: 'Routine',
+      URGENT: 'Urgent',
+      EMERGENT: 'Emergent',
+      ELECTIVE: 'Elective',
+    },
+    labSeverityFlag: {
+      NORMAL: 'Normal',
+      LOW: 'Low',
+      HIGH: 'High',
+      CRITICAL: 'Critical',
+      ABNORMAL: 'Abnormal',
+      UNSPECIFIED: 'Not graded',
+    },
     imagingOrderStatus: {
       DRAFT: 'Draft',
       ORDERED: 'Ordered',
@@ -371,6 +553,11 @@ export class EnumLabelService implements OnDestroy {
       COMPLETED: 'Completed',
       RESULTS_AVAILABLE: 'Results Available',
       CANCELLED: 'Cancelled',
+    },
+    imagingReportHistoryEvent: {
+      AUTHORED: 'Report written',
+      SIGNED: 'Report signed',
+      CRITICAL_ACKNOWLEDGED: 'Critical finding acknowledged',
     },
     imagingReportStatus: {
       DRAFT: 'Draft',
@@ -442,6 +629,12 @@ export class EnumLabelService implements OnDestroy {
       PAID: 'Paid',
       CANCELLED: 'Cancelled',
     },
+    invoiceItemCategory: {
+      SERVICE: 'Service',
+      MEDICATION: 'Medication',
+      LAB_TEST: 'Lab Test',
+      GENERAL: 'General',
+    },
     allergyVerificationStatus: {
       UNCONFIRMED: 'Unconfirmed',
       PROVISIONAL: 'Provisional',
@@ -509,6 +702,14 @@ export class EnumLabelService implements OnDestroy {
       APPOINTMENT_CREATED: 'Appointment Created',
       PRESCRIPTION_CREATED: 'Prescription Created',
       LAB_ORDER_CREATED: 'Lab Order Created',
+      LAB_ORDER_UPDATED: 'Lab Order Updated',
+      LAB_ORDER_CANCELLED: 'Lab Order Cancelled',
+      LAB_ORDER_ENTERED_IN_ERROR: 'Lab Order Entered in Error',
+      LAB_ORDER_DUPLICATE_PLACED: 'Duplicate Lab Order Placed',
+      IMAGING_ORDER_DUPLICATE_PLACED: 'Duplicate Imaging Order Placed',
+      LAB_SPECIMEN_UPDATED: 'Lab Specimen Updated',
+      LAB_RESULT_CREATED: 'Lab Result Created',
+      LAB_RESULT_ACKNOWLEDGED: 'Lab Result Acknowledged',
       IMAGING_ORDER_CREATED: 'Imaging Order Created',
       IMPERSONATION_STARTED: 'Impersonation Started',
       IMPERSONATION_ENDED: 'Impersonation Ended',
@@ -528,6 +729,7 @@ export class EnumLabelService implements OnDestroy {
       PHARMACIST: 'Pharmacist',
       MIDWIFE: 'Midwife',
       PATIENT: 'Patient',
+      PROVIDER_ADMIN: 'Provider Administrator',
       RADIOLOGIST: 'Radiologist',
       SURGEON: 'Surgeon',
       THERAPIST: 'Therapist',
@@ -640,13 +842,339 @@ export class EnumLabelService implements OnDestroy {
 
     /* ── Payment methods ──────────────────────────────────── */
     paymentMethod: {
-      CARD: 'Credit / Debit Card',
-      BANK_TRANSFER: 'Bank Transfer',
-      MOBILE_MONEY: 'Mobile Money',
+      CARD: 'Card',
+      BANK_TRANSFER: 'Bank transfer',
+      MOBILE_MONEY: 'Mobile money',
       CASH: 'Cash',
       INSURANCE: 'Insurance',
     },
+
+    /* Tier-2 nets for the domains that had none. Appended last on purpose:
+     * the cross-group scan in lookup() returns the FIRST group that defines a
+     * value, so a group added here can only fill a gap, never change the label
+     * an earlier group already gives. scripts/lib/enum-labels-net.test.mjs
+     * fails when a declared domain has no group. */
+    /* ── Patient chart timeline categories (PatientServiceImpl CATEGORY_*) ── */
+    timelineCategory: {
+      ALLERGY: 'Allergy',
+      DIAGNOSIS: 'Diagnosis',
+      ENCOUNTER: 'Encounter',
+      IMAGING: 'Imaging',
+      LAB_ORDER: 'Lab test ordered',
+      LAB_RESULT: 'Lab result',
+      NOTE: 'Clinical note',
+      PRESCRIPTION: 'Prescription',
+      PROCEDURE: 'Procedure',
+      REFERRAL: 'Referral',
+      TREATMENT_PLAN: 'Treatment plan',
+      CONSULTATION: 'Consultation request',
+      DISCHARGE_SUMMARY: 'Discharge summary',
+      DOCUMENT: 'Issued document',
+      // QA D959 (round 18): every clinical event type has a chronology row.
+      TRANSFUSION: 'Transfusion request',
+      PROCEDURE_ORDER: 'Procedure order',
+      OBGYN_REFERRAL: 'OB/GYN referral',
+      NURSING_NOTE: 'Nursing note',
+      IMMUNIZATION: 'Immunization',
+      DELIVERY: 'Delivery',
+      DEATH: 'Death',
+      MICRO_CULTURE: 'Microbiology culture',
+    },
+
+    /* ── Clinical / nursing note templates (QA D1076) ──────── */
+    noteTemplate: {
+      DAR: 'DAR note',
+      SOAP: 'SOAP note',
+      SOAPIE: 'SOAPIE note',
+    },
+
+    /* ── Immunization status ───────────────────────────────── */
+    immunizationStatus: {
+      COMPLETED: 'Completed',
+      DEFERRED: 'Deferred',
+      ENTERED_IN_ERROR: 'Entered in Error',
+      NOT_DONE: 'Not Done',
+      REFUSED: 'Refused',
+    },
+
+    /* ── MAR task status ───────────────────────────────────── */
+    marTaskStatus: {
+      COMPLETED: 'Course ended',
+      DUE: 'Due',
+      OVERDUE: 'Overdue',
+      UPCOMING: 'Upcoming',
+    },
+
+    /* ── MAR dose outcome (QA D929) ────────────────────────── */
+    medicationAdministrationStatus: {
+      GIVEN: 'Given',
+      HELD: 'Held',
+      MISSED: 'Missed',
+      PENDING: 'Pending',
+      REFUSED: 'Refused',
+    },
+
+    /* ── Newborn alert types ───────────────────────────────── */
+    newbornAlertType: {
+      APGAR: 'Apgar',
+      CARDIOVASCULAR: 'Cardiovascular',
+      DANGER_SIGN: 'Danger sign',
+      GENERAL: 'General',
+      GLUCOSE: 'Glucose',
+      OXYGENATION: 'Oxygenation',
+      RESPIRATORY: 'Respiratory',
+      THERMOREGULATION: 'Thermoregulation',
+    },
+
+    /* ── Notification types (Notification.type, a String column) ─── */
+    notificationType: {
+      ADMIN_MESSAGE: 'Message from the administration',
+      ANNOUNCEMENT: 'Announcement',
+      APPOINTMENT_REMINDER: 'Appointment Reminder',
+      BREAK_GLASS_OPT_OUT_OVERRIDE: 'Emergency access to your record',
+      CHAT_MESSAGE: 'New message',
+      CONSULTATION_UPDATE: 'Specialist consultation',
+      CRITICAL_IMAGING_FINDING: 'Critical Imaging Finding',
+      CRITICAL_IMAGING_FINDING_ESCALATION: 'Critical Imaging Finding Escalation',
+      CRITICAL_LAB_RESULT: 'Critical Lab Result',
+      CRITICAL_LAB_RESULT_ESCALATION: 'Critical Lab Result Escalation',
+      DISCHARGE_SUMMARY: 'Discharge Summary',
+      LAB_ORDER_RECEIVED: 'Lab Order Received',
+      LAB_RESULT: 'Lab result',
+      LAB_SPECIMEN_REJECTED: 'Specimen rejected',
+      LICENSE_EXPIRY: 'License Expiry',
+      MATERNITY_ALERT: 'Maternity alert',
+      MEDICATION_REFILL: 'Medication Refill',
+      NEWS2_ESCALATION: 'NEWS2 Escalation',
+      OBSTETRIC_ALERT: 'Urgent Obstetric Alert',
+      OBSTETRIC_ALERT_ESCALATION: 'Urgent Obstetric Alert Escalation',
+      PHARMACY_EVENT: 'Pharmacy Update',
+      POSITIVE_CULTURE_RESULT: 'Positive Culture Result',
+      CORRECTED_CULTURE_RESULT: 'Corrected Culture Result',
+      PRENATAL_REMINDER: 'Antenatal visit reminder',
+      PRO_CRITICAL_ITEM: 'Critical PRO Item',
+      PRO_CRITICAL_ITEM_ESCALATION: 'Critical PRO Item Escalation',
+      PRO_SCREEN_POSITIVE: 'Positive PRO Screen',
+      REORDER_ALERT: 'Reorder Alert',
+      SEVERE_HYPERTENSION: 'Severe hypertension',
+    },
+
+    /* ── Order source (snapshot drawer + nurse station board) ─── */
+    orderSourceType: {
+      IMAGING: 'Imaging',
+      LAB: 'Lab',
+      PROCEDURE: 'Procedure',
+      VITALS: 'Vitals',
+    },
+
+    /* ── Provider facilities (D5) ─────────────────────────── */
+    facilityType: {
+      HOSPITAL: 'Hospital',
+      PHARMACY: 'Pharmacy',
+      LABORATORY: 'Laboratory',
+    },
+    hospitalLifecycleState: {
+      ACTIVE: 'Active',
+      SUSPENDED: 'Suspended',
+      ARCHIVED: 'Archived',
+      PENDING_PURGE: 'Purge scheduled',
+      PURGED: 'Purged',
+    },
+    providerVerificationStatus: {
+      SUBMITTED: 'Submitted',
+      VERIFIED: 'Verified',
+      REJECTED: 'Rejected',
+      REVOKED: 'Revoked',
+    },
+
+    /* ── Organization types ────────────────────────────────── */
+    organizationType: {
+      ACADEMIC_CENTER: 'Academic Center',
+      ACADEMIC_MEDICAL_CENTER: 'Academic Medical Center',
+      AMBULATORY: 'Ambulatory Network',
+      COMMUNITY_HOSPITAL: 'Community Hospital',
+      GOVERNMENT_AGENCY: 'Government Agency',
+      HEALTHCARE_NETWORK: 'Healthcare Network',
+      HEALTH_SYSTEM: 'Health System',
+      HOSPITAL: 'Hospital',
+      HOSPITAL_CHAIN: 'Hospital Chain',
+      LABORATORY: 'Laboratory',
+      PEDIATRIC_SYSTEM: 'Pediatric System',
+      PHARMACY: 'Pharmacy',
+      PRIVATE_PRACTICE: 'Private Practice',
+      REGIONAL_NETWORK: 'Regional Network',
+      RESEARCH_INSTITUTION: 'Research Institution',
+      SPECIALTY_GROUP: 'Specialty Group',
+      SPECIALTY_NETWORK: 'Specialty Network',
+    },
+
+    /* ── Platform release status ───────────────────────────── */
+    platformReleaseStatus: {
+      CANCELLED: 'Cancelled',
+      COMPLETED: 'Completed',
+      IN_PROGRESS: 'In Progress',
+      SCHEDULED: 'Scheduled',
+    },
+
+    /* ── Platform service status ───────────────────────────── */
+    platformServiceStatus: {
+      ACTIVE: 'Active',
+      DECOMMISSIONED: 'Decommissioned',
+      INACTIVE: 'Inactive',
+      PENDING: 'Pending',
+      PILOT: 'Pilot',
+      UNKNOWN: 'Unknown',
+    },
+
+    /* ── Postpartum alert types ────────────────────────────── */
+    postpartumAlertType: {
+      EDUCATION: 'Education',
+      FOLLOW_UP: 'Follow-Up',
+      HEMORRHAGE: 'Hemorrhage',
+      HYPERTENSION: 'Severe hypertension',
+      INFECTION: 'Infection',
+      PAIN: 'Pain',
+      PSYCHOSOCIAL: 'Psychosocial',
+    },
+
+    /* ── Procedure order status ────────────────────────────── */
+    procedureOrderStatus: {
+      CANCELLED: 'Cancelled',
+      COMPLETED: 'Completed',
+      IN_PROGRESS: 'In Progress',
+      ORDERED: 'Ordered',
+      POSTPONED: 'Postponed',
+      PRE_OP_CLEARANCE_PENDING: 'Pre-Op Clearance Pending',
+      READY_FOR_PROCEDURE: 'Ready for Procedure',
+      SCHEDULED: 'Scheduled',
+    },
+
+    /* ── Nurse handoff direction (QA D235) ─────────────────── */
+    handoffDirection: {
+      BREAK_COVER: 'Break cover',
+      PROCEDURE: 'To a procedure or exam',
+      SHIFT_CHANGE: 'Shift change',
+      WARD_TRANSFER: 'Ward transfer',
+    },
+
+    /* ── Vitals round type ─────────────────────────────────── */
+    vitalTaskType: {
+      FULL_SET: 'Full Set',
+      NEWS2_HIGH: 'NEWS2 high: every 15 min',
+      NEWS2_MEDIUM: 'NEWS2 medium: hourly',
+      ROUTINE: 'Routine',
+    },
+
+    /* ── Staff scheduling and employment ──────────────────── */
+    shiftType: {
+      MORNING: 'Morning',
+      AFTERNOON: 'Afternoon',
+      EVENING: 'Evening',
+      NIGHT: 'Night',
+      ON_CALL: 'On-Call',
+      FLEX: 'Flex',
+    },
+    leaveType: {
+      VACATION: 'Vacation',
+      SICK: 'Sick Leave',
+      EMERGENCY: 'Emergency',
+      TRAINING: 'Training',
+      UNPAID: 'Unpaid Leave',
+      OTHER: 'Other',
+    },
+    employmentType: {
+      FULL_TIME: 'Full-Time',
+      PART_TIME: 'Part-Time',
+      CONTRACT: 'Contract',
+      LOCUM: 'Locum',
+      INTERN: 'Intern',
+    },
+    specimenType: {
+      BLOOD: 'Blood',
+      WHOLE_BLOOD: 'Whole blood',
+      SERUM: 'Serum',
+      URINE: 'Urine',
+      STOOL: 'Stool',
+      CSF: 'Cerebrospinal fluid',
+      SPUTUM: 'Sputum',
+      SWAB: 'Swab',
+      TISSUE: 'Tissue',
+      OTHER: 'Other',
+    },
+    platformServiceType: {
+      EHR: 'Electronic health record',
+      BILLING: 'Billing',
+      INVENTORY: 'Inventory',
+      LIMS: 'Laboratory information system',
+      ANALYTICS: 'Analytics',
+      CLINICAL_ANALYTICS: 'Clinical analytics',
+      REMOTE_MONITORING: 'Remote monitoring',
+      PEDIATRIC_MESSAGING: 'Paediatric messaging',
+      ORTHO_IMAGING: 'Orthopaedic imaging',
+      RESP_TELEMED: 'Respiratory telemedicine',
+    },
+    // QA D871: the ADT intake form's default acuity.
+    acuityLevel: {
+      LEVEL_1_MINIMAL: 'Level 1 - minimal',
+      LEVEL_2_MODERATE: 'Level 2 - moderate',
+      LEVEL_3_MAJOR: 'Level 3 - major',
+      LEVEL_4_SEVERE: 'Level 4 - severe',
+      LEVEL_5_CRITICAL: 'Level 5 - critical',
+    },
+    // QA D528/D663: tier-2 English for the domains #928 declared.
+    profileType: {
+      STAFF: 'Staff',
+      PATIENT: 'Patient',
+    },
+    medicationCategory: {
+      ANALGESIC: 'Analgesic',
+      ANTIBIOTIC: 'Antibiotic',
+      ANTIMALARIAL: 'Antimalarial',
+      ANTIPYRETIC: 'Antipyretic',
+      ANTI_INFLAMMATORY: 'Anti-inflammatory',
+      ANTIHYPERTENSIVE: 'Antihypertensive',
+      ANTIDIABETIC: 'Antidiabetic',
+      ANTIRETROVIRAL: 'Antiretroviral',
+      ANTIFUNGAL: 'Antifungal',
+      ANTIPARASITIC: 'Antiparasitic',
+      ANTIHISTAMINE: 'Antihistamine',
+      ANTICOAGULANT: 'Anticoagulant',
+      VITAMIN: 'Vitamin',
+      VACCINE: 'Vaccine',
+      OTHER: 'Other',
+    },
+    trackerAcuity: {
+      'ESI-1': 'ESI 1 - Resuscitation',
+      'ESI-2': 'ESI 2 - Emergent',
+      'ESI-3': 'ESI 3 - Urgent',
+      'ESI-4': 'ESI 4 - Less urgent',
+      'ESI-5': 'ESI 5 - Non-urgent',
+      EMERGENT: 'Emergent',
+      URGENT: 'Urgent',
+      ROUTINE: 'Routine',
+      LOW: 'Low',
+    },
   };
+
+  /**
+   * QA D528/D619: an audit row names its entity as a token — `BILLING_INVOICE`
+   * on a write audit, `BillingInvoice` from older emitters. Both become the
+   * keyed AUDIT_ENTITY_TYPE label. Anything that is not token-shaped (a
+   * resource someone named) is returned as it is; `'Unknown Resource'` and a
+   * blank are `null`, so a caller can hide the separator.
+   */
+  auditEntityLabel(raw: string | null | undefined): string | null {
+    const name = raw?.trim();
+    if (!name || name === 'Unknown Resource') return null;
+    // QA D672: several writers record the row's id as its resource name
+    // ("19ffd52b-…", "Patient 19ffd52b-…"); an id is not a label.
+    if (UUID_IN_TEXT.test(name)) return null;
+    const upperSnake = /^[A-Z][A-Z0-9_]*$/.test(name);
+    const pascal = /^(?:[A-Z][a-z0-9]+)+$/.test(name);
+    if (!upperSnake && !pascal) return name;
+    const code = name.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
+    return this.transform(code, 'auditEntityType');
+  }
 
   /** The locale-aware label for one raw enum value, or `''` for a blank one. */
   transform(value: string | null | undefined, domain?: string): string {
@@ -665,13 +1193,118 @@ export class EnumLabelService implements OnDestroy {
     return result;
   }
 
+  /**
+   * QA D908: the label defined for the value — in the locale files or the
+   * curated English map — or `null` when there is none, never the Title-Case
+   * prettification {@link transform} falls back to. A caller that keeps an
+   * unlabelled token verbatim asks this instead of comparing the label with
+   * the prettified code: "Activate" is ACTIVATE's real English label and
+   * reads exactly like the prettified code, so that comparison showed the
+   * raw token to English readers.
+   */
+  knownLabel(value: string | null | undefined, domain?: string): string | null {
+    if (!value) return null;
+    const lang = this.translate.getCurrentLang() || this.translate.getFallbackLang() || 'en';
+    // '?' cannot start a domain name, so this never collides with the other keys.
+    const memoKey = `${lang}|?${domain ?? ''}|${value}`;
+    const cached = this.memo.get(memoKey);
+    if (cached !== undefined) return cached || null;
+    const result = this.lookupKnown(value, domain);
+    this.memo.set(memoKey, result ?? '');
+    return result;
+  }
+
+  /**
+   * QA D836: the label for a FREE-TEXT value that may also be one of the
+   * domain's curated codes — a lab sample type is typed by the lab ("EDTA",
+   * "LCR", "Sang total (EDTA)") but older rows carry a code ("SERUM").
+   * The domain's translated or curated label wins when the value is one of
+   * its codes; anything else is shown exactly as typed. Never prettified:
+   * a one-word abbreviation looks like a code, and title-casing it read
+   * "Edta" / "Lcr". Other enum groups are not scanned either — a typed word
+   * that happens to be a status code elsewhere is still the lab's text.
+   */
+  labelOrAsTyped(value: string | null | undefined, domain: string): string {
+    if (!value) return '';
+    const lang = this.translate.getCurrentLang() || this.translate.getFallbackLang() || 'en';
+    // '=' cannot start a domain name, so this never collides with transform()'s keys.
+    const memoKey = `${lang}|=${domain}|${value}`;
+    const cached = this.memo.get(memoKey);
+    if (cached !== undefined) return cached;
+
+    const path = `PORTAL.ENUM.${EnumLabelService.toUpperSnake(domain)}.${value}`;
+    const translated: unknown = this.translate.instant(path);
+    let result = value;
+    if (typeof translated === 'string' && translated && translated !== path) {
+      result = translated;
+    } else {
+      const curated = EnumLabelService.LABELS[domain]?.[value];
+      if (curated) result = curated;
+    }
+    this.memo.set(memoKey, result);
+    return result;
+  }
+
   /** Convert camelCase domain → UPPER_SNAKE_CASE for the JSON path lookup. */
   private static toUpperSnake(camel: string): string {
     return camel.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
   }
 
+  private static readonly ENUM_ROOT = ['PORTAL', 'ENUM'].join('.');
+
+  /** QA D836: what an enum code looks like (letters, digits, underscores, one word). */
+  private static readonly CODE_LIKE = /^\w+$/;
+
+  /** The value's label in the generic STATUS group, else in the first group that has it. */
+  private lookupAnyGroup(value: string): string | null {
+    // The whole subtree, not a leaf key: held in a constant so the
+    // referenced-keys gate does not read it as a missing string.
+    const groups: unknown = this.translate.instant(EnumLabelService.ENUM_ROOT);
+    if (!groups || typeof groups !== 'object') return null;
+    const byGroup = groups as Record<string, unknown>;
+    const ordered = ['STATUS', ...Object.keys(byGroup).filter((g) => g !== 'STATUS')];
+    for (const group of ordered) {
+      const entries = byGroup[group];
+      if (entries && typeof entries === 'object') {
+        const label = (entries as Record<string, unknown>)[value];
+        if (typeof label === 'string' && label) return label;
+      }
+    }
+    return null;
+  }
+
   /** Three-tier lookup. See class JSDoc. */
   private lookup(value: string, domain?: string): string {
+    const known = this.lookupKnown(value, domain);
+    if (known) return known;
+
+    // QA D1062: a comma-joined list of codes (a proxy grant's
+    // "VIEW_APPOINTMENTS,VIEW_LAB_RESULTS") is labelled code by code, so a
+    // combination nobody keyed whole still reads in the page's language.
+    if (value.includes(',')) {
+      const parts = value
+        .split(',')
+        .map((p) => p.trim())
+        .filter((p) => p !== '');
+      if (parts.length > 1 && parts.every((p) => EnumLabelService.CODE_LIKE.test(p))) {
+        return parts.map((p) => this.lookup(p, domain)).join(', ');
+      }
+    }
+
+    // 3) Prettify — UPPER_SNAKE_CASE → Title Case. QA D836: only a code is
+    // prettified. Free text someone typed ("Sang total (EDTA)", a lab sample
+    // type) is shown as typed: title-casing it read "Sang total (edta)".
+    if (!EnumLabelService.CODE_LIKE.test(value)) {
+      return value;
+    }
+    return value
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  /** Tiers 1 and 2 of {@link lookup}: a defined label, or `null`. */
+  private lookupKnown(value: string, domain?: string): string | null {
     // 1) i18n — PORTAL.ENUM.<GROUP>.<VALUE>
     if (domain) {
       const group = EnumLabelService.toUpperSnake(domain);
@@ -682,6 +1315,12 @@ export class EnumLabelService implements OnDestroy {
         return translated;
       }
     }
+
+    // 1b) i18n in any other group. A domain with no locale group of its own
+    // (or a domain-less call) used to drop straight to the English LABELS, so
+    // a French page read "Draft" although PORTAL.ENUM.STATUS.DRAFT exists.
+    const translatedElsewhere = this.lookupAnyGroup(value);
+    if (translatedElsewhere) return translatedElsewhere;
 
     // 2) In-memory English LABELS
     if (domain) {
@@ -699,11 +1338,6 @@ export class EnumLabelService implements OnDestroy {
     for (const map of Object.values(EnumLabelService.LABELS)) {
       if (map[value]) return map[value];
     }
-
-    // 3) Prettify — UPPER_SNAKE_CASE → Title Case
-    return value
-      .split('_')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(' ');
+    return null;
   }
 }

@@ -1,19 +1,26 @@
 package com.example.hms.service.impl;
 
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
 import com.example.hms.enums.RoutingType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.PrescriptionDispatchFailedException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.model.prescription.PrescriptionTransmission;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchRequestDTO;
 import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchResponseDTO;
 import com.example.hms.repository.PrescriptionRepository;
@@ -21,7 +28,9 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.repository.prescription.PrescriptionTransmissionRepository;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.SmsService;
+import com.example.hms.service.pharmacy.PrescriberPharmacyNotifier;
 import com.example.hms.service.pharmacy.partner.PartnerNotificationChannel;
 import com.example.hms.service.pharmacy.partner.PartnerSmsTemplates;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +43,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -47,7 +57,9 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -68,7 +80,18 @@ class PrescriptionSmsDispatchServiceImplTest {
     @Mock private SmsService smsService;
     @Mock private PartnerNotificationChannel partnerChannel;
     @Mock private ControllerAuthUtils authUtils;
+    @Mock private PrescriberPharmacyNotifier prescriberNotifier;
+    @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     @Mock private Authentication auth;
+
+    /** G13: the work-queue claim; exit-path releases are verified where they matter. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
+
+    /** QA D792: real, over an empty stay history, so the guards apply the rule itself. */
+    @org.mockito.Spy
+    private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
+        new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class));
 
     @InjectMocks private PrescriptionSmsDispatchServiceImpl service;
 
@@ -80,8 +103,16 @@ class PrescriptionSmsDispatchServiceImplTest {
     private Pharmacy pharmacy;
     private User user;
 
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @BeforeEach
     void setUp() {
+        // QA D1000 class: the refusals are message keys, read in the request language.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         prescriptionId = UUID.randomUUID();
         pharmacyId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -141,6 +172,24 @@ class PrescriptionSmsDispatchServiceImplTest {
                 .thenAnswer(inv -> TEMPLATES.prescriptionOffer(REF_TOKEN, inv.getArgument(2), "AD"));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class,
+            names = {"SIGNED", "TRANSMISSION_FAILED"})
+    @DisplayName("G15 AC-10: no dispatch (first send or retry) while a fill is prepared: 409, nothing sent")
+    void dispatch_refusedWhileAFillIsPrepared(PrescriptionStatus status) {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        rx.setStatus(status);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId,
+                com.example.hms.enums.DispenseStatus.PENDING)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId,
+                PrescriptionSmsDispatchRequestDTO.builder().pharmacyId(pharmacyId).build()))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        org.mockito.Mockito.verifyNoInteractions(smsService, routingDecisionRepository, transmissionRepository);
+        assertThat(rx.getStatus()).isEqualTo(status);
+    }
+
     @Test
     @DisplayName("G1: dispatch records a PENDING PARTNER routing decision and sends the tokenised offer")
     void dispatch_happyPath() {
@@ -181,12 +230,61 @@ class PrescriptionSmsDispatchServiceImplTest {
         assertThat(decision.getDecidedForPatient()).isSameAs(rx.getPatient());
         assertThat(decision.getDecidedAt()).isNotNull();
         assertThat(decision.getReason()).contains("COMMUNITY_PHARMACY").contains("priority");
+        // A dispatch is never a no-show: that fact has its own column (V167)
+        // and only the no-show endpoint sets it.
+        assertThat(decision.isPartnerNoShow()).isFalse();
+        assertThat(decision.getNoShowReason()).isNull();
 
         assertThat(result.getStatus()).isEqualTo("SENT");
         assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
         assertThat(rx.getDispatchChannel()).isEqualTo("SMS");
         assertThat(rx.getDispatchStatus()).isEqualTo("SENT");
         assertThat(rx.getPharmacyId()).isEqualTo(pharmacyId);
+        // G13 AC-12: a successful dispatch ends the claim, DISPATCHED, by the
+        // resolveUserId actor; no queue role on this caller -> a plain release
+        verify(queueClaimService).releaseOnExit(rx,
+                com.example.hms.enums.QueueClaimReleaseReason.DISPATCHED, userId,
+                com.example.hms.enums.QueueClaimExitActor.OTHER);
+    }
+
+    private void stubSuccessfulDispatch() {
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> {
+                    PrescriptionTransmission t = inv.getArgument(0);
+                    t.setId(UUID.randomUUID());
+                    return t;
+                });
+    }
+
+    @Test
+    @DisplayName("G13 AC-12: a PHARMACIST's dispatch is a queue-role exit (a take-over when another holds the claim)")
+    void dispatch_byAPharmacistIsAQueueRoleExit() {
+        stubSuccessfulDispatch();
+        lenient().when(authUtils.hasAuthority(eq(auth), anyString())).thenReturn(false);
+        when(authUtils.hasAuthority(auth, "ROLE_PHARMACIST")).thenReturn(true);
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        verify(queueClaimService).releaseOnExit(rx,
+                com.example.hms.enums.QueueClaimReleaseReason.DISPATCHED, userId,
+                com.example.hms.enums.QueueClaimExitActor.QUEUE_ROLE);
+    }
+
+    @Test
+    @DisplayName("G13 AC-12: a DOCTOR's dispatch is never a take-over: OTHER, a plain release")
+    void dispatch_byADoctorIsAPlainRelease() {
+        stubSuccessfulDispatch();
+        lenient().when(authUtils.hasAuthority(eq(auth), anyString())).thenReturn(false);
+        lenient().when(authUtils.hasAuthority(auth, "ROLE_DOCTOR")).thenReturn(true);
+
+        service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        verify(queueClaimService).releaseOnExit(rx,
+                com.example.hms.enums.QueueClaimReleaseReason.DISPATCHED, userId,
+                com.example.hms.enums.QueueClaimExitActor.OTHER);
     }
 
     @Test
@@ -440,11 +538,50 @@ class PrescriptionSmsDispatchServiceImplTest {
 
         assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("DISPENSED");
+                // The status in words now, not the enum constant.
+                .hasMessageContaining("dispensed")
+                .hasMessageNotContaining("DISPENSED");
 
         verify(smsService, never()).send(anyString(), anyString());
         verify(routingDecisionRepository, never()).save(any());
         assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+    }
+
+    @Test
+    @DisplayName("QA D792: a SIGNED ward order of an ended stay is not dispatched by SMS")
+    void dispatch_rejectsWardOrderOfAnEndedStay() {
+        com.example.hms.model.Encounter stay = new com.example.hms.model.Encounter();
+        stay.setAdmissionId(java.util.UUID.randomUUID());
+        stay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        rx.setEncounter(stay);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+
+        verify(smsService, never()).send(anyString(), anyString());
+        verify(routingDecisionRepository, never()).save(any());
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+    }
+
+    @Test
+    @DisplayName("QA D792 (#953 review): any order the ended-stay guard refuses (an open stay encounter of a discharged admission...) is not dispatched")
+    void dispatch_rejectsAnyShapeTheGuardRefuses() {
+        rx.setEncounter(null);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        doReturn(true).when(endedStayOrders).endedWithAStay(rx);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+        verify(smsService, never()).send(anyString(), anyString());
     }
 
     @Test
@@ -567,24 +704,239 @@ class PrescriptionSmsDispatchServiceImplTest {
     }
 
     @Test
-    @DisplayName("provider failures persist a FAILED transmission and re-raise as BusinessException")
-    void dispatch_persistsFailedOnProviderError() {
+    void failedSmsStillAuditsThePassUnderThePrescribersReviewAfterCommit() {
+        rx.getPatient().setId(UUID.randomUUID());
+        rx.setMedicationName("Amoxicillin");
+        var allergy = new com.example.hms.model.PatientAllergy();
+        allergy.setId(UUID.randomUUID());
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Penicillin");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        var allergies = mock(com.example.hms.repository.PatientAllergyRepository.class);
+        when(allergies.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        var allergyAudit = mock(AuditEventLogService.class);
+        var recheck = new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, allergyAudit);
+        service.setAllergyRecheck(recheck);
+        var request = requestForCurrentPharmacy();
+        // Policy 4: the order passes under the prescriber's CONTINUE review of this conflict.
+        rx.setAllergyReviewDecision(com.example.hms.enums.AllergyReviewDecision.CONTINUE);
+        rx.setAllergyReviewToken(recheck.currentConflict(rx).orElseThrow().reviewToken());
         when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         stubHappyPathCollaborators();
-        doThrow(new RuntimeException("twilio offline")).when(smsService).send(anyString(), anyString());
+        when(transmissionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        doThrow(new IllegalStateException("Provider unavailable")).when(smsService).send(anyString(), anyString());
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, request))
+                .isInstanceOf(PrescriptionDispatchFailedException.class);
+            verifyNoInteractions(allergyAudit);
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+        var event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(allergyAudit).logEvent(event.capture());
+        assertThat(event.getValue().getEntityType()).isEqualTo("PRESCRIPTION");
+        assertThat(event.getValue().getResourceId()).isEqualTo(rx.getId().toString());
+        assertThat(event.getValue().getEventType()).isEqualTo(AuditEventType.DISPENSE_ALLERGY_ACKNOWLEDGED);
+    }
+
+    @Test
+    @DisplayName("provider failure: FAILED row, cancelled offer, TRANSMISSION_FAILED, prescriber told, caller still gets the error, no number anywhere")
+    void dispatch_recordsFailureAndCommitsIt() {
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        // Providers do quote the destination back; none of it may be stored or shown.
+        doThrow(new IllegalStateException("twilio offline: +22670111222 unreachable"))
+                .when(smsService).send(anyString(), anyString());
         PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
         assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(PrescriptionDispatchFailedException.class)
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("twilio offline");
+                .hasMessageNotContaining("+22670111222")
+                .hasMessageNotContaining("twilio");
 
         ArgumentCaptor<PrescriptionTransmission> captor =
                 ArgumentCaptor.forClass(PrescriptionTransmission.class);
         verify(transmissionRepository).save(captor.capture());
+        PrescriptionTransmission failed = captor.getValue();
+        assertThat(failed.getStatus()).isEqualTo("FAILED");
+        assertThat(failed.getStatusReason())
+                .isEqualTo("SMS provider refused the message (IllegalStateException)")
+                .doesNotContain("+22670111222");
+
+        ArgumentCaptor<PrescriptionRoutingDecision> decisions =
+                ArgumentCaptor.forClass(PrescriptionRoutingDecision.class);
+        verify(routingDecisionRepository, times(2)).save(decisions.capture());
+        assertThat(decisions.getValue().getStatus())
+                .as("the pharmacy never got the offer, so its reference must not be answerable")
+                .isEqualTo(RoutingDecisionStatus.CANCELLED);
+
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.TRANSMISSION_FAILED);
+        assertThat(rx.getDispatchStatus()).isEqualTo("FAILED");
+        assertThat(rx.getPharmacyId()).as("the order is with no pharmacy").isNull();
+        verify(prescriptionRepository).save(rx);
+        verify(prescriberNotifier).notifyPrescriber(rx, PrescriptionStatus.TRANSMISSION_FAILED);
+        // G13 AC-12 / decision D7: a failed dispatch keeps the claim
+        verifyNoInteractions(queueClaimService);
+    }
+
+    @Test
+    @DisplayName("the committed failure is audited with its actor (a 400 escapes the write-audit interceptor), ids only")
+    void dispatch_auditsTheRecordedFailure() {
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        doThrow(new IllegalStateException("twilio offline: +22670111222 unreachable"))
+                .when(smsService).send(anyString(), anyString());
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(PrescriptionDispatchFailedException.class);
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        AuditEventRequestDTO event = audit.getValue();
+        assertThat(event.getEventType()).isEqualTo(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER);
+        assertThat(event.getStatus()).isEqualTo(AuditStatus.FAILURE);
+        assertThat(event.getUserId()).isEqualTo(userId);
+        assertThat(event.getResourceId()).isEqualTo(prescriptionId.toString());
+        assertThat(event.getEntityType()).isEqualTo("PRESCRIPTION");
+        assertThat(event.getEventDescription())
+                .contains(prescriptionId.toString(), pharmacyId.toString(), "TRANSMISSION_FAILED",
+                        "IllegalStateException")
+                .doesNotContain("+22670111222", "twilio", "Metformin", "Alice", "Doe", "Pharmacie Centrale");
+    }
+
+    @Test
+    @DisplayName("an audit-service failure never turns the recorded failure into something else")
+    void dispatch_auditFailureIsBestEffort() {
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        doThrow(new RuntimeException("gateway down")).when(smsService).send(anyString(), anyString());
+        doThrow(new RuntimeException("audit store down")).when(auditEventLogService).logEvent(any());
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(PrescriptionDispatchFailedException.class);
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.TRANSMISSION_FAILED);
+    }
+
+    @Test
+    @DisplayName("the failure record commits: the dispatch transaction does not roll back on the provider failure, and only on it")
+    void dispatch_doesNotRollBackTheFailureRecord() throws NoSuchMethodException {
+        Transactional tx = PrescriptionSmsDispatchServiceImpl.class
+                .getMethod("dispatch", Authentication.class, UUID.class, PrescriptionSmsDispatchRequestDTO.class)
+                .getAnnotation(Transactional.class);
+
+        assertThat(tx).isNotNull();
+        assertThat(tx.noRollbackFor()).containsExactly(PrescriptionDispatchFailedException.class);
+        assertThat(tx.noRollbackForClassName()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a failed re-send while another pharmacy holds an open offer leaves that offer, and the status, alone")
+    void dispatch_failureKeepsTheOrderWithThePharmacyThatHasIt() {
+        rx.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
+        Pharmacy previous = new Pharmacy();
+        previous.setId(UUID.randomUUID());
+        previous.setPhoneNumber("+22670555444");
+        PrescriptionRoutingDecision live = PrescriptionRoutingDecision.builder()
+                .prescription(rx)
+                .routingType(RoutingType.PARTNER)
+                .targetPharmacy(previous)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        live.setId(UUID.randomUUID());
+        when(routingDecisionRepository.findByPrescriptionId(prescriptionId)).thenReturn(List.of(live));
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        doThrow(new RuntimeException("gateway down")).when(smsService).send(anyString(), anyString());
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(PrescriptionDispatchFailedException.class);
+
+        assertThat(live.getStatus()).isEqualTo(RoutingDecisionStatus.PENDING);
+        verify(routingDecisionRepository, never()).save(live);
+        verify(partnerChannel, never()).sendSuperseded(any(), any());
+        assertThat(rx.getStatus())
+                .as("the previous pharmacy can still accept: the counter must not be able to fill it too")
+                .isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        verify(prescriptionRepository, never()).save(rx);
+        verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+        ArgumentCaptor<PrescriptionTransmission> captor =
+                ArgumentCaptor.forClass(PrescriptionTransmission.class);
+        verify(transmissionRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo("FAILED");
-        assertThat(captor.getValue().getStatusReason()).contains("twilio");
-        // The transaction rolls back; the in-memory row must not have moved either.
-        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+    }
+
+    @Test
+    @DisplayName("a prescriber who dispatched it themselves saw the error; they are not also notified")
+    void dispatch_failureByThePrescriberIsNotNotified() {
+        Staff staff = new Staff();
+        staff.setUser(user);
+        rx.setStaff(staff);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        doThrow(new RuntimeException("gateway down")).when(smsService).send(anyString(), anyString());
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(PrescriptionDispatchFailedException.class);
+
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.TRANSMISSION_FAILED);
+        verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+    }
+
+    @Test
+    @DisplayName("TRANSMISSION_FAILED is dispatchable: sending again is the retry")
+    void dispatch_retriesFromTransmissionFailed() {
+        rx.setStatus(PrescriptionStatus.TRANSMISSION_FAILED);
+        rx.setDispatchStatus("FAILED");
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        stubHappyPathCollaborators();
+        when(transmissionRepository.save(any(PrescriptionTransmission.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        PrescriptionSmsDispatchResponseDTO result =
+                service.dispatch(auth, prescriptionId, requestForCurrentPharmacy());
+
+        assertThat(result.getStatus()).isEqualTo("SENT");
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        assertThat(rx.getDispatchStatus()).isEqualTo("SENT");
+        assertThat(rx.getPharmacyId()).isEqualTo(pharmacyId);
+    }
+
+    @Test
+    @DisplayName("a withdrawn order is never sent, never recorded as failed, and keeps its status")
+    void dispatch_refusesWithdrawnOrders() {
+        for (PrescriptionStatus withdrawn : List.of(PrescriptionStatus.CANCELLED, PrescriptionStatus.DISCONTINUED)) {
+            rx.setStatus(withdrawn);
+            when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+            assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                    .isInstanceOf(BusinessException.class)
+                    .isNotInstanceOf(PrescriptionDispatchFailedException.class)
+                    .hasMessageContaining(withdrawn.name().toLowerCase(java.util.Locale.ROOT));
+            assertThat(rx.getStatus()).isEqualTo(withdrawn);
+        }
+        assertThat(PrescriptionSmsDispatchServiceImpl.DISPATCHABLE_STATUSES)
+                .doesNotContain(PrescriptionStatus.CANCELLED, PrescriptionStatus.DISCONTINUED);
+        verify(smsService, never()).send(anyString(), anyString());
+        verify(transmissionRepository, never()).save(any());
+        verify(routingDecisionRepository, never()).save(any());
+        verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+        verify(auditEventLogService, never()).logEvent(any());
     }
 }

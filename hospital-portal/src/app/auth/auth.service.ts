@@ -1,7 +1,7 @@
 import { isPlatformBrowser } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable, inject, PLATFORM_ID, signal } from '@angular/core';
-import { Observable } from 'rxjs';
+import { EMPTY, Observable, catchError } from 'rxjs';
 
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents } from '../core/role-equivalence';
@@ -26,6 +26,8 @@ export interface SessionBootstrapResponse {
   roles: string[];
   superAdmin: boolean;
   hospitalAdmin: boolean;
+  /** Confined to a provider facility (pharmacy or laboratory). */
+  providerUser?: boolean;
   primaryHospitalId?: string;
   primaryHospitalName?: string;
   permittedHospitalIds?: string[];
@@ -435,17 +437,44 @@ export class AuthService {
   }
 
   logout(): void {
+    this.revokeServerSession();
     this.clearToken();
     this.clearRefreshToken();
     this.clearUserProfile();
+    // The next user must not inherit this one's provider flag or a resolved
+    // session (the shell's emergency-broadcast gate reads both).
+    this.roleContext.clearSession();
     // Clear idle lock state so the lock screen doesn't appear on next login
     if (this.isBrowser) {
       try {
         sessionStorage.removeItem('hms_idle_locked');
         sessionStorage.removeItem('hms_lock_ts');
+        sessionStorage.removeItem('hms-chunk-reload');
       } catch {
         /* storage not available */
       }
     }
+  }
+
+  /**
+   * POST /api/auth/logout so the server revokes the session: the bearer it
+   * carries and the HttpOnly `hms_refresh` cookie (hence `withCredentials`).
+   * Clearing local storage alone left the refresh cookie able to mint a new
+   * access token until it expired.
+   *
+   * Fire-and-forget: the local sign-out never waits on or fails because of
+   * it. The token is read before local state is cleared and sent explicitly;
+   * the absolute URL skips the API-prefix interceptor (whose expired-token
+   * path would call logout() again), and the error interceptor never tries a
+   * refresh or a second logout on this call's 401.
+   */
+  private revokeServerSession(): void {
+    if (!this.isBrowser) return;
+    const token = this.getToken();
+    const headers = token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : undefined;
+    this.http
+      .post(`${globalThis.location.origin}/api/auth/logout`, {}, { headers, withCredentials: true })
+      .pipe(catchError(() => EMPTY))
+      .subscribe();
   }
 }

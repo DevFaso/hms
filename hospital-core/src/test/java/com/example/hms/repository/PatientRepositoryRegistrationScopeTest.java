@@ -4,8 +4,6 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.User;
-import com.example.hms.security.EncryptionKeyHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.repository.support.TenantAwareJpaRepository;
@@ -15,11 +13,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.util.Set;
@@ -37,9 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and must not be found from C. Before #57 the filter keyed on
  * {@code Patient.hospitalId} (= A) and B saw nothing.
  */
-@DataJpaTest
-@ActiveProfiles("test")
-@Import({PatientRepositoryRegistrationScopeTest.JpaConfig.class, TenantContextAccessor.class, EncryptionKeyHolder.class})
+@TenantScopedDataJpaTest
+@Import(PatientRepositoryRegistrationScopeTest.JpaConfig.class)
 class PatientRepositoryRegistrationScopeTest {
 
     @Autowired
@@ -136,6 +131,45 @@ class PatientRepositoryRegistrationScopeTest {
         HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
 
         assertThat(patientRepository.findById(patientId)).isPresent();
+    }
+
+    @Test
+    @DisplayName("QA D624: break-the-glass reach is exactly what the caller's patient search finds")
+    void findableByPatientSearch() {
+        // Caller working at C who also holds a role at A: the search finds the
+        // patient (registered at A), so C may break the glass (D409 kept).
+        scopedToHospitals(elsewhere, Set.of(elsewhere.getId(), first.getId()));
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isTrue();
+        assertThat(searchFinds()).isTrue();
+
+        // Caller at C alone: search finds nothing, and neither id is reachable.
+        scopedTo(elsewhere);
+        assertThat(searchFinds()).isFalse();
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isFalse();
+        assertThat(patientRepository.isFindableByPatientSearch(UUID.randomUUID())).isFalse();
+
+        // No scope at all: nothing.
+        HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(UUID.randomUUID()).build());
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isFalse();
+
+        // Unpinned super-admin: global view, as in search.
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isTrue();
+        assertThat(patientRepository.isFindableByPatientSearch(UUID.randomUUID())).isFalse();
+    }
+
+    private boolean searchFinds() {
+        return patientRepository.searchPatientsExtended(null, null, null, null, null, null, null,
+                org.springframework.data.domain.PageRequest.of(0, 10))
+            .stream().anyMatch(p -> p.getId().equals(patientId));
+    }
+
+    private static void scopedToHospitals(Hospital acting, Set<UUID> permitted) {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(UUID.randomUUID())
+            .activeHospitalId(acting.getId())
+            .permittedHospitalIds(permitted)
+            .build());
     }
 
     private static void scopedTo(Hospital hospital) {

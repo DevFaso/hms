@@ -21,6 +21,13 @@ public class PrescriptionResponseDTO {
     private UUID patientId;
     private String patientFullName;
     private String patientEmail;
+    /**
+     * QA D912: the patient's primary phone, so a reopened prescription for a
+     * patient with no email still identifies them under the name. The MRN is
+     * not carried: it lives on the patient's hospital registrations, a
+     * collection the list queries do not fetch.
+     */
+    private String patientPhone;
 
     private UUID staffId;
     private String staffFullName;
@@ -40,10 +47,41 @@ public class PrescriptionResponseDTO {
 
     private String dosage;
     private String frequency;
+    /** QA round 30: the minimum hours between two doses of an as-needed order, or null. */
+    private Integer prnMinIntervalHours;
+
+    /** QA D1378 / D1360 (round 32): the order is as-needed (PRN), as the prescriber ticked it. */
+    private boolean asNeeded;
+
+    /** QA D1452: the MAR cannot schedule this order's wording; nurses give a reason at each later dose. Shown to the prescriber. */
+    private boolean frequencyUnread;
     private String duration;
     private String route;
     private String instructions;
     private String notes;
+
+    /**
+     * What was ordered, and what is left of it (gap G13).
+     *
+     * <p>The prescriber could be shown a remainder but not its unit: the
+     * response carried neither the ordered quantity nor the refill counters,
+     * so "outstanding 20" rendered as a bare number and the only remainder
+     * available at all was a routing decision's snapshot.
+     *
+     * <p>{@code refillsUsed} is here because the expected LIFETIME quantity is
+     * {@code quantity * (1 + refillsUsed)} - the same arithmetic
+     * {@code DispenseServiceImpl} runs - so without it a second fill cannot be
+     * told from an over-dispense. {@code refillsAllowed} and
+     * {@code refillsRemaining} come with it: they are what
+     * {@code PatientMedicationResponseDTO} already tells the patient about the
+     * very same row, and a prescriber reading the order should not have to open
+     * the medication list to learn what they granted.
+     */
+    private java.math.BigDecimal quantity;
+    private String quantityUnit;
+    private Integer refillsAllowed;
+    private Integer refillsRemaining;
+    private Integer refillsUsed;
 
     private String status;
 
@@ -64,6 +102,16 @@ public class PrescriptionResponseDTO {
      */
     private boolean controlledSubstance;
     private boolean requiresCosign;
+    /**
+     * QA D934: drafted by a nurse or a midwife (no signature of her own) and
+     * still unsigned, so a doctor of the order's hospital signs it. Lets the
+     * prescribing screen offer that doctor the Sign action.
+     */
+    private boolean awaitingPhysicianSignature;
+    /** QA D922: the catalogue item the order was written from (or resolved to), so an edit keeps it. */
+    private java.util.UUID medicationCatalogItemId;
+    /** QA D757: a take-home order outlives its stay; every other stay order ends at discharge. */
+    private boolean takeHome;
     private java.time.LocalDateTime twoFactorVerifiedAt;
     private java.time.LocalDateTime cosignedAt;
     private java.util.UUID cosignedByStaffId;
@@ -92,6 +140,14 @@ public class PrescriptionResponseDTO {
     private String pharmacyName;
     private String pharmacyContact;
 
+    /**
+     * G15: a fill of this prescription waiting for collection at a hospital
+     * dispensary: when it was marked ready, and where. Null when nothing is
+     * waiting. Set only on the patient-portal read.
+     */
+    private LocalDateTime readyForCollectionAt;
+    private String readyForCollectionPharmacyName;
+
     /** Community-pharmacy dispatch (PrescriptionSmsDispatchService): SMS / SENT / when. */
     private String dispatchChannel;
     private String dispatchStatus;
@@ -115,6 +171,27 @@ public class PrescriptionResponseDTO {
     private LocalDateTime clarificationRequestedAt;
     private String clarificationResponse;
     private LocalDateTime clarificationResolvedAt;
+    /** QA D660: why a signed order was withdrawn; null otherwise. */
+    private String withdrawalReason;
+
+    /**
+     * QA D1101 (round 19): why the prescriber passed an alert - a documented
+     * allergy ({@link #allergyOverride} true) or a critical decision-support
+     * alert such as a paediatric dose soft stop. Stored and audited since
+     * round 18, it was never returned, so the verifying pharmacist, the
+     * co-signer and the chart could not see why the stop was passed.
+     */
+    private String overrideReason;
+    /** True when {@link #overrideReason} is an allergy override, false for a decision-support one. */
+    private Boolean allergyOverride;
+
+    /** QA D1096 (round 19): the paediatric dose check asked for a recorded review before signing. */
+    private Boolean pediatricDoseReviewRequired;
+    private LocalDateTime pediatricDoseReviewedAt;
+    /** CR-01: signed as an urgent exception; the review is still due after the fact. */
+    private LocalDateTime pediatricDoseUrgentExceptionAt;
+    private String pediatricDoseReviewedByName;
+    private String pediatricDoseReviewReason;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -125,10 +202,18 @@ public class PrescriptionResponseDTO {
      * consultation about the order — comes off. Mutates and returns this.
      */
     public PrescriptionResponseDTO withoutClarificationExchange() {
+        // QA D1101/D1096: the clinicians' justifications between themselves
+        // stay on the staff side, like the clarification exchange.
+        this.overrideReason = null;
+        this.allergyOverride = null;
+        this.pediatricDoseReviewReason = null;
+        this.pediatricDoseUrgentExceptionAt = null;
         this.clarificationReason = null;
         this.clarificationRequestedAt = null;
         this.clarificationResponse = null;
         this.clarificationResolvedAt = null;
+        // QA D1960: the pharmacist's verification note is written for the prescriber.
+        this.pharmacistVerificationNote = null;
         // The pharmacy-event pair restates the exchange when the exchange is
         // what the pharmacy last did: lastPharmacyEventAt IS the instant the
         // pharmacist asked. Stripping the narrative while leaving its

@@ -355,8 +355,11 @@ and grep the boot logs of each `hms-backend-<env>` for the
 `[OIDC] app.auth.oidc.required=` line, which `AuthController` emits
 on startup.
 
-- `KeycloakJwtAuthenticationConverter` extracts realm + client roles into
-  Spring authorities.
+- `KeycloakJwtAuthenticationConverter` maps realm roles (`realm_access.roles`)
+  only, through `RoleExpansion` as the password path does. Client roles
+  (`resource_access.<client>.roles`) are ignored: every HMS role is a realm
+  role in `keycloak/realm-export.json`, and any client's role would otherwise
+  become a platform authority.
 - Legacy auth gate: `/api/auth/login` and `/api/auth/token/refresh` return
   **410 Gone** when `app.auth.oidc.required=true`
   ([AuthController.java:193-199, 532-537](../hospital-core/src/main/java/com/example/hms/controller/AuthController.java#L193-L199)).
@@ -367,7 +370,7 @@ on startup.
 ### 1.2 Realm + ops
 - [keycloak/realm-export.json](../keycloak/realm-export.json) declares
   `hms-backend`, `hms-portal`, `hms-patient-android`, `hms-patient-ios`,
-  **26 realm roles**, and the `hms-claims` scope (with `hospital_id` +
+  **27 realm roles** (26 until #851 added `ROLE_PROVIDER_ADMIN`), and the `hms-claims` scope (with `hospital_id` +
   `role_assignments` protocol mappers).
 - [scripts/keycloak-migration/](../scripts/keycloak-migration/) — TS migration
   with `MIGRATION_DRY_RUN`, idempotent rerun, role resolution, orphan tracking

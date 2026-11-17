@@ -32,6 +32,8 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,6 +60,7 @@ class ChatMessageServiceImplTest {
     @Mock private FileUploadService fileUploadService;
     @Mock private PatientRepository patientRepository;
     @Mock private PatientLocaleResolver patientLocaleResolver;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
 
     @InjectMocks
     private ChatMessageServiceImpl chatMessageService;
@@ -65,11 +68,16 @@ class ChatMessageServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // QA D877: refusals are bundle keys now; resolve them as a request would.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
     }
 
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
     }
 
     private void setSecurityContext(String role) {
@@ -96,6 +104,21 @@ class ChatMessageServiceImplTest {
         return user;
     }
 
+    /** QA D1299 (round 28): an empty body names the recipient and the message, in one refusal. */
+    @Test
+    void sendMessage_emptyBody_namesTheRecipientAndTheMessage_D1299() {
+        ChatMessageRequestDTO dto = new ChatMessageRequestDTO();
+        assertThatThrownBy(() -> chatMessageService.sendMessage(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors())
+                    .containsOnlyKeys("recipientId", "content"));
+        dto.setContent("Bonjour");
+        assertThatThrownBy(() -> chatMessageService.sendMessage(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors())
+                    .containsOnlyKeys("recipientId"));
+    }
+
     @Test
     void sendMessage_shouldThrowIfRecipientIsSender() {
         UUID senderId = UUID.randomUUID();
@@ -112,7 +135,7 @@ class ChatMessageServiceImplTest {
         // Simulate current user
         ChatMessageServiceImpl service = spy(chatMessageService);
         doReturn(senderId).when(service).getCurrentUserId();
-        assertThrows(SecurityException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
+        assertThrows(IllegalArgumentException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
     }
 
     @Test
@@ -131,6 +154,25 @@ class ChatMessageServiceImplTest {
         ChatMessageServiceImpl service = spy(chatMessageService);
         doReturn(senderId).when(service).getCurrentUserId();
         assertThrows(com.example.hms.exception.ResourceNotFoundException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
+    }
+
+    @Test
+    void sendMessage_withoutARecipientNamesTheField_D1282() {
+        UUID senderId = UUID.randomUUID();
+        User sender = new User();
+        sender.setId(senderId);
+        when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(senderId).when(service).getCurrentUserId();
+        for (String email : java.util.Arrays.asList(null, "", "   ")) {
+            ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder().recipientEmail(email).content("Bonjour").build();
+
+            com.example.hms.exception.FieldBusinessException refused = assertThrows(
+                com.example.hms.exception.FieldBusinessException.class, () -> service.sendMessage(dto, Locale.FRENCH));
+
+            assertEquals("recipientId", refused.getField());
+            assertEquals("chat.recipient.required", refused.getMessageKey());
+        }
     }
 
     @Test
@@ -213,7 +255,78 @@ class ChatMessageServiceImplTest {
         ChatMessageServiceImpl service = spy(chatMessageService);
         doReturn(senderId).when(service).getCurrentUserId();
 
-        assertThrows(SecurityException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
+    }
+
+    private com.example.hms.model.PatientHospitalRegistration registrationAt(UUID hospitalId) {
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.PatientHospitalRegistration r = new com.example.hms.model.PatientHospitalRegistration();
+        r.setHospital(hospital);
+        return r;
+    }
+
+    @Test
+    void qaD170_patientCannotMessageAClinicianAtAHospitalWhereNotRegistered() {
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        UUID hospitalA = UUID.randomUUID();
+        User patient = userWithRole(patientId, "ROLE_PATIENT");
+        User doctorAtB = userWithRole(doctorId, "ROLE_DOCTOR");
+        when(userRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(doctorId)).thenReturn(Optional.of(doctorAtB));
+        when(patientHospitalRegistrationRepository.findByPatientUserIdAndActiveTrue(patientId))
+            .thenReturn(List.of(registrationAt(hospitalA)));
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(doctorId, hospitalA))
+            .thenReturn(false);
+        setSecurityContext("ROLE_PATIENT");
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(patientId).when(service).getCurrentUserId();
+        ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder().recipientId(doctorId).content("hi").build();
+
+        // QA D433: a refusal the patient can read (client-safe 403), not the opaque default.
+        assertThrows(com.example.hms.exception.ClientSafeAccessDeniedException.class,
+            () -> service.sendMessage(dto, Locale.ENGLISH));
+        verify(chatMessageRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD170_patientMessagesAClinicianOfTheirOwnHospital() {
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        UUID hospitalA = UUID.randomUUID();
+        User patient = userWithRole(patientId, "ROLE_PATIENT");
+        User doctor = userWithRole(doctorId, "ROLE_DOCTOR");
+        when(userRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(doctorId)).thenReturn(Optional.of(doctor));
+        when(patientHospitalRegistrationRepository.findByPatientUserIdAndActiveTrue(patientId))
+            .thenReturn(List.of(registrationAt(hospitalA)));
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(doctorId, hospitalA))
+            .thenReturn(true);
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndActiveTrue(patientId)).thenReturn(true);
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(chatMessageMapper.toChatMessageResponseDTO(any(ChatMessage.class), any(java.util.Collection.class)))
+            .thenReturn(ChatMessageResponseDTO.builder().build());
+        setSecurityContext("ROLE_PATIENT");
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(patientId).when(service).getCurrentUserId();
+
+        assertNotNull(service.sendMessage(
+            ChatMessageRequestDTO.builder().recipientId(doctorId).content("hi").build(), Locale.ENGLISH));
+    }
+
+    @Test
+    void qaD197_patientToPatientIsAForbiddenNotAServerError() {
+        UUID patientId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        when(userRepository.findById(patientId)).thenReturn(Optional.of(userWithRole(patientId, "ROLE_PATIENT")));
+        when(userRepository.findById(otherId)).thenReturn(Optional.of(userWithRole(otherId, "ROLE_PATIENT")));
+        setSecurityContext("ROLE_PATIENT");
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(patientId).when(service).getCurrentUserId();
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> service.sendMessage(
+            ChatMessageRequestDTO.builder().recipientId(otherId).content("hi").build(), Locale.ENGLISH));
     }
 
     // ---- P1 #10 telehealth attachment paths ----
@@ -485,7 +598,7 @@ class ChatMessageServiceImplTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> service.sendMessage(dto, Locale.ENGLISH));
-        assertEquals("Attachment kind is required", ex.getMessage());
+        assertEquals("The attachment type is missing.", ex.getMessage());
         verify(chatAttachmentRepository, never()).saveAndFlush(any(ChatAttachment.class));
     }
 
@@ -509,9 +622,33 @@ class ChatMessageServiceImplTest {
         ChatMessageServiceImpl service = spy(chatMessageService);
         doReturn(senderId).when(service).getCurrentUserId();
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-            () -> service.sendMessage(dto, Locale.ENGLISH));
-        assertTrue(ex.getMessage().contains("content or at least one attachment"));
+        // QA D1299: a FieldBusinessException naming the message field (was an IllegalArgumentException; still 400).
+        com.example.hms.exception.FieldBusinessException ex = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
+        assertTrue(ex.getMessage().contains("add an attachment"));
+        assertEquals("content", ex.getField());
+    }
+
+    @Test
+    void qaD877_sendErrorsAreInTheSendersLanguage() {
+        UUID senderId = UUID.randomUUID();
+        User sender = userWithRole(senderId, "ROLE_DOCTOR");
+        when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
+        setSecurityContext("ROLE_DOCTOR");
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.FRENCH);
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(senderId).when(service).getCurrentUserId();
+
+        ChatMessageRequestDTO toSelf = ChatMessageRequestDTO.builder().recipientId(senderId).content("moi").build();
+        IllegalArgumentException self = assertThrows(IllegalArgumentException.class,
+            () -> service.sendMessage(toSelf, Locale.FRENCH));
+        assertEquals("Vous ne pouvez pas vous envoyer un message à vous-même.", self.getMessage());
+
+        ChatMessageRequestDTO empty = ChatMessageRequestDTO.builder().recipientId(UUID.randomUUID()).content("").build();
+        // QA D1299: now a FieldBusinessException on "content" (still 400, same sentence).
+        com.example.hms.exception.FieldBusinessException blank = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class, () -> service.sendMessage(empty, Locale.FRENCH));
+        assertEquals("Écrivez un message ou ajoutez une pièce jointe avant d'envoyer.", blank.getMessage());
     }
 
     @Test
@@ -610,5 +747,97 @@ class ChatMessageServiceImplTest {
 
         assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
             () -> chatMessageService.downloadAttachment(id, "alice"));
+    }
+
+    // --- QA D301 / D343 / D352: chat content is readable by its two participants only ---
+
+    @Test
+    void qaD301_aNonParticipantCannotReadHistorySearchMessagesOrConversations() {
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        UUID outsider = UUID.randomUUID();
+        UUID patientA2 = UUID.randomUUID();
+        UUID doctor2A = UUID.randomUUID();
+        doReturn(outsider).when(service).getCurrentUserId();
+
+        com.example.hms.exception.ResourceNotFoundException historyRefusal = assertThrows(
+            com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getChatHistory(patientA2, doctor2A, 0, 20, Locale.ENGLISH));
+        // QA D433: the 404 names the conversation, never another user's id.
+        org.assertj.core.api.Assertions.assertThat(historyRefusal.getMessage())
+            .doesNotContain(patientA2.toString()).doesNotContain(outsider.toString());
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.searchMessages(patientA2, doctor2A, "docteur", 0, 20));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getAllMessagesForUser(patientA2, null, 0, 20));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getUserConversations(patientA2, 0, 20));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.markMessagesAsRead(doctor2A, patientA2, Locale.ENGLISH));
+        verify(chatMessageRepository, never()).findChatBetweenUsers(any(), any(), any());
+        verify(chatMessageRepository, never()).searchMessagesBetweenUsers(any(), any(), any(), any());
+        verify(chatMessageRepository, never()).findAllMessagesForUser(any(), any());
+        verify(chatMessageRepository, never()).findLatestConversations(any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void qaD301_aParticipantStillReadsTheirOwnThread() {
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        UUID me = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        doReturn(me).when(service).getCurrentUserId();
+        when(chatMessageRepository.searchMessagesBetweenUsers(any(), any(), any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+        when(chatMessageRepository.findAllMessagesForUser(any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        assertTrue(service.searchMessages(other, me, "x", 0, 20).isEmpty());
+        assertTrue(service.getAllMessagesForUser(me, null, 0, 20).isEmpty());
+    }
+
+    @Test
+    void qaD343_byEmailAndUsernameAnswerForTheCallerOnly() {
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        UUID me = UUID.randomUUID();
+        User caller = new User();
+        caller.setId(me);
+        caller.setEmail("me@example.test");
+        caller.setUsername("me");
+        doReturn(me).when(service).getCurrentUserId();
+        when(userRepository.findById(me)).thenReturn(Optional.of(caller));
+        when(chatMessageRepository.findBySenderEmail("ME@example.test")).thenReturn(List.of());
+        when(chatMessageRepository.findByRecipientUsername("me")).thenReturn(List.of());
+
+        assertTrue(service.getMessagesBySenderEmail("ME@example.test").isEmpty());
+        assertTrue(service.getMessagesByRecipientUsername("me").isEmpty());
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getMessagesBySenderEmail("doctor@example.test"));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getMessagesByRecipientUsername("doctor"));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getMessagesByRecipientEmail("doctor@example.test"));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getMessagesBySenderUsername("doctor"));
+        verify(chatMessageRepository, never()).findBySenderEmail("doctor@example.test");
+    }
+
+    @Test
+    void qaD352_conversationNameFallsBackToUsernameWhenNamesAreMissing() {
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        UUID me = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        User self = new User();
+        self.setId(me);
+        User peer = new User();
+        peer.setId(other);
+        peer.setUsername("peer.user");
+        doReturn(me).when(service).getCurrentUserId();
+        when(userRepository.findById(me)).thenReturn(Optional.of(self));
+        when(userRepository.findById(other)).thenReturn(Optional.of(peer));
+        List<Object[]> rows = new java.util.ArrayList<>();
+        rows.add(new Object[] {UUID.randomUUID(), other, me, "hello", java.time.LocalDateTime.now(), false});
+        when(chatMessageRepository.findLatestConversations(me, 20, 0)).thenReturn(rows);
+
+        var conversations = service.getUserConversations(me, 0, 20);
+        assertEquals("peer.user", conversations.get(0).getConversationUserName());
     }
 }

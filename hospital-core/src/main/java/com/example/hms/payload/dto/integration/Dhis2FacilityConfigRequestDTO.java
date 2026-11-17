@@ -11,7 +11,10 @@ public record Dhis2FacilityConfigRequestDTO(
 
     @NotBlank(message = "{dhis2FacilityConfig.baseUrl.required}")
     @Size(max = 512)
-    @Pattern(regexp = "^https?://.+", message = "{dhis2FacilityConfig.baseUrl.pattern}")
+    // QA D898: HTTPS only (the export sends the DHIS2 token); the public-host
+    // check runs in Dhis2ConfigServiceImpl.requireCallableBaseUrl.
+    @Pattern(regexp = "^https://.+", flags = Pattern.Flag.CASE_INSENSITIVE,
+        message = "{dhis2FacilityConfig.baseUrl.pattern}")
     String baseUrl,
 
     @NotNull(message = "{dhis2FacilityConfig.authMode.required}")

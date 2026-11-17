@@ -42,12 +42,7 @@ public class LocaleConfig {
         ReloadableResourceBundleMessageSource messageSource =
                 new ReloadableResourceBundleMessageSource();
 
-        messageSource.setBasenames(
-                "classpath:messages",
-                "classpath:messages_en",
-                "classpath:messages_fr",
-                "classpath:messages_es"
-        );
+        messageSource.setBasenames(MessageBundles.basenames());
 
         messageSource.setDefaultEncoding("UTF-8");
         messageSource.setFallbackToSystemLocale(false);

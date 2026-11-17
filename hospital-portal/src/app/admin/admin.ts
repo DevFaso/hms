@@ -130,7 +130,7 @@ export class AdminComponent implements OnInit {
           },
           {
             labelKey: 'ADMIN.STAT.TODAY_APPOINTMENTS',
-            value: data.appointments?.todayTotal ?? '—',
+            value: data.appointments?.today ?? '—',
             icon: 'calendar_month',
             color: '#8b5cf6',
           },

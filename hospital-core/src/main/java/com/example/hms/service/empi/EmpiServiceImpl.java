@@ -2,6 +2,7 @@ package com.example.hms.service.empi;
 
 import com.example.hms.enums.empi.EmpiAliasType;
 import com.example.hms.enums.empi.EmpiIdentityStatus;
+import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.enums.empi.EmpiResolutionState;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -21,7 +22,9 @@ import com.example.hms.repository.empi.EmpiMasterIdentityRepository;
 import com.example.hms.repository.empi.EmpiMergeEventRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.utility.MessageUtil;
+import com.example.hms.utility.TransactionCallbacks;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -39,7 +42,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class EmpiServiceImpl implements EmpiService {
+public class EmpiServiceImpl implements EmpiService, EmpiAuthorisedMergePort {
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String EVENT_IDENTITY_LINKED = "IDENTITY_LINKED";
@@ -53,6 +56,7 @@ public class EmpiServiceImpl implements EmpiService {
     private static final String MSG_MERGE_SAME_IDENTITY = "empi.merge.sameIdentity";
     private static final String MSG_MERGE_ALREADY_MERGED = "empi.merge.alreadyMerged";
     private static final String MSG_MERGE_CROSS_TENANT = "empi.merge.crossTenant";
+    private static final String MSG_MERGE_IDENTITY_NOT_FOUND = "empi.merge.identityNotFound";
     private static final String MSG_MERGE_SAME_PATIENT = "empi.merge.samePatient";
     private static final String MSG_LINK_MISSING_PATIENT = "empi.link.missingPatient";
     private static final String MSG_LINK_ALIAS_INCOMPLETE = "empi.link.aliasIncomplete";
@@ -117,60 +121,97 @@ public class EmpiServiceImpl implements EmpiService {
         // and cross-facility affiliation, so another hospital's row must read as
         // absent rather than as data. EmpiMasterIdentityRepository is an unscoped
         // JpaRepository, so nothing below this filters by tenant. ──
+        CallerScope scope = callerScope();
         return masterIdentityRepository.findByPatientId(patientId)
-            .filter(this::isVisibleToCaller)
+            .filter(scope::sees)
             .map(empiMapper::toIdentityDto);
     }
 
     /**
-     * Whether the caller's active hospital may see this identity.
+     * The caller's reach over master identities: one pinned hospital, or the
+     * whole index for a VERIFIED super-admin in global view.
      *
-     * <p>Null active hospital = super-admin, unscoped. A scoped caller sees only
-     * identities stamped with their own hospital — and NOT unstamped ones: a
-     * legacy row with a null {@code hospitalId} belongs to nobody in particular,
-     * and handing it to whichever tenant asks first is the same disclosure by a
-     * different route. Super-admin remains able to reconcile those.
+     * <p>A scoped caller sees only identities stamped with their own hospital —
+     * and NOT unstamped ones: a legacy row with a null {@code hospitalId}
+     * belongs to nobody in particular, and handing it to whichever tenant asks
+     * first is the same disclosure by a different route. The verified
+     * super-admin remains able to reconcile those.
+     *
+     * <p>A null {@code hospitalId} WITHOUT {@code verifiedGlobalView} sees
+     * nothing: every identity reads as absent, so each caller path refuses it
+     * with the answer it already gives for a miss.
      */
-    private boolean isVisibleToCaller(EmpiMasterIdentity identity) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        return activeHospitalId == null
-            || (identity.getHospitalId() != null && activeHospitalId.equals(identity.getHospitalId()));
+    private record CallerScope(UUID hospitalId, boolean verifiedGlobalView) {
+        boolean sees(EmpiMasterIdentity identity) {
+            if (verifiedGlobalView) {
+                return true;
+            }
+            return hospitalId != null && hospitalId.equals(identity.getHospitalId());
+        }
     }
 
     /**
-     * Refuse a write against an identity the caller does not own.
+     * {@code requireActiveHospitalId()}, read as a reach over identities.
+     *
+     * <p>Since the one tenant resolver, {@code requireActiveHospitalId()} returns
+     * null for exactly one caller: a VERIFIED super-admin (a live SUPER_ADMIN
+     * assignment) in global view; the authorities-based "step 4" that let an
+     * unverified principal reach null is gone. The {@code isSuperAdminFromJwtClaim()}
+     * conjunct therefore no longer decides anything in production; it is kept
+     * so a null from anywhere else still reads as no reach, never as global.
+     */
+    private CallerScope callerScope() {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        boolean verifiedGlobalView = activeHospitalId == null && roleValidator.isSuperAdminFromJwtClaim();
+        return new CallerScope(activeHospitalId, verifiedGlobalView);
+    }
+
+    /**
+     * The identity, only when the caller may act on it; otherwise empty, the
+     * same empty a nonexistent id gives.
      *
      * <p>The merge endpoints are {@code HOSPITAL_ADMIN}-or-better, but
      * HOSPITAL_ADMIN is a PER-HOSPITAL role — so "is an admin" was never the same
-     * question as "is an admin HERE". Before this, the only tenant check on the
-     * merge path compared the two identities to each other and never to the
-     * caller, which let a hospital-A admin merge two hospital-B identities.
+     * question as "is an admin HERE". {@code findById} is scoped by
+     * {@code TenantScopeSpecification} to every hospital the caller is PERMITTED
+     * at, which is wider than the active one, so the visibility check is still
+     * needed on top of it.
      */
-    private void requireTenantAccess(EmpiMasterIdentity identity) {
-        if (!isVisibleToCaller(identity)) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
-        }
+    private Optional<EmpiMasterIdentity> findVisibleIdentity(UUID identityId, CallerScope scope) {
+        return masterIdentityRepository.findById(identityId)
+            .filter(scope::sees);
     }
 
     /**
      * Refuse a merge against a patient not registered at the caller's hospital.
      *
-     * <p>Needed in addition to {@link #requireTenantAccess} because
+     * <p>Needed in addition to {@link #findVisibleIdentity} because
      * {@code mergePatients} PROVISIONS a master identity for any patient that
      * lacks one — a write against another tenant's patient that happened before
      * any identity-level guard could run.
      *
-     * <p>Registration, not {@code Patient.hospitalId}: a patient may legitimately
-     * be registered at several hospitals, and each of those hospitals may
-     * reconcile them.
+     * <p>Registration, not {@code Patient.hospitalId}, is what lets a hospital
+     * START a merge: a patient may be registered at several hospitals. But only
+     * the patient's home hospital can FINISH one today:
+     * {@code ensureIdentityForPatient} stamps a provisioned identity with
+     * {@code Patient.hospitalId}, and {@code mergeIdentities} admits only
+     * identities stamped with the caller's hospital, so any other hospital the
+     * patient is registered at gets the identity-not-found refusal there.
+     * Which hospital owns a master identity is an open design question.
+     *
+     * <p>Any registration counts, active or not: the commonest duplicate is a
+     * discharged patient who returns and is registered again, and the
+     * hospital that discharged them must be able to reconcile the two.
+     *
+     * <p>A null scope skips the check only for a verified super-admin in global
+     * view; an unverified one gets the refusal a foreign patient gets.
      */
-    private void requirePatientInTenant(UUID patientId) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId == null) {
+    private void requirePatientInTenant(UUID patientId, CallerScope scope) {
+        if (scope.verifiedGlobalView()) {
             return;
         }
-        if (!registrationRepository.existsByPatientIdAndHospitalId(patientId, activeHospitalId)) {
+        if (scope.hospitalId() == null
+            || !registrationRepository.existsByPatientIdAndHospitalId(patientId, scope.hospitalId())) {
             throw new org.springframework.security.access.AccessDeniedException(
                 MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
         }
@@ -195,7 +236,7 @@ public class EmpiServiceImpl implements EmpiService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_IDENTITY_NOT_FOUND, identityId));
 
         if (aliasRepository.existsByAliasTypeAndAliasValueIgnoreCase(request.getAliasType(), request.getAliasValue())) {
-            throw new BusinessException(MessageUtil.resolve(MSG_ALIAS_EXISTS, request.getAliasValue()));
+            throw new BusinessException(MSG_ALIAS_EXISTS, request.getAliasValue());
         }
 
         EmpiIdentityAlias alias = empiMapper.createAliasFromRequest(request);
@@ -214,7 +255,7 @@ public class EmpiServiceImpl implements EmpiService {
         EmpiMasterIdentity identity = masterIdentityRepository.findById(identityId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_IDENTITY_NOT_FOUND, identityId));
 
-        boolean removed = identity.getAliases().removeIf(alias -> aliasId.equals(alias.getId()));
+        boolean removed = identity.getAliases().removeIf(alias -> !alias.isNationalUniqueIdAlias() && aliasId.equals(alias.getId()));
         if (!removed) {
             throw new ResourceNotFoundException(MSG_ALIAS_NOT_FOUND, aliasId);
         }
@@ -224,30 +265,79 @@ public class EmpiServiceImpl implements EmpiService {
     @Override
     @Transactional
     public EmpiMergeEventResponseDTO mergeIdentities(UUID primaryIdentityId, EmpiMergeRequestDTO request) {
-        EmpiMasterIdentity primary = masterIdentityRepository.findById(primaryIdentityId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_IDENTITY_NOT_FOUND, primaryIdentityId));
+        return mergeIdentities(primaryIdentityId, request, callerScope());
+    }
 
-        EmpiMasterIdentity secondary = masterIdentityRepository.findById(request.getSecondaryIdentityId())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_IDENTITY_NOT_FOUND, request.getSecondaryIdentityId()));
+    private EmpiMergeEventResponseDTO mergeIdentities(UUID primaryIdentityId, EmpiMergeRequestDTO request,
+                                                      CallerScope scope) {
+        // ── Tenant isolation, with no oracle. BOTH sides must belong to the
+        // caller: the identity-to-identity check further down only proves the
+        // two agree with each other, and two hospital-B identities agree
+        // perfectly. And an identity the caller may not see answers EXACTLY like
+        // one that does not exist — same status, same body, naming neither id —
+        // or a hospital-A admin pairs their own identity with candidate UUIDs
+        // and reads off which exist at other hospitals (partial ownership is not
+        // partial permission; the HL7 A40 rule, #738). Both lookups run before
+        // either is judged, so owning one side costs what owning neither does.
+        // An unverified null scope sees nothing, so it lands here too. ──
+        return mergeVisibleIdentities(
+            findVisibleIdentity(primaryIdentityId, scope),
+            findVisibleIdentity(request.getSecondaryIdentityId(), scope),
+            request);
+    }
 
-        // ── Tenant isolation: BOTH sides must belong to the caller. The
-        // identity-to-identity check further down only proves the two agree with
-        // each other; two hospital-B identities agree perfectly, and a hospital-A
-        // admin could merge them. ──
-        requireTenantAccess(primary);
-        requireTenantAccess(secondary);
+    /**
+     * The merge proper, given both sides already filtered through the caller's
+     * {@link CallerScope}: an empty side is one the caller may not see, or one
+     * that does not exist, and the two answer identically.
+     */
+    private EmpiMergeEventResponseDTO mergeVisibleIdentities(Optional<EmpiMasterIdentity> primaryLookup,
+                                                             Optional<EmpiMasterIdentity> secondaryLookup,
+                                                             EmpiMergeRequestDTO request) {
+        if (primaryLookup.isEmpty() || secondaryLookup.isEmpty()) {
+            throw new ResourceNotFoundException(MSG_MERGE_IDENTITY_NOT_FOUND);
+        }
+        EmpiMasterIdentity primary = primaryLookup.get();
+        EmpiMasterIdentity secondary = secondaryLookup.get();
 
         if (primary.getId().equals(secondary.getId())) {
-            throw new BusinessException(MessageUtil.resolve(MSG_MERGE_SAME_IDENTITY));
+            throw new BusinessException(MSG_MERGE_SAME_IDENTITY);
         }
         if (secondary.getStatus() == EmpiIdentityStatus.MERGED) {
-            throw new BusinessException(MessageUtil.resolve(MSG_MERGE_ALREADY_MERGED, secondary.getEmpiNumber()));
+            throw alreadyMerged(secondary);
         }
         // ── Tenant isolation (empi-identity skill: v0 merges are intra-tenant).
         // Identities with no hospital stamp (legacy/system rows) are exempt. ──
         if (primary.getHospitalId() != null && secondary.getHospitalId() != null
             && !primary.getHospitalId().equals(secondary.getHospitalId())) {
-            throw new BusinessException(MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
+            throw new BusinessException(MSG_MERGE_CROSS_TENANT);
+        }
+
+        // ── Both rows locked before anything is decided. The claim below
+        // serialises two merges that retire the SAME identity; A<-B racing
+        // B<-A retire different ones, so without this each claimed its own
+        // row and both applied, leaving two MERGED identities pointing at
+        // each other. Locked in ascending id order whichever way the merge
+        // runs, so the two wait on one row instead of each holding the row
+        // the other needs. ──
+        lockBothInIdOrder(primary.getId(), secondary.getId());
+        // The survivor, as the database holds it under that lock: the loaded
+        // instance is the one read before the lock and can be stale. A
+        // survivor merged away — by the opposite merge that just committed,
+        // or by any earlier one — cannot absorb anything, and the refusal is
+        // the one a merge of an already-merged identity gets.
+        if (masterIdentityRepository.findStatusById(primary.getId()) == EmpiIdentityStatus.MERGED) {
+            throw alreadyMerged(primary);
+        }
+
+        // ── The transition itself, decided by the database. The status read
+        // above is a fast path, not a guarantee: two merges of the same pair
+        // running at once both read ACTIVE. Whichever claims the row second
+        // gets 0 and the same refusal as a merge that arrived after the
+        // first had committed — so one merge event, one IDENTITIES_MERGED
+        // event and one PATIENT_MERGE audit row, however many raced. ──
+        if (masterIdentityRepository.claimForMerge(secondary.getId(), EmpiIdentityStatus.MERGED) == 0) {
+            throw alreadyMerged(secondary);
         }
 
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
@@ -268,9 +358,22 @@ public class EmpiServiceImpl implements EmpiService {
         mergeEventRepository.save(mergeEvent);
         masterIdentityRepository.save(secondary);
         masterIdentityRepository.save(primary);
+        // Flush HERE, inside the call: a constraint or lock failure then
+        // surfaces as this method's exception, where the caller can still
+        // answer it as a refusal. Left to the caller's commit, it would
+        // arrive after the caller had already decided the merge succeeded.
+        masterIdentityRepository.flush();
 
         publishEvent(buildMergeEventPayload(primary, secondary, mergeEvent));
-        emitMergeAudit(primary, secondary, mergeEvent);
+        // After commit, like the Kafka event: a SUCCESS row written now, in
+        // the audit service's own REQUIRES_NEW transaction, would survive this
+        // transaction rolling back and record a merge that never happened.
+        UUID primaryId = primary.getId();
+        String primaryEmpiNumber = primary.getEmpiNumber();
+        String secondaryEmpiNumber = secondary.getEmpiNumber();
+        EmpiMergeType mergeType = mergeEvent.getMergeType();
+        TransactionCallbacks.afterCommit(() ->
+            emitMergeAudit(primaryId, primaryEmpiNumber, secondaryEmpiNumber, mergeType));
         return empiMapper.toMergeEventDto(mergeEvent);
     }
 
@@ -278,18 +381,54 @@ public class EmpiServiceImpl implements EmpiService {
     @Transactional
     public EmpiMergeEventResponseDTO mergePatients(UUID primaryPatientId, UUID secondaryPatientId,
                                                    com.example.hms.enums.empi.EmpiMergeType mergeType, String notes) {
+        requireTwoDistinctPatients(primaryPatientId, secondaryPatientId);
+        return mergePatientsInScope(primaryPatientId, secondaryPatientId, mergeType, notes, callerScope());
+    }
+
+    /**
+     * See {@link EmpiAuthorisedMergePort}: the inbound
+     * HL7 A40 path, which has no request context to resolve a scope from and
+     * has already settled which hospital it acts at.
+     *
+     * <p>The scope built here is the one a caller PINNED to that hospital gets
+     * — never {@code verifiedGlobalView} — so every rule below still applies:
+     * both patients registered there, both identities stamped with it.
+     */
+    @Override
+    @Transactional
+    public EmpiMergeEventResponseDTO mergePatientsAtAuthorisedHospital(UUID actingHospitalId,
+                                                                       UUID primaryPatientId, UUID secondaryPatientId,
+                                                                       com.example.hms.enums.empi.EmpiMergeType mergeType,
+                                                                       String notes) {
+        if (actingHospitalId == null) {
+            // A programming error, not a refusal: a null here would otherwise
+            // read as "no scope", which sees nothing, and fail as a not-found
+            // that hides the bug.
+            throw new IllegalArgumentException("actingHospitalId is required");
+        }
+        requireTwoDistinctPatients(primaryPatientId, secondaryPatientId);
+        return mergePatientsInScope(primaryPatientId, secondaryPatientId, mergeType, notes,
+            new CallerScope(actingHospitalId, false));
+    }
+
+    private static void requireTwoDistinctPatients(UUID primaryPatientId, UUID secondaryPatientId) {
         if (primaryPatientId == null || secondaryPatientId == null) {
-            throw new BusinessException(MessageUtil.resolve(MSG_LINK_MISSING_PATIENT));
+            throw new BusinessException(MSG_LINK_MISSING_PATIENT);
         }
         if (primaryPatientId.equals(secondaryPatientId)) {
-            throw new BusinessException(MessageUtil.resolve(MSG_MERGE_SAME_PATIENT));
+            throw new BusinessException(MSG_MERGE_SAME_PATIENT);
         }
+    }
+
+    private EmpiMergeEventResponseDTO mergePatientsInScope(UUID primaryPatientId, UUID secondaryPatientId,
+                                                           com.example.hms.enums.empi.EmpiMergeType mergeType,
+                                                           String notes, CallerScope scope) {
         // ── Tenant isolation BEFORE provisioning: ensureIdentityForPatient
         // creates a master identity (and emits IDENTITY_LINKED) for any patient
         // that lacks one. Deferring the check to mergeIdentities would leave that
         // write already done against another tenant's patient. ──
-        requirePatientInTenant(primaryPatientId);
-        requirePatientInTenant(secondaryPatientId);
+        requirePatientInTenant(primaryPatientId, scope);
+        requirePatientInTenant(secondaryPatientId, scope);
 
         EmpiMasterIdentity primary = ensureIdentityForPatient(primaryPatientId);
         EmpiMasterIdentity secondary = ensureIdentityForPatient(secondaryPatientId);
@@ -298,7 +437,18 @@ public class EmpiServiceImpl implements EmpiService {
         request.setSecondaryIdentityId(secondary.getId());
         request.setMergeType(mergeType != null ? mergeType : com.example.hms.enums.empi.EmpiMergeType.MANUAL);
         request.setNotes(notes);
-        return mergeIdentities(primary.getId(), request);
+        // The identities just loaded by patient id, judged by the same scope,
+        // rather than read again by identity id. A re-read goes through
+        // TenantAwareJpaRepository.findById, whose TenantScopeSpecification
+        // answers empty on a thread with no HospitalContext — so on the MLLP
+        // worker every merge would fail as identity-not-found. The rule this
+        // merge is held to is CallerScope.sees (stamped with THE one hospital
+        // the scope names, or a verified global view), which is narrower than
+        // the specification's any-permitted-hospital-or-organisation filter.
+        return mergeVisibleIdentities(
+            Optional.of(primary).filter(scope::sees),
+            Optional.of(secondary).filter(scope::sees),
+            request);
     }
 
     /**
@@ -330,6 +480,7 @@ public class EmpiServiceImpl implements EmpiService {
         for (EmpiIdentityAlias alias : aliasRepository.findByMasterIdentity_Id(secondary.getId())) {
             boolean duplicate = primaryAliases.stream().anyMatch(existing ->
                 existing.getAliasType() == alias.getAliasType()
+                    && java.util.Objects.equals(existing.getNationalUniqueIdPatientId(), alias.getNationalUniqueIdPatientId())
                     && existing.getAliasValue() != null
                     && existing.getAliasValue().equalsIgnoreCase(alias.getAliasValue()));
             if (duplicate) {
@@ -342,17 +493,38 @@ public class EmpiServiceImpl implements EmpiService {
         }
     }
 
-    /** Skill merge-step 5: PATIENT_MERGE audit trail — best-effort, never rolls back the merge. */
-    private void emitMergeAudit(EmpiMasterIdentity primary, EmpiMasterIdentity secondary, EmpiMergeEvent mergeEvent) {
+    /**
+     * Write-lock both identities of a merge, lower id first. Every merge takes
+     * its pair in this one order, so two merges of one pair queue on the same
+     * first row rather than deadlocking. {@link UUID#compareTo} is only a
+     * total order, not the database's uuid order, and needs to be no more:
+     * what matters is that every merge agrees on it.
+     */
+    private void lockBothInIdOrder(UUID oneId, UUID otherId) {
+        boolean oneFirst = oneId.compareTo(otherId) < 0;
+        masterIdentityRepository.findWithLockById(oneFirst ? oneId : otherId);
+        masterIdentityRepository.findWithLockById(oneFirst ? otherId : oneId);
+    }
+
+    private static BusinessException alreadyMerged(EmpiMasterIdentity identity) {
+        return new BusinessException(MessageUtil.resolve(MSG_MERGE_ALREADY_MERGED, identity.getEmpiNumber()));
+    }
+
+    /**
+     * Skill merge-step 5: PATIENT_MERGE audit trail — best-effort, never rolls
+     * back the merge. Runs after commit, so it takes values, not entities.
+     */
+    private void emitMergeAudit(UUID primaryId, String primaryEmpiNumber, String secondaryEmpiNumber,
+                                EmpiMergeType mergeType) {
         try {
             auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                 .eventType(com.example.hms.enums.AuditEventType.PATIENT_MERGE)
                 .status(com.example.hms.enums.AuditStatus.SUCCESS)
-                .eventDescription("EMPI merge: " + secondary.getEmpiNumber()
-                    + " merged into " + primary.getEmpiNumber()
-                    + " (" + mergeEvent.getMergeType() + ")")
+                .eventDescription("EMPI merge: " + secondaryEmpiNumber
+                    + " merged into " + primaryEmpiNumber
+                    + " (" + mergeType + ")")
                 .entityType("EmpiMasterIdentity")
-                .resourceId(primary.getId() != null ? primary.getId().toString() : null)
+                .resourceId(primaryId != null ? primaryId.toString() : null)
                 .build());
         } catch (RuntimeException ex) {
             log.warn("Failed to emit PATIENT_MERGE audit event: {}", ex.getMessage());
@@ -364,12 +536,12 @@ public class EmpiServiceImpl implements EmpiService {
             throw new BusinessException("EMPI link request is required");
         }
         if (request.getPatientId() == null) {
-            throw new BusinessException(MessageUtil.resolve(MSG_LINK_MISSING_PATIENT));
+            throw new BusinessException(MSG_LINK_MISSING_PATIENT);
         }
         boolean hasAliasType = request.getAliasType() != null;
         boolean hasAliasValue = StringUtils.hasText(request.getAliasValue());
         if (hasAliasType != hasAliasValue) {
-            throw new BusinessException(MessageUtil.resolve(MSG_LINK_ALIAS_INCOMPLETE));
+            throw new BusinessException(MSG_LINK_ALIAS_INCOMPLETE);
         }
     }
 
@@ -378,7 +550,7 @@ public class EmpiServiceImpl implements EmpiService {
             throw new BusinessException("Alias request is required");
         }
         if (request.getAliasType() == null || !StringUtils.hasText(request.getAliasValue())) {
-            throw new BusinessException(MessageUtil.resolve(MSG_ALIAS_INVALID));
+            throw new BusinessException(MSG_ALIAS_INVALID);
         }
     }
 
@@ -393,7 +565,7 @@ public class EmpiServiceImpl implements EmpiService {
             String aliasValue = StringUtils.hasText(request.getAliasValue())
                 ? request.getAliasValue().trim()
                 : identity.getEmpiNumber();
-            throw new BusinessException(MessageUtil.resolve(MSG_ALIAS_EXISTS, aliasValue));
+            throw new BusinessException(MSG_ALIAS_EXISTS, aliasValue);
         }
         return identity;
     }
@@ -410,7 +582,7 @@ public class EmpiServiceImpl implements EmpiService {
             .map(alias -> {
                 EmpiMasterIdentity master = alias.getMasterIdentity();
                 if (master == null) {
-                    throw new BusinessException(MessageUtil.resolve(MSG_ALIAS_ORPHANED));
+                    throw new BusinessException(MSG_ALIAS_ORPHANED);
                 }
                 return master;
             });
@@ -457,7 +629,7 @@ public class EmpiServiceImpl implements EmpiService {
         }
 
         if (aliasRepository.existsByAliasTypeAndAliasValueIgnoreCase(request.getAliasType(), normalizedValue)) {
-            throw new BusinessException(MessageUtil.resolve(MSG_ALIAS_EXISTS, normalizedValue));
+            throw new BusinessException(MSG_ALIAS_EXISTS, normalizedValue);
         }
 
         EmpiAliasRequestDTO aliasDto = new EmpiAliasRequestDTO();
@@ -480,7 +652,7 @@ public class EmpiServiceImpl implements EmpiService {
             .orElse(context.getActiveOrganizationId());
         UUID hospitalId = Optional.ofNullable(primary.getHospitalId())
             .or(() -> Optional.ofNullable(secondary.getHospitalId()))
-            .orElse(context.getActiveHospitalId());
+            .orElse(ActingScopeResolver.pinnedHospitalIdOf(context));
         UUID departmentId = Optional.ofNullable(primary.getDepartmentId())
             .or(() -> Optional.ofNullable(secondary.getDepartmentId()))
             .orElseGet(() -> context.getPermittedDepartmentIds().stream().min(Comparator.naturalOrder()).orElse(null));
@@ -500,6 +672,19 @@ public class EmpiServiceImpl implements EmpiService {
             .build();
     }
 
+    /**
+     * Send an EMPI event once the surrounding transaction COMMITS.
+     *
+     * <p>Every caller runs inside a transaction — and {@code mergePatients}
+     * publishes {@code IDENTITY_LINKED} while provisioning, before
+     * {@code mergeIdentities} can still refuse, and a caller may run it inside
+     * its own wider transaction that rolls back afterwards. A send made inline
+     * would leave consumers holding an event for a change a rollback erased.
+     * Deferring here, the one place every event passes, keeps every present
+     * and future caller on the same timing. The send itself stays
+     * asynchronous; with no transaction active it runs inline, as before (see
+     * {@link TransactionCallbacks}).
+     */
     private void publishEvent(EmpiEventPayload payload) {
         if (payload == null) {
             return;
@@ -513,11 +698,14 @@ public class EmpiServiceImpl implements EmpiService {
             log.debug("No Kafka template available for EMPI events, skipping publish");
             return;
         }
-        try {
-            template.send(kafkaProperties.getEmpiIdentityTopic(), payload.getEmpiNumber(), payload);
-        } catch (RuntimeException ex) {
-            log.warn("Failed to publish EMPI event {}", payload, ex);
-        }
+        String topic = kafkaProperties.getEmpiIdentityTopic();
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                template.send(topic, payload.getEmpiNumber(), payload);
+            } catch (RuntimeException ex) {
+                log.warn("Failed to publish EMPI event {}", payload, ex);
+            }
+        });
     }
 
     private EmpiEventPayload buildIdentityEventPayload(EmpiMasterIdentity identity, String eventType) {
@@ -532,7 +720,7 @@ public class EmpiServiceImpl implements EmpiService {
             .patientId(identity.getPatientId())
             .occurredAt(OffsetDateTime.now())
             .organizationId(Optional.ofNullable(identity.getOrganizationId()).orElse(context.getActiveOrganizationId()))
-            .hospitalId(Optional.ofNullable(identity.getHospitalId()).orElse(context.getActiveHospitalId()))
+            .hospitalId(Optional.ofNullable(identity.getHospitalId()).orElse(ActingScopeResolver.pinnedHospitalIdOf(context)))
             .departmentId(Optional.ofNullable(identity.getDepartmentId()).orElseGet(() -> context.getPermittedDepartmentIds().stream().findFirst().orElse(null)))
             .build();
     }
@@ -566,7 +754,7 @@ public class EmpiServiceImpl implements EmpiService {
 
     private String normalizeEmpiNumber(String empiNumber) {
         if (!StringUtils.hasText(empiNumber)) {
-            throw new BusinessException(MessageUtil.resolve(MSG_LOOKUP_INVALID_EMPI));
+            throw new BusinessException(MSG_LOOKUP_INVALID_EMPI);
         }
         return empiNumber.trim();
     }

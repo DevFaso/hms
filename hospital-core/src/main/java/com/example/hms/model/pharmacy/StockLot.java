@@ -66,8 +66,14 @@ public class StockLot extends BaseEntity {
     @Column(name = "initial_quantity", nullable = false, precision = 12, scale = 2)
     private BigDecimal initialQuantity;
 
+    /*
+     * Never written by an entity flush (updatable = false): every change goes
+     * through the atomic UPDATEs in the repository (#825 round 5), so a stale
+     * managed copy can never overwrite a concurrent fill, return, receipt or
+     * adjustment. Refresh the entity after one of those UPDATEs to read it.
+     */
     @NotNull
-    @Column(name = "remaining_quantity", nullable = false, precision = 12, scale = 2)
+    @Column(name = "remaining_quantity", nullable = false, updatable = false, precision = 12, scale = 2)
     private BigDecimal remainingQuantity;
 
     @Size(max = 255)

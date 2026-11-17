@@ -1,13 +1,11 @@
 package com.example.hms.security;
 
 import com.example.hms.model.User;
-import lombok.AllArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 
 import java.util.Collection;
 import java.util.UUID;
 
-@AllArgsConstructor
 public class CustomUserDetails implements HospitalUserDetails {
 
     private final UUID userId;
@@ -15,6 +13,18 @@ public class CustomUserDetails implements HospitalUserDetails {
     private final String password;
     private final boolean active;
     private final Collection<? extends GrantedAuthority> authorities;
+    /** QA D114: tokens issued before this instant are refused. */
+    private final java.time.LocalDateTime passwordChangedAt;
+
+    public CustomUserDetails(UUID userId, String username, String password, boolean active,
+                             Collection<? extends GrantedAuthority> authorities) {
+        this.userId = userId;
+        this.username = username;
+        this.password = password;
+        this.active = active;
+        this.authorities = authorities;
+        this.passwordChangedAt = null;
+    }
 
     public CustomUserDetails(User user, Collection<? extends GrantedAuthority> authorities) {
         this.userId = user.getId();
@@ -22,6 +32,12 @@ public class CustomUserDetails implements HospitalUserDetails {
         this.password = user.getPasswordHash();
         this.active = user.isActive();
         this.authorities = authorities;
+        this.passwordChangedAt = user.getPasswordChangedAt();
+    }
+
+    @Override
+    public java.time.LocalDateTime getPasswordChangedAt() {
+        return passwordChangedAt;
     }
 
     @Override

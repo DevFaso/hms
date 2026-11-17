@@ -23,7 +23,8 @@ public class BillingInvoiceMapper {
         dto.setId(invoice.getId() != null ? invoice.getId().toString() : null);
 
         // Patient info
-        populatePatientInfo(dto, invoice.getPatient());
+        populatePatientInfo(dto, invoice.getPatient(),
+            invoice.getHospital() != null ? invoice.getHospital().getId() : null);
 
         // Hospital info
         populateHospitalInfo(dto, invoice.getHospital());
@@ -37,10 +38,11 @@ public class BillingInvoiceMapper {
         return dto;
     }
 
-    private void populatePatientInfo(BillingInvoiceResponseDTO dto, Patient patient) {
+    private void populatePatientInfo(BillingInvoiceResponseDTO dto, Patient patient, java.util.UUID invoiceHospitalId) {
         if (patient == null) return;
 
         String fullName = buildPatientName(patient);
+        dto.setPatientId(patient.getId() != null ? patient.getId().toString() : null);
         dto.setPatientFullName(fullName);
         dto.setPatientName(fullName);
         dto.setPatientEmail(patient.getEmail());
@@ -51,8 +53,11 @@ public class BillingInvoiceMapper {
         }
 
         // Insurance information
+        // QA D1651 class: only the coverage the invoice's hospital holds, plus
+        // legacy rows tagged to no hospital; never another hospital's policy.
         if (patient.getPatientInsurances() != null && !patient.getPatientInsurances().isEmpty()) {
             List<PatientInsuranceSummaryDTO> insuranceSummaries = patient.getPatientInsurances().stream()
+                .filter(insurance -> insurance.isVisibleAt(invoiceHospitalId))
                 .map(this::toPatientInsuranceSummaryDTO)
                 .toList();
             dto.setPatientInsurances(insuranceSummaries);
@@ -75,7 +80,9 @@ public class BillingInvoiceMapper {
     private void populateEncounterInfo(BillingInvoiceResponseDTO dto, Encounter encounter) {
         if (encounter == null) return;
 
-        dto.setEncounterDescription(encounter.getNotes());
+        dto.setEncounterCode(encounter.getCode());
+        // QA D1421: never Encounter.notes (nursing text, diagnoses), for any reader. A visit is
+        // named on an invoice by its type and date, below. Guard: ReceptionistClinicalReadGuardTest.
         dto.setEncounterType(encounter.getEncounterType() != null ? encounter.getEncounterType().name() : null);
         dto.setEncounterStatus(encounter.getStatus() != null ? encounter.getStatus().name() : null);
         dto.setEncounterDate(encounter.getEncounterDate() != null ? encounter.getEncounterDate().toString() : null);
@@ -84,15 +91,25 @@ public class BillingInvoiceMapper {
 
     private void populateInvoiceDetails(BillingInvoiceResponseDTO dto, BillingInvoice invoice) {
         dto.setInvoiceNumber(invoice.getInvoiceNumber());
+        // QA D936: the form tells the clerk which paid copays are still standing.
+        dto.setCheckInCopay(invoice.isCheckInCopay());
+        // QA D428: a folded check-in copay names the invoice it went to.
+        if (invoice.getCreditedToInvoice() != null) {
+            dto.setCreditedToInvoiceNumber(invoice.getCreditedToInvoice().getInvoiceNumber());
+        }
+        // QA D428: who created it, when the creator is on file.
+        dto.setCreatedByName(creatorName(invoice.getCreatedByUser()));
         dto.setInvoiceDate(invoice.getInvoiceDate() != null ? invoice.getInvoiceDate().toString() : null);
         dto.setDueDate(invoice.getDueDate() != null ? invoice.getDueDate().toString() : null);
         dto.setTotalAmount(invoice.getTotalAmount());
         dto.setAmountPaid(invoice.getAmountPaid());
 
-        // Calculate balance due
-        BigDecimal balanceDue = (invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO)
-            .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
+        // QA D202 / D1104: one rule for the balance, shared with the invoice PDF:
+        // a cancelled invoice is owed by nobody, whatever was billed on it.
+        BigDecimal balanceDue = com.example.hms.utility.InvoiceBalance.dueOf(invoice);
         dto.setBalanceDue(balanceDue);
+        // QA D1466: a copay above the visit total leaves money owed back.
+        dto.setRefundDue(com.example.hms.utility.InvoiceBalance.refundDueOf(invoice));
 
         // Calculate patient responsibility
         BigDecimal patientResponsibility = balanceDue.subtract(
@@ -100,7 +117,13 @@ public class BillingInvoiceMapper {
         dto.setPatientResponsibilityAmount(patientResponsibility.max(BigDecimal.ZERO));
 
         dto.setStatus(invoice.getStatus() != null ? invoice.getStatus().name() : null);
-        dto.setNotes(invoice.getNotes());
+        // QA D1901: server-written notes and reasons in the reader's language
+        // (Accept-Language); what a person typed is shown as typed.
+        dto.setNotes(com.example.hms.service.billing.BillingTextRenderer.render(invoice.getNotesCode(), invoice.getNotesArgs(),
+            invoice.getNotes()));
+        dto.setCancelReason(com.example.hms.service.billing.BillingTextRenderer.render(invoice.getCancelReasonCode(),
+            invoice.getCancelReasonArgs(), invoice.getCancelReason()));
+        dto.setCancelledAt(invoice.getCancelledAt() != null ? invoice.getCancelledAt().toString() : null);
         dto.setCreatedAt(invoice.getCreatedAt() != null ? invoice.getCreatedAt().toString() : null);
         dto.setUpdatedAt(invoice.getUpdatedAt() != null ? invoice.getUpdatedAt().toString() : null);
     }
@@ -170,5 +193,15 @@ public class BillingInvoiceMapper {
         String last   = p.getLastName()   == null ? "" : p.getLastName().trim();
         String full   = (first + " " + middle + " " + last).replaceAll("\\s+", " ").trim();
         return full.isEmpty() ? null : full;
+    }
+
+    /** QA D428: "First Last", the username when no name is on file, or null. */
+    private static String creatorName(com.example.hms.model.User user) {
+        if (user == null) {
+            return null;
+        }
+        String name = ((user.getFirstName() != null ? user.getFirstName() : "") + " "
+            + (user.getLastName() != null ? user.getLastName() : "")).trim();
+        return name.isEmpty() ? user.getUsername() : name;
     }
 }

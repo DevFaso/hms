@@ -29,6 +29,7 @@ import {
 } from '../../services/audit-saved-search.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 const DEFAULT_PAGE_SIZE = 25;
 // MVP-c3 added PLATFORM_CONFIG so platform-administration writes
@@ -38,10 +39,18 @@ const ALL_SOURCES: AuditSource[] = ['SUPPORT', 'FRONTEND', 'PERMISSION_MATRIX', 
 
 type ActiveTab = 'support' | 'aggregated';
 
+import { EnumLabelService } from '../../core/enum-label.service';
+import { AuditDescriptionService } from '../../audit-logs/audit-description.service';
+import { toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+
 @Component({
   selector: 'app-super-admin-audit-search',
   standalone: true,
   imports: [
+    KeyLabelPipe,
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     RouterLink,
@@ -56,8 +65,32 @@ type ActiveTab = 'support' | 'aggregated';
 })
 export class SuperAdminAuditSearchComponent implements OnInit {
   private readonly service = inject(AuditSearchService);
+  private readonly enumLabels = inject(EnumLabelService);
+  /** QA D619: an audit entity token as its keyed label (core/enum-label.service). */
+  entityLabel(raw: string | null | undefined): string | null {
+    return this.enumLabels.auditEntityLabel(raw);
+  }
+
+  private readonly descriptions = inject(AuditDescriptionService);
+
+  /**
+   * QA D894: SUPPORT and PLATFORM_CONFIG rows carry the server's English
+   * audit description (SuperAdminAuditAggregationServiceImpl.toDto), so they
+   * are read through the same patterns as /super-admin/audit-logs. FRONTEND
+   * (portal metadata) and PERMISSION_MATRIX summaries are not audit
+   * descriptions and stay as they are; the raw text is kept in the tooltip.
+   */
+  summaryText(row: AggregatedAuditEvent): string {
+    if (!row.summary) return '';
+    if (row.source !== 'SUPPORT' && row.source !== 'PLATFORM_CONFIG') return row.summary;
+    return this.descriptions.describe({ eventDescription: row.summary });
+  }
+
   private readonly residencyService = inject(DataResidencyService);
   private readonly savedSearchService = inject(AuditSavedSearchService);
+  private readonly confirm = inject(ConfirmService);
+  /** The last delete of a saved search was refused. */
+  readonly savedDeleteFailed = signal(false);
 
   readonly loading = signal(false);
   readonly errored = signal(false);
@@ -264,7 +297,8 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   private toIsoDateTime(value: string): string | undefined {
     const v = this.trimOrUndefined(value);
     if (!v) return undefined;
-    return v.length === 16 ? `${v}:00` : v;
+    // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+    return toServerDateTime(v);
   }
 
   exportCsv(): void {
@@ -345,18 +379,27 @@ export class SuperAdminAuditSearchComponent implements OnInit {
     this.runSearch();
   }
 
-  deleteSaved(saved: SavedAuditSearch): void {
-    this.savedSearchService
-      .delete(saved.id)
-      .pipe(catchError(() => of(null)))
-      .subscribe(() =>
-        this.savedSearches.update((current) => current.filter((s) => s.id !== saved.id)),
-      );
+  async deleteSaved(saved: SavedAuditSearch): Promise<void> {
+    // QA CX-010: the × removed the search on one click.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'AUDIT_SEARCH.SAVED.DELETE_CONFIRM',
+      params: { name: saved.name },
+      confirmKey: 'COMMON.DELETE',
+    });
+    if (!confirmed) return;
+    this.savedDeleteFailed.set(false);
+    this.savedSearchService.delete(saved.id).subscribe({
+      next: () => this.savedSearches.update((current) => current.filter((s) => s.id !== saved.id)),
+      // A refused delete used to drop the chip anyway: the search came back on reload.
+      error: () => this.savedDeleteFailed.set(true),
+    });
   }
 
   private fromIsoForInput(value: string | undefined): string {
     if (!value) return '';
-    return value.length === 19 && value.endsWith(':00') ? value.substring(0, 16) : value;
+    // #948 review: a saved filter keeps the UTC bounds the search was sent;
+    // shown raw, every apply-and-save moved the window by the reader's offset.
+    return toLocalInputValue(value);
   }
 
   private triggerBrowserDownload(blob: Blob, filename: string): void {

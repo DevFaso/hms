@@ -1,5 +1,8 @@
 package com.example.hms.controller;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.security.audit.WriteAuditInterceptor;
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminLabOrderCreateRequestDTO;
@@ -30,6 +33,7 @@ public class SuperAdminLabOrderController {
 
     @PostMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @WriteAudited(entity = "LAB_ORDER", eventType = AuditEventType.LAB_ORDER_CREATED)
     @Operation(
         summary = "Create lab order for a patient",
         description = "Allows super admins to create lab orders by referencing human-friendly organization, hospital, staff, and patient identifiers.",
@@ -40,6 +44,7 @@ public class SuperAdminLabOrderController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale
     ) {
         LabOrderResponseDTO response = superAdminLabOrderService.createLabOrder(request, locale);
+        WriteAuditInterceptor.describeWrite(response.getId(), response.getPatientId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWrapper.success(response));
     }
 }

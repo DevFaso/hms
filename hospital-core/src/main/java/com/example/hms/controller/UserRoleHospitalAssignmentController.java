@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
@@ -43,6 +44,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class UserRoleHospitalAssignmentController {
+
+    private static final String CONFIRMATION_CODE = "confirmationCode";
 
     private final UserRoleHospitalAssignmentService assignmentService;
 
@@ -122,7 +125,7 @@ public class UserRoleHospitalAssignmentController {
         log.info("📧 Resending notifications for assignment '{}'", assignmentId);
         com.example.hms.utility.ActivationDeliveryTracker.open();
         try {
-            assignmentService.sendNotifications(assignmentId);
+            assignmentService.resendNotifications(assignmentId);
             return ResponseEntity.ok(com.example.hms.utility.ActivationDeliveryTracker.close());
         } finally {
             com.example.hms.utility.ActivationDeliveryTracker.close();
@@ -162,7 +165,8 @@ public class UserRoleHospitalAssignmentController {
             @Parameter(description = "Filter by assignment code")
             @RequestParam(required = false) String assignmentCode
     ) {
-        Pageable pageable = PageRequest.of(page, size);
+        // QA D1295 class: pages of an unordered query repeat or skip rows; newest assignment first.
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "assignedAt", "id"));
         AssignmentSearchCriteria criteria = AssignmentSearchCriteria.builder()
             .hospitalId(hospitalId != null ? hospitalId.toString() : null)
             .active(active)
@@ -199,9 +203,29 @@ public class UserRoleHospitalAssignmentController {
             @PathVariable String assignmentCode,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "JSON body with confirmationCode field")
             @RequestBody java.util.Map<String, String> body) {
-        String confirmationCode = body != null ? body.get("confirmationCode") : null;
+        String confirmationCode = body != null ? body.get(CONFIRMATION_CODE) : null;
+        // QA round 29 sweep: a missing code is named, not answered "invalid code".
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(confirmationCode, CONFIRMATION_CODE, "assignment.verify.codeRequired")
+            .orThrow();
         log.info("🔐 Self-service verification attempt for assignment code '{}'", assignmentCode);
         return ResponseEntity.ok(assignmentService.verifyAssignmentByCode(assignmentCode, confirmationCode));
+    }
+
+    @Operation(summary = "Self-service activation by phone number and the one-time code from the SMS (QA D1123)")
+    @PostMapping("/public/activate-by-phone")
+    public ResponseEntity<UserRoleAssignmentPublicViewDTO> verifyAssignmentByPhone(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "JSON body with phone and confirmationCode")
+            @RequestBody java.util.Map<String, String> body) {
+        String phone = body != null ? body.get("phone") : null;
+        String confirmationCode = body != null ? body.get(CONFIRMATION_CODE) : null;
+        // QA round 29 sweep: both are named at once when missing, not answered "invalid code".
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(phone, "phone", "assignment.verify.phoneRequired")
+            .requireValue(confirmationCode, CONFIRMATION_CODE, "assignment.verify.codeRequired")
+            .orThrow();
+        log.info("🔐 Self-service activation attempt by phone");
+        return ResponseEntity.ok(assignmentService.verifyAssignmentByPhone(phone, confirmationCode));
     }
 
     @Operation(
@@ -240,17 +264,19 @@ public class UserRoleHospitalAssignmentController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Delete all assignments for a specific user")
+    @Operation(summary = "Retire all assignments of a specific user",
+        description = "Deactivates every assignment the user holds; the rows are kept, because "
+            + "encounters and other clinical records keep the assignment they were recorded under.")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @DeleteMapping("/user/{userId}")
     public ResponseEntity<Void> deleteAllForUser(@PathVariable UUID userId) {
-        log.warn("🗑️ Deleting all assignments for user ID {}", userId);
-        assignmentService.deleteAllAssignmentsForUser(userId);
+        log.warn("🔒 Deactivating all assignments for user ID {}", userId);
+        assignmentService.retireAssignmentsForUserWithinCallerScope(userId);
         return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Delete a role if it's not assigned")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @DeleteMapping("/role/{roleId}")
     public ResponseEntity<Void> deleteRoleIfUnassigned(@PathVariable UUID roleId) {
         log.warn("🔐 Attempting to delete role ID {}", roleId);

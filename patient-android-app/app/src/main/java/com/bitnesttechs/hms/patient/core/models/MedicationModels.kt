@@ -39,7 +39,14 @@ data class MedicationDto(
      * The wire name of that request's status, so the app can tell "awaiting
      * review" from "your care team put it on hold" without a second call.
      */
-    @Json(name = "refillRequestStatus") val refillRequestStatus: String? = null
+    @Json(name = "refillRequestStatus") val refillRequestStatus: String? = null,
+    /**
+     * G15: when a fill of this prescription was marked ready for collection,
+     * and at which pharmacy. Both null when nothing is waiting. Builds older
+     * than the field simply ignore it.
+     */
+    @Json(name = "readyForCollectionAt") val readyForCollectionAt: String? = null,
+    @Json(name = "readyForCollectionPharmacyName") val readyForCollectionPharmacyName: String? = null
 ) {
     /** Backward compat alias */
     val name: String get() = medicationName
@@ -95,13 +102,15 @@ enum class MedicationStatus {
 
     companion object {
         /**
-         * A medication with no status at all is treated as current: the
-         * backend only omits it when `@JsonInclude(NON_NULL)` drops a null,
-         * and `resolveStatus` never returns one.
+         * An absent status is UNKNOWN, like the other three enums here.
+         * `resolveStatus` never returns null today, but if that ever stops
+         * being true the failure mode of assuming ACTIVE is a discontinued
+         * or finished course badged green — the exact bug this mapping
+         * exists to prevent — while "Status unavailable" costs nothing.
          */
         fun fromWire(raw: String?): MedicationStatus {
             val trimmed = raw?.trim().orEmpty()
-            if (trimmed.isEmpty()) return ACTIVE
+            if (trimmed.isEmpty()) return UNKNOWN
             return entries.firstOrNull { it.name.equals(trimmed, ignoreCase = true) } ?: UNKNOWN
         }
     }
@@ -143,7 +152,14 @@ data class PrescriptionDto(
      * order is still at — or was filled by — the hospital's own dispensary.
      */
     @Json(name = "pharmacyName") val pharmacyName: String? = null,
-    @Json(name = "instructions") val instructions: String? = null
+    @Json(name = "instructions") val instructions: String? = null,
+    /**
+     * G15: when a fill of this prescription was marked ready for collection,
+     * and at which pharmacy. Both null when nothing is waiting. Builds older
+     * than the field simply ignore it.
+     */
+    @Json(name = "readyForCollectionAt") val readyForCollectionAt: String? = null,
+    @Json(name = "readyForCollectionPharmacyName") val readyForCollectionPharmacyName: String? = null
 ) {
     val displayName: String
         get() = medicationDisplayName?.takeIf { it.isNotBlank() } ?: medicationName
@@ -170,7 +186,6 @@ enum class PrescriptionStatus {
     DISPENSED,
     PARTIALLY_FILLED,
     PENDING_STOCK,
-    REQUIRES_EXTERNAL_FILL,
     SENT_TO_PARTNER,
     PARTNER_ACCEPTED,
     PARTNER_REJECTED,
@@ -194,7 +209,6 @@ enum class PrescriptionStatus {
             DISPENSED -> R.string.rx_status_dispensed
             PARTIALLY_FILLED -> R.string.rx_status_partially_filled
             PENDING_STOCK -> R.string.rx_status_pending_stock
-            REQUIRES_EXTERNAL_FILL -> R.string.rx_status_requires_external_fill
             SENT_TO_PARTNER -> R.string.rx_status_sent_to_partner
             PARTNER_ACCEPTED -> R.string.rx_status_partner_accepted
             PARTNER_REJECTED -> R.string.rx_status_partner_rejected
@@ -209,8 +223,8 @@ enum class PrescriptionStatus {
             PENDING_STOCK, PARTIALLY_FILLED, PENDING_CLARIFICATION, PENDING_SIGNATURE ->
                 StatusTone.ATTENTION
             PARTNER_REJECTED, TRANSMISSION_FAILED, CANCELLED, DISCONTINUED -> StatusTone.NEGATIVE
-            DRAFT, SIGNED, TRANSMITTED, SENT_TO_PARTNER, REQUIRES_EXTERNAL_FILL,
-            PRINTED_FOR_PATIENT, UNKNOWN -> StatusTone.NEUTRAL
+            DRAFT, SIGNED, TRANSMITTED, SENT_TO_PARTNER, PRINTED_FOR_PATIENT,
+            UNKNOWN -> StatusTone.NEUTRAL
         }
 
     /**
@@ -225,7 +239,7 @@ enum class PrescriptionStatus {
         get() = when (this) {
             DRAFT, PENDING_SIGNATURE, CANCELLED, DISCONTINUED -> false
             SIGNED, TRANSMITTED, TRANSMISSION_FAILED, PENDING_CLARIFICATION, DISPENSED,
-            PARTIALLY_FILLED, PENDING_STOCK, REQUIRES_EXTERNAL_FILL, SENT_TO_PARTNER,
+            PARTIALLY_FILLED, PENDING_STOCK, SENT_TO_PARTNER,
             PARTNER_ACCEPTED, PARTNER_REJECTED, PARTNER_DISPENSED, PRINTED_FOR_PATIENT,
             UNKNOWN -> true
         }

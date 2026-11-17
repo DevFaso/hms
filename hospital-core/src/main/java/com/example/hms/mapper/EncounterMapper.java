@@ -39,12 +39,18 @@ public class EncounterMapper {
         EncounterResponseDTO dto = new EncounterResponseDTO();
         UUID encounterId = e.getId();
         dto.setId(encounterId);
+        dto.setCode(e.getCode());
+        dto.setAdmissionId(e.getAdmissionId());
         dto.setEncounterType(e.getEncounterType());
         dto.setEncounterDate(e.getEncounterDate());
     dto.setStatus(e.getStatus());
-        dto.setNotes(nullSafe(e.getNotes()));
+        // QA D759: the anchor's bookkeeping note is shown in the reader's language.
+        dto.setNotes(e.isPrescriptionAnchor()
+            ? com.example.hms.utility.MessageUtil.resolveOrRaw("encounter.prescriptionAnchor.note")
+            : nullSafe(e.getNotes()));
         dto.setArrivalTimestamp(e.getArrivalTimestamp());
         dto.setChiefComplaint(nullSafe(e.getChiefComplaint()));
+        dto.setDeskChiefComplaint(nullSafe(e.getDeskChiefComplaint()));
         dto.setEsiScore(e.getEsiScore());
         dto.setRoomAssignment(nullSafe(e.getRoomAssignment()));
         dto.setTriageTimestamp(e.getTriageTimestamp());
@@ -86,14 +92,52 @@ public class EncounterMapper {
             JpaProxyUtils.safeInit(e.getAppointment(), OWNER, encounterId, "appointment"));
 
         dto.setNote(toEncounterNoteResponseDTO(e.getEncounterNote()));
+        // QA D831: the earlier entries of a stay stay readable (and signable).
+        java.util.List<EncounterNote> entries = e.getEncounterNotes();
+        if (entries != null && entries.size() > 1) {
+            dto.setNoteEntries(entries.stream()
+                .sorted(java.util.Comparator.comparing(EncounterNote::getCreatedAt,
+                    java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                .map(this::toEncounterNoteResponseDTO)
+                .toList());
+        }
 
+        return dto;
+    }
+
+    /**
+     * The encounter as the patient reads it (GET /me/patient/encounters, the
+     * patient apps). #965 review: the staff list of a stay's earlier entries
+     * carries other clinicians' unsigned drafts and their user ids; none of it
+     * reaches the patient. The entries are withheld and the note carries no
+     * user id.
+     *
+     * <p>QA D1910 (round 53): the note itself was the LATEST entry, signed or
+     * not, so a doctor's unsigned draft (assessment, plan) reached the patient
+     * during the visit and after checkout. The patient now reads the latest
+     * SIGNED entry only, the rule the after-visit summary already follows
+     * (#1138), and {@code notePendingSignature} says a draft is waiting.
+     */
+    public EncounterResponseDTO toPatientPortalEncounterResponseDTO(Encounter e) {
+        EncounterResponseDTO dto = toEncounterResponseDTO(e);
+        if (dto == null) {
+            return null;
+        }
+        dto.setNoteEntries(null);
+        EncounterNoteResponseDTO note = toEncounterNoteResponseDTO(e.getLatestSignedEncounterNote());
+        if (note != null) {
+            note.setAuthorUserId(null);
+            note.setSignedByUserId(null);
+        }
+        dto.setNote(note);
+        dto.setNotePendingSignature(e.hasNoteAwaitingSignature());
         return dto;
     }
 
     private void populatePatient(EncounterResponseDTO dto, Patient p) {
         if (p == null) return;
         dto.setPatientId(p.getId());
-        dto.setPatientName(joinName(p.getFirstName(), p.getLastName()));
+        dto.setPatientName(nullSafe(p.getFullName()));
         dto.setPatientEmail(nullSafe(p.getEmail()));
         dto.setPatientPhoneNumber(nullSafe(p.getPhoneNumberPrimary()));
     }
@@ -101,6 +145,7 @@ public class EncounterMapper {
     private void populateStaff(EncounterResponseDTO dto, Staff s) {
         if (s == null) return;
         dto.setStaffId(s.getId());
+        dto.setStaffUserId(s.getUser() != null ? s.getUser().getId() : null);
         String staffDisplay = (s.getUser() != null)
             ? joinName(s.getUser().getFirstName(), s.getUser().getLastName())
             : nullSafe(s.getName());
@@ -130,6 +175,9 @@ public class EncounterMapper {
         }
         return EncounterNoteResponseDTO.builder()
             .id(note.getId())
+            .authorUserId(note.getAuthor() != null ? note.getAuthor().getId() : null)
+            .authorName(nullSafe(note.getAuthorName()))
+            .authorCredentials(nullSafe(note.getAuthorCredentials()))
             .template(note.getTemplate())
             .chiefComplaint(nullSafe(note.getChiefComplaint()))
             .historyOfPresentIllness(nullSafe(note.getHistoryOfPresentIllness()))
@@ -268,6 +316,14 @@ public class EncounterMapper {
         if (dto.getEncounterType() != null) e.setEncounterType(EncounterType.valueOf(dto.getEncounterType().name()));
         if (dto.getEncounterDate() != null) e.setEncounterDate(dto.getEncounterDate());
         if (dto.getNotes() != null) e.setNotes(dto.getNotes());
+        // QA D944: the walk-in's "Motif principal" is the visit's chief complaint.
+        if (dto.getChiefComplaint() != null && !dto.getChiefComplaint().isBlank()) {
+            e.setChiefComplaint(dto.getChiefComplaint().trim());
+            // RCPT-CLIN: what a receptionist typed stays hers to read, whatever triage writes after it.
+            if (com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()) {
+                e.setDeskChiefComplaint(dto.getChiefComplaint().trim());
+            }
+        }
 
         return e;
     }

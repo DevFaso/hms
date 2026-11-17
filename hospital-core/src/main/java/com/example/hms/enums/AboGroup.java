@@ -60,6 +60,17 @@ public enum AboGroup {
     AB,
     O;
 
+    /**
+     * QA D1383 (round 32): the edge check of a patient's blood type, a String
+     * field - one of these groups followed by its Rhesus sign ({@link RhFactor}:
+     * + or -), in any case, or blank (left to the field's own rule; the patient
+     * entity upper-cases it). PUT and POST {@code /patients} stored "ZZ", "B"
+     * and "Q-" while PATCH refused them: every request field named
+     * {@code bloodType} carries this one pattern
+     * ({@code FreeTextStatusRequestFieldGuardTest}).
+     */
+    public static final String BLOOD_TYPE_CODES = "\\s*+(?:(?:AB|A|B|O)[+-])?\\s*+";
+
     /** Donor groups whose RED CELLS this group may receive. */
     public Set<AboGroup> compatibleRedCellDonors() {
         return switch (this) {
@@ -227,5 +238,37 @@ public enum AboGroup {
 
     public static RhFactor emergencyReleaseRh() {
         return RhFactor.NEGATIVE;
+    }
+
+    /**
+     * The products emergency release by O positive or despite an incompatible crossmatch applies
+     * to: red cells only. O is no universal donor of plasma or platelets.
+     */
+    public static boolean isEmergencyRedCells(BloodProductType product) {
+        return product == BloodProductType.PACKED_RED_CELLS || product == BloodProductType.WHOLE_BLOOD;
+    }
+
+    /** An O positive red-cell bag: the only addition to the O negative of an uncrossmatched release. */
+    public static boolean isEmergencyOPositive(AboGroup donorGroup, RhFactor donorRh, BloodProductType product) {
+        return isEmergencyRedCells(product) && donorGroup == emergencyReleaseGroup() && donorRh == RhFactor.POSITIVE;
+    }
+
+    /**
+     * Whether a release documented with a reason and a named person may send this red-cell bag to
+     * this recipient (user-supplied guidance, 2026-11-06). Group O passes every recipient, typed or
+     * not: that is the one place O positive reaches a patient typed Rh negative, the deliberate
+     * exception to {@link #isCompatible}. Anything else follows {@link #isCompatible} unchanged, so
+     * an ABO exclusion stays refused and an untyped patient receives group O only.
+     */
+    public static boolean documentedReleaseAllows(AboGroup recipientGroup, RhFactor recipientRh,
+                                                  AboGroup donorGroup, RhFactor donorRh,
+                                                  BloodProductType product) {
+        if (!isEmergencyRedCells(product)) {
+            return false;
+        }
+        if (donorGroup == emergencyReleaseGroup()) {
+            return donorRh != null;
+        }
+        return isCompatible(recipientGroup, recipientRh, donorGroup, donorRh, product, ChildbearingPotential.UNKNOWN);
     }
 }

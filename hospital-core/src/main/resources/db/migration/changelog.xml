@@ -2460,4 +2460,1135 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V166 — a pending, verified change of a user's own email address.
+         The self-service change used to go through PUT /users/{id} with no
+         re-authentication and took effect at once. POST
+         /auth/me/change-email now needs the current password and only
+         parks the change; the code sent to the NEW address applies it.
+         One row per user also holds the endpoint's own wrong-password and
+         request counters, kept apart from the login throttle. V165 is
+         reserved elsewhere and is intentionally skipped here.
+         A second table logs each mail sent to a new address (a hash of the
+         address, never the address) for the per-address send limit.
+         Additive: two new tables and an index, IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V166-email-change-requests" author="hms-team" runOnChange="false">
+        <sqlFile path="V166__email_change_requests.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V167 — the partner no-show becomes a column of its own.
+         The fact "the partner accepted and never delivered" lived inside
+         prescription_routing_decisions.reason, a free-text column, first as
+         an English literal ("Partner no-show: ", pre-#740), then as a
+         [PARTNER_NO_SHOW] marker (#740). Adds partner_no_show (boolean,
+         NOT NULL DEFAULT false) + no_show_reason (VARCHAR 1024) and moves
+         both encodings onto them: marker rows directly, literal rows only
+         when the no-show endpoint's own audit row corroborates them (the
+         literal alone is ambiguous against typed prose). PL/pgSQL helpers
+         in pg_temp, dropped at the end — hence splitStatements="false".
+         V165 is reserved elsewhere; V166 shipped with #784.
+         ================================================================= -->
+    <changeSet id="V167-routing-decision-partner-no-show" author="hms-team" runOnChange="false">
+        <sqlFile path="V167__routing_decision_partner_no_show.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V168 — one spelling per HL7 sender on rows written before the
+         normalisation. The allowlist matches MSH-3/MSH-4 case-insensitively
+         and the code now files a sender upper-case (#738 integration ids,
+         this release the ORU replay key), so legacy rows split one sender's
+         history in two. Upper-cases integration_message_event.integration_id
+         (MLLP rows) and lab_results.source_sending_* — ASCII only, and a
+         lab row only when its upper-cased replay key is free (V131 unique
+         index); collisions are counted and left. DO block.
+         ================================================================= -->
+    <changeSet id="V168-hl7-sender-casing-backfill" author="hms-team" runOnChange="false">
+        <sqlFile path="V168__hl7_sender_casing_backfill.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V169 — the patient foreign key on the 31 tables V156 left open.
+         NO ACTION, NOT VALID (V156 precedent), one FK per table, named as
+         the entity's @ForeignKey; orphans counted per table as WARNINGs,
+         nothing deleted (docs/runbooks/patient-fk-orphans.sql lists them).
+         Excluded by recorded decision: audit_event_logs (V141),
+         roi_requests (V151), empi.master_identities, the *_v2 tables.
+         ================================================================= -->
+    <changeSet id="V169-patient-fk-integrity-remaining" author="hms-team" runOnChange="false">
+        <sqlFile path="V169__patient_fk_integrity_remaining.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V170 — drop the orphan patients_v2 stack, only where empty.
+         Its one reader, the unguarded /patients-v2 controller, went in
+         #785 and its entities in this release. A table that still holds
+         rows is kept and named in a WARNING for a human to review.
+         ================================================================= -->
+    <changeSet id="V170-drop-patients-v2-orphan-tables" author="hms-team" runOnChange="false">
+        <sqlFile path="V170__drop_patients_v2_orphan_tables.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V171 — clinical.patient_diagnoses gets hospital_id (nullable, FK
+         to hospital.hospitals, index on patient_id + hospital_id) so the
+         snapshot drawer's read can be scoped. No backfill: pre-V171 rows
+         stay NULL and are shown only to a verified super-admin (and the
+         patient on the portal); new rows must carry one.
+         ================================================================= -->
+    <changeSet id="V171-patient-diagnoses-hospital" author="hms-team" runOnChange="false">
+        <sqlFile path="V171__patient_diagnoses_hospital.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V172 — case-insensitive unique username, fail-safe. Reports every
+         group of accounts whose usernames differ only in case (ids only)
+         and creates uq_users_username_lower ON security.users
+         (lower(username)) only when there are none. Never merges or
+         renames an account.
+         ================================================================= -->
+    <changeSet id="V172-username-case-insensitive-unique" author="hms-team" runOnChange="false">
+        <sqlFile path="V172__username_case_insensitive_unique.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V173 — the outbound mail outbox (platform.mail_outbox).
+         Mail was sent to SMTP on the request thread, from an after-commit
+         callback that still holds the request's JDBC connection, so a
+         stalled mail host pinned a Hikari connection and a request thread.
+         Requests now queue the composed mail here and a ShedLock'd sweep
+         claims each row with a conditional UPDATE and sends it with no
+         transaction open (the V152 webhook-outbox mechanics). Recipients,
+         subject and body are encrypted by the app; subject and body are
+         nulled once a row is terminal. created_at/updated_at are NOT NULL
+         (BaseEntity, the V153 lesson). Numbered after V167-V172, which
+         the same release takes above; V174 is unused.
+         Additive: one new table and one index, IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V173-mail-outbox" author="hms-team" runOnChange="false">
+        <sqlFile path="V173__mail_outbox.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V175 — fk_encounter_assignment + fk_staff_assignment, which the
+         entities have always declared and no migration ever created.
+         Records the decision that assignments are soft-deleted (a user's
+         removal now deactivates them; the deprecated hard delete refuses
+         one an encounter or staff row references). NO ACTION, NOT VALID:
+         rows already dangling are counted, not rewritten. V173 is the
+         mail outbox above; V174 is unused.
+         ================================================================= -->
+    <changeSet id="V175-encounter-staff-assignment-fk" author="hms-team" runOnChange="false">
+        <sqlFile path="V175__encounter_staff_assignment_fk.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V176 — one patient education progress row per (patient, resource).
+         Takes ACCESS EXCLUSIVE on the table; if any (patient, resource)
+         has more than one row it STOPS (count of groups only, nothing
+         changed: a person resolves the duplicates, then the deploy is
+         re-run); otherwise adds
+         uk_patient_education_progress_patient_resource. No environment has
+         duplicates today. One DO block: splitStatements="false". V174
+         stays unused.
+         ================================================================= -->
+    <changeSet id="V176-patient-education-progress-one-row-per-resource" author="hms-team" runOnChange="false">
+        <sqlFile path="V176__patient_education_progress_one_row_per_resource.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V177 — clinical.integration_message_event.payload_purged_at plus a
+         partial index on the rows still holding a body. The nightly
+         IntegrationMessageRetentionScheduler erases message content after
+         hms.integration.retention.payload-days (default 180; any failed
+         message at most unresolved-max-days, default 365; a replay's copy
+         payload-days from the replay); the rows themselves are kept. V176
+         belongs to another PR.
+         ================================================================= -->
+    <changeSet id="V177-integration-message-payload-purge" author="hms-team" runOnChange="false">
+        <sqlFile path="V177__integration_message_payload_purge.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V178 — pharmacy "ready for collection" (audit gap G15).
+         clinical.dispenses: legacy PENDING rows -> COMPLETED (0 rows on dev
+         and prod, 2026-10-07); dispensed_at nullable; prepared_by (FK
+         security.users), ready_reminder_sent_at, cancel_reason; partial
+         UNIQUE uq_disp_one_pending_per_rx (one open preparation per
+         prescription) and partial idx_disp_pending_created for the
+         reminder sweep. No DO blocks.
+         ================================================================= -->
+    <changeSet id="V178-dispense-ready-for-collection" author="hms-team" runOnChange="false">
+        <sqlFile path="V178__dispense_ready_for_collection.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V179 — pharmacy work-queue claim (audit gap G13).
+         New table clinical.prescription_queue_claims: one advisory claim
+         per prescription (uq_rx_queue_claim_prescription), FK to the
+         prescription and to security.users, both ON DELETE CASCADE;
+         created_at/updated_at (BaseEntity); idx_rx_queue_claim_user.
+         Expiry is computed from claimed_at, no sweep. No DO blocks.
+         ================================================================= -->
+    <changeSet id="V179-prescription-queue-claims" author="hms-team" runOnChange="false">
+        <sqlFile path="V179__prescription_queue_claims.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V180 — external provider facilities (D5 P1, plan in PR #828).
+         hospital.hospitals.facility_type (HOSPITAL default, CHECK of three
+         values, index); uq_hospital_provider_code (partial, providers only); new table hospital.provider_verifications (the
+         RCCM/IFU/CNSS identity and the licence layer, created_at/updated_at
+         for BaseEntity, FK to the facility ON DELETE CASCADE, status CHECK, VERIFIED needs both
+         consistency flags); partial unique indexes (one current verification
+         per facility; VERIFIED licence pair, RCCM and IFU unique);
+         ROLE_PROVIDER_ADMIN seeded. No DO blocks.
+         ================================================================= -->
+    <changeSet id="V180-provider-facilities" author="hms-team" runOnChange="false">
+        <sqlFile path="V180__provider_facilities.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V183 — MFA authenticator replacement stays pending until confirmed
+         (security hotfix PR #853). Adds security.user_mfa_enrollments
+         .pending_totp_secret (application-encrypted) and
+         security.mfa_backup_codes.pending (NOT NULL DEFAULT FALSE), so a
+         re-enrolment never disables the current authenticator: the two swap
+         when the new code is confirmed. Also (review rounds 4-6):
+         user_mfa_enrollments.last_totp_step (a TOTP code is accepted once),
+         and a partial UNIQUE index (user_id) WHERE method = 'TOTP'. ⚠ NOT
+         purely additive: before the index, duplicate TOTP rows are DELETED,
+         keeping one per user (verified, enabled, latest). V181/V182 are
+         reserved by the external-provider plan. IF NOT EXISTS throughout,
+         no DO blocks.
+         ================================================================= -->
+    <changeSet id="V183-mfa-pending-authenticator" author="hms-team" runOnChange="false">
+        <sqlFile path="V183__mfa_pending_authenticator.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V184 — security.users.deactivated_by_admin_at (PR #852, review
+         round 6): an administrator's disable is recorded, so a provider
+         admin's re-invite or an invitation code cannot switch the account
+         back on. Additive, idempotent, no DO blocks. No backfill on
+         purpose: a pre-V184 disable cannot be told from a revoked invite.
+         (V181/V182 reserved for P2-PH/P2-LAB; V183 = MFA hotfix #853.)
+         ================================================================= -->
+    <changeSet id="V184-user-deactivated-by-admin" author="hms-team" runOnChange="false">
+        <sqlFile path="V184__user_deactivated_by_admin.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V185 — security.users.phone_number backfilled to E.164 (#866
+         residual). One DO block (splitStatements=false). Rows whose E.164
+         form is already held are left unchanged and counted in a NOTICE.
+         Idempotent. The Sage export plan moves to V186.
+         ================================================================= -->
+    <changeSet id="V185-users-phone-e164-backfill" author="hms-team" runOnChange="false">
+        <sqlFile path="V185__users_phone_e164_backfill.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V187 — security.users.activated_before_delete (PR #872, D21): the
+         soft delete records whether the account was activated, so the
+         restore brings an e-mail-verified account back active and keeps a
+         pending invitee inactive. Additive, idempotent, no DO blocks, no
+         backfill. (V185/V186 taken by other branches.)
+         ================================================================= -->
+    <changeSet id="V187-user-activated-before-delete" author="hms-team" runOnChange="false">
+        <sqlFile path="V187__user_activated_before_delete.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V188 - clinical.patients.is_active no longer mirrors a pending
+         portal account (QA D27): puts back the records the old copy switched
+         off. Data-only UPDATE, idempotent, no DO blocks. (V186 reserved by
+         another branch.)
+         ================================================================= -->
+    <changeSet id="V188-patient-active-not-account-state" author="hms-team" runOnChange="false">
+        <sqlFile path="V188__patient_active_not_account_state.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V191: lab test definitions - re-file the rows create/update wrongly
+         saved global back under their author's hospital (D30), and record
+         the switched-on DRAFT/APPROVED rows as ACTIVE now that only ACTIVE
+         definitions are orderable (D48). Data-only, idempotent, no DO block.
+         ================================================================= -->
+    <changeSet id="V191-lab-test-definition-scope-and-orderable" author="hms-team" runOnChange="false">
+        <sqlFile path="V191__lab_test_definition_scope_and_orderable.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V190: billing invoices - unique per-hospital invoice numbers, the
+         idempotent-create key and the per-hospital numbering counter (D94).
+         No DO block.
+         ================================================================= -->
+    <changeSet id="V190-billing-invoice-numbering-and-idempotency" author="hms-team" runOnChange="false">
+        <sqlFile path="V190__billing_invoice_numbering_and_idempotency.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V192: lab test definitions - re-file the rows the entity hook kept
+         saving global after V191 (D73, regression of D30). Data-only,
+         idempotent, no DO block.
+         ================================================================= -->
+    <changeSet id="V192-lab-test-definition-rescope-after-hook" author="hms-team" runOnChange="false">
+        <sqlFile path="V192__lab_test_definition_rescope_after_hook.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V195: lab results - supersedes link for corrections (D81). -->
+    <changeSet id="V195-lab-result-supersedes-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V195__lab_result_supersedes_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V194: hospital.departments.email becomes optional (QA D93), as the
+         form and the request DTO already treat it. Single ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V194-department-email-optional" author="hms-team" runOnChange="false">
+        <sqlFile path="V194__department_email_optional.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V197: default now() on the postpartum and newborn alert created_at
+         columns (QA D131). Two ALTERs, no DO block.
+         ================================================================= -->
+    <changeSet id="V197-maternity-alert-created-at-default" author="hms-team" runOnChange="false">
+        <sqlFile path="V197__maternity_alert_created_at_default.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V196: clinical.stock_transactions.witnessed_by (QA D157), the second
+         person on a controlled-substance adjustment. No DO block.
+         ================================================================= -->
+    <changeSet id="V196-stock-transaction-witness" author="hms-team" runOnChange="false">
+        <sqlFile path="V196__stock_transaction_witness.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V198: drop the leftover user-level ROLE_PATIENT link on staff
+         accounts that hold no patient assignment (QA D74, D132). Single
+         DELETE, no DO block.
+         ================================================================= -->
+    <changeSet id="V198-drop-leftover-user-level-patient-role" author="hms-team" runOnChange="false">
+        <sqlFile path="V198__drop_leftover_user_level_patient_role.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V189: payment ledger status (PENDING/CONFIRMED/REJECTED/REVERSED)
+         and the reversal audit columns (QA D140, D142). No DO block.
+         ================================================================= -->
+    <changeSet id="V189-payment-transaction-status-and-reversal" author="hms-team" runOnChange="false">
+        <sqlFile path="V189__payment_transaction_status_and_reversal.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V193: clinical.encounters.admission_id - an admission's own
+         INPATIENT encounter (QA D134/D135/D136). No FK: admissions live in
+         public and encounters in clinical, and the column is nullable for
+         every outpatient row. Single ALTER + index, no DO block.
+         ================================================================= -->
+    <changeSet id="V193-encounter-admission-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V193__encounter_admission_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V200 - QA D210: flag the check-in copay invoice so the visit
+         invoice credits it. Single ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V200-billing-invoice-check-in-copay" author="hms-team" runOnChange="false">
+        <sqlFile path="V200__billing_invoice_check_in_copay.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V201: lab.lab_test_definitions.submitted_by_id - who submitted the
+         definition for QA (QA D213: distinct reviewer and approver).
+         Single nullable ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V201-lab-test-definition-submitted-by" author="hms-team" runOnChange="false">
+        <sqlFile path="V201__lab_test_definition_submitted_by.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V202 (QA D224): the after-visit summary's prescription and referral
+         summaries are kept on the discharge summary. Single ALTER, no DO block. -->
+    <changeSet id="V202-discharge-summary-avs-texts" author="hms-team" runOnChange="false">
+        <sqlFile path="V202__discharge_summary_avs_texts.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V204 (QA D264): the selling price per unit on a pharmacy inventory
+         item, so a dispense payment is checked against what it costs.
+         Single ALTER, no DO block. -->
+    <changeSet id="V204-inventory-item-unit-price" author="hms-team" runOnChange="false">
+        <sqlFile path="V204__inventory_item_unit_price.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V205 (QA D291): lab.lab_orders.order_number, a readable order code
+         from lab.lab_order_number_seq, backfilled. Plain statements, no DO block. -->
+    <changeSet id="V205-lab-order-number" author="hms-team" runOnChange="false">
+        <sqlFile path="V205__lab_order_number.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V206 (QA D312): deactivate the EMPTY duplicate inventory items left
+         from before the D208 guard (one per pharmacy and drug is kept; a twin
+         holding stock is left for a person). Plain statement, no DO block. -->
+    <changeSet id="V206-deactivate-empty-duplicate-inventory-items" author="hms-team" runOnChange="false">
+        <sqlFile path="V206__deactivate_empty_duplicate_inventory_items.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V209 (QA D304): partial unique index, one open admission per patient,
+         created only when no duplicates exist. DO block. -->
+    <changeSet id="V209-one-open-admission-per-patient" author="hms-team" runOnChange="false">
+        <sqlFile path="V209__one_open_admission_per_patient.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V213 (QA D404): billing.pharmacy_payments.status (POSTED/VOIDED) with
+         voided_at/voided_by/void_reason; payments on already-cancelled
+         dispenses backfilled to VOIDED; QA D416: dispenses from a lot with no
+         catalog medication take the lot's; QA D228: payment_transactions.
+         invoice_total_at_receipt; QA D428: billing_invoices.credited_to_invoice_id
+         (FK, backfilled for folded copays). Plain statements, no DO block. -->
+    <changeSet id="V213-pharmacy-payment-void-status" author="hms-team" runOnChange="false">
+        <sqlFile path="V213__pharmacy_payment_void_status.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V222 (QA D605): escalation rows for URGENT obstetric and neonatal alerts,
+         so the on-call team is told and a sweep re-notifies until someone
+         acknowledges. Plain statements, no DO block. -->
+    <changeSet id="V222-obstetric-alert-escalations" author="hms-team" runOnChange="false">
+        <sqlFile path="V222__obstetric_alert_escalations.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V226 (QA D665): clinical.obstetric_alert_escalations.alert_message_key +
+         alert_message_args, so reminders render the alert sentence per reader. Plain statements. -->
+    <changeSet id="V226-obstetric-alert-message-key" author="hms-team" runOnChange="false">
+        <sqlFile path="V226__obstetric_alert_message_key.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V225 (QA D665): security.notifications.message_key + message_args, so a
+         notification body is rendered in the reader's language. Plain statements. -->
+    <changeSet id="V225-notification-message-key" author="hms-team" runOnChange="false">
+        <sqlFile path="V225__notification_message_key.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V223 (QA D660): the mandatory reason a signed prescription was
+         cancelled or discontinued. Plain statements, no DO block. -->
+    <changeSet id="V223-prescription-withdrawal-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V223__prescription_withdrawal_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V221 (QA D654): clinical.prescriptions.medication_catalog_item_id, the
+         catalog pick the controlled flag is read from. Plain statements. -->
+    <changeSet id="V221-prescription-catalog-item-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V221__prescription_catalog_item_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V219 (QA D673): lab.lab_orders.cancellation_reason, required on every
+         cancel. Plain statement, no DO block. -->
+    <changeSet id="V219-lab-order-cancellation-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V219__lab_order_cancellation_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V228 (QA D726): security.notifications.subject_id, so a matching
+         critical-value read-back marks its notifications read. Plain
+         statements, no DO block. -->
+    <changeSet id="V228-notification-subject" author="hms-team" runOnChange="false">
+        <sqlFile path="V228__notification_subject.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V230 (QA D764): ADMITTED registrations without an open admission
+         become REGISTERED. Plain statement, no DO block. -->
+    <changeSet id="V230-registration-stay-status-registered" author="hms-team" runOnChange="false">
+        <sqlFile path="V230__registration_stay_status_registered.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V232 (QA D776): clinical.nurse_handoffs.created_by_user_id,
+         recipient_user_id and recipient_name, so a handoff is addressed to
+         someone and only that person completes it. Plain statements, no DO block. -->
+    <changeSet id="V232-nurse-handoff-recipient" author="hms-team" runOnChange="false">
+        <sqlFile path="V232__nurse_handoff_recipient.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V231 (QA D757): clinical.prescriptions.take_home, so a ward order
+         ends with its stay unless it is marked for home. Plain statements,
+         no DO block. -->
+    <changeSet id="V231-prescription-take-home" author="hms-team" runOnChange="false">
+        <sqlFile path="V231__prescription_take_home.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V229 (QA D783): issued invoices with a total of 0, no amount paid
+         and no payment row, left from before the D767 guard, are cancelled
+         (never deleted), with one SYSTEM audit row each. One DO block
+         (splitStatements=false). Idempotent. -->
+    <changeSet id="V229-cancel-issued-zero-total-invoices" author="hms-team" runOnChange="false">
+        <sqlFile path="V229__cancel_issued_zero_total_invoices.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V235 (QA D786): support.audit_event_logs.hospital_id, so a SYSTEM
+         row written for one hospital's data (no user, no assignment) reaches
+         that hospital's audit view; backfills the V229 cancellation rows from
+         their invoice and the care-gap tracing rows from their recall. Plain
+         statements, no DO block. Idempotent. -->
+    <changeSet id="V235-audit-event-hospital-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V235__audit_event_hospital_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V233 (QA D792, residual of D757): live ward orders (not take-home) of
+         stays that ended before discharge discontinued them are set
+         DISCONTINUED, with one SYSTEM audit row each (an open back order is
+         cancelled with its order); orders with a prepared fill or an open
+         partner offer are left to the application, which ends them when that
+         hold goes, and counted by shape. One DO block (splitStatements=false).
+         Idempotent. -->
+    <changeSet id="V233-discontinue-ended-stay-ward-orders" author="hms-team" runOnChange="false">
+        <sqlFile path="V233__discontinue_ended_stay_ward_orders.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V236 (round 13): encounters closed unseen with outcome
+         LEFT_WITHOUT_BEING_SEEN move from CANCELLED to the new status
+         LEFT_WITHOUT_BEING_SEEN; stay encounters take their admission's
+         current department (QA D804). Plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V236-encounter-left-without-being-seen" author="hms-team" runOnChange="false">
+        <sqlFile path="V236__encounter_left_without_being_seen.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V238 (round 14): one encounter note row per entry, the per-encounter
+         unique key dropped where a generated schema had it (QA D831); the
+         expected result of a qualitative lab test (QA D834). Plain
+         statements, no DO block. Idempotent. -->
+    <changeSet id="V238-note-entries-and-qualitative-lab-tests" author="hms-team" runOnChange="false">
+        <sqlFile path="V238__note_entries_and_qualitative_lab_tests.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V239 (round 16): a specimen can be rejected with a reason; the reason,
+         the rejecting user and the time are stored on the specimen (QA D962).
+         Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V239-lab-specimen-rejection" author="hms-team" runOnChange="false">
+        <sqlFile path="V239__lab_specimen_rejection.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V240 (round 16, QA D971): the BPA protocol row for the
+         hypertension-in-pregnancy advisory card, so an administrator can
+         switch it off. Seeded active; ON CONFLICT DO
+         NOTHING keeps an administrator's change on a re-run. V239 is not
+         used on this branch (another round-16 branch holds it).
+         ================================================================= -->
+    <changeSet id="V240-bpa-pregnancy-hypertension-protocol" author="hms-team" runOnChange="false">
+        <sqlFile path="V240__bpa_pregnancy_hypertension_protocol.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- V242 (round 16): discounts, waivers and credit notes on an issued
+         invoice, each with a mandatory reason (QA D974). Plain statements,
+         no DO block. Idempotent. -->
+    <changeSet id="V242-invoice-adjustments" author="hms-team" runOnChange="false">
+        <sqlFile path="V242__invoice_adjustments.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V243 (round 16, sibling fixes): the ordering user's id on an
+         ultrasound order, so update and cancel can be refused to anyone but
+         its author (QA D930 class). Nullable, plain statement, no DO block.
+         Idempotent. -->
+    <changeSet id="V243-ultrasound-order-author" author="hms-team" runOnChange="false">
+        <sqlFile path="V243__ultrasound_order_author.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V244 (round 17, front desk and identity): a discharge approval no
+         longer ends the patient's registration (QA D1014); puts back the
+         registrations it ended. Data only, plain statement, no DO block.
+         Idempotent. -->
+    <changeSet id="V244-discharged-registrations-stay-registered" author="hms-team" runOnChange="false">
+        <sqlFile path="V244__discharged_registrations_stay_registered.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V245 (round 17, clinical workflow): the witness of a controlled-drug
+         administration on the MAR/eMAR (QA D922, decision 2026-10-28) and the
+         care-note title (QA D1044). Nullable, plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V245-mar-witness-and-care-note-title" author="hms-team" runOnChange="false">
+        <sqlFile path="V245__mar_witness_and_care_note_title.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V246 (round 17): QA D1053, an in-basket item keeps the message keys
+         and arguments of its title and body, so it is rendered in the
+         reader's language; QA D1032, a pharmacy payment stores a readable
+         receipt number from a per-hospital, per-year counter (existing
+         payments numbered in order). Plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V246-r17-in-basket-keys-and-pharmacy-receipts" author="hms-team" runOnChange="false">
+        <sqlFile path="V246__r17_in_basket_keys_and_pharmacy_receipts.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V247 (round 18, QA D935): per-hospital paediatric dose limits - per-day
+         mg/kg, absolute per-dose and per-day mg caps, a manual-review age,
+         weight bands (JSON), the source and the local approval status. No
+         data. Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V247-pediatric-dose-limits" author="hms-team" runOnChange="false">
+        <sqlFile path="V247__pediatric_dose_limits.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V249 (round 18, front desk and identity): QA D1061, a dependant's
+         patient account may have no login phone (security.users.phone_number
+         loses NOT NULL; the UNIQUE constraint stays, NULLs never collide), so
+         a child is registered under the guardian's number. Plain statement,
+         no DO block. Idempotent. -->
+    <changeSet id="V249-dependant-account-without-login-phone" author="hms-team" runOnChange="false">
+        <sqlFile path="V249__dependant_account_without_login_phone.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V251 (round 18): QA D1069, an invoice cancellation stores its
+         reason, when and by whom (cancel_reason, cancelled_at, cancelled_by
+         on billing.billing_invoices). Plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V251-invoice-cancel-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V251__invoice_cancel_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V252 (round 19): QA D1120, lab test definitions are versioned
+         (supersedes_definition_id, version_number on lab.lab_test_definitions);
+         QA D1107, care notes saved by the nurse-station dialog are signed by
+         their author (backfill of clinical.nursing_notes). Plain statements,
+         no DO block. Idempotent. -->
+    <changeSet id="V252-lab-definition-versions-and-care-note-signature" author="hms-team" runOnChange="false">
+        <sqlFile path="V252__lab_definition_versions_and_care_note_signature.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V253 (round 19): QA D1096, the paediatric manual dose review is a
+         real stop. clinical.prescriptions records that a review is required
+         (pediatric_dose_review_required) and who reviewed it, when and why
+         (pediatric_dose_reviewed_by / _at / _review_reason, the reason
+         encrypted by the entity). Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V253-prescription-pediatric-dose-review" author="hms-team" runOnChange="false">
+        <sqlFile path="V253__prescription_pediatric_dose_review.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V254 (round 19): QA D1069, a cancelled dispense keeps the pharmacist's
+         reason (cancel_note on clinical.dispenses); QA D1105, an invoice
+         adjustment can be reversed on its own with a reason (reversed_at,
+         reversed_by, reversal_reason on billing.invoice_adjustments). Plain
+         statements, no DO block. Idempotent. -->
+    <changeSet id="V254-r19-cancel-reasons-and-adjustment-reversal" author="hms-team" runOnChange="false">
+        <sqlFile path="V254__r19_cancel_reasons_and_adjustment_reversal.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V255 (round 20): QA D1126 / D1132, the reason given with an
+         appointment's CANCELLED or NO_SHOW move is kept (status_reason on
+         clinical.appointments). Plain statement, no DO block. Idempotent. -->
+    <changeSet id="V255-r20-appointment-status-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V255__r20_appointment_status_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V256 (round 21): QA D1157, the reason a waitlist entry is closed or a
+         recall cancelled is required and kept (close_reason on
+         scheduling.appointment_waitlist and scheduling.patient_recalls), and
+         D1148, an advance directive's revocation reason (clinical.advance_directives).
+         Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V256-r21-waitlist-and-recall-close-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V256__r21_waitlist_and_recall_close_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V257 (round 21): QA D1169, the pain score and the fundal height of a
+         vitals row are numbers (pain_score, fundal_height_cm on
+         clinical.patient_vital_signs), moved out of the notes where they were
+         stored as a sentence in the nurse's language. Plain statements, no DO
+         block. Idempotent. -->
+    <changeSet id="V257-r21-vital-sign-pain-and-fundal-height" author="hms-team" runOnChange="false">
+        <sqlFile path="V257__r21_vital_sign_pain_and_fundal_height.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V258 (round 22): QA D1147, prescriptions edited before #1001 kept the
+         first drug's display name (and its code when the edit sent none): the
+         display name follows the drug's name again, a linked item's code is
+         restored, and an orphan code of the old drug is dropped
+         (clinical.prescriptions only). Plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V258-r22-prescription-display-name-backfill" author="hms-team" runOnChange="false">
+        <sqlFile path="V258__r22_prescription_display_name_backfill.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V259 (QA round 25: D1240, D1241, D1242, D1247): withdrawal reasons kept on
+         allergies, guarantors and birth plans; the birth plan's author; the
+         entered-in-error flag of a removed diagnosis (backfilled from its
+         history). Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V259-r25-record-withdrawal-reasons" author="hms-team" runOnChange="false">
+        <sqlFile path="V259__r25_record_withdrawal_reasons.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V261 (QA round 30, user decision 2026-11-02): the minimum interval
+         between two doses of an as-needed (PRN) prescription, written by the
+         prescriber. Nullable: existing orders keep no invented default.
+         Plain statement, no DO block. Idempotent. -->
+    <changeSet id="V261-r30-prescription-prn-min-interval" author="hms-team" runOnChange="false">
+        <sqlFile path="V261__r30_prescription_prn_min_interval.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V260 (QA round 32, D1378 / D1360, coordinator decision 2026-11-03): an
+         as-needed (PRN) prescription is an explicit flag on the order, never
+         guessed from the frequency text. NOT NULL default false; backfilled
+         true only where the round-31 phrase list already read the frequency
+         as as-needed (prescriptions and order-set MEDICATION items). D1381:
+         the admission cancellation reason, time and author. Plain
+         statements, no DO block. Idempotent. -->
+    <changeSet id="V260-r32-prescription-as-needed-flag" author="hms-team" runOnChange="false">
+        <sqlFile path="V260__r32_prescription_as_needed_flag.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V263-r33-end-encounters-of-cancelled-stays" author="hms-team" runOnChange="false">
+        <sqlFile path="V263__r33_end_encounters_of_cancelled_stays.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V264-r33-correction-history" author="hms-team" runOnChange="false">
+        <sqlFile path="V264__r33_correction_history.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V265-r34-desk-chief-complaint" author="hms-team" runOnChange="false">
+        <sqlFile path="V265__r34_desk_chief_complaint.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V267-r34-maternal-risk-assessed-at" author="hms-team" runOnChange="false">
+        <sqlFile path="V267__r34_maternal_risk_assessed_at.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V266-r34-emergency-blood-releases" author="hms-team" runOnChange="false">
+        <sqlFile path="V266__r34_emergency_blood_releases.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V270-r34-overbook-and-registration-deactivation-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V270__r34_overbook_and_registration_deactivation_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V275-r36-death-record-entered-in-error" author="hms-team" runOnChange="false">
+        <sqlFile path="V275__r36_death_record_entered_in_error.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V278-cr05-newborn-danger-signs" author="hms-team" runOnChange="false">
+        <sqlFile path="V278__cr05_newborn_danger_signs.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V280-death-record-birth-facts" author="hms-team" runOnChange="false">
+        <sqlFile path="V280__death_record_birth_facts.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V277-r36-order-review-holds" author="hms-team" runOnChange="false">
+        <sqlFile path="V277__r36_order_review_holds.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V279-cr-urgent-paediatric-dose-exception" author="hms-team" runOnChange="false">
+        <sqlFile path="V279__cr_urgent_paediatric_dose_exception.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V281-r37-death-record-closed-records" author="hms-team" runOnChange="false">
+        <sqlFile path="V281__r37_death_record_closed_records.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V282-ultrasound-observations-stated" author="hms-team" runOnChange="false">
+        <sqlFile path="V282__ultrasound_observations_stated.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V283-r40-orders-issuance-and-obstetric-review" author="hms-team" runOnChange="false">
+        <sqlFile path="V283__r40_orders_issuance_and_obstetric_review.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V284-allergy-conflict-prescriber-review" author="hms-team" runOnChange="false">
+        <sqlFile path="V284__allergy_conflict_prescriber_review.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V288-r44-one-live-pharmacy-claim-per-dispense" author="hms-team" runOnChange="false">
+        <sqlFile path="V288__r44_one_live_pharmacy_claim_per_dispense.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V289-d1592-delivery-newborns" author="hms-team" runOnChange="false">
+        <sqlFile path="V289__d1592_delivery_newborns.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V290-labour-transfer-between-hospitals" author="hms-team" runOnChange="false">
+        <sqlFile path="V290__labour_transfer_between_hospitals.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V291-delivery-born-before-arrival" author="hms-team" runOnChange="false">
+        <sqlFile path="V291__delivery_born_before_arrival.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V292-obstetric-alert-escalation-transfer-source" author="hms-team" runOnChange="false">
+        <sqlFile path="V292__obstetric_alert_escalation_transfer_source.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V293-d1714-fetal-death-events" author="hms-team" runOnChange="false">
+        <sqlFile path="V293__d1714_fetal_death_events.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V294-imaging-order-completed-at" author="hms-team" runOnChange="false">
+        <sqlFile path="V294__imaging_order_completed_at.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V296-safeguarding-reviews" author="hms-team" runOnChange="false">
+        <sqlFile path="V296__safeguarding_reviews.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V297-imaging-preauth-pending-and-duplicate-override" author="hms-team" runOnChange="false">
+        <sqlFile path="V297__imaging_preauth_pending_and_duplicate_override.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <changeSet id="V299-vital-sign-organ-damage-symptoms" author="hms-team" runOnChange="false">
+        <sqlFile path="V299__vital_sign_organ_damage_symptoms.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V300 - the death family's free-text narratives are encrypted at rest.
+         DeathDispute reason/resolution_reason, DeathRecord causes, amendment,
+         notes and entered-in-error reason, FetalDeathEvent creation/supersede
+         reasons widen to TEXT for their ciphertext. Plain idempotent ALTERs;
+         legacy rows are encrypted by PhiTextEncryptionBackfill, not SQL.
+         V298 and V295 are reserved by other branches.
+         ================================================================= -->
+    <changeSet id="V300-encrypt-death-narratives" author="hms-team" runOnChange="false">
+        <sqlFile path="V300__encrypt_death_narratives.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V301 (QA D1901, billing-money plan PR 1) - billing text the server
+         writes is stored as a message code plus arguments, so each reader
+         sees it in their own language: invoice_items.text_code/text_args,
+         billing_invoices.notes_code/notes_args and
+         cancel_reason_code/cancel_reason_args. Backfills a code only where the
+         stored text equals a server template exactly; counts only in NOTICEs.
+         One DO block (splitStatements=false). Idempotent. V301-V319 are
+         reserved for the billing-money plan.
+         ================================================================= -->
+    <changeSet id="V301-billing-text-code-and-args" author="hms-team" runOnChange="false">
+        <sqlFile path="V301__billing_text_code_and_args.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- X2 booking identities; V301-V319 are reserved for Claude. -->
+    <changeSet id="V320-appointment-booking-identity" author="hms-team" runOnChange="false">
+        <sqlFile path="V320__appointment_booking_identity.sql"
+                 relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V302 (billing-money plan PR 2, scorecard M1) - each hospital's price
+         list: billing.price_list_items (the hospital's code, label as typed,
+         category, optional link a charge source matches in PR 3; one active
+         item per link) and billing.price_list_prices (effective-dated,
+         insert-only versions in whole francs; only effective_to is set by the
+         service when a newer version starts). Plain idempotent DDL, no DO
+         block. V301-V319 are reserved for the billing-money plan.
+         ================================================================= -->
+    <changeSet id="V302-billing-price-list" author="hms-team" runOnChange="false">
+        <sqlFile path="V302__billing_price_list.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- X8 / P1: optional encrypted national IU with keyed lookup; private
+         per-patient EMPI hash aliases allow reasoned duplicates. V320 is
+         already used by the merged X2 booking-idempotency task. Legacy
+         alias uniqueness is replaced before its blanket constraint is removed. -->
+    <changeSet id="V321-patient-national-unique-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V321__patient_national_unique_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -36,7 +36,116 @@ public final class PhoneNumbers {
     /** Longer than any plausible international number: the field holds more than one. */
     private static final int MAX_PLAUSIBLE_DIGITS = 13;
 
+    /** Calling code used when the hospital's country is unknown: Burkina Faso. */
+    public static final String DEFAULT_CALLING_CODE = "226";
+
+    /** Country (ISO alpha-2 or name, lower-cased, accents kept) to calling code. */
+    private static final java.util.Map<String, String> CALLING_CODES = java.util.Map.ofEntries(
+            java.util.Map.entry("bf", "226"), java.util.Map.entry("burkina faso", "226"),
+            java.util.Map.entry("ml", "223"), java.util.Map.entry("mali", "223"),
+            java.util.Map.entry("ci", "225"), java.util.Map.entry("côte d'ivoire", "225"),
+            java.util.Map.entry("cote d'ivoire", "225"), java.util.Map.entry("ivory coast", "225"),
+            java.util.Map.entry("ne", "227"), java.util.Map.entry("niger", "227"),
+            java.util.Map.entry("tg", "228"), java.util.Map.entry("togo", "228"),
+            java.util.Map.entry("bj", "229"), java.util.Map.entry("benin", "229"),
+            java.util.Map.entry("bénin", "229"), java.util.Map.entry("sn", "221"),
+            java.util.Map.entry("senegal", "221"), java.util.Map.entry("sénégal", "221"),
+            java.util.Map.entry("gh", "233"), java.util.Map.entry("ghana", "233"),
+            java.util.Map.entry("fr", "33"), java.util.Map.entry("france", "33"));
+
+    /** E.164: a plus, then 8 to 15 digits, the first not zero. */
+    private static final Pattern E164 = Pattern.compile("\\+[1-9]\\d{7,14}");
+
+    /** Characters a desk types between digit groups. */
+    private static final Pattern FORMATTING = Pattern.compile("[\\s.\\-()/]");
+
     private PhoneNumbers() {
+    }
+
+    /** A national number typed without a prefix: digits only, 6 to 15 of them. */
+    private static final Pattern NATIONAL_DIGITS = Pattern.compile("\\d{6,15}");
+
+    /** Whether {@code country} is one whose calling code this class knows. */
+    public static boolean isKnownCountry(String country) {
+        if (country == null || country.isBlank()) {
+            return false;
+        }
+        return CALLING_CODES.containsKey(
+                country.trim().toLowerCase(java.util.Locale.ROOT).replace('\u2019', '\''));
+    }
+
+    /**
+     * QA D833: a facility's phone number as it is stored, or {@code null} when
+     * it is not a phone number. Typed as {@code "+226 25 36 12 40"} it becomes
+     * {@code "+22625361240"}: the separators a desk types are not part of the
+     * number, and counting them against a length limit cut the last digit off.
+     * A number for a country this class knows, or one written with an
+     * international prefix, must be a valid E.164 number; a national number
+     * for any other country is kept as its digits. The Burkina Faso calling
+     * code is assumed only when no country is given: an eight-digit number for
+     * a country this class does not know ({@code "Tchad"}) is not a Burkina
+     * number, and prefixing it with {@code +226} stored a wrong subscriber.
+     */
+    public static String normalizeFacilityPhone(String raw, String country) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String compact = FORMATTING.matcher(raw.trim()).replaceAll("");
+        boolean international = compact.startsWith("+") || compact.startsWith("00");
+        boolean unlistedCountry = country != null && !country.isBlank() && !isKnownCountry(country);
+        if (international || !unlistedCountry) {
+            String e164 = toE164(raw, callingCodeForCountry(country));
+            if (e164 != null) {
+                return e164;
+            }
+        }
+        if (international || isKnownCountry(country) || !NATIONAL_DIGITS.matcher(compact).matches()) {
+            return null;
+        }
+        return compact;
+    }
+
+    /** The calling code (digits, no plus) for a hospital country; Burkina Faso when unknown. */
+    public static String callingCodeForCountry(String country) {
+        if (country == null || country.isBlank()) {
+            return DEFAULT_CALLING_CODE;
+        }
+        String key = country.trim().toLowerCase(java.util.Locale.ROOT).replace('’', '\'');
+        return CALLING_CODES.getOrDefault(key, DEFAULT_CALLING_CODE);
+    }
+
+    /**
+     * One number typed at a desk, in E.164 ({@code +22670202020}), or
+     * {@code null} when it cannot be one. A local number ({@code 70202020},
+     * {@code 0612345678}) takes {@code callingCode}, its trunk zero dropped;
+     * {@code 00} becomes {@code +}. Burkina Faso numbers must have exactly
+     * eight national digits.
+     */
+    public static String toE164(String raw, String callingCode) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String compact = FORMATTING.matcher(raw.trim()).replaceAll("");
+        String candidate;
+        if (compact.startsWith("+")) {
+            candidate = compact;
+        } else if (compact.startsWith("00")) {
+            candidate = "+" + compact.substring(2);
+        } else if (compact.matches("\\d+")) {
+            String national = compact.startsWith("0") && !DEFAULT_CALLING_CODE.equals(callingCode)
+                    ? compact.substring(1) : compact;
+            candidate = "+" + callingCode + national;
+        } else {
+            return null;
+        }
+        if (!E164.matcher(candidate).matches()) {
+            return null;
+        }
+        if (candidate.startsWith("+" + DEFAULT_CALLING_CODE)
+                && candidate.length() != 1 + DEFAULT_CALLING_CODE.length() + SIGNIFICANT_DIGITS) {
+            return null;
+        }
+        return candidate;
     }
 
     /**

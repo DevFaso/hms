@@ -211,7 +211,7 @@ The verification re-runs at administer time so the **time** check uses the actua
 
 | Environment | URL | Purpose |
 |---|---|---|
-| **Dev** | `api.dev.e-keneya.com` | Continuous deploy from `develop` branch; engineering smoke tests and pre-production validation |
+| **Dev** | `dev.e-keneya.com/api` (same origin as the dev portal) | Continuous deploy from `develop` branch; engineering smoke tests and pre-production validation |
 | **Production** | `api.e-keneya.com` | Live clinical use |
 
 Both environments are fronted by Railway, use managed PostgreSQL 16, and apply Liquibase migrations on boot. Each has its own DHIS2 endpoint configuration (production points at the live national instance; dev points at sandbox).

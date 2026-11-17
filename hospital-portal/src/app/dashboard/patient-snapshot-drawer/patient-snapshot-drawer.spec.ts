@@ -37,6 +37,8 @@ describe('PatientSnapshotDrawerComponent — server-stamped type badges', () => 
     };
   }
 
+  const translate = () => TestBed.inject(TranslateService);
+
   function textOf(selector: string): string[] {
     return Array.from(fixture.nativeElement.querySelectorAll(selector) as NodeListOf<HTMLElement>)
       .map((el) => (el.textContent ?? '').trim())
@@ -55,7 +57,7 @@ describe('PatientSnapshotDrawerComponent — server-stamped type badges', () => 
     translate.setTranslation('fr', {
       PORTAL: {
         ENUM: {
-          SNAPSHOT_ITEM_TYPE: { VITALS: 'Constantes', LAB: 'Laboratoire' },
+          ORDER_SOURCE_TYPE: { VITALS: 'Constantes', LAB: 'Laboratoire' },
           ENCOUNTER_TYPE: { INPATIENT: 'Hospitalisation' },
           JOB_TITLE: { MIDWIFE: 'Sage-femme' },
         },
@@ -107,6 +109,52 @@ describe('PatientSnapshotDrawerComponent — server-stamped type badges', () => 
     expect(textOf('.note-type')).toEqual(['—']);
   });
 
+  it('names a pending lab order whose test definition is gone', () => {
+    // The service sends a null description rather than the word "Lab Order"
+    // (a lab order whose test definition was deleted). The fallback is the
+    // drawer's own key — « Demande de laboratoire », not « Prescription »,
+    // which reads as a medication order under a « Laboratoire » badge.
+    translate().setTranslation('fr', { DASHBOARD: { LAB_ORDER: 'Demande de laboratoire' } }, true);
+    fixture.componentRef.setInput(
+      'snapshot',
+      snapshot({ pendingOrders: [{ type: 'LAB', description: null, orderedAt: '2026-09-14' }] }),
+    );
+    fixture.detectChanges();
+
+    expect(textOf('.order-desc')).toEqual(['Demande de laboratoire']);
+  });
+
+  it('names a lab result whose test definition is gone', () => {
+    // Same shape one section up: the service used to stamp "Lab Test".
+    translate().setTranslation('fr', { DASHBOARD: { LAB_TEST: 'Test de laboratoire' } }, true);
+    fixture.componentRef.setInput(
+      'snapshot',
+      snapshot({
+        latestLabs: [
+          { test: null, value: '5.0', flag: 'REVIEW', date: '' },
+          { test: 'HbA1c', value: '6.1', flag: 'NORMAL', date: '' },
+        ],
+      }),
+    );
+    fixture.detectChanges();
+
+    expect(textOf('.lab-test')).toEqual(['Test de laboratoire', 'HbA1c']);
+  });
+
+  it('falls back to — when the note author is gone', () => {
+    // A note whose staff row was deleted: the service sends null, not a word.
+    fixture.componentRef.setInput(
+      'snapshot',
+      snapshot({
+        recentNotes: [{ author: null, type: 'INPATIENT', date: '2026-09-14', snippet: 'Stable.' }],
+      }),
+    );
+    fixture.componentInstance.notesOpen.set(true);
+    fixture.detectChanges();
+
+    expect(textOf('.note-author')).toEqual(['—']);
+  });
+
   it('translates a care-team job title', () => {
     // buildCareTeam sends JobTitle.name(). The panel rendered it raw, so a
     // French midwife read MIDWIFE, and the enum gate could not see it either:
@@ -133,5 +181,83 @@ describe('PatientSnapshotDrawerComponent — server-stamped type badges', () => 
 
     expect(textOf('.team-role')).toEqual(['—']);
     expect(textOf('.team-name')).toEqual(['Awa Sawadogo']);
+  });
+});
+
+/**
+ * The drawer with no snapshot in it.
+ *
+ * `GET /me/patients/{id}/snapshot` is hospital-scoped (PR #742) and answers
+ * 404 when no scope resolves. The host used to close the drawer on any
+ * failure, so an authorization refusal looked exactly like a dead button —
+ * and an empty drawer would be the same failure rendered as "no data", which
+ * this repo has ruled out repeatedly.
+ */
+describe('PatientSnapshotDrawerComponent — states with no snapshot', () => {
+  let fixture: ComponentFixture<PatientSnapshotDrawerComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [PatientSnapshotDrawerComponent, TranslateModule.forRoot()],
+      providers: [provideRouter([])],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(PatientSnapshotDrawerComponent);
+    fixture.componentRef.setInput('isOpen', true);
+    fixture.componentRef.setInput('snapshot', null);
+  });
+
+  it('says the read is in flight rather than opening on nothing', () => {
+    fixture.componentRef.setInput('loading', true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="snapshot-status"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('common.loading');
+  });
+
+  it('asks for a hospital when the scope is what is missing', () => {
+    fixture.componentRef.setInput('loadError', 'NO_SCOPE');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="snapshot-no-scope"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('DASHBOARD.SNAPSHOT_NO_HOSPITAL');
+    // A refusal is not a failure: no Retry, because trying again changes nothing.
+    expect(fixture.nativeElement.textContent).not.toContain('COMMON.RETRY');
+  });
+
+  it('says the patient is not reachable here on a scoped 404, with no retry', () => {
+    fixture.componentRef.setInput('loadError', 'NOT_HERE');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="snapshot-not-here"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('DASHBOARD.SNAPSHOT_NOT_HERE');
+    // Asking again returns the same 404.
+    expect(fixture.nativeElement.textContent).not.toContain('COMMON.RETRY');
+  });
+
+  it('states a failure and offers a retry', () => {
+    fixture.componentRef.setInput('loadError', 'FAILED');
+    fixture.detectChanges();
+
+    const error = fixture.nativeElement.querySelector('[data-testid="snapshot-error"]');
+    expect(error).not.toBeNull();
+    expect(error.getAttribute('role')).toBe('alert');
+
+    let retried = 0;
+    fixture.componentInstance.retryRequested.subscribe(() => retried++);
+    const button = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
+    ).find((b) => (b.textContent ?? '').includes('COMMON.RETRY'));
+    button?.click();
+
+    expect(retried).toBe(1);
+  });
+
+  it('renders nothing at all when it is closed, whatever the error says', () => {
+    fixture.componentRef.setInput('isOpen', false);
+    fixture.componentRef.setInput('loadError', 'FAILED');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.snapshot-drawer')).toBeNull();
   });
 });

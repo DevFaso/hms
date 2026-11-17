@@ -1444,7 +1444,7 @@ class DevSyntheticDataSeederTest {
             Hospital alternate = Hospital.builder().code("H2").build();
             setId(alternate, altId);
 
-            when(hospitalRepository.findAll()).thenReturn(List.of(from, alternate));
+            when(hospitalRepository.findAllHospitals()).thenReturn(List.of(from, alternate));
 
             Hospital result = (Hospital) method.invoke(seeder, from);
             assertThat(result).isNotNull();

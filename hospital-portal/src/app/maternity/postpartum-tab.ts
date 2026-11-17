@@ -17,6 +17,9 @@ import {
   PostpartumService,
   NewbornAssessmentRequest,
   NewbornAssessmentResponse,
+  NewbornAlert,
+  NewbornDangerSignObservation,
+  GlucoseUnit,
   NewbornFollowUpAction,
   PostpartumBladderStatus,
   PostpartumFundusTone,
@@ -30,7 +33,7 @@ import {
   PostpartumSupportStatus,
 } from '../services/postpartum.service';
 import { PatientResponse } from '../services/patient.service';
-import { DeliveryRecordResponse, LaborService } from '../services/labor.service';
+import { DeliveryNewborn, DeliveryRecordResponse, LaborService } from '../services/labor.service';
 import {
   ProAnswers,
   ProInstrumentView,
@@ -38,23 +41,187 @@ import {
   ProScreeningService,
 } from '../services/pro-screening.service';
 import { AuthService } from '../auth/auth.service';
+import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
+import { VITAL_SIGN_LIMITS, bloodPressureReversed } from '../shared/vital-sign-limits';
+import { glucoseMmolToMgDl } from '../shared/glucose-units';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { hasClinicalContent } from '../shared/forms/clinical-content';
+import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import {
   ProInstrumentFormComponent,
   unansweredItems,
 } from '../shared/pro-instrument-form/pro-instrument-form.component';
-import { nowLocalDatetime } from '../shared/date-utils';
+import {
+  nowLocalDatetime,
+  withServerDateTimes,
+  serverInstant,
+  toServerDateTime,
+} from '../shared/date-utils';
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
+/** QA D808: the bounds NewbornAssessmentRequestDTO puts on each number (APGAR 15 was sent). */
+export const NEWBORN_LIMITS: readonly FieldLimit[] = [
+  { field: 'apgarOneMinute', labelKey: 'POSTPARTUM.APGAR_ONE', min: 0, max: 10 },
+  { field: 'apgarFiveMinute', labelKey: 'POSTPARTUM.APGAR_FIVE', min: 0, max: 10 },
+  { field: 'apgarTenMinute', labelKey: 'POSTPARTUM.APGAR_TEN', min: 0, max: 10 },
+  { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 0 },
+  // QA D1424: warnings and escalation, never a limit that prevents saving an observation.
+  // Only what cannot exist is refused; a high value saves, flagged (NewbornAlertRules).
+  { field: 'heartRateBpm', labelKey: 'POSTPARTUM.PULSE', min: 0 },
+  { field: 'respirationsPerMin', labelKey: 'POSTPARTUM.RESP', min: 0 },
+  { field: 'oxygenSaturationPercent', labelKey: 'NURSE.SPO2', min: 0, max: 100 },
+  { field: 'glucoseValue', labelKey: 'POSTPARTUM.GLUCOSE_VALUE', min: 0 },
+];
+
+/**
+ * QA D808 (sibling): the bounds PostpartumObservationRequestDTO puts on each
+ * number. The pain score's refusal was the same bare "≤ 10".
+ */
+export const OBSERVATION_LIMITS: readonly FieldLimit[] = [
+  { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 25, max: 44 },
+  { field: 'systolicBpMmHg', labelKey: 'POSTPARTUM.SYSTOLIC', min: 40, max: 300 },
+  { field: 'diastolicBpMmHg', labelKey: 'POSTPARTUM.DIASTOLIC', min: 20, max: 200 },
+  { field: 'pulseBpm', labelKey: 'POSTPARTUM.PULSE', min: 20, max: 300 },
+  { field: 'respirationsPerMin', labelKey: 'POSTPARTUM.RESP', min: 4, max: 80 },
+  { field: 'painScore', labelKey: 'POSTPARTUM.PAIN', min: 0, max: 10 },
+];
+
+/** QA D1306 (round 28): the template id of each number a form's range check may refuse. */
+const OBSERVATION_FIELD_IDS: Readonly<Record<string, string>> = {
+  temperatureCelsius: 'obs-temp',
+  systolicBpMmHg: 'obs-sys',
+  diastolicBpMmHg: 'obs-dia',
+  pulseBpm: 'obs-pulse',
+  respirationsPerMin: 'obs-resp',
+  painScore: 'obs-pain',
+};
+const NEWBORN_FIELD_IDS: Readonly<Record<string, string>> = {
+  apgarOneMinute: 'nb-apgar1',
+  apgarFiveMinute: 'nb-apgar5',
+  apgarTenMinute: 'nb-apgar10',
+  temperatureCelsius: 'nb-temp',
+  heartRateBpm: 'nb-hr',
+  respirationsPerMin: 'nb-resp',
+  oxygenSaturationPercent: 'nb-spo2',
+  glucoseValue: 'nb-glucose',
+  glucoseUnit: 'nb-glucose-unit',
+};
+/** QA D1446: the template id of each field the server may name under a refusal. */
+const OBSERVATION_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
+  ...OBSERVATION_FIELD_IDS,
+  observationTime: 'obs-time',
+};
+const NEWBORN_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
+  ...NEWBORN_FIELD_IDS,
+  assessmentTime: 'nb-time',
+  // QA D1592: which registered baby of a multiple birth the assessment is for.
+  newbornPatientId: 'nb-baby',
+  poorFeeding: 'nb-danger-feeding',
+  convulsions: 'nb-danger-convulsions',
+  severeChestIndrawing: 'nb-danger-indrawing',
+  absentSpontaneousMovement: 'nb-danger-movement',
+};
+const OBSERVATION_IDS = Object.values(OBSERVATION_SERVER_FIELD_IDS);
+const NEWBORN_IDS = Object.values(NEWBORN_SERVER_FIELD_IDS);
+/** The id prefix the screening modal gives its instrument form's radios. */
+const SCREENING_ID_PREFIX = 'pp-pro';
+
+/**
+ * QA D1151: what IS a postpartum observation. A row with none of these (only
+ * a time and a signer) was saved and counted as one of the 15-minute checks.
+ */
+export const OBSERVATION_FINDINGS = [
+  'temperatureCelsius',
+  'systolicBpMmHg',
+  'diastolicBpMmHg',
+  'pulseBpm',
+  'respirationsPerMin',
+  'painScore',
+  'fundusTone',
+  'bladderStatus',
+  'lochiaAmount',
+  'lochiaCharacter',
+  'estimatedBloodLossMl',
+  'excessiveBleeding',
+  'foulLochiaOdor',
+  'uterineTenderness',
+  'uterineAtonySuspected',
+  'chillsOrRigors',
+  'uterotonicGiven',
+  'hemorrhageProtocolActivated',
+  'moodStatus',
+  'supportStatus',
+  'sleepStatus',
+  'psychosocialNotes',
+] as const;
+
+/** QA D1151: what IS a newborn assessment (a time and a delivery link alone are not). */
+export const NEWBORN_FINDINGS = [
+  'apgarOneMinute',
+  'apgarFiveMinute',
+  'apgarTenMinute',
+  'temperatureCelsius',
+  'heartRateBpm',
+  'respirationsPerMin',
+  'oxygenSaturationPercent',
+  'glucoseValue',
+  'examGeneralAppearance',
+  'examNotes',
+  // CR-05: a sign looked at, present or absent, is a finding. The form sends nothing for "not assessed".
+  'poorFeeding',
+  'convulsions',
+  'severeChestIndrawing',
+  'absentSpontaneousMovement',
+] as const;
+
+/** CR-05: part of the provisional WHO postnatal pathway, not all of it: early jaundice is not here. */
+const NEWBORN_DANGER_SIGNS = [
+  { field: 'poorFeeding', id: 'nb-danger-feeding', label: 'POSTPARTUM.DANGER_POOR_FEEDING' },
+  { field: 'convulsions', id: 'nb-danger-convulsions', label: 'POSTPARTUM.DANGER_CONVULSIONS' },
+  {
+    field: 'severeChestIndrawing',
+    id: 'nb-danger-indrawing',
+    label: 'POSTPARTUM.DANGER_CHEST_INDRAWING',
+  },
+  {
+    field: 'absentSpontaneousMovement',
+    id: 'nb-danger-movement',
+    label: 'POSTPARTUM.DANGER_NO_MOVEMENT',
+  },
+] as const;
+
+const NEWBORN_LABELS: Record<string, string> = {
+  ...labelKeysOf(NEWBORN_LIMITS),
+  assessmentTime: 'POSTPARTUM.TIME',
+  newbornPatientId: 'POSTPARTUM.NEWBORN_BABY',
+  ...Object.fromEntries(NEWBORN_DANGER_SIGNS.map((sign) => [sign.field, sign.label])),
+};
+const OBSERVATION_LABELS: Record<string, string> = {
+  ...labelKeysOf(OBSERVATION_LIMITS),
+  observationTime: 'POSTPARTUM.TIME',
+};
+
 /** The instrument the postpartum module screens with when the plan does not say. */
 const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
+
+/** QA D1424: the unit is chosen every time; 5.6 means nothing without it. */
+export const GLUCOSE_UNITS: readonly GlucoseUnit[] = ['MG_DL', 'MMOL_L'];
 
 @Component({
   selector: 'app-postpartum-tab',
   standalone: true,
   imports: [
+    ModalDialogDirective,
+    ServerTimePipe,
+    MeasurePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -67,10 +234,12 @@ const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PostpartumTabComponent {
+  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly postpartumService = inject(PostpartumService);
   private readonly laborService = inject(LaborService);
   private readonly screeningService = inject(ProScreeningService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -187,12 +356,22 @@ export class PostpartumTabComponent {
     () => this.schedule()?.screening?.instrumentCode ?? DEFAULT_SCREENING_INSTRUMENT,
   );
   /**
+   * Codes of the instruments whose validated text is loaded, from
+   * GET /pro-instruments; null until that answer arrives.
+   */
+  private readonly loadedInstrumentCodes = signal<string[] | null>(null);
+  /**
    * Until the validated text is loaded (SUPER_ADMIN import), there is nothing
    * to administer — the button stays off rather than opening an empty modal.
-   * An older schedule without the hook is treated as available so the modal
-   * can still explain itself.
+   * QA D323: when the schedule does not say (no plan yet, or an older
+   * schedule), the instrument list decides; it used to default to "available"
+   * and offered EPDS on a server with no EPDS text.
    */
-  screeningAvailable = computed(() => this.schedule()?.screening?.instrumentAvailable ?? true);
+  screeningAvailable = computed(() => {
+    const said = this.schedule()?.screening?.instrumentAvailable;
+    if (said !== undefined && said !== null) return said;
+    return this.loadedInstrumentCodes()?.includes(this.screeningCode()) ?? false;
+  });
 
   showScreeningModal = signal(false);
   screeningInstrument = signal<ProInstrumentView | null>(null);
@@ -221,6 +400,13 @@ export class PostpartumTabComponent {
   private readonly instrumentRequests = new Subject<string>();
 
   constructor() {
+    this.screeningService
+      .instruments()
+      .pipe(
+        catchError(() => of([])),
+        takeUntilDestroyed(),
+      )
+      .subscribe((list) => this.loadedInstrumentCodes.set(list.map((i) => i.code)));
     this.instrumentRequests
       .pipe(
         tap(() => {
@@ -357,16 +543,20 @@ export class PostpartumTabComponent {
     });
   }
 
-  /** "12 Aug 2026, vaginal" — enough to tell twins' episodes apart. */
+  /**
+   * "12 Aug 2026 — Spontaneous vaginal" — enough to tell twins' episodes
+   * apart. QA D807: the mode is its translated label, never the raw code.
+   */
   deliveryLabel(d: DeliveryRecordResponse): string {
     const when = d.birthDateTime
-      ? new Date(d.birthDateTime).toLocaleDateString(currentLocale())
+      ? serverInstant(d.birthDateTime).toLocaleDateString(currentLocale())
       : '';
-    return `${when} — ${d.deliveryMode ?? ''}`.trim();
+    const mode = d.deliveryMode ? this.translate.instant('LABOR.MODE_' + d.deliveryMode) : '';
+    return [when, mode].filter((part) => part !== '').join(' — ');
   }
 
   phaseLabelKey(schedule: PostpartumSchedule): string {
-    return `POSTPARTUM.PHASE_${schedule.phase}`;
+    return schedule.phase ? `POSTPARTUM.PHASE_${schedule.phase}` : 'POSTPARTUM.PHASE_UNKNOWN';
   }
 
   alertClass(severity: string): string {
@@ -378,6 +568,20 @@ export class PostpartumTabComponent {
       default:
         return 'risk-badge risk-low';
     }
+  }
+
+  /**
+   * QA D1631, the shared-patient read-only idiom (#1103): a row another
+   * hospital recorded is named as theirs. Judged against the hospital the
+   * requests are pinned to; in global view nothing is "elsewhere".
+   */
+  isForeign(record: { hospitalId?: string | null }): boolean {
+    const scope = this.roleContext.effectiveHospitalIdForRequest();
+    return !!record.hospitalId && !!scope && record.hospitalId !== scope;
+  }
+
+  private actingHospitalId(): string | undefined {
+    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? undefined;
   }
 
   /* ── Observation ── */
@@ -395,24 +599,74 @@ export class PostpartumTabComponent {
     const patient = this.patient();
     if (!patient) return;
     this.observationForm.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
+    // QA D86: without a care plan the backend needs the acting hospital.
+    this.observationForm.hospitalId = this.actingHospitalId();
+    if (!hasClinicalContent(this.observationForm, OBSERVATION_FINDINGS)) {
+      // QA D1151: an empty row is not a check; the vitals it needs are named.
+      refuseFields(
+        this.host.nativeElement,
+        [OBSERVATION_FIELD_IDS['temperatureCelsius']],
+        OBSERVATION_IDS,
+        this.translate.instant('POSTPARTUM.OBSERVATION_EMPTY'),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], OBSERVATION_IDS, '');
+    const outOfRange = firstOutOfRange(this.observationForm, OBSERVATION_LIMITS);
+    if (outOfRange) {
+      const message = rangeMessage(outOfRange, this.translate);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        [OBSERVATION_FIELD_IDS[outOfRange.field]],
+        OBSERVATION_IDS,
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
+    if (
+      bloodPressureReversed(
+        this.observationForm.systolicBpMmHg,
+        this.observationForm.diastolicBpMmHg,
+      )
+    ) {
+      // QA D1424: 70/120 is a swapped entry, refused where it was typed.
+      const message = this.translate.instant('VITAL_LIMITS.BP_ORDER');
+      refuseFields(
+        this.host.nativeElement,
+        [OBSERVATION_FIELD_IDS['diastolicBpMmHg']],
+        OBSERVATION_IDS,
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
     this.observationSaving.set(true);
-    this.postpartumService.createObservation(patient.id, this.observationForm).subscribe({
-      next: (created) => {
-        this.toast.success(this.translate.instant('POSTPARTUM.OBSERVATION_SAVED'));
-        this.observationSaving.set(false);
-        this.closeObservation();
-        if (created.schedule) this.schedule.set(created.schedule);
-        this.observations.update((list) => [created, ...list]);
-        for (const alert of created.alerts ?? []) {
-          if (alert.severity === 'URGENT') this.toast.error(alert.message);
-          else this.toast.info(alert.message);
-        }
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('POSTPARTUM.OBSERVATION_SAVE_ERROR'));
-        this.observationSaving.set(false);
-      },
-    });
+    this.postpartumService
+      .createObservation(patient.id, withServerDateTimes(this.observationForm, ['observationTime']))
+      .subscribe({
+        next: (created) => {
+          this.toast.success(this.translate.instant('POSTPARTUM.OBSERVATION_SAVED'));
+          this.observationSaving.set(false);
+          this.closeObservation();
+          if (created.schedule) this.schedule.set(created.schedule);
+          this.observations.update((list) => [created, ...list]);
+          for (const alert of created.alerts ?? []) {
+            if (alert.severity === 'URGENT') this.toast.error(alert.message);
+            else this.toast.info(alert.message);
+          }
+        },
+        error: (err: unknown) => {
+          // QA D1446: the fields the refusal names are marked, as on the delivery form.
+          this.markServerRefusals(err, OBSERVATION_SERVER_FIELD_IDS, OBSERVATION_IDS);
+          this.toast.error(
+            labelledRefusalReason(err, this.translate, OBSERVATION_LABELS) ??
+              this.translate.instant('POSTPARTUM.OBSERVATION_SAVE_ERROR'),
+          );
+          this.observationSaving.set(false);
+        },
+      });
   }
 
   /* ── Newborn assessment ── */
@@ -430,6 +684,21 @@ export class PostpartumTabComponent {
     this.showAssessmentModal.set(true);
   }
 
+  /**
+   * QA D1592: the babies the chosen delivery (or the only one on file)
+   * registered as patients. A multiple birth names the baby the assessment
+   * is for; it is then recorded on that baby's own chart.
+   */
+  newbornsOfAssessmentDelivery(): DeliveryNewborn[] {
+    const deliveries = this.deliveries();
+    const chosen = this.assessmentForm.deliveryRecordId
+      ? deliveries.find((d) => d.id === this.assessmentForm.deliveryRecordId)
+      : deliveries.length === 1
+        ? deliveries[0]
+        : undefined;
+    return chosen?.newborns ?? [];
+  }
+
   closeAssessment(): void {
     this.showAssessmentModal.set(false);
   }
@@ -444,23 +713,162 @@ export class PostpartumTabComponent {
     if (!patient) return;
     this.assessmentForm.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
     this.assessmentForm.followUpActions = [...this.selectedFollowUps];
+    this.assessmentForm.hospitalId = this.actingHospitalId();
+    if (!hasClinicalContent(this.assessmentForm, NEWBORN_FINDINGS)) {
+      // QA D1151: an assessment with no APGAR, vital sign or examination is refused.
+      refuseFields(
+        this.host.nativeElement,
+        [NEWBORN_FIELD_IDS['apgarOneMinute']],
+        NEWBORN_IDS,
+        this.translate.instant('POSTPARTUM.ASSESSMENT_EMPTY'),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], NEWBORN_IDS, '');
+    if (this.glucoseHasNoUnit()) {
+      const message = this.translate.instant('POSTPARTUM.GLUCOSE_UNIT_REQUIRED');
+      refuseFields(
+        this.host.nativeElement,
+        [NEWBORN_FIELD_IDS['glucoseUnit']],
+        NEWBORN_IDS,
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
+    const outOfRange = firstOutOfRange(this.assessmentForm, NEWBORN_LIMITS);
+    if (outOfRange) {
+      const message = rangeMessage(outOfRange, this.translate);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        [NEWBORN_FIELD_IDS[outOfRange.field]],
+        NEWBORN_IDS,
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
     this.assessmentSaving.set(true);
-    this.postpartumService.createNewbornAssessment(patient.id, this.assessmentForm).subscribe({
-      next: (created) => {
-        this.toast.success(this.translate.instant('POSTPARTUM.ASSESSMENT_SAVED'));
-        this.assessmentSaving.set(false);
-        this.closeAssessment();
-        this.assessments.update((list) => [created, ...list]);
-        for (const alert of created.alerts ?? []) {
-          if (alert.severity === 'URGENT') this.toast.error(alert.message);
-          else this.toast.info(alert.message);
-        }
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('POSTPARTUM.ASSESSMENT_SAVE_ERROR'));
-        this.assessmentSaving.set(false);
-      },
-    });
+    this.postpartumService
+      .createNewbornAssessment(
+        patient.id,
+        withServerDateTimes(this.assessmentForm, ['assessmentTime']),
+      )
+      .subscribe({
+        next: (created) => {
+          this.toast.success(this.translate.instant('POSTPARTUM.ASSESSMENT_SAVED'));
+          this.assessmentSaving.set(false);
+          this.closeAssessment();
+          this.assessments.update((list) => [created, ...list]);
+          for (const alert of created.alerts ?? []) {
+            if (alert.severity === 'URGENT') this.toast.error(alert.message);
+            else this.toast.info(alert.message);
+          }
+        },
+        error: (err: unknown) => {
+          // QA D1446: the fields the refusal names are marked, as on the delivery form.
+          this.markServerRefusals(err, NEWBORN_SERVER_FIELD_IDS, NEWBORN_IDS);
+          this.toast.error(
+            labelledRefusalReason(err, this.translate, NEWBORN_LABELS) ??
+              this.translate.instant('POSTPARTUM.ASSESSMENT_SAVE_ERROR'),
+          );
+          this.assessmentSaving.set(false);
+        },
+      });
+  }
+
+  readonly glucoseUnits = GLUCOSE_UNITS;
+  /** Symbols, the same in every language. */
+  readonly glucoseUnitLabels: Readonly<Record<GlucoseUnit, string>> = {
+    MG_DL: 'mg/dL',
+    MMOL_L: 'mmol/L',
+  };
+
+  private glucoseHasNoUnit(): boolean {
+    const { glucoseValue, glucoseUnit } = this.assessmentForm;
+    return glucoseValue !== undefined && glucoseValue !== null && !glucoseUnit;
+  }
+
+  /**
+   * QA D1424, D1482: a value outside what the other vitals forms accept, at either end, saves on
+   * this form; the reader is asked to check it. The numbers only choose when to ask.
+   */
+  newbornValueToCheck(
+    field: 'temperatureCelsius' | 'heartRateBpm' | 'respiratoryRateBpm' | 'glucose',
+  ): boolean {
+    const form = this.assessmentForm;
+    const outside = (raw: unknown, limit: { min: number; max: number }, read = Number(raw)) =>
+      raw !== null && raw !== undefined && raw !== '' && (read > limit.max || read < limit.min);
+    if (field === 'temperatureCelsius') {
+      return outside(form.temperatureCelsius, VITAL_SIGN_LIMITS.temperatureCelsius);
+    }
+    if (field === 'heartRateBpm') {
+      return outside(form.heartRateBpm, VITAL_SIGN_LIMITS.heartRateBpm);
+    }
+    if (field === 'respiratoryRateBpm') {
+      return outside(form.respirationsPerMin, VITAL_SIGN_LIMITS.respiratoryRateBpm);
+    }
+    const value = Number(form.glucoseValue);
+    return outside(
+      form.glucoseValue,
+      VITAL_SIGN_LIMITS.bloodGlucoseMgDl,
+      form.glucoseUnit === 'MMOL_L' ? glucoseMmolToMgDl(value) : value,
+    );
+  }
+
+  /** QA D1424: a request to remeasure stands out on the chart; a range notice does not. */
+  isNewbornValueCheck(alert: NewbornAlert): boolean {
+    return !!alert.code?.startsWith('newborn-check-');
+  }
+
+  /** CR-04, CR-05: a danger sign or urgent temperature stands out; its sentence names the provisional pathway. */
+  isNewbornDangerSign(alert: NewbornAlert): boolean {
+    return (
+      alert.type === 'DANGER_SIGN' ||
+      alert.code === 'newborn-temperature-who-danger' ||
+      alert.code === 'newborn-temperature-critical'
+    );
+  }
+
+  /** QA D1424: a request to remeasure, or an acceptable-range notice, reads as its sentence on the chart. */
+  newbornAlertsToRead(a: NewbornAssessmentResponse): NewbornAlert[] {
+    return (a.alerts ?? []).filter(
+      (alert) =>
+        this.isNewbornValueCheck(alert) ||
+        this.isNewbornDangerSign(alert) ||
+        alert.severity === 'INFO',
+    );
+  }
+
+  readonly newbornDangerSigns = NEWBORN_DANGER_SIGNS;
+
+  /** CR-05: a row where nobody looked says so; it never reads as "absent". */
+  anyDangerSignLookedAt(a: NewbornAssessmentResponse): boolean {
+    return NEWBORN_DANGER_SIGNS.some(
+      (sign) => a[sign.field] === 'PRESENT' || a[sign.field] === 'ABSENT',
+    );
+  }
+
+  dangerSignObservationKey(observation: NewbornDangerSignObservation | undefined): string {
+    if (observation === 'PRESENT') return 'POSTPARTUM.DANGER_PRESENT';
+    if (observation === 'ABSENT') return 'POSTPARTUM.DANGER_ABSENT';
+    return 'POSTPARTUM.DANGER_NOT_ASSESSED';
+  }
+
+  /** Marks each field a refusal names under `fieldErrors` with the server's reason. */
+  private markServerRefusals(
+    err: unknown,
+    idByField: Readonly<Record<string, string>>,
+    all: readonly string[],
+  ): void {
+    const refused = refusedFieldReasons(err, idByField);
+    if (refused.length === 0) return;
+    refuseFields(
+      this.host.nativeElement,
+      refused.map(([id, message]) => ({ id, message })),
+      all,
+    );
   }
 
   apgarSummary(a: NewbornAssessmentResponse): string {
@@ -511,6 +919,17 @@ export class PostpartumTabComponent {
     return instrument ? unansweredItems(instrument, this.screeningAnswers()) : [];
   }
 
+  /**
+   * The id of the first radio of each item (of `only`, when given) in the
+   * screening form — the control a refusal marks for that item.
+   */
+  private screeningItemIds(instrument: ProInstrumentView, only?: readonly number[]): string[] {
+    return instrument.items
+      .filter((item) => !only || only.includes(item.itemNo))
+      .filter((item) => item.options.length > 0)
+      .map((item) => `${SCREENING_ID_PREFIX}-item-${item.itemNo}-opt-${item.options[0].optionNo}`);
+  }
+
   submitScreening(): void {
     const patient = this.patient();
     const instrument = this.screeningInstrument();
@@ -518,17 +937,30 @@ export class PostpartumTabComponent {
     // Every item or nothing: a partial EPDS has no validated cutoff, and the
     // server would refuse it anyway — better to say which ones are missing.
     const missing = this.screeningUnanswered();
+    const allItems = this.screeningItemIds(instrument);
     if (missing.length > 0) {
+      // QA D1306 (round 28): each unanswered item is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        this.screeningItemIds(instrument, missing),
+        allItems,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.warning(this.translate.instant('PRO.INCOMPLETE', { items: missing.join(', ') }));
       return;
     }
+    refuseFields(this.host.nativeElement, [], allItems, '');
     this.screeningSaving.set(true);
     this.screeningService
       .record(patient.id, {
         instrumentCode: instrument.code,
         language: instrument.language,
         answers: this.screeningAnswers(),
-        administeredAt: this.screeningAdministeredAt || undefined,
+        // #948 review: wall clock in the picker, UTC on the server (which
+        // defaults it to its own UTC now when left empty).
+        administeredAt: this.screeningAdministeredAt
+          ? toServerDateTime(this.screeningAdministeredAt)
+          : undefined,
         notes: this.screeningNotes.trim() || undefined,
       })
       .subscribe({
@@ -545,8 +977,8 @@ export class PostpartumTabComponent {
             this.toast.success(this.translate.instant('PRO.SAVED'));
           }
         },
-        error: () => {
-          this.toast.error(this.translate.instant('PRO.SAVE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('PRO.SAVE_ERROR'));
           this.screeningSaving.set(false);
         },
       });
@@ -609,10 +1041,10 @@ export class PostpartumTabComponent {
         this.loadSchedule(patient.id);
         this.toast.success(this.translate.instant('PRO.ACKNOWLEDGED'));
       },
-      error: () => {
+      error: (err: unknown) => {
         // "Already acknowledged by a colleague" and "reload and retry" are the
         // usual refusals; both mean the row on screen is stale, so re-fetch.
-        this.toast.error(this.translate.instant('PRO.ACKNOWLEDGE_ERROR'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PRO.ACKNOWLEDGE_ERROR'));
         this.ackSaving.set(false);
         this.loadScreenings(patient.id);
       },

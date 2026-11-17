@@ -96,4 +96,37 @@ class RedisTokenBlacklistServiceTest {
 
         verify(redisTemplate, never()).hasKey(anyString());
     }
+
+    @Test
+    void claimIsASetIfAbsent_soOnlyOneCallerWinsAcrossInstances() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        long expiration = System.currentTimeMillis() + 60_000;
+        when(valueOps.setIfAbsent(org.mockito.ArgumentMatchers.eq("hms:blacklist:jti:jti-1"),
+                org.mockito.ArgumentMatchers.eq("claim:" + expiration), any(Duration.class)))
+                .thenReturn(true, false);
+
+        assertThat(service.claim("jti-1", expiration)).isTrue();
+        assertThat(service.claim("jti-1", expiration)).isFalse();
+    }
+
+    @Test
+    void claimNeverStoresAnExpiredToken() {
+        assertThat(service.claim("jti-expired", System.currentTimeMillis() - 1000)).isFalse();
+
+        verify(redisTemplate, never()).opsForValue();
+    }
+
+    @Test
+    void releaseIsOneAtomicCompareAndDelete_onTheClaimPrefix() {
+        service.release("jti-c");
+
+        // The script deletes only a value that starts with the claim prefix,
+        // so a logout's revocation (a bare expiry) is never removed.
+        verify(redisTemplate).execute(
+            org.mockito.ArgumentMatchers.<org.springframework.data.redis.core.script.RedisScript<Long>>any(),
+            org.mockito.ArgumentMatchers.eq(java.util.List.of("hms:blacklist:jti:jti-c")),
+            org.mockito.ArgumentMatchers.<Object>eq("claim:"));
+        verify(redisTemplate, never()).opsForValue();
+        verify(redisTemplate).delete("hms:rotated:jti:jti-c");
+    }
 }

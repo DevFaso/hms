@@ -3,15 +3,17 @@ import { provideRouter } from '@angular/router';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { LabResultsInboxComponent } from './lab-results-inbox';
+import { RoleContextService } from '../../core/role-context.service';
 import { DashboardService, DoctorResultQueueItem } from '../../services/dashboard.service';
 
 describe('LabResultsInboxComponent', () => {
   let fixture: ComponentFixture<LabResultsInboxComponent>;
   let component: LabResultsInboxComponent;
   let dashboardService: jasmine.SpyObj<DashboardService>;
+  let roleContext: RoleContextService;
 
   function item(overrides: Partial<DoctorResultQueueItem> = {}): DoctorResultQueueItem {
     return {
@@ -27,7 +29,20 @@ describe('LabResultsInboxComponent', () => {
     };
   }
 
-  function setup(queue: DoctorResultQueueItem[] | 'error'): void {
+  /**
+   * The REAL `RoleContextService`, not `roleContextStub`: this category now
+   * reads once per SCOPE, and the stub's pick is a plain variable that no
+   * effect can observe. Only the real service's signals re-run the reaction
+   * these specs are about.
+   *
+   * `hospitalId` defaults to a pinned hospital because the queue is scoped
+   * now — an unpinned caller is refused by the endpoint, and the component
+   * declines to ask, which is its own test below.
+   */
+  function setup(
+    queue: DoctorResultQueueItem[] | 'error',
+    hospitalId: string | null = 'h-1',
+  ): void {
     dashboardService = jasmine.createSpyObj<DashboardService>('DashboardService', [
       'getResultReviewQueue',
     ]);
@@ -45,6 +60,9 @@ describe('LabResultsInboxComponent', () => {
       ],
     });
 
+    roleContext = TestBed.inject(RoleContextService);
+    roleContext.activeHospitalId = hospitalId;
+
     fixture = TestBed.createComponent(LabResultsInboxComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -56,7 +74,8 @@ describe('LabResultsInboxComponent', () => {
     expect(dashboardService.getResultReviewQueue).toHaveBeenCalledTimes(1);
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Hémoglobine');
-    expect(text).toContain('9.2 g/dL');
+    // D1106 (round 19): a value typed with its unit also takes the reader's separator.
+    expect(text).toMatch(/9[.,]2 g\/dL/);
     expect(text).toContain('Awa Traoré');
   });
 
@@ -79,6 +98,17 @@ describe('LabResultsInboxComponent', () => {
       fixture.nativeElement.querySelectorAll('tbody.severity-group tr td:first-child'),
     ).map((cell) => (cell as HTMLElement).textContent?.trim());
     expect(rendered).toEqual(['Potassium', 'Hémoglobine', 'Glycémie']);
+  });
+
+  it('labels an ungraded non-numeric answer "qualitative", not "not evaluated" (QA D240)', () => {
+    setup([]);
+
+    expect(component.flagKey(item({ abnormalFlag: 'UNSPECIFIED', resultValue: 'Positif' }))).toBe(
+      'inBasket.labQualitative',
+    );
+    expect(component.flagKey(item({ abnormalFlag: 'UNSPECIFIED', resultValue: '14.2' }))).toBe(
+      'inBasket.labUnknown',
+    );
   });
 
   it('never labels an unrecognised grade "Normal"', () => {
@@ -256,6 +286,28 @@ describe('LabResultsInboxComponent', () => {
     expect(fixture.nativeElement.querySelector('.error-state')).toBeNull();
   });
 
+  it('ignores a slow read that lands after a newer one', () => {
+    // Both Retry controls are reachable from the error states, so two reads
+    // can overlap: a slow failure landing last drew the stale banner over
+    // current rows.
+    setup([]);
+    const slow = new Subject<DoctorResultQueueItem[]>();
+    dashboardService.getResultReviewQueue.and.returnValue(slow.asObservable());
+    component.load();
+
+    dashboardService.getResultReviewQueue.and.returnValue(of([item()]));
+    component.load();
+    fixture.detectChanges();
+    expect(component.results().length).toBe(1);
+
+    // The first read finally fails — and must write nothing.
+    slow.error(new Error('504'));
+    fixture.detectChanges();
+
+    expect(component.loadError()).toBeFalse();
+    expect(component.results().length).toBe(1);
+  });
+
   it('draws no truncation line on a short queue', () => {
     setup([item()]);
 
@@ -269,5 +321,123 @@ describe('LabResultsInboxComponent', () => {
     expect(component.formatDate('')).toBe('—');
     expect(component.formatDate(undefined)).toBe('—');
     expect(component.formatDate('not-a-date')).toBe('—');
+  });
+
+  it('QA D731: reads the zone-less server time as UTC, like the in-basket panel', () => {
+    setup([item()]);
+
+    // The round-10 result: one release shown at 0:39 in the panel and 4:39 here.
+    expect(component.formatDate('2026-10-24T04:39:00')).toBe(
+      component.formatDate('2026-10-24T04:39:00Z'),
+    );
+    expect(component.formatDate('2026-10-24T04:39:00.123456')).toBe(
+      component.formatDate('2026-10-24T04:39:00.123Z'),
+    );
+  });
+  /*
+   * ── The queue is hospital-scoped (PR #742) ──────────────────────────────
+   *
+   * `GET /me/results/review-queue` filters by the hospital the caller is
+   * acting in and answers 404 when none resolves. A category that read once
+   * on mount therefore showed one tenant's released results under another
+   * tenant's scope, and showed an error card to a caller who simply had not
+   * picked a hospital.
+   */
+
+  it('re-reads the queue when the hospital scope changes', () => {
+    setup([item({ id: 'a-1', testName: 'Potassium' })], 'h-a');
+    expect(dashboardService.getResultReviewQueue).toHaveBeenCalledTimes(1);
+
+    dashboardService.getResultReviewQueue.and.returnValue(
+      of([item({ id: 'b-1', testName: 'Créatinine' })]),
+    );
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.scopeToHospital('h-b');
+    fixture.detectChanges();
+
+    expect(dashboardService.getResultReviewQueue).toHaveBeenCalledTimes(2);
+    expect(component.results().map((r) => r.id)).toEqual(['b-1']);
+  });
+
+  it('drops the other tenant rows the moment the scope changes, not when the new read lands', () => {
+    // The clinical point of the whole change: a released result at hospital A
+    // must never sit on screen labelled as hospital B's worklist. A slow — or
+    // failing — read must not be what decides that.
+    setup([item({ id: 'a-1', testName: 'Potassium' })], 'h-a');
+    expect(component.results().length).toBe(1);
+
+    const slow = new Subject<DoctorResultQueueItem[]>();
+    dashboardService.getResultReviewQueue.and.returnValue(slow.asObservable());
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.scopeToHospital('h-b');
+    fixture.detectChanges();
+
+    expect(component.results()).toEqual([]);
+    expect(fixture.nativeElement.textContent).not.toContain('Potassium');
+
+    // And the read that was in flight under the OLD scope cannot write back.
+    slow.error(new Error('504'));
+    fixture.detectChanges();
+    expect(component.results()).toEqual([]);
+  });
+
+  it('asks the user to pick a hospital instead of reading without a scope', () => {
+    setup([item()], null);
+
+    expect(dashboardService.getResultReviewQueue).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).not.toBeNull();
+    // Not an error card, and not an empty state claiming there is nothing to
+    // review — the queue was never read.
+    expect(fixture.nativeElement.querySelector('.error-state')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.empty-state')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.btn-refresh')).toBeNull();
+  });
+
+  it('offers the picker beside the hint, because this page has no scope bar above it', () => {
+    // `/in-basket` is not `requiresHospitalScope` — it renders for every
+    // clinical role and for a super-admin in global view — so the shell draws
+    // no chip above it. A hint naming a control that is nowhere on screen is
+    // not a remedy.
+    setup([item()], null);
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.markSuperAdminGlobalDefaults();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="hospital-scope-chip"]'),
+    ).not.toBeNull();
+
+    // And it survives the pick: unmounting the chip would leave no way to
+    // switch hospital, or to return to global view, from this page.
+    roleContext.scopeToHospital('h-b');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="hospital-scope-chip"]'),
+    ).not.toBeNull();
+  });
+
+  it('reads as soon as a hospital is picked, and clears the hint', () => {
+    setup([item({ testName: 'Potassium' })], null);
+    expect(dashboardService.getResultReviewQueue).not.toHaveBeenCalled();
+
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.scopeToHospital('h-b');
+    fixture.detectChanges();
+
+    expect(dashboardService.getResultReviewQueue).toHaveBeenCalledTimes(1);
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Potassium');
+  });
+
+  it('refuses a manual reload while no hospital is in scope', () => {
+    setup([item()], null);
+
+    component.load();
+
+    expect(dashboardService.getResultReviewQueue).not.toHaveBeenCalled();
+    expect(component.loadError()).toBeFalse();
   });
 });

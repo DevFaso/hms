@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
@@ -72,11 +73,11 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         UserRoleHospitalAssignment assignment = staff.getAssignment();
 
         if (assignment == null || assignment.getHospital() == null) {
-            throw new BusinessException("Ordering staff does not have a valid hospital assignment.");
+            throw new BusinessException("lab.order.orderingStaffNoAssignment");
         }
 
         if (!assignment.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("Ordering staff assignment does not match the selected hospital.");
+            throw new BusinessException("lab.order.orderingStaffHospitalMismatch");
         }
 
         String requestedRole = normalize(request.getOrderingStaffRole());
@@ -86,7 +87,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
                 assignmentRole = normalize(assignment.getRole().getName());
             }
             if (assignmentRole == null || !assignmentRole.equalsIgnoreCase(requestedRole)) {
-                throw new BusinessException("Ordering staff does not hold the requested role within this hospital.");
+                throw new com.example.hms.exception.FieldBusinessException("orderingStaffRole", "lab.order.orderingStaffRoleMissing");
             }
         }
 
@@ -124,7 +125,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
 
         String documentationReference = normalize(request.getDocumentationReference());
         if (Boolean.TRUE.equals(documentationShared) && documentationReference == null) {
-            throw new BusinessException("documentationReference is required when documentation is shared with the laboratory.");
+            throw new com.example.hms.exception.FieldBusinessException("documentationReference", "lab.order.documentationReferenceRequired");
         }
 
         return LabOrderRequestDTO.builder()
@@ -169,9 +170,14 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         LocalDateTime orderDatetime
     ) {}
 
+    /** The translated label of a request field (field.label.*), never the raw property. */
+    private static String fieldLabel(String field) {
+        return MessageUtil.resolveOrRaw("field.label." + field);
+    }
+
     private Boolean requireBoolean(Boolean value, String field) {
         if (value == null) {
-            throw new BusinessException("Missing required field: " + field);
+            throw new com.example.hms.exception.FieldBusinessException(field, "lab.order.missingField", fieldLabel(field));
         }
         return value;
     }
@@ -191,14 +197,16 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         String normalized = identifier.trim();
         return organizationRepository.findByCode(normalized.toUpperCase(Locale.ENGLISH))
             .or(() -> organizationRepository.findByNameIgnoreCase(normalized))
-            .orElseThrow(() -> new ResourceNotFoundException("organization.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notfound", normalized));
     }
 
     private Hospital resolveHospital(String identifier, Organization organization) {
         String normalized = identifier.trim();
-        Hospital hospital = hospitalRepository.findByCodeIgnoreCase(normalized)
-            .or(() -> hospitalRepository.findByNameIgnoreCase(normalized))
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+        // The ORDERING hospital: clinical only. A pharmacy or laboratory named
+        // here is not found, as at every other destination.
+        Hospital hospital = hospitalRepository.findClinicalByCodeIgnoreCase(normalized)
+            .or(() -> hospitalRepository.findClinicalByNameIgnoreCase(normalized))
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", normalized));
 
         log.debug("resolveHospital matched hospital {} with organization {} (expected {})",
             hospital.getId(),
@@ -206,7 +214,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
             organization.getId());
 
         if (hospital.getOrganization() == null || !hospital.getOrganization().getId().equals(organization.getId())) {
-            throw new BusinessException("Hospital does not belong to the specified organization.");
+            throw new BusinessException("lab.order.hospitalOtherOrganization");
         }
         return hospital;
     }
@@ -219,11 +227,11 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         );
 
         if (matches.isEmpty()) {
-            throw new ResourceNotFoundException("patient.notfound");
+            throw new ResourceNotFoundException("patient.notFoundByIdentifier", normalized);
         }
 
         if (matches.size() > 1) {
-            throw new BusinessException("Multiple patients match the provided identifier within this hospital.");
+            throw new BusinessException("lab.order.patientAmbiguous");
         }
 
     return matches.get(0);
@@ -240,16 +248,16 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         );
 
         if (matches.isEmpty()) {
-            throw new ResourceNotFoundException("staff.notfound");
+            throw new ResourceNotFoundException("staff.notFoundByIdentifier", normalizedIdentifier);
         }
 
         if (matches.size() > 1) {
-            throw new BusinessException("Multiple staff members match the provided identifier. Please refine the selection using the role or username.");
+            throw new BusinessException("lab.order.staffAmbiguous");
         }
 
     Staff staff = matches.get(0);
         if (!staff.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("Staff member is not assigned to the specified hospital.");
+            throw new BusinessException("lab.order.staffNotInHospital");
         }
         return staff;
     }
@@ -384,7 +392,8 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
     private String requireValue(String value, String field) {
         String normalized = normalize(value);
         if (normalized == null) {
-            throw new BusinessException("Missing required field: " + field);
+            // QA D1299 / D1312: named in fieldErrors, and by its label in the sentence.
+            throw new com.example.hms.exception.FieldBusinessException(field, "lab.order.missingField", fieldLabel(field));
         }
         return normalized;
     }

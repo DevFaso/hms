@@ -5,6 +5,7 @@ import com.example.hms.mapper.PatientMapper;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.payload.dto.nurse.NursePatientNameRow;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.PatientVitalSignService;
@@ -27,6 +28,8 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final PatientMapper patientMapper;
     private final PatientVitalSignService patientVitalSignService;
+    private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
+    private final com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
 
     @Override
     public List<PatientResponseDTO> getPatientsForNurse(UUID nurseUserId,
@@ -44,11 +47,39 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
             .toList();
     }
 
+    @Override
+    public List<PatientResponseDTO> getPatientNamesForNurse(UUID nurseUserId, UUID hospitalId) {
+        return registrationRepository.findActiveNamesForHospital(hospitalId).stream()
+            .filter(row -> matchesAssignment(row.readyByStaffId(), nurseUserId))
+            .sorted(Comparator.comparing(NursePatientNameRow::registrationDate,
+                Comparator.nullsLast(Comparator.reverseOrder())))
+            .map(NurseDashboardServiceImpl::nameOnly)
+            .toList();
+    }
+
+    /** The name {@link #enrichRegistration} shows: the live name first, the registration's copy as a fallback. */
+    private static PatientResponseDTO nameOnly(NursePatientNameRow row) {
+        String live = java.util.stream.Stream.of(row.firstName(), row.middleName(), row.lastName())
+            .filter(part -> part != null && !part.isBlank())
+            .map(String::trim)
+            .collect(java.util.stream.Collectors.joining(" "));
+        return PatientResponseDTO.builder()
+            .id(row.patientId())
+            .firstName(row.firstName())
+            .middleName(row.middleName())
+            .lastName(row.lastName())
+            .displayName(live.isEmpty() ? row.registrationName() : live)
+            .build();
+    }
+
     private boolean matchesAssignment(PatientHospitalRegistration registration, UUID nurseUserId) {
+        return matchesAssignment(registration.getReadyByStaffId(), nurseUserId);
+    }
+
+    private boolean matchesAssignment(UUID readyBy, UUID nurseUserId) {
         if (nurseUserId == null) {
             return true;
         }
-        UUID readyBy = registration.getReadyByStaffId();
         if (readyBy != null) {
             return nurseUserId.equals(readyBy);
         }
@@ -73,12 +104,27 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
         Patient patient = registration.getPatient();
     UUID hospitalId = registration.getHospital() != null ? registration.getHospital().getId() : null;
     PatientResponseDTO dto = patientMapper.toPatientDTO(patient, hospitalId);
+        // QA D110: an opted-out patient's allergy summary narrows to this hospital's rows.
+        // QA D504 (round 2): and the row carries the flag so the dashboard can say so.
+        if (patient != null && patient.getId() != null && hospitalId != null
+                && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                    patientAllergyRepository, recordAccessPolicy,
+                    com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(),
+                    patient.getId(), hospitalId)) {
+            dto.setAllergiesWithheld(true);
+            dto.setRecordsWithheld(true);
+        }
+        if (dto.isAllergiesWithheld() && dto.getAllergies() != null) {
+            dto.setAllergies(com.example.hms.service.allergy.PatientAllergySummarySync.summarize(
+                patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)));
+        }
 
         String patientFullName = Optional.ofNullable(patient)
             .map(Patient::getFullName)
             .orElse(null);
-        dto.setDisplayName(firstNonNull(trimToNull(registration.getPatientFullName()),
-            trimToNull(patientFullName),
+        // QA D1036 (sibling): the live name first, the registration's copy as a fallback.
+        dto.setDisplayName(firstNonNull(trimToNull(patientFullName),
+            trimToNull(registration.getPatientFullName()),
             dto.getPatientName()));
         dto.setRoom(firstNonNull(trimToNull(registration.getCurrentBed()), trimToNull(registration.getCurrentRoom())));
         dto.setBed(trimToNull(registration.getCurrentBed()));
@@ -100,7 +146,7 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
             dto.setSpo2(vitals.getSpo2());
         }
 
-        dto.setFlags(buildFlags(registration, patient));
+        dto.setFlags(buildFlags(registration, dto.getAllergies()));
         dto.setRisks(buildRisks(registration, patient));
         return dto;
     }
@@ -118,12 +164,12 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
             : PatientResponseDTO.VitalSnapshot.builder().build());
     }
 
-    private List<String> buildFlags(PatientHospitalRegistration registration, Patient patient) {
+    private List<String> buildFlags(PatientHospitalRegistration registration, String visibleAllergies) {
         List<String> flags = new ArrayList<>();
         if (registration.getStayStatus() == PatientStayStatus.READY_FOR_DISCHARGE) {
             flags.add("Ready for discharge");
         }
-        if (patient != null && patient.getAllergies() != null && !patient.getAllergies().isBlank()) {
+        if (visibleAllergies != null && !visibleAllergies.isBlank()) {
             flags.add("Allergies noted");
         }
         if (!registration.isActive()) {

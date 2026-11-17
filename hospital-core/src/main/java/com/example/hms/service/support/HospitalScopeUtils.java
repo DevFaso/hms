@@ -1,5 +1,6 @@
 package com.example.hms.service.support;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.security.context.HospitalContext;
 
 import java.util.LinkedHashSet;
@@ -16,11 +17,12 @@ public final class HospitalScopeUtils {
     }
 
     /**
-     * Merge permitted hospitals with the active hospital, preserving insertion order and uniqueness.
+     * Merge permitted hospitals with the hospital the request is pinned to
+     * (a super-admin in global view has none), preserving insertion order and uniqueness.
      */
     public static Set<UUID> resolveScope(HospitalContext context) {
         LinkedHashSet<UUID> scope = new LinkedHashSet<>(context.getPermittedHospitalIds());
-        UUID activeHospitalId = context.getActiveHospitalId();
+        UUID activeHospitalId = ActingScopeResolver.pinnedHospitalIdOf(context);
         if (activeHospitalId != null) {
             scope.add(activeHospitalId);
         }

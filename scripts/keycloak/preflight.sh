@@ -22,7 +22,7 @@
 #                            checks fire (delegated to env-sync-verify.sh --full)
 #   HMS_KC_SMOKE_INBOX_USER  IMAP user — when set, an SMTP test email is sent
 #                            and the IMAP inbox is tailed for receipt
-#   HMS_BACKEND_BASE_URL     e.g. https://api.dev.e-keneya.com — used to
+#   HMS_BACKEND_BASE_URL     e.g. https://dev.e-keneya.com/api — used to
 #                            probe /actuator/health and the SSO discovery link
 #
 # Exit codes:

@@ -1,7 +1,10 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.enums.QueueClaimFilter;
+import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
+import com.example.hms.payload.dto.pharmacy.HandOverRequestDTO;
 import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,16 +25,56 @@ public interface DispenseService {
      */
     DispenseResponseDTO createDispenseTransactionally(DispenseRequestDTO dto);
 
+    /**
+     * G15: prepare a fill (stock set aside, status PENDING) and tell the
+     * patient it is ready for collection. 404 when
+     * {@code pharmacy.ready-for-collection.enabled} is off.
+     */
+    DispenseResponseDTO markReadyForCollection(DispenseRequestDTO dto);
+
+    /** Transactional body of {@link #markReadyForCollection}; same contract as {@link #createDispenseTransactionally}. */
+    DispenseResponseDTO markReadyForCollectionTransactionally(DispenseRequestDTO dto);
+
+    /** {@code pharmacy.ready-for-collection.enabled}, for {@code GET /pharmacy/dispense/settings}. */
+    boolean isReadyForCollectionEnabled();
+
+    /** G15: hand a prepared (PENDING) fill over to the patient. */
+    DispenseResponseDTO handOver(UUID dispenseId, HandOverRequestDTO request);
+
+    /** G15: cancel a prepared (PENDING) fill; the stock is returned and the patient told. */
+    DispenseResponseDTO cancelReady(UUID dispenseId, CancelReadyRequestDTO request);
+
     DispenseResponseDTO getDispense(UUID id);
 
     Page<DispenseResponseDTO> listByPrescription(UUID prescriptionId, Pageable pageable);
+
+    /**
+     * QA D241: the lots of {@code pharmacyId} that hold the prescribed drug
+     * and still have stock, for the dispense lot picker.
+     */
+    java.util.List<com.example.hms.payload.dto.pharmacy.StockLotResponseDTO> listDispensableLots(
+            UUID prescriptionId, UUID pharmacyId);
 
     Page<DispenseResponseDTO> listByPatient(UUID patientId, Pageable pageable);
 
     Page<DispenseResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable);
 
-    DispenseResponseDTO cancelDispense(UUID id);
+    /**
+     * QA D654: {@code witnessedBy} is required when the cancel returns a
+     * controlled substance. QA D1069: {@code reason} is always required (it
+     * voids the payment and returns the stock); it is kept on the dispense and
+     * on the voided payment. There is no overload without it.
+     */
+    DispenseResponseDTO cancelDispense(UUID id, UUID witnessedBy, String reason);
 
     /** Paginated list of prescriptions ready to dispense at the caller's active hospital. */
-    Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable);
+    default Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable) {
+        return getWorkQueue(pageable, QueueClaimFilter.ALL);
+    }
+
+    /**
+     * G13: the work queue, filtered by claim ({@link QueueClaimFilter}); each
+     * row carries its active claim. The filter is ignored when claims are off.
+     */
+    Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable, QueueClaimFilter claimFilter);
 }

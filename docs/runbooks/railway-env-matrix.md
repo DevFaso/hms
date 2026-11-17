@@ -27,11 +27,11 @@ MediHub (project)
 ├── dev       (environment)   ◄─ tracks branch `develop`
 │   ├── hms-keycloak-dev          + hms-keycloak-dev-db (Postgres)
 │   ├── hms-backend-dev           + hms-db-dev (Postgres)
-│   └── hospital-portal-dev
+│   └── hms-frontend-dev
 └── prod      (environment)   ◄─ tracks branch `main`
     ├── hms-keycloak-prod         + hms-keycloak-prod-db
-    ├── hms-backend-prod          + hms-db-prod
-    └── hospital-portal-prod
+    ├── hms-backend-core          + hms-db-prod   (the prod backend; not "hms-backend-prod")
+    └── hms-frontend-prod
 ```
 
 > **Why per-env service names** (rather than one shared service name
@@ -79,7 +79,8 @@ not breaking, but worth keeping consistent across envs.
 | `KC_DB_USERNAME` | derived | `${{hms-keycloak-dev-db.PGUSER}}` | same, `-prod-db` | **MUST.** |
 | `KC_DB_PASSWORD` | secret (derived) | `${{hms-keycloak-dev-db.PGPASSWORD}}` | same, `-prod-db` | **MUST.** Rotates with the linked Postgres. |
 | `KC_HOSTNAME` | public | `https://hms-keycloak-dev-dev.up.railway.app` | `https://hms-keycloak-prod-prod.up.railway.app` | **MUST include `https://` scheme.** Bare hostname → account console returns HTTP 403 (KC URL builder gets ambiguous behind Railway's edge). No trailing slash. The doubled `-dev`/`-prod` suffix is Railway's auto-generated public domain — confirm in the **Networking** tab. |
-| `KC_BOOTSTRAP_ADMIN_USERNAME` | secret | `kc-admin` (transitional, until lock-down) | **REMOVED** post-lockdown (per [keycloak-admin-recovery-2026-05-09.md](keycloak-admin-recovery-2026-05-09.md)) | Once a named admin exists and the bootstrap admin is retired, this var must be *removed* from Railway — the entrypoint's `[ -n ]` guard turns the bootstrap step into a no-op when it's absent. |
+| `KC_BOOTSTRAP_ADMIN` | plain | `true` only on a first boot / admin recovery | **REMOVED** / unset | Opt-in flag: the entrypoint runs `kc.sh bootstrap-admin user` only when this is `true` and both credentials are set. |
+| `KC_BOOTSTRAP_ADMIN_USERNAME` | secret | `kc-admin` (transitional, until lock-down) | **REMOVED** post-lockdown (per [keycloak-admin-recovery-2026-05-09.md](keycloak-admin-recovery-2026-05-09.md)) | Once a named admin exists and the bootstrap admin is retired, this var must be *removed* from Railway — the entrypoint skips the step unless `KC_BOOTSTRAP_ADMIN=true`; removing the credentials as well keeps the bootstrap secret off Railway. |
 | `KC_BOOTSTRAP_ADMIN_PASSWORD` | secret | (32-byte random, base64) | **REMOVED** post-lockdown | Same as username — paired removal. |
 | `KC_LOG_LEVEL` | public | `INFO` (`DEBUG` only while troubleshooting) | `INFO` | **SHOULD.** Don't leave `DEBUG` on in prod — it spams the metrics scrape and surfaces realm internals in tail logs. |
 | `PORT` | public (Railway-injected) | auto | auto | **MUST NOT** set manually. The entrypoint forwards it to `kc.sh start --http-port="${PORT:-8080}"` per [`keycloak/prod/entrypoint.sh`](../../keycloak/prod/entrypoint.sh). |
@@ -88,7 +89,9 @@ not breaking, but worth keeping consistent across envs.
 
 ---
 
-## 2. `hms-backend-<env>` (Spring Boot, `hospital-core`) — one per environment
+## 2. The backend services (Spring Boot, `hospital-core`) — one per environment
+
+> **Service names do not follow the `-<env>` pattern.** Dev is `hms-backend-dev`; **prod is `hms-backend-core`**, not `hms-backend-prod`. `<env>` is used below only as shorthand for "the backend service in that environment". Targeting `hms-backend-prod` with the Railway CLI fails against a service that does not exist.
 
 The whole OIDC posture lives in env vars; there are no per-profile YAML
 defaults. From [`hospital-core/src/main/resources/application.properties`](../../hospital-core/src/main/resources/application.properties):
@@ -101,13 +104,51 @@ app.auth.oidc.required=${OIDC_REQUIRED:false}
 
 | Variable | Type | dev | prod | Notes |
 | --- | --- | --- | --- | --- |
-| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. |
+| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. **Prod is unset today** (the SSO cutover has not happened) and `hms-keycloak-prod` is set to sleep. The backend fetches the issuer's discovery document at boot and the JWKS at runtime (`OidcResourceServerConfig`); the boot-time fetch runs while the decoder bean is created, so if the sleeping Keycloak is slow to wake the Spring context fails and the backend does not start. Turn `hms-keycloak-prod`'s sleep OFF before setting this on prod, and keep it off: `hms-keycloak-dev` never sleeps for the same reason. |
 | `OIDC_AUDIENCE` | public | `hms-backend` | `hms-backend` | **MUST.** Strict `aud` claim validation. The realm export hard-codes this audience on the issued tokens; mismatch → all KC-issued tokens rejected by the resource server. |
 | `OIDC_REQUIRED` | public | per phase plan (see [keycloak-implementation-gaps.md](../keycloak-implementation-gaps.md) §3 Phase 3) | per phase plan | **MUST.** Controls whether legacy `POST /api/auth/login` returns 410. The intended per-env value is documented in the gaps doc; this matrix only owns the *contract*, not the schedule. |
+| `JVM_HEAP_PERCENT` | public | unset | unset | Optional, read by the Dockerfile entrypoint: the heap is this percent (clamped 10-90) of the service's memory limit (§3a). Unset: 60, or 50 under a 3.5 GB limit (QA D1314). Set it only to change the heap. A `MaxRAMPercentage` in `JAVA_TOOL_OPTIONS` loses to it; an `-Xmx` there overrides it. |
+| `TOMCAT_MAX_THREADS` | public | unset (100) | unset (100) | Optional: the request threads (`server.tomcat.threads.max`). Each one's stack and each one's in-flight request count against the memory budget (§3a). |
 | `JWT_SECRET` | secret | (env-specific) | (env-specific) | **MUST.** HMAC signing for the legacy issuer (still active until Phase 4 cleanup). 32-byte minimum. |
 | `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` / `JWT_PREVIOUS_PUBLIC_KEY` | secret | unset (HMAC mode) | unset | RS256 mode is Phase 6; leave unset for now. When set in any env, that env switches to RS256 — must be set in lockstep with the matching public key on JWT consumers. |
 | `DATABASE_URL` (or `SPRING_DATASOURCE_URL` + USERNAME / PASSWORD) | derived | `${{hms-db-dev.DATABASE_URL}}` | same, `-prod` | **MUST.** Application Postgres — separate DB from `hms-keycloak-<env>-db`. |
 | Encryption keys (AES) | secret | (env-specific) | (env-specific) | **MUST.** Per memory `hms-prod-secrets-exposed-2026-05-09.md`, prod set is currently unrotated post-exposure; tier-4 rotation is a separate ticket. Refer to that runbook before touching. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | public | `https://otlp-gateway-prod-us-east-2.grafana.net/otlp` | same | **SHOULD.** The single switch that activates observability: the Dockerfile entrypoint attaches `-javaagent` only when this is non-empty, so leaving it unset means no traces, metrics or logs reach Grafana Cloud. Don't hand-set — run [`scripts/grafana-cloud-setup.sh`](../../scripts/grafana-cloud-setup.sh). |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | public | `http/protobuf` | same | **MUST** when the endpoint is set. The Grafana Cloud gateway rejects the agent's default `grpc`, and the failure is a quiet export error rather than a boot failure. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | secret | `Authorization=Basic <base64(1404501:glc_…)>` | same | **MUST** when the endpoint is set. Read by the OTEL agent. Instance `1404501`. |
+| `GRAFANA_OTLP_AUTH_HEADER` | secret | `Basic <base64(1404501:glc_…)>` | same | **MUST** when the endpoint is set. Same credential, different format — read by the Micrometer OTLP registry via `application.properties` (global, so the dev profile gets it too). Must stay in lockstep with `OTEL_EXPORTER_OTLP_HEADERS`, or metrics and traces disagree about authorization. |
+| `OTEL_SERVICE_NAME` | public | `hms-backend` | `hms-backend` | **SHOULD.** Becomes `service_name` on every series and span. Keep it identical across envs — `OTEL_RESOURCE_ATTRIBUTES` is what separates them. |
+| `OTEL_RESOURCE_ATTRIBUTES` | public | `deployment.environment=dev,service.namespace=hms` | `deployment.environment=prod,…` | **SHOULD.** The only thing distinguishing dev from prod series in a shared Grafana Cloud stack. Getting this wrong silently merges the two environments' metrics. |
+| `OTEL_METRICS_ENABLED` | public | `true` | `true` | **SHOULD.** Gates the Micrometer OTLP exporter (`management.otlp.metrics.export.enabled`). Traces/logs flow from the agent regardless. |
+| `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | public | `parentbased_always_on` / unset | `parentbased_traceidratio` / `0.1` | **SHOULD.** The agent defaults to 100% sampling. Traces are the signal that can outgrow the free tier's 50 GB/month, so prod ratio-samples. Raise temporarily for an investigation. |
+| `METRICS_SCRAPE_TOKEN` | secret | unset | unset | **SHOULD stay unset.** Gates `GET /api/actuator/prometheus`; blank = closed to everyone. Railway serves the management port on the public API hostname, so a public scrape endpoint leaks the whole URI inventory and business counters (it did, until this was gated). Production pushes over OTLP and never needs to be pulled. Set it only for a deliberate Grafana Cloud hosted-Prometheus scrape job. |
+| `OTEL_METRICS_EXPORTER` | public | `none` | `none` | **MUST** when the endpoint is set. Stops the *agent* exporting metrics. Metrics are owned by the Micrometer OTLP registry; leaving the agent's exporter on duplicates every series and doubles free-tier consumption. One exporter per signal: agent = traces + logs, Micrometer = metrics. |
+| `OTEL_METRICS_EXPORT_URL` | public | `<endpoint>/v1/metrics` | same | **MUST** when `OTEL_METRICS_ENABLED=true`. Micrometer wants a FULL signal URL (Boot's default is `…:4318/v1/metrics`), not the gateway base that `OTEL_EXPORTER_OTLP_ENDPOINT` holds for the agent. Pointing it at the bare `/otlp` makes every 60s push a rejected POST and the business counters never arrive. |
+| `SPLUNK_HEC_ENABLED` (+ `SPLUNK_HEC_URL` / `_TOKEN`) | secret | `false` | `false` | **MAY.** Additive SIEM log shipping. Enabling without URL + token fails the context at boot by design (`SplunkLoggingProperties`). Has never been enabled in either environment. |
+| `SMS_PROVIDER` | public | unset (`orange`) | unset (`orange`) | **MAY.** `app.sms.provider`: `orange` (default) or `ikoddi`. Exactly one provider sends; there is no automatic fallback. Until the selected provider has its credentials, SMS stays on the logging mock and the portal hides phone verification. |
+| `SMS_RECIPIENT_ALLOWLIST` | public | **the team's consented test numbers** (e.g. `+22670000001,+22670000002`) | **unset** | **MUST on dev and uat; MUST stay unset on prod.** `app.sms.recipient-allowlist`, comma-separated E.164. Checked inside both SMS gateways before every paid send (plain SMS and verification codes), so no caller can bypass it. **Unset or blank = no restriction** (prod). **Any other value = only the listed numbers**: every other recipient is not sent, is logged masked, and is reported as not accepted (`sms.recipient.notAllowlisted`). An invalid entry is ignored with an error log, never widened: a value with no valid entry allows no one. Dev and uat hold patients whose made-up numbers can belong to real people, and every Orange SMS is paid. The boot log states which mode is active. |
+| `ORANGE_SMS_CLIENT_ID` | secret | from Orange MyApps | from Orange MyApps | **MUST** for real SMS. With the secret below, it switches SMS on. Not the Orange *application* ID (that one only filters the admin statistics and is not configured here). Never commit, log or paste it. |
+| `ORANGE_SMS_CLIENT_SECRET` | secret | from Orange MyApps | from Orange MyApps | **MUST** for real SMS. Rotate it if it was ever shared in chat or a document. The backend builds the Basic header from it; the OAuth token it obtains is reused until shortly before expiry and refreshed once on a 401. |
+| `ORANGE_SMS_BASE_URL` | public | unset (`https://api.orange.com`) | unset | **MAY.** Override only for a trusted test stub. |
+| `ORANGE_SMS_SENDER_ADDRESS` | public | unset (`tel:+2260000`) | unset (`tel:+2260000`) | **MAY.** The country's generic sender address (Burkina Faso: `tel:+2260000`). An invalid value disables Orange SMS and logs an error at startup. |
+| `ORANGE_SMS_SENDER_NAME` | public | approved name, or unset | approved name | **SHOULD** in prod: some countries no longer accept the generated default name. It must be approved and whitelisted by Orange first; at most 11 letters, digits or spaces, else Orange SMS is disabled at startup. |
+| `ORANGE_SMS_ON_NET` | public | unset (`false`) | unset (`false`) | **MAY.** `true` only with an Orange-only (`SMS_OCB2`) contract and bundle. |
+| `IKODDI_ENABLED` (+ `IKODDI_API_KEY` / `_ORGANIZATION_ID` / `_OTP_APP_ID`) | secret | keep for the migration window | keep for the migration window | Legacy provider. With `SMS_PROVIDER=orange` these only verify codes IKODDI issued before the switch (they expire after `IKODDI_OTP_TTL_SECONDS`, 5 min); remove them once that window has passed. Required again only for `SMS_PROVIDER=ikoddi`. `IKODDI_COUNTRY_NUMBER_CODE` and `IKODDI_OTP_TTL_SECONDS` keep their names and also apply to Orange and the local codes. |
+
+**Orange SMS pacing is per process, not per account.** Each backend
+instance spaces its sends at five per second, Orange's announced limit.
+Two replicas (or another service on the same Orange account) together can
+exceed it; scale out only with a shared limiter. A send that times out
+or answers 5xx is not retried, since Orange may already have accepted
+(and charged) it; "accepted" means Orange answered 201, not that the
+handset received the message.
+
+> **Observability (Grafana Cloud).** These were absent from this matrix and unset on
+> both backends until 2026-11-01, so the entire pipeline — agent, dashboards, alert
+> rules, runbook — sat dormant. See
+> [`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md) for the one-command
+> setup, the free-tier arithmetic, and why the scrape endpoint is closed.
+
 
 **Verify with:** the boot log of each backend should print:
 
@@ -120,7 +161,7 @@ If the first line is absent in any env, `OIDC_ISSUER_URI` is unset.
 
 ---
 
-## 3. `hospital-portal-<env>` (Angular) — one per environment
+## 3. `hms-frontend-<env>` (Angular, `hospital-portal`) — one per environment
 
 Portal env vars are baked at build time into [`hospital-portal/src/environments/environment.<env>.ts`](../../hospital-portal/src/environments/), so the "matrix" here is what those files
 **must agree with** the matching `hms-keycloak-<env>` `KC_HOSTNAME`. There is
@@ -134,6 +175,68 @@ at PR-review time.
 | `oidc.enabled` | `true` (when ready per phase 2.8.B) | `false` until Phase 3 cutover | Drives whether the SSO button is rendered. Keep `false` in any env where the realm isn't yet imported / users aren't migrated. |
 
 **Verify with:** open the portal in each env, check `window.OIDC_ISSUER` (or the dev-tools network tab on `/realms/hms/.well-known/openid-configuration`) and confirm the issuer matches the realm.
+
+---
+
+## 3a. Resources (set on the service, not in variables)
+
+A JVM sizes its heap from the container's memory limit. With the plan's
+per-service maximum as the limit (32 GB on Pro as of 2026-10-09), an uncapped
+service grows until the bill does. Settings since 2026-10-09 (the prod backend
+service is `hms-backend-core`, dev is `hms-backend-dev`):
+
+| Service | Memory limit | `JAVA_TOOL_OPTIONS` | Sleep when idle |
+| --- | --- | --- | --- |
+| `hms-backend-core` (prod) | 6 GB (raised 2026-11-07, heap read back at 4006M) | `-XX:MaxRAMPercentage=70`, to be removed after the sync that ships this entrypoint | off |
+| `hms-backend-dev` | 4 GB (raised after QA D1314's first report; the 2 GB here was stale) | `-XX:MaxRAMPercentage=70`, to be removed | off |
+| `hms-keycloak-prod` | 2 GB (1.5 GB failed to boot) | none | on, requested; confirm it actually sleeps (DB traffic can keep it awake) |
+| `hms-keycloak-dev` | 2 GB | none | off (hms-backend-dev needs it at boot and for JWKS refresh) |
+
+No `ExitOnOutOfMemoryError`, by decision: it would turn one oversized request
+into a kill of the whole process. A request-scoped OOM fails that request and
+the heap recovers. An OOM can also land in a background thread (scheduler,
+pool housekeeper, exporter) and stop it while health stays UP; the
+`HmsHeapHigh` alert is the signal for that, not a process exit; `railway.toml` keeps `on_failure` with 3 restarts. A limit
+that is too small for the whole process (heap plus metaspace, threads and the
+OpenTelemetry agent) shows up as a kernel kill, exit 137, and a **CRASHED**
+deployment once the 3 restarts are spent (FAILED is for builds and deploy-time
+healthchecks). Once #839 is deployed, the image's entrypoint sets the heap itself:
+`JVM_HEAP_PERCENT` (default 60, or 50 under a 3.5 GB limit; clamped to 10-90) of the service's memory limit,
+logged at startup (`gc,init`, "Heap Max Capacity"). Every service must have a
+memory limit, or the JVM sizes from the platform's per-service maximum. The
+`JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70` variables above lose to the command
+line and should be removed: they read as if they set the heap, and they do not.
+
+**The memory budget (QA D1314).** A container is killed on heap *plus* native
+memory, so the entrypoint bounds each native part as well as the heap. Worst
+case, in MB (`JvmContainerBudgetGuardTest` recomputes this from the Dockerfile
+and fails if it no longer fits):
+
+| Part | Bound | 4 GB limit (60%) | 2 GB limit (50%) |
+| --- | --- | --- | --- |
+| Heap | `-XX:MaxRAMPercentage` | 2458 | 1024 |
+| Metaspace with class space | `-XX:MaxMetaspaceSize=512m` | 512 | 512 |
+| JIT code cache | `-XX:ReservedCodeCacheSize=192m` | 192 | 192 |
+| Direct buffers | `-XX:MaxDirectMemorySize=128m` | 128 | 128 |
+| Stacks: 100 Tomcat + 70 other threads | `-Xss768k`, `server.tomcat.threads.max` | 128 | 128 |
+| G1 tables (about 8% of the heap, allowance) | none | 197 | 82 |
+| malloc, symbols, the OpenTelemetry agent's native part (allowance) | `MALLOC_ARENA_MAX=2` | 150 | 150 |
+| **Sum** | | **3765** | **2216 - see below** |
+| Limit | | 4096 | 2048 |
+
+At 2 GB the worst case is about 170 MB over the limit, every bound hit at once
+and the allowances fully spent. Metaspace was measured at about 300 MB and the
+code cache at about 55 MB without the OpenTelemetry agent (D1314's PR; the
+agent's share is not measured), so the real figure should be lower, but 2 GB has
+no headroom and 50% is a smaller heap than the 70% it replaces: give a backend
+that takes real load 4 GB. A `JVM_HEAP_PERCENT` above the default gives up the
+margin. Running out of metaspace is the one bound that does not fail a single
+request: classes stay unloadable until a restart, so check
+`jvm.memory.used{area=nonheap}` before lowering it. What happens when a request needs more
+heap than there is: an `OutOfMemoryError` fails it, the heap recovers, and the
+`HmsHeapHigh` alert is the signal. A kernel kill (exit 137, "Killed", no
+`OutOfMemoryError` in the log) now means an allowance above is wrong: take
+`jcmd <pid> VM.native_memory summary` with `-XX:NativeMemoryTracking=summary`.
 
 ---
 
@@ -159,8 +262,12 @@ To audit the matrix against reality without touching anything:
 
 ```bash
 # Per env, per service, list configured variables (names only — values stay in Railway)
-for env in dev prod; do
-  for svc in hms-keycloak-$env hms-backend-$env hospital-portal-$env; do
+# The prod backend is hms-backend-core and the portals are hms-frontend-<env>,
+# so the service names are listed per environment rather than templated.
+for pair in "dev:hms-keycloak-dev hms-backend-dev hms-frontend-dev" \
+            "prod:hms-keycloak-prod hms-backend-core hms-frontend-prod"; do
+  env=${pair%%:*}
+  for svc in ${pair#*:}; do
     echo "=== $env / $svc ==="
     railway environment $env
     railway service $svc

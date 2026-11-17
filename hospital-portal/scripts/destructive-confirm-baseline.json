@@ -1,0 +1,21 @@
+{
+  "$comment": [
+    "Destructive calls a template reaches with no confirmation on the path, as they stand today (QA CX-010).",
+    "Each key is \"file::unconfirmed::handler->Service.method\"; \"why\" says why one click is right, or its defect id.",
+    "A site not listed fails the build: ask with ConfirmService.ask(), or send it from <app-confirm-dialog> / <app-reason-dialog>, then delete its pin."
+  ],
+  "pinned": {
+    "src/app/pharmacy/dispensing.html::unconfirmed::confirmCancelReady->PharmacyService.cancelReady": {
+      "count": 1,
+      "why": "the Confirm button of an inline panel the row's action opened: the panel names the action, takes the reason and offers Cancel, so opening it IS the question"
+    },
+    "src/app/pharmacy/dispensing.html::unconfirmed::confirmWitnessedCancel->PharmacyService.cancelDispense": {
+      "count": 1,
+      "why": "the Confirm button of an inline panel the row's action opened: it takes the reason and the witness and offers Cancel, so opening it IS the question"
+    },
+    "src/app/super-admin/emergency/emergency.html::unconfirmed::forceLogoutAll->EmergencyControlService.forceLogoutAll": {
+      "count": 1,
+      "why": "the typed phrase FORCE LOGOUT ALL is the confirmation (it refuses until typed exactly; emergency.spec.ts drives it): stronger than a yes/no"
+    }
+  }
+}

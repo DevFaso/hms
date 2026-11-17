@@ -21,4 +21,6 @@ public class LabResultTrendPointDTO {
     private String resultValue;
     private String resultUnit;
     private String severityFlag;
+    /** QA D1016/D931 (round 18): the point's value replaces a released one (the trend table marks it). */
+    private boolean corrected;
 }

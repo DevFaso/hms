@@ -53,8 +53,8 @@ class ImagingCriticalNotificationServiceTest {
 
     @Spy
     private Clock clock = Clock.systemDefaultZone();
-    @Mock
-    private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS)
+    private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock
     private SmsService smsService;
     @Mock
@@ -132,7 +132,7 @@ class ImagingCriticalNotificationServiceTest {
         service.notifyIfCritical(report);
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             message.capture(), eq("dr.ordering"), eq("CRITICAL_IMAGING_FINDING"));
         assertThat(message.getValue()).contains("Résultat d'imagerie critique");
         assertThat(report.getCriticalNotifiedAt()).isNotNull();
@@ -146,7 +146,7 @@ class ImagingCriticalNotificationServiceTest {
         service.notifyIfCritical(report);
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(message.capture(), anyString(), anyString());
+        verify(notificationService).created(message.capture(), anyString(), anyString());
         assertThat(message.getValue()).contains("CT Head without contrast");
     }
 
@@ -160,7 +160,7 @@ class ImagingCriticalNotificationServiceTest {
         service.notifyIfCritical(report);
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(message.capture(), anyString(), anyString());
+        verify(notificationService).created(message.capture(), anyString(), anyString());
         assertThat(message.getValue()).contains("Examen d'imagerie").doesNotContain("null");
     }
 
@@ -176,7 +176,7 @@ class ImagingCriticalNotificationServiceTest {
         service.notifyIfCritical(report);
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(message.capture(), anyString(), anyString());
+        verify(notificationService).created(message.capture(), anyString(), anyString());
         assertThat(message.getValue()).contains("pour patient.").doesNotContain("null");
     }
 
@@ -184,7 +184,7 @@ class ImagingCriticalNotificationServiceTest {
     void doesNothingForAReportWithNoCriticalFlag() {
         service.notifyIfCritical(report());
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -196,7 +196,7 @@ class ImagingCriticalNotificationServiceTest {
         service.notifyIfCritical(report);
 
         verify(notificationService, times(1))
-            .createNotification(anyString(), anyString(), eq("CRITICAL_IMAGING_FINDING"));
+            .created(anyString(), anyString(), eq("CRITICAL_IMAGING_FINDING"));
     }
 
     @Test
@@ -206,21 +206,21 @@ class ImagingCriticalNotificationServiceTest {
 
         service.notifyIfCritical(report);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(report.getCriticalNotifiedAt()).isNotNull();
     }
 
     @Test
     void aNotificationFailureNeverPropagatesIntoTheClinicalWrite() {
         ImagingReport report = flagged();
-        when(notificationService.createNotification(anyString(), anyString(), anyString()))
+        when(notificationService.created(anyString(), anyString(), anyString()))
             .thenThrow(new IllegalStateException("notification bus down"));
 
         assertThatCode(() -> service.notifyIfCritical(report)).doesNotThrowAnyException();
 
         // Pin that the throwing path was actually exercised. Without this the
         // test would pass just as happily against a method that never notified.
-        verify(notificationService).createNotification(anyString(), anyString(), eq("CRITICAL_IMAGING_FINDING"));
+        verify(notificationService).created(anyString(), anyString(), eq("CRITICAL_IMAGING_FINDING"));
     }
 
     @Test
@@ -230,7 +230,7 @@ class ImagingCriticalNotificationServiceTest {
         // path entirely and nobody would ever be told — the exact failure this
         // service exists to prevent, arriving through the back door.
         ImagingReport report = flagged();
-        when(notificationService.createNotification(anyString(), anyString(), anyString()))
+        when(notificationService.created(anyString(), anyString(), anyString()))
             .thenThrow(new IllegalStateException("notification bus down"));
 
         service.notifyIfCritical(report);
@@ -263,7 +263,7 @@ class ImagingCriticalNotificationServiceTest {
         service.notifyIfCritical(report);
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(message.capture(), anyString(), anyString());
+        verify(notificationService).created(message.capture(), anyString(), anyString());
         assertThat(message.getValue()).hasSizeLessThan(320).contains("…");
     }
 
@@ -277,7 +277,7 @@ class ImagingCriticalNotificationServiceTest {
 
         assertThat(service.escalateOverdue()).isEqualTo(1);
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("dr.ordering"), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
         verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), anyString());
         assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 1);
@@ -297,11 +297,11 @@ class ImagingCriticalNotificationServiceTest {
 
         // The ordering provider STAYS on the list — they remain the one who can
         // act clinically; widening is not a hand-off.
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("dr.ordering"), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("admin.one"), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("admin.two"), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
         assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 2);
     }
@@ -321,7 +321,7 @@ class ImagingCriticalNotificationServiceTest {
         // whole loop exists to prevent, so round 10 fires like round 1.
         assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 10);
         verify(notificationService, times(2))
-            .createNotification(anyString(), anyString(), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
+            .created(anyString(), anyString(), eq("CRITICAL_IMAGING_FINDING_ESCALATION"));
     }
 
     @Test
@@ -359,7 +359,7 @@ class ImagingCriticalNotificationServiceTest {
 
         service.escalateOverdue();
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(report.getCriticalEscalatedAt()).isNotNull();
         assertThat(report.getCriticalEscalationLevel()).isEqualTo((short) 1);
     }

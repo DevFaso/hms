@@ -94,6 +94,10 @@ public class DiagnosticReportFhirMapper {
         if (order.getStatus() == LabOrderStatus.CANCELLED) {
             return DiagnosticReport.DiagnosticReportStatus.CANCELLED;
         }
+        // QA D820: a voided order's report is entered in error, whatever its results said.
+        if (order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            return DiagnosticReport.DiagnosticReportStatus.ENTEREDINERROR;
+        }
         if (results == null || results.isEmpty()) {
             return DiagnosticReport.DiagnosticReportStatus.REGISTERED;
         }

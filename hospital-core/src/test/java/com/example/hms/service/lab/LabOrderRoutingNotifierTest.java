@@ -4,7 +4,6 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.repository.StaffRepository;
-import com.example.hms.service.NotificationService;
 import com.example.hms.service.i18n.NotificationLocales;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,7 +12,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.MessageSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -41,12 +39,14 @@ import static org.mockito.Mockito.when;
 class LabOrderRoutingNotifierTest {
 
     @Mock private StaffRepository staffRepository;
-    @Mock private NotificationService notificationService;
-    @Mock private MessageSource messageSource;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private PlatformTransactionManager transactionManager;
 
     @InjectMocks
     private LabOrderRoutingNotifier notifier;
+
+    private static final String BODY = com.example.hms.service.RenderingNotificationService.render(
+        LabOrderRoutingNotifier.MESSAGE_KEY, new Object[]{"Ordering Hospital", "CBC"}, NotificationLocales.STAFF);
 
     private Hospital ordering;
     private Hospital performing;
@@ -73,17 +73,15 @@ class LabOrderRoutingNotifierTest {
             .thenReturn(List.of("tech1"));
         when(staffRepository.findActiveUsernamesByHospitalAndRole(performing.getId(), "ROLE_LAB_MANAGER"))
             .thenReturn(List.of("shared"));
-        when(messageSource.getMessage(eq(LabOrderRoutingNotifier.MESSAGE_KEY), any(), eq(NotificationLocales.STAFF)))
-            .thenReturn("Ordering Hospital sent your laboratory a new order: CBC.");
 
         notifier.notifyPerformingLab(order);
 
-        verify(notificationService).createNotification(
-            "Ordering Hospital sent your laboratory a new order: CBC.", "sci1", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
-        verify(notificationService).createNotification(
-            "Ordering Hospital sent your laboratory a new order: CBC.", "shared", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
-        verify(notificationService).createNotification(
-            "Ordering Hospital sent your laboratory a new order: CBC.", "tech1", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
+        verify(notificationService).created(
+            BODY, "sci1", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
+        verify(notificationService).created(
+            BODY, "shared", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
+        verify(notificationService).created(
+            BODY, "tech1", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
     }
 
     @Test
@@ -91,12 +89,11 @@ class LabOrderRoutingNotifierTest {
         order.setPerformingHospital(performing);
         when(staffRepository.findActiveUsernamesByHospitalAndRole(eq(performing.getId()), any()))
             .thenReturn(List.of("sci1"));
-        when(messageSource.getMessage(any(), any(), any())).thenReturn("msg");
 
         notifier.notifyPerformingLab(order);
 
-        verify(messageSource).getMessage(LabOrderRoutingNotifier.MESSAGE_KEY,
-            new Object[]{"Ordering Hospital", "CBC"}, NotificationLocales.STAFF);
+        verify(notificationService).createNotification(LabOrderRoutingNotifier.MESSAGE_KEY,
+            new Object[]{"Ordering Hospital", "CBC"}, "sci1", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
     }
 
     @Test
@@ -104,7 +101,7 @@ class LabOrderRoutingNotifierTest {
         notifier.notifyPerformingLab(order);
 
         verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), any());
-        verify(notificationService, never()).createNotification(any(), any(), any());
+        verify(notificationService, never()).created(any(), any(), any());
     }
 
     @Test
@@ -115,7 +112,7 @@ class LabOrderRoutingNotifierTest {
 
         notifier.notifyPerformingLab(order);
 
-        verify(notificationService, never()).createNotification(any(), any(), any());
+        verify(notificationService, never()).created(any(), any(), any());
     }
 
     @Test
@@ -123,13 +120,12 @@ class LabOrderRoutingNotifierTest {
         order.setPerformingHospital(performing);
         when(staffRepository.findActiveUsernamesByHospitalAndRole(eq(performing.getId()), any()))
             .thenReturn(List.of("broken", "sci2"));
-        when(messageSource.getMessage(any(), any(), any())).thenReturn("msg");
-        when(notificationService.createNotification("msg", "broken", LabOrderRoutingNotifier.NOTIFICATION_TYPE))
+        when(notificationService.created(BODY, "broken", LabOrderRoutingNotifier.NOTIFICATION_TYPE))
             .thenThrow(new IllegalStateException("websocket down"));
 
         notifier.notifyPerformingLab(order);
 
-        verify(notificationService).createNotification("msg", "sci2", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
+        verify(notificationService).created(BODY, "sci2", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
     }
 
     @Test
@@ -140,7 +136,7 @@ class LabOrderRoutingNotifierTest {
 
         notifier.notifyPerformingLab(order);
 
-        verify(notificationService, never()).createNotification(any(), any(), any());
+        verify(notificationService, never()).created(any(), any(), any());
     }
 
     @AfterEach
@@ -163,18 +159,17 @@ class LabOrderRoutingNotifierTest {
         notifier.notifyPerformingLab(order);
 
         verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), any());
-        verify(notificationService, never()).createNotification(any(), any(), any());
+        verify(notificationService, never()).created(any(), any(), any());
 
         when(staffRepository.findActiveUsernamesByHospitalAndRole(eq(performing.getId()), any()))
             .thenReturn(List.of("sci1"));
-        when(messageSource.getMessage(any(), any(), any())).thenReturn("msg");
         List<TransactionSynchronization> registered =
             TransactionSynchronizationManager.getSynchronizations();
         assertThat(registered).hasSize(1);
         registered.get(0).afterCommit();
 
         verify(staffRepository, atLeastOnce()).findActiveUsernamesByHospitalAndRole(eq(performing.getId()), any());
-        verify(notificationService).createNotification("msg", "sci1", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
+        verify(notificationService).created(BODY, "sci1", LabOrderRoutingNotifier.NOTIFICATION_TYPE);
     }
 
     @Test
@@ -189,7 +184,7 @@ class LabOrderRoutingNotifierTest {
             TransactionSynchronizationManager.getSynchronizations();
 
         assertThatCode(() -> registered.get(0).afterCommit()).doesNotThrowAnyException();
-        verify(notificationService, never()).createNotification(any(), any(), any());
+        verify(notificationService, never()).created(any(), any(), any());
     }
 
     private static Hospital hospital(String name) {

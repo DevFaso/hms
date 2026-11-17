@@ -1,16 +1,21 @@
 package com.example.hms.repository.pharmacy;
 
 import com.example.hms.enums.DispenseStatus;
+import com.example.hms.enums.DispenseVerificationStatus;
+import com.example.hms.enums.ReadyCancelReason;
+import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.Dispense;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,7 +23,25 @@ import java.util.UUID;
 @Repository
 public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
 
-    Page<Dispense> findByPrescriptionId(UUID prescriptionId, Pageable pageable);
+    /** QA D204: the dispense row locked, so two checkouts of one dispense are serialised. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM Dispense d WHERE d.id = :id")
+    Optional<Dispense> findLockedById(@Param("id") UUID id);
+
+
+    /**
+     * QA D1128: every dispense list is newest first. These pages had no
+     * order, so "Délivrances récentes" showed ten arbitrary (in practice the
+     * oldest) fills and today's could not be cancelled from the screen. A
+     * prepared fill (PENDING) has no dispensedAt yet and sorts by when it was
+     * prepared, as the screen already sorted its page. A sort the client
+     * sends is applied after this one.
+     */
+    String NEWEST_FIRST = " ORDER BY COALESCE(d.dispensedAt, d.createdAt) DESC, d.id DESC";
+
+    @Query(value = "SELECT d FROM Dispense d WHERE d.prescription.id = :prescriptionId" + NEWEST_FIRST,
+        countQuery = "SELECT COUNT(d) FROM Dispense d WHERE d.prescription.id = :prescriptionId")
+    Page<Dispense> findByPrescriptionId(@Param("prescriptionId") UUID prescriptionId, Pageable pageable);
 
     /**
      * Roadmap row 4 / T-68 — lookup used by DispenseServiceImpl.createDispense
@@ -29,13 +52,55 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
      */
     Optional<Dispense> findByIdempotencyKey(String idempotencyKey);
 
-    Page<Dispense> findByPatientId(UUID patientId, Pageable pageable);
+    /** QA D1128: newest first (see {@link #NEWEST_FIRST}). */
+    @Query(value = "SELECT d FROM Dispense d WHERE d.patient.id = :patientId" + NEWEST_FIRST,
+        countQuery = "SELECT COUNT(d) FROM Dispense d WHERE d.patient.id = :patientId")
+    Page<Dispense> findByPatientId(@Param("patientId") UUID patientId, Pageable pageable);
 
     /** Live dispenses of a page of prescriptions, newest first — the work queue's last-action lookup. */
     List<Dispense> findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
             List<UUID> prescriptionIds, DispenseStatus excludedStatus);
 
-    Page<Dispense> findByPharmacyId(UUID pharmacyId, Pageable pageable);
+    /** QA D1058: each row names its patient and pharmacy, loaded with the page rather than one by one. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "pharmacy"})
+    @Query(value = "SELECT d FROM Dispense d WHERE d.pharmacy.id = :pharmacyId" + NEWEST_FIRST,
+        countQuery = "SELECT COUNT(d) FROM Dispense d WHERE d.pharmacy.id = :pharmacyId")
+    Page<Dispense> findByPharmacyId(@Param("pharmacyId") UUID pharmacyId, Pageable pageable);
+
+    /**
+     * QA D932: the fills of an item that is not kept in lots - from that pharmacy,
+     * of that catalogue item, with no lot - in the given states, newest first, each
+     * with its patient (one query, however many fills).
+     */
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT d FROM Dispense d
+        LEFT JOIN FETCH d.patient
+        WHERE d.pharmacy.id = :pharmacyId
+          AND d.medicationCatalogItem.id = :medicationCatalogItemId
+          AND d.stockLot IS NULL
+          AND d.status IN :statuses
+        ORDER BY d.createdAt DESC, d.id DESC
+        """)
+    List<Dispense> findReturnableFillsOutOfLots(
+            @Param("pharmacyId") UUID pharmacyId,
+            @Param("medicationCatalogItemId") UUID medicationCatalogItemId,
+            @Param("statuses") Collection<DispenseStatus> statuses);
+
+    /** QA D653: the fills taken from one lot in the given states, newest first. */
+    List<Dispense> findByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
+                                                                    Collection<DispenseStatus> statuses);
+
+    /** The return form lists every fill of a lot, with its patient (one query, however many fills; they share the one lot). */
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT d FROM Dispense d
+        LEFT JOIN FETCH d.patient
+        WHERE d.stockLot.id = :stockLotId
+          AND d.status IN :statuses
+        ORDER BY d.createdAt DESC, d.id DESC
+        """)
+    List<Dispense> findReturnableFillsOfLot(
+            @Param("stockLotId") UUID stockLotId,
+            @Param("statuses") Collection<DispenseStatus> statuses);
 
     /**
      * T-39: dispenses completed within a time window — used by the refill reminder scheduler
@@ -45,13 +110,123 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
             DispenseStatus status, LocalDateTime from, LocalDateTime to);
 
     /**
-     * Sum of dispensed quantities for a prescription, excluding the given status
-     * (typically CANCELLED). Returns {@code BigDecimal.ZERO} when no rows match,
-     * never {@code null}, thanks to the {@code COALESCE(..., 0)} in the query.
+     * The statuses that are not a fill (G15): a cancelled fill, and a fill
+     * that is prepared and still waiting for collection. Pass to
+     * {@link #sumQuantityDispensedForPrescription}.
+     */
+    List<DispenseStatus> NOT_A_FILL = List.of(DispenseStatus.CANCELLED, DispenseStatus.PENDING);
+
+    /**
+     * D95: how many fills of this prescription handed over everything they
+     * asked for. Used when the prescription carries no quantity of its own,
+     * so the sum above has nothing to be compared with.
+     */
+    @Query("SELECT COUNT(d) FROM Dispense d "
+         + "WHERE d.prescription.id = :prescriptionId AND d.status NOT IN :excludedStatuses "
+         + "AND d.quantityRequested IS NOT NULL AND d.quantityDispensed >= d.quantityRequested")
+    long countCompleteFillsForPrescription(
+            @Param("prescriptionId") UUID prescriptionId,
+            @Param("excludedStatuses") Collection<DispenseStatus> excludedStatuses);
+
+    /**
+     * Sum of dispensed quantities for a prescription, excluding the given
+     * statuses (always {@link #NOT_A_FILL} in production). Returns
+     * {@code BigDecimal.ZERO} when no rows match, never {@code null}, thanks
+     * to the {@code COALESCE(..., 0)} in the query.
      */
     @Query("SELECT COALESCE(SUM(d.quantityDispensed), 0) FROM Dispense d "
-         + "WHERE d.prescription.id = :prescriptionId AND d.status <> :excludedStatus")
+         + "WHERE d.prescription.id = :prescriptionId AND d.status NOT IN :excludedStatuses")
     BigDecimal sumQuantityDispensedForPrescription(
             @Param("prescriptionId") UUID prescriptionId,
-            @Param("excludedStatus") DispenseStatus excludedStatus);
+            @Param("excludedStatuses") Collection<DispenseStatus> excludedStatuses);
+
+    /**
+     * QA D706: what a new fill is capped against - every fill not cancelled,
+     * a prepared one still waiting for collection included.
+     */
+    default BigDecimal sumQuantityCommittedForPrescription(UUID prescriptionId) {
+        return sumQuantityDispensedForPrescription(prescriptionId, List.of(DispenseStatus.CANCELLED));
+    }
+
+    /**
+     * QA D1001: {@link #sumQuantityCommittedForPrescription} for a whole work
+     * queue page in one query, as {@code [prescriptionId, committed]} rows; a
+     * prescription with no fill has no row.
+     */
+    @Query("SELECT d.prescription.id, COALESCE(SUM(d.quantityDispensed), 0) FROM Dispense d "
+         + "WHERE d.prescription.id IN :prescriptionIds "
+         + "AND d.status <> com.example.hms.enums.DispenseStatus.CANCELLED "
+         + "GROUP BY d.prescription.id")
+    List<Object[]> sumQuantityCommittedByPrescriptionIds(
+            @Param("prescriptionIds") Collection<UUID> prescriptionIds);
+
+    /* ── Ready for collection (G15) ─────────────────────────────────────── */
+
+    /** True when the prescription has an open preparation (status PENDING). */
+    boolean existsByPrescription_IdAndStatus(UUID prescriptionId, DispenseStatus status);
+
+    /** The open preparation of one prescription, if any (at most one: V178). */
+    Optional<Dispense> findFirstByPrescription_IdAndStatus(UUID prescriptionId, DispenseStatus status);
+
+    /** The open preparations of a page of prescriptions, one query. */
+    List<Dispense> findByPrescription_IdInAndStatus(Collection<UUID> prescriptionIds, DispenseStatus status);
+
+    /**
+     * The prescription a dispense belongs to, read as a scalar so a caller
+     * can lock the prescription BEFORE it touches the dispense (lock order:
+     * prescription, then dispense). Empty when the id does not exist.
+     */
+    @Query("SELECT d.prescription.id FROM Dispense d WHERE d.id = :id")
+    Optional<UUID> findPrescriptionIdById(@Param("id") UUID id);
+
+    /** The hospital of a dispense's pharmacy, as a scalar (usable outside a transaction). */
+    @Query("SELECT d.pharmacy.hospital.id FROM Dispense d WHERE d.id = :id")
+    Optional<UUID> findHospitalIdById(@Param("id") UUID id);
+
+    /**
+     * Hand-over: PENDING to COMPLETED in one conditional UPDATE. Returns the
+     * number of rows changed: 0 when the row is no longer PENDING. Bulk JPQL
+     * skips {@code @PreUpdate}, so {@code updatedAt} is set here. The caller
+     * refreshes the one managed row afterwards; the context is not cleared.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE Dispense d SET d.status = com.example.hms.enums.DispenseStatus.COMPLETED, "
+         + "d.dispensedAt = :now, d.dispensedByUser = :handedOverBy, "
+         + "d.verificationStatus = :verificationStatus, d.patientScanValue = :patientScanValue, "
+         + "d.scanVerifiedAt = :scanVerifiedAt, d.updatedAt = :now "
+         + "WHERE d.id = :id AND d.status = com.example.hms.enums.DispenseStatus.PENDING")
+    int completePreparedFill(@Param("id") UUID id,
+                             @Param("now") LocalDateTime now,
+                             @Param("handedOverBy") User handedOverBy,
+                             @Param("verificationStatus") DispenseVerificationStatus verificationStatus,
+                             @Param("patientScanValue") String patientScanValue,
+                             @Param("scanVerifiedAt") LocalDateTime scanVerifiedAt);
+
+    /**
+     * Cancel a preparation: PENDING to CANCELLED in one conditional UPDATE.
+     * 0 when the row is no longer PENDING.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE Dispense d SET d.status = com.example.hms.enums.DispenseStatus.CANCELLED, "
+         + "d.cancelReason = :reason, d.updatedAt = :now "
+         + "WHERE d.id = :id AND d.status = com.example.hms.enums.DispenseStatus.PENDING")
+    int cancelPreparedFill(@Param("id") UUID id,
+                           @Param("reason") ReadyCancelReason reason,
+                           @Param("now") LocalDateTime now);
+
+    /**
+     * Claim the single reminder of a preparation: stamps
+     * {@code readyReminderSentAt} only while the row is still PENDING and
+     * unreminded, so two sweeps (or a hand-over racing the sweep) cannot
+     * both send. 1 = this caller owns the send.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE Dispense d SET d.readyReminderSentAt = :now, d.updatedAt = :now "
+         + "WHERE d.id = :id AND d.status = com.example.hms.enums.DispenseStatus.PENDING "
+         + "AND d.readyReminderSentAt IS NULL")
+    int claimReadyReminder(@Param("id") UUID id, @Param("now") LocalDateTime now);
+
+    /** Reminder sweep: open preparations older than the cut-off and not yet reminded. */
+    List<Dispense> findByStatusAndReadyReminderSentAtIsNullAndCreatedAtBefore(
+            DispenseStatus status, LocalDateTime cutoff);
 }

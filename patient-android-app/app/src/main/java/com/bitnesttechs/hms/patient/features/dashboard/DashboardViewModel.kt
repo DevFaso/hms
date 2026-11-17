@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.dashboard
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.core.models.*
@@ -53,7 +54,7 @@ class DashboardViewModel @Inject constructor(
                     unreadNotificationCount = unreadCount.coerceAtLeast(0)
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+                _uiState.value = _uiState.value.copy(isLoading = false, error = FailureText.of(e))
             }
         }
     }

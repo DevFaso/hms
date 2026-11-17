@@ -65,7 +65,18 @@ public class PatientAccessDedupe {
         if (actorUserId == null || patientId == null) {
             return false;
         }
-        String key = actorUserId + ":" + patientId;
+        return shouldRecord(actorUserId + ":" + patientId, nowMillis);
+    }
+
+    /**
+     * The same once-per-window answer for any key. {@code CrossTenantReadAudit}
+     * keys its refusal rows on actor, hospital and reason.
+     *
+     * @param key       what is being deduplicated; never null
+     * @param nowMillis current time, passed in so tests need no clock
+     * @return true exactly once per window
+     */
+    public boolean shouldRecord(String key, long nowMillis) {
         long cutoff = nowMillis - windowMillis;
 
         // compute() holds the bin lock for this key, so the read of the

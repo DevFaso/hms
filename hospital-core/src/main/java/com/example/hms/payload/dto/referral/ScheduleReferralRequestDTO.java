@@ -16,6 +16,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ScheduleReferralRequestDTO {
 
+    /**
+     * The hospital's wall-clock appointment time, NOT a UTC instant: it is
+     * copied into the booked Appointment's date and start time, which the
+     * calendar, check-in, reminders and patient emails read as local time.
+     */
     @NotNull
     @FutureOrPresent
     private LocalDateTime appointmentTime;

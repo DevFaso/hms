@@ -1,0 +1,54 @@
+{
+  "$comment": [
+    "Hand-written patient pickers (search input + own suggestion list), as they",
+    "stand today. Each key is \"template::rule::<iterable>\"; \"why\" is the QA",
+    "defect id or the reason. A copy not listed fails the build; replace a copy",
+    "with <app-patient-picker>, then delete its pin."
+  ],
+  "pinned": {
+    "src/app/admissions/admissions.html::hand-written-picker::patientSuggestions()": {
+      "count": 1,
+      "why": "pre-existing copy (class D947); replace with <app-patient-picker> when the page is next touched"
+    },
+    "src/app/appointments/appointment-form.html::hand-written-picker::patientSuggestions()": {
+      "count": 1,
+      "why": "D947: new-appointment patient picker does not work with the keyboard"
+    },
+    "src/app/consultations/consultations.html::hand-written-picker::patientSuggestions()": {
+      "count": 1,
+      "why": "pre-existing copy (class D947); replace with <app-patient-picker> when the page is next touched"
+    },
+    "src/app/encounters/encounters.html::hand-written-picker::patientSuggestions()": {
+      "count": 1,
+      "why": "pre-existing copy (class D947); replace with <app-patient-picker> when the page is next touched"
+    },
+    "src/app/lab/lab.html::hand-written-picker::patientSuggestions()": {
+      "count": 1,
+      "why": "pre-existing copy (class D947); replace with <app-patient-picker> when the page is next touched"
+    },
+    "src/app/prescriptions/prescriptions.html::hand-written-picker::patientSuggestions()": {
+      "count": 1,
+      "why": "pre-existing copy (class D947); replace with <app-patient-picker> when the page is next touched"
+    },
+    "src/app/reception/recalls-panel/recalls-panel.component.html::hand-written-picker::patientResults()": {
+      "count": 1,
+      "why": "pre-existing copy (class D947); replace with <app-patient-picker> when the page is next touched"
+    },
+    "src/app/reception/waitlist-panel/waitlist-panel.component.html::hand-written-picker::patientResults()": {
+      "count": 1,
+      "why": "pre-existing copy (class D947); replace with <app-patient-picker> when the page is next touched"
+    },
+    "src/app/reception/walkin-dialog/walkin-dialog.component.html::hand-written-picker::patientResults()": {
+      "count": 1,
+      "why": "D947 names this copy as the correct keyboard pattern; still a copy to replace with <app-patient-picker>"
+    },
+    "src/app/referrals/referrals.html::hand-written-picker::patientSuggestions()": {
+      "count": 1,
+      "why": "pre-existing copy (class D947); replace with <app-patient-picker> when the page is next touched"
+    },
+    "src/app/treatment-plans/treatment-plans.html::hand-written-picker::patientSuggestions()": {
+      "count": 1,
+      "why": "pre-existing copy (class D947); replace with <app-patient-picker> when the page is next touched"
+    }
+  }
+}

@@ -1,6 +1,11 @@
+import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, defer, map } from 'rxjs';
+
+import { allRows, PageSlice } from '../shared/all-pages';
+import { WithheldResult, recordsWithheld } from './patient.service';
+import { NewbornVitalAlert } from '../shared/newborn-vital-alerts';
 
 export type EncounterStatus =
   | 'SCHEDULED'
@@ -11,7 +16,24 @@ export type EncounterStatus =
   | 'AWAITING_RESULTS'
   | 'READY_FOR_DISCHARGE'
   | 'COMPLETED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  /** Round 13: the patient left before a clinician saw them; never a consultation. */
+  | 'LEFT_WITHOUT_BEING_SEEN';
+
+/**
+ * Every closed encounter status (EncounterStatus.CLOSED on the server): a
+ * closed visit takes no new order, triage or intake. One list, so a new closed
+ * status cannot be missed by one of the open-visit filters.
+ */
+export const CLOSED_ENCOUNTER_STATUSES: readonly string[] = [
+  'COMPLETED',
+  'CANCELLED',
+  'LEFT_WITHOUT_BEING_SEEN',
+];
+
+export function isClosedEncounterStatus(status: string | null | undefined): boolean {
+  return !!status && CLOSED_ENCOUNTER_STATUSES.includes(status);
+}
 /**
  * The eight constants EncounterType.java declares. TELEHEALTH was missing
  * here, so the API could send a value this type said was impossible and the
@@ -35,20 +57,9 @@ export interface EncounterNoteResponse {
   content: string;
   authorName: string;
   createdAt: string;
-  template?: 'SOAP' | 'SOAPIE';
-  chiefComplaint?: string;
-  historyOfPresentIllness?: string;
-  reviewOfSystems?: string;
-  physicalExam?: string;
-  diagnosticResults?: string;
-  subjective?: string;
-  objective?: string;
-  assessment?: string;
-  plan?: string;
-  implementation?: string;
-  evaluation?: string;
-  patientInstructions?: string;
-  summary?: string;
+  /** QA D831: when the entry was documented (a stay holds one entry per progress note). */
+  documentedAt?: string | null;
+  authorUserId?: string | null;
   /* Ceremony evidence (P3 #20), present on EncounterNoteResponseDTO payloads
      (encounter.note, addNote/sign/cosign responses). signatureValue null on a
      signed note means "asserted before V125, unverifiable". */
@@ -58,31 +69,53 @@ export interface EncounterNoteResponse {
   requiresCosign?: boolean;
   cosignedAt?: string | null;
   cosignedByName?: string | null;
+  /* The note sections (EncounterNoteResponseDTO), shown before a clinician
+     signs or co-signs an entry (#965 review). */
+  chiefComplaint?: string | null;
+  historyOfPresentIllness?: string | null;
+  reviewOfSystems?: string | null;
+  physicalExam?: string | null;
+  diagnosticResults?: string | null;
+  subjective?: string | null;
+  objective?: string | null;
+  assessment?: string | null;
+  plan?: string | null;
+  implementation?: string | null;
+  evaluation?: string | null;
+  patientInstructions?: string | null;
 }
 
-export interface EncounterNoteHistoryResponse {
+/**
+ * One row of GET /encounters/{id}/notes/history (EncounterNoteHistoryResponseDTO).
+ * The note's content at that moment is a JSON string, not note fields: typing
+ * this as an EncounterNoteResponse rendered every entry empty (QA D43).
+ */
+export interface EncounterNoteHistoryEntry {
   id: string;
-  noteId?: string;
-  changedAt?: string;
-  changedBy?: string;
-  changeType?: string;
-  contentSnapshot?: string;
-  metadataSnapshot?: string;
-  /** Legacy history payloads. */
-  content?: string;
-  authorName?: string;
-  createdAt?: string;
+  noteId?: string | null;
+  template?: string | null;
+  changedAt: string;
+  changedBy?: string | null;
+  changeType?: string | null;
+  /** JSON object: template, chiefComplaint, subjective, objective, assessment, plan, … */
+  contentSnapshot?: string | null;
+  /** JSON object: authorName, signedByName, signedAt, … */
+  metadataSnapshot?: string | null;
 }
 
 export type EncounterUrgency = 'EMERGENT' | 'URGENT' | 'ROUTINE' | 'LOW';
 
 export interface EncounterResponse {
   id: string;
+  /** QA D276: the visit code a billing clerk links an invoice to. */
+  code?: string;
   patientId: string;
   patientName: string;
   patientEmail: string;
   patientPhoneNumber: string;
   staffId: string;
+  /** QA D1085: the assigned clinician's user (null when unassigned); who may start the visit. */
+  staffUserId?: string | null;
   staffName: string;
   staffEmail: string;
   departmentId: string;
@@ -100,6 +133,8 @@ export interface EncounterResponse {
   encounterDate: string;
   notes: string;
   arrivalTimestamp: string | null;
+  /** When the visit was checked out (server local time); absent while it is open. */
+  checkoutTimestamp?: string | null;
   chiefComplaint: string;
   esiScore: number | null;
   roomAssignment: string;
@@ -111,6 +146,13 @@ export interface EncounterResponse {
   createdBy: string;
   updatedBy: string;
   note: EncounterNoteResponse;
+  /**
+   * QA D831: every note entry of the encounter, oldest first, when it has more
+   * than one (an inpatient stay's progress notes). `note` is the last of them.
+   */
+  noteEntries?: EncounterNoteResponse[] | null;
+  /** QA D831: set on an inpatient stay, whose notes are progress entries. */
+  admissionId?: string | null;
   patientFullName: string;
   staffFullName: string;
   nursingIntakeTimestamp: string | null;
@@ -130,11 +172,15 @@ export interface TriageSubmissionRequest {
   /** NEWS2 (P3 #25b): ACVPU consciousness assessment. */
   consciousnessLevel?: 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
   painScale?: number;
+  /** QA D1031: the antenatal fundal height, in cm. */
+  fundalHeightCm?: number;
   chiefComplaint?: string;
   esiScore: number;
   fallRisk?: boolean;
   fallRiskScore?: number;
   roomAssignment?: string;
+  /** r54: the organ-damage signs ticked with the blood pressure (optional). */
+  organDamageSymptoms?: OrganDamageSymptom[];
 }
 
 export interface TriageSubmissionResponse {
@@ -147,6 +193,12 @@ export interface TriageSubmissionResponse {
   roomedTimestamp: string;
   chiefComplaint: string;
   vitalSignId: string;
+  /** QA D1564: the newborn warnings on the triage set; empty for anyone 28 days old or more. */
+  newbornAlerts?: NewbornVitalAlert[];
+  /** QA D1890, r54: the obstetric severe-blood-pressure warning (pregnancy, or 42 days after a birth); empty when none. */
+  postpartumAlerts?: NewbornVitalAlert[];
+  /** r54: the adult severe-blood-pressure warning; empty when none. */
+  hypertensionAlerts?: NewbornVitalAlert[];
 }
 
 export interface MedicationReconciliationEntry {
@@ -188,9 +240,17 @@ export interface NursingIntakeResponse {
 /* ── MVP 6: Check-Out & AVS ─────────────────────────────────────── */
 
 export interface FollowUpAppointmentRequest {
-  reason: string;
+  reason?: string;
   preferredDate?: string;
   notes?: string;
+}
+
+/** QA D788: how a visit no clinician saw ends. */
+export type UnseenVisitOutcome = 'LEFT_WITHOUT_BEING_SEEN' | 'CANCELLED';
+
+export interface CloseUnseenVisitRequest {
+  outcome: UnseenVisitOutcome;
+  reason: string;
 }
 
 export interface CheckOutRequest {
@@ -211,6 +271,14 @@ export interface AfterVisitSummary {
   hospitalName: string;
   patientId?: string;
   patientName?: string;
+  /** Polish 2026-11-13: the identity band. */
+  patientDateOfBirth?: string | null;
+  patientMrn?: string | null;
+  /** A stay: its diagnoses read "at discharge"; an outpatient visit's do not. */
+  inpatientStay?: boolean;
+  /** Who signed the latest signed note, and when; absent while none is signed. */
+  signedByName?: string | null;
+  signedAt?: string | null;
   chiefComplaint?: string;
   dischargeDiagnoses: string[];
   prescriptionSummary?: string;
@@ -220,8 +288,82 @@ export interface AfterVisitSummary {
   encounterStatus: string;
   appointmentStatus?: string;
   checkoutTimestamp: string;
+  /** Provisional platform rule: a note of the visit still waits for its author's signature. */
+  pendingSignature?: boolean;
   followUpAppointmentId?: string;
   followUpAppointmentDate?: string;
+  /** The booked follow-up's time ("HH:mm"), service and clinician, when known. */
+  followUpAppointmentTime?: string | null;
+  followUpDepartmentName?: string | null;
+  followUpClinicianName?: string | null;
+  /* User decision 2026-11-12: the summary's content sections; each is empty when there is nothing to show. */
+  hospitalPhone?: string | null;
+  departmentPhone?: string | null;
+  vitalSigns?: AvsVitalSigns | null;
+  orderedTests?: AvsOrderedTest[] | null;
+  allergies?: AvsAllergy[] | null;
+  currentMedications?: AvsCurrentMedication[] | null;
+  clinicalAssessment?: string | null;
+  clinicalPlan?: string | null;
+  medicalHistory?: { condition: string; status?: string | null }[] | null;
+  surgicalHistory?: { procedure: string; date?: string | null }[] | null;
+  familyHistory?: { relationship?: string | null; condition: string }[] | null;
+  socialHistory?: {
+    tobaccoUse?: boolean | null;
+    alcoholUse?: boolean | null;
+    occupation?: string | null;
+  } | null;
+}
+
+export interface AvsVitalSigns {
+  recordedAt?: string | null;
+  temperatureCelsius?: number | null;
+  heartRateBpm?: number | null;
+  respiratoryRateBpm?: number | null;
+  systolicBpMmHg?: number | null;
+  diastolicBpMmHg?: number | null;
+  spo2Percent?: number | null;
+  bloodGlucoseMgDl?: number | null;
+  weightKg?: number | null;
+  heightCm?: number | null;
+  painScore?: number | null;
+  /** Only when weight and height were both recorded; no threshold is applied to it. */
+  bmi?: number | null;
+  /** Per value, what the existing vital-sign rules judged: LOW, HIGH or ABNORMAL; absent = no rule fired. */
+  valueFlags?: Record<string, 'LOW' | 'HIGH' | 'ABNORMAL'> | null;
+  flagged: boolean;
+}
+
+export interface AvsTestResult {
+  value?: string | null;
+  unit?: string | null;
+  referenceRange?: string | null;
+  abnormalFlag?: string | null;
+  corrected?: boolean;
+}
+
+export interface AvsOrderedTest {
+  kind: 'LAB' | 'IMAGING';
+  name?: string | null;
+  status?: string | null;
+  results?: AvsTestResult[] | null;
+  impression?: string | null;
+}
+
+export interface AvsAllergy {
+  allergen: string;
+  severity?: string | null;
+  reaction?: string | null;
+}
+
+export interface AvsCurrentMedication {
+  name: string;
+  dosage?: string | null;
+  frequency?: string | null;
+  startDate?: string | null;
+  prescriberName?: string | null;
+  /** Lines sharing a key are the same drug (catalogue item, else normalised name). */
+  drugKey?: string | null;
 }
 
 export interface EncounterRequest {
@@ -313,6 +455,17 @@ export interface EncounterFilterRequest {
   status?: EncounterStatus;
   fromDate?: string;
   toDate?: string;
+  /** Transfer size: list() reads every page whatever it is (QA D1347). */
+  size?: number;
+}
+
+/**
+ * Newest first, ties broken on the id: read page by page, an order that
+ * leaves ties to the database can repeat a visit on two pages and skip
+ * another (QA D1347).
+ */
+function withStableOrder(params: HttpParams): HttpParams {
+  return params.append('sort', 'encounterDate,desc').append('sort', 'id,desc');
 }
 
 @Injectable({ providedIn: 'root' })
@@ -320,6 +473,12 @@ export class EncounterService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/encounters';
 
+  /**
+   * The encounters the filters match. QA D1347: EVERY one (all pages; `size`
+   * is only the transfer size). This read the server's first page — 20 by
+   * default — so the encounters page and a patient's visit history stopped
+   * at the 20 newest with nothing to say so.
+   */
   list(filters?: EncounterFilterRequest): Observable<EncounterResponse[]> {
     let params = new HttpParams();
     if (filters) {
@@ -330,9 +489,39 @@ export class EncounterService {
       if (filters.fromDate) params = params.set('from', filters.fromDate);
       if (filters.toDate) params = params.set('to', filters.toDate);
     }
-    return this.http
-      .get<{ content: EncounterResponse[] }>(this.baseUrl, { params })
-      .pipe(map((res) => res?.content ?? []));
+    return allRows(
+      (page, size) =>
+        this.http.get<PageSlice<EncounterResponse>>(this.baseUrl, {
+          params: withStableOrder(params.set('page', page).set('size', size)),
+        }),
+      filters?.size,
+    );
+  }
+
+  /**
+   * QA D504 — one patient's visit history, with whether the patient's sharing
+   * opt-out held other hospitals' encounters back from it. QA D1347: every
+   * page, not the 20 newest; withheld when any page says so.
+   */
+  listForPatient(patientId: string): Observable<WithheldResult<EncounterResponse[]>> {
+    return defer(() => {
+      let withheld = false;
+      return allRows((page, size) =>
+        this.http
+          .get<PageSlice<EncounterResponse>>(this.baseUrl, {
+            params: withStableOrder(
+              new HttpParams().set('patientId', patientId).set('page', page).set('size', size),
+            ),
+            observe: 'response',
+          })
+          .pipe(
+            map((res) => {
+              withheld = withheld || recordsWithheld(res.headers);
+              return res.body;
+            }),
+          ),
+      ).pipe(map((items) => ({ items, withheld })));
+    });
   }
 
   getById(id: string): Observable<EncounterResponse> {
@@ -363,28 +552,45 @@ export class EncounterService {
   addAddendum(
     encounterId: string,
     req: EncounterNoteAddendumRequest,
+    noteId?: string,
   ): Observable<EncounterNoteAddendumResponse> {
+    // QA D831: a stay holds one entry per progress note; noteId names the
+    // entry the addendum corrects. Without it the server takes the current entry.
     return this.http.post<EncounterNoteAddendumResponse>(
       `${this.baseUrl}/${encounterId}/notes/addendums`,
       req,
+      noteId ? { params: { noteId } } : {},
     );
   }
 
-  getNoteHistory(encounterId: string): Observable<EncounterNoteHistoryResponse[]> {
-    return this.http.get<EncounterNoteHistoryResponse[]>(
+  getNoteHistory(encounterId: string): Observable<EncounterNoteHistoryEntry[]> {
+    return this.http.get<EncounterNoteHistoryEntry[]>(
       `${this.baseUrl}/${encounterId}/notes/history`,
     );
   }
 
   /** Author-only signing ceremony (P3 #20) — the backend resolves the signer
    *  and refuses non-authors; empty body by design. */
-  signNote(encounterId: string): Observable<EncounterNoteResponse> {
-    return this.http.post<EncounterNoteResponse>(`${this.baseUrl}/${encounterId}/notes/sign`, {});
+  signNote(encounterId: string, noteId?: string): Observable<EncounterNoteResponse> {
+    // QA D831: a stay holds one entry per progress note; noteId names the one
+    // on screen. Without it the server takes the current entry only.
+    return this.http.post<EncounterNoteResponse>(
+      `${this.baseUrl}/${encounterId}/notes/sign`,
+      {},
+      noteId ? { params: { noteId } } : {},
+    );
   }
 
-  /** Attending co-signature — backend refuses the note's own author. */
-  cosignNote(encounterId: string): Observable<EncounterNoteResponse> {
-    return this.http.post<EncounterNoteResponse>(`${this.baseUrl}/${encounterId}/notes/cosign`, {});
+  /**
+   * Attending co-signature — backend refuses the note's own author. noteId
+   * names the entry on screen; without it the server takes the current entry.
+   */
+  cosignNote(encounterId: string, noteId?: string): Observable<EncounterNoteResponse> {
+    return this.http.post<EncounterNoteResponse>(
+      `${this.baseUrl}/${encounterId}/notes/cosign`,
+      {},
+      noteId ? { params: { noteId } } : {},
+    );
   }
 
   submitTriage(
@@ -406,6 +612,14 @@ export class EncounterService {
 
   checkOut(encounterId: string, req: CheckOutRequest): Observable<AfterVisitSummary> {
     return this.http.post<AfterVisitSummary>(`${this.baseUrl}/${encounterId}/checkout`, req);
+  }
+
+  /**
+   * QA D788: a visit no clinician has seen is closed as "left without being
+   * seen" or cancelled, with a reason; it is never a consultation.
+   */
+  closeUnseen(encounterId: string, req: CloseUnseenVisitRequest): Observable<EncounterResponse> {
+    return this.http.post<EncounterResponse>(`${this.baseUrl}/${encounterId}/close-unseen`, req);
   }
 
   startEncounter(encounterId: string): Observable<EncounterResponse> {

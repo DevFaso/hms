@@ -24,7 +24,7 @@ public class HospitalRequestDTO {
     @Size(min = 2, max = 100, message = "{hospital.name.size}")
     private String name;
 
-    private String address; // Optional for foreign countries if poBox is provided
+    private String address; // Required for every hospital (QA D747); enforced in HospitalServiceImpl
 
     @NotBlank(message = "{hospital.city.required}")
     private String city;
@@ -43,7 +43,10 @@ public class HospitalRequestDTO {
     private String poBox; // For B.P. style addresses
 
     @NotBlank(message = "{hospital.phoneNumber.required}")
-    @Size(min = 10, max = 15, message = "{hospital.phoneNumber.size}")
+    // QA D833: the limit is on what is typed, spaces included; the service
+    // stores the number without them (PhoneNumbers.normalizeFacilityPhone).
+    @Size(max = 30, message = "{hospital.phoneNumber.size}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     @Email(message = "{hospital.email.invalid}")

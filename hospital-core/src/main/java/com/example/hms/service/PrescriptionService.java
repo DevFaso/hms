@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import org.springframework.data.domain.Page;
@@ -13,7 +14,43 @@ public interface PrescriptionService {
 
     PrescriptionResponseDTO createPrescription(PrescriptionRequestDTO request, Locale locale);
 
+    /**
+     * The guarded read: hospital scope, and a patient principal may only read
+     * their own prescription. This is the one to call for a READ.
+     *
+     * <p>A patient-only caller is bounded by ownership, not by a hospital: no
+     * scope is resolved, and they read their own prescription wherever it
+     * was written. For everyone else a {@code null} hospital scope reads
+     * across tenants only for a verified super-admin
+     * ({@code isSuperAdminFromJwtClaim()}); any other caller without a
+     * hospital is refused before the lookup. A staff member who holds
+     * {@code ROLE_PATIENT} and owns a prescription at another hospital reads
+     * it too, as its patient: the patient copy, without the clarification
+     * exchange. Every other refusal answers exactly as a missing id does.
+     */
     PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale);
+
+    /**
+     * The same read WITHOUT the patient-ownership guard, for the read-back a
+     * write endpoint returns after it has already authorised and committed the
+     * write.
+     *
+     * <p>Exactly two callers, and
+     * {@code PrescriptionAfterWriteCallerGuardTest} fails if that changes:
+     * {@code pharmacist-verify} and {@code request-clarification}. Both admit
+     * {@code ROLE_SUPER_ADMIN}, which the by-id read does not, so putting them
+     * through the guard would let an actor who also happens to be a patient
+     * commit the write and then be told 404 by the response to it, with a
+     * retry refused as already done.
+     *
+     * <p>{@code resolve-clarification} is deliberately NOT a caller: it is
+     * {@code ROLE_DOCTOR}-only, so the guard is a no-op for every principal
+     * that can reach it and routing it here would widen the unguarded surface
+     * for nothing. Do not add a caller without that kind of reason, and never
+     * from a read path — hospital scope still applies here, ownership does
+     * not.
+     */
+    PrescriptionResponseDTO getPrescriptionAfterWrite(UUID id, Locale locale);
 
     /**
      * Sign a prescription (P2 #16).
@@ -22,8 +59,15 @@ public interface PrescriptionService {
      * is the only path that can set it: it verifies the signer is the
      * prescription's own prescriber, applies the controlled-substance gates, and
      * records who signed, when, and a SHA-256 digest of what they signed.
+     *
+     * <p>Round 18: the one signature entry point. It signs with the
+     * prescriber's re-authentication, which a
+     * controlled-drug prescription requires (the password, or the TOTP code
+     * when an authenticator is enrolled), checked on this call only.
      */
-    PrescriptionResponseDTO signPrescription(UUID id, Locale locale);
+    PrescriptionResponseDTO signPrescription(UUID id,
+                                             com.example.hms.payload.dto.SignPrescriptionRequestDTO reauthentication,
+                                             Locale locale);
 
     /**
      * Co-sign a prescription that declared it needs one (P2 #15).
@@ -36,7 +80,47 @@ public interface PrescriptionService {
      */
     PrescriptionResponseDTO cosignPrescription(UUID id, Locale locale);
 
-    Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId, Pageable pageable, Locale locale);
+    /**
+     * Round 19 (QA D1096): a pharmacist or a physician other than the
+     * prescriber records the paediatric dose review the decision support asked
+     * for, with a reason; the order is not signed until then.
+     */
+    PrescriptionResponseDTO recordPediatricDoseReview(UUID id, String reason, Locale locale);
+
+    /**
+     * Policy 4 (pending clinical approval): the allergy conflict a signed order meets now and the
+     * prescriber's review on record, for an authorized prescriber of the order's hospital.
+     */
+    com.example.hms.payload.dto.prescription.AllergyConflictDTO getAllergyConflict(UUID id);
+
+    /**
+     * Policy 4 (pending clinical approval): an authorized prescriber of the order's hospital reviews its
+     * allergy conflict: CONTINUE with a plan, or STOP, with a rationale. The gates honour it while the
+     * conflict stays the one reviewed.
+     */
+    com.example.hms.payload.dto.prescription.AllergyConflictDTO reviewAllergyConflict(UUID id,
+        com.example.hms.payload.dto.prescription.AllergyConflictReviewRequestDTO request);
+
+    /**
+     * The prescription list, hospital-scoped.
+     *
+     * @param statuses gap G12 — restrict the page to these {@code PrescriptionStatus}
+     *                 values. {@code null} or empty means every status, which is what
+     *                 the endpoint did before the parameter existed.
+     */
+    Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId,
+                                       List<PrescriptionStatus> statuses,
+                                       Pageable pageable, Locale locale);
+
+    /**
+     * QA D1314: one page of the hospital's list narrowed by what the search box
+     * holds: the drug, the patient's name or the prescriber's name, accents
+     * ignored. A blank term is the plain list.
+     */
+    Page<PrescriptionResponseDTO> search(String term, List<PrescriptionStatus> statuses, Pageable pageable, Locale locale);
+
+    /** A held order stopped from the order review: by a prescriber of its hospital, with a reason, audited. */
+    void stopHeldOrder(UUID id, String reason);
 
     PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale);
 
@@ -44,6 +128,15 @@ public interface PrescriptionService {
 
     // legacy convenience (optional)
     List<PrescriptionResponseDTO> getPrescriptionsByPatientId(UUID patientId, Locale locale);
+
+    /**
+     * The portal patient's own prescriptions, at every hospital that holds any
+     * (design Q1: a patient is bounded by ownership, not by a hospital). No
+     * hospital scope is read. Callers MUST have bound {{@code patientId}} to the
+     * principal first: PatientPortalServiceImpl resolves it from the caller
+     * (or verifies a proxy grant); nothing else calls this.
+     */
+    List<PrescriptionResponseDTO> getPrescriptionsForPortalPatient(UUID patientId, Locale locale);
     List<PrescriptionResponseDTO> getPrescriptionsByStaffId(UUID staffId, Locale locale);
     List<PrescriptionResponseDTO> getPrescriptionsByEncounterId(UUID encounterId, Locale locale);
 }

@@ -2,12 +2,21 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 
+import { allPages, allRows, AllRows } from '../shared/all-pages';
+
 export interface LabOrderResponse {
   id: string;
   labOrderCode: string;
   patientId: string;
   patientFullName: string;
-  patientEmail: string;
+  /** QA D527: no longer sent on lab orders (the worklist does not show it). */
+  patientEmail?: string | null;
+  /** Lab requests drawer: the patient's MRN at the order's hospital. */
+  patientMrn?: string | null;
+  /** Lab requests drawer: the patient's date of birth (yyyy-MM-dd), for the age. */
+  patientDateOfBirth?: string | null;
+  /** Lab requests list and drawer: the clinician who placed the order. */
+  orderingStaffName?: string | null;
   hospitalId?: string;
   hospitalName: string;
   /** Laboratory (hospital) performing the test; null when this hospital's own lab does (B1). */
@@ -15,25 +24,46 @@ export interface LabOrderResponse {
   performingHospitalName?: string | null;
   labTestName: string;
   labTestCode: string;
+  /** QA D645/D648: the test definition was deleted; labTestName is the "deleted test" label. */
+  labTestDefinitionMissing?: boolean;
+  /** QA D1095: the test definition's unit, prefilled when a result is entered. */
+  labTestUnit?: string | null;
   orderDatetime: string;
   status: string;
   clinicalIndication: string;
   medicalNecessityNote: string;
   notes: string;
   primaryDiagnosisCode: string;
+  /** The patient's own diagnosis label for the code; only on the single-order read. */
+  primaryDiagnosisLabel?: string | null;
   additionalDiagnosisCodes: string[];
+  /** QA D963: ROUTINE, URGENT or STAT (LabOrderResponseDTO.priority). */
+  priority?: string | null;
   orderChannel: string;
+  /**
+   * Why the order was cancelled, or (QA D820) why it was voided as entered in
+   * error; absent otherwise.
+   */
+  cancellationReason?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** On a create response: an active order of the same test was found (warned, never blocked). */
+  duplicateOfRecentOrder?: boolean | null;
+  duplicateMatches?: LabOrderDuplicateMatch[] | null;
+  /** Whether the order carried an acknowledgement covering every duplicate found. */
+  duplicateAcknowledged?: boolean | null;
 }
 
 export interface LabResultResponse {
   id: string;
   labOrderId: string | null;
   labOrderCode: string;
+  /** QA D963: the order's priority, so the release queue flags STAT and URGENT. */
+  orderPriority?: string | null;
   patientId: string | null;
   patientFullName: string;
-  patientEmail: string;
+  /** QA D527: no longer sent (always null); kept so older payloads still type. */
+  patientEmail?: string | null;
   hospitalName: string;
   /**
    * The laboratory that ran the order, when it was not this hospital's own
@@ -41,14 +71,30 @@ export interface LabResultResponse {
    * so the release control reads this to know whether it is ours to offer.
    */
   performingHospitalId?: string | null;
+  labTestCode?: string | null;
   labTestName: string;
   resultValue: string;
   resultUnit: string;
   resultDate: string;
   notes: string;
   referenceRanges: LabResultReferenceRange[];
+  /** Round 18: the range this result was graded against (the patient's sex and age band). */
+  gradedReferenceRange?: LabResultReferenceRange | null;
+  /** QA D834: the expected answer of a qualitative test, shown where it has no range. */
+  expectedResult?: string | null;
   trendHistory?: LabResultTrendPoint[];
   severityFlag: string | null;
+  /**
+   * Reference ranges exist for the test but none is in this result's unit,
+   * so it was NOT graded (severityFlag is UNSPECIFIED), raised no range alert
+   * and is never auto-released. Shown as "not graded: units differ".
+   */
+  unitMismatch?: boolean;
+  /**
+   * QA D1394: a range applies but the value does not settle a grade against it
+   * (">1" on a range ending at 6.5): UNSPECIFIED, no alert, reviewed before release.
+   */
+  gradeUnknown?: boolean;
   acknowledged: boolean;
   acknowledgedAt: string | null;
   acknowledgedBy: string | null;
@@ -62,12 +108,37 @@ export interface LabResultResponse {
   released: boolean;
   releasedAt: string | null;
   releasedByFullName: string | null;
+  /** D58: released by the same user who entered it — a single-reviewer release. */
+  selfReleased?: boolean;
+  /** D81: the released result this one corrects. */
+  supersedesResultId?: string | null;
+  /** D81: set on a released result once a correction replaced it. */
+  supersededByResultId?: string | null;
+  /** The user who entered the result, so a self-release can be confirmed up front. */
+  enteredByUserId?: string | null;
   signedAt: string | null;
   signedBy: string | null;
   signatureValue: string | null;
   signatureNotes: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * MSH-10 of the HL7 v2 message that produced the row; null for a result a
+   * person entered. Non-null is what "came from an instrument" means.
+   */
+  sourceMessageControlId?: string | null;
+  /**
+   * OBX-11 as the analyzer sent it (F final, P preliminary, C corrected, …,
+   * HL7 table 0085); null when it did not say, and always for a typed row.
+   */
+  observationResultStatus?: string | null;
+  /** The ordering clinician's name, as recorded on the order. */
+  orderedByName?: string | null;
+  /** r44, single-result read only: the collected specimen's type and collection time. */
+  specimenType?: string | null;
+  specimenCollectedAt?: string | null;
+  /** r44, single-result read only: the laboratory an outsourced order was sent to. */
+  performingLabName?: string | null;
 }
 
 export interface LabResultReferenceRange {
@@ -78,12 +149,22 @@ export interface LabResultReferenceRange {
   ageMax: number | null;
   gender: string | null;
   notes: string | null;
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
+  /** Round 18: unit of ageMin/ageMax; YEARS when absent. */
+  ageUnit?: 'YEARS' | 'MONTHS' | 'DAYS' | null;
+  /** Round 18: where the limits come from. */
+  source?: string | null;
+  /** r44: the result's patient is in this age band (null: age unknown). */
+  patientInAgeBand?: boolean | null;
 }
 
 export interface LabResultTrendPoint {
   resultDate: string;
   resultValue: string;
   resultUnit: string;
+  /** QA D1016/D931 (round 18): the value replaces a released one. */
+  corrected?: boolean;
 }
 
 export interface LabTestDefinition {
@@ -104,13 +185,23 @@ export interface LabTestDefinition {
     | 'RETIRED';
   approvedById: string | null;
   approvedAt: string | null;
+  /** QA D534: the submitter, never offered the QA pass or the approval. */
+  submittedById?: string | null;
   reviewedById: string | null;
+  /** QA D722: set for the QA reviewer only - whether the server accepts their approval too. */
+  reviewerMayApprove?: boolean | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
+  /** QA D1120: the ACTIVE definition this version replaces on activation (null for a first version). */
+  supersedesDefinitionId?: string | null;
+  /** QA D1120: 1 for a first definition. */
+  versionNumber?: number | null;
   unit: string | null;
   loincCode: string | null;
   loincDisplay: string | null;
   preparationInstructions: string | null;
+  /** QA D834: the expected answer of a qualitative test ("Négatif"), which has no numeric range. */
+  expectedResult?: string | null;
   turnaroundTime: number | null;
   referenceRanges?: LabTestReferenceRange[];
 }
@@ -123,6 +214,13 @@ export interface LabTestReferenceRange {
   ageMax: number | null;
   gender: 'ALL' | 'MALE' | 'FEMALE';
   notes: string | null;
+  /** D107: panic limits; a value beyond them grades CRITICAL. */
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
+  /** Round 18: unit of ageMin/ageMax (inclusive bounds); YEARS when absent. */
+  ageUnit?: 'YEARS' | 'MONTHS' | 'DAYS' | null;
+  /** Round 18: where the limits come from, shown to the approving lab director. */
+  source?: string | null;
 }
 
 export interface LabTestDefinitionApprovalRequest {
@@ -231,6 +329,26 @@ export interface LabOrderRequest {
    * there. The order form always sends it explicitly.
    */
   performingHospitalId?: string | null;
+  /**
+   * The earlier orders (ids from the duplicate-order warning) the orderer saw
+   * before choosing "Order anyway"; the server records the acknowledgement
+   * only when they cover every duplicate it finds.
+   */
+  acknowledgedDuplicateOrderIds?: string[];
+}
+
+/**
+ * An active order of the same test for the same patient at this hospital,
+ * placed recently (GET /lab-orders/duplicates): the new order may duplicate it.
+ */
+export interface LabOrderDuplicateMatch {
+  orderId: string;
+  labOrderCode?: string;
+  labTestName?: string;
+  labTestCode?: string;
+  priority?: string;
+  status?: string;
+  orderDatetime?: string;
 }
 
 /** A laboratory a clinician may route an order to (GET /lab-orders/performing-labs). */
@@ -248,6 +366,8 @@ export interface LabResultRequest {
   resultUnit?: string;
   resultDate: string;
   notes?: string;
+  /** D81: the released result on the same order that this new result corrects. */
+  supersedesResultId?: string;
 }
 
 export interface LabTestDefinitionRequest {
@@ -260,6 +380,8 @@ export interface LabTestDefinitionRequest {
   loincDisplay?: string;
   sampleType?: string;
   preparationInstructions?: string;
+  /** QA D834: the expected answer of a qualitative test. */
+  expectedResult?: string;
   turnaroundTime?: number;
   isActive?: boolean;
   assignmentId?: string;
@@ -276,10 +398,17 @@ export interface LabSpecimen {
   barcodeValue: string | null;
   specimenType: string | null;
   collectedAt: string | null;
+  /** Lab requests drawer timeline: who collected it. */
+  collectedByName?: string | null;
   receivedAt: string | null;
+  /** Lab requests drawer timeline: who received it in the laboratory. */
+  receivedByName?: string | null;
   currentLocation: string | null;
   status: LabSpecimenStatus;
   notes: string | null;
+  /** QA D962: why the laboratory rejected it (status REJECTED). */
+  rejectionReason?: string | null;
+  rejectedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -301,6 +430,8 @@ export interface LabResultComparisonPoint {
   resultValue: string;
   resultUnit: string;
   severityFlag: string | null;
+  /** QA D1016/D931 (round 18): the value replaces a released one. */
+  corrected?: boolean;
 }
 
 export interface LabResultComparison {
@@ -366,18 +497,40 @@ export type LabResultPage = PageResponse<LabResultResponse>;
 export class LabService {
   private readonly http = inject(HttpClient);
 
+  /**
+   * The lab orders in scope. QA D1347: without `page` this is EVERY order the
+   * request matches (all pages read, `size` is only the transfer size); with
+   * `page` it is that one page, for a caller that says so on screen.
+   */
   listOrders(params?: {
     patientId?: string;
     page?: number;
     size?: number;
   }): Observable<LabOrderResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.patientId) httpParams = httpParams.set('patientId', params.patientId);
-    if (params?.page !== undefined) httpParams = httpParams.set('page', String(params.page));
-    if (params?.size !== undefined) httpParams = httpParams.set('size', String(params.size));
+    if (params?.page !== undefined) {
+      return this.listOrdersPage(params.page, params.size, params.patientId).pipe(
+        map((page) => page?.content ?? []),
+      );
+    }
+    return this.listAllOrders(params?.patientId).pipe(map((all) => all.rows));
+  }
+
+  /** Every order in scope and the server's own count of them (QA D1347). */
+  listAllOrders(patientId?: string): Observable<AllRows<LabOrderResponse>> {
+    return allPages((page, size) => this.listOrdersPage(page, size, patientId));
+  }
+
+  private listOrdersPage(
+    page: number,
+    size: number | undefined,
+    patientId?: string,
+  ): Observable<PageResponse<LabOrderResponse> | undefined> {
+    let httpParams = new HttpParams().set('page', String(page));
+    if (patientId) httpParams = httpParams.set('patientId', patientId);
+    if (size !== undefined) httpParams = httpParams.set('size', String(size));
     return this.http
       .get<ApiWrapper<PageResponse<LabOrderResponse>>>('/lab-orders', { params: httpParams })
-      .pipe(map((res) => res?.data?.content ?? []));
+      .pipe(map((res) => res?.data));
   }
 
   getOrder(id: string): Observable<LabOrderResponse> {
@@ -386,26 +539,56 @@ export class LabService {
       .pipe(map((res) => res.data));
   }
 
-  listResults(params?: { page?: number; size?: number }): Observable<LabResultResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.page !== undefined) httpParams = httpParams.set('page', String(params.page));
-    if (params?.size !== undefined) httpParams = httpParams.set('size', String(params.size));
-    return this.http
-      .get<ApiWrapper<PageResponse<LabResultResponse>>>('/lab-results', { params: httpParams })
-      .pipe(map((res) => res?.data?.content ?? []));
+  /**
+   * Every lab result in scope and the server's own count (QA D1347: was one page of 200).
+   * QA D1361: read page by page, so the pages must share one total order -
+   * newest result first, then the id, which no two results share. (The
+   * server closes any order with the id too; the sort is sent so the order
+   * does not hang on the endpoint's default.)
+   */
+  listAllResults(): Observable<AllRows<LabResultResponse>> {
+    return allPages((page, size) =>
+      this.http
+        .get<ApiWrapper<PageResponse<LabResultResponse>>>('/lab-results', {
+          params: new HttpParams()
+            .set('page', String(page))
+            .set('size', String(size))
+            .append('sort', 'resultDate,desc')
+            .append('sort', 'id,desc'),
+        })
+        .pipe(map((res) => res?.data)),
+    );
+  }
+
+  /**
+   * The results of one order, graded by the server (LabResultMapper), for the
+   * lab requests drawer. A reader outside the laboratory gets released rows only.
+   */
+  listOrderResults(labOrderId: string): Observable<LabResultResponse[]> {
+    // QA D1347: every page (an order's corrections included), in one total order.
+    return allPages((page, size) =>
+      this.http
+        .get<ApiWrapper<PageResponse<LabResultResponse>>>('/lab-results', {
+          params: new HttpParams()
+            .set('labOrderId', labOrderId)
+            .set('page', String(page))
+            .set('size', String(size))
+            .append('sort', 'resultDate,desc')
+            .append('sort', 'id,desc'),
+        })
+        .pipe(map((res) => res?.data)),
+    ).pipe(map((all) => all.rows));
   }
 
   getResult(id: string): Observable<LabResultResponse> {
-    return this.http
-      .get<ApiWrapper<LabResultResponse>>(`/lab-results/${id}`)
-      .pipe(map((res) => res.data));
+    return this.http.get<LabResultResponse>(`/lab-results/${id}`);
   }
 
   /**
    * B14 — the release worklist: every result of the acting hospital that
    * nobody has released yet, oldest first (the endpoint's own default sort).
    *
-   * <p>Unlike {@link listResults} this keeps the whole page rather than its
+   * <p>Unlike {@link listAllResults} this keeps the whole page rather than its
    * content: the worklist counts what is waiting and pages through it, and a
    * total that has been thrown away cannot be shown.
    */
@@ -420,6 +603,22 @@ export class LabService {
   listPerformingLabs(): Observable<PerformingLab[]> {
     return this.http
       .get<ApiWrapper<PerformingLab[]>>('/lab-orders/performing-labs')
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  /**
+   * The duplicate-order warning before submitting. Empty when there is none;
+   * a failed check is treated as none (the warning never blocks an order).
+   */
+  checkDuplicates(
+    patientId: string,
+    labTestDefinitionId: string,
+    hospitalId?: string,
+  ): Observable<LabOrderDuplicateMatch[]> {
+    const params: Record<string, string> = { patientId, labTestDefinitionId };
+    if (hospitalId) params['hospitalId'] = hospitalId;
+    return this.http
+      .get<ApiWrapper<LabOrderDuplicateMatch[]>>('/lab-orders/duplicates', { params })
       .pipe(map((res) => res?.data ?? []));
   }
 
@@ -440,7 +639,7 @@ export class LabService {
     approvalStatus?: LabTestDefinition['approvalStatus'];
     page?: number;
     size?: number;
-  }): Observable<{ content: LabTestDefinition[]; totalElements: number }> {
+  }): Observable<{ content: LabTestDefinition[]; totalElements: number; totalPages?: number }> {
     let httpParams = new HttpParams();
     if (params.keyword) httpParams = httpParams.set('keyword', params.keyword);
     if (params.approvalStatus) httpParams = httpParams.set('approvalStatus', params.approvalStatus);
@@ -454,6 +653,7 @@ export class LabService {
         map((res) => ({
           content: res?.data?.content ?? [],
           totalElements: res?.data?.totalElements ?? 0,
+          totalPages: res?.data?.totalPages ?? 0,
         })),
       );
   }
@@ -466,6 +666,17 @@ export class LabService {
 
   deleteOrder(id: string): Observable<void> {
     return this.http.delete<void>(`/lab-orders/${id}`);
+  }
+
+  /**
+   * QA D820: void an order entered in error, a COMPLETED one included. Never
+   * a delete: the order reads ENTERED_IN_ERROR with the reason, and its
+   * results stop appearing anywhere.
+   */
+  voidOrder(id: string, reason: string): Observable<LabOrderResponse> {
+    return this.http
+      .post<ApiWrapper<LabOrderResponse>>(`/lab-orders/${id}/void`, { reason })
+      .pipe(map((res) => res.data));
   }
 
   // ── Lab Result CRUD ──────────────────────────────────────────────────
@@ -482,8 +693,25 @@ export class LabService {
     return this.http.delete('/lab-results/' + id, { responseType: 'text' });
   }
 
-  releaseResult(id: string): Observable<LabResultResponse> {
-    return this.http.post<LabResultResponse>(`/lab-results/${id}/release`, {});
+  /**
+   * D58: `selfRelease` confirms that the caller, who entered the result,
+   * releases it without a second reviewer. Without it the API answers 409 for
+   * a self-release.
+   */
+  releaseResult(
+    id: string,
+    selfRelease = false,
+    ungradedConfirmed = false,
+  ): Observable<LabResultResponse> {
+    let params = new HttpParams();
+    if (selfRelease) params = params.set('selfRelease', 'true');
+    // QA D1092: the releaser confirms they reviewed a value no range could grade.
+    if (ungradedConfirmed) params = params.set('ungradedConfirmed', 'true');
+    return this.http.post<LabResultResponse>(
+      `/lab-results/${id}/release`,
+      {},
+      params.keys().length ? { params } : {},
+    );
   }
 
   // ── Lab Test Definition CRUD ─────────────────────────────────────────
@@ -497,6 +725,16 @@ export class LabService {
   updateTestDefinition(id: string, req: LabTestDefinitionRequest): Observable<LabTestDefinition> {
     return this.http
       .put<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}`, req)
+      .pipe(map((res) => res.data));
+  }
+
+  /**
+   * QA D1120: a new DRAFT version of an ACTIVE definition, linked to it. It is
+   * approved like any definition and replaces the active one on activation.
+   */
+  createTestDefinitionVersion(id: string): Observable<LabTestDefinition> {
+    return this.http
+      .post<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}/new-version`, {})
       .pipe(map((res) => res.data));
   }
 
@@ -548,14 +786,22 @@ export class LabService {
     return this.http.delete<void>(`/lab-test-validation-studies/${id}`);
   }
 
-  getQcEventsByDefinition(definitionId: string, size = 150): Observable<LabQcEvent[]> {
-    const params = new HttpParams()
-      .set('testDefinitionId', definitionId)
-      .set('size', String(size))
-      .set('sort', 'recordedAt,asc');
-    return this.http
-      .get<ApiWrapper<PageResponse<LabQcEvent>>>('/lab-qc-events', { params })
-      .pipe(map((res) => res?.data?.content ?? []));
+  /**
+   * Every QC event of the definition, oldest first. QA D1347: this read the
+   * 150 OLDEST once, so a definition with more lost its recent runs.
+   */
+  getQcEventsByDefinition(definitionId: string): Observable<LabQcEvent[]> {
+    return allRows((page, size) =>
+      this.http
+        .get<ApiWrapper<PageResponse<LabQcEvent>>>('/lab-qc-events', {
+          params: new HttpParams()
+            .set('testDefinitionId', definitionId)
+            .set('page', String(page))
+            .set('size', String(size))
+            .set('sort', 'recordedAt,asc'),
+        })
+        .pipe(map((res) => res?.data)),
+    );
   }
 
   getQcSummary(): Observable<LabQcSummary[]> {
@@ -604,6 +850,13 @@ export class LabService {
   receiveSpecimen(specimenId: string): Observable<LabSpecimen> {
     return this.http
       .post<ApiWrapper<LabSpecimen>>(`/lab-specimens/${specimenId}/receive`, null)
+      .pipe(map((res) => res.data));
+  }
+
+  /** QA D962: reject a specimen with a reason; the order goes back to awaiting collection. */
+  rejectSpecimen(specimenId: string, reason: string): Observable<LabSpecimen> {
+    return this.http
+      .post<ApiWrapper<LabSpecimen>>(`/lab-specimens/${specimenId}/reject`, { reason })
       .pipe(map((res) => res.data));
   }
 

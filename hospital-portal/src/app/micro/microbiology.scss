@@ -435,3 +435,19 @@
   gap: 0.5rem;
   margin-top: 0.25rem;
 }
+.correction-history {
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+
+  .correction-entry {
+    margin-top: 0.5rem;
+  }
+
+  .correction-entry p {
+    margin: 0;
+  }
+
+  .correction-isolates {
+    white-space: pre-line;
+  }
+}

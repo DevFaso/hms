@@ -3,11 +3,15 @@ package com.example.hms.service;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.BedStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Bed;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.BedRepository;
+import com.example.hms.repository.TransferOrderRepository;
+import com.example.hms.enums.TransferOrderStatus;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +35,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class BedAssignmentService {
 
+    /** The assign-bed request's bed field (QA D1366: a refused bed is named on it). */
+    public static final String FIELD_BED_ID = "bedId";
+
+    /** The transfer request's destination bed field (QA D1366). */
+    public static final String FIELD_TO_BED_ID = "toBedId";
+
     /** Admission states that can hold a bed. */
     private static final Set<AdmissionStatus> BED_HOLDING_STATUSES = Set.of(
         AdmissionStatus.PENDING, AdmissionStatus.ACTIVE,
@@ -38,6 +48,19 @@ public class BedAssignmentService {
 
     private final BedRepository bedRepository;
     private final AdmissionRepository admissionRepository;
+    private final TransferOrderRepository transferOrderRepository;
+    /**
+     * QA D804: the stay's encounter follows the admission's department. Set
+     * after construction through an ObjectProvider, so the callers that build
+     * this service by hand keep their constructor and no new bean cycle forms
+     * around the bed service; absent, the encounter is moved at discharge.
+     */
+    private org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> stayEncounters;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setStayEncounters(org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> stayEncounters) {
+        this.stayEncounters = stayEncounters;
+    }
 
     /**
      * Assign a bed to an admission: the bed must be active, AVAILABLE, and
@@ -49,7 +72,7 @@ public class BedAssignmentService {
         // Delegates to a private helper rather than the overload below: a
         // self-invocation of a @Transactional method bypasses the Spring proxy,
         // so the annotation on the inner call would silently do nothing.
-        doAssign(admission, bedId, Set.of(BedStatus.AVAILABLE));
+        doAssign(admission, bedId, Set.of(BedStatus.AVAILABLE), FIELD_BED_ID);
     }
 
     /**
@@ -66,26 +89,33 @@ public class BedAssignmentService {
      */
     @Transactional
     public void assignBed(Admission admission, UUID bedId, Set<BedStatus> claimableFrom) {
-        doAssign(admission, bedId, claimableFrom);
+        // Transfer completion: the bed was picked when the order was raised, not in this request.
+        doAssign(admission, bedId, claimableFrom, null);
     }
 
-    /** The actual work, shared by both public entry points. */
-    private void doAssign(Admission admission, UUID bedId, Set<BedStatus> claimableFrom) {
+    /**
+     * The actual work, shared by both public entry points. {@code field} is the
+     * request field the bed was picked in ({@code bedId}), so a bed that is no
+     * longer free or does not fit the patient is named on it (QA D1366); null
+     * when the request carries no bed.
+     */
+    private void doAssign(Admission admission, UUID bedId, Set<BedStatus> claimableFrom, String field) {
         if (!BED_HOLDING_STATUSES.contains(admission.getStatus())) {
-            throw new BusinessException("Beds can only be assigned to active admissions.");
+            throw new BusinessException("bed.r7.admissionNotActive");
         }
         UUID hospitalId = admission.getHospital().getId();
         // ── Tenant isolation: a bed from another hospital reads as not-found. ──
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Bed not found: " + bedId));
+            .orElseThrow(() -> new ResourceNotFoundException("bed.notFound", bedId));
 
         Bed current = admission.getBed();
         if (current != null && current.getId().equals(bed.getId())) {
             return; // already assigned — idempotent
         }
         if (!bed.isActive() || !claimableFrom.contains(bed.getStatus())) {
-            throw new BusinessException("Bed " + bedLabel(bed) + " is not available.");
+            throw refusal(field, "bed.r7.notAvailable", bedLabel(bed));
         }
+        requireWardFitsPatient(bed, admission.getPatient(), field);
 
         if (current != null) {
             markAvailable(current);
@@ -97,7 +127,64 @@ public class BedAssignmentService {
         // Keep the legacy free-text field in the "room/bed" shape the
         // worklists parse (DoctorWorklistServiceImpl splits on '/').
         admission.setRoomBed(bedLabel(bed));
+        // QA D237: a bed in another department's ward moves the stay there; the
+        // admission kept the first department and every worklist kept showing it.
+        if (bed.getWard() != null && bed.getWard().getDepartment() != null) {
+            admission.setDepartment(bed.getWard().getDepartment());
+            // QA D804: and the stay's encounter with it.
+            if (stayEncounters != null) {
+                stayEncounters.ifAvailable(service -> service.followStayDepartment(admission));
+            }
+        }
         log.info("Bed {} assigned to admission {}", bedLabel(bed), admission.getId());
+    }
+
+    /**
+     * QA D431: the bed picker ignored sex and age, so a 5-year-old was put in
+     * a maternity bed. A ward reserved for one population refuses a patient
+     * whose record says they are outside it; a missing sex or birth date is let
+     * through (an incomplete record must not block an admission).
+     */
+    public static void requireWardFitsPatient(Bed bed, com.example.hms.model.Patient patient) {
+        requireWardFitsPatient(bed, patient, null);
+    }
+
+    /**
+     * The same rule, refused on {@code field} (the request field the bed was
+     * picked in: {@code bedId}, {@code toBedId}) so the form marks the picker
+     * (QA D1366 class); a null field refuses without one.
+     */
+    public static void requireWardFitsPatient(Bed bed, com.example.hms.model.Patient patient, String field) {
+        if (bed.getWard() == null || bed.getWard().getWardType() == null || patient == null) {
+            return;
+        }
+        Integer age = patient.getDateOfBirth() == null ? null
+            : java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now(java.time.ZoneId.systemDefault())).getYears();
+        com.example.hms.enums.WardType type = bed.getWard().getWardType();
+        boolean mismatch = switch (type) {
+            case MATERNITY -> com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)
+                || com.example.hms.utility.ObstetricEligibility.isRecordedChild(patient);
+            case PEDIATRIC -> age != null && age >= 18;
+            case NICU -> age != null && age >= 1;
+            default -> false; // Every other ward takes any patient.
+        };
+        if (mismatch) {
+            throw refusal(field, switch (type) {
+                case MATERNITY -> "bed.ward.maternityMismatch";
+                case PEDIATRIC -> "bed.ward.pediatricMismatch";
+                default -> "bed.ward.nicuMismatch";
+            }, bedLabel(bed));
+        }
+    }
+
+    /**
+     * QA D1366 (round 31): a refusal about the bed the user picked names the
+     * request field it was picked in, so the form marks that picker (an
+     * occupied bed answered 400 with fieldErrors null). A null field (no bed
+     * in the request) refuses without one.
+     */
+    private static BusinessException refusal(String field, String key, Object... args) {
+        return field == null ? new BusinessException(key, args) : new FieldBusinessException(field, key, args);
     }
 
     /**
@@ -106,6 +193,9 @@ public class BedAssignmentService {
      */
     @Transactional
     public void unassignBed(Admission admission) {
+        // QA D1428: a closed stay's bed is history (releaseBed) and may hold
+        // another patient by now; freeing it here would empty their bed.
+        admission.requireOpen();
         Bed bed = admission.getBed();
         if (bed == null) {
             return;
@@ -122,12 +212,34 @@ public class BedAssignmentService {
      */
     @Transactional
     public void releaseBed(Admission admission) {
+        cancelPendingTransfer(admission);
         Bed bed = admission.getBed();
         if (bed == null) {
             return;
         }
         markAvailable(bed);
         log.info("Bed {} released by admission {}", bedLabel(bed), admission.getId());
+    }
+
+    /**
+     * QA D515: a stay closed with a transfer still ordered left the order
+     * REQUESTED and its destination bed RESERVED for a patient who had gone
+     * home — the bed was lost to the ward until someone found and cancelled
+     * it by hand. Every discharge/cancel path releases the bed through here,
+     * so the open order is cancelled and its reservation handed back with it.
+     */
+    private void cancelPendingTransfer(Admission admission) {
+        if (admission == null || admission.getId() == null) {
+            return;
+        }
+        transferOrderRepository.findPendingForAdmission(admission.getId()).ifPresent(order -> {
+            unreserve(order.getToBed());
+            order.setStatus(TransferOrderStatus.CANCELLED);
+            order.setCancelledAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+            order.setCancellationReason(MessageUtil.resolve("transfer.cancelledByDischarge"));
+            transferOrderRepository.save(order);
+            log.info("Pending transfer {} cancelled: admission {} closed", order.getId(), admission.getId());
+        });
     }
 
     /**
@@ -157,9 +269,10 @@ public class BedAssignmentService {
     @Transactional
     public Bed reserveBed(UUID bedId, UUID hospitalId) {
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Bed not found: " + bedId));
+            .orElseThrow(() -> new ResourceNotFoundException("bed.notFound", bedId));
         if (!bed.isActive() || bed.getStatus() != BedStatus.AVAILABLE) {
-            throw new BusinessException("Bed " + bedLabel(bed) + " is not available.");
+            // QA D1366: the transfer's destination, picked in toBedId.
+            throw new FieldBusinessException(FIELD_TO_BED_ID, "bed.r7.notAvailable", bedLabel(bed));
         }
         bed.setStatus(BedStatus.RESERVED);
         bedRepository.save(bed);
@@ -174,6 +287,10 @@ public class BedAssignmentService {
      */
     @Transactional
     public void releaseReservation(Bed bed) {
+        unreserve(bed);
+    }
+
+    private void unreserve(Bed bed) {
         if (bed == null || bed.getStatus() != BedStatus.RESERVED) {
             return;
         }

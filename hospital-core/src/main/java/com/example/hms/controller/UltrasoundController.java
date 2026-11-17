@@ -215,26 +215,6 @@ public class UltrasoundController {
         return ResponseEntity.ok(reports);
     }
 
-    @GetMapping("/templates/nuchal-translucency")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
-    @Operation(summary = "Get pre-filled template for Nuchal Translucency (NT) scan report")
-    public ResponseEntity<UltrasoundReportRequestDTO> getNuchalTranslucencyTemplate(
-        Authentication authentication
-    ) {
-        UltrasoundReportRequestDTO template = ultrasoundService.getNuchalTranslucencyTemplate();
-        return ResponseEntity.ok(template);
-    }
-
-    @GetMapping("/templates/anatomy-scan")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
-    @Operation(summary = "Get pre-filled template for Anatomy scan report")
-    public ResponseEntity<UltrasoundReportRequestDTO> getAnatomyScanTemplate(
-        Authentication authentication
-    ) {
-        UltrasoundReportRequestDTO template = ultrasoundService.getAnatomyScanTemplate();
-        return ResponseEntity.ok(template);
-    }
-
     // Helper method to extract userId from authentication
     private UUID extractUserId(Authentication authentication) {
         // This assumes the authentication principal contains user info

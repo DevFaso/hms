@@ -80,7 +80,10 @@ data class CareTeamDto(
 
 @JsonClass(generateAdapter = true)
 data class CareTeamMemberDto(
+    /** `CareTeamDTO.PrimaryCareEntry.id`: the primary-care LINK id, not a user. */
     @Json(name = "id") val id: String = "",
+    /** The clinician's HMS user id: the chat recipient. Null for an unlinked entry. */
+    @Json(name = "doctorUserId") val doctorUserId: String? = null,
     @Json(name = "name") val name: String = "",
     @Json(name = "doctorDisplay") val doctorDisplay: String? = null,
     @Json(name = "role") val role: String? = null,
@@ -154,15 +157,58 @@ data class ChatConversationDto(
 @JsonClass(generateAdapter = true)
 data class ChatMessageDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "timestamp") val timestamp: String = "",
+    /** ISO local date-time, no offset; null on a message with no send time. */
+    @Json(name = "timestamp") val timestamp: String? = null,
     @Json(name = "senderId") val senderId: String = "",
     @Json(name = "senderName") val senderName: String? = null,
     @Json(name = "senderRole") val senderRole: String? = null,
     @Json(name = "recipientId") val recipientId: String = "",
     @Json(name = "recipientName") val recipientName: String? = null,
-    @Json(name = "content") val content: String = "",
-    @Json(name = "read") val read: Boolean = false
-)
+    /** Null (or blank) on an attachment-only message, which the backend allows. */
+    @Json(name = "content") val content: String? = null,
+    @Json(name = "read") val read: Boolean = false,
+    /**
+     * `ChatMessageResponseDTO.attachments`. Nullable on the wire so an
+     * explicit `null` cannot fail the whole history decode; read through
+     * [attachmentList].
+     */
+    @Json(name = "attachments") val attachments: List<ChatAttachmentDto>? = null
+) {
+    val attachmentList: List<ChatAttachmentDto> get() = attachments.orEmpty()
+
+    /** The text to draw, or null for a message that is only attachments. */
+    val text: String? get() = content?.takeIf { it.isNotBlank() }
+}
+
+/**
+ * `ChatAttachmentDTO` as the history returns it. The bytes have no public
+ * URL: they are streamed to the message's sender or recipient only, by
+ * `GET /chat/attachments/{id}/download`.
+ */
+@JsonClass(generateAdapter = true)
+data class ChatAttachmentDto(
+    @Json(name = "id") val id: String = "",
+    @Json(name = "displayName") val displayName: String? = null,
+    @Json(name = "contentType") val contentType: String? = null,
+    @Json(name = "sizeBytes") val sizeBytes: Long = 0,
+    @Json(name = "kind") val kind: String? = null,
+    /** Audio length in seconds (1..90); null for a photo. */
+    @Json(name = "durationSeconds") val durationSeconds: Int? = null
+) {
+    val kindEnum: ChatAttachmentKind get() = ChatAttachmentKind.fromWire(kind)
+}
+
+/** `ChatAttachmentKind` (PHOTO, AUDIO); anything newer is [OTHER] and offered as a file. */
+enum class ChatAttachmentKind {
+    PHOTO,
+    AUDIO,
+    OTHER;
+
+    companion object {
+        fun fromWire(raw: String?): ChatAttachmentKind =
+            entries.firstOrNull { it != OTHER && it.name.equals(raw?.trim(), ignoreCase = true) } ?: OTHER
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class SendChatMessageRequest(
@@ -170,30 +216,61 @@ data class SendChatMessageRequest(
     @Json(name = "content") val content: String
 )
 
+/**
+ * `GeneralReferralResponseDTO`, as `GET /me/patient/referrals` returns it. The
+ * previous model read `referralDate`, `referredTo`, `specialistName`,
+ * `specialty`, `reason` and `notes` — names the API never sent — so every
+ * referral showed only its raw type and status.
+ */
 @JsonClass(generateAdapter = true)
 data class ReferralDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "referralDate") val referralDate: String? = null,
     @Json(name = "referralType") val referralType: String? = null,
-    @Json(name = "referredTo") val referredTo: String? = null,
-    @Json(name = "specialistName") val specialistName: String? = null,
-    @Json(name = "specialty") val specialty: String? = null,
-    @Json(name = "reason") val reason: String? = null,
     @Json(name = "status") val status: String = "",
-    @Json(name = "notes") val notes: String? = null
-)
+    @Json(name = "urgency") val urgency: String? = null,
+    @Json(name = "targetSpecialty") val targetSpecialty: String? = null,
+    @Json(name = "referringProviderName") val referringProviderName: String? = null,
+    @Json(name = "receivingProviderName") val receivingProviderName: String? = null,
+    @Json(name = "targetFacilityName") val targetFacilityName: String? = null,
+    @Json(name = "receivingHospitalName") val receivingHospitalName: String? = null,
+    @Json(name = "targetDepartmentName") val targetDepartmentName: String? = null,
+    @Json(name = "referralReason") val referralReason: String? = null,
+    @Json(name = "submittedAt") val submittedAt: String? = null,
+    @Json(name = "scheduledAppointmentAt") val scheduledAppointmentAt: String? = null,
+    @Json(name = "appointmentLocation") val appointmentLocation: String? = null
+) {
+    val statusEnum: ReferralStatus get() = ReferralStatus.fromWire(status)
+    val typeEnum: ReferralType? get() = referralType?.let { ReferralType.fromWire(it) }
+    val urgencyEnum: ReferralUrgency? get() = urgency?.let { ReferralUrgency.fromWire(it) }
+    val specialtyEnum: ReferralSpecialty? get() = targetSpecialty?.let { ReferralSpecialty.fromWire(it) }
 
+    /** Where the patient is referred: the named facility, else the receiving hospital, else the department. */
+    val destination: String?
+        get() = listOf(targetFacilityName, receivingHospitalName, targetDepartmentName)
+            .firstOrNull { !it.isNullOrBlank() }
+}
+
+/**
+ * `TreatmentPlanResponseDTO`, as `GET /me/patient/treatment-plans` returns
+ * it. The previous model read `title`, `description`, `startDate`,
+ * `endDate`, `goals` and `createdBy`, none of which the API sends, so every
+ * plan was a bare "Treatment plan" and a raw status.
+ */
 @JsonClass(generateAdapter = true)
 data class TreatmentPlanDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "title") val title: String = "",
-    @Json(name = "description") val description: String? = null,
-    @Json(name = "startDate") val startDate: String? = null,
-    @Json(name = "endDate") val endDate: String? = null,
     @Json(name = "status") val status: String = "",
-    @Json(name = "goals") val goals: List<String>? = null,
-    @Json(name = "createdBy") val createdBy: String? = null
-)
+    @Json(name = "problemStatement") val problemStatement: String? = null,
+    @Json(name = "therapeuticGoals") val therapeuticGoals: List<String>? = null,
+    @Json(name = "timelineSummary") val timelineSummary: String? = null,
+    @Json(name = "followUpSummary") val followUpSummary: String? = null,
+    @Json(name = "timelineStartDate") val timelineStartDate: String? = null,
+    @Json(name = "timelineReviewDate") val timelineReviewDate: String? = null,
+    @Json(name = "authorStaffName") val authorStaffName: String? = null,
+    @Json(name = "hospitalName") val hospitalName: String? = null
+) {
+    val statusEnum: TreatmentPlanStatus get() = TreatmentPlanStatus.fromWire(status)
+}
 
 @JsonClass(generateAdapter = true)
 data class ImmunizationDto(

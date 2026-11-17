@@ -2,6 +2,7 @@ package com.example.hms.payload.dto.mortality;
 
 import com.example.hms.enums.MannerOfDeath;
 import com.example.hms.enums.MaternalDeathTiming;
+import com.example.hms.enums.PerinatalBirthStatus;
 import com.example.hms.enums.PerinatalDeathType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -9,6 +10,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
 
 /**
  * Revising a cause of death.
@@ -53,6 +56,15 @@ public class DeathRecordAmendmentDTO {
     private Boolean perinatalDeath;
 
     private PerinatalDeathType perinatalType;
+
+    /** The time of birth, when known. With it the age at death is elapsed time; without it, only dates. */
+    private LocalDateTime bornAt;
+
+    /** Left off keeps what the record holds. */
+    private PerinatalBirthStatus birthStatus;
+
+    /** Completed weeks. Left off keeps what the record holds. */
+    private Integer gestationalAgeWeeks;
 
     @Size(max = 1000)
     private String notes;

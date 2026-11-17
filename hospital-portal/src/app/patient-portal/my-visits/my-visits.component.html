@@ -37,11 +37,16 @@
                 >{{ enc.type | enumLabel: 'encounterType' }} ·
                 {{ enc.department || ('PORTAL.VISITS.GENERAL' | translate) }}</span
               >
-              <span class="pli-sub">{{
-                enc.providerName || ('PORTAL.VISITS.PROVIDER' | translate)
-              }}</span>
-              <span class="pli-meta">
-                {{ enc.date | date: 'MMM d, yyyy' }}
+              {{ ' '
+              }}<span class="pli-sub"
+                >{{ enc.providerName || ('PORTAL.VISITS.PROVIDER' | translate) }}
+                @if (enc.hospitalName) {
+                  · <span class="pli-hospital">{{ enc.hospitalName }}</span>
+                }
+              </span>
+              {{ ' '
+              }}<span class="pli-meta">
+                {{ enc.date | serverTime | date: 'mediumDate' }}
                 @if (enc.chiefComplaint) {
                   · {{ enc.chiefComplaint }}
                 }
@@ -61,7 +66,7 @@
                 </div>
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.VISITS.DATE' | translate }}</span>
-                  <span class="dv">{{ enc.date | date: 'fullDate' }}</span>
+                  <span class="dv">{{ enc.date | serverTime | date: 'fullDate' }}</span>
                 </div>
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.VISITS.PROVIDER' | translate }}</span>
@@ -69,6 +74,12 @@
                     enc.providerName || ('PORTAL.VISITS.NOT_ASSIGNED' | translate)
                   }}</span>
                 </div>
+                @if (enc.hospitalName) {
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.VISITS.HOSPITAL_NAME_LABEL' | translate }}</span>
+                    <span class="dv">{{ enc.hospitalName }}</span>
+                  </div>
+                }
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.VISITS.DEPARTMENT' | translate }}</span>
                   <span class="dv">{{
@@ -83,13 +94,22 @@
                 }
                 @if (enc.diagnosisSummary) {
                   <div class="detail-item detail-item-wide">
-                    <span class="dl">{{ 'PORTAL.VISITS.DIAGNOSIS' | translate }}</span>
+                    <span class="dl">{{ 'PORTAL.VISITS.ASSESSMENT' | translate }}</span>
                     <span class="dv">{{ enc.diagnosisSummary }}</span>
+                  </div>
+                }
+                @if (enc.notePendingSignature) {
+                  <div class="detail-item detail-item-wide">
+                    <span class="dl">{{ 'PORTAL.VISITS.ASSESSMENT' | translate }}</span>
+                    <span class="dv note-pending">{{
+                      'PORTAL.VISITS.PENDING_SIGNATURE' | translate
+                    }}</span>
                   </div>
                 }
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.VISITS.STATUS' | translate }}</span>
-                  <span class="dv portal-status-chip" [attr.data-status]="enc.status">{{
+                  {{ ' '
+                  }}<span class="dv portal-status-chip" [attr.data-status]="enc.status">{{
                     enc.status | enumLabel: 'encounterStatus'
                   }}</span>
                 </div>

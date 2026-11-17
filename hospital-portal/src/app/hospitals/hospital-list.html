@@ -4,15 +4,21 @@
       <h1 class="page-title">{{ 'HOSPITALS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'HOSPITALS.SUBTITLE' | translate }}</p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">add</span>
-      {{ 'HOSPITALS.NEW' | translate }}
-    </button>
+    <!-- QA D36: creating, editing and deleting a hospital is the
+         super-admin's only (POST/PUT/DELETE /hospitals), so the buttons
+         are not offered to anyone the API would refuse. -->
+    @if (isSuperAdmin()) {
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'HOSPITALS.NEW' | translate }}
+      </button>
+    }
   </div>
 
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'HOSPITALS.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [placeholder]="'HOSPITALS.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
@@ -32,7 +38,7 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th>{{ 'COMMON.NAME' | translate }}</th>
             <th>{{ 'HOSPITALS.CODE' | translate }}</th>
             <th>{{ 'HOSPITALS.LOCATION' | translate }}</th>
             <th>{{ 'PATIENTS.PHONE' | translate }}</th>
@@ -67,7 +73,9 @@
               <td>{{ h.phoneNumber || '—' }}</td>
               <td>
                 @if (h.organizationName) {
-                  <span class="org-chip">{{ h.organizationName }}</span>
+                  <span class="org-chip">{{
+                    h.organizationName | orgText: h.organizationCode
+                  }}</span>
                 } @else {
                   <span class="text-muted">{{ 'HOSPITALS.UNASSIGNED' | translate }}</span>
                 }
@@ -79,7 +87,8 @@
                 <!-- MVP-c2-frontend — lifecycle chip rendered only for non-ACTIVE
                      states so the visual stays calm for the common case. -->
                 @if (h.lifecycleState && h.lifecycleState !== 'ACTIVE') {
-                  <span class="lifecycle-chip" [attr.data-test]="'lifecycle-chip-' + h.id">
+                  {{ ' '
+                  }}<span class="lifecycle-chip" [attr.data-test]="'lifecycle-chip-' + h.id">
                     {{ 'HOSPITAL_LIFECYCLE.STATE.' + h.lifecycleState | translate }}
                   </span>
                 }
@@ -93,26 +102,31 @@
                     <a
                       class="action-link"
                       [title]="'HOSPITAL_LIFECYCLE.OPEN_DETAIL' | translate"
+                      [attr.aria-label]="'HOSPITAL_LIFECYCLE.OPEN_DETAIL' | translate"
                       [routerLink]="['/hospitals', h.id]"
                       [attr.data-test]="'hospital-detail-' + h.id"
                     >
                       <span class="material-symbols-outlined">open_in_new</span>
                     </a>
+                    <button
+                      class="action-link"
+                      [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
+                      [attr.data-test]="'hospital-edit-' + h.id"
+                      (click)="openEdit(h)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button
+                      class="action-link danger"
+                      [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
+                      [attr.data-test]="'hospital-delete-' + h.id"
+                      (click)="confirmDelete(h)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
                   }
-                  <button
-                    class="action-link"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEdit(h)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  <button
-                    class="action-link danger"
-                    [title]="'COMMON.DELETE' | translate"
-                    (click)="confirmDelete(h)"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
                 </div>
               </td>
             </tr>
@@ -145,15 +159,21 @@
       <dialog
         class="modal modal-lg"
         [open]="showModal()"
+        appModalDialog
+        aria-labelledby="hospital-list-dialog-1-title"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeModal()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="hospital-list-dialog-1-title">
             {{ editing() ? ('HOSPITALS.EDIT' | translate) : ('HOSPITALS.CREATE' | translate) }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -164,6 +184,8 @@
                 <label for="hName">{{ 'DEPARTMENTS.NAME' | translate }} *</label>
                 <input
                   id="hName"
+                  [class.invalid]="isMissing('name')"
+                  [attr.aria-invalid]="isMissing('name') || null"
                   type="text"
                   [(ngModel)]="form.name"
                   name="name"
@@ -175,12 +197,14 @@
                 <label for="hPhone">{{ 'PATIENTS.PHONE' | translate }} *</label>
                 <input
                   id="hPhone"
+                  [class.invalid]="isMissing('phoneNumber')"
+                  [attr.aria-invalid]="isMissing('phoneNumber') || null"
                   type="tel"
+                  appPhoneField
                   [(ngModel)]="form.phoneNumber"
                   name="phoneNumber"
                   [placeholder]="'HOSPITALS.PHONE_PLACEHOLDER' | translate"
-                  minlength="10"
-                  maxlength="15"
+                  maxlength="30"
                   required
                 />
               </div>
@@ -216,6 +240,8 @@
                 <label for="hCountry">{{ 'HOSPITALS.COUNTRY' | translate }} *</label>
                 <input
                   id="hCountry"
+                  [class.invalid]="isMissing('country')"
+                  [attr.aria-invalid]="isMissing('country') || null"
                   type="text"
                   [(ngModel)]="form.country"
                   name="country"
@@ -227,6 +253,8 @@
                 <label for="hCity">{{ 'HOSPITALS.CITY' | translate }} *</label>
                 <input
                   id="hCity"
+                  [class.invalid]="isMissing('city')"
+                  [attr.aria-invalid]="isMissing('city') || null"
                   type="text"
                   [(ngModel)]="form.city"
                   name="city"
@@ -271,14 +299,23 @@
                 />
               </div>
               <div class="field">
-                <label for="hAddress">{{ 'HOSPITALS.ADDRESS' | translate }}</label>
+                <!-- QA D734/D747: the street is required for every hospital, on create
+                     and edit; the server refuses an empty one too. -->
+                <label for="hAddress">{{ 'HOSPITALS.ADDRESS' | translate }} *</label>
                 <input
                   id="hAddress"
+                  [class.invalid]="isMissing('address')"
+                  [attr.aria-invalid]="isMissing('address') || null"
                   type="text"
                   [(ngModel)]="form.address"
+                  required
                   name="address"
                   [placeholder]="'HOSPITALS.ADDRESS_PLACEHOLDER' | translate"
+                  aria-describedby="hAddressHint"
                 />
+                <small id="hAddressHint" class="field-hint">{{
+                  'HOSPITALS.ADDRESS_OR_PO_BOX_HINT' | translate
+                }}</small>
               </div>
             </div>
 
@@ -321,7 +358,9 @@
                 <select id="hOrgId" [(ngModel)]="form.organizationId" name="organizationId">
                   <option value="">{{ 'HOSPITALS.NONE_UNASSIGNED' | translate }}</option>
                   @for (org of organizations(); track org.id) {
-                    <option [value]="org.id">{{ org.name }} ({{ org.code }})</option>
+                    <option [value]="org.id">
+                      {{ org.name | orgText: org.code }} ({{ org.code }})
+                    </option>
                   }
                 </select>
               </div>
@@ -340,7 +379,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? editing()
@@ -368,13 +413,19 @@
       <dialog
         class="modal"
         [open]="showDeleteConfirm()"
+        appModalDialog
+        aria-labelledby="hospital-list-dialog-2-title"
         (click)="$event.stopPropagation()"
         (keydown.escape)="cancelDelete()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'HOSPITALS.DELETE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <h2 id="hospital-list-dialog-2-title">{{ 'HOSPITALS.DELETE' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -382,7 +433,7 @@
           <p class="delete-warning">
             {{ 'HOSPITALS.DELETE_CONFIRM' | translate }}
             <strong>{{ deletingHospital()?.name }}</strong
-            >? {{ 'COMMON.CANNOT_UNDO' | translate }}
+            >{{ 'COMMON.QUESTION_MARK' | translate }} {{ 'COMMON.CANNOT_UNDO' | translate }}
           </p>
         </div>
         <div class="modal-actions">

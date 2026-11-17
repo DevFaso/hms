@@ -68,6 +68,10 @@ class HospitalAdminOffChartTest {
         assertOffChart(DischargeSummaryController.class);
         assertOffChart(DischargeApprovalController.class);
         assertOffChart(TransferController.class);
+        // D88/D188/D229: GET /transfers/pending (the exact QA call) inherits
+        // the class guard above. The worklist names patients and the reason
+        // for their move; decision D5 keeps it from the role, and the bed
+        // board does not ask for it in a hospital-admin session.
         assertOffChart(IsolationController.class);
     }
 
@@ -79,7 +83,10 @@ class HospitalAdminOffChartTest {
         assertOffChart(GeneralReferralController.class, "/admin/expire-overdue");
         assertKept(GeneralReferralController.class, "POST /admin/expire-overdue");
         assertOffChart(ObgynReferralController.class, "/reports/summary");
-        assertOffChart(InBasketController.class);
+        // The one exception, a user-approved flow: the urgent review of a disputed death is filed for hospital
+        // administrators, so they open their in-basket, and it answers them with those items and nothing else
+        // (InBasketAdminDisputeReviewTest). Every other sender's recipients leave them out (InBasketRecipientGuardTest).
+        assertKept(InBasketController.class, "GET ");
         assertOffChart(CdsAcknowledgementController.class);
     }
 }

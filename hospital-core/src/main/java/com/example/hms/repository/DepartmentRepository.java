@@ -32,11 +32,20 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID>, J
     @Query("SELECT d FROM Department d JOIN FETCH d.hospital WHERE d.id = :id")
     Optional<Department> findByIdWithHospital(@Param("id") UUID id);
 
-    @Query("SELECT d FROM Department d JOIN FETCH d.headOfDepartment WHERE d.id = :id")
+    /** QA D280: LEFT, so a department without a head is found too (an inner join answered 404 for it). */
+    @Query("SELECT d FROM Department d LEFT JOIN FETCH d.headOfDepartment WHERE d.id = :id")
     Optional<Department> findByIdWithHeadOfDepartment(@Param("id") UUID id);
 
     /** Case-insensitive unique name per hospital */
     boolean existsByNameIgnoreCaseAndHospitalId(String name, UUID hospitalId);
+
+    /** QA D281: a rename may not land on another department's name in the same hospital. */
+    boolean existsByNameIgnoreCaseAndHospitalIdAndIdNot(String name, UUID hospitalId, UUID id);
+
+    /** QA D281: a department code is unique per hospital, case-insensitively. */
+    boolean existsByCodeIgnoreCaseAndHospitalId(String code, UUID hospitalId);
+
+    boolean existsByCodeIgnoreCaseAndHospitalIdAndIdNot(String code, UUID hospitalId, UUID id);
 
     Optional<Department> findByHospitalIdAndNameIgnoreCase(UUID hospitalId, String name);
 
@@ -77,6 +86,34 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID>, J
     @Query("SELECT COUNT(s) > 0 FROM Staff s WHERE s.department.id = :departmentId")
     boolean hasStaffMembers(@Param("departmentId") UUID departmentId);
 
+    /**
+     * QA D601: any clinical or operational row that points at this department.
+     * Dev carries no foreign key on several of these tables, and treatments
+     * cascade on delete, so the refusal cannot rely on a constraint violation.
+     */
+    @Query("SELECT COUNT(d) > 0 FROM Department d WHERE d.id = :departmentId AND ("
+        + "EXISTS (SELECT 1 FROM Admission r0 WHERE r0.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM AdmissionOrderSet r1 WHERE r1.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM Appointment r2 WHERE r2.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM AppointmentWaitlist r3 WHERE r3.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM Encounter r4 WHERE r4.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM GeneralReferral r5 WHERE r5.sourceDepartment.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM GeneralReferral r6 WHERE r6.targetDepartment.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM ImagingReport r7 WHERE r7.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM LabInstrument r8 WHERE r8.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM OnCallSchedule r9 WHERE r9.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM Questionnaire r10 WHERE r10.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM AppointmentSlot r11 WHERE r11.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM PatientRecall r12 WHERE r12.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM SessionTemplate r13 WHERE r13.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM VisitType r14 WHERE r14.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM StaffLeaveRequest r15 WHERE r15.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM StaffShift r16 WHERE r16.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM Treatment r17 WHERE r17.department.id = :departmentId) "
+        + "OR EXISTS (SELECT 1 FROM Ward r18 WHERE r18.department.id = :departmentId) "
+        + ")")
+    boolean existsByClinicalReference(@Param("departmentId") UUID departmentId);
+
     @Query("SELECT COUNT(t) > 0 FROM Treatment t WHERE t.department.id = :departmentId")
     boolean hasTreatments(@Param("departmentId") UUID departmentId);
 
@@ -87,14 +124,19 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID>, J
     @Query("""
         SELECT d
         FROM Department d
-        WHERE LOWER(d.name) LIKE LOWER(CONCAT('%', :query, '%'))
+        WHERE LOWER(d.name) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))
     """)
     Page<Department> search(@Param("query") String query, Pageable pageable);
 
     /* ---------- Translations (if present on your entity) ---------- */
 
-    @Query("SELECT d FROM Department d JOIN FETCH d.departmentTranslations WHERE d.id = :id")
+    /** QA D280: LEFT, so a department without a translation row is found too. */
+    @Query("SELECT DISTINCT d FROM Department d LEFT JOIN FETCH d.departmentTranslations WHERE d.id = :id")
     Optional<Department> findByIdWithTranslations(@Param("id") UUID id);
 
     boolean existsByHeadOfDepartment_Id(UUID staffId);
+
+    /** QA CX-003: every department with its hospital, for the analytics table (no lazy read per row). */
+    @Query("SELECT d FROM Department d JOIN FETCH d.hospital")
+    List<Department> findAllForAnalytics();
 }

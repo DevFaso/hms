@@ -87,7 +87,8 @@ class OruR01EndToEndIngestionTest {
         // Real service, real parser; mocked I/O collaborators only.
         MllpInboundLabServiceImpl labService = new MllpInboundLabServiceImpl(
             specimenRepository, labResultRepository, labOrderRepository, messageRecorder,
-            auditEventLogService, criticalValueNotificationService);
+            auditEventLogService, criticalValueNotificationService,
+            new com.example.hms.mapper.LabResultMapper());
         // The order's status is written by a compare-and-set statement, not
         // through the entity; the stub applies it so assertions can read it.
         lenient().when(labOrderRepository.findStatusById(any()))

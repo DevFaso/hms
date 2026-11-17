@@ -162,6 +162,11 @@ public class Staff extends BaseEntity {
         if (employmentType == null) {
             employmentType = EmploymentType.FULL_TIME;
         }
+        // job_title is NOT NULL; the getter already reads a missing title as
+        // ADMINISTRATIVE_STAFF, so store what every reader sees (QA D137).
+        if (jobTitle == null) {
+            jobTitle = JobTitle.ADMINISTRATIVE_STAFF;
+        }
         // integrity checks
         if (assignment == null || assignment.getHospital() == null) {
             throw new IllegalStateException("Staff must have a hospital-scoped assignment");

@@ -1,27 +1,40 @@
-import { TestBed } from '@angular/core/testing';
+import { EmpiStatusService } from '../reception/empi-status.service';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter, Route } from '@angular/router';
+import { provideRouter, Route, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
-import { ShellComponent } from './shell';
+import { MOBILE_SIDEBAR_QUERY, ShellComponent } from './shell';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { NotificationService } from '../services/notification.service';
+import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
 import { ImpersonationService } from '../services/impersonation.service';
 import { IdleService } from '../core/idle.service';
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
 import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
-import { navGroupForRoute } from './nav-groups';
+import { navGroupForRoute, providerNavEntries } from './nav-groups';
+import { ProviderContextService } from '../core/provider-context.service';
+import { FacilityTypeGuard } from '../auth/facility-type.guard';
+import { settingsFixture } from '../testing/provider-fixtures';
+import { ProviderSettings } from '../services/provider.model';
+import { WritableSignal } from '@angular/core';
 import { routes } from '../app.routes';
 import { roleSatisfies } from '../core/role-equivalence';
+import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
+import en from '../../assets/i18n/en.json';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 
 interface NavItem {
   route: string;
   label: string;
+  translationKey?: string;
 }
 
 /**
@@ -38,6 +51,10 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     wildcardPermission: boolean;
     /** When set, hasPermission answers from this list instead of the wildcard. */
     permissions?: string[];
+    /** QA D987: whether the EMPI matcher is on (default on). */
+    empiEnabled?: boolean | null;
+    /** Review round 16: the status read failed. */
+    empiFailed?: boolean;
   }): { items: NavItem[]; component: ShellComponent } {
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
       'getUserProfile',
@@ -95,6 +112,16 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
         { provide: NotificationService, useValue: notifStub },
         { provide: ImpersonationService, useValue: impersonationStub },
         { provide: IdleService, useValue: idleStub },
+        {
+          provide: EmpiStatusService,
+          useValue: {
+            enabled: signal<boolean | null>(
+              opts.empiEnabled === undefined ? true : opts.empiEnabled,
+            ),
+            failed: signal(opts.empiFailed ?? false),
+            load: () => of(true),
+          },
+        },
       ],
     });
 
@@ -114,6 +141,182 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
   }
 
   afterEach(() => TestBed.resetTestingModule());
+
+  it('names every facility-only network workspace, including routes absent from navigation', () => {
+    const { items, component } = createComponent({
+      activeRole: 'ROLE_SUPER_ADMIN',
+      roles: ['ROLE_SUPER_ADMIN'],
+      wildcardPermission: true,
+    });
+    component.navItems.set(items as never);
+    const gate = TestBed.inject(HospitalScopeGateService);
+    const title = () =>
+      (component as unknown as { networkModuleTitleKey: () => string }).networkModuleTitleKey();
+    function visit(entries: Route[], prefix = ''): void {
+      for (const route of entries) {
+        const path = `${prefix}/${route.path ?? ''}`.replace(/\/+/g, '/');
+        if (route.data?.['requiresHospitalScope'] && !route.data?.['supportsGlobalHospitalView']) {
+          gate.routePath.set(path);
+          gate.moduleTitleKey.set(route.data?.['hospitalNetworkTitleKey'] ?? null);
+          expect(title()).withContext(path).not.toBe('HOSPITAL_NETWORK.TITLE');
+        }
+        if (route.children) visit(route.children, path);
+      }
+    }
+    visit(routes);
+  });
+
+  it('D2001: the lock-screen lockout signs out and opens the sign-in page with the reason', () => {
+    const { component } = createComponent({
+      activeRole: 'ROLE_NURSE',
+      roles: ['ROLE_NURSE'],
+      wildcardPermission: false,
+    });
+    const router = TestBed.inject(Router);
+    const navigate = spyOn(router, 'navigate').and.resolveTo(true);
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    const idle = TestBed.inject(IdleService) as jasmine.SpyObj<IdleService>;
+    const clearPermissions = jasmine.createSpy('clear');
+    Object.assign(TestBed.inject(PermissionService), { clear: clearPermissions });
+
+    component.onLockScreenLockedOut();
+
+    expect(clearPermissions).toHaveBeenCalled();
+
+    expect(idle.stop).toHaveBeenCalled();
+    expect(auth.logout).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(['/login'], { queryParams: { reason: 'locked' } });
+  });
+
+  describe('sidebar width controls', () => {
+    let previousWidth: string | null;
+    const make = () =>
+      createComponent({
+        activeRole: 'ROLE_PATIENT',
+        roles: ['ROLE_PATIENT'],
+        wildcardPermission: false,
+      }).component;
+
+    beforeEach(() => {
+      previousWidth = localStorage.getItem('hms.sidebar.width');
+      localStorage.removeItem('hms.sidebar.width');
+      spyOn(globalThis, 'matchMedia').and.returnValue({ matches: false } as MediaQueryList);
+    });
+    afterEach(() => {
+      if (previousWidth === null) localStorage.removeItem('hms.sidebar.width');
+      else localStorage.setItem('hms.sidebar.width', previousWidth);
+    });
+
+    it('restores valid width preferences and rejects invalid browser storage', () => {
+      localStorage.setItem('hms.sidebar.width', '360');
+      expect(make().sidebarWidth()).toBe(360);
+      TestBed.resetTestingModule();
+      localStorage.setItem('hms.sidebar.width', 'NaN');
+      expect(make().sidebarWidth()).toBe(260);
+    });
+
+    it('resizes by keyboard within bounds and keeps the width after collapse and expansion', () => {
+      const component = make();
+      const key = (name: string) =>
+        component.resizeSidebarWithKey(
+          new KeyboardEvent('keydown', { key: name, cancelable: true }),
+        );
+      key('ArrowRight');
+      expect(component.sidebarWidth()).toBe(276);
+      key('End');
+      key('ArrowRight');
+      expect(component.sidebarWidth()).toBe(420);
+      component.toggleSidebar();
+      component.toggleSidebar();
+      expect(component.sidebarCollapsed()).toBeFalse();
+      expect(component.sidebarWidth()).toBe(420);
+      key('Home');
+      key('ArrowLeft');
+      expect(component.sidebarWidth()).toBe(240);
+      expect(localStorage.getItem('hms.sidebar.width')).toBe('240');
+      component.resetSidebarWidth();
+      expect(component.sidebarWidth()).toBe(260);
+    });
+
+    it('captures a drag, clamps its width, ignores other pointers, and restores cancelled drags', () => {
+      const component = make();
+      const target = {
+        setPointerCapture: jasmine.createSpy(),
+        hasPointerCapture: () => true,
+        releasePointerCapture: jasmine.createSpy(),
+      };
+      const event = (x: number, pointerId = 7) =>
+        ({
+          button: 0,
+          pointerId,
+          clientX: x,
+          preventDefault: () => undefined,
+          currentTarget: target,
+        }) as unknown as PointerEvent;
+      component.startSidebarResize(event(260));
+      component.moveSidebarResize(event(350, 8));
+      expect(component.sidebarWidth()).toBe(260);
+      component.moveSidebarResize(event(900));
+      expect(component.sidebarWidth()).toBe(420);
+      component.endSidebarResize(event(900), true);
+      expect(component.sidebarWidth()).toBe(260);
+      expect(component.sidebarResizing()).toBeFalse();
+      component.startSidebarResize(event(260));
+      component.moveSidebarResize(event(350));
+      component.endSidebarResize(event(350));
+      expect(component.sidebarWidth()).toBe(350);
+      expect(localStorage.getItem('hms.sidebar.width')).toBe('350');
+      component.toggleSidebar();
+      component.startSidebarResize(event(350));
+      expect(component.sidebarResizing()).toBeFalse();
+    });
+  });
+
+  it('starts with the drawer closed on a phone, so it does not cover the topbar (D116)', () => {
+    spyOn(globalThis, 'matchMedia').and.callFake(
+      (q: string) => ({ matches: q === '(max-width: 768px)' }) as MediaQueryList,
+    );
+    const { component } = createComponent({
+      activeRole: 'ROLE_PATIENT',
+      roles: ['ROLE_PATIENT'],
+      wildcardPermission: false,
+    });
+    expect(component.sidebarCollapsed()).toBeTrue();
+    component.toggleSidebar();
+    expect(component.sidebarCollapsed()).toBeFalse();
+    component.closeSidebar();
+    expect(component.sidebarCollapsed()).toBeTrue();
+  });
+
+  it('keeps the sidebar open on a desktop', () => {
+    spyOn(globalThis, 'matchMedia').and.callFake(() => ({ matches: false }) as MediaQueryList);
+    const { component } = createComponent({
+      activeRole: 'ROLE_PATIENT',
+      roles: ['ROLE_PATIENT'],
+      wildcardPermission: false,
+    });
+    expect(component.sidebarCollapsed()).toBeFalse();
+  });
+
+  it('gives every patient nav entry a distinct label in EN, FR and ES (D257)', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_PATIENT',
+      roles: ['ROLE_PATIENT'],
+      wildcardPermission: false,
+    });
+    const locales: Record<string, { NAV: Record<string, unknown> }> = { en, fr, es };
+    for (const [lang, bundle] of Object.entries(locales)) {
+      const labels = items.map((i) => {
+        const key = (i.translationKey ?? '').replace(/^NAV\./, '');
+        const raw = bundle.NAV[key];
+        const label = typeof raw === 'string' ? raw : undefined;
+        expect(label).withContext(`${lang} ${i.translationKey}`).toBeTruthy();
+        return (label ?? '').trim().toLocaleLowerCase(lang);
+      });
+      const dupes = labels.filter((l, idx) => labels.indexOf(l) !== idx);
+      expect(dupes).withContext(lang).toEqual([]);
+    }
+  });
 
   it('omits Dashboard and Administration when activeRole is ROLE_SUPER_ADMIN', () => {
     const { items } = createComponent({
@@ -215,6 +418,59 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(items.map((i) => i.route)).toContain('/reception/empi-candidates');
   });
 
+  it('a hospital admin reaches Users to onboard staff, exactly once (D117)', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_HOSPITAL_ADMIN',
+      roles: ['ROLE_HOSPITAL_ADMIN'],
+      wildcardPermission: false,
+    });
+
+    expect(items.filter((i) => i.route === '/users').length).toBe(1);
+  });
+
+  it('QA D876: DHIS2 export and ADT intake are reachable from the menu, by their guards', () => {
+    const superAdmin = createComponent({
+      activeRole: 'ROLE_SUPER_ADMIN',
+      roles: ['ROLE_SUPER_ADMIN'],
+      wildcardPermission: true,
+    }).items.map((i) => i.route);
+    expect(superAdmin).toContain('/admin/integrations/dhis2');
+    expect(superAdmin).toContain('/admin/adt-intake-configs');
+    TestBed.resetTestingModule();
+
+    const hospitalAdmin = createComponent({
+      activeRole: 'ROLE_HOSPITAL_ADMIN',
+      roles: ['ROLE_HOSPITAL_ADMIN'],
+      wildcardPermission: false,
+    }).items.map((i) => i.route);
+    expect(hospitalAdmin).toContain('/admin/integrations/dhis2');
+    // ADT intake is SUPER_ADMIN only, on the route and on the controller.
+    expect(hospitalAdmin).not.toContain('/admin/adt-intake-configs');
+  });
+
+  it('QA D987: hides the duplicate-patient panel while the matcher is switched off', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_RECEPTIONIST',
+      roles: ['ROLE_RECEPTIONIST'],
+      wildcardPermission: false,
+      empiEnabled: false,
+    });
+
+    expect(items.map((i) => i.route)).not.toContain('/reception/empi-candidates');
+  });
+
+  it('review round 16: a failed status read still offers the panel (the guard decides)', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_RECEPTIONIST',
+      roles: ['ROLE_RECEPTIONIST'],
+      wildcardPermission: false,
+      empiEnabled: null,
+      empiFailed: true,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/reception/empi-candidates');
+  });
+
   it('hides the duplicate-patient panel from roles outside its route guard', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_PHARMACIST',
@@ -229,6 +485,37 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
   // and the click landed on the 403 page — the nav item was permission-gated
   // while the route guard is role-gated, and the two vocabularies disagreed
   // for ten roles. The item now carries the guard's role list too.
+  // Billing-money plan PR 2: the claims reviewer holds 'View Billing' (PermissionService) and is on the
+  // /billing/tarifs guard, so the price list is in their navigation, while /billing (not on its guard) is not.
+  it('claims reviewer sees the price list but not the billing page', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_CLAIMS_REVIEWER',
+      roles: ['ROLE_CLAIMS_REVIEWER'],
+      wildcardPermission: false,
+      permissions: [
+        'View Dashboard',
+        'View Pharmacy Claims',
+        'Manage Pharmacy Claims',
+        'View Billing',
+        'View Billing Summary',
+        'View Notifications',
+      ],
+    });
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/billing/tarifs');
+    expect(routes).not.toContain('/billing');
+  });
+
+  it('a doctor does not see the price list', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_DOCTOR',
+      roles: ['ROLE_DOCTOR'],
+      wildcardPermission: false,
+      permissions: ['View Dashboard', 'View Billing'],
+    });
+    expect(items.map((i) => i.route)).not.toContain('/billing/tarifs');
+  });
+
   it('accountant sees Billing but not Patients — nav mirrors the route guard', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_ACCOUNTANT',
@@ -347,7 +634,17 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).not.toContain('/lab-release-worklist');
   });
 
-  it('pharmacy verifier reaches Dispensing and Stock Routing but not Prescriptions', () => {
+  it('admin does not see Prescriptions: no backend read admits ROLE_ADMIN', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_ADMIN',
+      roles: ['ROLE_ADMIN'],
+      wildcardPermission: true,
+    });
+
+    expect(items.map((i) => i.route)).not.toContain('/prescriptions');
+  });
+
+  it('pharmacy verifier reaches Dispensing, Stock Routing and Prescriptions', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_PHARMACY_VERIFIER',
       roles: ['ROLE_PHARMACY_VERIFIER'],
@@ -358,12 +655,29 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     const routes = items.map((i) => i.route);
     expect(routes).toContain('/pharmacy/dispensing');
     expect(routes).toContain('/pharmacy/stock-routing');
-    // Gap G9: /prescriptions is withheld ON PURPOSE. The route guard admits
-    // the verifier and the pharmacist-verify ceremony lives there, but
-    // GET /prescriptions (and GET /prescriptions/{id}) do not admit the
-    // role, so the page would open on a "failed to load" toast. This
-    // expectation is the guard against "fixing" that into a 403.
-    expect(routes).not.toContain('/prescriptions');
+    // Gap G9, resolved: /prescriptions used to be withheld because GET
+    // /prescriptions and GET /prescriptions/{id} did not admit the role, so
+    // the entry opened on a "failed to load" toast. Both reads admit
+    // ROLE_PHARMACY_VERIFIER now (PrescriptionControllerTest pins them) and
+    // the route guard always did, so the page the pharmacist-verify and
+    // request-clarification ceremonies live on is finally reachable from the
+    // navigation. What this expectation now guards is the pairing: if the
+    // backend ever drops the role from those reads, this must come out with it.
+    expect(routes).toContain('/prescriptions');
+  });
+
+  it('pharmacy verifier gets exactly one Prescriptions entry when also a pharmacist', () => {
+    // The verifier's own nav block pushes Dispensing and Stock Routing. Its
+    // Prescriptions entry is deliberately NOT pushed there but added to the
+    // clinical item's roles list, so holding both roles cannot produce two.
+    const { items } = createComponent({
+      activeRole: null,
+      roles: ['ROLE_PHARMACIST', 'ROLE_PHARMACY_VERIFIER'],
+      wildcardPermission: false,
+      permissions: ['View Prescriptions'],
+    });
+
+    expect(items.filter((i) => i.route === '/prescriptions').length).toBe(1);
   });
 
   it('claims reviewer reaches Pharmacy Claims — its entire purpose', () => {
@@ -544,6 +858,61 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
       .toEqual([]);
   });
 
+  it('switches to the provider shell when the server says the session acts at a provider facility', () => {
+    // A pharmacy's PROVIDER_ADMIN: the hospital pages would all answer 404.
+    const { component } = createComponent({
+      activeRole: 'ROLE_PROVIDER_ADMIN',
+      roles: ['ROLE_PROVIDER_ADMIN'],
+      wildcardPermission: false,
+    });
+    // The context's state is read-only to consumers; the test drives it as the server would.
+    const context = TestBed.inject(ProviderContextService) as unknown as {
+      settingsSignal: WritableSignal<ProviderSettings | null>;
+    };
+    const set = (settings: ProviderSettings | null) => context.settingsSignal.set(settings);
+    const read = () =>
+      (component as unknown as { baseNavItems: () => NavItem[] })
+        .baseNavItems()
+        .map((i) => i.route);
+
+    set(settingsFixture());
+    expect(read()).toEqual([
+      '/provider',
+      '/provider/profile',
+      '/provider/staff',
+      '/provider/audit',
+    ]);
+    for (const route of read()) {
+      expect(navGroupForRoute(route)).withContext(route).toBe('FACILITY');
+    }
+
+    // A pharmacist there: no admin pages.
+    set(settingsFixture({ providerAdmin: false }));
+    expect(read()).toEqual(['/provider', '/provider/profile']);
+
+    // Every provider nav entry is a real route, guarded by the facility guard.
+    const children = routes.find((r) => r.children)?.children ?? [];
+    for (const route of read()) {
+      const match = children.find((r) => '/' + r.path === route);
+      expect(match).withContext(route).toBeDefined();
+      expect(match?.canActivate).withContext(route).toContain(FacilityTypeGuard);
+    }
+
+    // No provider settings: the hospital nav as before.
+    set(null);
+    expect(read()).toContain('/dashboard');
+  });
+
+  it('providerNavEntries filters by facility type and admin seat', () => {
+    expect(providerNavEntries('HOSPITAL', true)).toEqual([]);
+    expect(providerNavEntries(null, true)).toEqual([]);
+    expect(providerNavEntries('LABORATORY', true).map((e) => e.route)).toContain('/provider/audit');
+    expect(providerNavEntries('LABORATORY', false).map((e) => e.route)).toEqual([
+      '/provider',
+      '/provider/profile',
+    ]);
+  });
+
   it('groups the nav and drops groups the role holds nothing in', () => {
     const { items, component } = createComponent({
       activeRole: 'ROLE_PATIENT',
@@ -657,6 +1026,16 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
     const guards = guardedRoutes();
     const portalRoles = [...new Set([...guards.values()].flatMap((r) => r ?? []))].sort();
+
+    it('a hospital admin can reach the pharmacy registry it administers (QA D39)', () => {
+      expect(guards.get('pharmacy-registry')).toContain('ROLE_HOSPITAL_ADMIN');
+      const { items } = createComponent({
+        activeRole: 'ROLE_HOSPITAL_ADMIN',
+        roles: ['ROLE_HOSPITAL_ADMIN'],
+        wildcardPermission: true,
+      });
+      expect(items.map((i) => i.route)).toContain('/pharmacy-registry');
+    });
 
     it('derives the role set from the route guards', () => {
       expect(portalRoles).toContain('ROLE_DOCTOR');
@@ -900,7 +1279,12 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
  * with a live badge AND a redundant nav row that carried no count.
  */
 describe('ShellComponent — inbox surfaces live in the topbar', () => {
-  function build(roles: string[], activeRole: string) {
+  function build(
+    roles: string[],
+    activeRole: string,
+    providerUser = false,
+    profile: { firstName: string; lastName: string; roles: string[] } | null = null,
+  ) {
     // Same shape as the harness above: ngOnInit calls getUserProfile, so a
     // partial stub blows up on the first detectChanges.
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
@@ -913,7 +1297,7 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     authStub.hasAnyRole.and.callFake((rs: string[]) => rs.some((r) => roles.includes(r)));
     // null subject skips the websocket branch in ngOnInit.
     authStub.getSubject.and.returnValue(null);
-    Object.defineProperty(authStub, 'currentProfile', { value: () => null });
+    Object.defineProperty(authStub, 'currentProfile', { value: () => profile });
 
     // Unlike the harness above, these tests DO run ngOnInit (they assert on
     // rendered DOM), so the stub also needs what ngOnInit calls.
@@ -921,6 +1305,7 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
       hasPermission: () => true,
       hasAnyPermission: () => true,
       loadFromBackend: () => undefined,
+      clear: () => undefined,
     };
     const notifStub = jasmine.createSpyObj<NotificationService>('NotificationService', [
       'connectWebSocket',
@@ -987,8 +1372,207 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     const roleContext = TestBed.inject(RoleContextService);
     roleContext.setRoles(roles);
     roleContext.activeRole = activeRole;
+    roleContext.setProviderUser(providerUser);
     return TestBed.createComponent(ShellComponent);
   }
+
+  function broadcastSpy(): jasmine.SpyObj<EmergencyBroadcastService> {
+    return TestBed.inject(EmergencyBroadcastService) as jasmine.SpyObj<EmergencyBroadcastService>;
+  }
+
+  it('opens the emergency-broadcast socket for staff once the session is resolved', () => {
+    const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    TestBed.inject(RoleContextService).markSessionResolved();
+    fixture.detectChanges();
+    expect(broadcastSpy().connect).toHaveBeenCalledTimes(1);
+  });
+
+  // QA D1125 (D1004 class, round 20): the bell panel and the profile menu
+  // moved no focus, and their Escape was bound on an aria-hidden backdrop that
+  // never receives a key, so Escape left them open.
+  for (const [what, testid] of [
+    ['notification panel', 'shell-bell'],
+    ['profile menu', 'shell-profile-btn'],
+  ]) {
+    it(`the ${what} is a keyboard modal: focus in, Escape closes, focus back to its button`, () => {
+      const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+      document.body.appendChild(fixture.nativeElement);
+      fixture.detectChanges();
+      const opener = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        `[data-testid="${testid}"]`,
+      )!;
+      expectKeyboardModal(fixture, opener);
+      fixture.destroy();
+    });
+  }
+
+  // QA D1153 / D1125 / D1004 (round 21): at 375 px the drawer never took
+  // focus, Escape from the Menu button did nothing and Tab walked to the
+  // language select behind the backdrop.
+  describe('the phone drawer is a keyboard modal', () => {
+    function phoneShell(): { fixture: ComponentFixture<ShellComponent>; menu: HTMLElement } {
+      spyOn(globalThis, 'matchMedia').and.callFake(
+        (q: string) => ({ matches: q === MOBILE_SIDEBAR_QUERY }) as MediaQueryList,
+      );
+      const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+      document.body.appendChild(fixture.nativeElement);
+      attached.push(fixture.nativeElement);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      // The test browser is wider than a phone, so the CSS hides the Menu button.
+      const menu = host.querySelector<HTMLElement>('.mobile-toggle')!;
+      menu.style.display = 'inline-flex';
+      return { fixture, menu };
+    }
+
+    function openFromMenu(
+      fixture: ComponentFixture<ShellComponent>,
+      menu: HTMLElement,
+    ): HTMLElement {
+      menu.focus();
+      menu.click();
+      fixture.detectChanges();
+      TestBed.tick();
+      const aside = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        'aside.sidebar',
+      )!;
+      expect(aside.getAttribute('role')).toBe('dialog');
+      expect(aside.getAttribute('aria-modal')).toBe('true');
+      expect((aside.getAttribute('aria-label') ?? '').trim()).not.toBe('');
+      expect(aside.contains(document.activeElement))
+        .withContext('focus moved into the drawer')
+        .toBeTrue();
+      return aside;
+    }
+
+    function press(target: EventTarget, key: string, shiftKey = false): void {
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }),
+      );
+    }
+
+    const attached: HTMLElement[] = [];
+    afterEach(() => attached.splice(0).forEach((el) => el.remove()));
+
+    it('focus moves in, Escape closes it and focus is back on Menu', () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      const mainArea = (fixture.nativeElement as HTMLElement).querySelector('.main-area')!;
+      expect(mainArea.hasAttribute('inert')).withContext('the page behind is inert').toBeTrue();
+      press(document.activeElement!, 'Escape');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      expect(document.activeElement).withContext('focus back on Menu').toBe(menu);
+      expect(mainArea.hasAttribute('inert')).toBeFalse();
+      fixture.destroy();
+    });
+
+    it('Escape pressed with focus outside the drawer (on Menu, or fallen to the page) still closes it', () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      (document.activeElement as HTMLElement).blur();
+      press(document.body, 'Escape');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      expect(document.activeElement).toBe(menu);
+      fixture.destroy();
+    });
+
+    it('Tab and Shift+Tab stay inside the drawer', () => {
+      const { fixture, menu } = phoneShell();
+      const aside = openFromMenu(fixture, menu);
+      const focusable = Array.from(
+        aside.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled])',
+        ),
+      ).filter((el) => el.getClientRects().length > 0);
+      const last = focusable[focusable.length - 1];
+      last.focus();
+      press(last, 'Tab');
+      expect(document.activeElement)
+        .withContext('Tab from the last control wraps')
+        .toBe(focusable[0]);
+      press(focusable[0], 'Tab', true);
+      expect(document.activeElement).withContext('Shift+Tab from the first wraps').toBe(last);
+      // Focus that left the drawer is brought back in by Tab.
+      (document.activeElement as HTMLElement).blur();
+      press(document.body, 'Tab');
+      expect(aside.contains(document.activeElement)).toBeTrue();
+      fixture.destroy();
+    });
+
+    it('a navigation from the open drawer closes it and puts focus on the new page, not on Menu', async () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      await TestBed.inject(Router).navigateByUrl('/');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      const main = (fixture.nativeElement as HTMLElement).querySelector('#main-content');
+      expect(document.activeElement).withContext('focus on <main>').toBe(main);
+      fixture.destroy();
+    });
+
+    it('on a wide screen the expanded sidebar is a landmark, not a modal', () => {
+      spyOn(globalThis, 'matchMedia').and.callFake(() => ({ matches: false }) as MediaQueryList);
+      const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeFalse();
+      expect(host.querySelector('aside.sidebar')!.hasAttribute('role')).toBeFalse();
+      expect(host.querySelector('aside.sidebar')!.hasAttribute('aria-modal')).toBeFalse();
+      expect(host.querySelector('.main-area')!.hasAttribute('inert')).toBeFalse();
+    });
+  });
+
+  it('a provider user whose settings are being asked again keeps the provider home, never the hospital nav', () => {
+    const fixture = build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST', true);
+    const context = TestBed.inject(ProviderContextService) as unknown as {
+      settingsSignal: WritableSignal<ProviderSettings | null>;
+      statusSignal: WritableSignal<string>;
+    };
+    context.settingsSignal.set(null);
+    context.statusSignal.set('error');
+    const routes = (fixture.componentInstance as unknown as { baseNavItems: () => NavItem[] })
+      .baseNavItems()
+      .map((i) => i.route);
+
+    // Every hospital entry would 404 under provider confinement.
+    expect(routes).toEqual(['/provider']);
+  });
+
+  it('never opens it for a provider user (the server refuses them the topic)', () => {
+    const fixture = build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST', true);
+    TestBed.inject(RoleContextService).markSessionResolved();
+    fixture.detectChanges();
+    expect(broadcastSpy().connect).not.toHaveBeenCalled();
+  });
+
+  it('after a hard refresh: no socket before the bootstrap answers, then one for staff, none for a provider', () => {
+    // Staff: the flag is only its initial false until the bootstrap lands.
+    const staff = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    staff.detectChanges();
+    expect(broadcastSpy().connect).not.toHaveBeenCalled();
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setProviderUser(false);
+    roleContext.markSessionResolved();
+    staff.detectChanges();
+    roleContext.markSessionResolved();
+    staff.detectChanges();
+    expect(broadcastSpy().connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('after a hard refresh, a provider user never gets the socket, before or after the bootstrap', () => {
+    const provider = build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST');
+    provider.detectChanges();
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setProviderUser(true);
+    roleContext.markSessionResolved();
+    provider.detectChanges();
+    expect(broadcastSpy().connect).not.toHaveBeenCalled();
+  });
 
   it('drops all three from the side-nav for staff', () => {
     const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
@@ -1042,6 +1626,112 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     expect(badges).toContain('99+');
   });
 
+  /**
+   * D812: at 375px the topbar was 736px wide, so the profile button (and
+   * with it the only sign-out) sat off-screen while the PAGE did not
+   * overflow, which is why a page-width check missed it. These measure the
+   * topbar itself. The topbar compacts by its own width (container queries),
+   * so constraining the shell to a phone's width here exercises the same CSS
+   * a phone does; the phone's drawer is fixed and out of flow (a viewport
+   * media query a desktop test browser does not match), so it is taken out
+   * of flow the same way.
+   */
+  // The test browser has no Material Symbols font, so every icon would
+  // render as its ligature text ("notifications" is ~90px wide). The real
+  // font draws each one as a 1em square; mimic that so widths are real.
+  let iconFont: HTMLStyleElement | null = null;
+  beforeEach(() => {
+    iconFont = document.createElement('style');
+    iconFont.textContent =
+      '.material-symbols-outlined{display:inline-block;width:1em;overflow:hidden;' +
+      'white-space:nowrap;font-size:24px;line-height:1}';
+    document.head.appendChild(iconFont);
+  });
+  afterEach(() => iconFont?.remove());
+
+  function renderAtWidth(width: number, roles: string[], activeRole: string): HTMLElement {
+    const fixture = build(roles, activeRole, false, {
+      firstName: 'Habibou',
+      lastName: 'Nana-Ouedraogo',
+      roles,
+    });
+    fixture.detectChanges();
+    // The drawer open, as when a phone user taps the hamburger.
+    fixture.componentInstance.sidebarCollapsed.set(false);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.display = 'block';
+    host.style.width = `${width}px`;
+    (host.querySelector('.sidebar') as HTMLElement).style.position = 'fixed';
+    return host;
+  }
+
+  function expectTopbarFits(host: HTMLElement, width: number): void {
+    const topbar = host.querySelector('header.topbar') as HTMLElement;
+    const bar = topbar.getBoundingClientRect();
+    expect(Math.round(bar.width)).withContext('topbar width').toBe(width);
+    expect(topbar.scrollWidth)
+      .withContext('topbar scrollWidth')
+      .toBeLessThanOrEqual(topbar.clientWidth);
+    for (const selector of ['.mobile-toggle', '.icon-btn', '.profile-btn']) {
+      for (const el of Array.from(topbar.querySelectorAll(selector))) {
+        const box = el.getBoundingClientRect();
+        if (box.width === 0) continue; // display:none at this width
+        expect(box.left).withContext(`${selector} left`).toBeGreaterThanOrEqual(bar.left);
+        expect(box.right).withContext(`${selector} right`).toBeLessThanOrEqual(bar.right);
+      }
+    }
+    const profile = topbar.querySelector('.profile-btn')!.getBoundingClientRect();
+    expect(profile.width).withContext('profile button rendered').toBeGreaterThan(0);
+  }
+
+  for (const [role, label] of [
+    ['ROLE_PATIENT', 'a patient'],
+    ['ROLE_DOCTOR', 'a doctor'],
+  ] as const) {
+    it(`keeps the profile menu on screen at 375px for ${label}, with a language picker (D812)`, () => {
+      const host = renderAtWidth(375, [role], role);
+      expectTopbarFits(host, 375);
+      const select = host.querySelector('.lang-select') as HTMLSelectElement;
+      expect(getComputedStyle(select).display).not.toBe('none');
+      expect(getComputedStyle(host.querySelector('.lang-switcher')!).display).toBe('none');
+    });
+  }
+
+  it('fits at 320px too, the narrowest phone still in use (D812)', () => {
+    expectTopbarFits(renderAtWidth(320, ['ROLE_PATIENT'], 'ROLE_PATIENT'), 320);
+  });
+
+  it('keeps the wide topbar (button group, name) on a desktop (D812)', () => {
+    const host = renderAtWidth(1280, ['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    expectTopbarFits(host, 1280);
+    expect(getComputedStyle(host.querySelector('.lang-select')!).display).toBe('none');
+    expect(getComputedStyle(host.querySelector('.lang-switcher')!).display).not.toBe('none');
+    expect(getComputedStyle(host.querySelector('.profile-name')!).display).not.toBe('none');
+  });
+
+  it('switches the language from the narrow picker (D812)', () => {
+    const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+    fixture.detectChanges();
+    const switchLang = spyOn(fixture.componentInstance, 'switchLang');
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '.lang-select',
+    ) as HTMLSelectElement;
+    select.value = 'es';
+    select.dispatchEvent(new Event('change'));
+    expect(switchLang).toHaveBeenCalledOnceWith('es');
+  });
+
+  it('offers sign-out in the drawer, the only menu on a phone (D812)', () => {
+    const host = renderAtWidth(375, ['ROLE_PATIENT'], 'ROLE_PATIENT');
+    const logout = host.querySelector(
+      '.sidebar [data-testid="sidebar-logout"]',
+    ) as HTMLButtonElement;
+    expect(logout).withContext('drawer sign-out').not.toBeNull();
+    logout.click();
+    expect((TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>).logout).toHaveBeenCalled();
+  });
+
   it('hides the badge at zero rather than rendering a 0', () => {
     const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
     fixture.detectChanges();
@@ -1080,18 +1770,35 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'lab-instruments',
         'lab-inventory',
         'lab-ops-dashboard',
+        // The ten that used to gate themselves (own chip + scopeReady +
+        // hint): moved onto the flag, their per-page block and chip deleted.
+        'bed-board',
+        'microbiology',
+        'on-call',
+        'panels',
+        'pharmacy/mtm',
+        'registries',
+        'roi',
+        'slot-admin',
+        'transfusions',
+        'unsigned-notes',
+        'webhooks',
         // The release worklist is one laboratory's queue: getPendingRelease
         // refuses a scopeless read outright rather than guessing a hospital,
         // so the page must not render until one is pinned.
         'lab-release-worklist',
         'lab-staff',
         'maternity',
+        'mortality',
         'nurse-station',
         'patient-tracker',
         'procedure-orders',
         'reception',
         'registrations',
         'reports',
+        // QA D853: one hospital's wards; in global view it mixed every
+        // hospital's wards and 'Nouvelle unité' could only fail.
+        'bed-management',
       ].sort(),
     );
   });

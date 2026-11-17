@@ -6,6 +6,7 @@ import { EMPTY, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ALL_HOSPITALS_REQUEST } from '../core/request-scope';
 
 function handleExpiredToken(
   auth: AuthService,
@@ -29,6 +30,23 @@ function handleExpiredToken(
   });
   return next(withExpiredBearer);
 }
+
+/**
+ * Calls the portal makes to (re)establish its hospital scope, or to leave.
+ * They carry the token but never `X-Hospital-Id`: a selection the user has
+ * lost must not travel on the very request that replaces it. Mirrors
+ * `ActingScopeResolver.SCOPE_ESTABLISHING_PATHS` on the backend, which
+ * ignores a stale header on these paths for callers that still send one.
+ */
+export const SCOPE_ESTABLISHING_PATTERNS: readonly RegExp[] = [
+  /\/auth\/session\/bootstrap(?:[/?#]|$)/i,
+  /\/auth\/logout(?:[/?#]|$)/i,
+  /\/auth\/token\/refresh(?:[/?#]|$)/i,
+  /\/me\/assignments(?:[?#]|$)/i,
+  // The caller's own credentials on the forced first sign-in: run before any
+  // role is confirmed, so they must not name a hospital (D22).
+  /\/auth\/me\/(?:complete-setup|change-password|change-username)(?:[?#]|$)/i,
+];
 
 export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
@@ -84,7 +102,12 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
     // For non-super-admins this resolves to their active hospital,
     // preserving the existing single-tenant behaviour.
     const hid = roleCtx.effectiveHospitalIdForRequest();
-    if (hid) {
+    const establishesScope = SCOPE_ESTABLISHING_PATTERNS.some((pattern) =>
+      pattern.test(modified.url),
+    );
+    // « Tous les hôpitaux » (PR #1163): a super-admin's explicit all-hospitals read.
+    const allHospitals = modified.context.get(ALL_HOSPITALS_REQUEST) && roleCtx.isSuperAdmin();
+    if (hid && !establishesScope && !allHospitals) {
       headers['X-Hospital-Id'] = hid;
     }
     if (Object.keys(headers).length) {

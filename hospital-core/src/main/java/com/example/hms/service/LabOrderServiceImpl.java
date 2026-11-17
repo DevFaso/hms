@@ -27,6 +27,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.DiagnosisCodeValidator;
 import com.example.hms.utility.RoleValidator;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -38,6 +39,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HexFormat;
@@ -45,6 +47,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
@@ -59,6 +62,21 @@ public class LabOrderServiceImpl implements LabOrderService {
     // i18n key for "lab order not found" appears 7x in this file.
     // One constant, one source of truth.
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
+    /** QA D1428 class: the statuses in which an order's content is closed to an edit. */
+    private static final java.util.Set<LabOrderStatus> CLOSED_TO_EDIT = java.util.EnumSet.of(
+        LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED);
+
+    /** The key an unknown staff id gets; every ordering-staff refusal reuses it. */
+    private static final String STAFF_NOT_FOUND = "staff.notfound";
+    private static final String ASSIGNMENT_NOT_FOUND = "assignment.notfound";
+
+    /**
+     * Resolvable message key, not a sentence, and the same one
+     * {@code PatientChartAccess} and {@code PatientLabResultServiceImpl} throw:
+     * a scopeless read of one patient's record is refused identically wherever
+     * the chart asks for it, and says nothing about whether the patient exists.
+     */
+    private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
 
     /**
      * Ceiling on a single worklist page.
@@ -79,6 +97,8 @@ public class LabOrderServiceImpl implements LabOrderService {
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final LabOrderMapper labOrderMapper;
     private final RoleValidator roleValidator;
+    /** Caller identity on both auth paths (RoleValidator.getCurrentUserId is null under OIDC). */
+    private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final HospitalRepository hospitalRepository;
     private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
@@ -87,16 +107,31 @@ public class LabOrderServiceImpl implements LabOrderService {
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
     private final com.example.hms.repository.LabResultRepository labResultRepository;
+    private final com.example.hms.service.lab.LabOrderDuplicateCheck duplicateCheck;
+    private final com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
+    /** QA D1912: a void withdraws the patient's "new result" notifications. */
+    private final com.example.hms.service.lab.LabResultReleaseNotifier resultReleaseNotifier;
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     @Override
     @Transactional
     public LabOrderResponseDTO createLabOrder(LabOrderRequestDTO request, Locale locale) {
         LabOrder newLabOrder = buildLabOrder(null, request, true);
+        // The duplicate warning: an active order of the same test for this
+        // patient here, placed recently. It warns, never blocks.
+        List<LabOrder> duplicates = duplicateCheck.find(newLabOrder);
         LabOrder saved = labOrderRepository.save(newLabOrder);
         // B1: the performing laboratory learns about the order (after commit, best-effort).
         routingNotifier.notifyPerformingLab(saved);
-        return labOrderMapper.toLabOrderResponseDTO(saved);
+        LabOrderResponseDTO response = labOrderMapper.toLabOrderResponseDTO(saved);
+        // The acknowledgement names the earlier orders the orderer was shown;
+        // it counts only when it covers every duplicate found now, so a stale
+        // warning (another order placed since) is recorded as unacknowledged.
+        duplicateCheck.report(saved, duplicates,
+            com.example.hms.service.lab.LabOrderDuplicateCheck.acknowledges(
+                request.getAcknowledgedDuplicateOrderIds(), duplicates),
+            response, callerUserId());
+        return response;
     }
 
     @Override
@@ -108,6 +143,15 @@ public class LabOrderServiceImpl implements LabOrderService {
         // The clinical order belongs to the hospital that placed it: the
         // performing laboratory reads and results it but never rewrites it.
         requireOrderingHospital(existing);
+        // QA D820: an order voided as entered in error is kept as it was voided.
+        if (existing.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
+        // QA D1428 class: a resulted or cancelled order is the record of what
+        // was asked and done; a correction is a new order or a superseding result.
+        if (CLOSED_TO_EDIT.contains(existing.getStatus())) {
+            throw new BusinessException("lab.order.closed.readOnly");
+        }
 
         Hospital previousPerformer = existing.getPerformingHospital();
         LabOrder updated = buildLabOrder(existing, request, false);
@@ -119,6 +163,44 @@ public class LabOrderServiceImpl implements LabOrderService {
             routingNotifier.notifyPerformingLab(saved);
         }
         return labOrderMapper.toLabOrderResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.LabOrderDuplicateMatchDTO> previewDuplicates(
+            UUID patientId, UUID hospitalId, UUID labTestDefinitionId) {
+        if (patientId == null || labTestDefinitionId == null) {
+            return List.of();
+        }
+        // The hospital the order would be placed at: the caller's own when
+        // pinned (another hospital's orders are not theirs to see), the named
+        // one for a super-admin in global view.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID targetHospitalId;
+        if (activeHospitalId != null) {
+            if (hospitalId != null && !hospitalId.equals(activeHospitalId)) {
+                return List.of();
+            }
+            targetHospitalId = activeHospitalId;
+        } else {
+            if (hospitalId == null || !roleValidator.isSuperAdminFromJwtClaim()) {
+                return List.of();
+            }
+            targetHospitalId = hospitalId;
+        }
+        // Only someone who may order tests here sees what is already ordered.
+        UUID callerId = callerUserId();
+        boolean mayOrderHere = roleValidator.isSuperAdminFromJwtClaim()
+            || (callerId != null && roleValidator.canOrderLabTests(callerId, targetHospitalId));
+        if (!mayOrderHere
+                || !patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, targetHospitalId)) {
+            return List.of();
+        }
+        LabTestDefinition definition = labTestDefinitionRepository.findById(labTestDefinitionId).orElse(null);
+        String testCode = definition != null ? definition.getTestCode() : null;
+        return duplicateCheck.find(patientId, targetHospitalId, labTestDefinitionId, testCode, null).stream()
+            .map(labOrderMapper::toDuplicateMatchDTO)
+            .toList();
     }
 
     /** 404-not-403: an ordering-side write from any other hospital does not exist. */
@@ -162,9 +244,9 @@ public class LabOrderServiceImpl implements LabOrderService {
             performing = current;
         } else {
             performing = hospitalRepository.findById(requested)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requested));
             if (!isRoutableLab(performing)) {
-                throw new BusinessException("The performing laboratory must be an active hospital.");
+                throw new BusinessException("lab.order.performingLabInactive");
             }
         }
         requirePerformerChangeAllowed(base, performing);
@@ -188,8 +270,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         if (!labSpecimenRepository.findByLabOrder_Id(base.getId()).isEmpty()
                 || !labResultRepository.findByLabOrder_Id(base.getId()).isEmpty()) {
-            throw new com.example.hms.exception.ConflictException(
-                "The performing laboratory cannot change once a specimen or a result has been recorded for this order.");
+            throw new com.example.hms.exception.ConflictException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.order.performingLabLocked"));
         }
     }
 
@@ -240,7 +321,18 @@ public class LabOrderServiceImpl implements LabOrderService {
 
     private static boolean isRoutableLab(Hospital hospital) {
         return hospital.isActive()
-            && hospital.getLifecycleState() == com.example.hms.enums.HospitalLifecycleState.ACTIVE;
+            && hospital.getLifecycleState() == com.example.hms.enums.HospitalLifecycleState.ACTIVE
+            && performsLabWork(hospital);
+    }
+
+    /**
+     * A hospital or a laboratory may perform a test; a pharmacy may not: no
+     * lab role can be held there (provider plan §3.2), so an order routed to
+     * it would sit where nobody can collect, enter or release it.
+     */
+    private static boolean performsLabWork(Hospital hospital) {
+        return com.example.hms.enums.FacilityType.orHospital(hospital.getFacilityType())
+            != com.example.hms.enums.FacilityType.PHARMACY;
     }
 
     @Override
@@ -251,6 +343,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             .findByActiveTrueAndLifecycleStateOrderByNameAsc(com.example.hms.enums.HospitalLifecycleState.ACTIVE)
             .stream()
             .filter(h -> !h.getId().equals(actingHospitalId))
+            .filter(LabOrderServiceImpl::performsLabWork)
             .map(h -> com.example.hms.payload.dto.PerformingLabOptionDTO.builder()
                 .id(h.getId())
                 .name(h.getName())
@@ -260,35 +353,34 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     private LabOrder buildLabOrder(LabOrder base, LabOrderRequestDTO request, boolean isNew) {
-    String clinicalIndication = normalizeRequiredText(request.getClinicalIndication(), "Clinical indication is required for lab orders.");
-    String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "Medical necessity rationale is required for lab orders.");
+    String clinicalIndication = normalizeRequiredText(request.getClinicalIndication(), "labOrder.clinicalIndication.required", "clinicalIndication");
+    String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "labOrder.medicalNecessityNote.required",
+        "medicalNecessityNote");
         String notes = normalizeOptionalText(request.getNotes());
 
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
-
-        Staff staff = staffRepository.findById(request.getOrderingStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", request.getPatientId()));
 
         UUID requestedHospitalId = request.getHospitalId();
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
             encounter = encounterRepository.findById(request.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
         Hospital hospital = encounter != null ? encounter.getHospital() : null;
         if (hospital != null && requestedHospitalId != null && !hospital.getId().equals(requestedHospitalId)) {
-            throw new BusinessException("Encounter hospital does not match the requested hospital.");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "lab.order.encounterHospitalMismatch");
         }
+        requireOrderableEncounter(encounter, patient, base);
 
         if (hospital == null && requestedHospitalId != null) {
-            hospital = hospitalRepository.findById(requestedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+            hospital = hospitalRepository.findClinicalById(requestedHospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requestedHospitalId));
         }
 
         if (hospital == null) {
-            throw new BusinessException("Lab orders must reference a hospital either via encounter or hospital identifier.");
+            throw new BusinessException("lab.order.hospitalRequired");
         }
 
         boolean patientRegistered = patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(
@@ -296,7 +388,15 @@ public class LabOrderServiceImpl implements LabOrderService {
             hospital.getId()
         );
         if (!patientRegistered) {
-            throw new BusinessException("Patient is not registered with the specified hospital.");
+            throw new BusinessException("lab.order.patientNotRegistered");
+        }
+
+        if (isNew) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        }
+        Staff staff = keptOrderingStaff(base, request.getOrderingStaffId(), hospital);
+        if (staff == null) {
+            staff = resolveOrderingStaff(request.getOrderingStaffId(), hospital);
         }
 
         // Role check based on assignment, not JWT
@@ -305,19 +405,14 @@ public class LabOrderServiceImpl implements LabOrderService {
         boolean authorized = roleValidator.canOrderLabTests(userId, hospitalId);
         if (!authorized) {
             log.warn("User {} is not authorized to place lab orders in hospital {}", userId, hospitalId);
-            throw new BusinessException("Only doctors, physicians, nurses, or nurse practitioners can place lab orders.");
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("laborder.orderingRole.notAllowed"));
         }
 
         LabTestDefinition testDefinition = labTestDefinitionRepository.findById(request.getLabTestDefinitionId())
             .orElseThrow(() -> new ResourceNotFoundException("labtestdefinition.notfound"));
+        requireOrderableHere(testDefinition, hospital, base);
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
-
-        if (isNew && labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(
-            patient.getId(), testDefinition.getId(), request.getOrderDatetime())) {
-            throw new BusinessException("Duplicate lab order detected for the same test, patient, and date.");
-        }
+        UserRoleHospitalAssignment assignment = resolveOrderingAssignment(base, request.getAssignmentId(), staff, hospital);
 
         LabOrder labOrder = (base != null) ? base : new LabOrder();
 
@@ -330,6 +425,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         labOrder.setAssignment(assignment);
         labOrder.setOrderDatetime(request.getOrderDatetime());
         applyRequestedStatus(labOrder, request.getStatus(), isNew);
+        labOrder.setPriority(resolvePriority(request.getPriority(), base));
         labOrder.setClinicalIndication(clinicalIndication);
         labOrder.setMedicalNecessityNote(medicalNecessityNote);
         labOrder.setNotes(notes);
@@ -349,6 +445,302 @@ public class LabOrderServiceImpl implements LabOrderService {
         applyStandingOrderMetadata(labOrder, request, base, labOrder.getOrderDatetime());
 
         return labOrder;
+    }
+
+    /**
+     * QA D1094: the visit a lab order is attached to. Any clinician of the
+     * visit's hospital who may order tests orders on it (the role check
+     * follows), as in a real hospital: the visit need not be theirs. It must
+     * be this patient's, and a NEW order (or one moved onto another visit) goes
+     * only on a visit still open - a closed visit takes a new visit. Each
+     * refusal is a translated 400; the entity's invariants are never the first
+     * to say no (they answered a colleague's visit with a 500).
+     */
+    static void requireOrderableEncounter(Encounter encounter, Patient patient, LabOrder base) {
+        if (encounter == null) {
+            return;
+        }
+        if (encounter.getPatient() == null || patient == null
+                || !java.util.Objects.equals(encounter.getPatient().getId(), patient.getId())) {
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "lab.order.encounterPatientMismatch");
+        }
+        boolean sameVisitAsBefore = base != null && base.getEncounter() != null
+            && java.util.Objects.equals(base.getEncounter().getId(), encounter.getId());
+        if (!sameVisitAsBefore && encounter.getStatus() != null && encounter.getStatus().isClosed()) {
+            throw new BusinessException("lab.order.encounterClosed", encounter.getStatus().localizedLabel());
+        }
+    }
+
+    private static final java.util.Set<String> LAB_PRIORITIES = java.util.Arrays.stream(
+        com.example.hms.enums.ClinicalPriority.values()).map(Enum::name).collect(java.util.stream.Collectors.toUnmodifiableSet());
+
+    /**
+     * D266: the requested priority was never copied onto the entity, so URGENT
+     * and STAT orders were stored as ROUTINE. A blank value keeps the existing
+     * order's priority (ROUTINE for a new one); an unknown value is refused
+     * rather than silently downgraded.
+     */
+    static String resolvePriority(String requested, LabOrder base) {
+        if (requested == null || requested.isBlank()) {
+            return base != null && base.getPriority() != null ? base.getPriority() : "ROUTINE";
+        }
+        String normalized = requested.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!LAB_PRIORITIES.contains(normalized)) {
+            throw new com.example.hms.exception.FieldBusinessException("priority", "lab.order.priority.invalid");
+        }
+        return normalized;
+    }
+
+    /**
+     * On an edit that leaves the ordering clinician as it is, that clinician
+     * stays - whoever is editing. The caller rule in {@link #resolveOrderingStaff}
+     * is about who may PLACE an order in someone's name; applied to edits it
+     * refused a nurse correcting a doctor's order (404) and forced every edit
+     * to re-attribute the order to the editor. Kept only while the existing
+     * row still belongs to the order's hospital; otherwise the edit goes
+     * through the placing rule like a new order. Null when there is nothing
+     * to keep.
+     */
+    private static Staff keptOrderingStaff(LabOrder base, UUID requestedStaffId, Hospital hospital) {
+        if (base == null || requestedStaffId == null) {
+            return null;
+        }
+        Staff current = base.getOrderingStaff();
+        if (current == null || !requestedStaffId.equals(current.getId())
+                || current.getHospital() == null || !hospital.getId().equals(current.getHospital().getId())) {
+            return null;
+        }
+        return current;
+    }
+
+    /**
+     * D48 / D30: a new order (or an order moved to another test) must name a
+     * definition that is ACTIVE, and that is either global or this hospital's
+     * own. A DRAFT was ordered and resulted; another tenant's private
+     * definition was reachable by id. An existing order keeping its test is
+     * left alone: a definition retired after the order was placed must not
+     * strand the sample.
+     */
+    private static void requireOrderableHere(LabTestDefinition definition, Hospital hospital, LabOrder base) {
+        boolean unchanged = base != null && base.getLabTestDefinition() != null
+            && base.getLabTestDefinition().getId() != null
+            && base.getLabTestDefinition().getId().equals(definition.getId());
+        if (unchanged) {
+            return;
+        }
+        if (definition.getHospital() != null && !definition.getHospital().getId().equals(hospital.getId())) {
+            throw new ResourceNotFoundException("labtestdefinition.notfound");
+        }
+        if (!definition.isOrderable()) {
+            throw new com.example.hms.exception.FieldBusinessException("labTestDefinitionId", com.example.hms.utility.MessageUtil.resolve("labtestdefinition.notOrderable"));
+        }
+    }
+
+    /**
+     * The role@hospital context the order is recorded under.
+     *
+     * <p>This used to be {@code assignmentRepository.findById(assignmentId)}
+     * and nothing more, so a caller could record an order under any
+     * assignment in the system - someone else's, another hospital's, a
+     * revoked one. The recorded assignment is now always one the ordering
+     * clinician holds, active, at the order's hospital, in a role that orders
+     * lab tests ({@link RoleValidator#isLabOrderingRole}):
+     * <ul>
+     *   <li>An edit that keeps the ordering clinician and leaves the
+     *       assignment as it is keeps it, whoever is editing, as long as it is
+     *       still at the order's hospital - the rule {@link #keptOrderingStaff}
+     *       applies to the clinician.</li>
+     *   <li>On an edit that keeps the ordering clinician, naming another of
+     *       that clinician's own assignments (or none) does not move the order:
+     *       it keeps its current assignment while that is still a valid
+     *       ordering context (active, here, in a lab-ordering role), and only
+     *       otherwise is the assignment re-picked as below. The portal's edit
+     *       form sends the editor's first active assignment, not the order's,
+     *       so honouring it would rewrite, say, an order placed as SURGEON to
+     *       DOCTOR on any edit.</li>
+     *   <li>On a new order, the named assignment is used when it is the
+     *       ordering clinician's, active, at the order's hospital, in a
+     *       lab-ordering role.</li>
+     *   <li>The ordering clinician's own assignment that is inactive, at
+     *       another hospital or in another role is replaced by the one they
+     *       hold here. The portal sends the first active assignment of the
+     *       signed-in user, which for a clinician working at two hospitals is
+     *       often the other hospital's; that used to fail at flush
+     *       ({@code LabOrder.validateHospitalScope}).</li>
+     *   <li>No id at all (an internal caller) is derived the same way.</li>
+     *   <li>On an edit that keeps another clinician's order, the editor's own
+     *       assignment is what a client naturally sends; it never becomes the
+     *       order's context - the order keeps the one it has.</li>
+     *   <li>Anything else - an id that does not exist, another person's
+     *       assignment, or the clinician holding no lab-ordering assignment
+     *       here - is refused with {@code assignment.notfound}. An unknown id
+     *       and another person's id get the same answer, so it says nothing
+     *       about whether the id exists.</li>
+     * </ul>
+     */
+    private UserRoleHospitalAssignment resolveOrderingAssignment(
+            LabOrder base, UUID requestedAssignmentId, Staff staff, Hospital hospital) {
+        UserRoleHospitalAssignment current = keptCurrentAssignment(base, staff);
+        if (isUnchangedOnKeptEdit(current, requestedAssignmentId, hospital)) {
+            return current;
+        }
+        UserRoleHospitalAssignment named = namedAssignment(requestedAssignmentId);
+        UUID namedUserId = userIdOf(named);
+        // A null id derives; an id that names nothing is refused below, like another person's.
+        if (requestedAssignmentId == null || staff.getUser().getId().equals(namedUserId)) {
+            return namedOwnAssignment(current, named, staff, hospital);
+        }
+        if (isEditorsOwnAssignmentOnAnothersOrder(current, namedUserId, hospital)) {
+            return current;
+        }
+        log.warn("Lab order refused: the assignment named is not the ordering clinician's");
+        throw new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND);
+    }
+
+    /** The order's current assignment, on an edit that keeps the ordering clinician; otherwise null. */
+    private static UserRoleHospitalAssignment keptCurrentAssignment(LabOrder base, Staff staff) {
+        if (base == null || base.getOrderingStaff() == null || staff.getId() == null) {
+            return null;
+        }
+        return staff.getId().equals(base.getOrderingStaff().getId()) ? base.getAssignment() : null;
+    }
+
+    /** The request echoes the kept order's assignment, which is still at the order's hospital. */
+    private static boolean isUnchangedOnKeptEdit(
+            UserRoleHospitalAssignment current, UUID requestedAssignmentId, Hospital hospital) {
+        return current != null && current.getId() != null && current.getId().equals(requestedAssignmentId)
+            && isAtHospital(current, hospital);
+    }
+
+    private UserRoleHospitalAssignment namedAssignment(UUID requestedAssignmentId) {
+        return requestedAssignmentId == null ? null
+            : assignmentRepository.findById(requestedAssignmentId).orElse(null);
+    }
+
+    private static UUID userIdOf(UserRoleHospitalAssignment assignment) {
+        return assignment != null && assignment.getUser() != null ? assignment.getUser().getId() : null;
+    }
+
+    /**
+     * The request names one of the ordering clinician's own assignments, or
+     * none: a kept order's still-valid assignment stays, else the named one
+     * if it is a valid ordering context, else the one derived here.
+     */
+    private UserRoleHospitalAssignment namedOwnAssignment(UserRoleHospitalAssignment current,
+            UserRoleHospitalAssignment named, Staff staff, Hospital hospital) {
+        if (current != null && isOrderingContextAt(current, hospital)) {
+            return current;
+        }
+        if (named != null && isOrderingContextAt(named, hospital)) {
+            return named;
+        }
+        return orderingClinicianAssignmentAt(staff, hospital).orElseThrow(() -> {
+            log.warn("Lab order refused: the ordering clinician holds no active assignment at hospital {}",
+                hospital.getId());
+            return new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND);
+        });
+    }
+
+    /** On a kept order, the request names the editor's own assignment rather than the clinician's. */
+    private boolean isEditorsOwnAssignmentOnAnothersOrder(
+            UserRoleHospitalAssignment current, UUID namedUserId, Hospital hospital) {
+        return current != null && isAtHospital(current, hospital)
+            && namedUserId != null && namedUserId.equals(callerUserId());
+    }
+
+    /**
+     * The ordering clinician's active lab-ordering assignment at the order's
+     * hospital: the one their staff row there is bound to, else any such one
+     * they hold there (ordered by id, so the choice is stable). Never an
+     * assignment in a role that does not order lab tests, such as an
+     * administrative one the same person also holds there.
+     */
+    private Optional<UserRoleHospitalAssignment> orderingClinicianAssignmentAt(Staff staff, Hospital hospital) {
+        UUID userId = staff.getUser().getId();
+        UserRoleHospitalAssignment ofRow = staff.getAssignment();
+        if (ofRow != null && ofRow.getUser() != null && userId.equals(ofRow.getUser().getId())
+                && isOrderingContextAt(ofRow, hospital)) {
+            return Optional.of(ofRow);
+        }
+        return assignmentRepository.findByUser_IdAndActiveTrue(userId).stream()
+            .filter(candidate -> isOrderingContextAt(candidate, hospital))
+            .min(Comparator.comparing(UserRoleHospitalAssignment::getId));
+    }
+
+    private static boolean isAtHospital(UserRoleHospitalAssignment assignment, Hospital hospital) {
+        return assignment.getHospital() != null && hospital.getId().equals(assignment.getHospital().getId());
+    }
+
+    private static boolean isOrderingContextAt(UserRoleHospitalAssignment assignment, Hospital hospital) {
+        return Boolean.TRUE.equals(assignment.getActive()) && isAtHospital(assignment, hospital)
+            && RoleValidator.isLabOrderingRole(assignment);
+    }
+
+    private UUID callerUserId() {
+        return authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication()).orElse(null);
+    }
+
+    /**
+     * The ordering clinician's staff row AT the order's hospital.
+     *
+     * <p>This used to be {@code staffRepository.findById(orderingStaffId)} and
+     * nothing more. The order's hospital comes from the encounter or the
+     * requested id, the staff row was looked up independently, and the
+     * authorization ({@code canOrderLabTests}) is on the USER, who may hold
+     * assignments at several hospitals — so one staff id came to own orders at
+     * several hospitals, and every read filtered to "this staff member's
+     * orders" unioned tenants (the review queue, {@code getLabOrdersByStaffId}).
+     * A staff row is pinned to one hospital ({@code uq_staff_user_hospital}),
+     * so binding the order to the row at its own hospital closes that at the
+     * source.
+     *
+     * <p>Two rules, both checked before anything is written:
+     * <ul>
+     *   <li>The named clinician is the CALLER. A clinician places orders in
+     *       their own name; only a super-admin (the discrete claim, never the
+     *       authorities an impersonation context can inflate) may name another
+     *       — the super-admin order console does, and binds its staff to the
+     *       hospital itself.</li>
+     *   <li>The row is that person's row at the order's hospital. The portal
+     *       sends the profile's staff id, which for a clinician working at two
+     *       hospitals is one row of two; the same person's row at the order's
+     *       hospital is the one the order belongs to. A person with no active
+     *       staff row there cannot order there.</li>
+     * </ul>
+     *
+     * <p>Every refusal is {@code staff.notfound}, the key an unknown staff id
+     * already gets, so naming someone else's id, or a row with nothing at this
+     * hospital, reads exactly like naming no one.
+     */
+    private Staff resolveOrderingStaff(UUID requestedStaffId, Hospital hospital) {
+        Staff named = requestedStaffId == null ? null : staffRepository.findById(requestedStaffId).orElse(null);
+        UUID personId = named != null && named.getUser() != null ? named.getUser().getId() : null;
+        if (personId == null) {
+            throw new ResourceNotFoundException(STAFF_NOT_FOUND, requestedStaffId);
+        }
+        if (!roleValidator.isSuperAdminFromJwtClaim()) {
+            UUID callerId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
+                .orElse(null);
+            if (!personId.equals(callerId)) {
+                log.warn("Lab order refused: the ordering staff named is not the caller");
+                // QA D432: a colleague at the order's own hospital is someone the
+                // caller can already see, so "staff not found" only misled. Say
+                // what is wrong; a row elsewhere still reads as unknown.
+                if (named.getHospital() != null && hospital.getId().equals(named.getHospital().getId())) {
+                    throw new com.example.hms.exception.FieldBusinessException("orderingStaffId", "labOrder.orderingStaff.notCaller");
+                }
+                throw new ResourceNotFoundException(STAFF_NOT_FOUND, requestedStaffId);
+            }
+        }
+        if (named.isActive() && named.getHospital() != null && hospital.getId().equals(named.getHospital().getId())) {
+            return named;
+        }
+        return staffRepository.findByUserIdAndHospitalId(personId, hospital.getId())
+            .filter(Staff::isActive)
+            .orElseThrow(() -> {
+                log.warn("Lab order refused: ordering staff has no active staff row at hospital {}", hospital.getId());
+                return new ResourceNotFoundException(STAFF_NOT_FOUND, requestedStaffId);
+            });
     }
 
     /**
@@ -396,7 +788,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         try {
             requested = LabOrderStatus.valueOf(requestedStatus.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new BusinessException("Unknown lab order status: " + requestedStatus);
+            // QA D1370 (round 31): named, so the form marks the field (the edge check refuses it first).
+            throw new com.example.hms.exception.FieldBusinessException("status", "lab.order.unknownStatus",
+                String.valueOf(requestedStatus));
         }
         if (isNew) {
             if (!CREATABLE_STATUSES.contains(requested)) {
@@ -407,11 +801,7 @@ public class LabOrderServiceImpl implements LabOrderService {
                 // scripted caller sends one — the seeder builds entities
                 // directly, and the only sample carrying IN_PROGRESS is a PUT,
                 // which is unaffected.)
-                throw new BusinessException(
-                    "A new lab order cannot be created with status " + requested.name()
-                        + ". New orders start at ORDERED or PENDING; the laboratory workflow moves "
-                        + "them on from there, and a cancellation goes through the transition "
-                        + "endpoint so it is role-checked and cannot freeze a brand-new order.");
+                throw new BusinessException("lab.order.invalidInitialStatus", requested.name());
             }
             labOrder.setStatus(requested);
             return;
@@ -435,7 +825,32 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         recordPerformedHereReach(List.of(labOrder), hospitalId);
 
-        return labOrderMapper.toLabOrderResponseDTO(labOrder);
+        LabOrderResponseDTO dto = labOrderMapper.toLabOrderResponseDTO(labOrder);
+        dto.setPrimaryDiagnosisLabel(primaryDiagnosisLabelOf(labOrder, hospitalId));
+        return dto;
+    }
+
+    /**
+     * The label of the order's diagnosis code: the description of the patient's
+     * own diagnosis recorded under that code at the ordering hospital. Only for a
+     * reader AT the ordering hospital: a laboratory the order was sent to reads
+     * the code it was sent, not the ordering hospital's chart. There is no ICD-10
+     * catalogue to resolve a code nobody recorded, so that stays null.
+     */
+    private String primaryDiagnosisLabelOf(LabOrder labOrder, UUID readerHospitalId) {
+        String code = labOrder.getPrimaryDiagnosisCode();
+        UUID orderingHospitalId = labOrder.getHospital() != null ? labOrder.getHospital().getId() : null;
+        if (code == null || code.isBlank() || labOrder.getPatient() == null || orderingHospitalId == null
+                || (readerHospitalId != null && !readerHospitalId.equals(orderingHospitalId))) {
+            return null;
+        }
+        return patientDiagnosisRepository
+            .findFirstByPatient_IdAndHospital_IdAndIcdCodeIgnoreCaseOrderByDiagnosedAtDesc(
+                labOrder.getPatient().getId(), orderingHospitalId, code.trim())
+            .map(com.example.hms.model.PatientDiagnosis::getDescription)
+            .filter(d -> !d.isBlank())
+            .map(String::trim)
+            .orElse(null);
     }
 
     @Override
@@ -463,6 +878,21 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         // ── Hospital scope enforcement: deletion stays with the ordering hospital ──
         requireOrderingHospital(labOrder);
+        // QA D820: a completed order, or one voided as entered in error, is part
+        // of the record. A voided order's results no longer load (LabResult's
+        // restriction), so the results check below cannot see them; the status
+        // is checked first.
+        if (labOrder.getStatus() == LabOrderStatus.COMPLETED
+                || labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.order.deleteClosed"));
+        }
+        // QA D601 class: an order that carries results is part of the chart;
+        // hard-deleting it would orphan them. It can only be cancelled.
+        if (labResultRepository.existsByLabOrder_Id(id)) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.order.deleteHasResults"));
+        }
 
         labOrderRepository.deleteById(id);
     }
@@ -471,6 +901,64 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional(readOnly = true)
     public Page<LabOrderResponseDTO> searchLabOrders(UUID patientId, LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable, Locale locale) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null && patientId != null) {
+            // One patient's record, asked for with no acting hospital.
+            //
+            // `buildPredicates` omits the hospital predicate entirely when the
+            // id is null, so this returned EVERY tenant's lab orders for the
+            // patient; and `recordPerformedHereReach` returns early on a null
+            // acting hospital, so not one of those foreign rows was accounted.
+            // That second half is not an oversight that could be patched here:
+            // a RECORD_SHARE row pairs a SOURCE hospital with an ACTING one,
+            // and in global view there is no acting hospital for the disclosure
+            // to be recorded against. Unscoped and accounted is not a state
+            // this endpoint can be in.
+            //
+            // Only a real super-admin in global view reaches this:
+            // requireActiveHospitalId returns null solely for the super-admin
+            // branch and throws BusinessException for everyone else. A scoped
+            // read is already whole — with an acting hospital the predicate
+            // admits only rows this hospital ordered or performs, and the
+            // performed-for-others rows are exactly the ones
+            // recordPerformedHereReach accounts.
+            //
+            // Narrow by design: the patient-less listing below is the platform
+            // worklist the lab screens page through, and a super-admin seeing
+            // it whole stays this service's behaviour (getAllLabOrders and
+            // getLabOrdersByLabTestDefinitionId still read that way — neither
+            // is filtered to one person). What is refused is the shape that is
+            // somebody's record rather than a worklist; getLabOrdersByPatientId
+            // and getLabOrdersByStaffId are refused for the same reason.
+            //
+            // Which makes this a line, not a wall, and that is worth saying
+            // plainly: the worklist below is still unscoped and still
+            // unaccounted, so a super-admin in global view can page it (the lab
+            // screens already ask for 500 a page) and filter to one patient on
+            // the client — the same rows, still no RECORD_SHARE row. Closing
+            // that means deciding what a platform-wide worklist is allowed to
+            // be, which is a product question this change does not answer. What
+            // it removes is the endpoint that served one patient's cross-tenant
+            // record directly, on request, to the chart.
+            //
+            // 404 on the patient, so the refusal says nothing about whether the
+            // rows exist.
+            //
+            // patient.notFound, not the patient.notfound this class throws in
+            // buildLabOrder: both keys exist and messages_en resolves them
+            // differently ("...with ID: {0}" vs "Patient not found"). The
+            // lowercase one is only reachable on the create/update path, never
+            // on this GET, so the answer to match is the chart's OTHER lab
+            // block, which throws the camelCase key through PatientChartAccess.
+            //
+            // Matching that key is the intent; it does not depend on the other
+            // block already refusing. This guard is right whether or not
+            // PatientLabResultServiceImpl refuses the same input — an
+            // unaccounted cross-tenant read is not made acceptable by a sibling
+            // still serving one, and the two agreeing is a property to reach,
+            // not a precondition. (At the time of writing it does still serve
+            // one; that is a defect there, not a reason to keep this one.)
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
+        }
         Page<LabOrder> page = labOrderRepository.search(hospitalId, patientId, fromDate, toDate,
             com.example.hms.utility.PageBounds.atMost(pageable, MAX_WORKLIST_PAGE_SIZE));
         recordPerformedHereReach(page.getContent(), hospitalId);
@@ -511,9 +999,17 @@ public class LabOrderServiceImpl implements LabOrderService {
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }
-        return labOrderRepository.findByPatient_Id(patientId).stream()
-            .map(labOrderMapper::toLabOrderResponseDTO)
-            .toList();
+        // The same hole searchLabOrders had, in the same shape: every tenant's
+        // orders for one patient, and the recordReach call above sits INSIDE
+        // the scoped branch, so none of it was accounted. This method is
+        // unconditionally patient-filtered, so the guard is just the null
+        // scope — no worklist reading to preserve.
+        //
+        // Guarded even though nothing calls it today: it is on LabOrderService
+        // with no @GetMapping anywhere (the only other mention is a javadoc in
+        // CrossHospitalReachRecorder), and a note in a pull request is not
+        // something whoever wires it up will read.
+        throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
     }
 
     @Override
@@ -526,9 +1022,36 @@ public class LabOrderServiceImpl implements LabOrderService {
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
         }
-        return labOrderRepository.findByOrderingStaff_Id(staffId).stream()
-            .map(labOrderMapper::toLabOrderResponseDTO)
-            .toList();
+        // Same shape as the two patient reads, and it took checking to be sure,
+        // because the obvious reasoning says it cannot leak: a Staff ROW is
+        // pinned to one hospital (hospital_id NOT NULL, uq_staff_user_hospital
+        // on (user_id, hospital_id)), so a clinician working at two hospitals
+        // has two staff rows with two ids, and "this staff id's orders" looks
+        // like one tenant's data by construction.
+        //
+        // It is not. buildLabOrder takes the order's hospital from the ENCOUNTER
+        // or the requested hospitalId, looks the ordering Staff up independently
+        // by id, and authorizes canOrderLabTests(staff.getUser().getId(),
+        // hospital.getId()) — on the USER, who may hold assignments at several
+        // hospitals. Nothing anywhere compares staff.getHospital() to the
+        // order's hospital. So one staff id can own orders at more than one
+        // hospital, and this fallback unions them with no acting hospital to
+        // account the disclosure against — one clinician's order history across
+        // tenants, and with it every patient on it.
+        //
+        // Deriving the scope from the staff row instead was the tempting
+        // alternative and it is wrong twice over. It would manufacture an
+        // acting hospital the caller never scoped to, so the RECORD_SHARE row
+        // would name a hospital the caller is not acting at — falsifying the
+        // accounting rather than completing it; scope is a property of the
+        // CALLER, never of the subject being asked about. And it would not even
+        // answer the question: filtering to staff.getHospital() drops exactly
+        // the orders that staff placed elsewhere, which are the rows that make
+        // this cross-tenant in the first place.
+        //
+        // staff.notfound, the key this class already throws for a staff id it
+        // will not resolve, so the refusal is indistinguishable from one.
+        throw new ResourceNotFoundException(STAFF_NOT_FOUND, staffId);
     }
 
     @Override
@@ -565,6 +1088,13 @@ public class LabOrderServiceImpl implements LabOrderService {
             .toList();
     }
 
+    /** QA D1098: a lab order's resulted states, in lifecycle order. */
+    private static final List<LabOrderStatus> RESULTED_STATES =
+        List.of(LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED);
+
+    /** QA D673: matches lab.lab_orders.cancellation_reason (V219). */
+    private static final int MAX_CANCELLATION_REASON = 1000;
+
     // ── Valid forward transitions (CANCELLED handled separately) ──────────────
     private static final Map<LabOrderStatus, Set<LabOrderStatus>> ALLOWED_TRANSITIONS;
     static {
@@ -574,13 +1104,64 @@ public class LabOrderServiceImpl implements LabOrderService {
         ALLOWED_TRANSITIONS.put(LabOrderStatus.COLLECTED,   EnumSet.of(LabOrderStatus.RECEIVED,    LabOrderStatus.CANCELLED));
         ALLOWED_TRANSITIONS.put(LabOrderStatus.RECEIVED,    EnumSet.of(LabOrderStatus.IN_PROGRESS, LabOrderStatus.CANCELLED));
         ALLOWED_TRANSITIONS.put(LabOrderStatus.IN_PROGRESS, EnumSet.of(LabOrderStatus.RESULTED,    LabOrderStatus.CANCELLED));
-        ALLOWED_TRANSITIONS.put(LabOrderStatus.RESULTED,    EnumSet.of(LabOrderStatus.VERIFIED,    LabOrderStatus.CANCELLED));
-        ALLOWED_TRANSITIONS.put(LabOrderStatus.VERIFIED,    EnumSet.of(LabOrderStatus.COMPLETED,   LabOrderStatus.CANCELLED));
+        // QA D1098 (round 19, order class): a resulted order is not cancelled -
+        // a wrong result is voided as entered in error (voidLabOrder), which
+        // keeps the account of what was released.
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.RESULTED,    EnumSet.of(LabOrderStatus.VERIFIED));
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.VERIFIED,    EnumSet.of(LabOrderStatus.COMPLETED));
     }
 
     @Override
     @Transactional
-    public LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, Locale locale) {
+    public LabOrderResponseDTO voidLabOrder(UUID id, String reason, Locale locale) {
+        // QA round 29 (D1333 class): the body is read before any lookup, so a
+        // missing reason is named under fieldErrors.reason whatever the order.
+        String voidReason = normalizeRequiredText(reason, "lab.order.voidReasonRequired", "reason");
+        if (voidReason.length() > MAX_CANCELLATION_REASON) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "lab.order.voidReasonTooLong",
+                MAX_CANCELLATION_REASON);
+        }
+        // Locked first, so a result being released concurrently cannot
+        // complete the order underneath the void (the release path decides
+        // under the same lock).
+        LabOrder labOrder = labOrderRepository.findWithLockById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
+        // An ordering-side decision, like a cancel: a performing laboratory
+        // does not void another hospital's order.
+        requireOrderingHospital(labOrder);
+        LabOrderStatus committed = labOrderRepository.findStatusById(id);
+        if (committed == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.alreadyVoided");
+        }
+        // A cancelled order is already closed, and its one reason column holds
+        // why it was cancelled: a void would overwrite that reason.
+        if (committed == LabOrderStatus.CANCELLED) {
+            throw new BusinessException("lab.order.voidCancelled");
+        }
+        requireOrderDecisionAuthority(roleValidator.getCurrentUserId(), labOrder.getHospital().getId(),
+            "lab.order.voidForbidden");
+        // QA D1912 (round 54): the result ids are read BEFORE the status flips.
+        // LabResult's @SQLRestriction hides every result of an ENTERED_IN_ERROR
+        // order, and the finder auto-flushes the dirty order, so read after the
+        // flip it returned nothing and the withdraw below was a no-op.
+        List<UUID> voidedResultIds = labResultRepository.findByLabOrder_Id(labOrder.getId()).stream()
+            .map(com.example.hms.model.LabResult::getId).filter(java.util.Objects::nonNull).toList();
+        // The one reason column on the order: for a voided order it says why it
+        // was entered in error. Who voided it and when is the audit row.
+        labOrder.setCancellationReason(voidReason);
+        labOrder.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        LabOrder saved = labOrderRepository.save(labOrder);
+        // QA D1912 (round 53): the voided results leave the portal; their
+        // "new result available" notifications leave with them.
+        resultReleaseNotifier.patientResultsWithdrawn(saved, voidedResultIds);
+        log.info("Lab order {} voided as entered in error", saved.getId());
+        return labOrderMapper.toLabOrderResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, String reason,
+                                                        Locale locale) {
         LabOrder labOrder = labOrderRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
@@ -595,7 +1176,17 @@ public class LabOrderServiceImpl implements LabOrderService {
         // (the ordering hospital or the performing laboratory); cancelling is
         // an ordering-side decision and stays with the ordering hospital.
         UUID authorityHospitalId = hospitalId != null ? hospitalId : orderingHospitalId;
+        // QA D1098: the shared order rule, so the refusal names the reason.
+        com.example.hms.service.support.CancelledOrders.requireResultStaysClosed(current, toStatus, RESULTED_STATES);
         validateStatusTransition(current, toStatus, authorityHospitalId, orderingHospitalId);
+        if (toStatus == LabOrderStatus.CANCELLED) {
+            // QA D673: a cancel states why, and the reason is kept on the order.
+            String cancelReason = normalizeRequiredText(reason, "lab.order.cancelReasonRequired", "reason");
+            if (cancelReason.length() > MAX_CANCELLATION_REASON) {
+                throw new com.example.hms.exception.FieldBusinessException("reason", "lab.order.cancelReasonTooLong", MAX_CANCELLATION_REASON);
+            }
+            labOrder.setCancellationReason(cancelReason);
+        }
         labOrder.setStatus(toStatus);
         return labOrderMapper.toLabOrderResponseDTO(labOrderRepository.save(labOrder));
     }
@@ -604,18 +1195,13 @@ public class LabOrderServiceImpl implements LabOrderService {
                                           UUID hospitalId, UUID orderingHospitalId) {
         Set<LabOrderStatus> allowed = ALLOWED_TRANSITIONS.getOrDefault(from, Set.of());
         if (!allowed.contains(to)) {
-            throw new BusinessException(
-                "Invalid lab order status transition: " + from.name() + " \u2192 " + to.name() + ".");
+            throw new BusinessException("lab.order.invalidTransition", from.name(), to.name());
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
 
         if (to == LabOrderStatus.CANCELLED) {
-            if (!roleValidator.isLabManager(currentUserId, orderingHospitalId)
-                    && !roleValidator.isHospitalAdmin(currentUserId, orderingHospitalId)
-                    && !roleValidator.isSuperAdminFromAuth()) {
-                throw new BusinessException("Only lab managers or admins may cancel a lab order.");
-            }
+            requireOrderDecisionAuthority(currentUserId, orderingHospitalId, "lab.order.cancelForbidden");
             return;
         }
 
@@ -626,15 +1212,31 @@ public class LabOrderServiceImpl implements LabOrderService {
                     "advance analytical steps");
             case VERIFIED, COMPLETED -> requireLabScientistOrManager(currentUserId, hospitalId,
                     "verify or complete a lab order");
-            default -> throw new BusinessException(
-                "Status " + to.name() + " cannot be set via transition.");
+            default -> throw new BusinessException("lab.order.statusNotTransitionable", to.name());
         }
     }
 
-    private String normalizeRequiredText(String value, String errorMessage) {
+    /**
+     * Who may cancel or void an order: the ordering hospital's lab manager or
+     * lab director, or a super-admin.
+     *
+     * <p>QA D666: the lab director is the laboratory's senior manager.
+     * QA D666 decision (E9 #67): a hospital admin does not cancel a clinical
+     * order; the controller does not admit the role either.
+     */
+    private void requireOrderDecisionAuthority(UUID currentUserId, UUID orderingHospitalId, String refusalKey) {
+        if (!roleValidator.isLabManager(currentUserId, orderingHospitalId)
+                && !roleValidator.isLabDirector(currentUserId, orderingHospitalId)
+                && !roleValidator.isSuperAdminFromAuth()) {
+            throw new BusinessException(refusalKey);
+        }
+    }
+
+    /** QA D1299: the refusal names the request field the text belongs to. */
+    private String normalizeRequiredText(String value, String errorMessage, String field) {
         String normalized = normalizeOptionalText(value);
         if (normalized == null) {
-            throw new BusinessException(errorMessage);
+            throw new com.example.hms.exception.FieldBusinessException(field, errorMessage);
         }
         return normalized;
     }
@@ -653,11 +1255,11 @@ public class LabOrderServiceImpl implements LabOrderService {
             if (base != null) {
                 return base.getPrimaryDiagnosisCode();
             }
-            throw new BusinessException("Primary diagnosis code is required for lab orders.");
+            throw new com.example.hms.exception.FieldBusinessException("primaryDiagnosisCode", "lab.order.primaryDiagnosisRequired");
         }
         normalized = normalized.toUpperCase(Locale.ROOT);
         if (!DiagnosisCodeValidator.isValidIcd10(normalized)) {
-            throw new BusinessException("Invalid ICD-10 diagnosis code: " + normalized);
+            throw new com.example.hms.exception.FieldBusinessException("primaryDiagnosisCode", "lab.order.invalidIcd10", normalized);
         }
         return normalized;
     }
@@ -672,7 +1274,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         for (String code : requested) {
             if (!DiagnosisCodeValidator.isValidIcd10(code)) {
-                throw new BusinessException("Invalid ICD-10 diagnosis code: " + code);
+                throw new BusinessException("lab.order.invalidIcd10", code);
             }
         }
         return requested;
@@ -683,7 +1285,8 @@ public class LabOrderServiceImpl implements LabOrderService {
             try {
                 return LabOrderChannel.fromCode(requestedChannel);
             } catch (IllegalArgumentException ex) {
-                throw new BusinessException(ex.getMessage());
+                // QA D1370 (round 31): translated and named, never the enum's English text.
+                throw new com.example.hms.exception.FieldBusinessException("orderChannel", "lab.order.orderChannel.invalid");
             }
         }
         if (base != null && base.getOrderChannel() != null) {
@@ -703,7 +1306,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (base != null && base.getOrderChannelOther() != null) {
             return base.getOrderChannelOther();
         }
-        throw new BusinessException("orderChannelOther must be provided when orderChannel is OTHER.");
+        throw new com.example.hms.exception.FieldBusinessException("orderChannelOther", "lab.order.channelOtherRequired");
     }
 
     private String resolveOrderingProviderNpi(Staff staff, String override, LabOrder base) {
@@ -725,10 +1328,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             return null;
         }
         if (!resolved.matches("\\d{10}")) {
-            throw new BusinessException("NPI must be a 10-digit numeric identifier.");
+            throw new com.example.hms.exception.FieldBusinessException("orderingProviderNpi", "lab.order.npiFormat");
         }
         if (staffNpi != null && requestNpi != null && !staffNpi.equals(requestNpi)) {
-            throw new BusinessException("Provided NPI does not match the staff member's recorded NPI.");
+            throw new com.example.hms.exception.FieldBusinessException("orderingProviderNpi", "lab.order.npiMismatch");
         }
         return resolved;
     }
@@ -740,7 +1343,7 @@ public class LabOrderServiceImpl implements LabOrderService {
                 return base.getProviderSignatureDigest();
             }
             if (isNew) {
-                throw new BusinessException("An electronic signature attestation is required for lab orders.");
+                throw new com.example.hms.exception.FieldBusinessException("providerSignature", "lab.order.signatureRequired");
             }
             return null;
         }
@@ -799,7 +1402,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         if (!documentationShared) {
             String channelName = channel.name().toLowerCase(Locale.ENGLISH);
-            throw new BusinessException("Medicare guidelines require lab orders submitted via " + channelName + " channel to include documentation shared with the performing laboratory.");
+            throw new com.example.hms.exception.FieldBusinessException("documentationSharedWithLab", "lab.order.channelDocumentationRequired", channelName);
         }
     }
 
@@ -837,10 +1440,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             expiresAt = base.getStandingOrderExpiresAt();
         }
         if (expiresAt == null) {
-            throw new BusinessException("Standing orders must include an expiration timestamp.");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderExpiresAt", "lab.order.standingExpiryRequired");
         }
         if (orderDatetime != null && expiresAt.isBefore(orderDatetime)) {
-            throw new BusinessException("Standing order expiration must be after the order date.");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderExpiresAt", "lab.order.standingExpiryAfterOrder");
         }
         return expiresAt;
     }
@@ -851,7 +1454,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             lastReviewedAt = base.getStandingOrderLastReviewedAt();
         }
         if (lastReviewedAt == null) {
-            throw new BusinessException("Standing orders must include the last review timestamp.");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderLastReviewedAt", "lab.order.standingLastReviewRequired");
         }
         return lastReviewedAt;
     }
@@ -862,7 +1465,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             reviewIntervalDays = base.getStandingOrderReviewIntervalDays();
         }
         if (reviewIntervalDays == null || reviewIntervalDays <= 0) {
-            throw new BusinessException("Standing orders require a positive review interval (days).");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderReviewIntervalDays", "lab.order.standingReviewInterval");
         }
         return reviewIntervalDays;
     }
@@ -870,7 +1473,7 @@ public class LabOrderServiceImpl implements LabOrderService {
     private LocalDateTime computeStandingOrderReviewDueAt(LocalDateTime lastReviewedAt, int reviewIntervalDays) {
         LocalDateTime reviewDueAt = lastReviewedAt.plusDays(reviewIntervalDays);
         if (reviewDueAt.isBefore(LocalDateTime.now())) {
-            throw new BusinessException("Standing order review is overdue. Please review before placing new orders.");
+            throw new BusinessException("lab.order.standingReviewOverdue");
         }
         return reviewDueAt;
     }
@@ -899,13 +1502,13 @@ public class LabOrderServiceImpl implements LabOrderService {
 
     private void requireLabStaff(UUID userId, UUID hospitalId) {
         if (!roleValidator.isLabStaff(userId, hospitalId)) {
-            throw new BusinessException("Only lab staff may perform specimen collection/receipt operations.");
+            throw new BusinessException("lab.specimen.labStaffOnly");
         }
     }
 
     private void requireLabScientistOrManager(UUID userId, UUID hospitalId, String action) {
         if (!roleValidator.isLabScientist(userId, hospitalId) && !roleValidator.isLabManager(userId, hospitalId)) {
-            throw new BusinessException("Only lab scientists or managers may " + action + ".");
+            throw new BusinessException("lab.order.labStaffOnly", action);
         }
     }
 }

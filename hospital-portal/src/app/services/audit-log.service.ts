@@ -34,6 +34,8 @@ export class AuditLogService {
     eventType?: string;
     fromDate?: string;
     toDate?: string;
+    /** QA D794: free text, matched by the server over every row. */
+    search?: string;
   }): Observable<{ content: AuditEventLog[]; totalElements: number; totalPages: number }> {
     let httpParams = new HttpParams();
     if (params?.page != null) httpParams = httpParams.set('page', params.page);
@@ -41,6 +43,7 @@ export class AuditLogService {
     if (params?.eventType) httpParams = httpParams.set('eventType', params.eventType);
     if (params?.fromDate) httpParams = httpParams.set('fromDate', params.fromDate);
     if (params?.toDate) httpParams = httpParams.set('toDate', params.toDate);
+    if (params?.search) httpParams = httpParams.set('search', params.search);
     return this.http.get<{ content: AuditEventLog[]; totalElements: number; totalPages: number }>(
       this.baseUrl,
       { params: httpParams },

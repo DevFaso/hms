@@ -95,6 +95,11 @@ public class ImagingOrderResponseDTO {
     private String orderingProviderNpi;
 
     private UUID orderingProviderUserId;
+    /**
+     * QA D1081 (D995 class): the user the server's author check compares the caller with, so a
+     * list offers the author-only actions (cancel, edit, sign) on this row only to its author.
+     */
+    private java.util.UUID authorUserId;
 
     private LocalDateTime providerSignedAt;
 
@@ -108,7 +113,26 @@ public class ImagingOrderResponseDTO {
 
     private List<ImagingOrderDuplicateMatchDTO> duplicateMatches;
 
+    /** Provisional rule 2 (V297): placed despite the duplicate warning, with its reason. */
+    private Boolean duplicateOverride;
+
+    private com.example.hms.enums.ImagingDuplicateOverrideReason duplicateOverrideReason;
+
+    private String duplicateOverrideNote;
+
+    private String duplicateOverrideByName;
+
+    private LocalDateTime duplicateOverrideAt;
+
+    /** Provisional rule 1 (V297): the study was done without its required pre-authorisation number. */
+    private Boolean authorizationPending;
+
+    private LocalDateTime authorizationPendingSince;
+
     private LocalDateTime cancelledAt;
+
+    /** When the study was completed (V294); null while it is not. */
+    private LocalDateTime completedAt;
 
     private String cancellationReason;
 

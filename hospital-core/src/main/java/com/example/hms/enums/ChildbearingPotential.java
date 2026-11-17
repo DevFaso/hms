@@ -49,6 +49,11 @@ public enum ChildbearingPotential {
 
     private static final Set<String> MALE = Set.of("m", "male", "homme", "masculin");
 
+    /** The record says male. Anything else, a blank included, is not known to be. */
+    public static boolean isRecordedMale(String gender) {
+        return gender != null && MALE.contains(gender.trim().toLowerCase(Locale.ROOT));
+    }
+
     /** Whether the Rh restriction must be enforced for this recipient. */
     public boolean requiresRhProtection() {
         return this != NO;
@@ -65,7 +70,7 @@ public enum ChildbearingPotential {
     public static ChildbearingPotential of(String gender, LocalDate dateOfBirth, LocalDate today) {
         String normalized = gender == null ? "" : gender.trim().toLowerCase(Locale.ROOT);
 
-        if (MALE.contains(normalized)) {
+        if (isRecordedMale(gender)) {
             return NO;
         }
         if (!FEMALE.contains(normalized)) {

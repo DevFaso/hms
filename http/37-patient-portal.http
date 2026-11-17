@@ -24,7 +24,8 @@ Content-Type: application/json
   "firstName": "Jane",
   "lastName": "Doe",
   "phoneNumber": "+1-555-000-9001",
-  "roleNames": ["PATIENT"]
+  "roleNames": ["PATIENT"],
+  "patientRegistration": true
 }
 
 ### Step 2: Patient login attempt (should fail - account disabled)

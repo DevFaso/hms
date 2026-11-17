@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.DisclosureEntryDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 import com.bitnesttechs.hms.patient.ui.theme.WarningOrange
 import kotlinx.coroutines.launch
@@ -58,7 +58,7 @@ fun SharingPrivacyScreen(onBack: () -> Unit = {}, viewModel: SharingPrivacyViewM
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary, titleContentColor = Color.White)
             )
         }
     ) { padding ->
@@ -88,7 +88,7 @@ fun SharingPrivacyScreen(onBack: () -> Unit = {}, viewModel: SharingPrivacyViewM
             when {
                 state.logLoading -> item {
                     Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(color = BrandBlue, modifier = Modifier.size(24.dp))
+                        CircularProgressIndicator(color = BrandPrimary, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(stringResource(R.string.sharing_loading_log), style = MaterialTheme.typography.bodyMedium)
                     }
@@ -104,7 +104,7 @@ fun SharingPrivacyScreen(onBack: () -> Unit = {}, viewModel: SharingPrivacyViewM
                 }
                 state.entries.isEmpty() -> item {
                     StateCard(
-                        icon = Icons.Default.Shield, tint = BrandBlue,
+                        icon = Icons.Default.Shield, tint = BrandPrimary,
                         title = stringResource(R.string.sharing_no_access_title),
                         body = stringResource(R.string.sharing_no_access_desc)
                     )
@@ -118,7 +118,7 @@ fun SharingPrivacyScreen(onBack: () -> Unit = {}, viewModel: SharingPrivacyViewM
                         item {
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 when {
-                                    state.loadingMore -> CircularProgressIndicator(color = BrandBlue, modifier = Modifier.size(24.dp))
+                                    state.loadingMore -> CircularProgressIndicator(color = BrandPrimary, modifier = Modifier.size(24.dp))
                                     state.loadMoreFailed -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(stringResource(R.string.sharing_load_more_failed), style = MaterialTheme.typography.bodySmall, color = ErrorRed)
                                         TextButton(onClick = { viewModel.loadMore() }) { Text(stringResource(R.string.retry)) }
@@ -154,7 +154,7 @@ private fun OptOutCard(state: SharingPrivacyViewModel.UiState, viewModel: Sharin
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
                 Icon(
                     if (optedOut) Icons.Default.Lock else Icons.Default.LockOpen, null,
-                    tint = if (optedOut) WarningOrange else BrandBlue, modifier = Modifier.size(28.dp)
+                    tint = if (optedOut) WarningOrange else BrandPrimary, modifier = Modifier.size(28.dp)
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(stringResource(R.string.sharing_opt_out_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -164,7 +164,7 @@ private fun OptOutCard(state: SharingPrivacyViewModel.UiState, viewModel: Sharin
             }
             when {
                 state.optOutLoading -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CircularProgressIndicator(color = BrandBlue, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(color = BrandPrimary, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     Text(stringResource(R.string.sharing_opt_out_loading), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -193,7 +193,7 @@ private fun OptOutCard(state: SharingPrivacyViewModel.UiState, viewModel: Sharin
                     } else {
                         Button(
                             onClick = { viewModel.openOptOutForm() }, enabled = !state.optOutSaving,
-                            colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                            colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                         ) { Text(stringResource(R.string.sharing_opt_out_enable)) }
                     }
                     Text(stringResource(R.string.sharing_opt_out_own_hospital_note), style = MaterialTheme.typography.bodySmall,
@@ -240,7 +240,7 @@ private fun OptOutSheet(state: SharingPrivacyViewModel.UiState, viewModel: Shari
                 }
                 Button(
                     onClick = { viewModel.confirmOptOut() }, enabled = !state.optOutSaving,
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                 ) {
                     if (state.optOutSaving) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
@@ -284,7 +284,7 @@ private fun DisclosureRow(entry: DisclosureEntryDto) {
     val tint = when {
         emergency -> ErrorRed
         entry.externalDisclosure -> WarningOrange
-        else -> BrandBlue
+        else -> BrandPrimary
     }
     Card(shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(1.dp)) {
         Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {

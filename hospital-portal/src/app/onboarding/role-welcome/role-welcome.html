@@ -12,7 +12,7 @@
     <div class="rw-card rw-card--centered">
       <div class="rw-icon rw-icon--warn">⚠️</div>
       <h1 class="rw-title">{{ 'ONBOARDING.NOT_FOUND' | translate }}</h1>
-      <p class="rw-body">{{ errorMessage }}</p>
+      <p class="rw-body">{{ errorMessage | translate }}</p>
       <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
         {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
       </button>
@@ -24,7 +24,7 @@
     <div class="rw-card rw-card--centered">
       <div class="rw-icon rw-icon--error">✕</div>
       <h1 class="rw-title">{{ 'ONBOARDING.ERROR_TITLE' | translate }}</h1>
-      <p class="rw-body">{{ errorMessage }}</p>
+      <p class="rw-body">{{ errorMessage | translate }}</p>
       <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
         {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
       </button>
@@ -40,13 +40,83 @@
         @if (assignment.hospitalName) {
           {{
             'ONBOARDING.ALREADY_CONFIRMED_BODY_ORG'
-              | translate: { role: assignment.roleName, organization: assignment.hospitalName }
+              | translate
+                : { role: (assignment.roleName | roleLabel), organization: assignment.hospitalName }
           }}
         } @else {
-          {{ 'ONBOARDING.ALREADY_CONFIRMED_BODY' | translate: { role: assignment.roleName } }}
+          {{
+            'ONBOARDING.ALREADY_CONFIRMED_BODY'
+              | translate: { role: (assignment.roleName | roleLabel) }
+          }}
         }
       </p>
       <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
+        {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
+      </button>
+    </div>
+  }
+
+  <!-- ───────────── BY PHONE (QA D1123: no e-mail link) ───────────── -->
+  @if (pageState === 'by-phone') {
+    <div class="rw-card" data-testid="activate-by-phone">
+      <div class="rw-header">
+        <div class="rw-logo-area">
+          <div class="rw-logo-badge">e-Keneya</div>
+        </div>
+        <h1 class="rw-title">{{ 'ONBOARDING.BY_PHONE_TITLE' | translate }}</h1>
+        <p class="rw-subtitle">{{ 'ONBOARDING.BY_PHONE_INTRO' | translate }}</p>
+      </div>
+      <form class="rw-verify" novalidate (ngSubmit)="submitByPhone()">
+        <div class="rw-field">
+          <label class="rw-info-label" for="rw-phone">{{
+            'ONBOARDING.PHONE_LABEL' | translate
+          }}</label>
+          <input
+            id="rw-phone"
+            class="rw-input"
+            type="tel"
+            appPhoneField
+            name="phone"
+            autocomplete="tel"
+            [(ngModel)]="phone"
+            [attr.aria-invalid]="phoneInvalid ? 'true' : null"
+            [attr.aria-describedby]="verifyError ? 'rw-phone-error' : null"
+          />
+        </div>
+        <div class="rw-field">
+          <label class="rw-info-label" for="rw-phone-code">{{
+            'ONBOARDING.CODE_LABEL' | translate
+          }}</label>
+          <input
+            id="rw-phone-code"
+            class="rw-input"
+            type="text"
+            name="code"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            [(ngModel)]="phoneCode"
+            [attr.aria-invalid]="codeInvalid ? 'true' : null"
+            [attr.aria-describedby]="verifyError ? 'rw-phone-error' : null"
+          />
+        </div>
+        @if (verifyError) {
+          <div id="rw-phone-error" class="rw-error" role="alert">{{ verifyError | translate }}</div>
+        }
+        <button
+          type="submit"
+          class="rw-btn rw-btn--primary rw-btn--full"
+          data-testid="activate-by-phone-submit"
+          [attr.aria-busy]="verifying"
+        >
+          {{
+            verifying
+              ? ('ONBOARDING.VERIFYING' | translate)
+              : ('ONBOARDING.BY_PHONE_SUBMIT' | translate)
+          }}
+        </button>
+      </form>
+      <button type="button" class="rw-btn rw-btn--link" (click)="goToLogin()">
         {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
       </button>
     </div>
@@ -58,10 +128,11 @@
       <!-- Header -->
       <div class="rw-header">
         <div class="rw-logo-area">
-          <div class="rw-logo-badge">HMS</div>
+          <div class="rw-logo-badge">e-Keneya</div>
         </div>
         <h1 class="rw-title">
-          {{ 'ONBOARDING.WELCOME' | translate }} {{ assignment.assigneeName }}!
+          {{ 'ONBOARDING.WELCOME' | translate }} {{ assignment.assigneeName
+          }}{{ 'COMMON.EXCLAMATION_MARK' | translate }}
         </h1>
         <p class="rw-subtitle">{{ 'ONBOARDING.ASSIGNED_ROLE' | translate }}</p>
       </div>
@@ -124,8 +195,8 @@
               inputmode="numeric"
               maxlength="1"
               placeholder="·"
-              [title]="'Digit ' + (i + 1) + ' of 6'"
-              [attr.aria-label]="'Digit ' + (i + 1) + ' of 6'"
+              [title]="'ONBOARDING.DIGIT_OF' | translate: { n: i + 1, total: 6 }"
+              [attr.aria-label]="'ONBOARDING.DIGIT_OF' | translate: { n: i + 1, total: 6 }"
               [value]="digit"
               [disabled]="verifying"
               (input)="onDigitInput($event, i)"
@@ -136,13 +207,14 @@
 
         <!-- Error message -->
         @if (verifyError) {
-          <div class="rw-error" role="alert">{{ verifyError }}</div>
+          <div class="rw-error" role="alert">{{ verifyError | translate }}</div>
         }
 
         <!-- Submit button -->
         <button
           class="rw-btn rw-btn--primary rw-btn--full"
-          [disabled]="!isCodeComplete || verifying"
+          [disabled]="verifying"
+          [appSubmitGuard]="!isCodeComplete && ('SUBMIT_GUARD.CODE' | translate)"
           (click)="submitCode()"
         >
           @if (verifying) {
@@ -165,12 +237,16 @@
         @if (assignment.hospitalName) {
           {{
             'ONBOARDING.ROLE_ACTIVE_BODY_ORG'
-              | translate: { role: assignment.roleName, organization: assignment.hospitalName }
+              | translate
+                : { role: (assignment.roleName | roleLabel), organization: assignment.hospitalName }
           }}
         } @else {
-          {{ 'ONBOARDING.ROLE_ACTIVE_BODY' | translate: { role: assignment.roleName } }}
+          {{
+            'ONBOARDING.ROLE_ACTIVE_BODY' | translate: { role: (assignment.roleName | roleLabel) }
+          }}
         }
       </p>
+      <p class="rw-body rw-other-roles">{{ 'ONBOARDING.OTHER_ROLES_HINT' | translate }}</p>
 
       <!-- Temporary credentials block — only shown for brand-new users -->
       @if (assignment.tempUsername && assignment.tempPassword) {

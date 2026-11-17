@@ -1,0 +1,169 @@
+package com.example.hms.mapper;
+
+import com.example.hms.model.Encounter;
+import com.example.hms.payload.dto.EncounterResponseDTO;
+import org.junit.jupiter.api.Test;
+
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/** QA D276: the encounter response carries the human-readable encounter code. */
+class EncounterMapperCodeTest {
+
+    @Test
+    void responseExposesTheEncounterCode() {
+        Encounter e = new Encounter();
+        e.setId(UUID.randomUUID());
+        e.setCode("ENC-2026-000123");
+
+        EncounterResponseDTO dto = new EncounterMapper().toEncounterResponseDTO(e);
+
+        assertThat(dto.getCode()).isEqualTo("ENC-2026-000123");
+    }
+
+    @Test
+    void d831_thePatientNeverReceivesTheStaysEntriesNorClinicianIds() {
+        // #965 review: GET /me/patient/encounters returned every entry of the
+        // stay, another doctor's unsigned draft included, with user ids.
+        com.example.hms.model.User doctorA = new com.example.hms.model.User();
+        doctorA.setId(UUID.randomUUID());
+        com.example.hms.model.User doctor2 = new com.example.hms.model.User();
+        doctor2.setId(UUID.randomUUID());
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(UUID.randomUUID());
+        com.example.hms.model.encounter.EncounterNote j0 = com.example.hms.model.encounter.EncounterNote.builder()
+            .author(doctorA).assessment("J0 brouillon non signé").build();
+        j0.setId(UUID.randomUUID());
+        j0.setCreatedAt(java.time.LocalDateTime.now().minusHours(4));
+        com.example.hms.model.encounter.EncounterNote j1 = com.example.hms.model.encounter.EncounterNote.builder()
+            .author(doctor2).assessment("J1 signé").signedAt(java.time.LocalDateTime.now())
+            .signedByUserId(doctor2.getId()).build();
+        j1.setId(UUID.randomUUID());
+        j1.setCreatedAt(java.time.LocalDateTime.now());
+        stay.setEncounterNote(j0);
+        stay.setEncounterNote(j1);
+        EncounterMapper mapper = new EncounterMapper();
+
+        // Path re-verified: the clinician still reads both entries.
+        assertThat(mapper.toEncounterResponseDTO(stay).getNoteEntries()).hasSize(2);
+
+        EncounterResponseDTO portal = mapper.toPatientPortalEncounterResponseDTO(stay);
+        assertThat(portal.getNoteEntries()).isNull();
+        assertThat(portal.getNote().getId()).isEqualTo(j1.getId());
+        assertThat(portal.getNote().getAuthorUserId()).isNull();
+        assertThat(portal.getNote().getSignedByUserId()).isNull();
+    }
+
+    @Test
+    void d1910_anUnsignedNoteNeverReachesThePatient() {
+        // QA D1910 (round 53): /me/patient/encounters returned the doctor's
+        // unsigned SOAP note, during the visit and after checkout.
+        Encounter visit = new Encounter();
+        visit.setId(UUID.randomUUID());
+        com.example.hms.model.encounter.EncounterNote draft = com.example.hms.model.encounter.EncounterNote.builder()
+            .subjective("NOTE-CLINIQUE-INTERNE").assessment("Diabète déséquilibré NOTE-CLINIQUE-INTERNE")
+            .plan("NOTE-CLINIQUE-INTERNE").patientInstructions("NOTE-CLINIQUE-INTERNE").build();
+        draft.setId(UUID.randomUUID());
+        draft.setCreatedAt(java.time.LocalDateTime.now());
+        visit.setEncounterNote(draft);
+        EncounterMapper mapper = new EncounterMapper();
+
+        // Path re-verified: the clinician reads the draft.
+        assertThat(mapper.toEncounterResponseDTO(visit).getNote().getAssessment()).contains("NOTE-CLINIQUE-INTERNE");
+
+        EncounterResponseDTO portal = mapper.toPatientPortalEncounterResponseDTO(visit);
+        assertThat(portal.getNote()).isNull();
+        assertThat(portal.getNotePendingSignature()).isTrue();
+        assertThat(portal.toString()).doesNotContain("NOTE-CLINIQUE-INTERNE");
+    }
+
+    @Test
+    void d1910_theSignedNoteIsReadWhileANewerDraftWaits() {
+        Encounter visit = new Encounter();
+        visit.setId(UUID.randomUUID());
+        com.example.hms.model.encounter.EncounterNote signed = com.example.hms.model.encounter.EncounterNote.builder()
+            .assessment("Angine signée").signedAt(java.time.LocalDateTime.now().minusHours(2)).build();
+        signed.setId(UUID.randomUUID());
+        signed.setCreatedAt(java.time.LocalDateTime.now().minusHours(3));
+        com.example.hms.model.encounter.EncounterNote draft = com.example.hms.model.encounter.EncounterNote.builder()
+            .assessment("Brouillon du lendemain").build();
+        draft.setId(UUID.randomUUID());
+        draft.setCreatedAt(java.time.LocalDateTime.now());
+        visit.setEncounterNote(signed);
+        visit.setEncounterNote(draft);
+
+        EncounterResponseDTO portal = new EncounterMapper().toPatientPortalEncounterResponseDTO(visit);
+
+        assertThat(portal.getNote().getId()).isEqualTo(signed.getId());
+        assertThat(portal.getNotePendingSignature()).isTrue();
+        assertThat(portal.toString()).doesNotContain("Brouillon du lendemain");
+
+        draft.setSignedAt(java.time.LocalDateTime.now());
+        EncounterResponseDTO afterSigning = new EncounterMapper().toPatientPortalEncounterResponseDTO(visit);
+        assertThat(afterSigning.getNote().getId()).isEqualTo(draft.getId());
+        assertThat(afterSigning.getNotePendingSignature()).isFalse();
+    }
+
+    @Test
+    void whatTheDeskTypedIsKeptApartFromTheClinicalComplaint() {
+        EncounterMapper mapper = new EncounterMapper();
+        com.example.hms.payload.dto.EncounterRequestDTO body = new com.example.hms.payload.dto.EncounterRequestDTO();
+        body.setChiefComplaint("  Fievre  ");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.TestingAuthenticationToken("desk", "p", "ROLE_RECEPTIONIST"));
+        Encounter walkIn;
+        try {
+            walkIn = mapper.mergeEncounter(body, null, null, null, null, null, null);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+        assertThat(walkIn.getChiefComplaint()).isEqualTo("Fievre");
+        assertThat(walkIn.getDeskChiefComplaint()).isEqualTo("Fievre");
+
+        // Triage writes the clinical column; the desk's own stays what the desk typed.
+        walkIn.setChiefComplaint("Douleur thoracique");
+        EncounterResponseDTO read = mapper.toEncounterResponseDTO(walkIn);
+        assertThat(read.getChiefComplaint()).isEqualTo("Douleur thoracique");
+        assertThat(read.getDeskChiefComplaint()).isEqualTo("Fievre");
+
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.TestingAuthenticationToken("doc", "p", "ROLE_DOCTOR"));
+        try {
+            assertThat(mapper.mergeEncounter(body, null, null, null, null, null, null).getDeskChiefComplaint())
+                .as("a clinician's complaint is not the desk's").isNull();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void d759_theAnchorsEnglishBookkeepingNoteIsNotShownAsIs() {
+        Encounter anchor = new Encounter();
+        anchor.setId(UUID.randomUUID());
+        anchor.setNotes(Encounter.PRESCRIPTION_ANCHOR_NOTE);
+        Encounter visit = new Encounter();
+        visit.setId(UUID.randomUUID());
+        visit.setNotes("Toux depuis 3 jours");
+
+        assertThat(new EncounterMapper().toEncounterResponseDTO(anchor).getNotes())
+            .isNotEqualTo(Encounter.PRESCRIPTION_ANCHOR_NOTE);
+        // Path re-verified: a clinician's own note is untouched.
+        assertThat(new EncounterMapper().toEncounterResponseDTO(visit).getNotes()).isEqualTo("Toux depuis 3 jours");
+    }
+
+    @Test
+    void qaD944_theWalkInReasonTypedAtTheDeskIsTheChiefComplaint() {
+        com.example.hms.payload.dto.EncounterRequestDTO dto = new com.example.hms.payload.dto.EncounterRequestDTO();
+        dto.setChiefComplaint("  Fièvre depuis 2 jours, toux ");
+        Encounter merged = new EncounterMapper().mergeEncounter(dto, null, null, null, null, null, null);
+        assertThat(merged.getChiefComplaint()).isEqualTo("Fièvre depuis 2 jours, toux");
+
+        Encounter kept = new Encounter();
+        kept.setChiefComplaint("Toux");
+        new EncounterMapper().mergeEncounter(new com.example.hms.payload.dto.EncounterRequestDTO(),
+            kept, null, null, null, null, null);
+        assertThat(kept.getChiefComplaint()).isEqualTo("Toux");
+    }
+}

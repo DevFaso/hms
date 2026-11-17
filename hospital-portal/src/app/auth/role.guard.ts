@@ -17,12 +17,15 @@ export const RoleGuard: CanActivateFn = (route: ActivatedRouteSnapshot): boolean
   if (activeRole) {
     // roleSatisfies applies doctor equivalence (role audit C2):
     // PHYSICIAN/SURGEON pass any guard that names ROLE_DOCTOR.
-    return roleSatisfies(requiredRoles, activeRole) ? true : router.parseUrl('/error/403');
+    if (roleSatisfies(requiredRoles, activeRole)) return true;
+    roleContext.noteRefusal(requiredRoles);
+    return router.parseUrl('/error/403');
   }
 
   if (auth.hasAnyRole(requiredRoles)) {
     return true;
   }
 
+  roleContext.noteRefusal(requiredRoles);
   return router.parseUrl('/error/403');
 };

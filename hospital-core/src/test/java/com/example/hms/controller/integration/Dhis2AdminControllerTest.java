@@ -2,6 +2,7 @@ package com.example.hms.controller.integration;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -13,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.integration.Dhis2AuthMode;
 import com.example.hms.model.integration.Dhis2PeriodType;
 import com.example.hms.payload.dto.integration.Dhis2DataElementMappingRequestDTO;
@@ -108,6 +110,40 @@ class Dhis2AdminControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.baseUrl").value("https://dhis2.example.org"));
         verify(configService).upsertFacilityConfig(eq(hospitalId), any());
+    }
+
+    @Test
+    void putFacilityRefusesPlainHttpBaseUrlOnTheField() throws Exception {
+        // QA D898: the export sends the DHIS2 token, so http:// is refused at the DTO.
+        Dhis2FacilityConfigRequestDTO body = new Dhis2FacilityConfigRequestDTO(
+            "http://dhis2.example.org", Dhis2AuthMode.PAT, "DHIS2_TOKEN",
+            Dhis2PeriodType.MONTHLY, "DS00000DEFK", true);
+
+        mockMvc.perform(put("/admin/integrations/dhis2/facility")
+                .param("hospitalId", hospitalId.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.baseUrl").exists());
+        verify(configService, never()).upsertFacilityConfig(any(), any());
+    }
+
+    @Test
+    void putFacilityInternalBaseUrlRefusalIsA400OnBaseUrl() throws Exception {
+        // QA D898: the service's SSRF refusal reaches the form under baseUrl.
+        when(configService.upsertFacilityConfig(eq(hospitalId), any())).thenThrow(
+            new FieldBusinessException("baseUrl", "dhis2FacilityConfig.baseUrl.publicHostRequired"));
+        Dhis2FacilityConfigRequestDTO body = new Dhis2FacilityConfigRequestDTO(
+            "https://169.254.169.254/latest", Dhis2AuthMode.PAT, "DHIS2_TOKEN",
+            Dhis2PeriodType.MONTHLY, "DS00000DEFK", true);
+
+        mockMvc.perform(put("/admin/integrations/dhis2/facility")
+                .param("hospitalId", hospitalId.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.field").value("baseUrl"))
+            .andExpect(jsonPath("$.fieldErrors.baseUrl").exists());
     }
 
     @Test

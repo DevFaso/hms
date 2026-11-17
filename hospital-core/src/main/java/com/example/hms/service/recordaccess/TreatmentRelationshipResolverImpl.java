@@ -71,10 +71,11 @@ public class TreatmentRelationshipResolverImpl implements TreatmentRelationshipR
         AdmissionStatus.PENDING, AdmissionStatus.ACTIVE,
         AdmissionStatus.ON_LEAVE, AdmissionStatus.AWAITING_DISCHARGE);
     private static final Set<AdmissionStatus> ADMISSION_TAILED = EnumSet.of(
-        AdmissionStatus.DISCHARGED, AdmissionStatus.TRANSFERRED);
+        AdmissionStatus.DISCHARGED, AdmissionStatus.TRANSFERRED,
+        // QA D1516: the stay's clinicians keep the chart, to readmit after a voided death closed it.
+        AdmissionStatus.CLOSED_IN_ERROR);
 
-    private static final Set<EncounterStatus> ENCOUNTER_TERMINAL = EnumSet.of(
-        EncounterStatus.COMPLETED, EncounterStatus.CANCELLED);
+    private static final Set<EncounterStatus> ENCOUNTER_TERMINAL = EncounterStatus.CLOSED;
 
     private static final Set<AppointmentStatus> APPOINTMENT_LIVE = EnumSet.of(
         AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING,
@@ -168,7 +169,9 @@ public class TreatmentRelationshipResolverImpl implements TreatmentRelationshipR
         for (Encounter e : rows) {
             EncounterStatus status = e.getStatus();
             LocalDateTime expires;
-            if (status == EncounterStatus.CANCELLED) {
+            // A visit nobody saw (cancelled, or left without being seen) is no
+            // treatment relationship; it must never fall through to "open".
+            if (status != null && EncounterStatus.ENDED_UNSEEN.contains(status)) {
                 continue;
             } else if (status == EncounterStatus.COMPLETED) {
                 LocalDateTime end = e.getCheckoutTimestamp() != null ? e.getCheckoutTimestamp() : e.getEncounterDate();

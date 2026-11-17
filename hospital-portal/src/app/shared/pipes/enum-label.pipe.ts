@@ -70,7 +70,13 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
     this.translationSub.unsubscribe();
   }
 
-  transform(value: string | null | undefined, domain?: string): string {
+  /**
+   * `mode = 'asTyped'` is for a free-text field whose domain has a few curated
+   * codes (a lab sample type): a code is labelled, anything else is shown as
+   * typed and never prettified. See {@link EnumLabelService.labelOrAsTyped}.
+   */
+  transform(value: string | null | undefined, domain?: string, mode?: 'asTyped'): string {
+    if (mode === 'asTyped' && domain) return this.labels.labelOrAsTyped(value, domain);
     return this.labels.transform(value, domain);
   }
 }

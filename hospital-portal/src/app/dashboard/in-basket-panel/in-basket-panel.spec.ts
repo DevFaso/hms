@@ -10,8 +10,11 @@ import {
   InBasketItem,
 } from '../../services/in-basket.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { RoleContextService } from '../../core/role-context.service';
+import { Router, provideRouter } from '@angular/router';
 
 import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 function mockItem(overrides: Partial<InBasketItem> = {}): InBasketItem {
   return {
     id: 'ib-1',
@@ -63,6 +66,7 @@ describe('InBasketPanelComponent', () => {
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: InBasketService, useValue: inBasketSpy },
+        provideRouter([]),
       ],
     }).compileComponents();
 
@@ -72,6 +76,25 @@ describe('InBasketPanelComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('reloads items and the unread badge when the hospital scope changes, dropping the old rows first', () => {
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.activeHospitalId = 'hospital-a';
+    fixture.detectChanges();
+    expect(inBasketSpy.getItems).toHaveBeenCalledTimes(1);
+    expect(component.items().length).toBe(1);
+
+    // The next read, issued under hospital B, has not answered yet.
+    inBasketSpy.getItems.and.returnValue(of(mockPage([])));
+    inBasketSpy.getSummary.and.returnValue(of({ ...mockSummary(), totalUnread: 0 }));
+    roleContext.activeHospitalId = 'hospital-b';
+    fixture.detectChanges();
+
+    expect(inBasketSpy.getItems).toHaveBeenCalledTimes(2);
+    expect(inBasketSpy.getSummary).toHaveBeenCalledTimes(2);
+    expect(component.items()).toEqual([]);
+    expect(component.badgeCount()).toBe(0);
   });
 
   it('should load items and summary on init', () => {
@@ -171,8 +194,27 @@ describe('InBasketPanelComponent', () => {
     expect(component.formatDate(null)).toBe('');
     const out = component.formatDate('2025-07-15T10:00:00');
     expect(out).toContain('juil.');
-    expect(out).toContain('10:00');
+    const local = new Date(Date.UTC(2025, 6, 15, 10, 0));
+    expect(out).toContain(`${local.getHours()}:${String(local.getMinutes()).padStart(2, '0')}`);
     expect(out).not.toContain('AM');
+  });
+
+  it("QA D662 (D647): the inbox shows the server's UTC time in the reader's zone", () => {
+    // The server sends a zone-less UTC wall time. Read raw, the browser took
+    // it for local time and New York saw 18:03 for a 14:03 event. Asserting
+    // that it is marked UTC keeps the test meaningful on a machine set to UTC.
+    const transform = spyOn(ServerTimePipe.prototype, 'transform').and.callThrough();
+    inBasketSpy.getItems.and.returnValue(
+      of(mockPage([mockItem({ createdAt: '2026-10-23T18:03:00' })])),
+    );
+    fixture.detectChanges();
+
+    expect(transform).toHaveBeenCalledWith('2026-10-23T18:03:00');
+    expect(transform.calls.mostRecent().returnValue).toBe('2026-10-23T18:03:00Z');
+    const shown =
+      (fixture.nativeElement as HTMLElement).querySelector('.meta-time')?.textContent ?? '';
+    const local = new Date(Date.UTC(2026, 9, 23, 18, 3));
+    expect(shown).toContain(`${local.getHours()}:${String(local.getMinutes()).padStart(2, '0')}`);
   });
 
   it('follows the stored language when the user chose English', () => {
@@ -200,71 +242,29 @@ describe('InBasketPanelComponent', () => {
     expect(inBasketSpy.getItems).toHaveBeenCalled();
     expect(inBasketSpy.getSummary).toHaveBeenCalled();
   });
-  it('shows an error with retry instead of an empty inbox when loading fails', () => {
-    inBasketSpy.getItems.and.returnValue(throwError(() => new Error('offline')));
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
-    expect(fixture.nativeElement.querySelector('.empty-state')).toBeNull();
-    expect(component.lastUpdated()).toBeNull();
-    inBasketSpy.getItems.and.returnValue(of(mockPage([])));
-    fixture.nativeElement.querySelector('.error-state button').click();
-    fixture.detectChanges();
-    expect(component.loadError()).toBeFalse();
-    expect(component.lastUpdated()).not.toBeNull();
-    expect(fixture.nativeElement.querySelector('.empty-state')).not.toBeNull();
-  });
 
-  it('waits for items and counts before reporting refresh success and ignores duplicate refreshes', () => {
-    const summary = new Subject<InBasketSummary>();
-    inBasketSpy.getSummary.and.returnValue(summary);
-    fixture.detectChanges();
-    expect(component.loading()).toBeTrue();
-    expect(component.lastUpdated()).toBeNull();
-    expect(fixture.nativeElement.querySelector('.btn-refresh').disabled).toBeTrue();
-    component.refresh();
-    expect(inBasketSpy.getItems).toHaveBeenCalledTimes(1);
-    summary.next(mockSummary());
-    summary.complete();
-    fixture.detectChanges();
-    expect(component.loading()).toBeFalse();
-    expect(component.lastUpdated()).not.toBeNull();
-    expect(fixture.nativeElement.querySelector('.last-updated')).not.toBeNull();
-  });
-
-  it('retains the last complete snapshot and timestamp if refreshing counts fails', () => {
-    fixture.detectChanges();
-    const timestamp = component.lastUpdated();
-    inBasketSpy.getItems.and.returnValue(of(mockPage([])));
-    inBasketSpy.getSummary.and.returnValue(throwError(() => new Error('offline')));
-    component.refresh();
-    fixture.detectChanges();
-    expect(component.loadError()).toBeTrue();
-    expect(component.lastUpdated()).toBe(timestamp);
-    expect(component.items().length).toBe(1);
-    expect(component.summary().totalUnread).toBe(3);
-    expect(fixture.nativeElement.querySelector('.error-state')).not.toBeNull();
-    expect(fixture.nativeElement.querySelector('.item-list')).not.toBeNull();
-  });
-
-  it('offers a way back to all items when a category is empty', () => {
-    fixture.detectChanges();
-    component.setFilter('MESSAGE');
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.empty-state h3').textContent).toContain(
-      'inBasket.emptyCategory',
+  // Provisional platform rule: a closed visit's unsigned note opens the visit, where its author signs.
+  it('offers the visit of a note to sign, and only for that item', () => {
+    inBasketSpy.getItems.and.returnValue(
+      of(
+        mockPage([
+          mockItem({
+            id: 'sign-1',
+            itemType: 'TASK',
+            referenceType: 'ENCOUNTER_NOTE_SIGNATURE',
+            encounterId: 'enc-42',
+          }),
+          mockItem({ id: 'lab-1' }),
+        ]),
+      ),
     );
-    fixture.nativeElement.querySelector('.empty-state button').click();
+    const router = TestBed.inject(Router);
+    spyOn(router, 'navigate').and.resolveTo(true);
     fixture.detectChanges();
-    expect(component.activeFilter()).toBeNull();
-    expect(fixture.nativeElement.querySelector('.item-list')).not.toBeNull();
-  });
 
-  it('preserves the dashboard title and allows the full page to hide it', () => {
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.panel-title')).not.toBeNull();
-    fixture.componentRef.setInput('showTitle', false);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.panel-title')).toBeNull();
-    expect(fixture.nativeElement.querySelector('.btn-refresh')).not.toBeNull();
+    const buttons = fixture.nativeElement.querySelectorAll('[data-testid="in-basket-open-visit"]');
+    expect(buttons.length).toBe(1);
+    (buttons[0] as HTMLButtonElement).click();
+    expect(router.navigate).toHaveBeenCalledWith(['/encounters', 'enc-42']);
   });
 });

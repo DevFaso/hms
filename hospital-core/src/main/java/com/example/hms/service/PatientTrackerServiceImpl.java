@@ -15,7 +15,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -37,10 +36,7 @@ public class PatientTrackerServiceImpl implements PatientTrackerService {
     private final PatientTrackerMapper trackerMapper;
 
     /** Terminal statuses excluded from the active tracker board. */
-    private static final Set<EncounterStatus> TERMINAL_STATUSES = EnumSet.of(
-            EncounterStatus.COMPLETED,
-            EncounterStatus.CANCELLED
-    );
+    private static final Set<EncounterStatus> TERMINAL_STATUSES = EncounterStatus.CLOSED;
 
     @Override
     public PatientTrackerBoardDTO getTrackerBoard(UUID hospitalId, UUID departmentId, LocalDate date) {

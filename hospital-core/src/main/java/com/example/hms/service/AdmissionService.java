@@ -45,7 +45,8 @@ public interface AdmissionService {
     /**
      * Cancel admission
      */
-    void cancelAdmission(UUID admissionId);
+    /** QA D1381: cancels a stay still in progress; the reason is required and kept on the admission. */
+    void cancelAdmission(UUID admissionId, String reason);
 
     /**
      * Assign a structured bed to an admission (P0 #4)
@@ -53,9 +54,10 @@ public interface AdmissionService {
     AdmissionResponseDTO assignBed(UUID admissionId, UUID bedId);
 
     /**
-     * Detach the admission's bed and make it available again
+     * Detach the admission's bed and make it available again. QA D1100: for a
+     * stated reason, audited with it.
      */
-    AdmissionResponseDTO unassignBed(UUID admissionId);
+    AdmissionResponseDTO unassignBed(UUID admissionId, String reason);
 
     /**
      * Get admissions by patient
@@ -68,9 +70,15 @@ public interface AdmissionService {
     List<AdmissionResponseDTO> getAdmissionsByHospital(UUID hospitalId, String status, LocalDateTime startDate, LocalDateTime endDate);
 
     /**
-     * Get all admissions across all hospitals (super admin only)
+     * The admissions list: the acting hospital's (every hospital's for a
+     * super-admin with no hospital in scope), narrowed by status, by an
+     * admission-time window and, when {@code patientId} is given, to that
+     * patient. QA D800: {@code patientId} was not a parameter, so
+     * {@code GET /admissions?patientId=X} silently returned every patient's
+     * stays and another patient's ACTIVE stay read as a second one of X's.
      */
-    List<AdmissionResponseDTO> getAllAdmissions(String status, LocalDateTime startDate, LocalDateTime endDate);
+    List<AdmissionResponseDTO> getAllAdmissions(String status, LocalDateTime startDate, LocalDateTime endDate,
+                                                UUID patientId);
 
     /**
      * Get current admission for patient

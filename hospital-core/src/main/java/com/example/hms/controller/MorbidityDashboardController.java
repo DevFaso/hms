@@ -65,12 +65,12 @@ public class MorbidityDashboardController {
         } catch (DateTimeParseException ex) {
             // A malformed month is a refusal, not a silent fallback to "now" —
             // a chart quietly showing a different period than the one asked
-            // for is worse than an error.
-            return ResponseEntity.badRequest().build();
+            // for is worse than an error. QA round 29 sweep: named (it was an empty 400).
+            throw new com.example.hms.exception.FieldBusinessException("month", "query.month.invalid", MAX_MONTHS_BACK);
         }
         if (target.isAfter(YearMonth.now())
             || target.isBefore(YearMonth.now().minusMonths(MAX_MONTHS_BACK))) {
-            return ResponseEntity.badRequest().build();
+            throw new com.example.hms.exception.FieldBusinessException("month", "query.month.invalid", MAX_MONTHS_BACK);
         }
         int capped = Math.clamp(limit, 1, MAX_LIMIT);
         return ResponseEntity.ok(morbidityAnalyticsService.topDiagnoses(target, capped));

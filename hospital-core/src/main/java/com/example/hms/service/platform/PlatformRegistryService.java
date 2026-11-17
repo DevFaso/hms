@@ -4,6 +4,7 @@ import com.example.hms.enums.platform.PlatformServiceStatus;
 import com.example.hms.payload.dto.DepartmentPlatformServiceLinkResponseDTO;
 import com.example.hms.payload.dto.HospitalPlatformServiceLinkResponseDTO;
 import com.example.hms.payload.dto.PlatformServiceLinkRequestDTO;
+import com.example.hms.payload.dto.PlatformServiceLinkUpdateRequestDTO;
 import com.example.hms.payload.dto.PlatformServiceRegistrationRequestDTO;
 import com.example.hms.payload.dto.PlatformServiceResponseDTO;
 import com.example.hms.payload.dto.PlatformServiceUpdateRequestDTO;
@@ -34,6 +35,17 @@ public interface PlatformRegistryService {
                                                                  UUID organizationServiceId,
                                                                  PlatformServiceLinkRequestDTO request,
                                                                  Locale locale);
+
+    /** Enables or disables an existing link; the link itself is kept. */
+    HospitalPlatformServiceLinkResponseDTO updateHospitalServiceLink(UUID hospitalId,
+                                                                     UUID organizationServiceId,
+                                                                     PlatformServiceLinkUpdateRequestDTO request,
+                                                                     Locale locale);
+
+    /** Every hospital link of one organization service, across all the organization's hospitals. */
+    List<HospitalPlatformServiceLinkResponseDTO> listServiceHospitalLinks(UUID organizationId,
+                                                                          UUID serviceId,
+                                                                          Locale locale);
 
     void unlinkHospitalFromService(UUID hospitalId,
                                    UUID organizationServiceId,

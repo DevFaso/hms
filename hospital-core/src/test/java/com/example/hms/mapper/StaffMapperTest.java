@@ -58,4 +58,40 @@ class StaffMapperTest {
     void nullStaffMapsToNull() {
         assertThat(mapper.toStaffDTO(null)).isNull();
     }
+
+    @Test
+    @DisplayName("staff whose account was never activated is not shown as active (D221)")
+    void unactivatedAccountIsNotActive() {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setActive(false);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        staff.setActive(true);
+        staff.setUser(user);
+
+        assertThat(mapper.toStaffDTO(staff).isActive()).isFalse();
+
+        user.setActive(true);
+        assertThat(mapper.toStaffDTO(staff).isActive()).isTrue();
+    }
+
+    @Test
+    @DisplayName("staff whose role here was switched off is not shown as active (QA D907)")
+    void switchedOffAssignmentIsNotActive() {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setActive(true);
+        com.example.hms.model.UserRoleHospitalAssignment assignment =
+            new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setActive(false);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        staff.setActive(true);
+        staff.setUser(user);
+        staff.setAssignment(assignment);
+
+        assertThat(mapper.toStaffDTO(staff).isActive()).isFalse();
+
+        assignment.setActive(true);
+        assertThat(mapper.toStaffDTO(staff).isActive()).isTrue();
+    }
 }

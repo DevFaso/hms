@@ -1,3 +1,4 @@
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   inject,
@@ -16,13 +17,22 @@ import {
   ChatSendRequest,
   ChatAttachment,
 } from '../services/chat.service';
-import { UserService, UserSummary } from '../services/user.service';
+import { ChatRecipient, UserService } from '../services/user.service';
+import { MessageableClinician, PatientPortalService } from '../services/patient-portal.service';
 import { AuthService } from '../auth/auth.service';
+import { ActivatedRoute } from '@angular/router';
+import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Observable, catchError, forkJoin, of } from 'rxjs';
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { serverInstant } from '../shared/date-utils';
+import { refusalReason } from '../shared/refusal-reason';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { captureOpener, restoreFocus } from '../shared/a11y/focus-return';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_SUPER_ADMIN: new Set([
@@ -108,10 +118,54 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_PATIENT: new Set(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']),
 };
 
+/** One row of the new-conversation picker, whichever list it came from. */
+export interface ChatTarget {
+  /** User id — the chat send API's `recipientId`. */
+  id: string;
+  name: string;
+  /** Staff directory rows carry a role; a patient's clinicians do not. */
+  roleName?: string;
+  /**
+   * Staff directory rows without a role fall back to the raw account type, as
+   * before (a pinned raw-enum render); kept apart from `subtitle` so the
+   * raw-enum gate still sees it.
+   */
+  profileType?: string;
+  /** A patient's clinicians: the hospital they were seen at. Free text, not an enum. */
+  subtitle?: string;
+  /** Values the picker's search box matches against. */
+  searchFields: (string | null | undefined)[];
+}
+
+function staffTarget(u: ChatRecipient): ChatTarget {
+  return {
+    id: u.id,
+    name: `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim(),
+    roleName: u.roleName || undefined,
+    profileType: u.profileType ?? undefined,
+    searchFields: [u.firstName, u.lastName],
+  };
+}
+
+function clinicianTarget(c: MessageableClinician): ChatTarget {
+  return {
+    id: c.userId,
+    name: c.name,
+    subtitle: c.hospitalName ?? undefined,
+    searchFields: [c.name, c.hospitalName],
+  };
+}
+
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+    FocusOnRenderDirective,
+  ],
   templateUrl: './chat.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './chat.scss',
@@ -119,9 +173,13 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
 export class ChatComponent implements OnInit, OnDestroy {
   private readonly chatService = inject(ChatService);
   private readonly userService = inject(UserService);
+  private readonly patientPortal = inject(PatientPortalService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D983: a chat notification opens here with ?open=unread. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
 
   conversations = signal<ChatConversation[]>([]);
   messages = signal<ChatMessage[]>([]);
@@ -187,8 +245,13 @@ export class ChatComponent implements OnInit, OnDestroy {
   /* ── New Conversation panel ── */
   showNewConversation = signal(false);
   userSearchTerm = signal('');
-  availableUsers = signal<UserSummary[]>([]);
+  availableUsers = signal<ChatTarget[]>([]);
   loadingUsers = signal(false);
+  /**
+   * A patient's picker loaded cleanly and holds nobody: they have no care
+   * team and no appointment yet, which is not an error.
+   */
+  noRecipientsYet = signal(false);
 
   /* ── Sidebar search ── */
   convSearchTerm = signal('');
@@ -199,7 +262,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (!term) return all;
     return all.filter(
       (c) =>
-        c.conversationUserName.toLowerCase().includes(term) ||
+        textMatches(c.conversationUserName, term) ||
         c.lastMessageContent?.toLowerCase().includes(term),
     );
   });
@@ -222,6 +285,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       next: (list) => {
         this.conversations.set(list ?? []);
         this.loading.set(false);
+        this.openFromNotification(list ?? []);
       },
       error: (err) => {
         this.loading.set(false);
@@ -233,6 +297,22 @@ export class ChatComponent implements OnInit, OnDestroy {
         }
       },
     });
+  }
+
+  /**
+   * QA D983: arriving from a "new message" notification opens the
+   * conversation that has the unread message (the most recent one first),
+   * instead of the bare list.
+   */
+  private openFromNotification(list: ChatConversation[]): void {
+    if (
+      this.route?.snapshot?.queryParamMap?.get('open') !== 'unread' ||
+      this.activeConversation()
+    ) {
+      return;
+    }
+    const unread = list.find((c) => (c.unreadCount ?? 0) > 0);
+    if (unread) this.selectConversation(unread);
   }
 
   selectConversation(conv: ChatConversation): void {
@@ -289,8 +369,10 @@ export class ChatComponent implements OnInit, OnDestroy {
           ),
         );
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CHAT.SEND_FAILED'));
+      error: (err) => {
+        // QA D877: the server's reason (a message to oneself, an empty
+        // message), now in the sender's language, rather than a generic failure.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CHAT.SEND_FAILED'));
         this.sendingMessage.set(false);
       },
     });
@@ -451,21 +533,39 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   /* ── New Conversation actions ── */
+  /** QA D1230: the control that opened the panel, given the keyboard back on close. */
+  private newConversationOpener: HTMLElement | null = null;
+
   openNewConversation(): void {
+    this.newConversationOpener = captureOpener();
     this.showNewConversation.set(true);
     this.userSearchTerm.set('');
     this.availableUsers.set([]);
     this.loadUsers();
   }
 
+  /**
+   * QA D1230 (round 24): Fermer and Escape close the panel and give the
+   * keyboard back to "Nouvelle conversation" (Escape did nothing and focus
+   * was left on the message area).
+   */
   closeNewConversation(): void {
     this.showNewConversation.set(false);
+    const opener = this.newConversationOpener;
+    this.newConversationOpener = null;
+    setTimeout(() => restoreFocus(opener), 0);
   }
 
   loadUsers(): void {
     this.loadingUsers.set(true);
-    this.userService.list(0, 100).subscribe({
-      next: (page) => {
+    this.noRecipientsYet.set(false);
+    if (this.isPatientCaller()) {
+      this.loadPatientRecipients();
+      return;
+    }
+    // QA D790: the colleague list, not the administrators' directory.
+    this.userService.chatRecipients().subscribe({
+      next: (recipients) => {
         // Filter out current user and already-conversing users
         const existingIds = new Set(this.conversations().map((c) => c.conversationUserId));
 
@@ -479,13 +579,13 @@ export class ChatComponent implements OnInit, OnDestroy {
           }
         }
 
-        const filtered = (page.content ?? []).filter((u) => {
+        const filtered = (recipients ?? []).filter((u) => {
           if (u.id === this.currentUserId || existingIds.has(u.id)) return false;
           // Normalise the user's roleName for comparison (may or may not have ROLE_ prefix)
           const userRole = u.roleName?.startsWith('ROLE_') ? u.roleName : 'ROLE_' + u.roleName;
           return allowedTargets.has(userRole);
         });
-        this.availableUsers.set(filtered);
+        this.availableUsers.set(filtered.map(staffTarget));
         this.loadingUsers.set(false);
       },
       error: () => {
@@ -495,24 +595,73 @@ export class ChatComponent implements OnInit, OnDestroy {
     });
   }
 
-  filteredUsers(): UserSummary[] {
+  /**
+   * `GET /users` is the staff directory and answers 403 to a patient (#776),
+   * so a patient cannot pick from it. Acting as a patient — the role picked at
+   * sign-in, or the only role held — means the patient picker.
+   */
+  /** QA D257: a patient writes to their care team, not to "colleagues". */
+  get subtitleKey(): string {
+    return this.isPatientCaller() ? 'CHAT.SUBTITLE_PATIENT' : 'CHAT.SUBTITLE';
+  }
+
+  private isPatientCaller(): boolean {
+    if (this.roleContext.activeRole === 'ROLE_PATIENT') return true;
+    const roles = this.auth.getRoles();
+    return roles.length > 0 && roles.every((r) => r === 'ROLE_PATIENT');
+  }
+
+  /**
+   * A patient writes to their care team and to the clinicians of their
+   * appointments — the list the native apps offer. The two sources load
+   * independently: one failing still shows the other, with a warning that
+   * the list may be incomplete.
+   */
+  private loadPatientRecipients(): void {
+    let failures = 0;
+    const tolerant = (source: Observable<MessageableClinician[]>) =>
+      source.pipe(
+        catchError(() => {
+          failures++;
+          return of<MessageableClinician[]>([]);
+        }),
+      );
+    forkJoin([
+      tolerant(this.patientPortal.getMyCareTeamClinicians()),
+      tolerant(this.patientPortal.getMyAppointmentClinicians()),
+    ]).subscribe(([careTeam, appointments]) => {
+      const seen = new Set<string>([this.currentUserId]);
+      const targets = [...careTeam, ...appointments]
+        .filter((c) => {
+          if (seen.has(c.userId)) return false;
+          seen.add(c.userId);
+          return true;
+        })
+        .map(clinicianTarget);
+      this.availableUsers.set(targets);
+      this.loadingUsers.set(false);
+      if (failures === 2) {
+        this.toast.error(this.translate.instant('CHAT.RECIPIENTS_LOAD_FAILED'));
+      } else if (failures === 1) {
+        this.toast.warning(this.translate.instant('CHAT.RECIPIENTS_PARTIAL_LOAD'));
+      } else if (targets.length === 0) {
+        this.noRecipientsYet.set(true);
+      }
+    });
+  }
+
+  filteredUsers(): ChatTarget[] {
     const term = this.userSearchTerm().toLowerCase().trim();
     const users = this.availableUsers();
     if (!term) return users;
-    return users.filter(
-      (u) =>
-        u.firstName?.toLowerCase().includes(term) ||
-        u.lastName?.toLowerCase().includes(term) ||
-        u.username?.toLowerCase().includes(term) ||
-        u.email?.toLowerCase().includes(term),
-    );
+    return users.filter((u) => u.searchFields.some((f) => f?.toLowerCase().includes(term)));
   }
 
-  startConversationWith(user: UserSummary): void {
+  startConversationWith(user: ChatTarget): void {
     // Create a synthetic conversation and select it
     const conv: ChatConversation = {
       conversationUserId: user.id,
-      conversationUserName: `${user.firstName} ${user.lastName}`.trim() || user.username,
+      conversationUserName: user.name,
       lastMessageContent: '',
       lastMessageTimestamp: '',
       lastMessageRead: true,
@@ -556,7 +705,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   formatTime(timestamp: string): string {
     if (!timestamp) return '';
-    const d = new Date(timestamp);
+    const d = serverInstant(timestamp);
     return d.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' });
   }
 }

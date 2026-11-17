@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 
 import { ProScreeningSummary } from './pro-screening.service';
 
+export type GlucoseUnit = 'MG_DL' | 'MMOL_L';
+
 export type PostpartumSchedulePhase =
   'IMMEDIATE_RECOVERY' | 'SHIFT_BASELINE' | 'ENHANCED_MONITORING' | 'DISCHARGE_PLANNING';
 export type PostpartumFundusTone =
@@ -100,6 +102,8 @@ export interface PostpartumObservationResponse {
   id: string;
   patientId: string;
   hospitalId?: string;
+  /** QA D1631: the hospital that recorded it, named when it is not this one. */
+  hospitalName?: string | null;
   carePlanId?: string;
   observationTime?: string;
   documentedAt?: string;
@@ -161,6 +165,11 @@ export interface NewbornAssessmentRequest {
    * Delivery. Optional — a newborn may be transferred in already born.
    */
   deliveryRecordId?: string;
+  /**
+   * QA D1592: the registered baby the assessment is for (required for a
+   * multiple birth); the assessment is recorded on that baby's own chart.
+   */
+  newbornPatientId?: string;
   assessmentTime?: string;
   apgarOneMinute?: number;
   apgarFiveMinute?: number;
@@ -173,8 +182,16 @@ export interface NewbornAssessmentRequest {
   diastolicBpMmHg?: number;
   oxygenSaturationPercent?: number;
   glucoseMgDl?: number;
+  /** QA D1424: a glucose as entered, always with its unit. */
+  glucoseValue?: number;
+  glucoseUnit?: GlucoseUnit;
   examGeneralAppearance?: string;
   examNotes?: string;
+  /** CR-05: left out means not assessed, never absent. */
+  poorFeeding?: NewbornDangerSignObservation;
+  convulsions?: NewbornDangerSignObservation;
+  severeChestIndrawing?: NewbornDangerSignObservation;
+  absentSpontaneousMovement?: NewbornDangerSignObservation;
   followUpNotes?: string;
   followUpActions?: NewbornFollowUpAction[];
   parentEducationNotes?: string;
@@ -185,10 +202,14 @@ export interface NewbornAssessmentRequest {
   thermoregulationSupportInitiated?: boolean;
 }
 
+export type NewbornDangerSignObservation = 'PRESENT' | 'ABSENT' | 'NOT_ASSESSED';
+
 export interface NewbornAssessmentResponse {
   id: string;
   patientId: string;
   hospitalId?: string;
+  /** QA D1631: the hospital that recorded it, named when it is not this one. */
+  hospitalName?: string | null;
   deliveryRecordId?: string | null;
   assessmentTime?: string;
   documentedAt?: string;
@@ -205,6 +226,10 @@ export interface NewbornAssessmentResponse {
   glucoseMgDl?: number | null;
   examGeneralAppearance?: string;
   examNotes?: string;
+  poorFeeding?: NewbornDangerSignObservation;
+  convulsions?: NewbornDangerSignObservation;
+  severeChestIndrawing?: NewbornDangerSignObservation;
+  absentSpontaneousMovement?: NewbornDangerSignObservation;
   escalationRecommended?: boolean;
   respiratorySupportInitiated?: boolean;
   glucoseProtocolInitiated?: boolean;

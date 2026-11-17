@@ -63,6 +63,7 @@ public class UserGovernanceService {
     @Transactional
     public UserResponseDTO createUser(AdminSignupRequest request) {
         AdminSignupRequest normalized = normalizeRoles(request);
+        refusePatientRole(normalized.getRoleNames());
         return userService.createUserWithRolesAndHospital(normalized);
     }
 
@@ -71,7 +72,7 @@ public class UserGovernanceService {
         Objects.requireNonNull(request, "Import request must not be null");
         String csv = request.getCsvContent();
     if (isBlank(csv)) {
-            throw new IllegalArgumentException("CSV content must not be blank");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.csv.blank"));
         }
 
         String delimiter = request.getDelimiter();
@@ -84,7 +85,7 @@ public class UserGovernanceService {
         try (BufferedReader reader = new BufferedReader(new StringReader(csv))) {
             String headerLine = reader.readLine();
             if (headerLine == null) {
-                throw new IllegalArgumentException("CSV content must include a header row");
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.csv.headerRequired"));
             }
 
             Map<String, Integer> headerIndex = parseHeader(headerLine, separator);
@@ -365,13 +366,15 @@ public class UserGovernanceService {
         String rolesCell = value(columns, headerIndex, "roles");
 
         if (isAnyBlank(username, email, firstName, lastName, phoneNumber, rolesCell)) {
-            throw new IllegalArgumentException("Missing required fields on row " + rowNumber);
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.csv.rowMissingFields", String.valueOf(rowNumber)));
         }
 
         Set<String> roleNames = parseRoles(rolesCell);
         if (roleNames.isEmpty()) {
-            throw new IllegalArgumentException("No roles provided for row " + rowNumber);
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.csv.rowNoRoles", String.valueOf(rowNumber)));
         }
+
+        refusePatientRole(roleNames);
 
         UUID hospitalId = parseUuid(value(columns, headerIndex, "hospitalid"));
         if (hospitalId == null) {
@@ -417,6 +420,19 @@ public class UserGovernanceService {
         }
 
         return builder.build();
+    }
+
+    /**
+     * QA D626 (verification): governance onboarding and the CSV import create
+     * accounts only, so a PATIENT role here would leave an account with no
+     * patient record. A patient is registered from the patient form.
+     */
+    private static void refusePatientRole(Set<String> roleNames) {
+        if (roleNames != null && roleNames.stream().filter(Objects::nonNull)
+            .map(r -> r.trim().toUpperCase(Locale.ROOT).replaceFirst("^ROLE_", ""))
+            .anyMatch("PATIENT"::equals)) {
+            throw new com.example.hms.exception.BusinessException("users.roles.patientFromPatientForm");
+        }
     }
 
     private AdminSignupRequest normalizeRoles(AdminSignupRequest request) {
@@ -513,7 +529,7 @@ public class UserGovernanceService {
         try {
             return UUID.fromString(value.trim());
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Invalid UUID: " + value, ex);
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.csv.invalidUuid", value), ex);
         }
     }
 

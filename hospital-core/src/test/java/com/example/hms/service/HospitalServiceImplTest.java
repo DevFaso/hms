@@ -13,11 +13,14 @@ import com.example.hms.payload.dto.HospitalWithDepartmentsDTO;
 import com.example.hms.payload.dto.DepartmentSummaryDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import org.apache.kafka.common.errors.DuplicateResourceException;
+import com.example.hms.exception.ConflictException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +52,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -62,6 +66,8 @@ class HospitalServiceImplTest {
     private MessageSource messageSource;
     @Mock
     private RoleValidator roleValidator;
+    @Mock
+    private com.example.hms.repository.provider.ProviderVerificationRepository providerVerificationRepository;
 
     private HospitalMapper hospitalMapper;
     private HospitalServiceImpl hospitalService;
@@ -69,8 +75,13 @@ class HospitalServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        lenient().when(hospitalRepository.findClinicalById(any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(ClinicalHospitals::isClinical));
         hospitalMapper = new HospitalMapper();
-        hospitalService = new HospitalServiceImpl(hospitalRepository, organizationRepository, hospitalMapper, messageSource, roleValidator);
+        hospitalService = new HospitalServiceImpl(hospitalRepository, organizationRepository, hospitalMapper, messageSource, roleValidator,
+            providerVerificationRepository);
     }
 
     @AfterEach
@@ -138,7 +149,7 @@ class HospitalServiceImplTest {
                 .thenReturn(List.of(hospital));
 
         List<HospitalResponseDTO> results = hospitalService.getAllHospitals(
-                organizationId, false, "  Ouaga  ", " Centre  ", Locale.ENGLISH);
+                organizationId, false, "  Ouaga  ", " Centre  ", null, Locale.ENGLISH);
 
         assertEquals(1, results.size());
         assertEquals("FIL-01", results.get(0).getCode());
@@ -158,11 +169,57 @@ class HospitalServiceImplTest {
     }
 
     @Test
+    @DisplayName("AC-11: a verified super-admin's facilityType=PHARMACY lists providers through the type finder")
+    void getAllHospitals_superAdminProviderFilter() {
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        Hospital pharmacy = buildHospital(UUID.randomUUID(), "Pharmacy", "PH-01");
+        when(hospitalRepository.findAllForFiltersByFacilityType(eq(FacilityType.PHARMACY), any(), any(), any(), any()))
+                .thenReturn(List.of(pharmacy));
+
+        List<HospitalResponseDTO> results = hospitalService.getAllHospitals(
+                null, null, null, null, "PHARMACY", Locale.ENGLISH);
+
+        assertEquals(1, results.size());
+        verify(hospitalRepository, never()).findAllForFilters(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("AC-11: anyone else naming a provider type is refused before any read; HOSPITAL is the clinical list")
+    void getAllHospitals_providerFilterRefusedToOthers() {
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        when(hospitalRepository.findAllForFilters(any(), any(), any(), any())).thenReturn(List.of());
+
+        assertThrows(AccessDeniedException.class, () -> hospitalService.getAllHospitals(
+                null, null, null, null, "LABORATORY", Locale.ENGLISH));
+        hospitalService.getAllHospitals(null, null, null, null, "HOSPITAL", Locale.ENGLISH);
+
+        verify(hospitalRepository, never()).findAllForFiltersByFacilityType(any(), any(), any(), any(), any());
+        verify(hospitalRepository).findAllForFilters(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("AC-11: who first, then what: anyone else gets the same 403 for any non-HOSPITAL value, a super-admin a 400 for an unknown one")
+    void getAllHospitals_accessBeforeParsing() {
+        when(hospitalRepository.findAllForFilters(any(), any(), any(), any())).thenReturn(List.of());
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        for (String value : List.of("PHARMACY", "laboratory", "not-a-type")) {
+            assertThrows(AccessDeniedException.class, () -> hospitalService.getAllHospitals(
+                    null, null, null, null, value, Locale.ENGLISH), value);
+        }
+        hospitalService.getAllHospitals(null, null, null, null, " hospital ", Locale.ENGLISH);
+
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        assertThrows(BusinessException.class, () -> hospitalService.getAllHospitals(
+                null, null, null, null, "not-a-type", Locale.ENGLISH));
+        verify(hospitalRepository, never()).findAllForFiltersByFacilityType(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void getAllHospitals_unassignedOnlyIgnoresOrganization() {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of());
 
-        hospitalService.getAllHospitals(UUID.randomUUID(), true, null, null, Locale.ENGLISH);
+        hospitalService.getAllHospitals(UUID.randomUUID(), true, null, null, null, Locale.ENGLISH);
 
         verify(hospitalRepository).findAllForFilters(isNull(), eq(Boolean.TRUE), isNull(), isNull());
     }
@@ -173,13 +230,13 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of());
 
-        hospitalService.getAllHospitals(null, null, "  ", "", Locale.ENGLISH);
+        hospitalService.getAllHospitals(null, null, "  ", "", null, Locale.ENGLISH);
 
         verify(hospitalRepository).findAllForFilters(isNull(), isNull(), isNull(), isNull());
     }
 
     @Test
-    @DisplayName("getAllHospitals returns full directory regardless of user scope (referral support)")
+    @DisplayName("QA D36: getAllHospitals returns only the caller's own hospitals; the directory serves referrals")
     void getAllHospitals_scopeFiltering() {
         UUID scopedId = UUID.randomUUID();
         UUID unscopedId = UUID.randomUUID();
@@ -191,11 +248,43 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1, h2));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
 
-        // No scope filtering — both hospitals returned so clinicians can pick
-        // referral destinations across the network.
-        assertEquals(2, result.size());
+        // The full record is the caller's own hospitals' only.
+        assertEquals(1, result.size());
+        assertEquals("S-01", result.get(0).getCode());
+    }
+
+    @Test
+    @DisplayName("QA D36: the directory lists every active hospital with id, name and city only")
+    void getHospitalDirectory_listsActiveHospitalsMinimally() {
+        setScopedContext(UUID.randomUUID());
+        Hospital open = buildHospital(UUID.randomUUID(), "Open", "O-01");
+        open.setCity("Ouagadougou");
+        Hospital closed = buildHospital(UUID.randomUUID(), "Closed", "C-01");
+        closed.setActive(false);
+        when(hospitalRepository.findAllForFilters(null, null, null, null)).thenReturn(List.of(open, closed));
+
+        var directory = hospitalService.getHospitalDirectory();
+
+        assertEquals(1, directory.size());
+        assertEquals(open.getId(), directory.get(0).id());
+        assertEquals("Open", directory.get(0).name());
+        assertEquals("Ouagadougou", directory.get(0).city());
+    }
+
+    @Test
+    @DisplayName("QA D36: the directory skips null rows and answers empty when the repository returns null")
+    void getHospitalDirectory_toleratesNulls() {
+        Hospital open = buildHospital(UUID.randomUUID(), "Open", "O-01");
+        java.util.List<Hospital> withNull = new java.util.ArrayList<>();
+        withNull.add(null);
+        withNull.add(open);
+        when(hospitalRepository.findAllForFilters(null, null, null, null)).thenReturn(withNull);
+        assertEquals(1, hospitalService.getHospitalDirectory().size());
+
+        when(hospitalRepository.findAllForFilters(null, null, null, null)).thenReturn(null);
+        assertEquals(0, hospitalService.getHospitalDirectory().size());
     }
 
     @Test
@@ -209,7 +298,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1, h2));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(2, result.size());
     }
 
@@ -224,12 +313,12 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(1, result.size());
     }
 
     @Test
-    @DisplayName("getAllHospitals returns results even when user has empty scope (directory is unscoped)")
+    @DisplayName("QA D36: a caller with no hospital gets no hospital records")
     void getAllHospitals_emptyScopeReturnsEmpty() {
         HospitalContextHolder.setContext(HospitalContext.builder()
                 .principalUserId(UUID.randomUUID()).principalUsername("user")
@@ -239,10 +328,9 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1));
 
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
-        // Hospital directory is unscoped — even users with empty scope see the
-        // full list so they can create referrals to other hospitals.
-        assertEquals(1, result.size());
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
+        // The referral destination picker reads getHospitalDirectory instead.
+        assertEquals(0, result.size());
     }
 
     // ═══════════════ getHospitalById ═══════════════
@@ -368,7 +456,42 @@ class HospitalServiceImplTest {
         }
 
         @Test
-        @DisplayName("throws DuplicateResourceException when hospital already exists")
+        @DisplayName("QA D833: '+226 25 36 12 40' is stored whole, as E.164 (was cut to '+226 25 36 12 4')")
+        void burkinaPhoneWithSpacesIsStoredWhole() {
+            setSuperAdmin();
+            HospitalRequestDTO dto = buildUSRequest("Clinique du Nord");
+            dto.setCountry("Burkina Faso");
+            dto.setPhoneNumber("+226 25 36 12 40");
+            when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> {
+                Hospital h = inv.getArgument(0);
+                h.setId(UUID.randomUUID());
+                return h;
+            });
+
+            hospitalService.createHospital(dto, Locale.FRENCH);
+
+            org.mockito.ArgumentCaptor<Hospital> saved = org.mockito.ArgumentCaptor.forClass(Hospital.class);
+            verify(hospitalRepository).save(saved.capture());
+            assertEquals("+22625361240", saved.getValue().getPhoneNumber());
+        }
+
+        @Test
+        @DisplayName("QA D833: a Burkina number one digit short is refused on the phone field, not saved")
+        void truncatedBurkinaPhoneIsRefused() {
+            setSuperAdmin();
+            HospitalRequestDTO dto = buildUSRequest("Clinique du Nord");
+            dto.setCountry("Burkina Faso");
+            dto.setPhoneNumber("+226 25 36 12 4");
+
+            com.example.hms.exception.FieldBusinessException refusal = assertThrows(
+                com.example.hms.exception.FieldBusinessException.class,
+                () -> hospitalService.createHospital(dto, Locale.FRENCH));
+            assertEquals("phoneNumber", refusal.getField());
+            verify(hospitalRepository, never()).save(any(Hospital.class));
+        }
+
+        @Test
+        @DisplayName("QA D167: a duplicate hospital is a ConflictException (409), not a 500")
         void duplicate() {
             setSuperAdmin();
             HospitalRequestDTO dto = buildUSRequest("Existing Hospital");
@@ -376,7 +499,20 @@ class HospitalServiceImplTest {
 
             when(hospitalRepository.existsByNameIgnoreCaseAndZipCode("Existing Hospital", "10001")).thenReturn(true);
 
-            assertThrows(DuplicateResourceException.class,
+            assertThrows(ConflictException.class,
+                    () -> hospitalService.createHospital(dto, Locale.ENGLISH));
+        }
+
+        @Test
+        @DisplayName("QA D285: a name with stray blanks is checked and stored trimmed")
+        void blankPaddedDuplicateIsRefused() {
+            setSuperAdmin();
+            HospitalRequestDTO dto = buildUSRequest("  existing   hospital ");
+            stubMessage("hospital.exists");
+
+            when(hospitalRepository.existsByNameIgnoreCaseAndZipCode("existing hospital", "10001")).thenReturn(true);
+
+            assertThrows(ConflictException.class,
                     () -> hospitalService.createHospital(dto, Locale.ENGLISH));
         }
 
@@ -431,6 +567,31 @@ class HospitalServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D833: an unchanged legacy phone does not block an edit; a new one is normalised")
+        void phoneIsNormalisedOnlyWhenChanged() {
+            setSuperAdmin();
+            UUID id = UUID.randomUUID();
+            Hospital hospital = buildHospital(id, "Clinique du Nord", "CDN-01");
+            hospital.setCountry("Burkina Faso");
+            hospital.setPhoneNumber("+226 25 36 12 4");
+            hospital.setAddress("Avenue de la Nation");
+            when(hospitalRepository.findById(id)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            HospitalRequestDTO unchanged = HospitalRequestDTO.builder().phoneNumber("+226 25 36 12 4").build();
+            hospitalService.updateHospital(id, unchanged, Locale.FRENCH);
+            assertEquals("+226 25 36 12 4", hospital.getPhoneNumber());
+
+            HospitalRequestDTO corrected = HospitalRequestDTO.builder().phoneNumber("+226 25 36 12 40").build();
+            hospitalService.updateHospital(id, corrected, Locale.FRENCH);
+            assertEquals("+22625361240", hospital.getPhoneNumber());
+
+            HospitalRequestDTO shortAgain = HospitalRequestDTO.builder().phoneNumber("25 36 12 4").build();
+            assertThrows(com.example.hms.exception.FieldBusinessException.class,
+                () -> hospitalService.updateHospital(id, shortAgain, Locale.FRENCH));
+        }
+
+        @Test
         @DisplayName("updates hospital with new organization")
         void withOrganization() {
             setSuperAdmin();
@@ -462,6 +623,22 @@ class HospitalServiceImplTest {
             assertThrows(ResourceNotFoundException.class,
                     () -> hospitalService.updateHospital(id, request, Locale.ENGLISH));
         }
+
+        @Test
+        @DisplayName("refuses a rename onto another hospital's name (D223)")
+        void duplicateNameIsAConflict() {
+            setSuperAdmin();
+            UUID id = UUID.randomUUID();
+            Hospital hospital = buildHospital(id, "Old Name", "OLD-01");
+            HospitalRequestDTO dto = buildUSRequest("QA Hôpital B");
+            when(hospitalRepository.findById(id)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.existsByNameIgnoreCaseAndZipCode(
+                    "QA Hôpital B", dto.getZipCode())).thenReturn(true);
+
+            assertThrows(com.example.hms.exception.ConflictException.class,
+                    () -> hospitalService.updateHospital(id, dto, Locale.ENGLISH));
+            verify(hospitalRepository, never()).save(any(Hospital.class));
+        }
     }
 
     // ═══════════════ deleteHospital ═══════════════
@@ -475,7 +652,9 @@ class HospitalServiceImplTest {
         void happyPath() {
             setSuperAdmin();
             UUID id = UUID.randomUUID();
-            when(hospitalRepository.existsById(id)).thenReturn(true);
+            Hospital existing = new Hospital();
+            existing.setId(id);
+            when(hospitalRepository.findByIdForUpdate(id)).thenReturn(Optional.of(existing));
 
             hospitalService.deleteHospital(id, Locale.ENGLISH);
 
@@ -488,7 +667,7 @@ class HospitalServiceImplTest {
             setSuperAdmin();
             UUID id = UUID.randomUUID();
             stubMessage("hospital.notFound");
-            when(hospitalRepository.existsById(id)).thenReturn(false);
+            when(hospitalRepository.findByIdForUpdate(id)).thenReturn(Optional.empty());
 
             assertThrows(ResourceNotFoundException.class,
                     () -> hospitalService.deleteHospital(id, Locale.ENGLISH));
@@ -926,28 +1105,30 @@ class HospitalServiceImplTest {
         @Test
         @DisplayName("US address requires state")
         void usNoState() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("No State").city("NY").country("US")
+                    .name("No State").city("NY").country("US").address("1 Main St")
                     .zipCode("10001").phoneNumber("1234567890")
                     .active(true).build();
             stubMessage("hospital.state.required");
 
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(com.example.hms.exception.FieldBusinessException.class,
                     () -> hospitalService.createHospital(dto, Locale.ENGLISH));
         }
 
         @Test
         @DisplayName("US address requires zipCode")
         void usNoZip() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("No Zip").city("NY").country("US").state("NY")
+                    .name("No Zip").city("NY").country("US").address("1 Main St").state("NY")
                     .phoneNumber("1234567890")
                     .active(true).build();
             stubMessage("hospital.zipCode.required");
 
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(com.example.hms.exception.FieldBusinessException.class,
                     () -> hospitalService.createHospital(dto, Locale.ENGLISH));
         }
 
@@ -956,7 +1137,7 @@ class HospitalServiceImplTest {
         void usaCode() {
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("USA Hospital").city("LA").country("USA")
+                    .name("USA Hospital").city("LA").country("USA").address("1 Main St")
                     .state("CA").zipCode("90001").phoneNumber("1234567890")
                     .active(true).build();
 
@@ -973,28 +1154,30 @@ class HospitalServiceImplTest {
         @Test
         @DisplayName("US address with blank state throws")
         void usBlankState() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("Blank State").city("NY").country("US").state("  ")
+                    .name("Blank State").city("NY").country("US").address("1 Main St").state("  ")
                     .zipCode("10001").phoneNumber("1234567890")
                     .active(true).build();
             stubMessage("hospital.state.required");
 
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(com.example.hms.exception.FieldBusinessException.class,
                     () -> hospitalService.createHospital(dto, Locale.ENGLISH));
         }
 
         @Test
         @DisplayName("US address with blank zipCode throws")
         void usBlankZip() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("Blank Zip").city("NY").country("US").state("NY")
+                    .name("Blank Zip").city("NY").country("US").address("1 Main St").state("NY")
                     .zipCode("  ").phoneNumber("1234567890")
                     .active(true).build();
             stubMessage("hospital.zipCode.required");
 
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(com.example.hms.exception.FieldBusinessException.class,
                     () -> hospitalService.createHospital(dto, Locale.ENGLISH));
         }
 
@@ -1012,12 +1195,50 @@ class HospitalServiceImplTest {
         }
 
         @Test
-        @DisplayName("foreign country with poBox is valid")
+        @DisplayName("QA D747: a P.O. box no longer stands in for the required street")
+        void qaD747_poBoxWithoutStreetIsRefused() {
+            // Round 10 re-test (hosp3.js): POST /hospitals with address "" and
+            // poBox "BP 45" answered 201.
+            setSuperAdmin();
+            HospitalRequestDTO dto = HospitalRequestDTO.builder()
+                    .name("Clinique Notre-Dame de Fada").city("Fada N'Gourma").country("Burkina Faso")
+                    .address("").poBox("BP 45").phoneNumber("+22640770011").active(true).build();
+            stubMessage("hospital.address.required");
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> hospitalService.createHospital(dto, Locale.ENGLISH));
+            verify(hospitalRepository, never()).save(any(Hospital.class));
+        }
+
+        @Test
+        @DisplayName("QA D747: an update that empties the street is refused; one that omits it keeps it")
+        void qaD747_updateStreetRule() {
+            setSuperAdmin();
+            UUID id = UUID.randomUUID();
+            Hospital stored = new Hospital();
+            stored.setId(id);
+            stored.setName("Centre Médical Saint-Camille");
+            stored.setAddress("Avenue de la Nation");
+            when(hospitalRepository.findById(id)).thenReturn(Optional.of(stored));
+            stubMessage("hospital.address.required");
+
+            HospitalRequestDTO emptied = HospitalRequestDTO.builder().address("   ").poBox("01 BP 1234").build();
+            assertThrows(IllegalArgumentException.class,
+                    () -> hospitalService.updateHospital(id, emptied, Locale.ENGLISH));
+            verify(hospitalRepository, never()).save(any(Hospital.class));
+
+            when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+            HospitalRequestDTO omitted = HospitalRequestDTO.builder().phoneNumber("+22625441122").build();
+            assertNotNull(hospitalService.updateHospital(id, omitted, Locale.ENGLISH));
+        }
+
+        @Test
+        @DisplayName("foreign country with street and poBox is valid")
         void foreignWithPoBox() {
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("Foreign PO").city("Ouaga").country("BF")
-                    .poBox("BP 123").phoneNumber("1234567890").active(true).build();
+                    .name("Foreign PO").city("Ouaga").country("BF").address("Avenue Kwame Nkrumah")
+                    .poBox("BP 123").phoneNumber("+226 25 30 00 00").active(true).build();
 
             when(hospitalRepository.existsByNameIgnoreCaseAndZipCode(any(), any())).thenReturn(false);
             when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> {
@@ -1092,7 +1313,7 @@ class HospitalServiceImplTest {
                 .thenReturn(null);
 
         // null-guard in getAllHospitals returns empty list
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertTrue(result.isEmpty());
     }
 
@@ -1320,7 +1541,7 @@ class HospitalServiceImplTest {
     }
 
     @Test
-    @DisplayName("getAllHospitals returns hospitals with null id (no scope filtering)")
+    @DisplayName("QA D36: getAllHospitals drops a hospital with no id (it cannot be in scope)")
     void getAllHospitals_hospitalWithNullIdFiltered() {
         UUID scopedId = UUID.randomUUID();
         setScopedContext(scopedId);
@@ -1332,9 +1553,8 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1, h2));
 
-        // No scope filtering — both hospitals returned (directory is public)
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
-        assertEquals(2, result.size());
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
+        assertEquals(1, result.size());
     }
 
     @Test
@@ -1352,7 +1572,7 @@ class HospitalServiceImplTest {
                 .thenReturn(hospitals);
 
         // null entries are filtered out; non-null hospitals are kept
-        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
+        List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
         assertEquals(1, result.size());
     }
 

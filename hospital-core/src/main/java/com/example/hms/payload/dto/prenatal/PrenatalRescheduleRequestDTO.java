@@ -32,4 +32,8 @@ public class PrenatalRescheduleRequestDTO {
     private UUID newStaffId;
 
     private String notes;
+
+    /** QA D1429: why the visit moves outside any published free slot; required then. */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String overbookReason;
 }

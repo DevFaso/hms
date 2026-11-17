@@ -1,12 +1,14 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.InvoiceStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.BillingInvoice;
 import com.example.hms.model.InvoiceItem;
 import com.example.hms.payload.dto.EmailInvoiceRequest;
 import com.example.hms.repository.BillingInvoiceRepository;
 import com.example.hms.repository.InvoiceItemRepository;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,23 +21,43 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class InvoiceEmailService {
 
+    private static final String NOT_FOUND = "billinginvoice.notfound";
+
     private final BillingInvoiceRepository billingInvoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
     private final PdfInvoiceService pdfInvoiceService;
     private final EmailService emailService;
+    private final RoleValidator roleValidator;
+    /** QA D974: the adjustments go on the mailed paper too, so lines and total agree. */
+    private final com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository;
 
-    @Transactional
+    @Transactional(readOnly = true)
     public void emailInvoice(UUID invoiceId, EmailInvoiceRequest req) {
         // Load invoice with patient & hospital to avoid LazyInitialization issues
         var invoice = billingInvoiceRepository.findByIdWithRefs(invoiceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Invoice not found: " + invoiceId));
+            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND, invoiceId));
+        // QA D755: the invoice id is a claim. Another hospital's invoice is
+        // "not found" (404, as GET answers), never mailed to an outside address.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && (invoice.getHospital() == null
+                || !activeHospitalId.equals(invoice.getHospital().getId()))) {
+            throw new ResourceNotFoundException(NOT_FOUND, invoiceId);
+        }
+        // QA D758: mailing is not issuing. A draft is issued on purpose
+        // (status SENT) before it leaves the hospital; it never flips here.
+        if (invoice.getStatus() == null || invoice.getStatus() == InvoiceStatus.DRAFT) {
+            throw new BusinessException("billing.invoice.emailDraft");
+        }
+        if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            throw new BusinessException("billing.invoice.cancelledLocked");
+        }
 
         List<InvoiceItem> items = invoiceItemRepository.findByBillingInvoiceId(invoiceId);
 
         Locale locale = req.locale() != null ? Locale.forLanguageTag(req.locale()) : Locale.FRENCH /* French-first: a missing locale must not mail an English invoice */;
 
         byte[] pdf = req.attachPdf()
-            ? pdfInvoiceService.generateInvoicePdf(invoice, items, locale)
+            ? pdfInvoiceService.generateInvoicePdf(invoice, items, List.of(), adjustmentsWithoutReasons(invoiceId), locale)
             : null;
 
         String subject = "Invoice " + nullSafe(invoice.getInvoiceNumber());
@@ -46,10 +68,6 @@ public class InvoiceEmailService {
             subject, body,
             pdf, "invoice-" + invoice.getInvoiceNumber() + ".pdf", "application/pdf"
         );
-
-        // update invoice status, not the item
-        invoice.setStatus(InvoiceStatus.SENT);
-        billingInvoiceRepository.save(invoice);
     }
 
     private static String buildEmailBody(BillingInvoice inv, String custom) {
@@ -65,10 +83,22 @@ public class InvoiceEmailService {
             nullSafe(inv.getInvoiceDate()),
             nullSafe(inv.getDueDate()),
             nullSafe(inv.getTotalAmount()),
-            custom != null ? "<p>"+custom+"</p>" : "",
+            custom != null ? "<p>" + org.springframework.web.util.HtmlUtils.htmlEscape(custom) + "</p>" : "",
             hospitalName
         );
     }
 
     private static String nullSafe(Object o) { return o == null ? "" : String.valueOf(o); }
+
+    /** QA D974: the mail may reach the patient; the clerk's reason stays with billing. */
+    private List<com.example.hms.model.InvoiceAdjustment> adjustmentsWithoutReasons(UUID invoiceId) {
+        if (adjustmentRepository == null) {
+            return List.of();
+        }
+        // QA D1105: only what still lowers the bill; a reversed adjustment is not mailed.
+        return adjustmentRepository.findByInvoice_IdAndReversedAtIsNullOrderByCreatedAtAsc(invoiceId).stream()
+            .map(a -> com.example.hms.model.InvoiceAdjustment.builder().invoice(a.getInvoice())
+                .invoiceItem(a.getInvoiceItem()).type(a.getType()).amount(a.getAmount()).build())
+            .toList();
+    }
 }

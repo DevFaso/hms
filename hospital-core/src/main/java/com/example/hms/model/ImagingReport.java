@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingReportStatus;
 import com.example.hms.security.context.HospitalContext;
@@ -270,6 +271,21 @@ public class ImagingReport extends BaseEntity implements TenantScoped {
         return signedAt != null;
     }
 
+    /**
+     * May the patient themselves read this report? Only once it is signed —
+     * the one ceremony that makes a read available at all ({@code signReport}
+     * promotes the order to RESULTS_AVAILABLE for the ordering clinician) — and
+     * not after it was voided or rejected. A DRAFT or PRELIMINARY read, which
+     * can carry an unconfirmed critical finding nobody has told the patient
+     * about yet, is the care team's until it is signed. The lab counterpart
+     * is {@code LabResult.isReleased}.
+     */
+    public boolean isReleasedToPatient() {
+        return isSigned()
+            && reportStatus != ImagingReportStatus.CANCELLED
+            && reportStatus != ImagingReportStatus.ERROR;
+    }
+
     public boolean isCriticalFlagged() {
         return criticalResultFlaggedAt != null;
     }
@@ -301,12 +317,12 @@ public class ImagingReport extends BaseEntity implements TenantScoped {
 
     @Override
     public void applyTenantScope(HospitalContext context) {
-        if (context == null || context.getActiveHospitalId() == null) {
+        if (context == null || ActingScopeResolver.pinnedHospitalIdOf(context) == null) {
             return;
         }
         if (hospital == null) {
             hospital = new Hospital();
-            hospital.setId(context.getActiveHospitalId());
+            hospital.setId(ActingScopeResolver.pinnedHospitalIdOf(context));
         }
         if (organization == null && context.getActiveOrganizationId() != null) {
             organization = new Organization();

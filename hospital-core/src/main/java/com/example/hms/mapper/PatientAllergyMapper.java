@@ -36,6 +36,8 @@ public class PatientAllergyMapper {
             .lastOccurrenceDate(allergy.getLastOccurrenceDate())
             .recordedDate(allergy.getRecordedDate())
             .active(allergy.isActive())
+            .deactivationReason(allergy.getDeactivationReason())
+            .deactivatedAt(allergy.getDeactivatedAt())
             .recordedBy(recordedBy)
             .sourceSystem(allergy.getSourceSystem())
             .createdAt(allergy.getCreatedAt())

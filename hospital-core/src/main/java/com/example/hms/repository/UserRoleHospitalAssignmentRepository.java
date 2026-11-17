@@ -8,12 +8,14 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -29,13 +31,58 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     long countByHospitalIsNullAndActiveTrue();
 
+    /**
+     * QA D418: claims the anonymous re-send of a pending activation code, in
+     * the database so the cooldown holds across instances. Succeeds (returns
+     * 1) only for a row still waiting for its code (inactive, code not
+     * revoked) whose last code went out before {@code cooldownCutoff}; it then
+     * stores a fresh code and stamps the send, so the re-sent code is valid
+     * for the full expiry window even when the first one had lapsed. Two
+     * parallel claims update the row once: the second sees the new stamp.
+     *
+     * <p>QA D789: never for a row at a hospital in one of {@code closedStates}
+     * ({@code FacilityAssignmentGuard.CLOSED_STATES}): an archived hospital's
+     * invitation is neither rotated nor re-sent. A global row (no hospital)
+     * is never at a closed one.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE UserRoleHospitalAssignment a SET a.confirmationCode = :code, a.confirmationSentAt = :now "
+        + "WHERE a.id = :id AND a.active = false AND a.confirmationCode IS NOT NULL "
+        + "AND (a.confirmationSentAt IS NULL OR a.confirmationSentAt < :cooldownCutoff) "
+        + "AND NOT EXISTS (SELECT h.id FROM Hospital h WHERE h.id = a.hospital.id "
+        + "AND h.lifecycleState IN :closedStates)")
+    int claimActivationResend(@Param("id") UUID id, @Param("code") String code,
+                              @Param("now") java.time.LocalDateTime now,
+                              @Param("cooldownCutoff") java.time.LocalDateTime cooldownCutoff,
+                              @Param("closedStates")
+                              java.util.Collection<com.example.hms.enums.HospitalLifecycleState> closedStates);
+
     /* ------------ Basic lookups ------------ */
     List<UserRoleHospitalAssignment> findByUserId(UUID userId);
 
     /** Prefer this over Optional for multi-row relation */
     List<UserRoleHospitalAssignment> findAllByUserId(UUID userId);
 
-    Optional<UserRoleHospitalAssignment> findByUserIdAndHospitalId(UUID userId, UUID hospitalId);
+    /**
+     * The ACTIVE, non-patient assignments a user holds at one hospital, oldest
+     * first. An inactive row (a pending invitation, a retired grant, or a
+     * ROLE_PATIENT a patient registration attached to a staff account) never
+     * counts as the user's working role there, and a user may hold several
+     * roles at one hospital, so this is a list, never a unique lookup.
+     */
+    @Query("""
+        SELECT a FROM UserRoleHospitalAssignment a
+        WHERE a.user.id = :userId AND a.hospital.id = :hospitalId
+          AND a.active = true AND UPPER(a.role.code) <> 'ROLE_PATIENT'
+        ORDER BY a.createdAt ASC
+        """)
+    List<UserRoleHospitalAssignment> findActiveStaffAssignments(@Param("userId") UUID userId,
+                                                                @Param("hospitalId") UUID hospitalId);
+
+    /** The first of {@link #findActiveStaffAssignments}: the role a staff member works under at a hospital. */
+    default Optional<UserRoleHospitalAssignment> findActiveStaffAssignment(UUID userId, UUID hospitalId) {
+        return findActiveStaffAssignments(userId, hospitalId).stream().findFirst();
+    }
 
     Optional<UserRoleHospitalAssignment> findByUserUsernameAndHospitalIdAndRoleCodeIgnoreCase(
         String username, UUID hospitalId, String roleCode);
@@ -46,11 +93,25 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     Optional<UserRoleHospitalAssignment> findFirstByUser_IdAndHospital_IdAndActiveTrue(UUID userId, UUID hospitalId);
 
+    /**
+     * QA D1632: every active assignment the user holds at one hospital, so the
+     * caller can pick the one whose role the request is ACTING under
+     * ({@code ActingAssignments}). The role is EAGER; nothing else is read.
+     */
+    List<UserRoleHospitalAssignment> findAllByUser_IdAndHospital_IdAndActiveTrue(UUID userId, UUID hospitalId);
+
+    /** QA D516: an active assignment at the hospital holding one of these role codes (oldest first). */
+    Optional<UserRoleHospitalAssignment> findFirstByHospital_IdAndRole_CodeInAndActiveTrueOrderByCreatedAtAsc(
+        UUID hospitalId, Collection<String> roleCodes);
+
     List<UserRoleHospitalAssignment> findByUser_IdAndActiveTrue(UUID userId);
 
     Optional<UserRoleHospitalAssignment> findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(UUID userId, String roleCode);
 
     List<UserRoleHospitalAssignment> findByRoleId(UUID roleId);
+
+    /** Whether any assignment, live or retired, still carries this role. */
+    boolean existsByRoleId(UUID roleId);
 
     Optional<UserRoleHospitalAssignment> findFirstByHospitalIdAndRole_Name(UUID hospitalId, String roleName);
 
@@ -73,7 +134,13 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     /* ------------ Existence checks ------------ */
     boolean existsByUserIdAndHospitalIdAndActiveTrue(UUID userId, UUID hospitalId);
 
+    /** A hospital the user held once: an inactive assignment there (ActingScopeResolver's NO_LONGER_PERMITTED). */
+    boolean existsByUserIdAndHospitalIdAndActiveFalse(UUID userId, UUID hospitalId);
+
     boolean existsByUserIdAndActiveTrue(UUID userId);
+
+    /** Any assignment, active or not, whose role is not the given one (QA D24: is this a staff account?). */
+    boolean existsByUserIdAndRole_CodeNot(UUID userId, String roleCode);
 
     boolean existsByUserIdAndHospitalIdAndRoleId(UUID userId, UUID hospitalId, UUID roleId);
 
@@ -95,6 +162,100 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     boolean existsActiveByUserAndHospitalAndAnyRoleCode(@Param("userId") UUID userId,
                                                         @Param("hospitalId") UUID hospitalId,
                                                         @Param("roleCodes") Set<String> roleCodes);
+
+    /**
+     * QA D314: how many distinct people hold a role at a hospital. A lab with
+     * a single director cannot have its QA review and its director approval
+     * done by two different directors. QA D523: only people who can still
+     * sign in count - a disabled or deleted director left with an active
+     * assignment must not block the only working one.
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT a.user.id)
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) = :roleCode
+    """)
+    long countActiveUsersWithRoleCodeAtHospital(@Param("hospitalId") UUID hospitalId,
+                                                @Param("roleCode") String roleCode);
+
+    /**
+     * QA D902: every live assignment holding one of these role codes (active,
+     * on an active, undeleted account). Not a lock by itself: a caller that
+     * decides "another one remains" from it first takes
+     * {@link RoleRepository#lockRolesWithCodes} on those codes, so the count
+     * is read after any racing removal has committed.
+     */
+    @Query("""
+        SELECT a
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
+          AND UPPER(a.role.code) IN (:roleCodes)
+    """)
+    List<UserRoleHospitalAssignment> findLiveAssignmentsWithRoleCodes(@Param("roleCodes") Set<String> roleCodes);
+
+    /**
+     * QA D157 (#891 review): a controlled-substance witness must be an active,
+     * undeleted account as well as hold an active assignment.
+     */
+    @Query("""
+        SELECT (COUNT(a) > 0)
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
+          AND a.user.id = :userId
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) IN (:roleCodes)
+    """)
+    boolean existsActiveWitness(@Param("userId") UUID userId,
+                                @Param("hospitalId") UUID hospitalId,
+                                @Param("roleCodes") Set<String> roleCodes);
+
+    /** The live holders of these roles at one hospital; the same test {@link #existsActiveWitness} applies. */
+    @Query("""
+        SELECT a.user
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) IN (:roleCodes)
+    """)
+    List<com.example.hms.model.User> findLiveUsersAtHospitalWithRoleCodes(@Param("hospitalId") UUID hospitalId,
+                                                                          @Param("roleCodes") Set<String> roleCodes);
+
+    /**
+     * QA D1610: the staff of ONE hospital, each once: an active, non-patient assignment there on an
+     * undeleted account. An announcement made at a hospital notifies these people and nobody else.
+     */
+    @Query("""
+        SELECT DISTINCT a.user
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isDeleted = FALSE
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) NOT IN ('ROLE_PATIENT', 'PATIENT')
+    """)
+    List<com.example.hms.model.User> findLiveStaffUsersAtHospital(@Param("hospitalId") UUID hospitalId);
+
+    /**
+     * QA D1610: the staff of EVERY hospital, each once. Only a platform-wide announcement, posted by a
+     * super-admin in global view, may fan out to them; {@code NotificationFanOutScopeGuardTest} holds that.
+     */
+    @Query("""
+        SELECT DISTINCT a.user
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isDeleted = FALSE
+          AND UPPER(a.role.code) NOT IN ('ROLE_PATIENT', 'PATIENT')
+    """)
+    List<com.example.hms.model.User> findLiveStaffUsersPlatformWide();
 
     /* ------------ Fetch graphs for DTO mapping ------------ */
 
@@ -163,6 +324,14 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
                                                        @Param("hospitalId") UUID hospitalId);
 
     Optional<UserRoleHospitalAssignment> findByUserIdAndRoleNameAndHospitalName(UUID id, String roleName, String hospitalName);
+
+    /**
+     * Every assignment at one facility, active or not, with its holder and
+     * role: a provider facility's staff page (provider plan AC-6).
+     */
+    @EntityGraph(attributePaths = {"user", "role"})
+    @Query("SELECT a FROM UserRoleHospitalAssignment a WHERE a.hospital.id = :hospitalId")
+    List<UserRoleHospitalAssignment> findStaffRowsByHospitalId(@Param("hospitalId") UUID hospitalId);
 
     /** Batch-fetch assignments for multiple users (avoids N+1 on paged endpoints). */
     @EntityGraph(attributePaths = {"role"})

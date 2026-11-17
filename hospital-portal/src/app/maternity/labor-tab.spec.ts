@@ -1,15 +1,28 @@
+import { nowLocalDatetime } from '../shared/date-utils';
 import { TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { LaborTabComponent } from './labor-tab';
+import { LaborTabComponent, PARTOGRAPH_LIMITS } from './labor-tab';
+import { VITAL_SIGN_LIMITS } from '../shared/vital-sign-limits';
 import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../testing/form-refusal-behaviour';
+import {
+  DeliveryRecordResponse,
   LaborService,
   LaborEpisodeResponse,
   PartographEntryResponse,
 } from '../services/labor.service';
+import { provideRouter } from '@angular/router';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import { HospitalService } from '../services/hospital.service';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 
 function episode(id: string, status: LaborEpisodeResponse['status']): LaborEpisodeResponse {
   return {
@@ -109,6 +122,14 @@ describe('LaborTabComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('D65: with no patient picked, shows the labour hint, not the referrals one', () => {
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('LABOR.PICK_PATIENT_HINT');
+    expect(text).not.toContain('MATERNITY.PICK_PATIENT_HINT');
+  });
+
   it('picking a patient loads episodes and entries of the active episode', () => {
     laborSpy.episodes.and.returnValue(of([episode('e1', 'ACTIVE')]));
     laborSpy.entries.and.returnValue(of([entry('pe1')]));
@@ -121,17 +142,81 @@ describe('LaborTabComponent', () => {
     expect(component.entries().length).toBe(1);
   });
 
+  it("D1631: another hospital's active labour is shown read only, named, with no record button", () => {
+    TestBed.inject(RoleContextService).activeHospitalId = 'hA';
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('eB', 'ACTIVE'), hospitalId: 'hB', hospitalName: 'Hôpital B' }]),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(fixture.componentInstance.activeEpisodeForeign()).toBeTrue();
+    expect(host.querySelector('[data-testid="labor-foreign-episode"]')).not.toBeNull();
+    const buttons = Array.from(host.querySelectorAll('button')).map((b) => b.textContent ?? '');
+    expect(buttons.some((t) => t.includes('LABOR.NEW_ENTRY'))).toBeFalse();
+    expect(buttons.some((t) => t.includes('LABOR.RECORD_DELIVERY'))).toBeFalse();
+    expect(buttons.some((t) => t.includes('LABOR.START_EPISODE'))).toBeFalse();
+    // Its partograph is still read.
+    expect(laborSpy.entries).toHaveBeenCalledWith('p1', 'eB');
+  });
+
+  it("D1631: the own hospital's active labour keeps its record buttons", () => {
+    TestBed.inject(RoleContextService).activeHospitalId = 'h1';
+    laborSpy.episodes.and.returnValue(of([episode('e1', 'ACTIVE')]));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(fixture.componentInstance.activeEpisodeForeign()).toBeFalse();
+    expect(host.querySelector('[data-testid="labor-foreign-episode"]')).toBeNull();
+    const buttons = Array.from(host.querySelectorAll('button')).map((b) => b.textContent ?? '');
+    expect(buttons.some((t) => t.includes('LABOR.NEW_ENTRY'))).toBeTrue();
+  });
+
   it('startEpisode posts and reloads on success', () => {
     component.patient.set({ id: 'p1' } as PatientResponse);
     laborSpy.startEpisode.and.returnValue(of(episode('e2', 'ACTIVE')));
     laborSpy.episodes.and.returnValue(of([episode('e2', 'ACTIVE')]));
 
     component.openStartForm();
+    component.startForm.laborOnsetAt = '2026-10-19T06:00';
     component.submitStart();
 
     expect(laborSpy.startEpisode).toHaveBeenCalledWith('p1', jasmine.any(Object));
     expect(toastSpy.success).toHaveBeenCalled();
     expect(component.startFormOpen()).toBeFalse();
+  });
+
+  it('D295: an episode is not started without an onset time', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+
+    component.openStartForm();
+    component.submitStart();
+
+    expect(laborSpy.startEpisode).not.toHaveBeenCalled();
+    expect(component.startFormOpen()).toBeTrue();
+  });
+
+  it('D214: a refused start shows the server reason and sends the override', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    laborSpy.startEpisode.and.returnValue(
+      throwError(() => ({ status: 400, error: { message: 'Naissance récente : motif requis' } })),
+    );
+
+    component.openStartForm();
+    component.startForm.laborOnsetAt = '2026-10-19T06:00';
+    component.startForm.recentDeliveryOverrideReason = 'Second jumeau';
+    component.submitStart();
+
+    expect(laborSpy.startEpisode).toHaveBeenCalledWith(
+      'p1',
+      jasmine.objectContaining({ recentDeliveryOverrideReason: 'Second jumeau' }),
+    );
+    expect(toastSpy.error).toHaveBeenCalledWith('Naissance récente : motif requis');
+    expect(component.startFormOpen()).toBeTrue();
   });
 
   it('submitEntry rejects an all-empty form', () => {
@@ -183,6 +268,86 @@ describe('LaborTabComponent', () => {
     expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
   });
 
+  it('QA D745/D746: a delivery dated in the future shows the field reason', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([episode('e1', 'ACTIVE')]);
+    laborSpy.recordDelivery.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: 'La demande contient des erreurs de validation',
+          fieldErrors: { birthDateTime: 'Cette heure ne peut pas être dans le futur.' },
+        },
+      })),
+    );
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.submitDelivery();
+
+    expect(toastSpy.error).toHaveBeenCalledWith('Cette heure ne peut pas être dans le futur.');
+  });
+
+  it('QA r46: born before arrival is offered only on a continued episode and needs its reason', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([episode('e1', 'ACTIVE')]);
+    expect(component.bornBeforeArrivalOffered()).toBeFalse();
+
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    expect(component.bornBeforeArrivalOffered()).toBeTrue();
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.bornBeforeArrival = true;
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+
+    laborSpy.recordDelivery.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).toHaveBeenCalledWith(
+      'p1',
+      'e1',
+      jasmine.objectContaining({
+        bornBeforeArrival: true,
+        bornBeforeArrivalReason: 'Née pendant le trajet',
+      }),
+    );
+  });
+
+  it('Rex on #1140: an admission entry here never blocks a birth declared before arrival', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    component.entries.set([{ observationTime: '2026-11-13T23:00:00' } as PartographEntryResponse]);
+    laborSpy.recordDelivery.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.birthDateTime = '2026-11-13T00:30';
+
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+
+    component.deliveryForm.bornBeforeArrival = true;
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+    component.submitDelivery();
+    expect(laborSpy.recordDelivery).toHaveBeenCalled();
+  });
+
+  it('Rex on #1140: an observation here before the birth refuses the declaration', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([{ ...episode('e1', 'ACTIVE'), transferredFromEpisodeId: 'eB' }]);
+    component.entries.set([{ observationTime: '2026-11-12T00:00:00' } as PartographEntryResponse]);
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.birthDateTime = '2026-11-13T12:00';
+    component.deliveryForm.bornBeforeArrival = true;
+    component.deliveryForm.bornBeforeArrivalReason = 'Née pendant le trajet';
+
+    component.submitDelivery();
+
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
   it('submitDelivery posts and closes the form', () => {
     component.patient.set({ id: 'p1' } as PatientResponse);
     component.episodes.set([episode('e1', 'ACTIVE')]);
@@ -216,9 +381,14 @@ describe('LaborTabComponent', () => {
     // Mirror real usage: the mode is chosen after the form opens (opening
     // resets the form to its live-birth defaults).
     component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    // #941 review: "now" on the workstation's wall clock goes out as UTC.
+    component.deliveryForm.birthDateTime = nowLocalDatetime(new Date(Date.UTC(2026, 9, 24, 9, 0)));
     component.submitDelivery();
 
     expect(laborSpy.recordDelivery).toHaveBeenCalledWith('p1', 'e1', jasmine.any(Object));
+    expect(laborSpy.recordDelivery.calls.mostRecent().args[2].birthDateTime).toBe(
+      '2026-10-24T09:00:00',
+    );
     expect(component.deliveryFormOpen()).toBeFalse();
     expect(toastSpy.success).toHaveBeenCalled();
   });
@@ -229,5 +399,955 @@ describe('LaborTabComponent', () => {
     component.onPatientChange({ id: 'p1' } as PatientResponse);
 
     expect(toastSpy.error).toHaveBeenCalled();
+  });
+  /* ── Round 13 browser walk (QA D806, D808, D809, D811) ── */
+
+  function useFrench(): void {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      FIELD_LIMITS: {
+        RANGE: '{{field}} : la valeur doit être comprise entre {{min}} et {{max}}.',
+        MIN: '{{field}} : la valeur doit être supérieure ou égale à {{min}}.',
+        FIELD_REASON: '{{field}} : {{reason}}',
+      },
+      LABOR: {
+        DILATION: 'Dilatation (cm)',
+        APGAR_ONE: 'APGAR à 1 min',
+        BIRTH_BEFORE_LAST_ENTRY: 'Heure de naissance : avant le partogramme.',
+        PLACENTA_BEFORE_BIRTH: 'Délivrance du placenta : avant la naissance.',
+        ACTIVE_EPISODE: 'Travail en cours',
+        STATUS_ACTIVE: 'En travail',
+      },
+      MATERNITY: {
+        GRAVIDA: 'Gestité',
+        PARA: 'Parité (P)',
+        PARA_ABOVE_GRAVIDA: 'P ne peut pas dépasser G.',
+      },
+    });
+    translate.use('fr');
+  }
+
+  function activeEpisodeWith(entries: PartographEntryResponse[]): void {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([episode('e1', 'ACTIVE')]);
+    component.entries.set(entries);
+  }
+
+  it('QA D808: a dilation of 15 is refused before sending, naming the field', () => {
+    useFrench();
+    activeEpisodeWith([]);
+    component.entryForm = { cervicalDilationCm: 15 };
+
+    component.submitEntry();
+
+    expect(laborSpy.addEntry).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith(
+      'Dilatation (cm) : la valeur doit être comprise entre 0 et 10.',
+    );
+  });
+
+  it('QA D808: an APGAR of 15 is refused before sending, naming the field', () => {
+    useFrench();
+    activeEpisodeWith([]);
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.apgarOneMinute = 15;
+
+    component.submitDelivery();
+
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith(
+      'APGAR à 1 min : la valeur doit être comprise entre 0 et 10.',
+    );
+  });
+
+  it('QA D808: a bare server constraint reason is shown after the field label', () => {
+    useFrench();
+    activeEpisodeWith([]);
+    laborSpy.addEntry.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Validation Failed',
+          message: 'La demande contient des erreurs de validation',
+          fieldErrors: { cervicalDilationCm: 'doit être inférieur ou égal à 10' },
+        },
+      })),
+    );
+    component.entryForm = { cervicalDilationCm: 9 };
+
+    component.submitEntry();
+
+    expect(toastSpy.error).toHaveBeenCalledWith(
+      'Dilatation (cm) : doit être inférieur ou égal à 10',
+    );
+  });
+
+  it('QA D806: a birth earlier than a charted partograph entry is refused before sending', () => {
+    useFrench();
+    const charted = { ...entry('pe1'), observationTime: '2026-10-25T18:42:00' };
+    activeEpisodeWith([charted]);
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    // 18:23 UTC on the workstation's wall clock, before the 18:42 UTC entry.
+    component.deliveryForm.birthDateTime = nowLocalDatetime(
+      new Date(Date.UTC(2026, 9, 25, 18, 23)),
+    );
+
+    component.submitDelivery();
+
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('Heure de naissance : avant le partogramme.');
+  });
+
+  it('QA D806: a placenta delivered before the birth is refused before sending', () => {
+    useFrench();
+    activeEpisodeWith([{ ...entry('pe1'), observationTime: '2026-10-25T18:00:00' }]);
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.birthDateTime = nowLocalDatetime(
+      new Date(Date.UTC(2026, 9, 25, 18, 23)),
+    );
+    component.deliveryForm.placentaDeliveredAt = nowLocalDatetime(
+      new Date(Date.UTC(2026, 9, 25, 15, 43)),
+    );
+
+    component.submitDelivery();
+
+    expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('Délivrance du placenta : avant la naissance.');
+  });
+
+  it('QA D806: times in order (birth after the last entry, placenta after the birth) are sent', () => {
+    activeEpisodeWith([{ ...entry('pe1'), observationTime: '2026-10-25T18:00:00' }]);
+    laborSpy.recordDelivery.and.returnValue(throwError(() => ({ status: 500 })));
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.deliveryForm.birthDateTime = nowLocalDatetime(
+      new Date(Date.UTC(2026, 9, 25, 18, 23)),
+    );
+    component.deliveryForm.placentaDeliveredAt = nowLocalDatetime(
+      new Date(Date.UTC(2026, 9, 25, 18, 35)),
+    );
+
+    component.submitDelivery();
+
+    expect(laborSpy.recordDelivery).toHaveBeenCalled();
+  });
+
+  it('QA D806: the server refusal on the birth field is shown as sent (it names the field)', () => {
+    activeEpisodeWith([]);
+    laborSpy.recordDelivery.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Bad Request',
+          message: "L'heure de naissance ne peut pas précéder une observation du partogramme.",
+          fieldErrors: {
+            birthDateTime:
+              "L'heure de naissance ne peut pas précéder une observation du partogramme.",
+          },
+        },
+      })),
+    );
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+
+    component.submitDelivery();
+
+    expect(toastSpy.error).toHaveBeenCalledWith(
+      "L'heure de naissance ne peut pas précéder une observation du partogramme.",
+    );
+  });
+
+  it('QA D809: an admission typed G1 P3 is refused before sending', () => {
+    useFrench();
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.openStartForm();
+    component.startForm.laborOnsetAt = '2026-10-19T06:00';
+    component.startForm.gravida = 1;
+    component.startForm.para = 3;
+
+    component.submitStart();
+
+    expect(laborSpy.startEpisode).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('P ne peut pas dépasser G.');
+  });
+
+  it('QA D809: a negative parity is refused before sending, naming the field', () => {
+    useFrench();
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.openStartForm();
+    component.startForm.laborOnsetAt = '2026-10-19T06:00';
+    component.startForm.para = -1;
+
+    component.submitStart();
+
+    expect(laborSpy.startEpisode).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith(
+      'Parité (P) : la valeur doit être supérieure ou égale à 0.',
+    );
+  });
+
+  it('Review of #958: an admission typed G0 is refused before sending (a woman in labour is pregnant)', () => {
+    useFrench();
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.openStartForm();
+    component.startForm.laborOnsetAt = '2026-10-19T06:00';
+    component.startForm.gravida = 0;
+    component.startForm.para = 0;
+
+    component.submitStart();
+
+    expect(laborSpy.startEpisode).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith(
+      'Gestité : la valeur doit être supérieure ou égale à 1.',
+    );
+  });
+
+  it('QA D811: the active labour shows its status once, and a missing temperature as a bare dash', () => {
+    useFrench();
+    laborSpy.episodes.and.returnValue(of([episode('e1', 'ACTIVE')]));
+    laborSpy.entries.and.returnValue(of([{ ...entry('pe1'), temperatureCelsius: null }]));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Travail en cours');
+    expect(text).not.toContain('En travail');
+    expect(text).not.toContain('—°C');
+    expect(text).not.toContain('— °C');
+  });
+  /* ── Round 13 re-test (QA D827) ── */
+
+  for (const [lang, bundle, expected] of [
+    ['fr', fr, 'Pertes sanguines : 250 ml'],
+    ['es', es, 'Pérdida de sangre: 250 ml'],
+  ] as const) {
+    it(`QA D827 (${lang}): the delivery summary names the blood-loss unit once`, () => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(lang, bundle);
+      translate.use(lang);
+      const delivered = { ...episode('e1', 'DELIVERED'), deliveryRecorded: true };
+      laborSpy.episodes.and.returnValue(of([delivered]));
+      laborSpy.delivery.and.returnValue(
+        of({
+          id: 'd1',
+          episodeId: 'e1',
+          patientId: 'p1',
+          deliveredByStaffName: null,
+          birthDateTime: '2026-10-25T10:00:00',
+          deliveryMode: 'SPONTANEOUS_VAGINAL',
+          liveBirth: true,
+          numberOfInfants: 1,
+          infantSex: null,
+          birthWeightGrams: null,
+          gestationalAgeWeeksAtBirth: null,
+          apgarOneMinute: null,
+          apgarFiveMinute: null,
+          placentaDeliveredAt: null,
+          placentaComplete: null,
+          uterotonicGiven: null,
+          estimatedBloodLossMl: 250,
+          perinealTear: null,
+          notes: null,
+          alerts: [],
+        }),
+      );
+      const fixture = TestBed.createComponent(LaborTabComponent);
+      fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+      fixture.detectChanges();
+
+      const text = ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+      expect(text).toContain(expected);
+      expect(text).not.toContain('(ml)');
+    });
+  }
+  /* ── Round 18 (QA D1068): what the midwife typed is read back ── */
+
+  it('QA D1068: the delivery summary shows the placenta, the uterotonic and the notes', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    const delivered = { ...episode('e1', 'DELIVERED'), deliveryRecorded: true };
+    laborSpy.episodes.and.returnValue(of([delivered]));
+    laborSpy.delivery.and.returnValue(
+      of({
+        id: 'd1',
+        episodeId: 'e1',
+        patientId: 'p1',
+        deliveredByStaffName: null,
+        birthDateTime: '2026-10-30T17:12:00',
+        deliveryMode: 'SPONTANEOUS_VAGINAL',
+        liveBirth: true,
+        numberOfInfants: 1,
+        infantSex: null,
+        birthWeightGrams: null,
+        gestationalAgeWeeksAtBirth: null,
+        apgarOneMinute: null,
+        apgarFiveMinute: null,
+        placentaDeliveredAt: '2026-10-30T17:20:00',
+        placentaComplete: true,
+        uterotonicGiven: true,
+        estimatedBloodLossMl: null,
+        perinealTear: null,
+        notes: 'Déchirure suturée, mère stable',
+        alerts: [],
+      }),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const stage = (
+      el.querySelector('[data-testid="delivery-third-stage"]')?.textContent ?? ''
+    ).replace(/\s+/g, ' ');
+    expect(stage).toContain('Placenta complet : Oui');
+    expect(stage).toContain('Utérotonique administré (GATPA) : Oui');
+    expect(el.querySelector('[data-testid="delivery-notes"]')?.textContent).toContain(
+      'Déchirure suturée, mère stable',
+    );
+  });
+
+  it('QA D1068: the partograph lists the drugs and notes of each observation, and the risk notes', () => {
+    useFrench();
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'ACTIVE'), riskNotes: 'Antécédent de césarienne' }]),
+    );
+    laborSpy.entries.and.returnValue(
+      of([{ ...entry('pe1'), drugsGiven: 'Ocytocine 5 UI', notes: 'Poche des eaux rompue' }]),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const cell = el.querySelector('[data-testid="partograph-entry-notes"]')?.textContent ?? '';
+    expect(cell).toContain('Ocytocine 5 UI');
+    expect(cell).toContain('Poche des eaux rompue');
+    expect(el.querySelector('[data-testid="labor-risk-notes"]')?.textContent).toContain(
+      'Antécédent de césarienne',
+    );
+  });
+});
+
+describe('LaborTabComponent recent-delivery override (rendered, QA D1339 / D1340)', () => {
+  let laborSpy: jasmine.SpyObj<LaborService>;
+  let attached: HTMLElement | null = null;
+
+  /** A zone-less UTC wall time `days` ago, as the API sends it. */
+  function serverWallDaysAgo(days: number): string {
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 19);
+  }
+
+  function delivered(id: string, daysAgo: number): LaborEpisodeResponse {
+    return {
+      ...episode(id, 'DELIVERED'),
+      admittedAt: serverWallDaysAgo(daysAgo),
+      deliveryRecorded: true,
+    };
+  }
+
+  beforeEach(async () => {
+    laborSpy = jasmine.createSpyObj('LaborService', [
+      'startEpisode',
+      'episodes',
+      'addEntry',
+      'entries',
+      'recordDelivery',
+      'delivery',
+    ]);
+    laborSpy.entries.and.returnValue(of([]));
+    laborSpy.delivery.and.returnValue(throwError(() => ({ status: 404 })));
+    const patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
+    patientSpy.search.and.returnValue(of([]));
+    patientSpy.lookup.and.returnValue(of([]));
+    await TestBed.configureTestingModule({
+      imports: [LaborTabComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: LaborService, useValue: laborSpy },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'info']),
+        },
+        { provide: PatientService, useValue: patientSpy },
+      ],
+    }).compileComponents();
+  });
+
+  afterEach(() => {
+    attached?.remove();
+    attached = null;
+  });
+
+  function render(episodes: LaborEpisodeResponse[]) {
+    laborSpy.episodes.and.returnValue(of(episodes));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    attached = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(attached);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function openStart(episodes: LaborEpisodeResponse[]) {
+    const fixture = render(episodes);
+    fixture.componentInstance.openStartForm();
+    fixture.componentInstance.startForm.laborOnsetAt = nowLocalDatetime();
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('after a birth in the last 20 weeks the override is starred, required and marked when blank', async () => {
+    const fixture = openStart([delivered('e0', 1)]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="labor-start-submit"]',
+      sent: laborSpy.startEpisode,
+    });
+    expect(marked).toContain('labor-override');
+  });
+
+  it('with no recent birth the override is optional (negative control)', async () => {
+    const fixture = openStart([delivered('e0', 200)]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const override = (fixture.nativeElement as HTMLElement).querySelector('#labor-override');
+    expect(override?.hasAttribute('required')).toBeFalse();
+    expect(fixture.componentInstance.startOverrideRequired()).toBeFalse();
+  });
+
+  it('the server naming the override under fieldErrors marks it with its reason', async () => {
+    laborSpy.startEpisode.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({ recentDeliveryOverrideReason: 'Motif requis après une naissance' }),
+      ),
+    );
+    const fixture = openStart([]);
+    await fixture.whenStable();
+    fixture.componentInstance.submitStart();
+    fixture.detectChanges();
+    expect(laborSpy.startEpisode).toHaveBeenCalled();
+    expectFieldsMarked(fixture, { 'labor-override': 'Motif requis après une naissance' });
+  });
+
+  it('the delivery form asks for the override when another birth is recent', async () => {
+    const fixture = render([episode('e1', 'ACTIVE'), delivered('e0', 30)]);
+    fixture.componentInstance.openDeliveryForm();
+    fixture.componentInstance.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="labor-delivery-submit"]',
+      sent: laborSpy.recordDelivery,
+    });
+    expect(marked).toContain('dl-override');
+  });
+
+  it('QA D1446: the server refusing the time marks the time field, as on the delivery form', async () => {
+    laborSpy.addEntry.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({ observationTime: 'Cette heure ne peut pas être dans le futur.' }),
+      ),
+    );
+    const fixture = render([episode('e1', 'ACTIVE')]);
+    fixture.componentInstance.entryFormOpen.set(true);
+    fixture.componentInstance.entryForm = { fetalHeartRateBpm: 140 };
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.componentInstance.submitEntry();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'pe-time': 'Cette heure ne peut pas être dans le futur.' });
+  });
+
+  it('QA D1424: 70/120 is refused on the diastolic and never sent; 120/70 and a pressure alone are', async () => {
+    laborSpy.addEntry.and.returnValue(of({ alerts: [] }) as never);
+    const fixture = render([episode('e1', 'ACTIVE')]);
+    const cmp = fixture.componentInstance;
+    cmp.entryFormOpen.set(true);
+    cmp.entryForm = { systolicBpMmHg: 70, diastolicBpMmHg: 120 };
+    fixture.detectChanges();
+    await fixture.whenStable();
+    cmp.submitEntry();
+    fixture.detectChanges();
+    expect(laborSpy.addEntry).not.toHaveBeenCalled();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#pe-dia')?.getAttribute('aria-invalid')).toBe('true');
+
+    cmp.entryForm = { systolicBpMmHg: 120, diastolicBpMmHg: 70 };
+    cmp.submitEntry();
+    expect(laborSpy.addEntry).toHaveBeenCalledTimes(1);
+
+    cmp.entryFormOpen.set(true);
+    cmp.entryForm = { systolicBpMmHg: 170 };
+    cmp.submitEntry();
+    expect(laborSpy.addEntry).toHaveBeenCalledTimes(2);
+  });
+
+  it('QA D1424: the partograph vitals carry the bounds of every other vitals form', () => {
+    for (const [field, limit] of [
+      ['pulseBpm', VITAL_SIGN_LIMITS.heartRateBpm],
+      ['systolicBpMmHg', VITAL_SIGN_LIMITS.systolicBpMmHg],
+      ['diastolicBpMmHg', VITAL_SIGN_LIMITS.diastolicBpMmHg],
+    ] as const) {
+      const row = PARTOGRAPH_LIMITS.find((l) => l.field === field);
+      expect(row?.min).withContext(field).toBe(limit.min);
+      expect(row?.max).withContext(field).toBe(limit.max);
+    }
+  });
+
+  it('QA D1340: the delivery card shows the birth time without seconds', () => {
+    laborSpy.delivery.and.returnValue(
+      of({
+        id: 'd1',
+        episodeId: 'e0',
+        patientId: 'p1',
+        deliveredByStaffName: null,
+        birthDateTime: '2026-11-02T15:00:00',
+        deliveryMode: 'SPONTANEOUS_VAGINAL',
+        liveBirth: true,
+        numberOfInfants: 1,
+        infantSex: null,
+        birthWeightGrams: null,
+        gestationalAgeWeeksAtBirth: null,
+        apgarOneMinute: null,
+        apgarFiveMinute: null,
+        placentaDeliveredAt: null,
+        placentaComplete: null,
+        uterotonicGiven: null,
+        estimatedBloodLossMl: null,
+        perinealTear: null,
+        notes: null,
+        alerts: [],
+      }),
+    );
+    const fixture = render([delivered('e0', 200)]);
+    const text = ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+    // The time reads in the runner's locale ("15:00" in FR, "3:00 PM" in CI's EN).
+    expect(text).toMatch(/2026, \d{1,2}:\d{2}/);
+    expect(text).not.toMatch(/\d{1,2}:\d{2}:\d{2}/);
+  });
+});
+
+describe('LaborTabComponent labour transfer (provisional rule, 2026-11-12)', () => {
+  let laborSpy: jasmine.SpyObj<LaborService>;
+  let hospitalSpy: jasmine.SpyObj<HospitalService>;
+  let attached: HTMLElement | null = null;
+
+  beforeEach(async () => {
+    laborSpy = jasmine.createSpyObj('LaborService', [
+      'startEpisode',
+      'episodes',
+      'addEntry',
+      'entries',
+      'recordDelivery',
+      'delivery',
+      'transfer',
+      'arrivalWithoutHandover',
+    ]);
+    laborSpy.entries.and.returnValue(of([]));
+    laborSpy.delivery.and.returnValue(throwError(() => ({ status: 404 })));
+    hospitalSpy = jasmine.createSpyObj('HospitalService', ['directory']);
+    hospitalSpy.directory.and.returnValue(
+      of([
+        { id: 'h1', name: 'Hôpital B', city: null },
+        { id: 'hA', name: 'Hôpital A', city: null },
+      ]),
+    );
+    const patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
+    patientSpy.search.and.returnValue(of([]));
+    patientSpy.lookup.and.returnValue(of([]));
+    await TestBed.configureTestingModule({
+      imports: [LaborTabComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: LaborService, useValue: laborSpy },
+        { provide: HospitalService, useValue: hospitalSpy },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'info']),
+        },
+        { provide: PatientService, useValue: patientSpy },
+      ],
+    }).compileComponents();
+  });
+
+  afterEach(() => {
+    attached?.remove();
+    attached = null;
+  });
+
+  function render(hospital: string, roles: string[], episodes: LaborEpisodeResponse[]) {
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setRoles(roles);
+    roleContext.activeHospitalId = hospital;
+    laborSpy.episodes.and.returnValue(of(episodes));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    attached = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(attached);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function buttons(fixture: { nativeElement: unknown }): string[] {
+    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).map(
+      (b) => b.textContent ?? '',
+    );
+  }
+
+  const atB = (): LaborEpisodeResponse => ({
+    ...episode('eB', 'ACTIVE'),
+    hospitalId: 'hB',
+    hospitalName: 'Hôpital B',
+  });
+
+  it("offers 'Transférer' on the hospital's own active labour to a midwife, and sends the reason", async () => {
+    laborSpy.transfer.and.returnValue(of({ ...episode('eA', 'ACTIVE'), hospitalId: 'hA' }));
+    const fixture = render('h1', ['ROLE_MIDWIFE'], [episode('e1', 'ACTIVE')]);
+    const cmp = fixture.componentInstance;
+    expect(cmp.canTransfer()).toBeTrue();
+    expect(buttons(fixture).some((t) => t.includes('LABOR.TRANSFER.ACTION'))).toBeTrue();
+
+    cmp.openTransfer();
+    fixture.detectChanges();
+    // The hospital the requests are pinned to is not a destination.
+    expect(cmp.destinations().map((h) => h.id)).toEqual(['hA']);
+    cmp.transferForm = { destinationHospitalId: 'hA', reason: '  Bloc opératoire  ' };
+    cmp.submitTransfer();
+    expect(laborSpy.transfer).toHaveBeenCalledWith('p1', 'e1', {
+      destinationHospitalId: 'hA',
+      reason: 'Bloc opératoire',
+    });
+  });
+
+  it('the transfer dialog refuses an empty submit on its marked fields, nothing sent', async () => {
+    const fixture = render('h1', ['ROLE_DOCTOR'], [episode('e1', 'ACTIVE')]);
+    fixture.componentInstance.openTransfer();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="labor-transfer-submit"]',
+      sent: laborSpy.transfer,
+    });
+    expect(marked).toEqual(jasmine.arrayContaining(['lt-destination', 'lt-reason']));
+  });
+
+  it('the server naming the destination marks it with its reason', async () => {
+    laborSpy.transfer.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({
+          destinationHospitalId: 'Elle n’est pas inscrite dans cet hôpital.',
+        }),
+      ),
+    );
+    const fixture = render('h1', ['ROLE_MIDWIFE'], [episode('e1', 'ACTIVE')]);
+    const cmp = fixture.componentInstance;
+    cmp.openTransfer();
+    cmp.transferForm = { destinationHospitalId: 'hA', reason: 'Bloc' };
+    fixture.detectChanges();
+    await fixture.whenStable();
+    cmp.submitTransfer();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, {
+      'lt-destination': 'Elle n’est pas inscrite dans cet hôpital.',
+    });
+  });
+
+  it("a nurse is not offered 'Transférer' nor the arrival", () => {
+    const own = render('h1', ['ROLE_NURSE'], [episode('e1', 'ACTIVE')]);
+    expect(own.componentInstance.canTransfer()).toBeFalse();
+    expect(buttons(own).some((t) => t.includes('LABOR.TRANSFER.ACTION'))).toBeFalse();
+    own.destroy();
+    attached?.remove();
+    const foreign = render('hA', ['ROLE_NURSE'], [atB()]);
+    expect(foreign.componentInstance.canRecordArrival()).toBeFalse();
+    expect(buttons(foreign).some((t) => t.includes('LABOR.ARRIVAL.ACTION'))).toBeFalse();
+  });
+
+  it("offers 'Arrivée sans transmission' on another hospital's active labour, never 'Transférer'", () => {
+    laborSpy.arrivalWithoutHandover.and.returnValue(
+      of({ ...episode('eA', 'ACTIVE'), hospitalId: 'hA', transferredFromEpisodeId: 'eB' }),
+    );
+    const fixture = render('hA', ['ROLE_DOCTOR'], [atB()]);
+    const cmp = fixture.componentInstance;
+    expect(cmp.canRecordArrival()).toBeTrue();
+    expect(cmp.canTransfer()).toBeFalse();
+    const labels = buttons(fixture);
+    expect(labels.some((t) => t.includes('LABOR.ARRIVAL.ACTION'))).toBeTrue();
+    expect(labels.some((t) => t.includes('LABOR.TRANSFER.ACTION'))).toBeFalse();
+
+    cmp.openArrival();
+    cmp.arrivalReason = 'Arrivée par ses propres moyens';
+    cmp.submitArrival();
+    expect(laborSpy.arrivalWithoutHandover).toHaveBeenCalledWith('p1', 'eB', {
+      reason: 'Arrivée par ses propres moyens',
+    });
+  });
+
+  it('the arrival dialog refuses an empty reason on its field, nothing sent', async () => {
+    const fixture = render('hA', ['ROLE_MIDWIFE'], [atB()]);
+    fixture.componentInstance.openArrival();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="labor-arrival-submit"]',
+      sent: laborSpy.arrivalWithoutHandover,
+    });
+    expect(marked).toContain('la-reason');
+  });
+
+  it("after a transfer, A's episode names where it continues from and shows B's partograph read only", () => {
+    laborSpy.entries.and.callFake((_patient: string, episodeId: string) =>
+      of(episodeId === 'eB' ? [{ ...entry('peB'), episodeId: 'eB' }] : []),
+    );
+    const continued: LaborEpisodeResponse = {
+      ...episode('eA', 'ACTIVE'),
+      hospitalId: 'hA',
+      admittedAt: '2026-08-20T09:00:00',
+      transferredFromEpisodeId: 'eB',
+      transferredFromHospitalName: 'Hôpital B',
+    };
+    const closed: LaborEpisodeResponse = {
+      ...atB(),
+      status: 'TRANSFERRED_OUT',
+      transferHospitalName: 'Hôpital A',
+    };
+    const fixture = render('hA', ['ROLE_MIDWIFE'], [continued, closed]);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(laborSpy.entries).toHaveBeenCalledWith('p1', 'eB');
+    expect(fixture.componentInstance.previousEntries().length).toBe(1);
+    expect(host.querySelector('[data-testid="labor-continues"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="labor-previous-partograph"]')).not.toBeNull();
+    // A records on its own episode.
+    expect(buttons(fixture).some((t) => t.includes('LABOR.NEW_ENTRY'))).toBeTrue();
+  });
+
+  it('B, once it no longer sees an active labour, shows where she went and why', () => {
+    const fixture = render(
+      'hB',
+      ['ROLE_MIDWIFE'],
+      [
+        {
+          ...atB(),
+          status: 'TRANSFERRED_OUT',
+          transferHospitalName: 'Hôpital A',
+          transferReason: 'Bloc opératoire',
+          transferredAt: '2026-08-20T09:00:00',
+        },
+      ],
+    );
+    const section = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="labor-transferred-out"]',
+    );
+    expect(section?.textContent).toContain('Bloc opératoire');
+    expect(section?.textContent).toContain('LABOR.TRANSFER.CLOSED_TRANSFERRED');
+  });
+
+  it('Rex on #1134: only whoever may record the arrival is told about it', () => {
+    const hint = (f: { nativeElement: unknown }) =>
+      (f.nativeElement as HTMLElement).textContent ?? '';
+    const nurse = render('hA', ['ROLE_NURSE'], [atB()]);
+    expect(hint(nurse)).toContain('LABOR.FOREIGN.HINT');
+    expect(hint(nurse)).not.toContain('LABOR.FOREIGN.HINT_ARRIVAL');
+    nurse.destroy();
+    attached?.remove();
+    const midwife = render('hA', ['ROLE_MIDWIFE'], [atB()]);
+    expect(hint(midwife)).toContain('LABOR.FOREIGN.HINT_ARRIVAL');
+  });
+
+  it('every new transfer text reads in French and Spanish', () => {
+    const labor = (fr as unknown as { LABOR: Record<string, Record<string, string>> }).LABOR;
+    const laborEs = (es as unknown as { LABOR: Record<string, Record<string, string>> }).LABOR;
+    expect(labor['TRANSFER']['ACTION']).toBe('Transférer');
+    expect(labor['ARRIVAL']['ACTION']).toBe('Arrivée sans transmission');
+    expect(laborEs['ARRIVAL']['ACTION']).toBe('Llegada sin traspaso');
+    expect(Object.keys(labor['TRANSFER']).sort()).toEqual(Object.keys(laborEs['TRANSFER']).sort());
+  });
+});
+
+/* ── QA D1592: a recorded live birth registers each baby as a patient ── */
+describe('LaborTabComponent newborns (QA D1592)', () => {
+  let laborSpy: jasmine.SpyObj<LaborService>;
+  let toastSpy: jasmine.SpyObj<ToastService>;
+
+  const record = (newborns: DeliveryRecordResponse['newborns']): DeliveryRecordResponse => ({
+    id: 'd1',
+    episodeId: 'e1',
+    patientId: 'p1',
+    deliveredByStaffName: null,
+    birthDateTime: '2026-11-12T03:40:00',
+    deliveryMode: 'SPONTANEOUS_VAGINAL',
+    liveBirth: true,
+    numberOfInfants: newborns?.length ?? 0,
+    infantSex: 'FEMALE',
+    birthWeightGrams: 3150,
+    gestationalAgeWeeksAtBirth: 39,
+    apgarOneMinute: 8,
+    apgarFiveMinute: 9,
+    placentaDeliveredAt: null,
+    placentaComplete: null,
+    uterotonicGiven: null,
+    estimatedBloodLossMl: null,
+    perinealTear: null,
+    notes: null,
+    alerts: [],
+    newborns,
+  });
+
+  beforeEach(async () => {
+    laborSpy = jasmine.createSpyObj('LaborService', [
+      'startEpisode',
+      'episodes',
+      'addEntry',
+      'entries',
+      'recordDelivery',
+      'delivery',
+    ]);
+    laborSpy.entries.and.returnValue(of([]));
+    toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
+    const patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
+    patientSpy.search.and.returnValue(of([]));
+    patientSpy.lookup.and.returnValue(of([]));
+    await TestBed.configureTestingModule({
+      imports: [LaborTabComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: LaborService, useValue: laborSpy },
+        { provide: ToastService, useValue: toastSpy },
+        { provide: PatientService, useValue: patientSpy },
+      ],
+    }).compileComponents();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+  });
+
+  it('the delivery summary lists each baby with its MRN and a link to its chart', () => {
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'DELIVERED'), deliveryRecorded: true }]),
+    );
+    laborSpy.delivery.and.returnValue(
+      of(
+        record([
+          {
+            patientId: 'b1',
+            displayName: 'Bébé 1 Traore',
+            mrn: 'MRN-001',
+            birthOrder: 1,
+            needsReview: false,
+          },
+          {
+            patientId: 'b2',
+            displayName: 'Bébé 2 Traore',
+            mrn: 'MRN-002',
+            birthOrder: 2,
+            needsReview: true,
+            reviewReason: 'LIVE_BIRTH_COUNT_LOWERED',
+          },
+        ]),
+      ),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const links = Array.from(
+      el.querySelectorAll<HTMLAnchorElement>('[data-testid="delivery-newborn-link"]'),
+    );
+    expect(links.map((a) => a.textContent?.trim())).toEqual(['Bébé 1 Traore', 'Bébé 2 Traore']);
+    expect(links[0].getAttribute('href')).toBe('/patients/b1');
+    const text = (el.querySelector('[data-testid="delivery-newborns"]')?.textContent ?? '').replace(
+      /\s+/g,
+      ' ',
+    );
+    expect(text).toContain('N° de dossier MRN-001');
+    expect(text).toContain('À vérifier : moins de naissances vivantes sont désormais enregistrées');
+    expect(text).toContain('Le nom est provisoire');
+  });
+
+  it('a stillbirth shows no newborn list', () => {
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'DELIVERED'), deliveryRecorded: true }]),
+    );
+    laborSpy.delivery.and.returnValue(of({ ...record([]), liveBirth: false }));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="delivery-newborns"]'),
+    ).toBeNull();
+  });
+
+  it('QA D1714: each baby has its own outcome, so mixed twins are sent per baby', () => {
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    const component = fixture.componentInstance;
+    component.deliveryForm = { numberOfInfants: 2 };
+    component.setBabyOutcome(2, 'STILLBORN');
+
+    expect(component.babyOrders()).toEqual([1, 2]);
+    expect(component.deliveryBabies()).toEqual([
+      { birthOrder: 1, outcome: 'LIVE' },
+      { birthOrder: 2, outcome: 'STILLBORN' },
+    ]);
+    component.deliveryForm = { numberOfInfants: 1 };
+    expect(component.deliveryBabies()).toEqual([{ birthOrder: 1, outcome: 'LIVE' }]);
+  });
+
+  it('QA D1803: each baby outcome select has a full row of its own, so its label is never cut', () => {
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    const component = fixture.componentInstance;
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([episode('e1', 'ACTIVE')]);
+    fixture.detectChanges();
+    component.openDeliveryForm();
+    component.deliveryForm.numberOfInfants = 2;
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+
+    const fields = Array.from(page.querySelectorAll('.baby-outcome-field')) as HTMLElement[];
+    expect(fields.length).toBe(2);
+    fields.forEach((field) => {
+      expect(getComputedStyle(field).gridColumnStart).toBe('1');
+      expect(getComputedStyle(field).gridColumnEnd).toBe('-1');
+      const select = field.querySelector('select') as HTMLSelectElement;
+      expect(select.getBoundingClientRect().width).toBeGreaterThanOrEqual(
+        field.getBoundingClientRect().width - 1,
+      );
+    });
+  });
+
+  it('QA D1714: the delivery summary shows each baby and the fetal-death event', () => {
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'DELIVERED'), deliveryRecorded: true }]),
+    );
+    laborSpy.delivery.and.returnValue(
+      of({
+        ...record([]),
+        numberOfInfants: 2,
+        babies: [
+          { birthOrder: 1, outcome: 'LIVE' },
+          { birthOrder: 2, outcome: 'STILLBORN', fetalDeathEventId: 'fd1' },
+        ],
+      }),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+
+    const outcomes = (
+      page.querySelector('[data-testid="delivery-baby-outcomes"]')?.textContent ?? ''
+    ).replace(/\s+/g, ' ');
+    expect(outcomes).toContain('Bébé 1 : Né(e) vivant(e)');
+    expect(outcomes).toContain('Bébé 2 : Mort-né(e) (sans signe de vie)');
+    expect(page.querySelector('[data-testid="delivery-fetal-death-event"]')).not.toBeNull();
   });
 });

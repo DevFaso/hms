@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.StrictQueryParams;
 import com.example.hms.enums.SignatureType;
 import com.example.hms.payload.dto.signature.SignatureAuditEntryDTO;
 import com.example.hms.payload.dto.signature.SignatureRequestDTO;
@@ -50,10 +51,22 @@ public class DigitalSignatureController {
     }
 
     /**
+     * QA D627: the reports the caller can sign here, for the sign picker.
+     */
+    @GetMapping("/signable")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST')")
+    @Operation(summary = "List the caller's unsigned signable reports",
+        description = "The caller's own reports in the acting hospital, of a signable type, not yet signed by them")
+    public ResponseEntity<List<com.example.hms.payload.dto.signature.SignableReportDTO>> listSignableReports() {
+        return ResponseEntity.ok(signatureService.listSignableReports());
+    }
+
+    /**
      * Verify a signature
      */
+    @com.example.hms.security.ReadsOnly("compares a value with the stored signature; signature and report stay as signed, only the attempt is noted")
     @PostMapping("/verify")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST')")
     @Operation(summary = "Verify a digital signature", 
         description = "Verify that a signature value matches a stored signature for a report")
     public ResponseEntity<SignatureVerificationResponseDTO> verifySignature(
@@ -92,7 +105,7 @@ public class DigitalSignatureController {
      * Get signatures for a specific report
      */
     @GetMapping("/report/{reportType}/{reportId}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST')")
     @Operation(summary = "Get all signatures for a report", 
         description = "Retrieve all digital signatures associated with a specific clinical report")
     public ResponseEntity<List<SignatureResponseDTO>> getSignaturesByReport(
@@ -118,7 +131,7 @@ public class DigitalSignatureController {
      * Get a specific signature by ID
      */
     @GetMapping("/{signatureId}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST')")
     @Operation(summary = "Get signature by ID", 
         description = "Retrieve details of a specific digital signature")
     public ResponseEntity<SignatureResponseDTO> getSignatureById(@PathVariable UUID signatureId) {
@@ -130,6 +143,7 @@ public class DigitalSignatureController {
      * Get audit trail for a signature
      */
     @GetMapping("/{signatureId}/audit-trail")
+    @StrictQueryParams
     @PreAuthorize("hasAnyRole('DOCTOR', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get signature audit trail", 
         description = "Retrieve complete audit trail showing all actions performed on a signature")
@@ -142,7 +156,7 @@ public class DigitalSignatureController {
      * Check if a report is signed
      */
     @GetMapping("/report/{reportType}/{reportId}/is-signed")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST')")
     @Operation(summary = "Check if report is signed", 
         description = "Check whether a report has at least one valid signature")
     public ResponseEntity<Boolean> isReportSigned(

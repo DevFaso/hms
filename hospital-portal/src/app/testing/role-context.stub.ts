@@ -1,62 +1,129 @@
+import { computed, signal } from '@angular/core';
 import { RoleContextService } from '../core/role-context.service';
+import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
 
-/** Mutable scope a spec can flip between tests. */
+/**
+ * The scope a stub starts from. Read-only on purpose: the stub copies it into
+ * signals, so mutating the object afterwards would change nothing — a spec
+ * that needs another scope calls `stub.set({...})`, which notifies every
+ * `computed()` and template reading it, exactly as the real service does.
+ */
 export interface RoleContextStubState {
-  superAdmin: boolean;
+  readonly superAdmin: boolean;
   /**
    * The hospital the account is pinned to. For staff it is their assignment;
    * for a super-admin it seeds both the primary hospital and the chip's pick.
    * null = a super-admin in global view (or staff with no hospital yet).
    */
-  hospitalId: string | null;
-  roles: string[];
+  readonly hospitalId: string | null;
+  readonly roles: readonly string[];
+  /**
+   * The role picked at login. Omitted, it follows the real service's
+   * `setRoles`: pinned automatically when the account holds exactly one role,
+   * none otherwise. Set it with several `roles` to model a multi-role user
+   * pinned to one of them — the case `hasAnyActiveRole` exists for.
+   */
+  readonly activeRole?: string | null;
 }
 
+/** The stub's extra surface: move the scope the way a login or a chip would. */
+export interface RoleContextStubControls {
+  /** Replace part of the scope. A new hospital also clears any chip pick. */
+  set(patch: Partial<RoleContextStubState>): void;
+}
+
+export type RoleContextStub = RoleContextService & RoleContextStubControls;
+
 /**
- * One `RoleContextService` stand-in for page specs, mirroring the real
- * service's scope rules: the chip's pick (`scopeToHospital`) and global view
- * (`enableGlobalView`) only move a super-admin's selected hospital, never the
- * primary one, exactly as `effectiveHospitalIdForRequest` treats them. Read
- * `state` live so a test can switch scope before `detectChanges`.
+ * One `RoleContextService` stand-in for page specs, backed by real signals so
+ * a `computed()` over it recomputes and `detectChanges()` re-renders after
+ * `set(...)`. It mirrors the real service's scope rules: the chip's pick
+ * (`scopeToHospital`) and global view (`enableGlobalView`) only move a
+ * super-admin's selected hospital, never the primary one, exactly as
+ * `effectiveHospitalIdForRequest` treats them.
  */
-export function roleContextStub(state: RoleContextStubState): RoleContextService {
-  // Until the chip (or the URL sync) picks, everything derives from `state`
-  // live — so a test may flip `state` after building the stub. A pick sets an
-  // override that, like the real service, moves only the selected hospital.
-  let override: { globalView: boolean; selected: string | null } | null = null;
-  const globalView = (): boolean =>
-    override ? override.globalView : state.superAdmin && state.hospitalId == null;
-  const selected = (): string | null => (override ? override.selected : state.hospitalId);
-  const effective = (): string | null => {
-    if (state.superAdmin) {
-      return globalView() ? null : (selected() ?? state.hospitalId);
+export function roleContextStub(initial: RoleContextStubState): RoleContextStub {
+  const superAdmin = signal(initial.superAdmin);
+  const hospitalId = signal<string | null>(initial.hospitalId);
+  const roles = signal<string[]>([...initial.roles]);
+  const pickedRole = signal<string | null | undefined>(initial.activeRole);
+  // A chip (or URL sync) pick overrides the global-view default derived from
+  // `hospitalId`, and like the real service moves only the selected hospital.
+  const override = signal<{ globalView: boolean; selected: string | null } | null>(null);
+
+  const activeRole = computed(() => {
+    const picked = pickedRole();
+    if (picked !== undefined) return picked;
+    const all = roles();
+    return all.length === 1 ? all[0] : null;
+  });
+  const rawGlobalView = computed(() => {
+    const o = override();
+    return o ? o.globalView : superAdmin() && hospitalId() == null;
+  });
+  const selected = computed(() => {
+    const o = override();
+    return o ? o.selected : hospitalId();
+  });
+  const effective = computed(() => {
+    if (superAdmin()) {
+      return rawGlobalView() ? null : (selected() ?? hospitalId());
     }
-    return state.hospitalId;
-  };
-  return {
-    isSuperAdmin: () => state.superAdmin,
-    globalView: () => state.superAdmin && globalView(),
-    selectedHospitalId: () => (state.superAdmin ? selected() : null),
+    return hospitalId();
+  });
+  const hasRole = (role: string): boolean => roles().includes(role);
+
+  const stub = {
+    isSuperAdmin: computed(() => superAdmin()),
+    globalView: computed(() => superAdmin() && rawGlobalView()),
+    selectedHospitalId: computed(() => (superAdmin() ? selected() : null)),
     effectiveHospitalIdForRequest: effective,
-    hasHospitalScope: () => effective() != null,
-    get activeHospitalId() {
-      return state.hospitalId;
+    hasHospitalScope: computed(() => effective() != null),
+    activeHospitalIdSignal: computed(() => hospitalId()),
+    get activeHospitalId(): string | null {
+      return hospitalId();
     },
-    hasAnyActiveRole: (roles: string[]) => roles.some((r) => state.roles.includes(r)),
-    get activeRoles() {
-      return state.roles;
+    get activeRoles(): string[] {
+      return roles();
     },
-    // Mirrors the real service: a single active role is only pinned when the
-    // account holds exactly one. A multi-role user has no active role, and
-    // callers fall back to the full list.
-    get activeRole() {
-      return state.roles.length === 1 ? state.roles[0] : null;
+    get activeRole(): string | null {
+      return activeRole();
     },
-    enableGlobalView: () => {
-      override = { globalView: true, selected: null };
+    get permittedHospitalIds(): string[] {
+      const id = hospitalId();
+      return id ? [id] : [];
     },
+    hasRole,
+    isReceptionist: () => hasRole('ROLE_RECEPTIONIST') || hasRole('RECEPTIONIST'),
+    // Same rules as the real service, doctor equivalence included, so a spec
+    // cannot pass on a narrower rule than the page runs. A picked role is the
+    // only one that counts.
+    hasAnyActiveRole: (wanted: string[]) => {
+      const active = activeRole();
+      if (active) return roleSatisfies(wanted, active);
+      return expandRoleEquivalents(roles()).some((r) => wanted.includes(r));
+    },
+    hasAnyActiveRoleExactly: (wanted: string[]) => {
+      const active = activeRole();
+      if (active) return wanted.includes(active);
+      return wanted.some((r) => roles().includes(r));
+    },
+    enableGlobalView: () => override.set({ globalView: true, selected: null }),
     scopeToHospital: (id: string) => {
-      override = { globalView: false, selected: id };
+      if (id) override.set({ globalView: false, selected: id });
     },
-  } as unknown as RoleContextService;
+    set: (patch: Partial<RoleContextStubState>) => {
+      if (patch.superAdmin !== undefined) superAdmin.set(patch.superAdmin);
+      if (patch.hospitalId !== undefined) {
+        hospitalId.set(patch.hospitalId);
+        override.set(null);
+      }
+      if (patch.roles !== undefined) {
+        roles.set([...patch.roles]);
+        if (patch.activeRole === undefined) pickedRole.set(undefined);
+      }
+      if (patch.activeRole !== undefined) pickedRole.set(patch.activeRole);
+    },
+  };
+  return stub as unknown as RoleContextStub;
 }

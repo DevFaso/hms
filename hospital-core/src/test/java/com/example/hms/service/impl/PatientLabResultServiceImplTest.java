@@ -24,6 +24,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -33,11 +34,14 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import java.util.Map;
 import java.util.Set;
 import static org.mockito.Mockito.lenient;
@@ -53,6 +57,7 @@ class PatientLabResultServiceImplTest {
     @Mock private LabResultMapper labResultMapper;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
 
     @InjectMocks private PatientLabResultServiceImpl service;
 
@@ -84,8 +89,8 @@ class PatientLabResultServiceImplTest {
 
     @Test void getLabResults_success_empty() {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of());
         assertThat(service.getLabResultsForPatient(patientId, hospitalId, 10)).isEmpty();
     }
@@ -99,15 +104,15 @@ class PatientLabResultServiceImplTest {
 
     @Test void getLabResults_hospitalNotFound() {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.getLabResultsForPatient(patientId, hospitalId, 10))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test void getLabResults_defaultLimit() {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of());
         // passing 0 should use default limit of 25
         assertThat(service.getLabResultsForPatient(patientId, hospitalId, 0)).isEmpty();
@@ -115,8 +120,8 @@ class PatientLabResultServiceImplTest {
 
     @Test void getLabResults_exceedsMaxLimit() {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of());
         // passing 999 should be clamped to 100
         assertThat(service.getLabResultsForPatient(patientId, hospitalId, 999)).isEmpty();
@@ -138,10 +143,30 @@ class PatientLabResultServiceImplTest {
         return lr;
     }
 
+    /**
+     * Portal path: every row the patient has, from every hospital, unscoped.
+     * Stubs the pre-#790 staff-scoped finder too, leniently, since older
+     * callers of this helper relied on it; every current caller below reads
+     * through {@code getLabResultsForPatientPortal}.
+     */
     private void givenTheOnlyRowIs(LabResult lr) {
+        lenient().when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        lenient().when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        // Lenient: the staff path reads the scoped finder, the portal (the
+        // patient's own record) always reads every row of the patient.
+        lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+            .thenReturn(List.of(lr));
+        lenient().when(labResultRepository.findAllPatientResults(eq(patientId), any(Pageable.class)))
+            .thenReturn(List.of(lr));
+    }
+
+    /** Staff path (#751): readable where the order is handled, the acting hospital as performer. */
+    private void givenTheOnlyStaffRowIs(LabResult lr) {
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId),
+                eq(false), any(Pageable.class)))
             .thenReturn(List.of(lr));
     }
 
@@ -149,7 +174,7 @@ class PatientLabResultServiceImplTest {
     @Test void getLabResults_withResults_pendingStatus() {
         LabResult lr = unreleasedGlucoseWithEverything();
         when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
-        givenTheOnlyRowIs(lr);
+        givenTheOnlyStaffRowIs(lr);
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
         assertThat(results).hasSize(1);
@@ -161,6 +186,34 @@ class PatientLabResultServiceImplTest {
         assertThat(row.getValue()).isEqualTo("5.0");
         assertThat(row.getUnit()).isEqualTo("mg/dL");
         assertThat(row.getPerformedBy()).isEqualTo("Tech Nician");
+    }
+
+    /** QA D160: the care team (not the lab) sees that a result is pending, not its preliminary value. */
+    @Test void staffView_outsideTheLab_unreleasedRow_isPendingWithoutValue() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
+        givenTheOnlyStaffRowIs(lr);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10, false);
+        assertThat(results).hasSize(1);
+        PatientLabResultResponseDTO row = results.get(0);
+        assertThat(row.getStatus()).isEqualTo("PENDING");
+        assertThat(row.isReleased()).isFalse();
+        assertThat(row.getTestName()).isEqualTo("Glucose");
+        assertThat(row.getValue()).isNull();
+        assertThat(row.getUnit()).isNull();
+        assertThat(row.getNotes()).isNull();
+        assertThat(row.getPerformedBy()).isNull();
+    }
+
+    /** QA D160: the laboratory itself still sees the preliminary value it has to release. */
+    @Test void staffView_laboratory_unreleasedRow_keepsItsValue() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
+        givenTheOnlyStaffRowIs(lr);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10, true);
+        assertThat(results.get(0).getValue()).isEqualTo("5.0");
     }
 
     /** B3 — patient path: the row is there so the patient knows a result is expected, but nothing of it. */
@@ -186,14 +239,33 @@ class PatientLabResultServiceImplTest {
         assertThat(row.getPerformedBy()).isNull();
     }
 
+    /** QA D1394: an analyser's N is no grade the patient may read as fine when the ranges could not grade it. */
+    @Test void portalView_aValueNoBoundSettled_isMarkedAndNeverNormal() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        lr.setReleased(true);
+        lr.setResultValue(">1");
+        lr.setAbnormalFlag(com.example.hms.enums.AbnormalFlag.NORMAL);
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setSeverityFlag("UNSPECIFIED");
+        mapped.setGradeUnknown(true);
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        givenTheOnlyRowIs(lr);
+
+        PatientLabResultResponseDTO row = service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0);
+        assertThat(row.isGradeUnknown()).isTrue();
+        assertThat(row.getStatus()).isEqualTo("UNKNOWN");
+    }
+
     /** B3 — the same row, once released, reaches the patient whole. */
     @Test void portalView_releasedRow_carriesTheValue() {
         LabResult lr = unreleasedGlucoseWithEverything();
         lr.setReleased(true);
         LabResultResponseDTO mapped = new LabResultResponseDTO();
         mapped.setSeverityFlag("NORMAL");
-        mapped.setReferenceRanges(List.of(LabResultReferenceRangeDTO.builder().minValue(3.9).maxValue(6.1).unit("mg/dL").build()));
+        LabResultReferenceRangeDTO graded = LabResultReferenceRangeDTO.builder().minValue(3.9).maxValue(6.1).unit("mg/dL").build();
+        mapped.setReferenceRanges(List.of(graded));
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        when(labResultMapper.gradedReferenceRange(lr)).thenReturn(graded);
         givenTheOnlyRowIs(lr);
 
         PatientLabResultResponseDTO row = service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0);
@@ -234,9 +306,8 @@ class PatientLabResultServiceImplTest {
         lenient().when(labResultMapper.toResponseDTO(preliminary)).thenReturn(null);
         when(labResultMapper.toResponseDTO(finalResult)).thenReturn(new LabResultResponseDTO());
 
-        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(labResultRepository.findAllPatientResults(eq(patientId), any(Pageable.class)))
             .thenReturn(List.of(preliminary, finalResult));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatientPortal(patientId, hospitalId, 10);
@@ -278,15 +349,14 @@ class PatientLabResultServiceImplTest {
         another.setSourceObservationSetId("2");
         when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(new LabResultResponseDTO());
 
-        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
         ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);
         // Honour the page size, or the mock hands back every row whatever was
         // asked for and the short-page path this test exists for never runs.
         List<LabResult> newestFirst = List.of(finalResult, preliminary, another);
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), pageCaptor.capture()))
+        when(labResultRepository.findAllPatientResults(eq(patientId), pageCaptor.capture()))
             .thenAnswer(invocation -> {
-                Pageable requested = invocation.getArgument(2);
+                Pageable requested = invocation.getArgument(1);
                 return newestFirst.subList(0, Math.min(requested.getPageSize(), newestFirst.size()));
             });
 
@@ -298,6 +368,79 @@ class PatientLabResultServiceImplTest {
                 + "never a hundred-row page on every call, and never a fixed +1 that a second "
                 + "pair on the page would defeat")
             .containsExactly(2, 100);
+    }
+
+    /* ── QA D1213 (round 23): filter before limit, and paging for the portal ── */
+
+    /**
+     * The QA's A2: 21 released results, two of them corrected away (each
+     * superseded by a later row), so 19 are current. Newest first, each on its
+     * own order; the corrected rows sit inside the first twenty.
+     */
+    private List<LabResult> a2Results() {
+        List<LabResult> rows = new java.util.ArrayList<>();
+        LocalDateTime t = LocalDateTime.of(2026, 11, 1, 18, 0);
+        for (int i = 0; i < 21; i++) {
+            LabResult r = buildLabResult(String.valueOf(i), "mmol/L", true, false);
+            r.setResultDate(t.minusHours(i));
+            LabOrder order = new LabOrder();
+            order.setId(UUID.randomUUID());
+            order.setLabTestDefinition(new LabTestDefinition());
+            r.setLabOrder(order);
+            r.setTestCode("T" + i);
+            rows.add(r);
+        }
+        rows.get(3).setSupersededByResultId(rows.get(2).getId());
+        rows.get(10).setSupersededByResultId(rows.get(9).getId());
+        lenient().when(labResultMapper.toResponseDTO(any(LabResult.class))).thenAnswer(inv -> {
+            LabResult r = inv.getArgument(0);
+            LabResultResponseDTO dto = new LabResultResponseDTO();
+            dto.setId(r.getId().toString());
+            return dto;
+        });
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        List<LabResult> all = List.copyOf(rows);
+        when(labResultRepository.findAllPatientResults(eq(patientId), any(Pageable.class))).thenAnswer(inv -> {
+            Pageable requested = inv.getArgument(1);
+            return all.subList(0, Math.min(requested.getPageSize(), all.size()));
+        });
+        return all;
+    }
+
+    @Test void d1213_theListFiltersBeforeItLimits() {
+        a2Results();
+
+        List<PatientLabResultResponseDTO> shown = service.getLabResultsForPatientPortal(patientId, null, 20);
+
+        assertThat(shown).as("all 19 current results within a limit of 20, not 17").hasSize(19);
+    }
+
+    @Test void d1213_pagesReachEveryCurrentResultOnceInOrder() {
+        List<LabResult> all = a2Results();
+
+        // The portal's contract: offset/limit, asking limit + 1 to see "more".
+        List<PatientLabResultResponseDTO> first = service.getLabResultsForPatientPortal(patientId, 0, 11);
+        List<PatientLabResultResponseDTO> second = service.getLabResultsForPatientPortal(patientId, 10, 11);
+
+        assertThat(first).as("10 shown + 1 that says there is more").hasSize(11);
+        assertThat(second).as("the last 9, nothing more").hasSize(9);
+        List<UUID> served = new java.util.ArrayList<>();
+        first.subList(0, 10).forEach(r -> served.add(r.getId()));
+        second.forEach(r -> served.add(r.getId()));
+        List<UUID> expected = all.stream().filter(r -> r.getSupersededByResultId() == null)
+            .map(LabResult::getId).toList();
+        assertThat(served).as("every current result, once, newest first").containsExactlyElementsOf(expected);
+        assertThat(service.getLabResultsForPatientPortal(patientId, 50, 10)).isEmpty();
+    }
+
+    /** QA D1362 (round 31): the portal's total counts the current results, every one, not a window. */
+    @Test void d1362_theTotalCountsEveryCurrentResult() {
+        a2Results();
+
+        assertThat(service.countLabResultsForPatientPortal(patientId))
+            .as("21 rows, two corrected away: 19 current, the rows the paged list reaches")
+            .isEqualTo(19);
+        verify(patientChartAccess).requireOwnRecord(patientId);
     }
 
     /** The staff record is the record: both rows stay, each labelled. */
@@ -319,8 +462,8 @@ class PatientLabResultServiceImplTest {
         when(labResultMapper.toResponseDTO(any(LabResult.class))).thenReturn(new LabResultResponseDTO());
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(preliminary, finalResult));
 
         assertThat(service.getLabResultsForPatient(patientId, hospitalId, 10))
@@ -388,7 +531,47 @@ class PatientLabResultServiceImplTest {
         }
     }
 
-    @Test void getLabResults_released_normalStatus() {
+    /** D49 - collectedAt is the specimen's real collection time (the earliest), never the order time. */
+    @Test void collectedAt_isTheEarliestSpecimenCollection_notTheOrderTime() {
+        LabResult lr = buildLabResult("5.0", "mmol/L", true, false);
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setOrderDatetime(LocalDateTime.of(2026, 10, 17, 14, 0));
+        order.setLabTestDefinition(new LabTestDefinition());
+        lr.setLabOrder(order);
+        LocalDateTime drawn = LocalDateTime.of(2026, 10, 17, 14, 20);
+        com.example.hms.model.LabSpecimen first = new com.example.hms.model.LabSpecimen();
+        first.setLabOrder(order);
+        first.setCollectedAt(drawn);
+        com.example.hms.model.LabSpecimen later = new com.example.hms.model.LabSpecimen();
+        later.setLabOrder(order);
+        later.setCollectedAt(drawn.plusMinutes(40));
+        com.example.hms.model.LabSpecimen notYet = new com.example.hms.model.LabSpecimen();
+        notYet.setLabOrder(order);
+        when(labSpecimenRepository.findByLabOrder_IdIn(Set.of(order.getId()))).thenReturn(List.of(later, notYet, first));
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(new LabResultResponseDTO());
+        givenTheOnlyStaffRowIs(lr);
+
+        assertThat(service.getLabResultsForPatient(patientId, hospitalId, 10).get(0).getCollectedAt()).isEqualTo(drawn);
+    }
+
+    /** D49 - no collection recorded: no collection time is invented from the order. */
+    @Test void collectedAt_withoutARecordedCollection_isNull() {
+        LabResult lr = buildLabResult("5.0", "mmol/L", true, false);
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setOrderDatetime(LocalDateTime.of(2026, 10, 17, 14, 0));
+        order.setLabTestDefinition(new LabTestDefinition());
+        lr.setLabOrder(order);
+        when(labSpecimenRepository.findByLabOrder_IdIn(Set.of(order.getId()))).thenReturn(List.of());
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(new LabResultResponseDTO());
+        givenTheOnlyStaffRowIs(lr);
+
+        assertThat(service.getLabResultsForPatient(patientId, hospitalId, 10).get(0).getCollectedAt()).isNull();
+    }
+
+    /** D31 - released, no reference range and no recorded flag: not interpreted, never NORMAL. */
+    @Test void getLabResults_released_unrangedAndUnflagged_isUnknownNotNormal() {
         LabResult lr = buildLabResult("5.0", "mg/dL", true, false);
         LabTestDefinition testDef = new LabTestDefinition();
         testDef.setName("Glucose"); testDef.setTestCode("GLU");
@@ -400,12 +583,33 @@ class PatientLabResultServiceImplTest {
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
-        assertThat(results.get(0).getStatus()).isEqualTo("NORMAL");
+        assertThat(results.get(0).getStatus()).isEqualTo("UNKNOWN");
+    }
+
+    /** QA D240: a released "Positif" is a qualitative answer, not "unknown". */
+    @Test void getLabResults_released_qualitativeValue_isQualitativeNotUnknown() {
+        LabResult lr = buildLabResult("Positif", null, true, false);
+        LabTestDefinition testDef = new LabTestDefinition();
+        testDef.setName("TDR paludisme"); testDef.setTestCode("TDRPALU");
+        LabOrder order = new LabOrder();
+        order.setLabTestDefinition(testDef);
+        lr.setLabOrder(order);
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setSeverityFlag("UNSPECIFIED");
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
+            .thenReturn(List.of(lr));
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
+        assertThat(results.get(0).getStatus()).isEqualTo("QUALITATIVE");
     }
 
     @Test void getLabResults_released_criticalSeverity() {
@@ -417,8 +621,8 @@ class PatientLabResultServiceImplTest {
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -435,8 +639,8 @@ class PatientLabResultServiceImplTest {
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -452,8 +656,8 @@ class PatientLabResultServiceImplTest {
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -469,8 +673,8 @@ class PatientLabResultServiceImplTest {
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -487,8 +691,8 @@ class PatientLabResultServiceImplTest {
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -504,10 +708,11 @@ class PatientLabResultServiceImplTest {
         LabResultResponseDTO mapped = new LabResultResponseDTO();
         mapped.setReferenceRanges(List.of(range));
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        when(labResultMapper.gradedReferenceRange(lr)).thenReturn(range);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -521,12 +726,28 @@ class PatientLabResultServiceImplTest {
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
         assertThat(results.get(0).getTestName()).isEqualTo("Lab Result");
+    }
+
+    /** QA D648: GET /patients/{id}/lab-results named a deleted test by its clinical indication ("QA R9"). */
+    @Test
+    @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
+    void getLabResults_deletedDefinition_isTheDeletedTestLabel_notTheIndication() {
+        LabResult lr = buildLabResult("7.9", null, true, false);
+        LabOrder order = new LabOrder();
+        order.setLabTestDefinition(null);
+        order.setClinicalIndication("QA R9");
+        lr.setLabOrder(order);
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(new LabResultResponseDTO());
+        givenTheOnlyStaffRowIs(lr);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
+        assertThat(results.get(0).getTestName()).isEqualTo("Deleted test");
     }
 
     @Test void getLabResults_assignmentUserResolution() {
@@ -541,8 +762,8 @@ class PatientLabResultServiceImplTest {
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(eq(patientId), eq(Set.of(hospitalId)), any(Pageable.class)))
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -559,11 +780,11 @@ class PatientLabResultServiceImplTest {
         LabResult local = buildLabResult("5.1", "mmol/L", true, false); local.setLabOrder(localOrder);
         LabResult foreign = buildLabResult("6.2", "mmol/L", true, false); foreign.setLabOrder(foreignOrder);
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
             .thenReturn(Set.of(hospitalId, otherHospitalId));
-        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
-                eq(patientId), eq(Set.of(hospitalId, otherHospitalId)), any(Pageable.class)))
+        when(labResultRepository.findPatientResultsReadableAt(
+                eq(patientId), eq(Set.of(hospitalId, otherHospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
             .thenReturn(List.of(local, foreign));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
@@ -573,5 +794,211 @@ class PatientLabResultServiceImplTest {
         assertThat(results.get(1).getHospitalName()).isEqualTo("Hôpital B");
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // -- #751 on the staff path: readable where the order is handled --
+
+    private static final String TREATMENT_REACH = "Cross-hospital lab result read on the treatment relationship";
+    private static final String PERFORMED_HERE_REACH =
+        com.example.hms.service.recordaccess.CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION;
+
+    /** A released result on an order placed at {@code orderedAt} and run by {@code performedAt}'s laboratory. */
+    private LabResult resultOrderedAt(Hospital orderedAt, Hospital performedAt, String value) {
+        LabOrder order = new LabOrder();
+        order.setHospital(orderedAt);
+        order.setPerformingHospital(performedAt);
+        LabResult result = buildLabResult(value, "mmol/L", true, false);
+        result.setLabOrder(order);
+        return result;
+    }
+
+    @Test void staffView_showsWhatThisHospitalsLaboratoryPerformedAndAccountsItOnce() {
+        // Hospital B placed two orders: one this hospital's laboratory ran,
+        // one B ran itself. B is also readable on the treatment relationship.
+        // The staff read passes this hospital as the performer; both rows
+        // show; the performed-here row is accounted under the performing-
+        // laboratory reason and NOT again under the treatment relationship.
+        UUID hospitalB = UUID.randomUUID();
+        Hospital b = new Hospital(); b.setId(hospitalB); b.setName("Hopital B");
+        LabResult performedHere = resultOrderedAt(b, hospital, "5.5");
+        LabResult ranAtB = resultOrderedAt(b, null, "6.1");
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, hospitalB));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId, hospitalB)),
+                eq(hospitalId), eq(false), any(Pageable.class)))
+            .thenReturn(List.of(performedHere, ranAtB));
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
+
+        assertThat(results).extracting(PatientLabResultResponseDTO::getValue).containsExactly("5.5", "6.1");
+        // Provenance stays the ordering hospital's: the row is B's record.
+        assertThat(results).extracting(PatientLabResultResponseDTO::getHospitalId)
+            .containsExactly(hospitalB, hospitalB);
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(hospitalB.toString(), 1L)), eq(TREATMENT_REACH));
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(hospitalB.toString(), 1L)), eq(PERFORMED_HERE_REACH));
+        verify(labResultRepository, never()).findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any());
+    }
+
+    @Test void staffView_withoutATreatmentRelationship_stillShowsThePerformedHereRow() {
+        // No relationship to B: the readable set is this hospital alone, and
+        // the performed-here row is the only foreign row - accounted once,
+        // under the performing-laboratory reason, with nothing on the
+        // treatment relationship.
+        UUID hospitalB = UUID.randomUUID();
+        Hospital b = new Hospital(); b.setId(hospitalB); b.setName("Hopital B");
+        LabResult performedHere = resultOrderedAt(b, hospital, "5.5");
+        givenTheOnlyStaffRowIs(performedHere);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
+
+        assertThat(results).extracting(PatientLabResultResponseDTO::getHospitalId).containsExactly(hospitalB);
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of()), eq(TREATMENT_REACH));
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(hospitalB.toString(), 1L)), eq(PERFORMED_HERE_REACH));
+    }
+
+    @Test void portalView_returnsEveryHospitalsRowsWithNoDisclosure() {
+        // #790 — the patient's own read ignores hospital scope entirely: every
+        // row the patient has, from every hospital, with neither the record-
+        // access check nor a disclosure row. The hospital id the portal
+        // resolves is not a scope, so a second hospital's row is never
+        // "foreign" to the patient reading their own record.
+        UUID hospitalB = UUID.randomUUID();
+        Hospital b = new Hospital(); b.setId(hospitalB); b.setName("Hopital B");
+        LabResult ranHereForB = resultOrderedAt(b, hospital, "5.5");
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(labResultRepository.findAllPatientResults(eq(patientId), any(Pageable.class)))
+            .thenReturn(List.of(ranHereForB));
+
+        assertThat(service.getLabResultsForPatientPortal(patientId, hospitalId, 10)).hasSize(1);
+
+        verify(hospitalRepository, never()).findById(any());
+        verify(recordAccessPolicy, never()).readableHospitalIds(any(), any(), any());
+        verify(labResultRepository, never()).findPatientResultsReadableAt(any(), any(), any(), anyBoolean(), any());
+        verify(labResultRepository, never()).findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any());
+        verifyNoInteractions(reachRecorder);
+    }
+
+    // -- No hospital scope: the staff path refuses, the portal path does not --
+
+    /**
+     * The staff read with no resolvable hospital scope must NOT fall through to
+     * the patient-only query, which returns every hospital's rows with neither
+     * RecordAccessPolicy nor a cross-hospital disclosure row. It refuses, with
+     * the same 404 PatientChartAccess throws, and it refuses BEFORE reading.
+     */
+    @Test void staffView_withNoHospitalScope_refusesInsteadOfReadingEveryHospital() {
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital(); other.setId(otherHospitalId); other.setName("Hopital B");
+        LabOrder foreignOrder = new LabOrder(); foreignOrder.setHospital(other);
+        LabResult foreign = buildLabResult("6.2", "mmol/L", true, false); foreign.setLabOrder(foreignOrder);
+        when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(patient);
+        // Stubbed so the test would SEE the leak if the fallback ever ran again.
+        lenient().when(labResultRepository.findAllPatientResults(any(), any())).thenReturn(List.of(foreign));
+
+        // The key matters as much as the type. ResourceNotFoundException is
+        // @ResponseStatus(NOT_FOUND), so the type pins 404-not-403; the key
+        // pins that the refusal is indistinguishable from "no such patient",
+        // and that it stays a resolvable key rather than the prose that once
+        // rendered as "[Missing translation] Patient not found with ID: ...".
+        assertThatThrownBy(() -> service.getLabResultsForPatient(patientId, null, 10))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("patient.notFound");
+
+        verify(labResultRepository, never()).findAllPatientResults(any(), any());
+        verify(labResultRepository, never()).findPatientResultsReadableAt(any(), any(), any(), anyBoolean(), any());
+        verifyNoInteractions(reachRecorder);
+    }
+
+    /**
+     * The patient reading their own results: no hospital scope is legitimate,
+     * and refusing the staff case must not take this branch with it.
+     *
+     * <p>The portal resolves the patient through
+     * {@code PatientChartAccess.requireOwnRecord}, never the staff gate: the
+     * real {@code require} refuses a null scope for every principal that is
+     * not a super-admin — every patient — which is what used to make this
+     * branch dead code. {@code PatientChartAccessTest} pins the resolver
+     * itself against a real, unscoped patient context.
+     */
+    @Test void portalView_withNoHospitalScope_stillReturnsThePatientsOwnResults() {
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital(); other.setId(otherHospitalId); other.setName("Hopital B");
+        LabOrder order = new LabOrder(); order.setHospital(other);
+        LabResult own = buildLabResult("5.1", "mmol/L", true, false); own.setLabOrder(order);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
+        when(labResultRepository.findAllPatientResults(eq(patientId), page.capture())).thenReturn(List.of(own));
+
+        List<PatientLabResultResponseDTO> results =
+            service.getLabResultsForPatientPortal(patientId, null, 10);
+
+        assertThat(results).extracting(PatientLabResultResponseDTO::getValue).containsExactly("5.1");
+        // Newest ten at the database — this used to load the patient's whole
+        // result history, fully hydrated, to sort and cut it in memory. id
+        // breaks resultDate ties, so the wider second read cannot reorder them.
+        assertThat(page.getValue().getPageSize()).isEqualTo(10);
+        assertThat(page.getValue().getSort())
+            .containsExactly(Sort.Order.desc("resultDate"), Sort.Order.desc("id"));
+        assertThat(results).extracting(PatientLabResultResponseDTO::getHospitalId)
+            .containsExactly(otherHospitalId);
+        // Nothing to disclose against: there is no acting hospital.
+        verifyNoInteractions(reachRecorder);
+    }
+
+    /**
+     * The patient registered at two hospitals reads their own results with the
+     * portal passing one of them: they see both hospitals' rows, the record
+     * policy is never asked (a patient is not a staff reader of their own
+     * chart), and nothing is recorded as a cross-hospital disclosure.
+     */
+    @Test void portalView_withAHospitalId_stillShowsEveryHospitalsRows_andDisclosesNothing() {
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital(); other.setId(otherHospitalId);
+        LabOrder here = new LabOrder(); here.setHospital(hospital);
+        LabOrder there = new LabOrder(); there.setHospital(other);
+        LabResult own = buildLabResult("5.1", "mmol/L", true, false); own.setLabOrder(here);
+        LabResult foreign = buildLabResult("6.2", "mmol/L", true, false); foreign.setLabOrder(there);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(labResultRepository.findAllPatientResults(eq(patientId), any(Pageable.class)))
+            .thenReturn(List.of(own, foreign));
+
+        List<PatientLabResultResponseDTO> results =
+            service.getLabResultsForPatientPortal(patientId, hospitalId, 10);
+
+        assertThat(results).extracting(PatientLabResultResponseDTO::getHospitalId)
+            .containsExactlyInAnyOrder(hospitalId, otherHospitalId);
+        verify(recordAccessPolicy, never()).readableHospitalIds(any(), any(), any());
+        verifyNoInteractions(reachRecorder);
+    }
+
+    /** The portal is the patient's own record: it never goes through the staff chart gate. */
+    @Test void portalView_neverAsksTheStaffChartGate() {
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(labResultRepository.findAllPatientResults(eq(patientId), any(Pageable.class))).thenReturn(List.of());
+
+        service.getLabResultsForPatientPortal(patientId, null, 10);
+
+        verify(patientChartAccess, never()).require(any(), any());
+    }
+
+    /** And a staff read never takes the portal's resolver, which authorizes nothing. */
+    @Test void staffView_neverTakesTheOwnRecordResolver() {
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId),
+                eq(false), any(Pageable.class)))
+            .thenReturn(List.of());
+
+        service.getLabResultsForPatient(patientId, hospitalId, 10);
+
+        verify(patientChartAccess, never()).requireOwnRecord(any());
+        verify(labResultRepository, never()).findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(any(), any(), any());
     }
 }

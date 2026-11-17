@@ -12,11 +12,17 @@ import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.payload.dto.LabTestReferenceRangeDTO;
+import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
-import jakarta.persistence.EntityNotFoundException;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.exception.ResourceNotFoundException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,19 +37,26 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
+import java.util.EnumSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabTestDefinitionServiceImplTest {
 
@@ -51,6 +64,11 @@ class LabTestDefinitionServiceImplTest {
     @Mock private LabTestDefinitionMapper mapper;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private UserRepository userRepository;
+    @Mock private HospitalRepository hospitalRepository;
+    /** Answers the scope the test's HospitalContext describes, as the real resolver does. */
+    @Mock private ActingScopeResolver actingScopeResolver;
+    @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.repository.LabOrderRepository labOrderRepository;
 
     @InjectMocks private LabTestDefinitionServiceImpl service;
 
@@ -64,6 +82,8 @@ class LabTestDefinitionServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(actingScopeResolver.current())
+            .thenAnswer(inv -> ActingScopeResolver.scopeOf(HospitalContextHolder.getContextOrEmpty()));
         defId = UUID.randomUUID();
         assignmentUUID = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -86,6 +106,10 @@ class LabTestDefinitionServiceImplTest {
                 .active(true)
                 .build();
         definition.setId(defId);
+        definition.setHospital(hospital);
+        // QA D417: review requires a range; tests that need none clear it.
+        definition.setReferenceRanges(new java.util.ArrayList<>(java.util.List.of(
+            com.example.hms.model.LabTestReferenceRange.builder().minValue(1.0).maxValue(2.0).build())));
 
         requestDTO = LabTestDefinitionRequestDTO.builder()
                 .testCode("CBC")
@@ -103,6 +127,32 @@ class LabTestDefinitionServiceImplTest {
                 .build();
     }
 
+    @AfterEach
+    void clearContext() {
+        HospitalContextHolder.clear();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    private void actingAt(UUID activeHospitalId) {
+        HospitalContextHolder.setContext(HospitalContext.builder().activeHospitalId(activeHospitalId).build());
+    }
+
+    /** The caller holds, at {@code hospitalId}, exactly the roles {@code user} carries. */
+    private void holdsRolesAtHospital(User user) {
+        lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(user.getId()), eq(hospitalId), anySet()))
+            .thenAnswer(inv -> {
+                Set<String> roles = inv.getArgument(2);
+                return user.getUserRoles().stream()
+                    .anyMatch(ur -> roles.contains(ur.getRole().getCode()));
+            });
+    }
+
+    private void managesHospital(User user) {
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(user.getId()), eq(hospitalId), anySet())).thenReturn(true);
+    }
+
     // ---- create ----
 
     @Test
@@ -112,6 +162,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
             when(assignmentRepository.findById(assignmentUUID)).thenReturn(Optional.of(assignment));
             assignment.setUser(currentUser);
+            managesHospital(currentUser);
+            definition.setHospital(null);
             when(mapper.toEntity(requestDTO, assignment)).thenReturn(definition);
             when(repository.save(definition)).thenReturn(definition);
             when(mapper.toDto(definition)).thenReturn(responseDTO);
@@ -121,6 +173,8 @@ class LabTestDefinitionServiceImplTest {
             assertThat(result).isNotNull();
             assertThat(result.getTestCode()).isEqualTo("CBC");
             verify(repository).save(definition);
+            // D30: filed under the author's hospital, never saved global.
+            assertThat(definition.getHospital()).isSameAs(hospital);
         }
     }
 
@@ -140,6 +194,44 @@ class LabTestDefinitionServiceImplTest {
 
             LabTestDefinitionResponseDTO result = service.create(requestDTO);
             assertThat(result).isNotNull();
+            assertThat(definition.getHospital()).as("only a super-admin creates a global definition").isNull();
+        }
+    }
+
+    @Test
+    void create_noAssignment_labScientistAtActiveHospital_isFiledUnderThatHospital() {
+        requestDTO.setAssignmentId(null);
+        actingAt(hospitalId);
+        definition.setHospital(null);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            managesHospital(currentUser);
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(mapper.toEntity(requestDTO, null)).thenReturn(definition);
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.create(requestDTO);
+
+            assertThat(definition.getHospital()).isSameAs(hospital);
+        }
+    }
+
+    @Test
+    void create_withOwnAssignmentAtAnotherHospitalThanTheActiveOne_isRefused() {
+        actingAt(UUID.randomUUID());
+        assignment.setUser(currentUser);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(assignmentRepository.findById(assignmentUUID)).thenReturn(Optional.of(assignment));
+
+            assertThatThrownBy(() -> service.create(requestDTO))
+                    .isInstanceOf(AccessDeniedException.class);
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
         }
     }
 
@@ -174,8 +266,9 @@ class LabTestDefinitionServiceImplTest {
             when(assignmentRepository.findById(assignmentUUID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.create(requestDTO))
-                    .isInstanceOf(EntityNotFoundException.class)
-                    .hasMessageContaining("Assignment not found");
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .satisfies(e -> assertThat(((ResourceNotFoundException) e).getMessageKey())
+                        .contains("assignment.notfound"));
         }
     }
 
@@ -197,6 +290,7 @@ class LabTestDefinitionServiceImplTest {
 
     @Test
     void getById_success() {
+        actingAt(hospitalId);
         when(repository.findById(defId)).thenReturn(Optional.of(definition));
         when(mapper.toDto(definition)).thenReturn(responseDTO);
 
@@ -211,29 +305,59 @@ class LabTestDefinitionServiceImplTest {
         when(repository.findById(defId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getById(defId))
-                .isInstanceOf(EntityNotFoundException.class);
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     // ---- getAll ----
 
     @Test
     void getAll_success() {
-        when(repository.findAll()).thenReturn(List.of(definition));
+        actingAt(hospitalId);
+        when(repository.findVisibleAt(hospitalId)).thenReturn(List.of(definition));
         when(mapper.toDto(definition)).thenReturn(responseDTO);
 
         List<LabTestDefinitionResponseDTO> result = service.getAll();
 
         assertThat(result).hasSize(1);
+        verify(repository, never()).findAll();
+    }
+
+    @Test
+    void getAll_superAdminInGlobalView_readsEveryRow() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        when(repository.findAll()).thenReturn(List.of(definition));
+        when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+        assertThat(service.getAll()).hasSize(1);
+    }
+
+    @Test
+    void getById_anotherHospitalsDefinition_isNotFound() {
+        actingAt(UUID.randomUUID());
+        when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+        assertThatThrownBy(() -> service.getById(defId))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void getActiveByHospital_anotherHospital_isRefused() {
+        actingAt(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.getActiveByHospital(hospitalId))
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     // ---- getActiveByHospital ----
 
     @Test
     void getActiveByHospital_withHospitalId_mergesResults() {
+        actingAt(hospitalId);
         LabTestDefinition globalDef = LabTestDefinition.builder()
                 .testCode("GLOB")
                 .name("Global Test")
                 .active(true)
+                .approvalStatus(LabTestDefinitionApprovalStatus.ACTIVE)
                 .build();
         globalDef.setId(UUID.randomUUID());
 
@@ -241,6 +365,7 @@ class LabTestDefinitionServiceImplTest {
                 .testCode("CBC")
                 .name("Hospital CBC")
                 .active(true)
+                .approvalStatus(LabTestDefinitionApprovalStatus.ACTIVE)
                 .build();
         hospitalDef.setId(UUID.randomUUID());
 
@@ -269,6 +394,7 @@ class LabTestDefinitionServiceImplTest {
                 .testCode("GLOB")
                 .name("Global Test")
                 .active(true)
+                .approvalStatus(LabTestDefinitionApprovalStatus.ACTIVE)
                 .build();
         globalDef.setId(UUID.randomUUID());
         LabTestDefinitionResponseDTO globalResp = LabTestDefinitionResponseDTO.builder()
@@ -287,10 +413,12 @@ class LabTestDefinitionServiceImplTest {
 
     @Test
     void getActiveByHospital_hospitalOverridesGlobal() {
+        actingAt(hospitalId);
         LabTestDefinition globalDef = LabTestDefinition.builder()
                 .testCode("CBC")
                 .name("Global CBC")
                 .active(true)
+                .approvalStatus(LabTestDefinitionApprovalStatus.ACTIVE)
                 .build();
         globalDef.setId(UUID.randomUUID());
 
@@ -298,6 +426,7 @@ class LabTestDefinitionServiceImplTest {
                 .testCode("CBC")
                 .name("Hospital CBC Override")
                 .active(true)
+                .approvalStatus(LabTestDefinitionApprovalStatus.ACTIVE)
                 .build();
         hospitalDef.setId(UUID.randomUUID());
 
@@ -316,6 +445,19 @@ class LabTestDefinitionServiceImplTest {
         // Hospital definition overrides global with same testCode
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getName()).isEqualTo("Hospital CBC Override");
+    }
+
+    /** QA D535: a DRAFT whose active column is still true is not in the active catalog. */
+    @Test
+    void getActiveByHospital_draftWithActiveColumn_isNotListed() {
+        actingAt(hospitalId);
+        LabTestDefinition draft = LabTestDefinition.builder()
+                .testCode("DRF").name("Draft").active(true).build();
+        draft.setId(UUID.randomUUID());
+        when(repository.findByHospitalIsNullAndActiveTrue()).thenReturn(List.of());
+        when(repository.findByHospital_IdAndActiveTrue(hospitalId)).thenReturn(List.of(draft));
+
+        assertThat(service.getActiveByHospital(hospitalId)).isEmpty();
     }
 
     // ---- update ----
@@ -350,7 +492,7 @@ class LabTestDefinitionServiceImplTest {
             when(repository.findById(defId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.update(defId, requestDTO))
-                    .isInstanceOf(EntityNotFoundException.class);
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
     }
 
@@ -385,6 +527,66 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    /** QA D601: the exact report - LAB_DIRECTOR deletes an ACTIVE, ordered definition. */
+    @Test
+    void delete_activeDefinition_isRefused_andNothingIsDeleted() {
+        superAdminCaller();
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            assertThatThrownBy(() -> service.delete(defId))
+                    .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            verify(repository, never()).delete(definition);
+        }
+    }
+
+    /** QA D601: every non-draft status (pending, approved, retired) is refused too. */
+    @Test
+    void delete_everySubmittedStatus_isRefused() {
+        superAdminCaller();
+        for (LabTestDefinitionApprovalStatus st : LabTestDefinitionApprovalStatus.values()) {
+            if (st == LabTestDefinitionApprovalStatus.DRAFT || st == LabTestDefinitionApprovalStatus.REJECTED) {
+                continue;
+            }
+            definition.setApprovalStatus(st);
+            try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+                sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+                lenient().when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+                lenient().when(repository.findById(defId)).thenReturn(Optional.of(definition));
+                assertThatThrownBy(() -> service.delete(defId))
+                        .as(st.name())
+                        .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            }
+        }
+        verify(repository, never()).delete(definition);
+    }
+
+    /** QA D601: a draft that was somehow ordered keeps its orders' test name. */
+    @Test
+    void delete_draftWithOrders_isRefused() {
+        superAdminCaller();
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(labOrderRepository.existsByLabTestDefinition_Id(defId)).thenReturn(true);
+
+            assertThatThrownBy(() -> service.delete(defId))
+                    .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            verify(repository, never()).delete(definition);
+        }
+    }
+
+    private void superAdminCaller() {
+        definition.setHospital(null);
+        definition.setAssignment(null);
+        Role superRole = Role.builder().code("ROLE_SUPER_ADMIN").name("Super Admin").build();
+        currentUser.getUserRoles().add(UserRole.builder().role(superRole).build());
+    }
+
     @Test
     void delete_notFound_throws() {
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
@@ -393,7 +595,7 @@ class LabTestDefinitionServiceImplTest {
             when(repository.findById(defId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.delete(defId))
-                    .isInstanceOf(EntityNotFoundException.class);
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
     }
 
@@ -428,9 +630,10 @@ class LabTestDefinitionServiceImplTest {
 
     @Test
     void search_success() {
+        authenticateAs("ROLE_LAB_DIRECTOR");
         Pageable pageable = PageRequest.of(0, 10);
         Page<LabTestDefinition> page = new PageImpl<>(List.of(definition));
-        when(repository.search("CBC", null, null, null, null, pageable)).thenReturn(page);
+        when(repository.search("CBC", null, null, null, null, false, null, pageable)).thenReturn(page);
         when(mapper.toDto(definition)).thenReturn(responseDTO);
 
         Page<LabTestDefinitionResponseDTO> result = service.search("CBC", null, null, null, null, pageable);
@@ -440,13 +643,50 @@ class LabTestDefinitionServiceImplTest {
 
     @Test
     void search_withNullPageable_usesUnpaged() {
-        when(repository.search(eq("CBC"), isNull(), isNull(), isNull(), isNull(), eq(Pageable.unpaged())))
+        authenticateAs("ROLE_LAB_DIRECTOR");
+        when(repository.search(eq("CBC"), isNull(), isNull(), isNull(), isNull(), eq(false), isNull(), eq(Pageable.unpaged())))
                 .thenReturn(new PageImpl<>(List.of(definition)));
         when(mapper.toDto(definition)).thenReturn(responseDTO);
 
         Page<LabTestDefinitionResponseDTO> result = service.search("CBC", null, null, null, null, null);
 
         assertThat(result.getContent()).hasSize(1);
+    }
+
+    /** QA D639: the doctor's order search never returns a DRAFT definition, even when it asks for one. */
+    @Test
+    void search_asDoctor_isNarrowedToActiveDefinitions() {
+        authenticateAs("ROLE_DOCTOR");
+        Pageable pageable = PageRequest.of(0, 10);
+        when(repository.search(eq("K"), isNull(), isNull(), eq(Boolean.TRUE),
+                eq(LabTestDefinitionApprovalStatus.ACTIVE), eq(false), isNull(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.search("K", null, null, null, LabTestDefinitionApprovalStatus.DRAFT, pageable);
+
+        verify(repository).search(eq("K"), isNull(), isNull(), eq(Boolean.TRUE),
+                eq(LabTestDefinitionApprovalStatus.ACTIVE), eq(false), isNull(), eq(pageable));
+    }
+
+    /** Path kept: the lab director's configuration screen still lists drafts. */
+    @Test
+    void search_asLabDirector_keepsRequestedStatus() {
+        authenticateAs("ROLE_LAB_DIRECTOR");
+        Pageable pageable = PageRequest.of(0, 10);
+        when(repository.search(eq("K"), isNull(), isNull(), isNull(),
+                eq(LabTestDefinitionApprovalStatus.DRAFT), eq(false), isNull(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.search("K", null, null, null, LabTestDefinitionApprovalStatus.DRAFT, pageable);
+
+        verify(repository).search(eq("K"), isNull(), isNull(), isNull(),
+                eq(LabTestDefinitionApprovalStatus.DRAFT), eq(false), isNull(), eq(pageable));
+    }
+
+    private static void authenticateAs(String role) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                "u", "n/a", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))));
     }
 
     // ---- hospital-level auth via assignment ----
@@ -461,9 +701,6 @@ class LabTestDefinitionServiceImplTest {
             User otherUser = new User();
             otherUser.setId(UUID.randomUUID());
             assignment.setUser(otherUser);
-            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
-                    eq(currentUser.getId()), eq(hospitalId), anySet()
-            )).thenReturn(false);
 
             assertThatThrownBy(() -> service.create(requestDTO))
                     .isInstanceOf(AccessDeniedException.class)
@@ -472,29 +709,25 @@ class LabTestDefinitionServiceImplTest {
     }
 
     @Test
-    void create_hospitalLevel_elevatedRole_success() {
+    void create_ownAssignmentWithoutAManageRoleThere_isRefused() {
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
             when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
             when(assignmentRepository.findById(assignmentUUID)).thenReturn(Optional.of(assignment));
-            User otherUser = new User();
-            otherUser.setId(UUID.randomUUID());
-            assignment.setUser(otherUser);
+            assignment.setUser(currentUser);
             when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
                     eq(currentUser.getId()), eq(hospitalId), anySet()
-            )).thenReturn(true);
-            when(mapper.toEntity(requestDTO, assignment)).thenReturn(definition);
-            when(repository.save(definition)).thenReturn(definition);
-            when(mapper.toDto(definition)).thenReturn(responseDTO);
+            )).thenReturn(false);
 
-            LabTestDefinitionResponseDTO result = service.create(requestDTO);
-            assertThat(result).isNotNull();
+            assertThatThrownBy(() -> service.create(requestDTO))
+                    .isInstanceOf(AccessDeniedException.class);
         }
     }
 
     @Test
     void create_assignmentNoHospital_throwsIllegalState() {
         assignment.setHospital(null);
+        assignment.setUser(currentUser);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
@@ -526,6 +759,7 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
             assignment.setUser(currentUser);
+            managesHospital(currentUser);
             when(assignmentRepository.findById(newAssignmentId)).thenReturn(Optional.of(newAssignment));
             doNothing().when(mapper).updateEntityFromDto(requestDTO, definition);
             when(repository.save(definition)).thenReturn(definition);
@@ -533,6 +767,65 @@ class LabTestDefinitionServiceImplTest {
 
             LabTestDefinitionResponseDTO result = service.update(defId, requestDTO);
             assertThat(result).isNotNull();
+            // D30: an edit no longer turns the definition global.
+            assertThat(definition.getHospital()).isSameAs(hospital);
+            assertThat(definition.getAssignment()).isSameAs(newAssignment);
+        }
+    }
+
+    @Test
+    void updateReferenceRanges_authorAtTheDefinitionsHospital_succeeds() {
+        // D30: the author of a hospital definition got 403 here, because the
+        // definition had been saved global.
+        User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+        holdsRolesAtHospital(scientist);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(scientist));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(List.of())).thenReturn(new java.util.ArrayList<>());
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            assertThat(service.updateReferenceRanges(defId, List.of())).isNotNull();
+        }
+    }
+
+    @Test
+    void updateReferenceRanges_labScientistOfAnotherHospital_isRefused() {
+        User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(scientist));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            assertThatThrownBy(() -> service.updateReferenceRanges(defId, List.of()))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
+    @Test
+    void update_assignmentAtAnotherHospital_cannotMoveTheDefinition() {
+        UUID newAssignmentId = UUID.randomUUID();
+        requestDTO.setAssignmentId(newAssignmentId);
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment elsewhere = new UserRoleHospitalAssignment();
+        elsewhere.setId(newAssignmentId);
+        elsewhere.setHospital(other);
+        elsewhere.setUser(currentUser);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            managesHospital(currentUser);
+            when(assignmentRepository.findById(newAssignmentId)).thenReturn(Optional.of(elsewhere));
+
+            assertThatThrownBy(() -> service.update(defId, requestDTO))
+                    .isInstanceOf(AccessDeniedException.class);
         }
     }
 
@@ -565,6 +858,7 @@ class LabTestDefinitionServiceImplTest {
     void processApproval_submitForQa_fromDraft_success() {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
         User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+        holdsRolesAtHospital(scientist);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -585,6 +879,7 @@ class LabTestDefinitionServiceImplTest {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.REJECTED);
         definition.setRejectionReason("Missing reference range");
         User manager = userWithRole("ROLE_LAB_MANAGER");
+        holdsRolesAtHospital(manager);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -604,6 +899,7 @@ class LabTestDefinitionServiceImplTest {
     void processApproval_submitForQa_wrongStatus_throwsIllegalState() {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
         User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+        holdsRolesAtHospital(scientist);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -622,6 +918,7 @@ class LabTestDefinitionServiceImplTest {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
         // ROLE_NURSE has no right to submit
         User nurse = userWithRole("ROLE_NURSE");
+        holdsRolesAtHospital(nurse);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -640,7 +937,9 @@ class LabTestDefinitionServiceImplTest {
     @Test
     void processApproval_completeQaReview_success() {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        definition.setSubmittedById(UUID.randomUUID());
         User qm = userWithRole("ROLE_QUALITY_MANAGER");
+        holdsRolesAtHospital(qm);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -657,10 +956,31 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    /** QA D213 (round 5): a pre-V201 submission has no recorded submitter, so four-eyes could not hold. */
+    @Test
+    void processApproval_completeQaReview_unknownSubmitter_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        definition.setSubmittedById(null);
+        User qm = userWithRole("ROLE_QUALITY_MANAGER");
+        holdsRolesAtHospital(qm);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(qm));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("COMPLETE_QA_REVIEW")))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "lab.definition.submitterUnknown");
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
     @Test
     void processApproval_completeQaReview_wrongStatus_throwsIllegalState() {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
         User qm = userWithRole("ROLE_QUALITY_MANAGER");
+        holdsRolesAtHospital(qm);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -679,6 +999,7 @@ class LabTestDefinitionServiceImplTest {
     void processApproval_approve_success() {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -700,6 +1021,7 @@ class LabTestDefinitionServiceImplTest {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
         // QUALITY_MANAGER cannot APPROVE
         User qm = userWithRole("ROLE_QUALITY_MANAGER");
+        holdsRolesAtHospital(qm);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -712,12 +1034,16 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
-    // ── ACTIVATE ─────────────────────────────────────────────────────────
+    // ── QA D707: a small lab brings a test live without the super-admin ──
 
+    /** Director submits, the quality manager reviews, the same director approves: two people. */
     @Test
-    void processApproval_activate_success() {
-        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+    void processApproval_directorPlusQualityManager_canApproveOwnSubmissionAfterIndependentReview() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setSubmittedById(director.getId());
+        definition.setReviewedById(UUID.randomUUID());
+        holdsRolesAtHospital(director);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -726,10 +1052,416 @@ class LabTestDefinitionServiceImplTest {
             when(repository.save(definition)).thenReturn(definition);
             when(mapper.toDto(definition)).thenReturn(responseDTO);
 
+            service.processApprovalAction(defId, approvalReq("APPROVE"));
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.APPROVED);
+        }
+    }
+
+    /** With no recorded reviewer, the submitter still may not approve alone. */
+    @Test
+    void processApproval_approve_bySubmitterWithNoRecordedReviewer_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setSubmittedById(director.getId());
+        definition.setReviewedById(null);
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        }
+    }
+
+    /** QM_B got 403 on SUBMIT: the quality manager may author a definition. */
+    @Test
+    void processApproval_submitForQa_byQualityManager_isAllowed() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User qm = userWithRole("ROLE_QUALITY_MANAGER");
+        holdsRolesAtHospital(qm);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(qm));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("SUBMIT_FOR_QA"));
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+            assertThat(definition.getSubmittedById()).isEqualTo(qm.getId());
+        }
+    }
+
+    /** D722: the queue's search tells the QA reviewer whether their approval will be accepted. */
+    @Test
+    void search_pendingApproval_reviewerHint_followsTheSoleDirectorRule() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setReviewedById(director.getId());
+        definition.setSubmittedById(UUID.randomUUID());
+        holdsRolesAtHospital(director);
+        LabTestDefinitionResponseDTO dto = LabTestDefinitionResponseDTO.builder().id(defId).build();
+        LabTestDefinitionResponseDTO dto2 = LabTestDefinitionResponseDTO.builder().id(defId).build();
+        authenticateAs("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.search(any(), any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(definition)));
+            when(mapper.toDto(definition)).thenReturn(dto, dto2);
+            when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR"))
+                .thenReturn(2L, 1L);
+
+            var page = org.springframework.data.domain.PageRequest.of(0, 20);
+            assertThat(service.search(null, null, null, null, null, page)
+                .getContent().get(0).getReviewerMayApprove()).isFalse();
+            assertThat(service.search(null, null, null, null, null, page)
+                .getContent().get(0).getReviewerMayApprove()).isTrue();
+        }
+    }
+
+    // ── ACTIVATE ─────────────────────────────────────────────────────────
+
+    @Test
+    void processApproval_activate_success() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            definition.getReferenceRanges().add(com.example.hms.model.LabTestReferenceRange.builder()
+                .minValue(3.5).maxValue(5.0).unit("mmol/L").build());
+
             service.processApprovalAction(defId, approvalReq("ACTIVATE"));
 
             assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
             assertThat(definition.isActive()).isTrue();
+            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(
+                // QA D638: the row names the step and the definition and is anchored at its hospital.
+                e -> e.getEventDescription().contains("ACTIVATE") && e.getEventDescription().contains("CBC")
+                    && hospital.getId().equals(e.getHospitalId())));
+        }
+    }
+
+    /**
+     * QA D894: the row is written in English with the step and the status as
+     * codes, whatever the caller's language, so the audit log reads it in its
+     * reader's language. It used to be written in the caller's language and
+     * stayed French for an English or Spanish reader.
+     */
+    @Test
+    void processApproval_auditDescriptionIsEnglishWithCodesWhateverTheCallersLanguage() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+            definition.getReferenceRanges().add(com.example.hms.model.LabTestReferenceRange.builder()
+                .minValue(3.5).maxValue(5.0).unit("mmol/L").build());
+
+            service.processApprovalAction(defId, approvalReq("ACTIVATE"));
+
+            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(
+                e -> "Lab test definition CBC: approval step ACTIVATE, new status ACTIVE."
+                    .equals(e.getEventDescription())));
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    /** QA D213: a failing audit write never undoes the approval step. */
+    @Test
+    void processApproval_activate_auditFailure_doesNotUndoTheStep() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.getReferenceRanges().add(com.example.hms.model.LabTestReferenceRange.builder()
+            .minValue(3.5).maxValue(5.0).unit("mmol/L").build());
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+            org.mockito.Mockito.doThrow(new IllegalStateException("audit down"))
+                .when(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.any());
+
+            service.processApprovalAction(defId, approvalReq("ACTIVATE"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
+        }
+    }
+
+    /** QA D213: a definition with no reference range is not activated. */
+    @Test
+    void processApproval_activate_withoutReferenceRanges_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.getReferenceRanges().clear();
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("ACTIVATE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.APPROVED);
+        }
+    }
+
+    /** The round-13 malaria rapid test: no numeric range, a qualitative answer. */
+    private void tdrPalu(String expectedResult) {
+        definition.setTestCode("TDR-PALU");
+        definition.setName("TDR paludisme");
+        definition.setCategory("Parasitologie");
+        definition.setSampleType("Sang capillaire");
+        definition.setUnit(null);
+        definition.getReferenceRanges().clear();
+        definition.setExpectedResult(expectedResult);
+    }
+
+    /**
+     * QA D834: POST /lab-test-definitions/{TDR-PALU}/approval SUBMIT_FOR_QA by
+     * the lab director answered 400 "doit avoir au moins une valeur de
+     * référence"; the only way through was a fake 0-0 range. A qualitative
+     * test with its expected answer goes into review, and goes live.
+     */
+    @Test
+    void d834_aQualitativeTestWithItsExpectedResultIsSubmittedAndActivated() {
+        tdrPalu("Négatif");
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("SUBMIT_FOR_QA"));
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+
+            definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+            service.processApprovalAction(defId, approvalReq("ACTIVATE"));
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
+            assertThat(definition.getReferenceRanges()).isEmpty();
+        }
+    }
+
+    /** QA D834: without a range AND without an expected answer it is still refused (D417 kept). */
+    @Test
+    void d834_aTestWithNeitherRangeNorExpectedResultIsStillRefused() {
+        tdrPalu("   ");
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("SUBMIT_FOR_QA");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.DRAFT);
+        }
+    }
+
+    /**
+     * QA D314 / D417 / D523: the sole director of the hospital who did the QA
+     * review approves, and the audit row records the combined review.
+     */
+    @Test
+    void processApproval_approve_byDirectorWhoReviewed_isAllowedAndAudited() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setReviewedById(director.getId());
+        definition.setSubmittedById(UUID.randomUUID());
+        holdsRolesAtHospital(director);
+        when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR")).thenReturn(1L);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("APPROVE"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.APPROVED);
+            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(
+                e -> e.getEventDescription().contains("also completed the QA review")));
+        }
+    }
+
+    /** QA D523: with two directors, the one who did the QA review cannot also approve. */
+    @Test
+    void processApproval_approve_byReviewerWhenTwoDirectors_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setReviewedById(director.getId());
+        definition.setSubmittedById(UUID.randomUUID());
+        holdsRolesAtHospital(director);
+        when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR")).thenReturn(2L);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "lab.definition.fourEyes.approverNotReviewer");
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    /** QA D523: the super-admin has no exemption from the unknown-submitter refusal either. */
+    @Test
+    void processApproval_completeQaReview_bySuperAdmin_withUnknownSubmitter_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        definition.setSubmittedById(null);
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("COMPLETE_QA_REVIEW");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "lab.definition.submitterUnknown");
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    /** QA D523: the super-admin who submitted cannot also complete the QA review. */
+    @Test
+    void processApproval_completeQaReview_bySuperAdminWhoSubmitted_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        definition.setSubmittedById(admin.getId());
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("COMPLETE_QA_REVIEW");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "lab.definition.fourEyes.qaNotSubmitter");
+        }
+    }
+
+    /** QA D523: the super-admin who did the QA review cannot also approve (not a sole director). */
+    @Test
+    void processApproval_approve_bySuperAdminWhoReviewed_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        definition.setReviewedById(admin.getId());
+        definition.setSubmittedById(UUID.randomUUID());
+        lenient().when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR")).thenReturn(0L);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "lab.definition.fourEyes.approverNotReviewer");
+        }
+    }
+
+    /** QA D523: a one-director hospital does not let the super-admin who reviewed also approve. */
+    @Test
+    void processApproval_approve_bySuperAdminWhoReviewed_atOneDirectorHospital_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        definition.setReviewedById(admin.getId());
+        definition.setSubmittedById(UUID.randomUUID());
+        holdsRolesAtHospital(admin);
+        lenient().when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR")).thenReturn(1L);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "lab.definition.fourEyes.approverNotReviewer");
+        }
+    }
+
+    /** QA D314: the single-director exception never lets the submitter approve. */
+    @Test
+    void processApproval_approve_bySoleDirectorWhoSubmitted_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setReviewedById(director.getId());
+        definition.setSubmittedById(director.getId());
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        }
+    }
+
+    /** QA D213: the submitter cannot complete the QA review of their own submission. */
+    @Test
+    void processApproval_completeQaReview_bySubmitter_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setSubmittedById(director.getId());
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("COMPLETE_QA_REVIEW");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
         }
     }
 
@@ -738,6 +1470,7 @@ class LabTestDefinitionServiceImplTest {
         // Must be APPROVED; PENDING_DIRECTOR_APPROVAL is wrong
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -756,6 +1489,7 @@ class LabTestDefinitionServiceImplTest {
     void processApproval_reject_fromPendingQa_success() {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -774,8 +1508,10 @@ class LabTestDefinitionServiceImplTest {
 
     @Test
     void processApproval_reject_noReason_throwsIllegalArgument() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -784,15 +1520,17 @@ class LabTestDefinitionServiceImplTest {
 
             var req = approvalReq("REJECT");
         assertThatThrownBy(() -> service.processApprovalAction(defId, req))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
                     .hasMessageContaining("rejection reason");
         }
     }
 
     @Test
     void processApproval_reject_blankReason_throwsIllegalArgument() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -801,7 +1539,7 @@ class LabTestDefinitionServiceImplTest {
 
             var req = approvalReq("REJECT", "   ");
         assertThatThrownBy(() -> service.processApprovalAction(defId, req))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
         }
     }
 
@@ -810,6 +1548,7 @@ class LabTestDefinitionServiceImplTest {
         // REJECT is only allowed from PENDING_* states
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -829,6 +1568,7 @@ class LabTestDefinitionServiceImplTest {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
         definition.setActive(true);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -848,6 +1588,7 @@ class LabTestDefinitionServiceImplTest {
     void processApproval_retire_wrongStatus_throwsIllegalState() {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -857,6 +1598,40 @@ class LabTestDefinitionServiceImplTest {
             var req = approvalReq("RETIRE");
         assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    @Test
+    void processApproval_directorOfAnotherHospital_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        // A LAB_DIRECTOR role exists, but not at this definition's hospital.
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
+    @Test
+    void processApproval_globalDefinition_isTheSuperAdminsWorkflow() {
+        definition.setHospital(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(AccessDeniedException.class);
         }
     }
 
@@ -890,7 +1665,7 @@ class LabTestDefinitionServiceImplTest {
 
             var req = approvalReq("SUBMIT_FOR_QA");
         assertThatThrownBy(() -> service.processApprovalAction(defId, req))
-                    .isInstanceOf(EntityNotFoundException.class);
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
     }
 
@@ -903,6 +1678,244 @@ class LabTestDefinitionServiceImplTest {
         assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(AccessDeniedException.class)
                     .hasMessageContaining("Unauthenticated");
+        }
+    }
+
+    // ── QA D705 / D721: unit, sample type, code and LOINC lock with the ranges ──
+
+    /** The exact report: LAB_DIRECTOR_A PUTs GLY-A (ACTIVE, mmol/L) with unit g/L. */
+    @Test
+    void update_activeDefinition_unitChangedByDirector_isRefusedAndNothingIsSaved() {
+        definition.setAssignment(assignment);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setUnit("mmol/L");
+        definition.setSampleType("Plasma");
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        managesHospital(director);
+        requestDTO.setUnit("g/L");
+        requestDTO.setSampleType("Plasma");
+        requestDTO.setReferenceRanges(null);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            assertThatThrownBy(() -> service.update(defId, requestDTO))
+                .isInstanceOf(IllegalStateException.class);
+            assertThat(definition.getUnit()).isEqualTo("mmol/L");
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+            verify(mapper, never()).updateEntityFromDto(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    /** D721: after QA (pending director approval) the sample type no longer moves. */
+    @Test
+    void update_lockedStatuses_sampleTypeOrLoincOrCodeChange_isRefused() {
+        definition.setAssignment(assignment);
+        definition.setUnit("mmol/L");
+        definition.setSampleType("Plasma");
+        definition.setLoincCode("2345-7");
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        managesHospital(director);
+        requestDTO.setReferenceRanges(null);
+        requestDTO.setUnit("mmol/L");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            for (LabTestDefinitionApprovalStatus status : EnumSet.of(
+                    LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
+                    LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
+                    LabTestDefinitionApprovalStatus.APPROVED,
+                    LabTestDefinitionApprovalStatus.ACTIVE)) {
+                definition.setApprovalStatus(status);
+                requestDTO.setSampleType("Serum");
+                requestDTO.setLoincCode("2345-7");
+                assertThatThrownBy(() -> service.update(defId, requestDTO)).isInstanceOf(IllegalStateException.class);
+                requestDTO.setSampleType("Plasma");
+                requestDTO.setTestCode("CBC2");
+                assertThatThrownBy(() -> service.update(defId, requestDTO)).isInstanceOf(IllegalStateException.class);
+                requestDTO.setTestCode("CBC");
+                requestDTO.setLoincCode("2339-0");
+                assertThatThrownBy(() -> service.update(defId, requestDTO)).isInstanceOf(IllegalStateException.class);
+            }
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    /** Paths that must keep working: a name edit of a live test, and any edit of a draft. */
+    @Test
+    void update_activeNameOnly_andDraftUnit_areAllowed() {
+        definition.setAssignment(assignment);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setUnit("mmol/L");
+        definition.setSampleType("Plasma");
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        managesHospital(director);
+        requestDTO.setReferenceRanges(null);
+        requestDTO.setUnit(" mmol/L ");
+        requestDTO.setSampleType("Plasma");
+        requestDTO.setName("Glycemie a jeun");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            assertThat(service.update(defId, requestDTO)).isNotNull();
+            definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+            requestDTO.setUnit("g/L");
+            assertThat(service.update(defId, requestDTO)).isNotNull();
+            definition.setApprovalStatus(LabTestDefinitionApprovalStatus.REJECTED);
+            assertThat(service.update(defId, requestDTO)).isNotNull();
+        }
+    }
+
+    // ── QA D159: reviewed ranges do not move without a new review ─────────
+
+    private LabTestReferenceRangeDTO glucoseRangeDto(double max) {
+        LabTestReferenceRangeDTO dto = new LabTestReferenceRangeDTO();
+        dto.setMinValue(3.9);
+        dto.setMaxValue(max);
+        dto.setUnit("mmol/L");
+        dto.setGender("ALL");
+        return dto;
+    }
+
+    private com.example.hms.model.LabTestReferenceRange glucoseRange(double max) {
+        return com.example.hms.model.LabTestReferenceRange.builder()
+            .minValue(3.9).maxValue(max).unit("mmol/L").gender("ALL").build();
+    }
+
+    @Test
+    void updateReferenceRanges_ofAnActiveDefinition_isRefusedAndNothingIsSaved() {
+        definition.setHospital(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setReferenceRanges(new java.util.ArrayList<>(List.of(glucoseRange(6.1))));
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        LabTestReferenceRangeDTO widened = glucoseRangeDto(9.0);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(List.of(widened)))
+                .thenReturn(new java.util.ArrayList<>(List.of(glucoseRange(9.0))));
+
+            List<LabTestReferenceRangeDTO> widenedRanges = List.of(widened);
+            assertThatThrownBy(() -> service.updateReferenceRanges(defId, widenedRanges))
+                .isInstanceOf(IllegalStateException.class)
+                .satisfies(e -> assertThat(e.getMessage()).containsAnyOf("ACTIVE", "Active"));
+            assertThat(definition.getReferenceRanges()).containsExactly(glucoseRange(6.1));
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    /** QA D742: the ranges lock names the status in the reader's language, like the clinical-fields lock. */
+    @Test
+    void updateReferenceRanges_lockMessage_namesTheStatusInFrenchNotTheEnum() throws Exception {
+        definition.setHospital(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        definition.setReferenceRanges(new java.util.ArrayList<>(List.of(glucoseRange(6.1))));
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        LabTestReferenceRangeDTO widened = glucoseRangeDto(9.0);
+        org.springframework.context.support.ResourceBundleMessageSource bundle =
+            new org.springframework.context.support.ResourceBundleMessageSource();
+        bundle.setBasenames("i18n/messages-lab");
+        bundle.setDefaultEncoding("UTF-8");
+        bundle.setFallbackToSystemLocale(false);
+        java.lang.reflect.Field field = com.example.hms.utility.MessageUtil.class.getDeclaredField("messageSource");
+        field.setAccessible(true);
+        org.springframework.context.MessageSource previous = (org.springframework.context.MessageSource) field.get(null);
+        com.example.hms.utility.MessageUtil.setMessageSource(bundle);
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(List.of(widened)))
+                .thenReturn(new java.util.ArrayList<>(List.of(glucoseRange(9.0))));
+
+            List<LabTestReferenceRangeDTO> widenedRanges = List.of(widened);
+            assertThatThrownBy(() -> service.updateReferenceRanges(defId, widenedRanges))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("En attente de revue qualité")
+                .hasMessageNotContaining("PENDING_QA_REVIEW");
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(previous);
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    @Test
+    void update_ofAnActiveDefinition_withTheSameRanges_isAllowed() {
+        definition.setHospital(null);
+        definition.setAssignment(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setReferenceRanges(new java.util.ArrayList<>(List.of(glucoseRange(6.1))));
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        requestDTO.setAssignmentId(null);
+        requestDTO.setReferenceRanges(List.of(glucoseRangeDto(6.1)));
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(requestDTO.getReferenceRanges()))
+                .thenReturn(new java.util.ArrayList<>(List.of(glucoseRange(6.1))));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            assertThat(service.update(defId, requestDTO)).isNotNull();
+        }
+    }
+
+    @Test
+    void update_ofAnActiveDefinition_withNewRanges_isRefused() {
+        definition.setHospital(null);
+        definition.setAssignment(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setReferenceRanges(new java.util.ArrayList<>(List.of(glucoseRange(6.1))));
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        requestDTO.setAssignmentId(null);
+        requestDTO.setReferenceRanges(List.of(glucoseRangeDto(9.0)));
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(requestDTO.getReferenceRanges()))
+                .thenReturn(new java.util.ArrayList<>(List.of(glucoseRange(9.0))));
+
+            assertThatThrownBy(() -> service.update(defId, requestDTO))
+                .isInstanceOf(IllegalStateException.class);
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void update_cannotSwitchOnADefinitionTheWorkflowHasNotActivated() {
+        definition.setHospital(null);
+        definition.setAssignment(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        definition.setActive(false);
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        requestDTO.setAssignmentId(null);
+        requestDTO.setActive(true);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            assertThatThrownBy(() -> service.update(defId, requestDTO))
+                .isInstanceOf(IllegalStateException.class);
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
         }
     }
 
@@ -983,7 +1996,7 @@ class LabTestDefinitionServiceImplTest {
             when(repository.findById(defId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.updateReferenceRanges(defId, List.of()))
-                    .isInstanceOf(EntityNotFoundException.class);
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
     }
 
@@ -991,6 +2004,7 @@ class LabTestDefinitionServiceImplTest {
 
     @Test
     void exportPdf_noHospitalContext_returnsBytes() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
         when(repository.findAll()).thenReturn(List.of(definition));
 
         byte[] result = service.exportPdf();
@@ -1006,11 +2020,200 @@ class LabTestDefinitionServiceImplTest {
 
     @Test
     void exportPdf_emptyDefinitions_returnsValidPdf() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
         when(repository.findAll()).thenReturn(List.of());
 
         byte[] result = service.exportPdf();
 
         assertThat(result).isNotNull();
         assertThat(result).hasSizeGreaterThan(0);
+    }
+
+    @Test
+    void exportPdf_nonSuperAdminWithoutAHospital_exportsTheGlobalCatalogOnly() {
+        when(repository.findVisibleAt(null)).thenReturn(List.of());
+
+        assertThat(service.exportPdf()).isNotEmpty();
+        verify(repository, never()).findAll();
+    }
+
+    @Test
+    void exportPdf_superAdminInGlobalView_ignoresAnUnpinnedActiveHospital() {
+        when(actingScopeResolver.current()).thenReturn(new ActingScope.Global(UUID.randomUUID()));
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).activeHospitalId(hospitalId).build());
+        when(repository.findAll()).thenReturn(List.of(definition));
+
+        assertThat(service.exportPdf()).isNotEmpty();
+        verify(repository, never()).findByHospital_IdAndActiveTrue(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void exportPdf_pinnedScope_exportsThatHospitalOnly() {
+        when(actingScopeResolver.current()).thenReturn(new ActingScope.Pinned(hospitalId, ActingScope.Source.REQUESTED));
+        when(repository.findByHospital_IdAndActiveTrue(hospitalId)).thenReturn(List.of(definition));
+        when(repository.findByHospitalIsNullAndActiveTrue()).thenReturn(List.of());
+
+        assertThat(service.exportPdf()).isNotEmpty();
+        verify(repository, never()).findAll();
+    }
+
+    /** QA D417: a definition without a range cannot enter review (it would come out stuck). */
+    @Test
+    void processApproval_submit_withoutReferenceRanges_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        definition.getReferenceRanges().clear();
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("SUBMIT_FOR_QA");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("reference range");
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.DRAFT);
+        }
+    }
+
+    /** QA D417: an APPROVED definition with no range can be sent back, then resubmitted. */
+    @Test
+    void processApproval_reject_fromApproved_isAllowed() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.getReferenceRanges().clear();
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("REJECT", "Range missing"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.REJECTED);
+        }
+    }
+
+    // ── QA D1120: versions and duplicate codes ───────────────────────────
+
+    /** A second live definition with the same code is refused clearly, not accepted silently. */
+    @Test
+    void d1120_aDuplicateCodeIsRefused() {
+        LabTestDefinition live = LabTestDefinition.builder().testCode("CBC").name("CBC").build();
+        live.setId(UUID.randomUUID());
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(assignmentRepository.findById(assignmentUUID)).thenReturn(Optional.of(assignment));
+            assignment.setUser(currentUser);
+            managesHospital(currentUser);
+            when(repository.findLiveByCodeAtHospital("CBC", hospitalId)).thenReturn(List.of(live));
+
+            assertThatThrownBy(() -> service.create(requestDTO))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                .hasMessageContaining("CBC")
+                .hasMessageContaining("new version");
+            verify(repository, never()).save(any());
+        }
+    }
+
+    /** An ACTIVE definition gets a linked DRAFT copy: same code, ranges copied, version + 1. */
+    @Test
+    void d1120_aNewVersionIsALinkedDraftCopy() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setUnit("g/L");
+        definition.setPointOfCare(true);
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(currentUser.getId()), eq(hospitalId), anySet())).thenReturn(true);
+            actingAt(hospitalId);
+            when(repository.findBySupersedesDefinitionId(defId)).thenReturn(List.of());
+            when(repository.save(any(LabTestDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.createNewVersion(defId);
+
+            org.mockito.ArgumentCaptor<LabTestDefinition> saved =
+                org.mockito.ArgumentCaptor.forClass(LabTestDefinition.class);
+            verify(repository).save(saved.capture());
+            LabTestDefinition next = saved.getValue();
+            assertThat(next.getTestCode()).isEqualTo("CBC");
+            assertThat(next.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.DRAFT);
+            assertThat(next.isActive()).isFalse();
+            assertThat(next.getSupersedesDefinitionId()).isEqualTo(defId);
+            assertThat(next.getVersionNumber()).isEqualTo(2);
+            assertThat(next.getHospital()).isSameAs(hospital);
+            assertThat(next.getUnit()).isEqualTo("g/L");
+            assertThat(next.isPointOfCare()).isTrue();
+            assertThat(next.getReferenceRanges()).hasSize(1);
+            assertThat(next.getReferenceRanges().get(0)).as("a copy, never the live range itself")
+                .isNotSameAs(definition.getReferenceRanges().get(0))
+                .isEqualTo(definition.getReferenceRanges().get(0));
+            assertThat(definition.getApprovalStatus())
+                .as("the live version stays live until the new one is activated")
+                .isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
+        }
+    }
+
+    @Test
+    void d1120_onlyAnActiveDefinitionIsVersioned_andOneAtATime() {
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(currentUser.getId()), eq(hospitalId), anySet())).thenReturn(true);
+            actingAt(hospitalId);
+
+            definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+            assertThatThrownBy(() -> service.createNewVersion(defId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+            definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+            LabTestDefinition inProgress = LabTestDefinition.builder().testCode("CBC").name("CBC")
+                .approvalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW).build();
+            when(repository.findBySupersedesDefinitionId(defId)).thenReturn(List.of(inProgress));
+            assertThatThrownBy(() -> service.createNewVersion(defId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                .hasMessageContaining("already in progress");
+            verify(repository, never()).save(any());
+        }
+    }
+
+    /** Activating a version retires the one it replaces, so the code is live once. */
+    @Test
+    void d1120_activatingAVersionRetiresTheOneItReplaces() {
+        LabTestDefinition previous = LabTestDefinition.builder().testCode("CBC").name("CBC")
+            .approvalStatus(LabTestDefinitionApprovalStatus.ACTIVE).active(true).build();
+        UUID previousId = UUID.randomUUID();
+        previous.setId(previousId);
+        previous.setHospital(hospital);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.setSupersedesDefinitionId(previousId);
+        definition.setVersionNumber(2);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.findById(previousId)).thenReturn(Optional.of(previous));
+            when(repository.save(any(LabTestDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("ACTIVATE"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
+            assertThat(previous.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.RETIRED);
+            assertThat(previous.isActive()).isFalse();
+        }
     }
 }

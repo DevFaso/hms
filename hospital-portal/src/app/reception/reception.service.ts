@@ -24,9 +24,13 @@ export type QueueStatus =
   | 'COMPLETED'
   | 'WALK_IN'
   | 'CANCELLED'
+  | 'LEFT_WITHOUT_BEING_SEEN'
   | string;
 
 export interface ReceptionQueueItem {
+  /** QA D1489: a check-in on either is refused, so the row does not offer one. */
+  patientDeceased?: boolean;
+  registrationInactive?: boolean;
   appointmentId: string | null;
   patientId: string;
   patientName: string;
@@ -37,10 +41,16 @@ export interface ReceptionQueueItem {
   departmentName: string | null;
   appointmentReason: string | null;
   status: QueueStatus;
+  /** QA D1400 + D1401: the filters that open this row, by the rule the summary counts through. */
+  queueFilters?: string[];
   waitMinutes: number;
   encounterId: string | null;
   hasInsuranceIssue: boolean;
   hasOutstandingBalance: boolean;
+  /** QA D1591: the patient pre-checked in from the portal, when, and whether they consented there. */
+  preCheckedIn?: boolean;
+  preCheckinTimestamp?: string | null;
+  preCheckInConsent?: boolean;
 }
 
 export interface InsuranceSummary {
@@ -83,6 +93,7 @@ export interface FrontDeskPatientSnapshot {
 
 export interface InsuranceIssue {
   appointmentId: string | null;
+  encounterId?: string | null;
   patientId: string;
   patientName: string;
   mrn: string | null;
@@ -196,7 +207,11 @@ export interface CheckInRequest {
   patientId?: string | null;
   chiefComplaint?: string | null;
   copayAmount?: number | null;
-  identityConfirmed?: boolean;
+  /** QA D975: how the copay was paid (cash when absent) and its reference. */
+  copayMethod?: string | null;
+  copayReference?: string | null;
+  /** QA D1415: required by the server, so required here: a caller cannot forget the attestation. */
+  identityConfirmed: boolean;
   insuranceVerified?: boolean;
   notes?: string | null;
   /* Consent-to-treat capture (P3 #21) — recorded as a queryable row, never
@@ -217,6 +232,9 @@ export interface CheckInResponse {
   arrivalTimestamp: string;
   chiefComplaint: string | null;
   message: string;
+  /** QA D975: the copay's invoice and payment, for its receipt. */
+  copayInvoiceId?: string | null;
+  copayPaymentId?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -267,8 +285,17 @@ export class ReceptionService {
     return this.http.get<FlowBoard>(`${this.base}/flow-board`, { params });
   }
 
-  recordPayment(invoiceId: string, amount: number, method = 'CASH'): Observable<unknown> {
-    return this.http.post(`/billing-invoices/${invoiceId}/payments`, { amount, method });
+  recordPayment(
+    invoiceId: string,
+    amount: number,
+    method = 'CASH',
+    reference?: string,
+  ): Observable<unknown> {
+    return this.http.post(`/billing-invoices/${invoiceId}/payments`, {
+      amount,
+      method,
+      ...(reference ? { reference } : {}),
+    });
   }
 
   // ── MVP 11: Duplicate candidate detection ──────────────────────────────────
@@ -328,8 +355,10 @@ export class ReceptionService {
     return this.http.post<WaitlistEntryResponse>(`${this.base}/waitlist/${id}/decline-offer`, {});
   }
 
-  closeWaitlistEntry(id: string): Observable<void> {
-    return this.http.post<void>(`${this.base}/waitlist/${id}/close`, {});
+  /** QA D1157: a waitlist entry is closed with the reason it was closed for. */
+  closeWaitlistEntry(id: string, reason: string): Observable<void> {
+    // In the body only: free text in a query string lands in proxy and access logs.
+    return this.http.post<void>(`${this.base}/waitlist/${id}/close`, { reason });
   }
 
   // ── P3 #22: Patient recalls ────────────────────────────────────────────────
@@ -349,8 +378,9 @@ export class ReceptionService {
     return this.http.post<RecallResponse>(`/recalls/${id}/close`, {});
   }
 
-  cancelRecall(id: string): Observable<RecallResponse> {
-    return this.http.post<RecallResponse>(`/recalls/${id}/cancel`, {});
+  /** QA D1157: a recall is cancelled with the reason it was cancelled for. */
+  cancelRecall(id: string, reason: string): Observable<RecallResponse> {
+    return this.http.post<RecallResponse>(`/recalls/${id}/cancel`, { reason });
   }
 
   linkRecallAppointment(id: string, appointmentId: string): Observable<RecallResponse> {

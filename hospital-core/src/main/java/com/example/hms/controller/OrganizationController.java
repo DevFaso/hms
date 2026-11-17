@@ -48,29 +48,44 @@ import org.springframework.context.i18n.LocaleContextHolder;
 @Tag(name = "Organization Management", description = "APIs for managing healthcare organizations")
 @SecurityRequirement(name = "Bearer Authentication")
 public class OrganizationController {
+    private static final String ORGANIZATION_NOT_FOUND_KEY = "organization.notFound";
 
-    private static final String ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found with ID: ";
+
 
     private final OrganizationRepository organizationRepository;
     private final OrganizationSecurityService organizationSecurityService;
     private final OrganizationMapper organizationMapper;
     private final OrganizationSecurityPolicyMapper policyMapper;
     private final OrganizationPlatformBootstrapService organizationPlatformBootstrapService;
+    private final com.example.hms.security.tenant.OrganizationReadScope organizationReadScope;
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN')")
     @Operation(summary = "Get all organizations", 
-               description = "Retrieve a paginated list of all organizations")
+               description = "Retrieve a paginated list of organizations: every one for a super-admin, "
+                   + "only those of the hospitals the caller administers for a hospital administrator (QA D845)")
     @ApiResponse(responseCode = "200", description = "Organizations retrieved successfully")
     public ResponseEntity<Page<OrganizationResponseDTO>> getAllOrganizations(
             @Parameter(description = "Pagination parameters") Pageable pageable,
             @RequestParam(required = false) Boolean active) {
         
+        boolean activeOnly = active != null && active;
         Page<Organization> organizations;
-        if (active != null && active) {
-            organizations = organizationRepository.findAllActiveWithHospitals(pageable);
+        if (organizationReadScope.readsEveryOrganization()) {
+            organizations = activeOnly
+                ? organizationRepository.findAllActiveWithHospitals(pageable)
+                : organizationRepository.findAllWithHospitals(pageable);
         } else {
-            organizations = organizationRepository.findAllWithHospitals(pageable);
+            // QA D845: a hospital administrator lists only the organisations
+            // of the hospitals they administer, never every tenant.
+            java.util.Set<UUID> readable = organizationReadScope.administeredOrganizationIds();
+            if (readable.isEmpty()) {
+                organizations = Page.empty(pageable);
+            } else {
+                organizations = activeOnly
+                    ? organizationRepository.findActiveByIdInWithHospitals(readable, pageable)
+                    : organizationRepository.findByIdInWithHospitals(readable, pageable);
+            }
         }
 
         Page<OrganizationResponseDTO> responsePage = organizations.map(organizationMapper::toResponseDTO);
@@ -88,9 +103,11 @@ public class OrganizationController {
     public ResponseEntity<OrganizationResponseDTO> getOrganizationById(
             @Parameter(description = "Organization ID") @PathVariable UUID id,
             @RequestParam(defaultValue = "false") boolean includePolicies) {
-        
+
+        // QA D845: a hospital administrator reads only an organisation they administer.
+        organizationReadScope.requireReadable(id);
         Organization organization = organizationRepository.findByIdWithHospitals(id)
-            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_MESSAGE + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
         OrganizationResponseDTO response;
         if (includePolicies) {
@@ -118,8 +135,10 @@ public class OrganizationController {
         
         // Check if organization code already exists
         if (organizationRepository.existsByCode(requestDTO.getCode())) {
-            throw new IllegalArgumentException("Organization with code '" + requestDTO.getCode() + "' already exists");
+            throw new com.example.hms.exception.BusinessException("organization.r7.codeExists", requestDTO.getCode());
         }
+        // QA D435: two organisations with the same name cannot be told apart in any picker.
+        requireNameFree(requestDTO.getName(), null);
 
         Organization organization = organizationMapper.toEntity(requestDTO);
         organization = organizationRepository.save(organization);
@@ -149,12 +168,16 @@ public class OrganizationController {
             @Valid @RequestBody OrganizationRequestDTO requestDTO) {
         
         Organization organization = organizationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_MESSAGE + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
         // Check if new code conflicts with existing organization (excluding current one)
         if (!organization.getCode().equals(requestDTO.getCode()) && 
             organizationRepository.existsByCode(requestDTO.getCode())) {
-            throw new IllegalArgumentException("Organization with code '" + requestDTO.getCode() + "' already exists");
+            throw new com.example.hms.exception.BusinessException("organization.r7.codeExists", requestDTO.getCode());
+        }
+        // Only a rename is checked: a twin stored before the D435 guard must stay editable.
+        if (isRename(organization.getName(), requestDTO.getName())) {
+            requireNameFree(requestDTO.getName(), organization.getId());
         }
 
         organizationMapper.updateEntity(organization, requestDTO);
@@ -180,7 +203,7 @@ public class OrganizationController {
             @Parameter(description = "Organization ID") @PathVariable UUID id) {
         
         Organization organization = organizationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_MESSAGE + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
         organization.setActive(false);
         organizationRepository.save(organization);
@@ -208,11 +231,32 @@ public class OrganizationController {
             @Parameter(description = "Organization ID") @PathVariable UUID id) {
         
         Organization organization = organizationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_MESSAGE + id));
+            .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 
         organizationSecurityService.applyDefaultSecurityPolicies(id, organization.getType());
         
         log.info("Applied default security policies to organization: {}", organization.getCode());
         return ResponseEntity.ok(new MessageResponse("Default security policies applied successfully"));
+    }
+
+    /** QA D435: an organisation name is unique, ignoring case and surrounding spaces. */
+    private void requireNameFree(String name, UUID self) {
+        if (name == null || name.isBlank()) {
+            return;
+        }
+        String trimmed = name.trim();
+        boolean taken = self == null
+            ? organizationRepository.existsByNameIgnoreCase(trimmed)
+            : organizationRepository.existsByNameIgnoreCaseAndIdNot(trimmed, self);
+        if (taken) {
+            throw new com.example.hms.exception.BusinessException("organization.r7.nameExists", trimmed);
+        }
+    }
+
+    private static boolean isRename(String current, String requested) {
+        if (requested == null || requested.isBlank()) {
+            return false;
+        }
+        return current == null || !current.trim().equalsIgnoreCase(requested.trim());
     }
 }

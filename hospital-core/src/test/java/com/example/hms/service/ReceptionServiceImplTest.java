@@ -77,12 +77,14 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class ReceptionServiceImplTest {
 
     @Mock private AppointmentRepository appointmentRepo;
@@ -97,12 +99,15 @@ class ReceptionServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.repository.UserRepository userRepo;
     @Mock private com.example.hms.service.TreatmentConsentService treatmentConsentService;
+    @Mock private com.example.hms.repository.PatientTreatmentConsentRepository consentRepo;
     @Mock private AppointmentSlotRepository slotRepo;
     @Mock private SlotInventoryService slotInventoryService;
     @Mock private PatientOutreachNotifier outreachNotifier;
     @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
     @Mock private org.springframework.context.MessageSource messageSource;
     @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepo;
+    @Mock private com.example.hms.service.BillingInvoiceService billingInvoiceService;
+    @Mock private org.springframework.beans.factory.ObjectProvider<EncounterService> encounterServiceProvider;
 
     @InjectMocks
     private ReceptionServiceImpl service;
@@ -118,6 +123,8 @@ class ReceptionServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // QA D936: check-in reads the appointment under a row lock; the lock answers what the plain read would.
+        lenient().when(appointmentRepo.lockById(any())).thenAnswer(inv -> appointmentRepo.findById(inv.getArgument(0)));
         patient = new Patient();
         patient.setId(patientId);
         patient.setFirstName("John");
@@ -190,6 +197,125 @@ class ReceptionServiceImplTest {
         lenient().when(invoiceRepo.existsOutstandingBalance(any(), any())).thenReturn(false);
     }
 
+    // ── D1400 + D1401: a card's number is the rows it opens ──────────────────
+
+    @Nested
+    @DisplayName("QA D1400 + D1401: every card counts exactly the rows it opens")
+    class CardsCountWhatTheyOpen {
+
+        private List<ReceptionQueueItemDTO> queue;
+        private ReceptionDashboardSummaryDTO summary;
+
+        /** A day at hospital A with one visit in every state the desk can meet. */
+        @BeforeEach
+        void aMixedDay() {
+            Appointment scheduled = makeAppointment(AppointmentStatus.SCHEDULED);
+            Appointment confirmed = makeAppointment(AppointmentStatus.CONFIRMED);
+            Appointment pending = makeAppointment(AppointmentStatus.PENDING);
+            Appointment rescheduled = makeAppointment(AppointmentStatus.RESCHEDULED);
+            Appointment noShow = makeAppointment(AppointmentStatus.NO_SHOW);
+            Appointment cancelled = makeAppointment(AppointmentStatus.CANCELLED);
+            Appointment completedNoVisit = makeAppointment(AppointmentStatus.COMPLETED);
+            Appointment arrived = makeAppointment(AppointmentStatus.CHECKED_IN);
+            Appointment triage = makeAppointment(AppointmentStatus.CHECKED_IN);
+            Appointment waiting = makeAppointment(AppointmentStatus.CHECKED_IN);
+            Appointment inProgress = makeAppointment(AppointmentStatus.IN_PROGRESS);
+            Appointment awaitingResults = makeAppointment(AppointmentStatus.IN_PROGRESS);
+            Appointment ready = makeAppointment(AppointmentStatus.IN_PROGRESS);
+            Appointment done = makeAppointment(AppointmentStatus.COMPLETED);
+            Appointment walkedOut = makeAppointment(AppointmentStatus.CANCELLED);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today)).thenReturn(List.of(
+                scheduled, confirmed, pending, rescheduled, noShow, cancelled, completedNoVisit,
+                arrived, triage, waiting, inProgress, awaitingResults, ready, done, walkedOut));
+            List<Encounter> visits = List.of(
+                makeEncounter(EncounterStatus.ARRIVED, arrived),
+                makeEncounter(EncounterStatus.TRIAGE, triage),
+                makeEncounter(EncounterStatus.WAITING_FOR_PHYSICIAN, waiting),
+                makeEncounter(EncounterStatus.IN_PROGRESS, inProgress),
+                makeEncounter(EncounterStatus.AWAITING_RESULTS, awaitingResults),
+                makeEncounter(EncounterStatus.READY_FOR_DISCHARGE, ready),
+                makeEncounter(EncounterStatus.COMPLETED, done),
+                makeEncounter(EncounterStatus.LEFT_WITHOUT_BEING_SEEN, walkedOut));
+            List<Encounter> walkIns = List.of(
+                makeWalkInEncounter(EncounterStatus.ARRIVED),
+                makeWalkInEncounter(EncounterStatus.TRIAGE),
+                makeWalkInEncounter(EncounterStatus.IN_PROGRESS),
+                makeWalkInEncounter(EncounterStatus.COMPLETED),
+                makeWalkInEncounter(EncounterStatus.CANCELLED));
+            walkIns.forEach(walkIn -> lenient().when(walkIn.getHospital()).thenReturn(hospital));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(visits);
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any())).thenReturn(walkIns);
+            stubEmptyInsuranceAndInvoices();
+            queue = service.getQueue(today, hospitalId, "ALL", null, null);
+            summary = service.getDashboardSummary(today, hospitalId);
+        }
+
+        private long opened(String filter) {
+            assertThat(service.getQueue(today, hospitalId, filter, null, null))
+                .as("the server filter and the row's own list agree on " + filter)
+                .hasSize((int) queue.stream().filter(i -> i.getQueueFilters().contains(filter)).count());
+            return service.getQueue(today, hospitalId, filter, null, null).size();
+        }
+
+        @Test
+        void everyStatusCardEqualsItsFilter() {
+            assertThat(summary.getScheduledToday()).isEqualTo(opened("SCHEDULED")).isEqualTo(4);
+            assertThat(summary.getArrivedCount()).isEqualTo(opened("ARRIVED")).isEqualTo(5);
+            assertThat(summary.getInProgressCount()).isEqualTo(opened("IN_PROGRESS")).isEqualTo(4);
+            assertThat(summary.getCompletedCount()).isEqualTo(opened("COMPLETED")).isEqualTo(3);
+            assertThat(summary.getNoShowCount()).isEqualTo(opened("NO_SHOW")).isEqualTo(1);
+            assertThat(summary.getWaitingCount()).isEqualTo(summary.getArrivedCount());
+        }
+
+        @Test
+        void walkInsOpenByHavingNoAppointmentNotByAStatusTheyNeverHave() {
+            assertThat(summary.getWalkInCount()).isEqualTo(opened("WALK_IN")).isEqualTo(5);
+            assertThat(service.getQueue(today, hospitalId, "WALK_IN", null, null))
+                .allSatisfy(item -> assertThat(item.getAppointmentId()).isNull());
+            assertThat(queue.stream().filter(i -> i.getAppointmentId() == null))
+                .allSatisfy(item -> assertThat(item.getStatus()).isNotEqualTo("WALK_IN"));
+        }
+
+        @Test
+        void aConfirmedVisitOpensUnderItsOwnFilterToo() {
+            assertThat(opened("CONFIRMED")).isEqualTo(1);
+            assertThat(service.getFlowBoard(today, hospitalId, null).getScheduled())
+                .as("the board's columns stay exact").hasSize(1);
+        }
+
+        @Test
+        void theInsuranceCardIsTheRowsTheQueueFlags() {
+            // No policy for anyone in this fixture: every visit that took place is flagged, walk-ins too.
+            List<InsuranceIssueDTO> issues = service.getInsuranceIssues(today, hospitalId);
+            assertThat(issues).hasSameSizeAs(queue.stream().filter(ReceptionQueueItemDTO::isHasInsuranceIssue).toList());
+            assertThat(issues).hasSize(queue.size() - 4);
+            assertThat(issues).anySatisfy(issue -> {
+                assertThat(issue.getAppointmentId()).isNull();
+                assertThat(issue.getEncounterId()).isNotNull();
+            });
+            // A visit that did not take place is not the desk's to chase.
+            assertThat(queue).filteredOn(i -> Set.of("CANCELLED", "NO_SHOW", "LEFT_WITHOUT_BEING_SEEN").contains(i.getStatus()))
+                .isNotEmpty().allSatisfy(i -> assertThat(i.isHasInsuranceIssue()).isFalse());
+        }
+
+        @Test
+        void thePaymentCardIsTheRowsTheQueueFlags() {
+            when(invoiceRepo.existsOutstandingBalance(any(), any())).thenReturn(true);
+            assertThat(service.getPaymentsPending(today, hospitalId))
+                .hasSameSizeAs(service.getQueue(today, hospitalId, "ALL", null, null).stream()
+                    .filter(ReceptionQueueItemDTO::isHasOutstandingBalance).toList());
+        }
+
+        @Test
+        void anEmptyDayCountsNothing() {
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today)).thenReturn(List.of());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any())).thenReturn(List.of());
+            ReceptionDashboardSummaryDTO empty = service.getDashboardSummary(today, hospitalId);
+            assertThat(empty.getScheduledToday() + empty.getArrivedCount() + empty.getWalkInCount()).isZero();
+            assertThat(service.getInsuranceIssues(today, hospitalId)).isEmpty();
+        }
+    }
+
     // ── getDashboardSummary ──────────────────────────────────────────────────
 
     @Nested
@@ -197,8 +323,8 @@ class ReceptionServiceImplTest {
     class GetDashboardSummary {
 
         @Test
-        @DisplayName("waitingCount is arrivedCount minus inProgressCount (never negative)")
-        void waitingCountIsArrivedMinusInProgress() {
+        @DisplayName("QA D1401: waitingCount is the ARRIVED rows of the queue")
+        void waitingCountIsTheArrivedRows() {
             Appointment appt1 = makeAppointment(AppointmentStatus.SCHEDULED);
             Appointment appt2 = makeAppointment(AppointmentStatus.SCHEDULED);
             Encounter arrived1 = makeEncounter(EncounterStatus.ARRIVED, appt1);
@@ -214,8 +340,8 @@ class ReceptionServiceImplTest {
 
             ReceptionDashboardSummaryDTO result = service.getDashboardSummary(today, hospitalId);
 
-            // 2 arrived, 1 in-progress → waitingCount = max(0, 2-1) = 1
-            assertThat(result.getWaitingCount()).isEqualTo(1);
+            // One row per appointment: both read ARRIVED on the queue, so both wait.
+            assertThat(result.getWaitingCount()).isEqualTo(result.getArrivedCount()).isEqualTo(2);
         }
 
         @Test
@@ -274,7 +400,7 @@ class ReceptionServiceImplTest {
             assertThat(result.getDate()).isEqualTo(today);
             assertThat(result.getHospitalId()).isEqualTo(hospitalId);
             assertThat(result.getNoShowCount()).isEqualTo(1);
-            assertThat(result.getCompletedCount()).isZero(); // no linked encounter or walk-in with COMPLETED
+            assertThat(result.getCompletedCount()).isEqualTo(1); // QA D1401: the queue shows this appointment as COMPLETED
             assertThat(result.getWalkInCount()).isEqualTo(1);
             assertThat(result.getScheduledToday()).isEqualTo(1); // only 'scheduled' qualifies
         }
@@ -318,6 +444,116 @@ class ReceptionServiceImplTest {
     @Nested
     @DisplayName("getQueue()")
     class GetQueue {
+
+        @Test
+        @DisplayName("QA D239: the queue carries the MRN at this hospital and the booked reason")
+        void queueCarriesMrnAndReason_D239() {
+            com.example.hms.model.PatientHospitalRegistration reg = new com.example.hms.model.PatientHospitalRegistration();
+            reg.setHospital(hospital);
+            reg.setMrn("MRN-A-0042");
+            patient.setHospitalRegistrations(new java.util.HashSet<>(java.util.Set.of(reg)));
+            Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);
+            when(appt.getReason()).thenReturn("Contrôle");
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(Collections.emptyList());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            stubEmptyInsuranceAndInvoices();
+
+            ReceptionQueueItemDTO item = service.getQueue(today, hospitalId, "ALL", null, null).get(0);
+
+            assertThat(item.getMrn()).isEqualTo("MRN-A-0042");
+            assertThat(item.getAppointmentReason()).isEqualTo("Contrôle");
+        }
+
+        @Test
+        @DisplayName("QA D1021: an open walk-in and an open booked visit from before midnight stay on today's queue")
+        void openVisitsFromAnEarlierDayStayOnTodaysQueue_D1021() {
+            Encounter lateWalkIn = makeWalkInEncounter(EncounterStatus.ARRIVED);
+            when(lateWalkIn.getEncounterDate()).thenReturn(today.minusDays(1).atTime(23, 57));
+            Appointment lateAppt = makeAppointment(AppointmentStatus.SCHEDULED);
+            Encounter lateCheckIn = makeEncounter(EncounterStatus.ARRIVED, lateAppt);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today)).thenReturn(List.of());
+            when(encounterRepo.findOpenStartedBefore(eq(hospitalId), eq(today.atStartOfDay()), any()))
+                    .thenReturn(List.of(lateWalkIn, lateCheckIn));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(List.of(lateCheckIn));
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> queue = service.getQueue(today, hospitalId, "ALL", null, null);
+
+            assertThat(queue).extracting(ReceptionQueueItemDTO::getEncounterId)
+                    .containsExactlyInAnyOrder(lateWalkIn.getId(), lateCheckIn.getId());
+            assertThat(service.getDashboardSummary(today, hospitalId).getArrivedCount()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("QA D1021: a past day shows only what happened on it (no carry-over query)")
+        void aPastDayCarriesNothingOver_D1021() {
+            LocalDate yesterday = today.minusDays(1);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, yesterday)).thenReturn(List.of());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+
+            assertThat(service.getQueue(yesterday, hospitalId, "ALL", null, null)).isEmpty();
+            verify(encounterRepo, never()).findOpenStartedBefore(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1021: 'today' for the carry-over is the hospital's calendar day, not the server's")
+        void theCarryOverDayIsTheHospitalsToday_D1021() {
+            // Kiritimati (UTC+14) and Pago Pago (UTC-11) are 25 hours apart:
+            // their calendar days always differ, whatever the server's zone.
+            com.example.hms.model.Organization org = mock(com.example.hms.model.Organization.class);
+            when(org.getDefaultTimezone()).thenReturn("Pacific/Kiritimati");
+            Hospital zoned = mock(Hospital.class);
+            when(zoned.getOrganization()).thenReturn(org);
+            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(zoned));
+            LocalDate hospitalToday = LocalDate.now(java.time.ZoneId.of("Pacific/Kiritimati"));
+            LocalDate otherDay = LocalDate.now(java.time.ZoneId.of("Pacific/Pago_Pago"));
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(eq(hospitalId), any())).thenReturn(List.of());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            when(encounterRepo.findOpenStartedBefore(any(), any(), any())).thenReturn(List.of());
+
+            service.getQueue(otherDay, hospitalId, "ALL", null, null);
+            verify(encounterRepo, never()).findOpenStartedBefore(any(), any(), any());
+
+            service.getQueue(hospitalToday, hospitalId, "ALL", null, null);
+            verify(encounterRepo).findOpenStartedBefore(eq(hospitalId), eq(hospitalToday.atStartOfDay()), any());
+        }
+
+        @Test
+        @DisplayName("QA D1591: the queue row says the patient pre-checked in, when, and that they consented")
+        void queueCarriesThePreCheckIn_D1591() {
+            Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);
+            Appointment other = makeAppointment(AppointmentStatus.SCHEDULED);
+            LocalDateTime when = LocalDateTime.of(2026, 11, 12, 8, 15);
+            when(appt.getPreCheckedIn()).thenReturn(true);
+            when(appt.getPreCheckinTimestamp()).thenReturn(when);
+            UUID apptId = appt.getId();
+            when(consentRepo.existsByAppointment_IdAndSourceAndStatus(apptId,
+                    com.example.hms.enums.TreatmentConsentSource.PRE_CHECK_IN,
+                    com.example.hms.enums.TreatmentConsentStatus.ACTIVE)).thenReturn(true);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt, other));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(Collections.emptyList());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> rows = service.getQueue(today, hospitalId, "ALL", null, null);
+            ReceptionQueueItemDTO pre = rows.stream().filter(r -> apptId.equals(r.getAppointmentId())).findFirst().orElseThrow();
+            ReceptionQueueItemDTO plain = rows.stream().filter(r -> !apptId.equals(r.getAppointmentId())).findFirst().orElseThrow();
+
+            assertThat(pre.isPreCheckedIn()).isTrue();
+            assertThat(pre.getPreCheckinTimestamp()).isEqualTo(when);
+            assertThat(pre.isPreCheckInConsent()).isTrue();
+            assertThat(plain.isPreCheckedIn()).isFalse();
+            assertThat(plain.isPreCheckInConsent()).isFalse();
+        }
 
         @Test
         @DisplayName("returns queue items for all appointments")
@@ -392,7 +628,63 @@ class ReceptionServiceImplTest {
             List<ReceptionQueueItemDTO> result = service.getQueue(today, hospitalId, null, null, null);
 
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).getAppointmentReason()).isEqualTo("Walk-in");
+            // QA D944: no English "Walk-in" placeholder; the queue renders its own.
+            assertThat(result.get(0).getAppointmentReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("QA D944: a walk-in's reason is its chief complaint, else the notes the desk typed")
+        void walkInReasonIsTheComplaintTyped() {
+            Encounter withComplaint = new Encounter();
+            withComplaint.setChiefComplaint("Fièvre depuis 2 jours, toux");
+            withComplaint.setNotes("autre");
+            assertThat(ReceptionServiceImpl.walkInReason(withComplaint)).isEqualTo("Fièvre depuis 2 jours, toux");
+
+            // The clinician's notes are never the desk's reason (review round 6).
+            Encounter clinicalNotesOnly = new Encounter();
+            clinicalNotesOnly.setNotes("VIH+, discuter observance ARV");
+            assertThat(ReceptionServiceImpl.walkInReason(clinicalNotesOnly)).isNull();
+
+            assertThat(ReceptionServiceImpl.walkInReason(new Encounter())).isNull();
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+            names = {"CANCELLED", "LEFT_WITHOUT_BEING_SEEN"})
+        @DisplayName("round 13: a walk-in closed unseen shows as closed, never back in the walk-in column")
+        void aWalkInClosedUnseenIsNotWaiting(EncounterStatus closedAs) {
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(Collections.emptyList());
+            Encounter walkIn = makeWalkInEncounter(closedAs);
+            lenient().when(walkIn.getHospital()).thenReturn(hospital);
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(List.of(walkIn));
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> all = service.getQueue(today, hospitalId, "ALL", null, null);
+            com.example.hms.payload.dto.FlowBoardDTO board = service.getFlowBoard(today, hospitalId, null);
+
+            assertThat(all).extracting(ReceptionQueueItemDTO::getStatus).containsExactly(closedAs.name());
+            assertThat(board.getWalkIn()).isEmpty();
+            assertThat(board.getArrived()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("round 13: an appointment whose visit was left without being seen reads LEFT_WITHOUT_BEING_SEEN, not the appointment's CANCELLED")
+        void anAppointmentLeftWithoutBeingSeen() {
+            Appointment appt = makeAppointment(AppointmentStatus.CANCELLED);
+            Encounter visit = makeEncounter(EncounterStatus.LEFT_WITHOUT_BEING_SEEN, appt);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(List.of(visit));
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> result = service.getQueue(today, hospitalId, "ALL", null, null);
+
+            assertThat(result).extracting(ReceptionQueueItemDTO::getStatus)
+                .containsExactly("LEFT_WITHOUT_BEING_SEEN");
         }
 
         @Test
@@ -786,6 +1078,127 @@ class ReceptionServiceImplTest {
 
             assertThat(result).isEmpty();
         }
+
+        private Patient registered(String first, String last, LocalDate dob, String phone, boolean here) {
+            Patient p = new Patient();
+            p.setId(UUID.randomUUID());
+            p.setFirstName(first);
+            p.setLastName(last);
+            p.setDateOfBirth(dob);
+            p.setPhoneNumberPrimary(phone);
+            p.setActive(true);
+            com.example.hms.model.PatientHospitalRegistration r = new com.example.hms.model.PatientHospitalRegistration();
+            com.example.hms.model.Hospital h = new com.example.hms.model.Hospital();
+            h.setId(here ? hospitalId : UUID.randomUUID());
+            r.setHospital(h);
+            r.setActive(true);
+            r.setMrn("CHW1444");
+            p.setHospitalRegistrations(new java.util.HashSet<>(Set.of(r)));
+            return p;
+        }
+
+        @Test
+        @DisplayName("QA D924: the phone does not filter; name and DOB find the record whatever phone is typed")
+        void aDifferentPhoneStillFindsTheRecord() {
+            Patient fatimata = registered("Fatimata", "Zongo", LocalDate.of(1991, 7, 22), "+22670161000", true);
+            when(patientRepo.searchPatientsExtended(any(), eq("%zongo fatimata%"), isNull(), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(fatimata)));
+            // Round 8: the same-name-and-DOB source finds her too (counted once).
+            when(patientRepo.searchPatientsExtended(any(), eq("%zongo fatimata%"), eq("1991-07-22"), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(fatimata)));
+            when(patientRepo.findAllByPhoneSubscriberAtHospital(eq("%70161099"), any(), any())).thenReturn(List.of());
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Zongo Fatimata", "1991-07-22", "+22670161099", hospitalId);
+
+            assertThat(result).singleElement().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(fatimata.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(80);
+                assertThat(c.getMrn()).isEqualTo("CHW1444");
+            });
+        }
+
+        @Test
+        @DisplayName("QA D924/D942: the same subscriber, however written, scores; a shared number alone is not a duplicate")
+        void theSameSubscriberScores() {
+            Patient same = registered("Aïcha", "Kaboré", LocalDate.of(1991, 7, 22), "70 16 10 99", true);
+            Patient sharedPhoneOnly = registered("Issa", "Kaboré", LocalDate.of(2015, 1, 1), "70161099", true);
+            // A patient registered elsewhere is excluded by the hospital-scoped query itself.
+            when(patientRepo.searchPatientsExtended(any(), any(), any(), any(), any(), eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of()));
+            when(patientRepo.findAllByPhoneSubscriberAtHospital(eq("%70161099"), eq(hospitalId), any()))
+                    .thenReturn(List.of(same, sharedPhoneOnly));
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Aicha Kabore", "1991-07-22", "+22670161099", hospitalId);
+
+            assertThat(result).singleElement().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(same.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(100);
+            });
+        }
+
+        @Test
+        @DisplayName("review: a transposed date of birth does not hide a same-name record (the name is its own source)")
+        void aTransposedDobStillFindsTheName() {
+            Patient aicha = registered("Aïcha", "Kaboré", LocalDate.of(2019, 3, 4), "76000001", true);
+            when(patientRepo.searchPatientsExtended(any(), eq("%aicha kabore%"), isNull(), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(aicha)));
+            // The transposed date matches no one.
+            when(patientRepo.searchPatientsExtended(any(), eq("%aicha kabore%"), eq("2019-04-03"), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of()));
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Aicha Kabore", "2019-04-03", "76999999", hospitalId);
+
+            assertThat(result).singleElement().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(aicha.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(50);
+            });
+        }
+
+        @Test
+        @DisplayName("review round 8: a common name does not push the same-name-and-DOB record out of the capped page")
+        void aCommonNameDoesNotHideTheSameBirthDate() {
+            Patient target = registered("Adama", "Ouedraogo", LocalDate.of(1990, 5, 1), "70000001", true);
+            List<Patient> namesakes = new java.util.ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                namesakes.add(registered("Adama", "Ouedraogo", LocalDate.of(1980, 1, 1).plusDays(i), "7100000" + (i % 10), true));
+            }
+            // The name-only page is full of namesakes born on other days.
+            when(patientRepo.searchPatientsExtended(any(), eq("%ouedraogo adama%"), isNull(), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(namesakes));
+            when(patientRepo.searchPatientsExtended(any(), eq("%ouedraogo adama%"), eq("1990-05-01"), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(target)));
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Ouedraogo Adama", "1990-05-01", "76999999", hospitalId);
+
+            assertThat(result).first().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(target.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(80);
+            });
+        }
+
+        @Test
+        @DisplayName("review: no hospital, no scope: the duplicate check asks nothing")
+        void noHospitalNoCheck() {
+            assertThat(service.getDuplicateCandidates("Aicha", "1991-07-22", "+22670161099", null)).isEmpty();
+            verify(patientRepo, never()).findAllByPhoneSubscriberAtHospital(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("no name, no DOB and a short phone ask nothing")
+        void nothingToAsk() {
+            assertThat(service.getDuplicateCandidates(null, " ", "12", hospitalId)).isEmpty();
+            verify(patientRepo, never()).findAllByPhoneSubscriberAtHospital(any(), any(), any());
+        }
     }
 
     // ── addToWaitlist ────────────────────────────────────────────────────────
@@ -805,7 +1218,7 @@ class ReceptionServiceImplTest {
             req.setRequestedDateTo(today.plusDays(7));
             req.setReason("Follow-up needed");
 
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
             when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
@@ -838,7 +1251,7 @@ class ReceptionServiceImplTest {
             WaitlistEntryRequestDTO req = new WaitlistEntryRequestDTO();
             req.setDepartmentId(departmentId);
             req.setPatientId(patientId);
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "user"))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -853,7 +1266,7 @@ class ReceptionServiceImplTest {
             WaitlistEntryRequestDTO req = new WaitlistEntryRequestDTO();
             req.setDepartmentId(departmentId);
             req.setPatientId(patientId);
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
             when(patientRepo.findById(patientId)).thenReturn(Optional.empty());
             when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -875,7 +1288,7 @@ class ReceptionServiceImplTest {
             WaitlistEntryRequestDTO req = new WaitlistEntryRequestDTO();
             req.setDepartmentId(departmentId);
             req.setPatientId(patientId);
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
             when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId))
@@ -953,8 +1366,6 @@ class ReceptionServiceImplTest {
             UUID waitlistId = UUID.randomUUID();
             AppointmentWaitlist entry = waitingEntry(waitlistId);
             AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(7));
-            when(messageSource.getMessage(eq("sms.waitlist.offer"), any(), any(Locale.class)))
-                    .thenReturn("offer message");
 
             WaitlistEntryResponseDTO result =
                     service.offerWaitlistSlot(waitlistId, hospitalId, slot.getId(), 48);
@@ -963,7 +1374,9 @@ class ReceptionServiceImplTest {
             verify(entry).setOfferedSlot(slot);
             verify(entry).setStatus("OFFERED");
             verify(entry).setOfferExpiresAt(any(LocalDateTime.class));
-            verify(outreachNotifier).notifyPatient(patient, "offer message");
+            verify(outreachNotifier).notifyPatient(eq(patient),
+                    org.mockito.ArgumentMatchers.argThat(text -> "sms.waitlist.offer".equals(text.key())),
+                    any(Locale.class));
             assertThat(result).isNotNull();
         }
 
@@ -1142,10 +1555,104 @@ class ReceptionServiceImplTest {
             when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
                     .thenReturn(Optional.of(entry));
 
-            service.closeWaitlistEntry(waitlistId, hospitalId);
+            service.closeWaitlistEntry(waitlistId, hospitalId, "  Patient seen elsewhere ");
 
+            verify(entry).setCloseReason("Patient seen elsewhere");
             verify(entry).setStatus("CLOSED");
             verify(waitlistRepo).save(entry);
+        }
+
+        @Test
+        @DisplayName("QA D1157: a close without a reason is refused and nothing is written")
+        void aCloseWithoutAReasonIsRefused_D1157() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = mock(AppointmentWaitlist.class);
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            for (String blank : new String[] {null, "", "   "}) {
+                assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, blank))
+                        .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                        .extracting("messageKey").isEqualTo("waitlist.close.reasonRequired"); // QA D1267
+            }
+            verify(entry, never()).setStatus(org.mockito.ArgumentMatchers.anyString());
+            verify(waitlistRepo, never()).save(entry);
+        }
+
+        @Test
+        @DisplayName("QA D1186: a closed entry is not closed again and its reason is kept")
+        void aClosedEntryIsNotClosedAgain_D1186() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = AppointmentWaitlist.builder()
+                    .status("CLOSED").closeReason("Premier motif").build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, "Second motif"))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .extracting("messageKey").isEqualTo("waitlist.close.alreadyClosed");
+            assertThat(entry.getCloseReason()).isEqualTo("Premier motif");
+            verify(waitlistRepo, never()).save(entry);
+        }
+
+        @Test
+        @DisplayName("QA D1185: closing an OFFERED entry frees the held slot and withdraws the offer")
+        void closingAnOfferedEntryReleasesTheSlot_D1185() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(1));
+            slot.setStatus(SlotStatus.HELD);
+            slot.setHeldUntil(LocalDateTime.now().plusHours(48));
+            AppointmentWaitlist entry = AppointmentWaitlist.builder()
+                    .status("OFFERED").offeredSlot(slot).offerExpiresAt(LocalDateTime.now().plusHours(48)).build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            service.closeWaitlistEntry(waitlistId, hospitalId, "Patient a trouvé un autre créneau");
+
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.OPEN);
+            assertThat(slot.getHeldUntil()).isNull();
+            verify(slotRepo).save(slot);
+            assertThat(entry.getOfferedSlot()).isNull();
+            assertThat(entry.getOfferExpiresAt()).isNull();
+            assertThat(entry.getStatus()).isEqualTo("CLOSED");
+            assertThat(entry.getCloseReason()).isEqualTo("Patient a trouvé un autre créneau");
+        }
+
+        @Test
+        @DisplayName("QA D1185: a slot re-held by someone else after the offer lapsed is not freed by the close")
+        void aHoldThatIsNotThisOffersIsLeftAlone_D1185() {
+            UUID waitlistId = UUID.randomUUID();
+            LocalDateTime lapsed = LocalDateTime.now().minusHours(1);
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(1));
+            slot.setStatus(SlotStatus.HELD);
+            slot.setHeldUntil(LocalDateTime.now().plusHours(47));
+            AppointmentWaitlist entry = AppointmentWaitlist.builder()
+                    .status("OFFERED").offeredSlot(slot).offerExpiresAt(lapsed).build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            service.closeWaitlistEntry(waitlistId, hospitalId, "Plus besoin");
+
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.HELD);
+            verify(slotRepo, never()).save(slot);
+            assertThat(entry.getOfferedSlot()).isNull();
+            assertThat(entry.getStatus()).isEqualTo("CLOSED");
+        }
+
+        @Test
+        @DisplayName("QA D1185: a refused close of an OFFERED entry leaves the slot held")
+        void aRefusedCloseLeavesTheOfferAlone_D1185() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(1));
+            slot.setStatus(SlotStatus.HELD);
+            AppointmentWaitlist entry = AppointmentWaitlist.builder().status("OFFERED").offeredSlot(slot).build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, " "))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.HELD);
+            verify(slotRepo, never()).save(slot);
         }
 
         @Test
@@ -1154,7 +1661,7 @@ class ReceptionServiceImplTest {
             UUID waitlistId = UUID.randomUUID();
             when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId))
+            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, "reason"))
                     .isInstanceOf(ResourceNotFoundException.class);
         }
     }
@@ -1204,11 +1711,11 @@ class ReceptionServiceImplTest {
     class UpdateEncounterStatus {
 
         @Test
-        @DisplayName("admin can update any encounter status")
+        @DisplayName("admin can move any encounter through the desk statuses")
         void adminUpdatesStatus() {
             UUID encounterId = UUID.randomUUID();
             Encounter encounter = mock(Encounter.class);
-            lenient().when(encounter.getStatus()).thenReturn(EncounterStatus.ARRIVED);
+            lenient().when(encounter.getStatus()).thenReturn(EncounterStatus.TRIAGE);
             when(encounterRepo.findByIdAndHospital_Id(encounterId, hospitalId))
                     .thenReturn(Optional.of(encounter));
 
@@ -1221,10 +1728,114 @@ class ReceptionServiceImplTest {
             when(staffRepo.findByUsernameOrLicenseOrRoleCode("receptionist1"))
                     .thenReturn(Optional.of(adminStaff));
 
+            service.updateEncounterStatus(encounterId, EncounterStatus.ARRIVED, hospitalId, "receptionist1");
+
+            verify(encounter).setStatus(EncounterStatus.ARRIVED);
+            verify(encounterRepo).save(encounter);
+        }
+
+        private void callerIsReceptionist(String username) {
+            Role receptionistRole = mock(Role.class);
+            when(receptionistRole.getCode()).thenReturn("ROLE_RECEPTIONIST");
+            UserRoleHospitalAssignment assignment = mock(UserRoleHospitalAssignment.class);
+            when(assignment.getRole()).thenReturn(receptionistRole);
+            Staff adminStaff = mock(Staff.class);
+            when(adminStaff.getAssignment()).thenReturn(assignment);
+            when(staffRepo.findByUsernameOrLicenseOrRoleCode(username)).thenReturn(Optional.of(adminStaff));
+        }
+
+        private Encounter encounterIn(UUID encounterId, EncounterStatus status) {
+            Encounter encounter = mock(Encounter.class);
+            lenient().when(encounter.getStatus()).thenReturn(status);
+            when(encounterRepo.findByIdAndHospital_Id(encounterId, hospitalId)).thenReturn(Optional.of(encounter));
+            return encounter;
+        }
+
+        @Test
+        @DisplayName("QA D788: the desk dropping a never-seen ARRIVED card on 'completed' is refused, nothing written")
+        void deskCannotCompleteANeverSeenVisit() {
+            UUID encounterId = UUID.randomUUID();
+            Encounter encounter = encounterIn(encounterId, EncounterStatus.ARRIVED);
+            callerIsReceptionist("receptionist1");
+
+            assertThatThrownBy(() -> service.updateEncounterStatus(
+                    encounterId, EncounterStatus.COMPLETED, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .satisfies(ex -> assertThat(((com.example.hms.exception.BusinessException) ex).getMessageKey())
+                    .isEqualTo("encounter.status.notCompletable"));
+            verify(encounter, never()).setStatus(any());
+            verify(encounterRepo, never()).save(any());
+            verify(encounterServiceProvider, never()).getObject();
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+            names = {"IN_PROGRESS", "AWAITING_RESULTS", "READY_FOR_DISCHARGE"})
+        @DisplayName("QA D788: the desk never sets a clinical status by hand (the bypass of the start and the examination)")
+        void deskCannotSetAClinicalStatus(EncounterStatus target) {
+            UUID encounterId = UUID.randomUUID();
+            Encounter encounter = encounterIn(encounterId, EncounterStatus.ARRIVED);
+            callerIsReceptionist("receptionist1");
+
+            assertThatThrownBy(() -> service.updateEncounterStatus(encounterId, target, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(encounter, never()).setStatus(any());
+        }
+
+        @Test
+        @DisplayName("QA D825, the re-test call: reopening a visit left without being seen names the status in French, not its code")
+        void d825_reopeningALeftWithoutBeingSeenVisitNamesTheStatusInFrench() {
+            UUID encounterId = UUID.randomUUID();
+            Encounter encounter = encounterIn(encounterId, EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
+            callerIsReceptionist("receptionist1");
+            Object previousSource = org.springframework.test.util.ReflectionTestUtils.getField(
+                com.example.hms.utility.MessageUtil.class, "messageSource");
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                assertThatThrownBy(() -> service.updateEncounterStatus(
+                        encounterId, EncounterStatus.ARRIVED, hospitalId, "receptionist1"))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage("Cette visite est déjà au statut Parti sans être vu ; elle ne se rouvre pas d'ici.");
+                org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag("es"));
+                assertThatThrownBy(() -> service.updateEncounterStatus(
+                        encounterId, EncounterStatus.ARRIVED, hospitalId, "receptionist1"))
+                    .hasMessageContaining("Se fue sin ser atendido")
+                    .hasMessageNotContaining("LEFT_WITHOUT_BEING_SEEN");
+            } finally {
+                com.example.hms.utility.MessageUtil.setMessageSource(
+                    (org.springframework.context.MessageSource) previousSource);
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+            verify(encounter, never()).setStatus(any());
+            verify(encounterRepo, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D788: the desk cannot cancel on the board either; close-unseen records the reason")
+        void deskCannotCancelOnTheBoard() {
+            UUID encounterId = UUID.randomUUID();
+            encounterIn(encounterId, EncounterStatus.ARRIVED);
+            callerIsReceptionist("receptionist1");
+
+            assertThatThrownBy(() -> service.updateEncounterStatus(
+                    encounterId, EncounterStatus.CANCELLED, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("QA D788: a READY_FOR_DISCHARGE card dropped on 'completed' is checked out, not just relabelled")
+        void completingAnExaminedVisitIsACheckout() {
+            UUID encounterId = UUID.randomUUID();
+            Encounter encounter = encounterIn(encounterId, EncounterStatus.READY_FOR_DISCHARGE);
+            callerIsReceptionist("receptionist1");
+            EncounterService encounterService = mock(EncounterService.class);
+            when(encounterServiceProvider.getObject()).thenReturn(encounterService);
+
             service.updateEncounterStatus(encounterId, EncounterStatus.COMPLETED, hospitalId, "receptionist1");
 
-            verify(encounter).setStatus(EncounterStatus.COMPLETED);
-            verify(encounterRepo).save(encounter);
+            verify(encounterService).checkOut(eq(encounterId), any(), eq("receptionist1"), eq(false), eq(hospitalId));
+            verify(encounter, never()).setStatus(any());
         }
 
         @Test
@@ -1275,6 +1886,215 @@ class ReceptionServiceImplTest {
     @Nested
     @DisplayName("MVP 1 — checkInPatient")
     class CheckInPatientTests {
+
+        private Appointment scheduledAppointment() {
+            Staff staff = mock(Staff.class);
+            lenient().when(staff.getHospital()).thenReturn(hospital);
+            Appointment appointment = new Appointment();
+            appointment.setId(UUID.randomUUID());
+            appointment.setStatus(AppointmentStatus.SCHEDULED);
+            appointment.setPatient(patient);
+            appointment.setStaff(staff);
+            appointment.setHospital(hospital);
+            appointment.setDepartment(department);
+            appointment.setAppointmentDate(today);
+            appointment.setStartTime(LocalTime.of(9, 0));
+            appointment.setEndTime(LocalTime.of(9, 30));
+            when(appointmentRepo.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+            when(encounterRepo.save(any(Encounter.class))).thenAnswer(inv -> {
+                Encounter e = inv.getArgument(0);
+                e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(appointmentRepo.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            return appointment;
+        }
+
+        @Test
+        @DisplayName("QA D1489: a deactivated registration is refused on the patient, consent ticked or not, and nothing is written")
+        void aDeactivatedRegistrationIsRefused_D1489() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            when(registrationRepo.existsByPatientIdAndHospitalIdAndActiveFalse(patient.getId(), hospitalId)).thenReturn(true);
+
+            for (Boolean consent : new Boolean[] {Boolean.TRUE, Boolean.FALSE, null}) {
+                CheckInRequestDTO request = CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                        .identityConfirmed(true).consentObtained(consent).build();
+                assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                        .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                                e -> org.assertj.core.api.Assertions.assertThat(e.getField()).isEqualTo("patientId"));
+            }
+            org.mockito.Mockito.verifyNoInteractions(treatmentConsentService);
+            verify(encounterRepo, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D1488: a recorded death refuses the check-in")
+        void aDeadPatientIsRefused_D1488() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            patient.setDeceasedAt(java.time.LocalDateTime.now().minusHours(1));
+            CheckInRequestDTO request = CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            verify(encounterRepo, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D149: the copay entered at check-in is recorded on the encounter, not dropped")
+        void copayIsRecordedOnTheEncounter_D149() {
+            Appointment appointment = scheduledAppointment();
+            // QA D1293: the desk sends the method it chose (the dialog's default is cash).
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .copayAmount(new java.math.BigDecimal("2000"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.CASH)
+                    .identityConfirmed(true)
+                    .build();
+
+            CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
+
+            org.mockito.ArgumentCaptor<Encounter> encounter = org.mockito.ArgumentCaptor.forClass(Encounter.class);
+            verify(billingInvoiceService).recordCheckInCopay(encounter.capture(),
+                eq(new java.math.BigDecimal("2000")), any(), any(), any());
+            assertThat(encounter.getValue().getId()).isEqualTo(response.getEncounterId());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.CsvSource({"-200, reception.checkin.copayNegative",
+            "1500.5, billing.payment.wholeAmountOnly"})
+        @DisplayName("QA D1320: a negative or fractional copay is refused on copayAmount, before anything is written")
+        void aWrongCopayAmountIsRefusedOnItsField_D1320(String amount, String key) {
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(UUID.randomUUID())
+                    .copayAmount(new java.math.BigDecimal(amount))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.CASH)
+                    .identityConfirmed(true)
+                    .build();
+
+            com.example.hms.exception.FieldBusinessException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                com.example.hms.exception.FieldBusinessException.class,
+                () -> service.checkInPatient(request, hospitalId, "receptionist1"));
+
+            assertThat(refused.getField()).isEqualTo("copayAmount");
+            assertThat(refused.getMessageKey()).isEqualTo(key);
+            verify(appointmentRepo, never()).lockById(any());
+        }
+
+        @Test
+        @DisplayName("QA D1293: a copay with no method is refused with the field named, before anything is written")
+        void aCopayWithNoMethodIsRefused_D1293() {
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(UUID.randomUUID())
+                    .copayAmount(new java.math.BigDecimal("2000"))
+                    .identityConfirmed(true)
+                    .build();
+
+            com.example.hms.exception.FieldBusinessException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                com.example.hms.exception.FieldBusinessException.class,
+                () -> service.checkInPatient(request, hospitalId, "receptionist1"));
+
+            assertThat(refused.getField()).isEqualTo("copayMethod");
+            assertThat(refused.getMessageKey()).isEqualTo("billing.payment.methodRequired");
+            verify(appointmentRepo, never()).lockById(any());
+            org.mockito.Mockito.verifyNoInteractions(billingInvoiceService);
+        }
+
+        @Test
+        @DisplayName("QA D1611: a copay by insurance is refused on copayMethod, before anything is written")
+        void aCopayByInsuranceIsRefused_D1611() {
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(UUID.randomUUID())
+                    .copayAmount(new java.math.BigDecimal("2000"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.INSURANCE)
+                    .copayReference("MUT-R44-001")
+                    .identityConfirmed(true)
+                    .build();
+
+            com.example.hms.exception.FieldBusinessException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                com.example.hms.exception.FieldBusinessException.class,
+                () -> service.checkInPatient(request, hospitalId, "receptionist1"));
+
+            assertThat(refused.getField()).isEqualTo("copayMethod");
+            assertThat(refused.getMessageKey()).isEqualTo("billing.payment.insuranceNotAPayment");
+            verify(appointmentRepo, never()).lockById(any());
+            org.mockito.Mockito.verifyNoInteractions(billingInvoiceService);
+        }
+
+        @Test
+        @DisplayName("QA D975: the copay is recorded in the method and with the reference the desk chose, and the receipt ids come back")
+        void copayKeepsItsMethodAndReference_D975() {
+            Appointment appointment = scheduledAppointment();
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .copayAmount(new java.math.BigDecimal("1500"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.MOBILE_MONEY)
+                    .copayReference("OM-778812")
+                    .identityConfirmed(true)
+                    .build();
+            com.example.hms.model.BillingInvoice invoice = new com.example.hms.model.BillingInvoice();
+            invoice.setId(UUID.randomUUID());
+            com.example.hms.model.PaymentTransaction row = new com.example.hms.model.PaymentTransaction();
+            row.setId(UUID.randomUUID());
+            row.setInvoice(invoice);
+            when(billingInvoiceService.recordCheckInCopay(any(), any(),
+                eq(com.example.hms.enums.PaymentMethod.MOBILE_MONEY), eq("OM-778812"), any())).thenReturn(row);
+
+            CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
+
+            assertThat(response.getCopayPaymentId()).isEqualTo(row.getId());
+            assertThat(response.getCopayInvoiceId()).isEqualTo(invoice.getId());
+        }
+
+        @Test
+        @DisplayName("QA D630: an appointment for tomorrow is not checked in today, and no encounter is opened")
+        void checkInTheDayBeforeIsRefused_D630() {
+            Appointment appointment = scheduledAppointment();
+            appointment.setAppointmentDate(java.time.LocalDate.now().plusDays(1));
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .chiefComplaint("toux")
+                    .identityConfirmed(true)
+                    .consentObtained(true)
+                    .build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                    .isEqualTo("reception.checkin.notToday"));
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+            verify(encounterRepo, never()).save(any(Encounter.class));
+        }
+
+        @Test
+        @DisplayName("QA D149: no copay, no invoice")
+        void noCopayNoInvoice_D149() {
+            Appointment appointment = scheduledAppointment();
+            CheckInRequestDTO request = CheckInRequestDTO.builder().appointmentId(appointment.getId()).build();
+
+            service.checkInPatient(request, hospitalId, "receptionist1");
+
+            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D149/D184: a negative or fractional copay is refused before anything is written")
+        void invalidCopayIsRefusedBeforeTheCheckIn_D149() {
+            Appointment appointment = scheduledAppointment();
+            CheckInRequestDTO fractional = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId()).copayAmount(new java.math.BigDecimal("0.50")).build();
+            CheckInRequestDTO negative = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId()).copayAmount(new java.math.BigDecimal("-100")).build();
+
+            assertThatThrownBy(() -> service.checkInPatient(fractional, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThatThrownBy(() -> service.checkInPatient(negative, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(appointmentRepo, never()).save(any(Appointment.class));
+            verify(encounterRepo, never()).save(any(Encounter.class));
+        }
 
         @Test
         @DisplayName("successfully checks in a SCHEDULED appointment → creates ARRIVED encounter")
@@ -1329,8 +2149,10 @@ class ReceptionServiceImplTest {
             verify(appointmentRepo).save(any(Appointment.class));
             verify(encounterRepo).save(any(Encounter.class));
             verify(auditEventLogService).logEvent(any());
+            // QA D936: the appointment is read under a row lock.
+            verify(appointmentRepo).lockById(appointmentId);
             // No consent fields on the request — nothing recorded (P3 #21).
-            verify(treatmentConsentService, org.mockito.Mockito.never())
+            verify(treatmentConsentService, never())
                 .record(any(), any(), any(), any(), any());
         }
 
@@ -1386,6 +2208,53 @@ class ReceptionServiceImplTest {
                 org.mockito.ArgumentMatchers.argThat(req ->
                     "John Doe".equals(req.getSignedName())
                         && req.getAppointmentId().equals(appointmentId)));
+        }
+
+        @Test
+        @DisplayName("QA D1591: the consent given at pre-check-in carries onto the visit, never recorded twice")
+        void checkInCarriesThePreCheckInConsent() {
+            UUID appointmentId = UUID.randomUUID();
+            Staff staff = mock(Staff.class);
+            lenient().when(staff.getHospital()).thenReturn(hospital);
+            UserRoleHospitalAssignment assignment = mock(UserRoleHospitalAssignment.class);
+            lenient().when(assignment.getHospital()).thenReturn(hospital);
+
+            Appointment appointment = new Appointment();
+            appointment.setId(appointmentId);
+            appointment.setStatus(AppointmentStatus.SCHEDULED);
+            appointment.setPatient(patient);
+            appointment.setStaff(staff);
+            appointment.setHospital(hospital);
+            appointment.setDepartment(department);
+            appointment.setAssignment(assignment);
+            appointment.setAppointmentDate(today);
+            appointment.setStartTime(LocalTime.of(9, 0));
+            appointment.setEndTime(LocalTime.of(9, 30));
+
+            com.example.hms.model.PatientTreatmentConsent given = new com.example.hms.model.PatientTreatmentConsent();
+            given.setSource(com.example.hms.enums.TreatmentConsentSource.PRE_CHECK_IN);
+            when(consentRepo.findByAppointment_IdAndStatus(appointmentId,
+                    com.example.hms.enums.TreatmentConsentStatus.ACTIVE)).thenReturn(List.of(given));
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.of(appointment));
+            when(encounterRepo.save(any(Encounter.class))).thenAnswer(inv -> {
+                Encounter e = inv.getArgument(0);
+                e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(appointmentRepo.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(userRepo.findByUsername("receptionist1")).thenReturn(Optional.empty());
+
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointmentId)
+                    .identityConfirmed(true)
+                    .consentObtained(true)
+                    .build();
+
+            service.checkInPatient(request, hospitalId, "receptionist1");
+
+            assertThat(given.getEncounter()).isNotNull();
+            verify(consentRepo).save(given);
+            verify(treatmentConsentService, never()).record(any(), any(), any(), any(), any());
         }
 
         @Test
@@ -1506,8 +2375,8 @@ class ReceptionServiceImplTest {
                     .build();
 
             assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("COMPLETED");
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessageContaining("status is Completed");
         }
 
         @Test
@@ -1527,8 +2396,8 @@ class ReceptionServiceImplTest {
                     .build();
 
             assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("CHECKED_IN");
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessageContaining("status is Checked in");
         }
 
         @Test
@@ -1539,8 +2408,8 @@ class ReceptionServiceImplTest {
                     .build();
 
             assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("appointmentId");
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage("An appointment is required for check-in.");
         }
 
         @Test

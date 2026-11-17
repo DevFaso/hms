@@ -1,5 +1,6 @@
 package com.example.hms.i18n;
 
+import com.example.hms.config.MessageBundles;
 import org.springframework.context.MessageSource;
 import org.springframework.context.support.ReloadableResourceBundleMessageSource;
 
@@ -11,7 +12,7 @@ import org.springframework.context.support.ReloadableResourceBundleMessageSource
  * {@code anyString()} does not match, so every test that verifies a
  * notification body would have to stub the source by hand. Reading the real
  * bundles instead keeps the assertions on the words a clinician actually sees
- * and fails loudly when a key is missing from {@code messages*.properties}.
+ * and fails loudly when a key is missing from {@code i18n/messages-*.properties}.
  */
 public final class TestMessageSources {
 
@@ -20,11 +21,7 @@ public final class TestMessageSources {
 
     public static MessageSource bundles() {
         ReloadableResourceBundleMessageSource messageSource = new ReloadableResourceBundleMessageSource();
-        messageSource.setBasenames(
-            "classpath:messages",
-            "classpath:messages_en",
-            "classpath:messages_fr",
-            "classpath:messages_es");
+        messageSource.setBasenames(MessageBundles.basenames());
         messageSource.setDefaultEncoding("UTF-8");
         messageSource.setFallbackToSystemLocale(false);
         messageSource.setUseCodeAsDefaultMessage(false);

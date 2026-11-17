@@ -165,6 +165,19 @@ final class LabResultWireContractTests: XCTestCase {
         """)
         XCTAssertFalse(comma.isGradedNormal)
         XCTAssertEqual(comma.tone, .neutral)
+
+        // The units on the range are NOT compared with the row's: the app
+        // cannot tell whether the range shown is the one that graded this
+        // result, and the check that tried was removed. See
+        // LabResultDTO.displayReferenceRange.
+        let otherUnit = try decode("""
+        {
+          "id": "z5", "testName": "Glucose", "value": "5.4", "unit": "mmol/L",
+          "referenceRange": "70 - 110 mg/dL", "status": "NORMAL", "released": true
+        }
+        """)
+        XCTAssertTrue(otherUnit.isGradedNormal)
+        XCTAssertEqual(otherUnit.displayReferenceRange, "70 - 110 mg/dL")
     }
 
     func testUnknownOrMissingStatusFallsBackInsteadOfRenderingTheRawName() {

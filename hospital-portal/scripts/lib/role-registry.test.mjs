@@ -9,12 +9,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, statSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import { roleNamesFrom, bareRoleName, READABLE } from './role-registry.mjs';
-import { walk } from './walk.mjs';
+import { roleNamesFrom, roleSourcesFrom, bareRoleName } from './role-registry.mjs';
 import { validateDeclaration } from './enum-domains.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -24,22 +24,17 @@ const DOMAINS = JSON.parse(
 );
 
 /**
- * Exactly what check-i18n-enum-coverage.mjs gathers, from the same
- * declaration.
- *
- * This used to be a flat `readdirSync` over the migration folder while the
- * gate used a recursive `walk` over the DECLARED paths — so a migration in a
- * subfolder, or a source added to the declaration, would be read by the gate
- * and not by the test that exists to prove they agree.
+ * Exactly what check-i18n-enum-coverage.mjs gathers: both call
+ * `roleSourcesFrom` on the same declaration. This used to be a private copy
+ * of the gate's existsSync / statSync / walk, and the two had drifted once
+ * already (a flat readdirSync here against a recursive walk there).
  */
-const declaredSources = () =>
-  DOMAINS.role.roles
-    .map((path) => resolve(REPO_DIR, path))
-    // statSync, not the extension: the gate branches on isDirectory(), and a
-    // declared `.sql` FILE sent this helper's `walk` into readdirSync on a
-    // regular file. Both path shapes validate, so both have to work here.
-    .flatMap((full) => (statSync(full).isDirectory() ? walk(full, READABLE) : [full]))
-    .map((path) => ({ path, text: readFileSync(path, 'utf8') }));
+const declaredGroups = () => {
+  const { groups, errors } = roleSourcesFrom(DOMAINS.role.roles, REPO_DIR);
+  assert.deepEqual(errors, [], 'the declared role sources resolve');
+  return groups;
+};
+const declaredSources = () => declaredGroups().flatMap((g) => g.sources);
 
 const sql = (text) => [{ path: 'V1__x.sql', text }];
 const java = (text) => [{ path: 'RoleSeeder.java', text }];
@@ -123,7 +118,9 @@ test('punctuation inside a dollar-quoted VALUE does not end the statement', () =
     ['A', 'B', 'C'],
   );
   assert.deepEqual(
-    roleNamesFrom(sql(`INSERT INTO roles (description, code) VALUES (${D}Covid--19 lead${D}, 'ROLE_T');`)),
+    roleNamesFrom(
+      sql(`INSERT INTO roles (description, code) VALUES (${D}Covid--19 lead${D}, 'ROLE_T');`),
+    ),
     ['T'],
   );
 });
@@ -309,15 +306,63 @@ test('the role domain declares sources that exist and validate', () => {
   assert.ok(DOMAINS.role.roles.length >= 2, 'the migrations are not the only writer');
 });
 
-test('every declared Java seeder contributes at least one role', () => {
+test('every declared path contributes at least one role', () => {
   // The Java half yields nothing today that the migrations do not, so a
   // parser that quietly stopped matching would be invisible in the total.
-  for (const source of declaredSources().filter((s) => s.path.endsWith('.java'))) {
+  // The gate runs the same per-path check (UNPARSEABLE ROLE SOURCE).
+  const groups = declaredGroups();
+  assert.equal(groups.length, DOMAINS.role.roles.length);
+  for (const { path, sources } of groups) {
     assert.ok(
-      roleNamesFrom([source]).length > 0,
-      `${source.path} is declared as a role source but parses to no roles`,
+      roleNamesFrom(sources).length > 0,
+      `${path} is declared as a role source but parses to no roles`,
     );
   }
+});
+
+test('roleSourcesFrom accounts for each declared path on its own', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'p4-roles-'));
+  try {
+    mkdirSync(join(dir, 'empty'));
+    writeFileSync(join(dir, 'empty', 'README.md'), 'no migrations here');
+    mkdirSync(join(dir, 'migrations'));
+    writeFileSync(
+      join(dir, 'migrations', 'V1__r.sql'),
+      "INSERT INTO roles (name) VALUES ('ROLE_DOCTOR');",
+    );
+    writeFileSync(join(dir, 'Makefile'), 'not a source');
+
+    const { groups, errors } = roleSourcesFrom(
+      ['migrations', 'empty', 'Makefile', 'gone.sql'],
+      dir,
+    );
+    // A declared folder with nothing readable is a GROUP with no sources — the
+    // gate's per-path check fails it; a grand-total check never would.
+    assert.deepEqual(
+      groups.map((g) => [g.path, g.sources.length, roleNamesFrom(g.sources)]),
+      [
+        ['migrations', 1, ['DOCTOR']],
+        ['empty', 0, []],
+      ],
+    );
+    assert.equal(errors.length, 2);
+    assert.match(errors[0], /UNREADABLE ROLE SOURCE Makefile/);
+    assert.match(errors[1], /MISSING ROLE SOURCE gone\.sql/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a source with no role literal is skipped before it is parsed, and loses nothing', () => {
+  // The pre-filter is exact: a name is only read from a 'ROLE_X' (SQL) or
+  // "ROLE_X" (Java) literal, so a file with none can contribute none.
+  assert.deepEqual(roleNamesFrom(sql('CREATE TABLE roles (id uuid);')), []);
+  assert.deepEqual(roleNamesFrom(java('class RoleSeeder { String x = "DOCTOR"; }')), []);
+  // …and one with a literal only inside a DO block still yields it.
+  assert.deepEqual(
+    roleNamesFrom(sql("DO $$ BEGIN INSERT INTO roles (name) VALUES ('ROLE_MIDWIFE'); END $$;")),
+    ['MIDWIFE'],
+  );
 });
 
 test('the real migrations parse to the registry the portal keys', () => {

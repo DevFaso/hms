@@ -17,6 +17,14 @@ public record StaffLeaveRequestDTO(
     LocalTime startTime,
     LocalTime endTime,
     @NotNull StaffLeaveType leaveType,
-    boolean requiresCoverage,
+    Boolean requiresCoverage,
     String reason
-) { }
+) {
+    // A body that leaves this out or sends null gets the documented default
+    // (QA D23): Jackson 3 refuses a null for a primitive record component.
+    public StaffLeaveRequestDTO {
+        if (requiresCoverage == null) {
+            requiresCoverage = Boolean.FALSE;
+        }
+    }
+}

@@ -5,18 +5,16 @@
       <p class="page-subtitle">{{ 'PHARMACY.MTM_SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
-      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
-      <button class="btn-primary" (click)="openCreate()" [disabled]="!scopeReady()">
+      <button class="btn-primary" (click)="openCreate()">
         <span class="material-symbols-outlined">add</span>
         {{ 'PHARMACY.MTM_NEW' | translate }}
       </button>
     </div>
   </div>
 
-  <app-hospital-scope-hint />
-
   @if (showForm()) {
-    <div class="form-card">
+    <!-- QA D1307 class (round 28): opened from a row action, this form takes the keyboard (its first field), keeps Escape to itself and gives focus back to the row on close. -->
+    <div class="form-card" appInlineSubForm #reviewForm="inlineSubForm" (dismissed)="closeForm()">
       <h3>
         <span class="material-symbols-outlined">edit_note</span>
         {{ 'PHARMACY.MTM_REVIEW' | translate }}
@@ -24,19 +22,28 @@
       <form (ngSubmit)="submit()">
         <div class="form-row">
           <div class="field">
-            <label for="mtmPatient">{{ 'PHARMACY.PATIENT_ID' | translate }} *</label>
-            <input
-              id="mtmPatient"
-              type="text"
-              [(ngModel)]="form.patientId"
-              name="patientId"
-              required
-            />
+            @if (selectedReviewId) {
+              <span class="field-label">{{ 'PHARMACY.PATIENT' | translate }}</span>
+              <p class="readonly-value" data-testid="mtm-edit-patient">{{ editingPatientLabel }}</p>
+            } @else {
+              <label for="mtmPatient">{{ 'PHARMACY.PATIENT' | translate }} *</label>
+              <app-patient-picker
+                required
+                inputId="mtmPatient"
+                [hospitalId]="form.hospitalId || null"
+                [selected]="pickedPatient()"
+                (selectedChange)="onPatientPicked($event)"
+              />
+            }
           </div>
           <div class="field">
             <label for="mtmStatus">{{ 'PHARMACY.STATUS' | translate }}</label>
             <select id="mtmStatus" [(ngModel)]="form.status" name="status">
-              <option value="DRAFT">{{ 'PORTAL.ENUM.MTM_REVIEW_STATUS.DRAFT' | translate }}</option>
+              @if (canChooseDraft()) {
+                <option value="DRAFT">
+                  {{ 'PORTAL.ENUM.MTM_REVIEW_STATUS.DRAFT' | translate }}
+                </option>
+              }
               <option value="COMPLETED">
                 {{ 'PORTAL.ENUM.MTM_REVIEW_STATUS.COMPLETED' | translate }}
               </option>
@@ -87,6 +94,7 @@
             <input
               id="mtmFollowUp"
               type="date"
+              [min]="minFollowUp"
               [(ngModel)]="form.followUpDate"
               name="followUpDate"
             />
@@ -96,12 +104,19 @@
           <button type="button" class="btn-secondary" (click)="closeForm()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="submit" class="btn-primary" [disabled]="saving()">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-primary"
+            [disabled]="saving()"
+          >
             <span class="material-symbols-outlined">check</span>
             {{ saving() ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
           </button>
         </div>
       </form>
+      <app-inline-discard-ask [form]="reviewForm" />
     </div>
   }
 
@@ -117,7 +132,7 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>{{ 'PHARMACY.PATIENT_ID' | translate }}</th>
+            <th>{{ 'PHARMACY.PATIENT' | translate }}</th>
             <th>{{ 'PHARMACY.MTM_CHRONIC_FOCUS' | translate }}</th>
             <th>{{ 'PHARMACY.MTM_POLYPHARMACY' | translate }}</th>
             <th>{{ 'PHARMACY.MTM_ADHERENCE' | translate }}</th>
@@ -129,7 +144,7 @@
         <tbody>
           @for (r of reviews(); track r.id) {
             <tr>
-              <td>{{ r.patientId }}</td>
+              <td [attr.data-testid]="'mtm-patient-' + r.id">{{ patientLabel(r) }}</td>
               <td>{{ r.chronicConditionFocus || '—' }}</td>
               <td>
                 @if (r.polypharmacyAlert) {
@@ -144,12 +159,24 @@
                   r.status | enumLabel: 'mtmReviewStatus'
                 }}</span>
               </td>
-              <td>{{ r.followUpDate || '—' }}</td>
               <td>
-                <button class="btn-action" (click)="openEdit(r)">
-                  <span class="material-symbols-outlined">edit</span>
-                  {{ 'COMMON.EDIT' | translate }}
-                </button>
+                {{ r.followUpDate ? (r.followUpDate | serverTime | date: 'mediumDate') : '—' }}
+              </td>
+              <td>
+                @if (canEdit(r)) {
+                  <button
+                    class="btn-action"
+                    (click)="openEdit(r)"
+                    [attr.data-testid]="'mtm-edit-' + r.id"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                    {{ 'COMMON.EDIT' | translate }}
+                  </button>
+                } @else {
+                  <span class="muted" [attr.data-testid]="'mtm-closed-' + r.id">{{
+                    'PHARMACY.MTM_CLOSED' | translate
+                  }}</span>
+                }
               </td>
             </tr>
           }

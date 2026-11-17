@@ -1,3 +1,5 @@
+import { allRows } from '../../shared/all-pages';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import {
   Component,
   computed,
@@ -20,8 +22,13 @@ import {
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { currentLocale } from '../../shared/i18n/app-locale';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
+import { serverInstant, localDateString } from '../../shared/date-utils';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 interface QcPoint {
   x: number;
   y: number;
@@ -57,7 +64,15 @@ interface QcChartGroup {
 @Component({
   selector: 'app-lab-approval-queue',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './lab-approval-queue.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-approval-queue.scss',
@@ -78,6 +93,38 @@ export class LabApprovalQueueComponent implements OnInit {
   readonly isLabDirector = this.auth.hasAnyRole(['ROLE_LAB_DIRECTOR']);
   readonly isQualityManager = this.auth.hasAnyRole(['ROLE_QUALITY_MANAGER']);
   readonly isSuperAdmin = this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
+  /** D124: who may move an APPROVED definition to ACTIVE (mirrors the server). */
+  readonly canActivate = this.auth.hasAnyRole([
+    'ROLE_LAB_DIRECTOR',
+    'ROLE_LAB_MANAGER',
+    'ROLE_SUPER_ADMIN',
+  ]);
+
+  /** QA D534: the signed-in user's id, to keep the four-eyes steps off their own submission. */
+  private readonly currentUserId = this.auth.getUserId();
+
+  /** QA D534: the submitter is never offered the QA pass or the approval (the server refuses it). */
+  isOwnSubmission(def: LabTestDefinition): boolean {
+    return !!this.currentUserId && !!def.submittedById && def.submittedById === this.currentUserId;
+  }
+
+  /** QA D722: the signed-in user did this definition's QA review. */
+  isOwnReview(def: LabTestDefinition): boolean {
+    return !!this.currentUserId && !!def.reviewedById && def.reviewedById === this.currentUserId;
+  }
+
+  /**
+   * QA D707 / D722, mirroring the server: the QA reviewer approves only when the server
+   * says so (the sole-director exception); otherwise any director who did not review may
+   * approve, the submitter included, because an independent reviewer stands between them.
+   * With no recorded reviewer, the submitter may not approve.
+   */
+  canApprove(def: LabTestDefinition): boolean {
+    if (this.isOwnReview(def)) {
+      return def.reviewerMayApprove === true;
+    }
+    return !!def.reviewedById || !this.isOwnSubmission(def);
+  }
 
   // Approval modal
   showApprovalModal = signal(false);
@@ -117,14 +164,18 @@ export class LabApprovalQueueComponent implements OnInit {
 
   loadQueue(): void {
     this.loading.set(true);
-    // Fetch all pending definitions (both PENDING_QA_REVIEW and PENDING_DIRECTOR_APPROVAL)
-    this.labService.searchTestDefinitions({ size: 200 }).subscribe({
-      next: ({ content }) => {
+    // Fetch all pending definitions (both PENDING_QA_REVIEW and PENDING_DIRECTOR_APPROVAL).
+    // QA D1347: every definition (all pages), not the first 200.
+    allRows((page, size) => this.labService.searchTestDefinitions({ page, size })).subscribe({
+      next: (content) => {
         const pending = content.filter(
           (d) =>
             d.approvalStatus === 'PENDING_QA_REVIEW' ||
             d.approvalStatus === 'PENDING_DIRECTOR_APPROVAL' ||
-            d.approvalStatus === 'DRAFT',
+            d.approvalStatus === 'APPROVED' ||
+            d.approvalStatus === 'DRAFT' ||
+            // QA D417: a rejected definition is corrected and resubmitted from here.
+            d.approvalStatus === 'REJECTED',
         );
         this.definitions.set(pending);
         this.applyFilter();
@@ -201,8 +252,11 @@ export class LabApprovalQueueComponent implements OnInit {
         this.processingApproval.set(false);
         this.loadQueue();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.ACTION_FAILED'));
+      error: (err: { error?: { message?: string } }) => {
+        // QA D534: the server's reason (four-eyes, missing range…) is shown, not a generic failure.
+        this.toast.error(
+          err?.error?.message || this.translate.instant('LAB_APPROVAL.TOAST.ACTION_FAILED'),
+        );
         this.processingApproval.set(false);
       },
     });
@@ -250,7 +304,7 @@ export class LabApprovalQueueComponent implements OnInit {
   emptyStudyForm(): LabTestValidationStudyRequest {
     return {
       studyType: 'PRECISION',
-      studyDate: new Date().toISOString().split('T')[0],
+      studyDate: localDateString(),
       passed: false,
     };
   }
@@ -275,8 +329,10 @@ export class LabApprovalQueueComponent implements OnInit {
         this.closeStudyModal();
         this.savingStudy.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_APPROVAL.TOAST.STUDY_SAVE_FAILED'),
+        );
         this.savingStudy.set(false);
       },
     });
@@ -288,8 +344,10 @@ export class LabApprovalQueueComponent implements OnInit {
         this.validationStudies.update((list) => list.filter((s) => s.id !== study.id));
         this.toast.success(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVED'));
       },
-      error: () =>
-        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVE_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVE_FAILED'),
+        ),
     });
   }
 
@@ -321,7 +379,9 @@ export class LabApprovalQueueComponent implements OnInit {
     for (const level of levels) {
       const levelEvents = events
         .filter((e) => e.qcLevel === level)
-        .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+        .sort(
+          (a, b) => serverInstant(a.recordedAt).getTime() - serverInstant(b.recordedAt).getTime(),
+        );
 
       if (levelEvents.length === 0) continue;
 
@@ -403,18 +463,18 @@ export class LabApprovalQueueComponent implements OnInit {
         const v = e.measuredValue;
         const dev = Math.abs(v - mean) / sd;
         const zone: 'ok' | 'warn' | 'fail' = dev > 2 ? 'fail' : dev > 1 ? 'warn' : 'ok';
-        const dateStr = new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
+        const dateStr = serverInstant(e.recordedAt).toLocaleDateString(currentLocale(), {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
         });
-        return { x: xToSvg(i), y: yToSvg(v), zone, title: `${dateStr} | ${v.toFixed(3)}` };
+        return { x: xToSvg(i), y: yToSvg(v), zone, title: `${dateStr} | ${formatDecimal(v, 3)}` };
       });
 
       const polyline = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 
       const prec = sd < 1 ? 3 : sd < 10 ? 2 : 1;
-      const f = (v: number) => v.toFixed(prec);
+      const f = (v: number) => formatDecimal(v, prec);
       const yAxisLabels = [
         { y: p3sY, label: `+3s (${f(mean + 3 * sd)})` },
         { y: p2sY, label: `+2s` },
@@ -427,7 +487,7 @@ export class LabApprovalQueueComponent implements OnInit {
 
       const xAxisLabels: { x: number; label: string }[] = [];
       const fmtDate = (e: LabQcEvent) =>
-        new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
+        serverInstant(e.recordedAt).toLocaleDateString(currentLocale(), {
           month: 'short',
           day: 'numeric',
         });

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -84,19 +85,9 @@ class FhirBulkExportRunnerTest {
 
     @BeforeEach
     void setUp() {
-        FhirOperationsProperties properties = new FhirOperationsProperties();
-        properties.getBulkExport().setEnabled(true);
-        properties.getBulkExport().setStorageDir(tempDir.toString());
-
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
 
-        runner = new FhirBulkExportRunner(
-            service, jobRepository, fileRepository, registrationRepository,
-            encounterRepository, vitalSignRepository, labResultRepository,
-            patientProblemRepository, prescriptionRepository,
-            patientMapper, encounterMapper, observationMapper,
-            conditionMapper, medicationRequestMapper,
-            FhirContext.forR4(), transactionManager, properties);
+        runner = newRunner(patientMapper);
 
         hospitalId = UUID.randomUUID();
         jobId = UUID.randomUUID();
@@ -127,7 +118,20 @@ class FhirBulkExportRunnerTest {
 
         org.hl7.fhir.r4.model.Patient fhirPatient = new org.hl7.fhir.r4.model.Patient();
         fhirPatient.setId(patient.getId().toString());
-        when(patientMapper.toFhir(patient)).thenReturn(fhirPatient);
+        when(patientMapper.toFhir(patient, hospitalId)).thenReturn(fhirPatient);
+    }
+
+    private FhirBulkExportRunner newRunner(PatientFhirMapper mapper) {
+        FhirOperationsProperties properties = new FhirOperationsProperties();
+        properties.getBulkExport().setEnabled(true);
+        properties.getBulkExport().setStorageDir(tempDir.toString());
+        return new FhirBulkExportRunner(
+            service, jobRepository, fileRepository, registrationRepository,
+            encounterRepository, vitalSignRepository, labResultRepository,
+            patientProblemRepository, prescriptionRepository,
+            mapper, encounterMapper, observationMapper,
+            conditionMapper, medicationRequestMapper,
+            FhirContext.forR4(), transactionManager, properties);
     }
 
     private void stubEmptyClinicalData() {
@@ -139,7 +143,8 @@ class FhirBulkExportRunnerTest {
             .thenReturn(new PageImpl<>(List.of()));
         when(patientProblemRepository.findByPatient_IdAndHospital_Id(any(), any()))
             .thenReturn(List.of());
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(any(), any(), any()))
+        // QA D1537: the export reads the issued orders, chosen in the query.
+        when(prescriptionRepository.findIssuedByPatientIdAndHospitalIdIn(any(), any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of()));
     }
 
@@ -170,6 +175,45 @@ class FhirBulkExportRunnerTest {
     }
 
     @Test
+    void thePatientLineCarriesOnlyTheJobHospitalsMrn() throws Exception {
+        UUID otherHospitalId = UUID.randomUUID();
+        registerAt(patient, hospitalId, "MRN-JOB");
+        registerAt(patient, otherHospitalId, "MRN-ELSEWHERE");
+        PatientFhirMapper realMapper = spy(new PatientFhirMapper());
+
+        newRunner(realMapper).processJob(jobId);
+
+        assertThat(job.getStatus()).isEqualTo(FhirBulkExportJob.Status.COMPLETED);
+        List<String> lines = Files.readAllLines(
+            tempDir.resolve(jobId.toString()).resolve("Patient.ndjson"));
+        assertThat(lines).hasSize(1);
+        org.hl7.fhir.r4.model.Patient out = FhirContext.forR4().newJsonParser()
+            .parseResource(org.hl7.fhir.r4.model.Patient.class, lines.get(0));
+        assertThat(out.getIdentifier())
+            .filteredOn(i -> i.getSystem() != null && i.getSystem().endsWith(":mrn"))
+            .extracting(i -> i.getSystem() + "|" + i.getValue())
+            .containsExactly("urn:hms:hospital:" + hospitalId + ":mrn|MRN-JOB");
+        // Nothing of the other registration anywhere on the line: its MRN
+        // system would name the hospital, its value is that hospital's record number.
+        assertThat(lines.get(0)).doesNotContain(otherHospitalId.toString()).doesNotContain("MRN-ELSEWHERE");
+        // Every job carries a hospital (the kickoff refuses one without), so
+        // the every-MRN form is never reached from an export.
+        verify(realMapper, never()).toFhir(any(Patient.class));
+    }
+
+    private static void registerAt(Patient patient, UUID hospitalId, String mrn) {
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(hospitalId);
+        PatientHospitalRegistration registration = new PatientHospitalRegistration();
+        // Entities compare by id: without one the set keeps a single registration.
+        registration.setId(UUID.randomUUID());
+        registration.setHospital(hospital);
+        registration.setMrn(mrn);
+        registration.setPatient(patient);
+        patient.getHospitalRegistrations().add(registration);
+    }
+
+    @Test
     void emptyTypesNeverLeaveFilesBehind() {
         runner.processJob(jobId);
 
@@ -183,6 +227,33 @@ class FhirBulkExportRunnerTest {
     }
 
     @Test
+    void aLegacyDuplicateIsNotExportedBesideItsNewerSibling_D741() {
+        // Self-review of #939: each row is judged against its order, not its own back-link.
+        job.setTypes("Observation");
+        com.example.hms.model.LabOrder order = new com.example.hms.model.LabOrder();
+        order.setId(UUID.randomUUID());
+        com.example.hms.model.LabResult stale = com.example.hms.model.LabResult.builder().labOrder(order)
+            .resultValue("1").resultDate(java.time.LocalDateTime.of(2026, 10, 1, 8, 0)).build();
+        stale.setId(UUID.randomUUID());
+        stale.setReleased(true);
+        com.example.hms.model.LabResult newer = com.example.hms.model.LabResult.builder().labOrder(order)
+            .resultValue("2").resultDate(stale.getResultDate().plusHours(1)).build();
+        newer.setId(UUID.randomUUID());
+        newer.setReleased(true);
+        when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of(stale, newer)));
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(stale, newer));
+        when(observationMapper.toFhir(any(com.example.hms.model.LabResult.class)))
+            .thenReturn(new org.hl7.fhir.r4.model.Observation());
+
+        runner.processJob(jobId);
+
+        verify(observationMapper, never()).toFhir(stale);
+        verify(observationMapper).toFhir(newer);
+        verify(labResultRepository).findByLabOrder_Id(order.getId());
+    }
+
+    @Test
     void honoursTheTypeFilter() {
         job.setTypes("Encounter");
 
@@ -190,6 +261,7 @@ class FhirBulkExportRunnerTest {
 
         assertThat(tempDir.resolve(jobId.toString()).resolve("Patient.ndjson")).doesNotExist();
         verify(patientMapper, never()).toFhir(any(Patient.class));
+        verify(patientMapper, never()).toFhir(any(Patient.class), any());
     }
 
     @Test

@@ -19,7 +19,7 @@
 | Largest individual debt | **PatientPortalServiceImpl.java L892** — Brain Method, Cognitive Complexity **40 → 15**, ~30 min |
 | Largest aggregate debt | Duplicated role-string literals across service impls (~50 min total) |
 | Local gate | `./gradlew :hospital-core:test :hospital-core:jacocoTestCoverageVerification` |
-| CI gate | `.github/workflows/build.yml` runs SonarCloud on every push and PR |
+| CI gate | the `sonar-analysis` job in `.github/workflows/project-quality.yml` runs SonarCloud on every push and PR, on the backend job's own JaCoCo report |
 
 ## How to use this document
 
@@ -32,7 +32,8 @@
    cd hospital-portal && npm run lint && npm run format:check && npm run test:headless
    ./gradlew :hospital-core:test :hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification
    ```
-5. **Sonar runs on push** via [.github/workflows/build.yml](../.github/workflows/build.yml).
+5. **Sonar runs on push** via the `sonar-analysis` job in
+   [.github/workflows/project-quality.yml](../.github/workflows/project-quality.yml).
    The PR will show the remaining issue count and quality-gate result.
 
 > **Triage priority:** PR-order the patterns roughly by **Security (P0)** →
@@ -794,5 +795,5 @@ back to this section**.
 - [docs/ui/accessibility.md](./ui/accessibility.md) — frontend
   equivalent for axe-core / WCAG (row 11 of the roadmap)
 - [build.gradle](../build.gradle) — Sonar + JaCoCo configuration
-- [.github/workflows/build.yml](../.github/workflows/build.yml) — CI
-  workflow that runs Sonar on every push / PR
+- [.github/workflows/project-quality.yml](../.github/workflows/project-quality.yml)
+  — its `sonar-analysis` job runs Sonar on every push / PR

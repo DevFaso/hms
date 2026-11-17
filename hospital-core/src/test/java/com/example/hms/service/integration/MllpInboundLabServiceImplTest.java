@@ -1,5 +1,6 @@
 package com.example.hms.service.integration;
 
+import com.example.hms.utility.Hl7FieldBounds;
 import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.ActorType;
 import com.example.hms.enums.LabOrderStatus;
@@ -53,6 +54,11 @@ class MllpInboundLabServiceImplTest {
     @Mock private IntegrationMessageRecorder messageRecorder;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
+    /** Review of #975: the HL7 auto-release announces through the service's one choke point. */
+    @Mock private com.example.hms.service.LabResultService labResultService;
+    // The real unit-matching rule, not a stub: the auto-release gate asks it.
+    @org.mockito.Spy private com.example.hms.mapper.LabResultMapper labResultMapper =
+        new com.example.hms.mapper.LabResultMapper();
 
     @InjectMocks private MllpInboundLabServiceImpl service;
 
@@ -170,6 +176,64 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("ABC and ABC+BEL are two messages: a control character is not trimmed into a replay")
+    void aTrailingControlCharacterIsNotAReplay() {
+        String bel = String.valueOf((char) 7);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "APP", "FAC", "ABC" + bel))
+            .thenReturn(Optional.empty());
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC", "ABC" + bel, "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        // Looked up (and stored) under its exact id, so a stored ABC does not
+        // swallow it; trim() used to look up ABC and acknowledge it unstored.
+        verify(labResultRepository, never())
+            .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId("APP", "FAC", "ABC");
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getSourceMessageControlId()).isEqualTo("ABC" + bel);
+    }
+
+    @Test
+    @DisplayName("A space-padded retry of a stored message, in another casing, is still its replay")
+    void aPaddedDifferentlyCasedRetryIsStillAReplay() {
+        LabResult existing = LabResult.builder().build();
+        existing.setId(UUID.randomUUID());
+        when(labResultRepository.findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "APP", "FAC", "MSG-REPLAY"))
+            .thenReturn(Optional.of(existing));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, " app ", "Fac",
+            "  MSG-REPLAY  ", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        verify(labResultRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("The stored sender pair is the allowlist's form, so one sender is one replay key in any casing")
+    void theStoredSenderPairIsUpperCased() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "5.4")), hospital, "roche_cobas", "lab_a",
+            "MSG-9", "MSH|...\r");
+
+        verify(labResultRepository)
+            .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "ROCHE_COBAS", "LAB_A", "MSG-9");
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getSourceSendingApplication()).isEqualTo("ROCHE_COBAS");
+        assertThat(saved.getValue().getSourceSendingFacility()).isEqualTo("LAB_A");
+    }
+
+    @Test
     @DisplayName("Two different analyzers reusing the same MSH-10 do NOT collapse")
     void differentSendersWithSameControlIdDoNotCollapse() {
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
@@ -251,7 +315,130 @@ class MllpInboundLabServiceImplTest {
             eq(IntegrationMessageStatus.FAILED), eq("cross-tenant rejection"));
         verify(messageRecorder).recordMessage(
             any(), any(), any(), any(), any(),
-            eq(IntegrationMessageStatus.FAILED), eq("accession ACC-MISSING not found"));
+            eq(IntegrationMessageStatus.FAILED), eq("accession \"ACC-MISSING\" not found"));
+    }
+
+    @Test
+    @DisplayName("QA D962 — a tube the lab rejected takes no result from the analyser that still ran it")
+    void rejectedWhenTheSpecimenWasRejected() {
+        specimen.setStatus(com.example.hms.enums.LabSpecimenStatus.REJECTED);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
+            "MSG-CTRL-REJ", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labResultRepository, never()).save(any());
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(),
+            eq(IntegrationMessageStatus.FAILED), eq("specimen rejected"));
+    }
+
+    @Test
+    @DisplayName("Review of #975 — a tube rejected while the ORU was being read takes no result either")
+    void rejectedWhenTheSpecimenWasRejectedSinceItWasRead() {
+        specimen.setStatus(com.example.hms.enums.LabSpecimenStatus.RECEIVED);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(specimenRepository.findStatusById(specimen.getId()))
+            .thenReturn(com.example.hms.enums.LabSpecimenStatus.REJECTED);
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
+            "MSG-CTRL-REJ2", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labOrderRepository).findWithLockById(labOrder.getId());
+        verify(labResultRepository, never()).save(any());
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(),
+            eq(IntegrationMessageStatus.FAILED), eq("specimen rejected"));
+    }
+
+    @Test
+    @DisplayName("Review of #975 — the orders of one message are locked in id order, whatever order the message names them in")
+    void theOrdersOfAMessageAreLockedInIdOrder() {
+        LabOrder later = new LabOrder();
+        later.setId(new UUID(0, 2));
+        later.setHospital(hospital);
+        LabSpecimen laterTube = new LabSpecimen();
+        laterTube.setId(UUID.randomUUID());
+        laterTube.setLabOrder(later);
+        LabOrder earlier = new LabOrder();
+        earlier.setId(new UUID(0, 1));
+        earlier.setHospital(hospital);
+        LabSpecimen earlierTube = new LabSpecimen();
+        earlierTube.setId(UUID.randomUUID());
+        earlierTube.setLabOrder(earlier);
+        when(specimenRepository.findByAccessionNumber("ACC-LATER")).thenReturn(Optional.of(laterTube));
+        when(specimenRepository.findByAccessionNumber("ACC-EARLIER")).thenReturn(Optional.of(earlierTube));
+        // The first order locked is found rejected, so nothing else is locked.
+        when(specimenRepository.findStatusById(earlierTube.getId()))
+            .thenReturn(com.example.hms.enums.LabSpecimenStatus.REJECTED);
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-LATER", "5.4"), observation("ACC-EARLIER", "6.1")), hospital, "APP", "FAC",
+            "MSG-CTRL-ORDER", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labOrderRepository).findWithLockById(earlier.getId());
+        verify(labOrderRepository, never()).findWithLockById(later.getId());
+    }
+
+    @Test
+    @DisplayName("QA D820 — an order voided as entered in error takes no result from the analyser")
+    void rejectedWhenTheOrderWasVoided() {
+        labOrder.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
+            "MSG-CTRL-VOID", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labResultRepository, never()).save(any());
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(),
+            eq(IntegrationMessageStatus.FAILED), eq("order entered in error"));
+        assertThat(labOrder.getStatus()).isEqualTo(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
+    }
+
+    @Test
+    @DisplayName("OBR-2 is quoted in the reason, so a placer cannot end its slot and write a finding of its own")
+    void aForgedPlacerIsQuotedInTheReason() {
+        String forged = "X not found; cross-tenant rejection\n" + (char) 0x1B + "[31m";
+        when(specimenRepository.findByAccessionNumber(forged)).thenReturn(Optional.empty());
+
+        service.processOruR01(List.of(observation(forged, "5.4")), hospital, "APP", "FAC",
+            "MSG-1", "MSH|...\r");
+
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(), eq(IntegrationMessageStatus.FAILED),
+            eq("accession \"X not found; cross-tenant rejection\\u000a\\u001b[31m\" not found"));
+    }
+
+    @Test
+    @DisplayName("Both ORU audit descriptions quote MSH-10 and the integration id, escaping line breaks and ANSI escapes")
+    void auditDescriptionsQuoteTheSendersText() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        String esc = String.valueOf((char) 0x1B);
+        String forged = "M1)\nLAB_RESULT_DELETED by admin (msgCtrlId=" + esc + "[2J";
+
+        service.processOruR01(List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
+            forged, "MSH|...\r");
+
+        ArgumentCaptor<AuditEventRequestDTO> audits = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService, times(2)).logEvent(audits.capture());
+        assertThat(audits.getAllValues()).extracting(AuditEventRequestDTO::getEventType)
+            .containsExactlyInAnyOrder(AuditEventType.LAB_RESULT_UPDATED, AuditEventType.LAB_RESULT_RELEASED);
+        for (AuditEventRequestDTO audit : audits.getAllValues()) {
+            assertThat(audit.getEventDescription())
+                .endsWith("via \"MLLP:APP/FAC\" (msgCtrlId=\"M1)\\u000aLAB_RESULT_DELETED by admin "
+                    + "(msgCtrlId=\\u001b[2J\")")
+                .doesNotContain("\n").doesNotContain(esc);
+        }
     }
 
     // ── B14 — release + order status on ingest ───────────────────────────
@@ -276,6 +463,8 @@ class MllpInboundLabServiceImplTest {
     @DisplayName("B14 — auto-release on: a NORMAL observation is released as Autoverification, an abnormal one is not")
     void autoReleaseReleasesOnlyNormalRows() {
         ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        // @InjectMocks fills the constructor only; the announce collaborator is a field.
+        ReflectionTestUtils.setField(service, "labResultService", labResultService);
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -295,6 +484,14 @@ class MllpInboundLabServiceImplTest {
         assertThat(saved.get(1).isReleased()).isFalse();
         assertThat(saved.get(2).isReleased()).isFalse();
 
+        // Review of #975 (QA D178/D938 class): the released row is announced once,
+        // through the service, so the clinician's in-basket item is filed as a
+        // worklist release files it; the two unreleased rows are not.
+        // (identity, not equals: unsaved rows share a null id and compare equal)
+        ArgumentCaptor<LabResult> announced = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultService, times(1)).announceReleasedResult(announced.capture());
+        assertThat(announced.getValue()).isSameAs(saved.get(0));
+
         // The system release leaves its own audit row: 3 ingest events + 1 release, SYSTEM actor, no value.
         ArgumentCaptor<AuditEventRequestDTO> auditCaptor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService, times(4)).logEvent(auditCaptor.capture());
@@ -307,6 +504,98 @@ class MllpInboundLabServiceImplTest {
         assertThat(release.getUserName()).isEqualTo("MLLP:APP/FAC");
         assertThat(release.getPatientId()).isNull();
         assertThat(release.getEventDescription()).contains("Autoverification").doesNotContain("5.4");
+    }
+
+    private void configureRangesIn(String unit) {
+        com.example.hms.model.LabTestDefinition definition = new com.example.hms.model.LabTestDefinition();
+        definition.setReferenceRanges(new java.util.ArrayList<>(List.of(
+            com.example.hms.model.LabTestReferenceRange.builder().minValue(70.0).maxValue(110.0).unit(unit).build())));
+        labOrder.setLabTestDefinition(definition);
+    }
+
+    @Test
+    @DisplayName("Auto-release on: an explicit N is NOT released when no configured range is in the observation's unit")
+    void explicitNormalInAnotherUnitWaitsForAPerson() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        configureRangesIn("mg/dL");
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "5.4", "1", "GLU", "N")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().isReleased()).isFalse();
+        // The analyser's own grading is stored as sent.
+        assertThat(captor.getValue().getAbnormalFlag()).isEqualTo(com.example.hms.enums.AbnormalFlag.NORMAL);
+    }
+
+    /** QA D1394: an analyser's N on ">1" settles nothing; the hospital's range could not grade it. */
+    @Test
+    @DisplayName("Auto-release on: an explicit N is NOT released on a comparator its bound cannot settle")
+    void explicitNormalOnAnUndecidableComparatorWaitsForAPerson() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        configureRangesIn("mmol/L");
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", ">80", "1", "GLU", "N")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().isReleased()).isFalse();
+        assertThat(labResultMapper.isUngradedForUnitMismatch(captor.getValue())).as("the units agree").isFalse();
+    }
+
+    @Test
+    @DisplayName("Auto-release on: a bare range on a test in another unit does not release an explicit N")
+    void explicitNormalAgainstABareRangeInTheTestsOtherUnitWaits() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        configureRangesIn(null);
+        labOrder.getLabTestDefinition().setUnit("mg/dL");
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "90", "1", "GLU", "N")),
+            hospital, "APP", "FAC", null, "MSH|..." + (char) 13);
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().isReleased()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Auto-release on: an explicit N in the range's own unit is released as before")
+    void explicitNormalInTheRangesUnitIsReleased() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        configureRangesIn("mmol/L");
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "5.4", "1", "GLU", "N")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().isReleased()).isTrue();
+    }
+
+    @Test
+    @DisplayName("An explicit OBX-8 critical flag is kept when the units differ: only range grading is withheld")
+    void analyserCriticalFlagIsKeptWhenUnitsDiffer() {
+        configureRangesIn("mg/dL");
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", "1.1", "1", "K", "LL")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().getAbnormalFlag()).isEqualTo(com.example.hms.enums.AbnormalFlag.CRITICAL);
+        verify(criticalValueNotificationService).notifyIfCritical(captor.getValue());
     }
 
     @Test
@@ -323,7 +612,7 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
-    @DisplayName("B14 — auto-release on: a blank or unknown OBX-8 stays NORMAL but is NOT released; only an explicit N is")
+    @DisplayName("B14/D31 — auto-release on: a blank or unknown OBX-8 records NO flag and is NOT released; only an explicit N is NORMAL and released")
     void unknownObxFlagIsNeverAutoReleased() {
         ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
@@ -339,8 +628,9 @@ class MllpInboundLabServiceImplTest {
         ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
         verify(labResultRepository, times(4)).save(captor.capture());
         List<LabResult> saved = captor.getAllValues();
-        // What the patient sees is unchanged: blank and unknown codes still read NORMAL.
-        assertThat(saved).extracting(LabResult::getAbnormalFlag).containsOnly(AbnormalFlag.NORMAL);
+        // D31: a blank or unknown code asserts nothing - no flag, so nobody reads it as NORMAL.
+        assertThat(saved).extracting(LabResult::getAbnormalFlag)
+            .containsExactly(null, null, null, AbnormalFlag.NORMAL);
         assertThat(saved.get(0).isReleased()).isFalse();
         assertThat(saved.get(1).isReleased()).isFalse();
         // Blank is an UNGRADED value (K = 7.8 from an analyzer with no ranges) — a person looks first.
@@ -471,7 +761,7 @@ class MllpInboundLabServiceImplTest {
         assertThat(captor.getAllValues()).extracting(LabResult::getAbnormalFlag).containsExactly(
             AbnormalFlag.ABNORMAL_LOW, AbnormalFlag.ABNORMAL_HIGH,
             AbnormalFlag.CRITICAL, AbnormalFlag.CRITICAL,
-            AbnormalFlag.ABNORMAL, AbnormalFlag.NORMAL, AbnormalFlag.NORMAL);
+            AbnormalFlag.ABNORMAL, AbnormalFlag.NORMAL, null);
     }
 
     @Test
@@ -613,5 +903,77 @@ class MllpInboundLabServiceImplTest {
         assertThat(service.processOruR01(List.of(), hospital, "APP", "FAC", "MSG-EMPTY", "MSH|...\r"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
         verify(labResultRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("An OBR-2 wider than any accession is refused before it is looked up, logged or recorded")
+    void anOverWidthPlacerIsRefusedBeforeItIsLookedUp() {
+        String placer = "P".repeat(Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX + 1);
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation(placer, "5.4")), hospital, "ROCHE_COBAS", "LAB_A",
+            "MSG-CTRL-1", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(specimenRepository, never()).findByAccessionNumber(any());
+        verify(labResultRepository, never()).save(any());
+        // The reason names the limit, never the placer.
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:ROCHE_COBAS/LAB_A"), isNull(),
+            eq(IntegrationMessageDirection.INBOUND), eq("ORU^R01"),
+            eq("MSH|...\r"), eq(IntegrationMessageStatus.FAILED),
+            eq("OBR-2 placer exceeds " + Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX + " characters"));
+    }
+
+    @Test
+    @DisplayName("An OBX-5 wider than result_value is refused before anything is looked up or saved: AE, a dead letter, no RECEIVED row")
+    void anOverWidthResultValueIsRefused() {
+        String value = "9".repeat(Hl7FieldBounds.RESULT_VALUE_MAX + 1);
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4"), observation("ACC-1", value, "2", "K", "N")),
+            hospital, "ROCHE_COBAS", "LAB_A", "MSG-CTRL-1", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(specimenRepository, never()).findByAccessionNumber(any());
+        verify(labResultRepository, never()).save(any());
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:ROCHE_COBAS/LAB_A"), isNull(),
+            eq(IntegrationMessageDirection.INBOUND), eq("ORU^R01"),
+            eq("MSH|...\r"), eq(IntegrationMessageStatus.FAILED),
+            eq("OBX-5 exceeds " + Hl7FieldBounds.RESULT_VALUE_MAX + " characters"));
+        verify(messageRecorder, never()).recordMessage(
+            any(), any(), any(), any(), any(), eq(IntegrationMessageStatus.RECEIVED), any());
+    }
+
+    @Test
+    @DisplayName("An OBX-5 exactly as wide as result_value, padded, is stored trimmed")
+    void aResultValueAtTheColumnWidthIsStored() {
+        String value = "9".repeat(Hl7FieldBounds.RESULT_VALUE_MAX);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.processOruR01(List.of(observation("ACC-1", "  " + value + "  ")),
+            hospital, "ROCHE_COBAS", "LAB_A", "MSG-CTRL-1", "MSH|...\r"))
+            .isEqualTo(MllpInboundOutcome.ACCEPTED);
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getResultValue()).isEqualTo(value);
+    }
+
+    @Test
+    @DisplayName("An OBR-2 exactly as wide as the accession column is looked up, and padding does not count")
+    void aPlacerAtTheColumnWidthIsLookedUpTrimmed() {
+        // Matched trimmed, so bounded trimmed: trailing spaces on a placer
+        // that fits must not turn a matchable message into a refused one.
+        String placer = "P".repeat(Hl7FieldBounds.PLACER_ORDER_NUMBER_MAX);
+        when(specimenRepository.findByAccessionNumber(placer)).thenReturn(Optional.empty());
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation(placer + "    ", "5.4")), hospital, "ROCHE_COBAS", "LAB_A",
+            "MSG-CTRL-1", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
+        verify(specimenRepository).findByAccessionNumber(placer);
     }
 }

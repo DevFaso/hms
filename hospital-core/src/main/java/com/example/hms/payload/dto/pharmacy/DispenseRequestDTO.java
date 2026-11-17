@@ -66,6 +66,14 @@ public class DispenseRequestDTO {
     @Size(max = 1000)
     private String cdsOverrideReason;
 
+    /**
+     * QA D964: why the chosen lot was taken although a shorter-dated usable
+     * lot of the same item could serve this movement ({@code FefoLotPolicy}).
+     * Required only then; recorded with the movement.
+     */
+    @Size(max = 300)
+    private String fefoOverrideReason;
+
     private DispenseStatus status;
 
     @Size(max = 1000)
@@ -81,6 +89,12 @@ public class DispenseRequestDTO {
      */
     @Size(max = 64)
     private String idempotencyKey;
+
+    /**
+     * QA D654: the second person who witnessed the stock leaving for a
+     * controlled substance (required then, ignored otherwise).
+     */
+    private UUID witnessedBy;
 
     /**
      * Tier 2 item 34 — raw value scanned from the patient's wristband,

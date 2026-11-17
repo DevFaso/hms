@@ -33,7 +33,12 @@ import java.util.UUID;
 @Tag(name = "CDS Acknowledgements", description = "Clinician dismissals and overrides of Best-Practice Advisories")
 public class CdsAcknowledgementController {
 
-    private static final String CLINICIAN_ROLES =
+    /**
+     * Who acts on a CDS card. Public because {@code CdsHooksController} gates
+     * the card-producing invocations with the same list: the roles that may
+     * dismiss a card are the roles that receive one, so the two cannot drift.
+     */
+    public static final String CLINICIAN_ROLES =
         "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_SUPER_ADMIN')";
 
     private final CdsAcknowledgementService service;

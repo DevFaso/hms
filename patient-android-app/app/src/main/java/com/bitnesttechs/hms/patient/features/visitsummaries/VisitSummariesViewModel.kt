@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.visitsummaries
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.core.models.DischargeSummaryDto
@@ -26,7 +27,7 @@ class VisitSummariesViewModel @Inject constructor(
             try {
                 summaries.value = api.getAfterVisitSummaries(size = 50).body()?.data ?: emptyList()
             } catch (e: Exception) {
-                error.value = e.message
+                error.value = FailureText.of(e)
             } finally {
                 isLoading.value = false
             }

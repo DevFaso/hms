@@ -96,6 +96,11 @@
     background: #fef2f2;
     color: #b91c1c;
   }
+  // QA D423: a critical clinical alert is set apart from routine messages.
+  &.type-critical {
+    background: #b91c1c;
+    color: #fff;
+  }
   &.type-system {
     background: #f1f5f9;
     color: #475569;

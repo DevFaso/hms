@@ -2,7 +2,7 @@ import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { LabStaffListComponent } from './lab-staff-list';
 import { AuthService } from '../../auth/auth.service';
 import { PagedResponse, StaffResponse } from '../../services/staff.service';
@@ -99,6 +99,29 @@ describe('LabStaffListComponent', () => {
     expect(component.loading()).toBeFalse();
     expect(component.staff().length).toBe(3);
     expect(component.totalElements()).toBe(3);
+  });
+
+  it('QA D881: the role dropdown and the list name a lab role the same way', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { ROLE: { LAB_SCIENTIST: 'Biologiste de laboratoire' } } },
+      LAB_STAFF: { LAB_SCIENTIST: 'Scientifique de laboratoire' },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
+    flushStaff();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const badges = Array.from(el.querySelectorAll('.role-badge')).map((b) => b.textContent?.trim());
+    expect(badges).toContain('Biologiste de laboratoire');
+
+    component.startEdit(component.staff()[1]);
+    fixture.detectChanges();
+    const options = Array.from(el.querySelectorAll('.role-select option')).map((o) =>
+      o.textContent?.trim(),
+    );
+    expect(options).toContain('Biologiste de laboratoire');
+    expect(options).not.toContain('Scientifique de laboratoire');
   });
 
   it('should show loading state initially', () => {

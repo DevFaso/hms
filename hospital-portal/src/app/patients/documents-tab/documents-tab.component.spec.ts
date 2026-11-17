@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 import { DocumentsTabComponent, PAGE_SIZE } from './documents-tab.component';
@@ -7,6 +8,7 @@ import {
   PatientDocumentsService,
 } from '../../services/patient-documents.service';
 import { ToastService } from '../../core/toast.service';
+import { currentLocale } from '../../shared/i18n/app-locale';
 import { PatientDocumentResponse } from '../../services/patient-portal.service';
 
 const doc = (over: Partial<PatientDocumentResponse> = {}): PatientDocumentResponse => ({
@@ -73,6 +75,14 @@ describe('DocumentsTabComponent', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('referral.pdf');
     expect(text).toContain('47 KB');
+  });
+
+  it('QA D1599: the front desk view asks for insurance only and offers no type filter', () => {
+    fixture.componentRef.setInput('insuranceOnly', true);
+    component.load();
+    fixture.detectChanges();
+    expect(serviceSpy.list).toHaveBeenCalledWith('p1', 'INSURANCE_DOCUMENT', 0, PAGE_SIZE);
+    expect((fixture.nativeElement as HTMLElement).querySelector('select')).toBeNull();
   });
 
   it('reloads from page 0 with the type filter when it changes', () => {
@@ -154,17 +164,37 @@ describe('DocumentsTabComponent', () => {
     expect((fixture.nativeElement as HTMLElement).innerHTML).not.toContain('legacy.example');
   });
 
-  it('reports a failed download and clears the busy state', () => {
+  it('reports a failed download and clears the busy state', async () => {
     serviceSpy.downloadBlob.and.returnValue(throwError(() => new Error('503')));
     component.download(doc());
-    expect(toastSpy.error).toHaveBeenCalledWith('PATIENT_DOCUMENTS.DOWNLOAD_FAILED');
     expect(component.downloading()).toBeNull();
+    // The server's reason is read from the blob body first (QA D1184), so the toast follows a promise.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(toastSpy.error).toHaveBeenCalledWith('PATIENT_DOCUMENTS.DOWNLOAD_FAILED');
+  });
+
+  it('QA D1184: a stored file that is gone shows the server reason, not the generic toast', async () => {
+    const gone = new HttpErrorResponse({
+      status: 404,
+      error: new Blob([JSON.stringify({ message: "Le fichier stocké n'est plus disponible." })]),
+    });
+    serviceSpy.downloadBlob.and.returnValue(throwError(() => gone));
+    component.download(doc());
+    // Blob.text() resolves on its own schedule: wait for the toast, up to a second.
+    for (let i = 0; i < 50 && toastSpy.error.calls.count() === 0; i++) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    }
+    expect(toastSpy.error).toHaveBeenCalledWith("Le fichier stocké n'est plus disponible.");
   });
 
   it('formats sizes for humans', () => {
     expect(component.formatSize(512)).toBe('512 B');
     expect(component.formatSize(48_211)).toBe('47 KB');
-    expect(component.formatSize(3_600_000)).toBe('3.4 MB');
+    // The decimal separator follows the cached UI locale (French by default), so derive it.
+    const decimal = new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 1 }).format(
+      3.4,
+    );
+    expect(component.formatSize(3_600_000)).toBe(`${decimal} MB`);
     expect(component.formatSize(null)).toBeNull();
   });
 });

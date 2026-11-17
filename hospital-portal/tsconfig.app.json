@@ -5,12 +5,12 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"],
-  "exclude": ["src/**/*.spec.ts", "src/test-setup.ts"],
+  "exclude": ["src/**/*.spec.ts", "src/test-setup.ts", "src/app/testing/**"],
   "angularCompilerOptions": {
     "extendedDiagnostics": {
       "checks": {
-        "nullishCoalescingNotNullable": "suppress",
-        "optionalChainNotNullable": "suppress"
+        "nullishCoalescingNotNullable": "error",
+        "optionalChainNotNullable": "error"
       }
     }
   }

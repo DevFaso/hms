@@ -123,7 +123,7 @@ public class SuperAdminOrganizationController {
         Locale locale = LocaleContextHolder.getLocale();
         HospitalResponseDTO current = hospitalService.getHospitalById(hospitalId, locale);
         if (current.getOrganizationId() != null && !current.getOrganizationId().equals(organizationId)) {
-            throw new BusinessRuleException("Hospital is already assigned to a different organization");
+            throw BusinessRuleException.ofKey("organization.r7.hospitalInOtherOrg");
         }
 
         HospitalResponseDTO updated = hospitalService.assignHospitalToOrganization(hospitalId, organizationId, locale);
@@ -144,7 +144,7 @@ public class SuperAdminOrganizationController {
         Locale locale = LocaleContextHolder.getLocale();
         HospitalResponseDTO current = hospitalService.getHospitalById(hospitalId, locale);
         if (current.getOrganizationId() == null || !organizationId.equals(current.getOrganizationId())) {
-            throw new BusinessRuleException("Hospital is not assigned to the specified organization");
+            throw BusinessRuleException.ofKey("organization.r7.hospitalNotInOrg");
         }
 
         HospitalResponseDTO updated = hospitalService.unassignHospitalFromOrganization(hospitalId, locale);
@@ -167,7 +167,9 @@ public class SuperAdminOrganizationController {
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<TenantLifecycleResponseDTO> suspend(
         @PathVariable UUID organizationId,
-        @Valid @RequestBody TenantLifecycleActionRequestDTO request,
+        // QA D1349 (round 30): the reason of a destructive transition is required at the edge.
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnRefusal.class}) @RequestBody TenantLifecycleActionRequestDTO request,
         @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
         return ResponseEntity.ok(lifecycleService.suspend(organizationId, request, mfaToken));
@@ -192,7 +194,9 @@ public class SuperAdminOrganizationController {
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<TenantLifecycleResponseDTO> archive(
         @PathVariable UUID organizationId,
-        @Valid @RequestBody TenantLifecycleActionRequestDTO request,
+        // QA D1349 (round 30): the reason of a destructive transition is required at the edge.
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnRefusal.class}) @RequestBody TenantLifecycleActionRequestDTO request,
         @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
         return ResponseEntity.ok(lifecycleService.archive(organizationId, request, mfaToken));
@@ -205,7 +209,9 @@ public class SuperAdminOrganizationController {
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<TenantLifecycleResponseDTO> schedulePurge(
         @PathVariable UUID organizationId,
-        @Valid @RequestBody TenantLifecycleActionRequestDTO request,
+        // QA D1349 (round 30): the reason of a destructive transition is required at the edge.
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnRefusal.class}) @RequestBody TenantLifecycleActionRequestDTO request,
         @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
         return ResponseEntity.ok(lifecycleService.schedulePurge(organizationId, request, mfaToken));

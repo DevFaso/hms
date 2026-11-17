@@ -5,6 +5,7 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.pro.ProResponseSource;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.security.tenant.TenantOwnership;
 import com.example.hms.mapper.ProResponseMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -70,7 +71,6 @@ public class ProResponseService {
     static final int DEFAULT_HISTORY = 20;
 
     private static final String PATIENT_NOT_FOUND = "patient.notfound";
-    private static final String RESPONSE_NOT_FOUND = "Screening response not found.";
 
     private final ProResponseRepository responseRepository;
     private final ProInstrumentService instrumentService;
@@ -126,13 +126,12 @@ public class ProResponseService {
         requireInTenant(patient, hospitalId);
         ProResponse response = responseRepository
             .findByIdAndPatient_IdAndHospital_Id(responseId, patient.getId(), hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(RESPONSE_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("pro.response.notFound", responseId));
         if (!response.isCriticalItemPositive()) {
-            throw new BusinessException("Only a safety-item-positive response needs acknowledging.");
+            throw new BusinessException("pro.response.notCritical");
         }
         if (response.isAcknowledged()) {
-            throw new BusinessException("This response was already acknowledged by "
-                + response.getAcknowledgedByDisplay() + ".");
+            throw new BusinessException("pro.response.alreadyAcknowledged", response.getAcknowledgedByDisplay());
         }
         UUID userId = roleValidator.getCurrentUserId();
         response.setAcknowledgedAt(LocalDateTime.now(clock));
@@ -142,7 +141,7 @@ public class ProResponseService {
         try {
             response = responseRepository.saveAndFlush(response);
         } catch (OptimisticLockingFailureException ex) {
-            throw new BusinessException("Somebody else just acknowledged this response - reload and retry.");
+            throw new BusinessException("pro.response.acknowledgeConflict");
         }
         emitAudit(AuditEventType.PRO_ALERT_ACKNOWLEDGED, response, "PRO safety alert acknowledged");
         return mapper.toDto(response);
@@ -222,8 +221,7 @@ public class ProResponseService {
     public ProSelfReportDTO.Entry recordForSelf(Patient patient, ProResponseCreateDTO request) {
         PostpartumCarePlan plan = openPlanForSelf(patient);
         if (plan == null) {
-            throw new BusinessException(
-                "No screening is open for you right now. Your care team will invite you when one is due.");
+            throw new BusinessException("pro.response.noOpenScreening");
         }
         request.setHospitalId(null);
         request.setAdministeredAt(null);
@@ -248,16 +246,17 @@ public class ProResponseService {
 
     private ProResponse persist(Patient patient, UUID hospitalId, ProResponseCreateDTO request,
                                 ProResponseSource source, UUID recordedByUserId) {
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         ProInstrument instrument = instrumentService.requireActive(request.getInstrumentCode());
         ProScoring.ProScoreResult score = ProScoring.score(instrument, request.getAnswers());
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         PostpartumCarePlan plan = activePlan(patient, hospitalId);
 
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDateTime administeredAt = request.getAdministeredAt() != null ? request.getAdministeredAt() : now;
         if (administeredAt.isAfter(now.plusMinutes(5))) {
-            throw new BusinessException("The administration time cannot be in the future.");
+            throw new com.example.hms.exception.FieldBusinessException("administeredAt", "pro.response.administeredInFuture");
         }
 
         ProResponse response = ProResponse.builder()
@@ -306,7 +305,7 @@ public class ProResponseService {
 
     private Patient requirePatient(UUID patientId) {
         return patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND, patientId));
     }
 
     /**
@@ -315,6 +314,9 @@ public class ProResponseService {
      */
     private UUID resolveHospitalId(Patient patient, UUID requested) {
         if (requested != null) {
+            // A claimed hospital is only honoured when it IS the acting one (QA D401):
+            // otherwise the registration check would run against the claim, not the caller.
+            TenantOwnership.requireOwnedByActingHospital(requested, PATIENT_NOT_FOUND, patient.getId());
             return requested;
         }
         UUID active = roleValidator.requireActiveHospitalId();
@@ -328,13 +330,13 @@ public class ProResponseService {
         if (primary != null) {
             return primary.getId();
         }
-        throw new BusinessException("Unable to resolve a hospital for this patient.");
+        throw new BusinessException("pro.response.noHospital");
     }
 
     /** Same not-found as a nonexistent patient: a foreign chart is not a chart. */
     private static void requireInTenant(Patient patient, UUID hospitalId) {
         if (!isRegistered(patient, hospitalId)) {
-            throw new ResourceNotFoundException(PATIENT_NOT_FOUND);
+            throw new ResourceNotFoundException(PATIENT_NOT_FOUND, patient.getId());
         }
     }
 

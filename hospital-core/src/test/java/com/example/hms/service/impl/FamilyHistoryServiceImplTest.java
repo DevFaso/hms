@@ -27,11 +27,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class FamilyHistoryServiceImplTest {
+
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     @Mock private FamilyHistoryRepository familyHistoryRepository;
     @Mock private PatientRepository patientRepository;
@@ -56,6 +60,12 @@ class FamilyHistoryServiceImplTest {
         patient = new Patient(); patient.setId(patientId);
         hospital = Hospital.builder().build(); hospital.setId(hospitalId);
         staff = new Staff(); staff.setId(staffId);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test
@@ -70,7 +80,7 @@ class FamilyHistoryServiceImplTest {
         FamilyHistoryResponseDTO response = new FamilyHistoryResponseDTO();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(familyHistoryMapper.toEntity(any(), eq(patient), eq(hospital), eq(staff))).thenReturn(entity);
         when(familyHistoryRepository.save(entity)).thenReturn(entity);
@@ -189,5 +199,27 @@ class FamilyHistoryServiceImplTest {
     void deleteFamilyHistory_notFound() {
         when(familyHistoryRepository.findById(historyId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.deleteFamilyHistory(historyId)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ── QA r5 tenancy sweep: the D262 shape on a history row ──
+
+    @Test
+    void deleteFamilyHistory_ofAnotherHospital_isNotFoundAndKept() {
+        PatientFamilyHistory entity = new PatientFamilyHistory();
+        entity.setId(historyId);
+        entity.setActive(true);
+        entity.setHospital(hospital);
+        when(familyHistoryRepository.findById(historyId)).thenReturn(Optional.of(entity));
+        UUID hospitalB = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .activeHospitalId(hospitalB).permittedHospitalIds(java.util.Set.of(hospitalB)).build());
+        try {
+            assertThatThrownBy(() -> service.deleteFamilyHistory(historyId)).isInstanceOf(ResourceNotFoundException.class);
+            assertThat(entity.getActive()).isTrue();
+            verify(familyHistoryRepository, never()).save(any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 }

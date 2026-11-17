@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
 import com.example.hms.security.context.HospitalContext;
@@ -85,6 +86,14 @@ public class UltrasoundOrder extends BaseEntity implements TenantScoped {
     @Column(name = "ordered_by", length = 200)
     private String orderedBy;
 
+    /**
+     * QA D930 class (V243): the user who placed the order. {@code orderedBy}
+     * is a display name and cannot decide who may change the order; null on
+     * rows written before V243 (no recorded author).
+     */
+    @Column(name = "ordered_by_user_id")
+    private UUID orderedByUserId;
+
     @Column(name = "gestational_age_at_order")
     private Integer gestationalAgeAtOrder; // weeks
 
@@ -151,9 +160,19 @@ public class UltrasoundOrder extends BaseEntity implements TenantScoped {
             return;
         }
         // Apply hospital scope from context if not already set
-        if (this.hospital == null && context.getActiveHospitalId() != null) {
+        if (this.hospital == null && ActingScopeResolver.pinnedHospitalIdOf(context) != null) {
             this.hospital = new Hospital();
-            this.hospital.setId(context.getActiveHospitalId());
+            this.hospital.setId(ActingScopeResolver.pinnedHospitalIdOf(context));
         }
     }
+
+    /**
+     * QA D1538 (round 40): placed as an emergency (URGENT/STAT) for a patient the obstetric rule would
+     * have refused (recorded male, or a child). The rule never refuses an emergency, a clinical decision
+     * still pending; the order is flagged here for review and the skip is audited
+     * (OBSTETRIC_RULE_SKIPPED_EMERGENCY).
+     */
+    @Column(name = "obstetric_rule_skipped", nullable = false)
+    @Builder.Default
+    private boolean obstetricRuleSkipped = false;
 }

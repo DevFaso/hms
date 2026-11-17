@@ -11,6 +11,10 @@
       <div class="portal-spinner"></div>
       <p>{{ 'PORTAL.MEDICATIONS.LOADING' | translate }}</p>
     </div>
+  } @else if (medicationsFailed() && prescriptions().length === 0) {
+    <p class="portal-inline-error" role="alert" data-testid="medications-load-failed">
+      {{ medicationsFailureReason() ?? ('PORTAL_PAGING.MED_LOAD_FAILED' | translate) }}
+    </p>
   } @else if (medications().length === 0 && prescriptions().length === 0) {
     <div class="portal-empty">
       <span class="material-symbols-outlined">medication</span>
@@ -18,11 +22,16 @@
       <p>{{ 'PORTAL.MEDICATIONS.EMPTY_DESC' | translate }}</p>
     </div>
   } @else {
-    @if (medications().length > 0) {
+    @if (medicationsFailed()) {
+      <p class="portal-inline-error" role="alert" data-testid="medications-load-failed">
+        {{ medicationsFailureReason() ?? ('PORTAL_PAGING.MED_LOAD_FAILED' | translate) }}
+      </p>
+    }
+    @for (group of medicationGroups(); track group.titleKey) {
       <section class="portal-section">
-        <h2 class="portal-section-title">{{ 'PORTAL.MEDICATIONS.ACTIVE' | translate }}</h2>
+        <h2 class="portal-section-title">{{ group.titleKey | translate }}</h2>
         <div class="portal-list">
-          @for (med of medications(); track med.id) {
+          @for (med of group.meds; track med.id) {
             <div
               class="portal-list-item clickable"
               (click)="toggleMed(med.id)"
@@ -36,12 +45,40 @@
               </div>
               <div class="pli-body">
                 <span class="pli-title">{{ med.medicationName }}</span>
-                <span class="pli-sub">{{ med.dosage }} · {{ med.frequency }}</span>
-                <span class="pli-meta"
+                {{ ' ' }}<span class="pli-sub">{{ med.dosage }} · {{ med.frequency }}</span>
+                @if (med.asNeeded) {
+                  <!-- QA D1398: taken at home, so "q6h" alone reads as a fixed schedule -->
+                  {{ ' '
+                  }}<span class="ready-chip" [attr.data-testid]="'med-prn-' + med.id">{{
+                    (med.prnMinIntervalHours
+                      ? 'PORTAL.MEDICATIONS.AS_NEEDED_INTERVAL'
+                      : 'PORTAL.MEDICATIONS.AS_NEEDED'
+                    ) | translate: { hours: med.prnMinIntervalHours }
+                  }}</span>
+                }
+                @if (med.readyForCollectionAt) {
+                  <!-- G15: a fill is waiting at the pharmacy counter. -->
+                  {{ ' '
+                  }}<span class="ready-chip" [attr.data-testid]="'med-ready-' + med.id">
+                    <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
+                    {{
+                      'PORTAL.MEDICATIONS.READY_AT'
+                        | translate: { pharmacy: med.readyForCollectionPharmacyName ?? '' }
+                    }}
+                    ·
+                    {{
+                      'PORTAL.MEDICATIONS.READY_SINCE'
+                        | translate
+                          : { date: (med.readyForCollectionAt | serverTime | date: 'short') }
+                    }}
+                  </span>
+                }
+                {{ ' '
+                }}<span class="pli-meta"
                   >{{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
                   {{ med.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }} ·
                   {{ 'PORTAL.MEDICATIONS.STARTED' | translate }}
-                  {{ med.startDate | date: 'MMM d, yyyy' }}</span
+                  {{ med.startDate | serverTime | date: 'mediumDate' }}</span
                 >
               </div>
               <span class="portal-status-chip" [attr.data-status]="med.status">{{
@@ -64,6 +101,17 @@
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.FREQUENCY' | translate }}</span>
                     <span class="dv">{{ med.frequency }}</span>
                   </div>
+                  @if (med.asNeeded) {
+                    <div class="detail-item">
+                      <span class="dl">{{ 'PORTAL.MEDICATIONS.AS_NEEDED' | translate }}</span>
+                      <span class="dv" [attr.data-testid]="'med-prn-detail-' + med.id">{{
+                        med.prnMinIntervalHours
+                          ? ('PORTAL.MEDICATIONS.MIN_INTERVAL'
+                            | translate: { hours: med.prnMinIntervalHours })
+                          : '—'
+                      }}</span>
+                    </div>
+                  }
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}</span>
                     <span class="dv">{{
@@ -72,11 +120,12 @@
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.START_DATE' | translate }}</span>
-                    <span class="dv">{{ med.startDate | date: 'mediumDate' }}</span>
+                    <span class="dv">{{ med.startDate | serverTime | date: 'mediumDate' }}</span>
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
-                    <span class="dv portal-status-chip" [attr.data-status]="med.status">{{
+                    {{ ' '
+                    }}<span class="dv portal-status-chip" [attr.data-status]="med.status">{{
                       med.status | enumLabel: 'status'
                     }}</span>
                   </div>
@@ -112,7 +161,12 @@
                       [attr.data-testid]="'med-not-refillable-' + med.id"
                     >
                       <span class="material-symbols-outlined">block</span>
-                      {{ 'PORTAL.MEDICATIONS.NOT_REFILLABLE' | translate }}
+                      {{
+                        (med.refillBlockedReason === 'CONTROLLED'
+                          ? 'PORTAL.MEDICATIONS.NOT_REFILLABLE_CONTROLLED'
+                          : 'PORTAL.MEDICATIONS.NOT_REFILLABLE'
+                        ) | translate
+                      }}
                     </span>
                   } @else if (med.refillRequestOpen) {
                     <span
@@ -142,6 +196,27 @@
             }
           }
         </div>
+        @if (group.pager; as pager) {
+          <!-- QA D1399: the server's total, and every row one click away -->
+          <p class="pli-meta" data-testid="med-past-count">
+            {{
+              'PORTAL_PAGING.SHOWN_OF'
+                | translate: { shown: pager.shown().length, total: pager.total() }
+            }}
+          </p>
+          @if (pager.hasMore()) {
+            <div class="portal-load-more">
+              <button
+                type="button"
+                class="btn-secondary"
+                data-testid="med-past-more"
+                (click)="pager.showMore()"
+              >
+                {{ 'PORTAL_PAGING.SHOW_MORE' | translate }}
+              </button>
+            </div>
+          }
+        }
       </section>
     }
 
@@ -149,7 +224,7 @@
       <section class="portal-section">
         <h2 class="portal-section-title">{{ 'PORTAL.MEDICATIONS.PRESCRIPTIONS' | translate }}</h2>
         <div class="portal-list">
-          @for (rx of prescriptions(); track rx.id) {
+          @for (rx of prescriptionRows.shown(); track rx.id) {
             <div
               class="portal-list-item clickable"
               (click)="toggleRx(rx.id)"
@@ -163,11 +238,50 @@
               </div>
               <div class="pli-body">
                 <span class="pli-title">{{ rx.medicationName }}</span>
-                <span class="pli-sub">{{ rx.dosage }} · {{ rx.frequency }}</span>
-                <span class="pli-meta">
+                {{ ' ' }}<span class="pli-sub">{{ rx.dosage }} · {{ rx.frequency }}</span>
+                @if (rx.asNeeded) {
+                  <!-- QA D1398 -->
+                  {{ ' '
+                  }}<span class="ready-chip" [attr.data-testid]="'rx-prn-' + rx.id">{{
+                    (rx.prnMinIntervalHours
+                      ? 'PORTAL.MEDICATIONS.AS_NEEDED_INTERVAL'
+                      : 'PORTAL.MEDICATIONS.AS_NEEDED'
+                    ) | translate: { hours: rx.prnMinIntervalHours }
+                  }}</span>
+                }
+                @if (rx.readyForCollectionAt) {
+                  {{ ' '
+                  }}<span class="ready-chip" [attr.data-testid]="'rx-ready-' + rx.id">
+                    <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
+                    {{
+                      'PORTAL.MEDICATIONS.READY_AT'
+                        | translate: { pharmacy: rx.readyForCollectionPharmacyName ?? '' }
+                    }}
+                    ·
+                    {{
+                      'PORTAL.MEDICATIONS.READY_SINCE'
+                        | translate
+                          : { date: (rx.readyForCollectionAt | serverTime | date: 'short') }
+                    }}
+                  </span>
+                }
+                {{ ' '
+                }}<span class="pli-meta">
                   {{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
                   {{ rx.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }}
                 </span>
+                @if (rx.status === 'PRINTED_FOR_PATIENT') {
+                  <!-- QA D966: the copy the pharmacy printed, to take to a pharmacy -->
+                  <button
+                    type="button"
+                    class="refill-btn"
+                    [attr.data-testid]="'rx-printed-copy-' + rx.id"
+                    (click)="openPrintedCopy(rx.id, $event)"
+                    (keydown.enter)="$event.stopPropagation()"
+                  >
+                    {{ 'PORTAL.MEDICATIONS.PRINTED_COPY' | translate }}
+                  </button>
+                }
               </div>
               <span class="portal-status-chip" [attr.data-status]="rx.status">{{
                 rx.status | enumLabel: 'prescriptionStatus'
@@ -197,11 +311,14 @@
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.PRESCRIBED_DATE' | translate }}</span>
-                    <span class="dv">{{ rx.prescribedDate | date: 'mediumDate' }}</span>
+                    <span class="dv">{{
+                      rx.prescribedDate | serverTime | date: 'mediumDate'
+                    }}</span>
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
-                    <span class="dv portal-status-chip" [attr.data-status]="rx.status">{{
+                    {{ ' '
+                    }}<span class="dv portal-status-chip" [attr.data-status]="rx.status">{{
                       rx.status | enumLabel: 'prescriptionStatus'
                     }}</span>
                   </div>
@@ -218,6 +335,26 @@
             }
           }
         </div>
+        <!-- QA D1442: the total, and every prescription one click away -->
+        <p class="pli-meta" data-testid="rx-count">
+          {{
+            'PORTAL_PAGING.SHOWN_OF'
+              | translate
+                : { shown: prescriptionRows.shown().length, total: prescriptionRows.total() }
+          }}
+        </p>
+        @if (prescriptionRows.hasMore()) {
+          <div class="portal-load-more">
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="rx-more"
+              (click)="prescriptionRows.showMore()"
+            >
+              {{ 'PORTAL_PAGING.SHOW_MORE' | translate }}
+            </button>
+          </div>
+        }
       </section>
     }
 
@@ -232,18 +369,27 @@
               </div>
               <div class="pli-body">
                 <span class="pli-title">{{ r.medicationName }}</span>
-                <span class="pli-meta">
+                {{ ' '
+                }}<span class="pli-meta">
                   {{ 'PORTAL.MEDICATIONS.REQUESTED' | translate }}
-                  {{ r.requestedAt | date: 'mediumDate' }}
-                  @if (r.updatedAt && r.status !== 'PENDING' && r.status !== 'REQUESTED') {
+                  {{ r.requestedAt | serverTime | date: 'mediumDate' }}
+                  @if (r.updatedAt && r.status !== 'REQUESTED' && r.status !== 'PAUSED') {
                     · {{ 'PORTAL.MEDICATIONS.COMPLETED' | translate }}
-                    {{ r.updatedAt | date: 'mediumDate' }}
+                    {{ r.updatedAt | serverTime | date: 'mediumDate' }}
                   }
                 </span>
               </div>
-              <span class="portal-status-chip" [attr.data-status]="r.status">{{
-                r.status | enumLabel: 'status'
-              }}</span>
+              <!--
+                QA D816: the same labels as the medication row's chip. The
+                generic status enum read "Demandée" here while the row read
+                "En attente" for the same request.
+              -->
+              <span
+                class="portal-status-chip"
+                [attr.data-status]="r.status"
+                [attr.data-testid]="'refill-history-status-' + r.id"
+                >{{ 'REFILLS.STATUS_' + r.status | translate }}</span
+              >
             </div>
           }
         </div>

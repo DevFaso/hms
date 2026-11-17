@@ -1,5 +1,7 @@
+import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
+  ElementRef,
   OnInit,
   computed,
   inject,
@@ -14,7 +16,19 @@ import { DrugInteractionEntry, DrugInteractionService } from '../services/drug-i
 import { InteractionSeverity } from '../services/medication-timeline.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
+
+/** The dialog's inputs its submit may refuse. */
+const DDI_FIELD_IDS = [
+  'ddi-drug1-name',
+  'ddi-drug1-code',
+  'ddi-drug2-name',
+  'ddi-drug2-code',
+  'ddi-recommendation',
+];
 /**
  * Drug-interaction KB curation page (P2 #14).
  *
@@ -27,7 +41,7 @@ import { RoleContextService } from '../core/role-context.service';
 @Component({
   selector: 'app-drug-interactions',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule],
   templateUrl: './drug-interactions.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './drug-interactions.scss',
@@ -40,6 +54,7 @@ export class DrugInteractionsComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   items = signal<DrugInteractionEntry[]>([]);
   loading = signal(true);
@@ -163,20 +178,37 @@ export class DrugInteractionsComponent implements OnInit {
   }
 
   submit(): void {
+    // QA D1306 (round 28): each refusal marks its field, not only a toast.
+    const root = this.host.nativeElement;
     if (!this.form.drug1Name.trim() || !this.form.drug2Name.trim()) {
-      this.toast.error(this.translate.instant('DRUG_INTERACTIONS.NAMES_REQUIRED'));
+      const message = this.translate.instant('DRUG_INTERACTIONS.NAMES_REQUIRED');
+      const blank = [
+        this.form.drug1Name.trim() ? null : 'ddi-drug1-name',
+        this.form.drug2Name.trim() ? null : 'ddi-drug2-name',
+      ].filter((id): id is string => id !== null);
+      refuseFields(root, blank, DDI_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     if (!this.isRxCuiValid(this.form.drug1Code) || !this.isRxCuiValid(this.form.drug2Code)) {
       // Hard stop, not a warning: a non-RxCUI code creates a row that fires in
       // some checking layers and silently never in others.
-      this.toast.error(this.translate.instant('DRUG_INTERACTIONS.CODE_INVALID'));
+      const message = this.translate.instant('DRUG_INTERACTIONS.CODE_INVALID');
+      const bad = [
+        this.isRxCuiValid(this.form.drug1Code) ? null : 'ddi-drug1-code',
+        this.isRxCuiValid(this.form.drug2Code) ? null : 'ddi-drug2-code',
+      ].filter((id): id is string => id !== null);
+      refuseFields(root, bad, DDI_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     if (!this.form.recommendation.trim()) {
-      this.toast.error(this.translate.instant('DRUG_INTERACTIONS.RECOMMENDATION_REQUIRED'));
+      const message = this.translate.instant('DRUG_INTERACTIONS.RECOMMENDATION_REQUIRED');
+      refuseFields(root, ['ddi-recommendation'], DDI_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], DDI_FIELD_IDS, '');
 
     this.saving.set(true);
     const id = this.editingId();
@@ -195,7 +227,7 @@ export class DrugInteractionsComponent implements OnInit {
         // "exists but was retired; reactivate it instead" is actionable —
         // surface the backend refusal verbatim.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('DRUG_INTERACTIONS.SAVE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('DRUG_INTERACTIONS.SAVE_ERROR'),
         );
         this.saving.set(false);
       },
@@ -225,7 +257,7 @@ export class DrugInteractionsComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('DRUG_INTERACTIONS.DEACTIVATE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('DRUG_INTERACTIONS.DEACTIVATE_ERROR'),
         );
         this.deactivating.set(false);
       },
@@ -246,7 +278,7 @@ export class DrugInteractionsComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('DRUG_INTERACTIONS.REACTIVATE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('DRUG_INTERACTIONS.REACTIVATE_ERROR'),
         );
         this.reactivatingId.set(null);
       },

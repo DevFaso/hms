@@ -22,11 +22,12 @@ import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.repository.PatientDiagnosisRepository;
 import com.example.hms.repository.PatientProblemRepository;
-import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -64,10 +65,23 @@ import com.example.hms.model.Hospital;
 @SuppressWarnings("java:S100")
 class PatientSnapshotServiceImplTest {
 
-    @Mock private PatientRepository patientRepository;
+    /** QA D628: the vitals summary is rendered from the real bundles, in English here. */
+    @org.junit.jupiter.api.BeforeEach
+    void englishBundles() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
+    @Mock private com.example.hms.service.support.PatientChartAccess patientChartAccess;
     @Mock private PatientAllergyRepository patientAllergyRepository;
     @Mock private PatientVitalSignRepository patientVitalSignRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
+    @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
     @Mock private LabOrderRepository labOrderRepository;
     @Mock private LabResultRepository labResultRepository;
     @Mock private EncounterRepository encounterRepository;
@@ -86,29 +100,45 @@ class PatientSnapshotServiceImplTest {
     private Patient stubPatient(UUID patientId) {
         Patient p = mock(Patient.class);
         when(p.getId()).thenReturn(patientId);
-        when(p.getFirstName()).thenReturn("Alice");
-        when(p.getLastName()).thenReturn("Wong");
+        lenient().when(p.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Alice");
+        lenient().when(p.getLastName()).thenReturn("Wong");
         when(p.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         when(p.getGender()).thenReturn("F");
         when(p.getChronicConditions()).thenReturn(null);
         return p;
     }
 
+    /**
+     * The hospital the caller is acting at. getSnapshot now refuses a null
+     * scope outright, so every test below reads as a scoped caller and the
+     * readable set is the acting hospital alone unless the test widens it.
+     */
+    private static final UUID HOSPITAL_ID = UUID.randomUUID();
+    private static final Set<UUID> READABLE = Set.of(HOSPITAL_ID);
+
     private void givenPatient(UUID patientId, Patient patient) {
-        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        // PatientChartAccess is the whole chart-read rule now (registration OR a
+        // treatment relationship, chart-restricted refused loudly, 404 for the
+        // rest), so the tests stub it rather than the repository and the
+        // registration flag.
+        when(patientChartAccess.require(eq(patientId), eq(HOSPITAL_ID))).thenReturn(patient);
+        // Lenient: the cross-hospital test supplies its own wider readable set.
+        lenient().when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(HOSPITAL_ID)))
+                .thenReturn(READABLE);
     }
 
     private void stubEmptySubQueries(UUID patientId) {
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
     }
 
     // ========== getSnapshot() ==========
@@ -116,26 +146,29 @@ class PatientSnapshotServiceImplTest {
     @Test
     void getSnapshot_patientNotFound_shouldThrowResourceNotFoundException() {
         UUID patientId = UUID.randomUUID();
-        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
+        when(patientChartAccess.require(eq(patientId), eq(HOSPITAL_ID)))
+                .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
 
-        assertThrows(ResourceNotFoundException.class, () -> service.getSnapshot(patientId, null));
+        assertThrows(ResourceNotFoundException.class, () -> service.getSnapshot(patientId, HOSPITAL_ID));
     }
 
     @Test
     void getSnapshot_basicDemographics_shouldPopulateCorrectly() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
+        when(patient.getMrnForHospital(HOSPITAL_ID)).thenReturn("MRN-A-0042");
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertNotNull(result);
         assertEquals(patientId, result.getPatientId());
         assertEquals("Alice Wong", result.getName());
         assertEquals("F", result.getSex());
         assertTrue(result.getAge() > 0);
-        assertEquals(patientId.toString(), result.getMrn());
+        // QA D1040 class: the hospital's MRN, never the patient's UUID (was asserted as the UUID).
+        assertEquals("MRN-A-0042", result.getMrn());
     }
 
     @Test
@@ -145,21 +178,89 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
 
         PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.isActive()).thenReturn(true);
         when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
 
-        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(allergy));
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertFalse(result.getAllergies().isEmpty());
         assertTrue(result.getAllergies().contains("Penicillin"));
+    }
+
+    @Test
+    void d504_withoutBreakGlassTheSnapshotSaysItsAllergyListIsNarrowed() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.isActive()).thenReturn(true);
+        when(allergy.getAllergenDisplay()).thenReturn("Peanuts");
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+        when(patientAllergyRepository.findVisibleAt(patientId, HOSPITAL_ID)).thenReturn(List.of(allergy));
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+        when(recordAccessPolicy.foreignRowsWithheld(any(), eq(patientId), eq(HOSPITAL_ID))).thenReturn(true);
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+        assertTrue(result.getAllergies().contains("Peanuts"));
+        assertTrue(result.isAllergiesWithheld());
+        // QA D504 (round 3): diagnoses, medications, vitals and labs are narrowed too.
+        assertTrue(result.isRecordsWithheld());
+    }
+
+    @Test
+    void d504_breakGlassShowsTheOtherHospitalsAllergyDespiteTheOptOut() {
+        UUID patientId = UUID.randomUUID();
+        UUID doctorB = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
+        try {
+            PatientAllergy allergy = mock(PatientAllergy.class);
+            when(allergy.isActive()).thenReturn(true);
+            when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
+            when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+            when(recordAccessPolicy.decide(doctorB, patientId, HOSPITAL_ID)).thenReturn(
+                com.example.hms.service.recordaccess.RecordAccessDecision.permitted(patientId, HOSPITAL_ID, doctorB,
+                    new com.example.hms.service.recordaccess.TreatmentRelationship(
+                        com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, UUID.randomUUID(), HOSPITAL_ID,
+                        patientId, null, null, true),
+                    com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+            when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                    .thenReturn(Collections.emptyList());
+            when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                    .thenReturn(new PageImpl<>(Collections.emptyList()));
+            when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+            when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+            when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+            PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+            assertTrue(result.getAllergies().contains("Penicillin"));
+            assertFalse(result.isAllergiesWithheld());
+            assertFalse(result.isRecordsWithheld());
+            verify(patientAllergyRepository, never()).findVisibleAt(any(), any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 
     @Test
@@ -170,17 +271,18 @@ class PatientSnapshotServiceImplTest {
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
         PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.isActive()).thenReturn(true);
         when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
-        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(allergy));
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(List.of("Penicillin"), result.getAllergies());
         verify(patient, never()).getAllergies();
@@ -194,15 +296,15 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertTrue(result.getAllergies().contains("Sulfa drugs"));
     }
@@ -215,7 +317,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(3, result.getActiveDiagnoses().size());
         assertTrue(result.getActiveDiagnoses().contains("Diabetes"));
@@ -235,21 +337,72 @@ class PatientSnapshotServiceImplTest {
         when(rx.getFrequency()).thenReturn("BID");
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(List.of(rx)));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getActiveMedications().size());
         PatientSnapshotDTO.MedicationItem med = result.getActiveMedications().get(0);
         assertEquals("Metformin", med.getName());
         assertEquals("500mg", med.getDose());
         assertEquals("BID", med.getFrequency());
+    }
+
+    private static Prescription rx(String name, com.example.hms.enums.PrescriptionStatus status,
+                                   com.example.hms.model.Encounter encounter) {
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+        p.setMedicationName(name);
+        p.setStatus(status);
+        p.setEncounter(encounter);
+        p.setDuration("5 days");
+        p.setCreatedAt(java.time.LocalDateTime.now().minusHours(2));
+        return p;
+    }
+
+    private static com.example.hms.model.Encounter stay(com.example.hms.enums.EncounterStatus status) {
+        com.example.hms.model.Encounter e = new com.example.hms.model.Encounter();
+        e.setId(UUID.randomUUID());
+        e.setAdmissionId(UUID.randomUUID());
+        e.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        e.setStatus(status);
+        return e;
+    }
+
+    @Test
+    void d737_activeMedicationsAreTheRunningCoursesOnly() {
+        // QA D720/D737 (r10 re-test s8.js): the snapshot listed the discharged
+        // stay's completed courses and drafts as active medications.
+        UUID patientId = UUID.randomUUID();
+        givenPatient(patientId, stubPatient(patientId));
+        com.example.hms.model.Encounter discharged = stay(com.example.hms.enums.EncounterStatus.COMPLETED);
+        com.example.hms.model.Encounter current = stay(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        Prescription morphineOfTheOldStay = rx("Morphine", com.example.hms.enums.PrescriptionStatus.SIGNED, discharged);
+        Prescription draft = rx("Draft course", com.example.hms.enums.PrescriptionStatus.DRAFT, null);
+        Prescription withdrawn = rx("Withdrawn", com.example.hms.enums.PrescriptionStatus.DISCONTINUED, null);
+        Prescription amoxicillin = rx("Amoxicilline 1 g", com.example.hms.enums.PrescriptionStatus.SIGNED, current);
+        Prescription paracetamol = rx("Paracetamol 1 g", com.example.hms.enums.PrescriptionStatus.SIGNED, current);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                .thenReturn(new PageImpl<>(List.of(morphineOfTheOldStay, draft, withdrawn, amoxicillin, paracetamol)));
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId)).thenReturn(List.of());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+        assertEquals(List.of("Amoxicilline 1 g", "Paracetamol 1 g"),
+                result.getActiveMedications().stream().map(PatientSnapshotDTO.MedicationItem::getName).toList());
     }
 
     @Test
@@ -267,25 +420,26 @@ class PatientSnapshotServiceImplTest {
         when(vital.getRecordedAt()).thenReturn(LocalDateTime.of(2026, 3, 14, 10, 30));
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(List.of(vital));
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertFalse(result.getRecentVitals().isEmpty());
         PatientSnapshotDTO.VitalItem v = result.getRecentVitals().get(0);
         // The sibling of the LAB token: a revert to the word "Vitals"
         // passed the whole suite until this line existed.
         assertEquals("VITALS", v.getType());
-        assertTrue(v.getValue().contains("T:37.0°C"));
-        assertTrue(v.getValue().contains("HR:80"));
-        assertTrue(v.getValue().contains("BP:120/80"));
-        assertTrue(v.getValue().contains("SpO2:98%"));
+        // QA D628: the shared, localized summary (request locale = English here).
+        assertTrue(v.getValue().contains("Temp 37 °C"), v.getValue());
+        assertTrue(v.getValue().contains("HR 80"));
+        assertTrue(v.getValue().contains("BP 120/80"));
+        assertTrue(v.getValue().contains("SpO2 98%"));
     }
 
     @Test
@@ -301,21 +455,22 @@ class PatientSnapshotServiceImplTest {
         when(order.getLabTestDefinition()).thenReturn(testDef);
 
         LabResult labResult = mock(LabResult.class);
+        when(labResult.isReleased()).thenReturn(true);
         when(labResult.getLabOrder()).thenReturn(order);
         when(labResult.getResultValue()).thenReturn("6.5%");
         when(labResult.isAcknowledged()).thenReturn(true);
         when(labResult.getResultDate()).thenReturn(LocalDateTime.of(2026, 3, 14, 9, 0));
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(List.of(labResult)));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(List.of(labResult));
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getLatestLabs().size());
         PatientSnapshotDTO.LabItem lab = result.getLatestLabs().get(0);
@@ -335,20 +490,21 @@ class PatientSnapshotServiceImplTest {
         LabOrder order = mock(LabOrder.class);
         when(order.getLabTestDefinition()).thenReturn(testDef);
         LabResult labResult = mock(LabResult.class);
+        when(labResult.isReleased()).thenReturn(true);
         when(labResult.getLabOrder()).thenReturn(order);
         when(labResult.getResultValue()).thenReturn("5.9");
         when(labResult.getAbnormalFlag()).thenReturn(com.example.hms.enums.AbnormalFlag.ABNORMAL_HIGH);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(List.of(labResult)));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(List.of(labResult));
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO.LabItem lab = service.getSnapshot(patientId, null).getLatestLabs().get(0);
+        PatientSnapshotDTO.LabItem lab = service.getSnapshot(patientId, HOSPITAL_ID).getLatestLabs().get(0);
 
         // The drawer colours on the literal ABNORMAL; the arrow is a separate field.
         assertEquals("ABNORMAL", lab.getFlag());
@@ -370,15 +526,15 @@ class PatientSnapshotServiceImplTest {
         when(pendingOrder.getOrderDatetime()).thenReturn(LocalDateTime.of(2026, 3, 14, 8, 0));
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(pendingOrder));
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(List.of(pendingOrder));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getPendingOrders().size());
         PatientSnapshotDTO.OrderItem order = result.getPendingOrders().get(0);
@@ -396,17 +552,60 @@ class PatientSnapshotServiceImplTest {
         when(completedOrder.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(completedOrder));
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(List.of(completedOrder));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertTrue(result.getPendingOrders().isEmpty());
+    }
+
+    /** CX-003 class (round 33): the snapshot stopped at 10 of each with no total. */
+    @Test
+    void getSnapshot_everyMedicationPendingOrderAndCareTeamMemberIsAnswered() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        int count = 25;
+        List<com.example.hms.model.Prescription> running = new java.util.ArrayList<>();
+        List<LabOrder> orders = new java.util.ArrayList<>();
+        List<Encounter> visits = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            com.example.hms.model.Prescription rx = new com.example.hms.model.Prescription();
+            rx.setMedicationName("Med " + i);
+            rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+            running.add(rx);
+            LabOrder order = mock(LabOrder.class);
+            when(order.getStatus()).thenReturn(LabOrderStatus.PENDING);
+            orders.add(order);
+            Staff clinician = mock(Staff.class);
+            when(clinician.getFullName()).thenReturn("Dr " + i);
+            Encounter visit = mock(Encounter.class);
+            when(visit.getStaff()).thenReturn(clinician);
+            visits.add(visit);
+        }
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> read =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), read.capture()))
+                .thenReturn(new PageImpl<>(running));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(orders);
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(visits);
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+        assertEquals(count, result.getActiveMedications().size());
+        assertEquals(count, result.getPendingOrders().size());
+        assertEquals(count, result.getCareTeam().size());
+        assertTrue(read.getValue().isUnpaged(), "every prescription of the chart is read, not the newest 200");
     }
 
     @Test
@@ -423,15 +622,15 @@ class PatientSnapshotServiceImplTest {
         when(enc.getStaff()).thenReturn(doctor);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(List.of(enc));
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertFalse(result.getCareTeam().isEmpty());
         PatientSnapshotDTO.CareTeamMember member = result.getCareTeam().get(0);
@@ -446,7 +645,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertNotNull(result.getRecentNotes());
         assertTrue(result.getRecentNotes().isEmpty());
@@ -459,15 +658,15 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertNotNull(result);
         assertEquals("Alice Wong", result.getName());
@@ -481,7 +680,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(0, result.getAge());
     }
@@ -495,15 +694,15 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenThrow(new RuntimeException("DB error"));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertNotNull(result);
         assertTrue(result.getActiveMedications().isEmpty());
@@ -516,15 +715,15 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenThrow(new RuntimeException("DB error"));
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertNotNull(result);
         assertTrue(result.getRecentVitals().isEmpty());
@@ -537,15 +736,15 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenThrow(new RuntimeException("DB error"));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenThrow(new RuntimeException("DB error"));
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertNotNull(result);
         assertTrue(result.getLatestLabs().isEmpty());
@@ -558,15 +757,15 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenThrow(new RuntimeException("DB error"));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertNotNull(result);
         assertTrue(result.getPendingOrders().isEmpty());
@@ -579,15 +778,15 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenThrow(new RuntimeException("DB error"));
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertNotNull(result);
         assertTrue(result.getCareTeam().isEmpty());
@@ -608,27 +807,28 @@ class PatientSnapshotServiceImplTest {
         when(vital.getRecordedAt()).thenReturn(null);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(List.of(vital));
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getRecentVitals().size());
         PatientSnapshotDTO.VitalItem v = result.getRecentVitals().get(0);
-        assertTrue(v.getValue().contains("HR:72"));
-        assertTrue(v.getValue().contains("SpO2:97%"));
-        assertFalse(v.getValue().contains("T:"));
-        assertFalse(v.getValue().contains("BP:"));
+        assertTrue(v.getValue().contains("HR 72"));
+        assertTrue(v.getValue().contains("SpO2 97%"));
+        assertFalse(v.getValue().contains("Temp"));
+        assertFalse(v.getValue().contains("BP "));
         assertEquals("", v.getTimestamp());
     }
 
     @Test
-    void getSnapshot_labResultWithNullTestDef_shouldUseFallback() {
+    @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
+    void getSnapshot_labResultWithNullTestDef_isTheDeletedTestLabel() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -637,24 +837,26 @@ class PatientSnapshotServiceImplTest {
         when(order.getLabTestDefinition()).thenReturn(null);
 
         LabResult labResult = mock(LabResult.class);
+        when(labResult.isReleased()).thenReturn(true);
         when(labResult.getLabOrder()).thenReturn(order);
         when(labResult.getResultValue()).thenReturn("5.0");
         when(labResult.isAcknowledged()).thenReturn(false);
         when(labResult.getResultDate()).thenReturn(null);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(List.of(labResult)));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(List.of(labResult));
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getLatestLabs().size());
-        assertEquals("Lab Test", result.getLatestLabs().get(0).getTest());
+        // QA D648: the same deleted-test label as every lab screen.
+        assertEquals("Deleted test", result.getLatestLabs().get(0).getTest());
         assertEquals("REVIEW", result.getLatestLabs().get(0).getFlag());
         assertEquals("", result.getLatestLabs().get(0).getDate());
     }
@@ -674,15 +876,15 @@ class PatientSnapshotServiceImplTest {
         when(inProgressOrder.getOrderDatetime()).thenReturn(null);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(inProgressOrder));
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(List.of(inProgressOrder));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getPendingOrders().size());
         assertEquals("Chem Panel", result.getPendingOrders().get(0).getDescription());
@@ -690,7 +892,8 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
-    void getSnapshot_pendingOrderWithNullTestDef_shouldSendNullNotAWord() {
+    @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
+    void getSnapshot_pendingOrderWithNullTestDef_isTheDeletedTestLabel() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -701,18 +904,19 @@ class PatientSnapshotServiceImplTest {
         when(order.getOrderDatetime()).thenReturn(LocalDateTime.of(2026, 3, 14, 8, 0));
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(order));
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(List.of(order));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getPendingOrders().size());
-        assertNull(result.getPendingOrders().get(0).getDescription());
+        // QA D648: a pending order whose definition was deleted names a deleted test.
+        assertEquals("Deleted test", result.getPendingOrders().get(0).getDescription());
     }
 
     @Test
@@ -729,15 +933,15 @@ class PatientSnapshotServiceImplTest {
         when(enc.getStaff()).thenReturn(staffMember);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(List.of(enc));
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getCareTeam().size());
         // Was the literal "Staff" — an English word the portal cannot translate,
@@ -759,15 +963,15 @@ class PatientSnapshotServiceImplTest {
         when(enc.getStaff()).thenReturn(null);
 
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(List.of(enc));
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertTrue(result.getCareTeam().isEmpty());
     }
@@ -780,7 +984,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertTrue(result.getAllergies().isEmpty());
     }
@@ -793,7 +997,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertTrue(result.getActiveDiagnoses().isEmpty());
     }
@@ -805,8 +1009,9 @@ class PatientSnapshotServiceImplTest {
         // is never called when structured diagnoses are non-empty (short-circuit)
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         givenPatient(patientId, patient);
 
@@ -814,18 +1019,18 @@ class PatientSnapshotServiceImplTest {
         when(dx.getIcdCode()).thenReturn("E11.9");
         when(dx.getDescription()).thenReturn("Type 2 Diabetes");
 
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(List.of(dx));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getActiveDiagnoses().size());
         assertEquals("E11.9 \u2013 Type 2 Diabetes", result.getActiveDiagnoses().get(0));
@@ -840,31 +1045,35 @@ class PatientSnapshotServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         givenPatient(patientId, patient);
 
         PatientProblem problem = mock(PatientProblem.class);
+        // The scoped read filters ACTIVE itself (the unscoped finder used to do
+        // it in the query), so the row has to carry the status.
+        when(problem.getStatus()).thenReturn(ProblemStatus.ACTIVE);
         when(problem.getProblemCode()).thenReturn("B54");
         when(problem.getProblemDisplay()).thenReturn("Malaria, unspecified");
 
         when(patientProblemRepository
-                .findByPatient_IdAndStatusOrderByCreatedAtDesc(patientId, ProblemStatus.ACTIVE))
+                .findByPatient_IdAndHospital_IdIn(patientId, READABLE))
                 .thenReturn(List.of(problem));
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(Collections.emptyList());
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any()))
-                .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any()))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getActiveDiagnoses().size());
         assertEquals("B54 \u2013 Malaria, unspecified", result.getActiveDiagnoses().get(0));
@@ -877,8 +1086,9 @@ class PatientSnapshotServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         givenPatient(patientId, patient);
 
@@ -886,18 +1096,18 @@ class PatientSnapshotServiceImplTest {
         when(dx.getIcdCode()).thenReturn(null);
         when(dx.getDescription()).thenReturn("Hypertension");
 
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(List.of(dx));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getActiveDiagnoses().size());
         assertEquals("Hypertension", result.getActiveDiagnoses().get(0));
@@ -920,18 +1130,18 @@ class PatientSnapshotServiceImplTest {
         lenient().when(encWithNotes.getEncounterType()).thenReturn(EncounterType.OUTPATIENT);
         lenient().when(encWithNotes.getEncounterDate()).thenReturn(LocalDateTime.of(2026, 3, 14, 10, 0));
 
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(encWithNotes));
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(List.of(encWithNotes));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertFalse(result.getRecentNotes().isEmpty());
         assertEquals("Dr. Smith", result.getRecentNotes().get(0).getAuthor());
@@ -953,18 +1163,18 @@ class PatientSnapshotServiceImplTest {
         lenient().when(enc.getEncounterType()).thenReturn(null);
         lenient().when(enc.getEncounterDate()).thenReturn(null);
 
-        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(List.of(enc));
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
-        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
                 .thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertFalse(result.getRecentNotes().isEmpty());
         PatientSnapshotDTO.NoteItem note = result.getRecentNotes().get(0);
@@ -984,11 +1194,11 @@ class PatientSnapshotServiceImplTest {
         Hospital other = new Hospital();
         other.setId(otherHospitalId);
         Patient patient = stubPatient(patientId);
-        when(patient.isRegisteredInHospital(hospitalId)).thenReturn(true);
-        givenPatient(patientId, patient);
+        when(patientChartAccess.require(eq(patientId), eq(hospitalId))).thenReturn(patient);
         Prescription rx = new Prescription();
         rx.setMedicationName("Metformin");
         rx.setHospital(other);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
                 .thenReturn(Set.of(hospitalId, otherHospitalId));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(Set.of(hospitalId, otherHospitalId)), any()))
@@ -1004,15 +1214,301 @@ class PatientSnapshotServiceImplTest {
                 eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
 
+    // -- No hospital scope: the drawer refuses instead of reading every tenant --
+
+    /**
+     * The whole record of one patient — allergies, diagnoses, medications,
+     * vitals, labs, pending orders, notes, care team — was returned from every
+     * hospital when no scope resolved: each section took a patient-wide branch,
+     * the registration check was skipped, and {@code account()} no-ops on a
+     * null acting hospital so nothing was disclosed. It refuses, and it refuses
+     * BEFORE it reads anything, including the patient row itself.
+     */
     @Test
-    void getSnapshot_withoutAnActingHospital_recordsNoReach() {
+    void noHospitalScopeRefusesInsteadOfReadingEveryTenant() {
+        UUID patientId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        LabOrder foreignOrder = new LabOrder();
+        foreignOrder.setHospital(other);
+        foreignOrder.setStatus(LabOrderStatus.PENDING);
+        // The finder that used to serve this — the one #739 (open) abandons on
+        // the lab side. It is no longer referenced by the service at all, so the
+        // `never()` on it below is a guard against it coming BACK, not evidence
+        // about today: what fails when the guard is removed is the missing
+        // throw, and the scoped finder stubbed next is what would then carry the
+        // foreign row into the snapshot.
+        lenient().when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(foreignOrder));
+        lenient().when(labOrderRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), any()))
+                .thenReturn(List.of(foreignOrder));
+        // A whole, usable patient, all lenient: none of it may be touched once
+        // the guard fires, but it has to be there so that reverting the guard
+        // produces the LEAK (a snapshot carrying the foreign order) rather than
+        // an NPE on a half-built mock, which would prove nothing.
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(patientId);
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
+        lenient().when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+
+        // The key, not the resolved message: getMessage() is already resolved,
+        // so only getMessageKey() pins that the refusal is a resolvable key and
+        // is the same answer a missing patient gives (asserted below).
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> service.getSnapshot(patientId, null))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+                .isEqualTo("patient.notFound");
+
+        verify(patientChartAccess, never()).require(any(), any());
+        verify(labOrderRepository, never()).findByPatient_Id(any());
+        verify(recordAccessPolicy, never()).readableHospitalIds(any(), any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    /**
+     * The drawer is a chart read and now goes through the one chart-read rule,
+     * so a restricted chart refuses here exactly as the chart tabs do (E8 #54).
+     * It used to open on `patient.isRegisteredInHospital` alone, which does not
+     * know about restriction at all.
+     */
+    @Test
+    void aRestrictedChartIsRefusedByTheDrawerToo() {
+        UUID patientId = UUID.randomUUID();
+        when(patientChartAccess.require(eq(patientId), eq(HOSPITAL_ID)))
+                .thenThrow(new com.example.hms.exception.ChartRestrictedException(patientId));
+
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> service.getSnapshot(patientId, HOSPITAL_ID))
+                .isInstanceOf(com.example.hms.exception.ChartRestrictedException.class);
+
+        // Refused before a single section is read.
+        verify(recordAccessPolicy, never()).readableHospitalIds(any(), any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    /**
+     * And it is the same answer: a caller who could not establish scope cannot
+     * tell a refusal from "no such patient", so the drawer is not a probe for
+     * which patient ids exist on the platform.
+     */
+    @Test
+    void theRefusalIsIndistinguishableFromAMissingPatient() {
+        UUID patientId = UUID.randomUUID();
+        // What PatientChartAccess throws for a patient that does not exist, or
+        // that this caller may not read \u2014 one answer for both, by design.
+        when(patientChartAccess.require(eq(patientId), eq(HOSPITAL_ID)))
+                .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
+        // And the scopeless call, stubbed to SUCCEED with a usable patient, so
+        // that removing the guard fails this test on the missing throw rather
+        // than on a stubbing miss or an NPE inside a half-built mock.
+        Patient reachable = mock(Patient.class);
+        lenient().when(reachable.getId()).thenReturn(patientId);
+        lenient().when(reachable.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(reachable.getFirstName()).thenReturn("Alice");
+        lenient().when(reachable.getLastName()).thenReturn("Wong");
+        lenient().when(reachable.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
+        lenient().when(patientChartAccess.require(eq(patientId), isNull())).thenReturn(reachable);
+
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> service.getSnapshot(patientId, null))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+                .isEqualTo("patient.notFound");
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> service.getSnapshot(patientId, HOSPITAL_ID))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+                .isEqualTo("patient.notFound");
+    }
+
+    /**
+     * The disclosure call is no longer conditional on anything the caller
+     * controls. It is the CALL that is unconditional, not the row:
+     * {@code CrossHospitalReachRecorder.recordReach} returns on an empty
+     * {@code perSource}, so a scoped read that surfaced nothing foreign still
+     * writes no {@code RECORD_SHARE} row — which is correct, and is why the
+     * caller may pass the reach unconditionally.
+     */
+    @Test
+    void aScopedReadAlwaysOffersTheReachToTheRecorder() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        service.getSnapshot(patientId, null);
+        service.getSnapshot(patientId, HOSPITAL_ID);
 
-        verify(reachRecorder, never()).recordReach(any(), any(), any(), any(), any(), any());
+        verify(reachRecorder).recordReach(eq(patientId), eq(HOSPITAL_ID), any(), isNull(),
+                eq(Map.of()), eq("Cross-hospital patient snapshot read on the treatment relationship"));
+        verify(reachRecorder).recordReach(eq(patientId), eq(HOSPITAL_ID), any(), isNull(),
+                eq(Map.of()), eq(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION));
+    }
+
+    /**
+     * #751 on the fifth staff lab surface: the drawer's latest labs are the
+     * readable results — ordered in the readable set OR performed by this
+     * hospital's own laboratory — newest first, and a row that surfaced
+     * because this laboratory ran it is accounted once, under the
+     * performing-laboratory reason, and not as a treatment-relationship read.
+     */
+    @Test
+    void latestLabsShowWhatThisHospitalsLaboratoryPerformed() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(patientId, "ACTIVE", READABLE))
+                .thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+        UUID orderingHospitalId = UUID.randomUUID();
+        Hospital ordering = new Hospital();
+        ordering.setId(orderingHospitalId);
+        Hospital here = new Hospital();
+        here.setId(HOSPITAL_ID);
+        LabOrder order = new LabOrder();
+        order.setHospital(ordering);
+        order.setPerformingHospital(here);
+        LabResult performedHere = new LabResult();
+        performedHere.setLabOrder(order);
+        performedHere.setReleased(true);
+        performedHere.setResultValue("7.1");
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), page.capture()))
+                .thenReturn(List.of(performedHere));
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+        assertEquals(1, result.getLatestLabs().size());
+        assertEquals("7.1", result.getLatestLabs().get(0).getValue());
+        assertEquals(10, page.getValue().getPageSize());
+        assertEquals(org.springframework.data.domain.Sort.Direction.DESC,
+                page.getValue().getSort().getOrderFor("resultDate").getDirection());
+        verify(reachRecorder).recordReach(eq(patientId), eq(HOSPITAL_ID), any(), isNull(),
+                eq(Map.of(orderingHospitalId.toString(), 1L)),
+                eq(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION));
+        verify(reachRecorder).recordReach(eq(patientId), eq(HOSPITAL_ID), any(), isNull(),
+                eq(Map.of()), eq("Cross-hospital patient snapshot read on the treatment relationship"));
+    }
+
+    // -- V171: clinical.patient_diagnoses has a hospital_id --
+
+    @Test
+    void legacyDiagnosesAreScopedToTheReadableSetAndAccounted() {
+        // The patient-wide read of clinical.patient_diagnoses is gone: a row
+        // recorded at a readable foreign hospital is shown and accounted like
+        // any other cross-hospital row.
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(patientId);
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+                .thenReturn(Set.of(hospitalId, otherHospitalId));
+        PatientDiagnosis dx = PatientDiagnosis.builder()
+                .icdCode("E11.9").description("Type 2 Diabetes").hospital(other).build();
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospital_IdInOrderByDiagnosedAtDesc(
+                patientId, "ACTIVE", Set.of(hospitalId, otherHospitalId)))
+                .thenReturn(List.of(dx));
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, hospitalId);
+
+        assertEquals(List.of("E11.9 – Type 2 Diabetes"), result.getActiveDiagnoses());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+                eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void aDiagnosisWrittenBeforeItHadAHospitalIsNotShownToAClinician() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(HOSPITAL_ID).superAdmin(false).build());
+        try {
+            PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+            assertTrue(result.getActiveDiagnoses().isEmpty());
+            verify(patientDiagnosisRepository, never())
+                    .findByPatient_IdAndStatusAndHospitalIsNullOrderByDiagnosedAtDesc(any(), any());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void aDiagnosisWrittenBeforeItHadAHospitalIsShownToAVerifiedSuperAdmin() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(patientId);
+        givenPatient(patientId, patient);
+        PatientDiagnosis unscoped = PatientDiagnosis.builder()
+                .icdCode("I10").description("Hypertension").build();
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusAndHospitalIsNullOrderByDiagnosedAtDesc(
+                patientId, "ACTIVE")).thenReturn(List.of(unscoped));
+        HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(HOSPITAL_ID).superAdmin(true).build());
+        try {
+            PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+            assertEquals(List.of("I10 – Hypertension"), result.getActiveDiagnoses());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void aDiagnosisWrittenBeforeItHadAHospitalIsNotShownToASuperAdminPinnedToOneHospital() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        // X-Hospital-Id pins the super-admin: they act at that hospital, so the
+        // hospital-less rows — which no hospital can claim — stay out.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(HOSPITAL_ID).superAdmin(true).headerOverridden(true).build());
+        try {
+            PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+            assertTrue(result.getActiveDiagnoses().isEmpty());
+            verify(patientDiagnosisRepository, never())
+                    .findByPatient_IdAndStatusAndHospitalIsNullOrderByDiagnosedAtDesc(any(), any());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void d1423_aDeactivatedAllergyIsNotOnTheSnapshotAndTheSummaryTextDoesNotStandInForIt() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        lenient().when(patient.getAllergies()).thenReturn("Sesame");
+        givenPatient(patientId, patient);
+
+        PatientAllergy active = new PatientAllergy();
+        active.setAllergenDisplay("Penicillin");
+        active.setActive(true);
+        PatientAllergy removed = new PatientAllergy();
+        removed.setAllergenDisplay("Sesame");
+        removed.setActive(false);
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(removed, active));
+
+        assertEquals(List.of("Penicillin"), service.getSnapshot(patientId, HOSPITAL_ID).getAllergies());
+
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(removed));
+        assertTrue(service.getSnapshot(patientId, HOSPITAL_ID).getAllergies().isEmpty(),
+            "every allergy deactivated: nothing is listed, and the old summary text does not come back");
     }
 }

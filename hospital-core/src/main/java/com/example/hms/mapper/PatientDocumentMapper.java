@@ -19,6 +19,9 @@ public class PatientDocumentMapper {
                 .uploadedByUserId(uploader != null ? uploader.getId() : null)
                 .uploadedByDisplayName(resolveUploaderDisplayName(uploader))
                 .documentType(doc.getDocumentType())
+                // QA D1048: a document the hospital issued (a certificate) is not a
+                // patient upload; the id is read without initialising the proxy.
+                .issuedByHospital(doc.getIssuingHospital() != null)
                 .displayName(doc.getDisplayName())
                 // Derived, never the stored file_url: historical rows carry
                 // absolute /uploads URLs from when the tree was served

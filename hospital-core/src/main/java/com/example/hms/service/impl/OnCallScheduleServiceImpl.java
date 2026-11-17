@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.JobTitle;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Department;
@@ -11,14 +12,18 @@ import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.OnCallScheduleRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.OnCallScheduleService;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -30,19 +35,25 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
     private final RoleValidator roleValidator;
+    /**
+     * The rota clock: "currently on call" and the default listing window.
+     * {@code ClinicalDashboardServiceImpl.getOnCallStatus} asks the same
+     * question ({@code findActiveByStaffIdAt}) with the same bean.
+     */
+    private final Clock clock;
 
     @Override
     @Transactional(readOnly = true)
     public List<OnCallScheduleResponseDTO> listForHospital(OffsetDateTime from, OffsetDateTime to) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to read the on-call rota.");
+            throw new BusinessException("onCall.rota.hospitalRequired");
         }
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         OffsetDateTime start = from != null ? from : now.minusDays(1);
         OffsetDateTime end = to != null ? to : now.plusDays(7);
         if (end.isBefore(start)) {
-            throw new BusinessException("The rota window ends before it starts.");
+            throw new BusinessException("onCall.rota.windowInverted");
         }
         return onCallRepository.findByHospitalAndWindow(hospitalId, start, end).stream()
             .map(entry -> toResponse(entry, now))
@@ -53,7 +64,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
     @Transactional(readOnly = true)
     public List<OnCallScheduleResponseDTO> listForStaff(UUID staffId) {
         requireStaffInTenant(staffId);
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         return onCallRepository.findByStaff_IdOrderByStartTimeDesc(staffId).stream()
             .map(entry -> toResponse(entry, now))
             .toList();
@@ -73,7 +84,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
         entry.setEndTime(request.getEndTime());
         entry.setNotes(request.getNotes());
 
-        return toResponse(onCallRepository.save(entry), OffsetDateTime.now());
+        return toResponse(onCallRepository.save(entry), OffsetDateTime.now(clock));
     }
 
     @Override
@@ -90,7 +101,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
         entry.setEndTime(request.getEndTime());
         entry.setNotes(request.getNotes());
 
-        return toResponse(onCallRepository.save(entry), OffsetDateTime.now());
+        return toResponse(onCallRepository.save(entry), OffsetDateTime.now(clock));
     }
 
     @Override
@@ -103,12 +114,12 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
 
     private OnCallSchedule loadScoped(UUID id) {
         OnCallSchedule entry = onCallRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("On-call entry not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("onCall.entry.notFound", id));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null && (entry.getStaff() == null || entry.getStaff().getHospital() == null
             || !hospitalId.equals(entry.getStaff().getHospital().getId()))) {
             // Cross-hospital rows read as absent, matching the house convention.
-            throw new ResourceNotFoundException("On-call entry not found with ID: " + id);
+            throw new ResourceNotFoundException("onCall.entry.notFound", id);
         }
         return entry;
     }
@@ -122,21 +133,41 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
             throw new org.springframework.security.access.AccessDeniedException(
                 "Cannot roster a staff member from another hospital.");
         }
+        // The rota is who answers a clinical page: a departed or deactivated
+        // member, or a desk / back-office role, is not cover (QA D117).
+        if (!staff.isActive() || staff.getUser() == null || !staff.getUser().isActive()
+            || staff.getUser().isDeleted()) {
+            throw new com.example.hms.exception.FieldBusinessException("staffId", MessageUtil.resolve("onCall.staff.inactive"));
+        }
+        if (!ON_CALL_JOB_TITLES.contains(staff.getJobTitle())) {
+            throw new com.example.hms.exception.FieldBusinessException("staffId", MessageUtil.resolve("onCall.staff.notClinical"));
+        }
         return staff;
     }
+
+    /** Clinical titles that can carry an on-call page. */
+    private static final Set<JobTitle> ON_CALL_JOB_TITLES = EnumSet.of(
+        JobTitle.DOCTOR, JobTitle.PHYSICIAN, JobTitle.SURGEON, JobTitle.ANESTHESIOLOGIST,
+        JobTitle.RADIOLOGIST, JobTitle.NURSE, JobTitle.NURSE_PRACTITIONER, JobTitle.MIDWIFE,
+        JobTitle.PHARMACIST, JobTitle.LAB_TECHNICIAN, JobTitle.LAB_SCIENTIST,
+        JobTitle.LABORATORY_SCIENTIST, JobTitle.LAB_DIRECTOR, JobTitle.TECHNICIAN,
+        JobTitle.PHYSIOTHERAPIST, JobTitle.PSYCHOLOGIST);
 
     private Department resolveDepartment(UUID departmentId) {
         if (departmentId == null) {
             // Null is legitimate: a hospital-wide rota covers no single department.
             return null;
         }
-        return departmentRepository.findById(departmentId)
+        Department department = departmentRepository.findById(departmentId)
             .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
+        // QA r5 tenancy sweep: another hospital's row answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notFound", departmentId);
+        return department;
     }
 
     private void validateWindow(OnCallScheduleRequestDTO request) {
         if (!request.getEndTime().isAfter(request.getStartTime())) {
-            throw new BusinessException("An on-call shift must end after it starts.");
+            throw new com.example.hms.exception.FieldBusinessException("endTime", "onCall.shift.endBeforeStart");
         }
     }
 
@@ -148,8 +179,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
         List<OnCallSchedule> clashes = onCallRepository.findOverlapping(
             request.getStaffId(), request.getStartTime(), request.getEndTime(), excludeId);
         if (!clashes.isEmpty()) {
-            throw new BusinessException(
-                "This staff member is already on call over part of that window.");
+            throw new BusinessException("onCall.shift.overlap");
         }
     }
 

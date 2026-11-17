@@ -63,13 +63,12 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     }
 
     private static final String AUTHOR_LABEL = "Author";
-    private static final String STAFF_LABEL = "Staff";
-    private static final String REVIEWER_LABEL = "Reviewer";
 
     private final TreatmentPlanRepository treatmentPlanRepository;
     private final TreatmentPlanFollowUpRepository treatmentPlanFollowUpRepository;
     private final TreatmentPlanReviewRepository treatmentPlanReviewRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final EncounterRepository encounterRepository;
     private final StaffRepository staffRepository;
@@ -82,14 +81,21 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         Patient patient = fetchPatient(requestDTO.getPatientId());
         Hospital hospital = fetchHospital(requestDTO.getHospitalId());
         Encounter encounter = resolveEncounter(requestDTO.getEncounterId());
-    Staff author = fetchStaff(requestDTO.getAuthorStaffId(), AUTHOR_LABEL);
+    Staff author = fetchStaff(requestDTO.getAuthorStaffId());
         UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO.getAssignmentId(), author);
         Staff supervising = fetchOptionalStaff(requestDTO.getSupervisingStaffId());
         Staff signOff = fetchOptionalStaff(requestDTO.getSignOffStaffId());
 
         validateHospitalContext(hospital, assignment, author, supervising, signOff);
+        // QA D503 class: the author is the caller, not a colleague named in the body.
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(author);
+        // QA D1127: a plan is not written straight as APPROVED; another clinician approves it.
+        requireNotApprovedByWrite(null, requestDTO.getStatus());
         validateEncounterContext(encounter, hospital, patient);
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         var context = new TreatmentPlanMapper.TreatmentPlanContext(hospital, encounter, assignment, author, supervising, signOff);
         TreatmentPlan plan = treatmentPlanMapper.toEntity(requestDTO, patient, context);
         applyFollowUps(plan, requestDTO.getFollowUps());
@@ -103,20 +109,78 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         Patient patient = fetchPatient(requestDTO.getPatientId());
         Hospital hospital = fetchHospital(requestDTO.getHospitalId());
         Encounter encounter = resolveEncounter(requestDTO.getEncounterId());
-    Staff author = fetchStaff(requestDTO.getAuthorStaffId(), AUTHOR_LABEL);
+    Staff author = fetchStaff(requestDTO.getAuthorStaffId());
         UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO.getAssignmentId(), author);
         Staff supervising = fetchOptionalStaff(requestDTO.getSupervisingStaffId());
         Staff signOff = fetchOptionalStaff(requestDTO.getSignOffStaffId());
 
         validateHospitalContext(hospital, assignment, author, supervising, signOff);
+        // QA D503 class: an edit keeps the plan's author; naming a new one must name the caller.
+        if (plan.getAuthor() == null || !java.util.Objects.equals(plan.getAuthor().getId(), author.getId())) {
+            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(author);
+        }
+        // QA D930 class: sending back the plan's own authorStaffId skipped the
+        // check above, so any colleague could rewrite the plan. The plan is
+        // rewritten by its author only (or a super-admin in global view).
+        if (plan.getAuthor() != null) {
+            // QA D1112: the authorship rule, not "act in your own name".
+            com.example.hms.security.CallerIdentity.requireAuthorUnlessSuperAdmin(plan.getAuthor(),
+                "treatmentPlan.authorOnly");
+        }
+        // QA D1127: the edit is the author's, so it never moves the plan to APPROVED.
+        requireNotApprovedByWrite(plan.getStatus(), requestDTO.getStatus());
+        // QA D1066 class (round 21, with D1162): a cancelled plan is closed to edits too.
+        // An archived one is not: this form is the only way back from a mistaken archive.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(plan.getStatus(),
+            "treatmentPlan.cancelled.locked");
         validateEncounterContext(encounter, hospital, patient);
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         var context = new TreatmentPlanMapper.TreatmentPlanContext(hospital, encounter, assignment, author, supervising, signOff);
+        com.example.hms.enums.TreatmentPlanStatus statusBefore = plan.getStatus();
+        java.util.List<Object> contentBefore = clinicalContent(plan);
         plan.setPatient(patient);
         treatmentPlanMapper.applyRequest(plan, requestDTO, context);
+        // QA D1162 (round 21, user decision): the approval was given to the
+        // plan as it was. An edit of its content sends it back for review; it
+        // used to stay APPROVED under the colleague's approval.
+        plan.setStatus(statusAfterEdit(statusBefore, !contentBefore.equals(clinicalContent(plan)), plan.getStatus()));
         applyFollowUps(plan, requestDTO.getFollowUps());
         TreatmentPlan saved = treatmentPlanRepository.save(plan);
         return treatmentPlanMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D1162: an APPROVED plan whose clinical content an edit changed goes
+     * back to IN_REVIEW, unless the same edit archives or cancels it. An edit
+     * that echoes the approved content unchanged keeps the approval.
+     */
+    static com.example.hms.enums.TreatmentPlanStatus statusAfterEdit(
+            com.example.hms.enums.TreatmentPlanStatus before, boolean contentChanged,
+            com.example.hms.enums.TreatmentPlanStatus after) {
+        if (before == com.example.hms.enums.TreatmentPlanStatus.APPROVED && contentChanged
+                && after == com.example.hms.enums.TreatmentPlanStatus.APPROVED) {
+            return com.example.hms.enums.TreatmentPlanStatus.IN_REVIEW;
+        }
+        return after;
+    }
+
+    /** What a reviewer approved: the patient, the visit and every clinical field of the plan. */
+    private static java.util.List<Object> clinicalContent(TreatmentPlan plan) {
+        return java.util.Arrays.asList(
+            plan.getPatient() != null ? plan.getPatient().getId() : null,
+            plan.getEncounter() != null ? plan.getEncounter().getId() : null,
+            plan.getProblemStatement(),
+            plan.getTherapeuticGoalsJson(),
+            plan.getMedicationPlanJson(),
+            plan.getLifestylePlanJson(),
+            plan.getTimelineSummary(),
+            plan.getFollowUpSummary(),
+            plan.getReferralPlanJson(),
+            plan.getResponsiblePartiesJson(),
+            plan.getTimelineStartDate(),
+            plan.getTimelineReviewDate());
     }
 
     @Override
@@ -126,10 +190,28 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && plan.getHospital() != null
                 && !activeHospitalId.equals(plan.getHospital().getId())) {
-            throw new ResourceNotFoundException("Treatment plan not found with ID: " + id);
+            throw new ResourceNotFoundException("treatmentPlan.notFound", id);
         }
         return treatmentPlanMapper.toResponseDTO(plan);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<TreatmentPlanResponseDTO> listForPortalPatient(UUID patientId, Pageable pageable) {
+        return treatmentPlanRepository.findAllByPatientIdAndStatusIn(patientId, PATIENT_VISIBLE_STATUSES, pageable)
+            .map(treatmentPlanMapper::toResponseDTO);
+    }
+
+    /**
+     * QA D1910 class (round 53): a plan in DRAFT, IN_REVIEW or
+     * REVISIONS_REQUIRED is the author's unfinished work, not yet approved by
+     * the reviewing clinician (QA D1127), and a cancelled plan may never have
+     * been approved; the patient read every one of them. The patient reads an
+     * approved plan only. ARCHIVED is left out too: an archived plan may never
+     * have been approved, and nothing on the row says whether it was.
+     */
+    static final java.util.Set<com.example.hms.enums.TreatmentPlanStatus> PATIENT_VISIBLE_STATUSES =
+        java.util.EnumSet.of(com.example.hms.enums.TreatmentPlanStatus.APPROVED);
 
     @Override
     @Transactional(readOnly = true)
@@ -170,9 +252,19 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         return page.map(treatmentPlanMapper::toResponseDTO);
     }
 
+    /** QA D1428 class: a cancelled or archived plan is closed, its follow-ups with it. */
+    private static void requirePlanOpen(TreatmentPlan plan) {
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(plan.getStatus(),
+            "treatmentPlan.cancelled.locked");
+        if (plan.getStatus() == com.example.hms.enums.TreatmentPlanStatus.ARCHIVED) {
+            throw new com.example.hms.exception.BusinessException("treatmentPlan.archived.locked");
+        }
+    }
+
     @Override
     public TreatmentPlanFollowUpDTO addFollowUp(UUID planId, TreatmentPlanFollowUpRequestDTO requestDTO) {
         TreatmentPlan plan = getPlanOrThrow(planId);
+        requirePlanOpen(plan);
         TreatmentPlanFollowUp followUp = TreatmentPlanFollowUp.builder()
             .treatmentPlan(plan)
             .label(requestDTO.getLabel())
@@ -188,7 +280,8 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     @Override
     public TreatmentPlanFollowUpDTO updateFollowUp(UUID planId, UUID followUpId, TreatmentPlanFollowUpRequestDTO requestDTO) {
         TreatmentPlanFollowUp followUp = treatmentPlanFollowUpRepository.findByIdAndTreatmentPlanId(followUpId, planId)
-            .orElseThrow(() -> new ResourceNotFoundException("Treatment plan follow-up not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("treatmentPlan.followUp.notFound", followUpId));
+        requirePlanOpen(getPlanOrThrow(planId));
         followUp.setLabel(requestDTO.getLabel());
         followUp.setInstructions(requestDTO.getInstructions());
         followUp.setDueOn(requestDTO.getDueOn());
@@ -200,7 +293,20 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     @Override
     public TreatmentPlanReviewDTO addReview(UUID planId, TreatmentPlanReviewRequestDTO requestDTO) {
         TreatmentPlan plan = getPlanOrThrow(planId);
-    Staff reviewer = fetchStaff(requestDTO.getReviewerStaffId(), REVIEWER_LABEL);
+    Staff reviewer = fetchStaff(requestDTO.getReviewerStaffId());
+        // QA D503 class: the reviewer is the signed-in clinician, not a name in the body.
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(reviewer);
+        // QA D955 class: a plan is approved or signed off by someone other than its author.
+        boolean approves = requestDTO.getAction() == com.example.hms.enums.TreatmentPlanReviewAction.APPROVED
+            || requestDTO.getAction() == com.example.hms.enums.TreatmentPlanReviewAction.SIGNED_OFF;
+        if (approves && plan.getAuthor() != null && (java.util.Objects.equals(plan.getAuthor().getId(), reviewer.getId())
+                || com.example.hms.security.CallerIdentity.sameUser(plan.getAuthor(), reviewer))) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("treatmentPlan.review.notAuthor"));
+        }
+        // QA D1066 class (round 20, D1127): a review moves the status now, so a
+        // cancelled plan is refused before anything is written; it is never revived.
+        requirePlanOpen(plan);
         TreatmentPlanReview review = TreatmentPlanReview.builder()
             .treatmentPlan(plan)
             .reviewer(reviewer)
@@ -209,12 +315,52 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
             .build();
         TreatmentPlanReview saved = treatmentPlanReviewRepository.save(review);
         plan.addReview(saved);
+        // QA D1127: the review by another clinician is the one road to APPROVED
+        // (the create and the edit refuse it); a request for changes sends the
+        // plan back to its author.
+        com.example.hms.enums.TreatmentPlanStatus reviewed = statusAfterReview(requestDTO.getAction());
+        // QA D1066 class: nor does it reopen an archived plan.
+        if (reviewed != null && plan.getStatus() != com.example.hms.enums.TreatmentPlanStatus.ARCHIVED) {
+            plan.setStatus(reviewed);
+            treatmentPlanRepository.save(plan);
+        }
         return treatmentPlanMapper.toReviewDTO(saved);
     }
 
+    /**
+     * QA D1127 (round 20): a treatment plan's author could approve it himself
+     * by creating it as APPROVED or by an edit to APPROVED, around the
+     * "approved by another clinician" rule the review enforces (QA D955). The
+     * create and the edit are the author's writes, so neither moves a plan
+     * into APPROVED; a plan that is already APPROVED keeps its status on an
+     * edit that does not touch it.
+     */
+    static void requireNotApprovedByWrite(com.example.hms.enums.TreatmentPlanStatus current,
+                                          com.example.hms.enums.TreatmentPlanStatus requested) {
+        if (requested == com.example.hms.enums.TreatmentPlanStatus.APPROVED
+                && current != com.example.hms.enums.TreatmentPlanStatus.APPROVED) {
+            throw new com.example.hms.exception.FieldBusinessException("status", "treatmentPlan.approve.byReviewOnly");
+        }
+    }
+
+    /** The plan status a review moves to, or null when the review leaves it as it is. */
+    static com.example.hms.enums.TreatmentPlanStatus statusAfterReview(
+            com.example.hms.enums.TreatmentPlanReviewAction action) {
+        if (action == null) {
+            return null;
+        }
+        return switch (action) {
+            case APPROVED, SIGNED_OFF -> com.example.hms.enums.TreatmentPlanStatus.APPROVED;
+            case CHANGES_REQUESTED, SENT_BACK -> com.example.hms.enums.TreatmentPlanStatus.REVISIONS_REQUIRED;
+        };
+    }
+
     private TreatmentPlan getPlanOrThrow(UUID id) {
-        return treatmentPlanRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Treatment plan not found"));
+        TreatmentPlan plan = treatmentPlanRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("treatmentPlan.notFound", id));
+        // QA r5 tenancy sweep: every write (update, follow-ups, reviews) loads here.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(plan.getHospital(), "treatmentPlan.notFound", id);
+        return plan;
     }
 
     private Patient fetchPatient(UUID id) {
@@ -223,8 +369,11 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     }
 
     private Hospital fetchHospital(UUID id) {
-        return hospitalRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+        Hospital hospital = hospitalRepository.findClinicalById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
+        // QA r5 tenancy sweep: a plan is written at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", id);
+        return hospital;
     }
 
     private Encounter resolveEncounter(UUID encounterId) {
@@ -232,12 +381,12 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
             return null;
         }
         return encounterRepository.findById(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException("Encounter not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", encounterId));
     }
 
     private UserRoleHospitalAssignment fetchAssignment(UUID assignmentId) {
         return assignmentRepository.findById(assignmentId)
-            .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", assignmentId));
     }
 
     /** Resolve assignment: use explicit ID if provided, otherwise derive from author staff. */
@@ -248,20 +397,20 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         return author.getAssignment();
     }
 
-    private Staff fetchStaff(UUID staffId, String label) {
+    private Staff fetchStaff(UUID staffId) {
         return staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(label + " staff not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
     }
 
     private Staff fetchOptionalStaff(UUID staffId) {
         if (staffId == null) {
             return null;
         }
-        return fetchStaff(staffId, STAFF_LABEL);
+        return fetchStaff(staffId);
     }
 
     private Staff optionalStaff(UUID staffId) {
-        return staffId == null ? null : fetchStaff(staffId, STAFF_LABEL);
+        return staffId == null ? null : fetchStaff(staffId);
     }
 
     private void applyFollowUps(TreatmentPlan plan, List<TreatmentPlanFollowUpRequestDTO> followUps) {
@@ -295,7 +444,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
             .collect(Collectors.toMap(Staff::getId, Function.identity()));
         ids.forEach(id -> {
             if (!map.containsKey(id)) {
-                throw new ResourceNotFoundException("Staff not found");
+                throw new ResourceNotFoundException("staff.notFound", id);
             }
         });
         return map;
@@ -308,7 +457,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
                                          Staff signOff) {
         UUID hospitalId = hospital.getId();
         if (assignment.getHospital() == null || !hospitalId.equals(assignment.getHospital().getId())) {
-            throw new IllegalStateException("Assignment hospital mismatch");
+            throw new com.example.hms.exception.FieldBusinessException("assignmentId", "treatmentPlan.assignmentOtherHospital");
         }
         ensureStaffInHospital(author, hospitalId, AUTHOR_LABEL);
         if (supervising != null) {
@@ -330,10 +479,10 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
             return;
         }
         if (encounter.getHospital() == null || !hospital.getId().equals(encounter.getHospital().getId())) {
-            throw new IllegalStateException("Encounter hospital mismatch");
+            throw new com.example.hms.exception.FieldBusinessException("encounterId", "treatmentPlan.encounterOtherHospital");
         }
         if (encounter.getPatient() == null || !patient.getId().equals(encounter.getPatient().getId())) {
-            throw new IllegalStateException("Encounter must reference the same patient");
+            throw new com.example.hms.exception.FieldBusinessException("encounterId", "treatmentPlan.encounterOtherPatient");
         }
     }
 }

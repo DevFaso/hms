@@ -4,6 +4,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.controller.support.RecordsWithheldHeaders;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.payload.dto.EncounterRequestDTO;
@@ -90,6 +91,8 @@ public class EncounterController {
 
     private final EncounterService encounterService;
     private final ControllerAuthUtils authUtils;
+    private final RecordsWithheldHeaders recordsWithheld;
+    private final com.example.hms.service.MedicalCertificateService medicalCertificateService;
 
     // ----------------------------------------------------------
     // Create (Receptionist can check-in → default ARRIVED)
@@ -100,7 +103,9 @@ public class EncounterController {
         summary = "Create a new encounter",
         description = "Creates a new patient encounter. " +
             "Receptionists use this as the walk-in check-in endpoint: the hospitalId is always " +
-            "the active hospital of the request context (cannot be overridden) and the initial status defaults to ARRIVED. " +
+            "the active hospital of the request context (cannot be overridden). The initial status is the one requested " +
+            "(ARRIVED or IN_PROGRESS; the reception walk-in sends ARRIVED); with none, an EMERGENCY visit dated today " +
+            "starts ARRIVED and any other visit IN_PROGRESS. " +
             "For receptionist walk-ins, omit appointmentId; supply patientId and chiefComplaint. " +
             "Doctors, nurses, and midwives may also create encounters; their hospitalId defaults " +
             "to the active hospital of the request context but can be overridden in the request body."
@@ -126,8 +131,10 @@ public class EncounterController {
             }
         }
 
-        // Default status for front-desk check-in
-        if (dto.getStatus() == null) {
+        // Default status for front-desk check-in. QA D761: only there; a
+        // clinician's encounter keeps its IN_PROGRESS default, and a status
+        // the client sends is now honoured by the service (it was ignored).
+        if (dto.getStatus() == null && isReceptionist) {
             dto.setStatus(EncounterStatus.ARRIVED);
         }
         // Optional: set encounter time if your DTO supports it
@@ -176,7 +183,8 @@ public class EncounterController {
         Authentication auth
     ) {
         if (from != null && to != null && from.isAfter(to)) {
-            return ResponseEntity.badRequest().build();
+            // QA round 29 sweep: a refusal names its field (it was an empty 400).
+            throw new com.example.hms.exception.FieldBusinessException("to", "query.dateRange.reversed");
         }
 
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
@@ -200,7 +208,8 @@ public class EncounterController {
 
         Page<EncounterResponseDTO> page =
             encounterService.list(patientId, staffId, resolvedHospitalId, from, to, status, pageable, locale);
-        return ResponseEntity.ok(page);
+        // QA D504: a patient's visit history narrowed by the opt-out says so.
+        return ResponseEntity.ok().headers(recordsWithheld.forRead(auth, patientId, resolvedHospitalId)).body(page);
     }
 
     // ----------------------------------------------------------
@@ -256,8 +265,10 @@ public class EncounterController {
     // ----------------------------------------------------------
     // MVP 2 — Triage Submission
     // ----------------------------------------------------------
+    // QA D933: the midwife triages her own ANC patients (BP, weight), as the
+    // tracker already offers her; vitals elsewhere admit ROLE_MIDWIFE too.
     @PostMapping(value = "/{encounterId}/triage", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR')")
     @Operation(
         summary = "Submit triage data for an encounter (MVP 2)",
         description = "Atomically records vitals, chief complaint, ESI acuity, room assignment, "
@@ -278,13 +289,37 @@ public class EncounterController {
     }
 
     // ----------------------------------------------------------
+    // QA D961 — Medical certificate / sick-leave note from a visit
+    // ----------------------------------------------------------
+    @PostMapping(value = "/{encounterId}/medical-certificate", consumes = MediaType.APPLICATION_JSON_VALUE)
+    // Product decision 2026-10-28: any licensed physician (RoleValidator.
+    // LICENSED_PHYSICIAN_ROLE_CODES); the service also requires the role at
+    // the visit's hospital and that the caller treated the visit.
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_ANESTHESIOLOGIST','ROLE_RADIOLOGIST')")
+    @Operation(
+        summary = "Issue a medical certificate or sick-leave note for a visit",
+        description = "Generates a dated, signed PDF in FR/EN/ES from the visit, files it in the "
+            + "patient's documents (staff chart and patient portal) and returns the document."
+    )
+    public ResponseEntity<com.example.hms.payload.dto.portal.PatientDocumentResponseDTO> issueMedicalCertificate(
+        @PathVariable UUID encounterId,
+        @Valid @RequestBody com.example.hms.payload.dto.clinical.MedicalCertificateRequestDTO request
+    ) {
+        // The scope is the one resolver's (the service checks the visit's
+        // hospital against the acting hospital); the signer is the caller.
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+            .body(medicalCertificateService.issue(encounterId, request));
+    }
+
+    // ----------------------------------------------------------
     // Start Encounter — Doctor picks up a WAITING_FOR_PHYSICIAN patient
     // ----------------------------------------------------------
     @PostMapping("/{encounterId}/start")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_MIDWIFE')")
     @Operation(
-        summary = "Start an encounter (doctor picks up patient)",
-        description = "Transitions a WAITING_FOR_PHYSICIAN encounter to IN_PROGRESS."
+        summary = "Start an encounter (the assigned clinician picks up the patient)",
+        description = "Transitions a WAITING_FOR_PHYSICIAN encounter to IN_PROGRESS. A doctor may "
+            + "start an unassigned visit; a midwife starts only the visits booked with her (QA D1015)."
     )
     public ResponseEntity<EncounterResponseDTO> startEncounter(
         @PathVariable UUID encounterId,
@@ -293,15 +328,19 @@ public class EncounterController {
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
-        EncounterResponseDTO response = encounterService.startEncounter(encounterId, auth.getName(), isSuperAdmin, hospitalId);
+        // QA D1015: a midwife who is not also a doctor leads only her own visits.
+        boolean midwifeOnly = !isSuperAdmin && !authUtils.hasAuthority(auth, "ROLE_DOCTOR");
+        EncounterResponseDTO response = encounterService.startEncounter(
+            encounterId, auth.getName(), isSuperAdmin, hospitalId, midwifeOnly);
         return ResponseEntity.ok(response);
     }
 
     // ----------------------------------------------------------
     // Complete Triage — Nurse advances TRIAGE → WAITING_FOR_PHYSICIAN
     // ----------------------------------------------------------
+    // QA D1431 (RCPT-CLIN): ending a triage is a clinical act; the desk neither reads nor records one.
     @PostMapping("/{encounterId}/complete-triage")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_DOCTOR','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR')")
     @Operation(
         summary = "Complete triage (advance to waiting for physician)",
         description = "Transitions an ARRIVED or TRIAGE encounter to WAITING_FOR_PHYSICIAN."
@@ -343,11 +382,12 @@ public class EncounterController {
     // ----------------------------------------------------------
     // Ready for Discharge — Advance AWAITING_RESULTS → READY_FOR_DISCHARGE
     // ----------------------------------------------------------
+    // QA D1431 sibling (RCPT-CLIN): so is declaring a patient ready to leave.
     @PostMapping("/{encounterId}/ready-for-discharge")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(
         summary = "Mark encounter ready for discharge",
-        description = "Transitions AWAITING_RESULTS or IN_PROGRESS → READY_FOR_DISCHARGE."
+        description = "Transitions AWAITING_RESULTS → READY_FOR_DISCHARGE; from IN_PROGRESS for a doctor, nurse or midwife only."
     )
     public ResponseEntity<EncounterResponseDTO> markReadyForDischarge(
         @PathVariable UUID encounterId,
@@ -392,11 +432,15 @@ public class EncounterController {
     // ----------------------------------------------------------
     // MVP 6 — Check-Out & After-Visit Summary
     // ----------------------------------------------------------
+    // RCPT-CLIN: the check-out writes the discharge diagnoses and the instructions, which the
+    // desk can no longer read; a receptionist closes only a visit nobody saw (/close-unseen).
     @PostMapping(value = "/{encounterId}/checkout", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(
         summary = "Check out a patient and generate After-Visit Summary (MVP 6)",
-        description = "Atomically transitions encounter → COMPLETED, linked appointment → COMPLETED, "
+        description = "Only once the clinician has completed the examination (AWAITING_RESULTS or "
+            + "READY_FOR_DISCHARGE, QA D788); a visit nobody saw is closed with /close-unseen. "
+            + "Atomically transitions encounter → COMPLETED, linked appointment → COMPLETED, "
             + "records checkout timestamp, discharge diagnoses, follow-up instructions, "
             + "and returns a comprehensive After-Visit Summary."
     )
@@ -407,11 +451,42 @@ public class EncounterController {
         com.example.hms.security.ActingContext ctx
     ) {
         String username = auth.getName();
-        boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
+        boolean isSuperAdmin = isVisitCloserSuperAdmin(auth);
         UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         AfterVisitSummaryDTO avs =
             encounterService.checkOut(encounterId, request, username, isSuperAdmin, hospitalId);
         return ResponseEntity.ok(avs);
+    }
+
+    // ----------------------------------------------------------
+    // QA D788 — close a visit no clinician has seen (never a consultation)
+    // ----------------------------------------------------------
+    @PostMapping(value = "/{encounterId}/close-unseen", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
+    @Operation(
+        summary = "Close a visit no clinician has seen (left without being seen, or cancelled)",
+        description = "Only from SCHEDULED, ARRIVED, TRIAGE or WAITING_FOR_PHYSICIAN. The outcome sets the "
+            + "encounter's status: LEFT_WITHOUT_BEING_SEEN for a patient who left before being seen, CANCELLED "
+            + "for a cancelled visit; the outcome and the reason are kept on the encounter. Its appointment is "
+            + "cancelled, and no After-Visit Summary is produced: it is never counted as a consultation. A seen "
+            + "visit is checked out instead."
+    )
+    public ResponseEntity<EncounterResponseDTO> closeUnseen(
+        @PathVariable UUID encounterId,
+        @Valid @RequestBody com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO request,
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
+    ) {
+        String username = auth.getName();
+        boolean isSuperAdmin = isVisitCloserSuperAdmin(auth);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
+        return ResponseEntity.ok(
+            encounterService.closeUnseen(encounterId, request, username, isSuperAdmin, hospitalId));
+    }
+
+    /** The check-out and close-unseen read the super-admin flag the same way (one read, QA D788). */
+    private boolean isVisitCloserSuperAdmin(Authentication auth) {
+        return authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
     }
 
     // ----------------------------------------------------------
@@ -456,6 +531,7 @@ public class EncounterController {
                            "Original note remains unchanged; addendum is clearly marked.")
     public ResponseEntity<EncounterNoteAddendumResponseDTO> addEncounterNoteAddendum(
         @PathVariable UUID encounterId,
+        @RequestParam(value = "noteId", required = false) UUID noteId,
         @Valid @RequestBody EncounterNoteAddendumRequestDTO request,
         Locale locale,
         Authentication auth,
@@ -463,8 +539,10 @@ public class EncounterController {
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
+        // QA D831: on a stay each progress note is its own entry; noteId names
+        // the one the addendum corrects (none = the current entry).
         EncounterNoteAddendumResponseDTO response =
-            encounterService.addEncounterNoteAddendum(encounterId, request, locale, isSuperAdmin, hospitalId);
+            encounterService.addEncounterNoteAddendum(encounterId, noteId, request, locale, isSuperAdmin, hospitalId);
         return ResponseEntity
             .created(URI.create("/encounters/" + encounterId + "/notes/addendums"))
             .body(response);
@@ -484,9 +562,11 @@ public class EncounterController {
                    + "A signature cannot be asserted in the note body.")
     public ResponseEntity<EncounterNoteResponseDTO> signEncounterNote(
         @PathVariable UUID encounterId,
+        @RequestParam(value = "noteId", required = false) UUID noteId,
         Locale locale
     ) {
-        return ResponseEntity.ok(encounterService.signEncounterNote(encounterId, locale));
+        // QA D831: a stay holds one entry per progress note; noteId names one.
+        return ResponseEntity.ok(encounterService.signEncounterNote(encounterId, noteId, locale));
     }
 
     /**
@@ -503,9 +583,10 @@ public class EncounterController {
                    + "profile at the note's hospital.")
     public ResponseEntity<EncounterNoteResponseDTO> cosignEncounterNote(
         @PathVariable UUID encounterId,
+        @RequestParam(value = "noteId", required = false) UUID noteId,
         Locale locale
     ) {
-        return ResponseEntity.ok(encounterService.cosignEncounterNote(encounterId, locale));
+        return ResponseEntity.ok(encounterService.cosignEncounterNote(encounterId, noteId, locale));
     }
 
     @GetMapping(value = "/{encounterId}/notes/history", consumes = MediaType.ALL_VALUE)

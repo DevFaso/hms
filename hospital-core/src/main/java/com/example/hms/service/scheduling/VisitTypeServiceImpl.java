@@ -1,6 +1,7 @@
 package com.example.hms.service.scheduling;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
@@ -45,7 +46,7 @@ public class VisitTypeServiceImpl implements VisitTypeService {
         UUID hospitalId = requireHospital();
         rejectDuplicateCode(hospitalId, request.getCode(), null);
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         VisitType entity = VisitType.builder()
@@ -105,10 +106,10 @@ public class VisitTypeServiceImpl implements VisitTypeService {
         visitTypeRepository.findByHospital_IdAndCodeIgnoreCase(hospitalId, code.trim())
             .filter(existing -> excludeId == null || !existing.getId().equals(excludeId))
             .ifPresent(existing -> {
-                throw new BusinessException(existing.isActive()
-                    ? "A visit type with code '" + code.trim() + "' already exists."
-                    : "A visit type with code '" + code.trim()
-                        + "' exists but was retired; reactivate it instead of re-creating it.");
+                // QA D854: a bundle key about the code field, in the admin's language.
+                throw new FieldBusinessException("code", existing.isActive()
+                    ? "visitType.code.duplicate"
+                    : "visitType.code.retired", code.trim());
             });
     }
 
@@ -134,17 +135,17 @@ public class VisitTypeServiceImpl implements VisitTypeService {
         if (hospitalId == null) {
             // Same rule as the slot inventory: the catalog is inherently
             // per-hospital; a super-admin must scope to one to curate it.
-            throw new BusinessException("An active hospital is required to manage visit types.");
+            throw new BusinessException("visitType.hospitalRequired");
         }
         return hospitalId;
     }
 
     private VisitType loadScoped(UUID id) {
         VisitType entity = visitTypeRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Visit type not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException("visitType.notFound", id));
         UUID hospitalId = requireHospital();
         if (!hospitalId.equals(entity.getHospital().getId())) {
-            throw new ResourceNotFoundException("Visit type not found with ID: " + id);
+            throw new ResourceNotFoundException("visitType.notFound", id);
         }
         return entity;
     }

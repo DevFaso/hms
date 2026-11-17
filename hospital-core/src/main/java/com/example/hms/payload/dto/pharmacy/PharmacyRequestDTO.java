@@ -38,6 +38,7 @@ public class PharmacyRequestDTO {
     private String facilityCode;
 
     @Size(max = 30)
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     @Size(max = 255)

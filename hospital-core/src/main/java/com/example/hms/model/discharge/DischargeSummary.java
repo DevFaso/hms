@@ -143,6 +143,16 @@ public class DischargeSummary extends BaseEntity {
     @Column(name = "patient_education_provided", length = 2000)
     private String patientEducationProvided;
 
+    /** QA D224: the after-visit summary's prescription summary, kept past checkout (V202). */
+    @Size(max = 3000)
+    @Column(name = "prescription_summary", length = 3000)
+    private String prescriptionSummary;
+
+    /** QA D224: the after-visit summary's referral summary, kept past checkout (V202). */
+    @Size(max = 3000)
+    @Column(name = "referral_summary", length = 3000)
+    private String referralSummary;
+
     // Medication reconciliation
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(

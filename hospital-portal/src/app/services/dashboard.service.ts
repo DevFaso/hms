@@ -198,6 +198,8 @@ export interface PatientFlowItem {
   urgency: string;
   state: string;
   flowSource: 'ENCOUNTER' | 'ADMISSION';
+  /** QA D994: the visit's type, absent on an admission card and on an older server. */
+  encounterType?: string | null;
 }
 
 export interface ClinicalInboxItem {
@@ -218,6 +220,8 @@ export interface DoctorResultQueueItem {
   patientId: string;
   testName: string;
   resultValue: string;
+  /** QA D1095: the value's unit (the test definition's when none was typed). */
+  resultUnit?: string | null;
   /** NORMAL | ABNORMAL | CRITICAL — the three-value family, nothing else. */
   abnormalFlag: string;
   /**
@@ -230,6 +234,8 @@ export interface DoctorResultQueueItem {
   abnormalDirection?: 'LOW' | 'HIGH';
   resultedAt: string;
   orderingContext?: string;
+  /** QA D1016: the result corrects a released value the clinician may already have acted on. */
+  corrected?: boolean;
 }
 
 export interface PatientSnapshot {
@@ -239,11 +245,23 @@ export interface PatientSnapshot {
   sex: string;
   mrn: string;
   allergies: string[];
+  /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
+  allergiesWithheld?: boolean;
+  /** QA D504 — the opt-out held back other hospitals' rows from every clinical list on this read. */
+  recordsWithheld?: boolean;
   codeStatus?: string;
   activeDiagnoses: string[];
   activeMedications: { name: string; dose: string; frequency: string }[];
   recentVitals: { type: string; value: string; timestamp: string }[];
-  latestLabs: { test: string; value: string; flag: string; date: string }[];
+  // `test` is null when the result's lab order has no test definition.
+  /** QA D1016: `corrected` when the result corrects a released value. */
+  latestLabs: {
+    test: string | null;
+    value: string;
+    flag: string;
+    date: string;
+    corrected?: boolean;
+  }[];
   // `description` is null when the lab order has no test definition.
   pendingOrders: { type: string; description: string | null; orderedAt: string }[];
   // `type` is null when the encounter has no type, and `author` when the
@@ -286,7 +304,7 @@ export interface HospitalAdminSummary {
 }
 
 export interface HospitalAdminAppointmentMetrics {
-  todayTotal: number;
+  today: number;
   completed: number;
   noShows: number;
   cancelled: number;
@@ -568,12 +586,15 @@ export interface TrendPoint {
 }
 
 export interface DepartmentUtilization {
+  departmentId: string;
+  hospitalName: string;
   departmentName: string;
   appointmentCount: number;
   encounterCount: number;
 }
 
 export interface HospitalMetric {
+  hospitalId: string;
   hospitalName: string;
   patientCount: number;
   appointmentCount: number;

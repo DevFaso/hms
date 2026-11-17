@@ -19,6 +19,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -39,7 +40,9 @@ import java.util.UUID;
  * <p>A 2xx is SENT and resets the endpoint's strike count; anything else
  * retries until the ceiling and then lands terminally in ERROR, striking
  * the endpoint; at the threshold the endpoint auto-disables — a dead
- * receiver must not accumulate an unbounded queue.
+ * receiver must not accumulate an unbounded queue. A delivery the transport
+ * refused before sending (the host resolves to a non-public address: DNS
+ * rebinding) is terminal at once.
  */
 @Service
 @Slf4j
@@ -106,10 +109,13 @@ public class WebhookDeliveryDispatchService {
             return false;
         }
 
-        ClaimedWork work = transactionTemplate.execute(status -> loadWork(deliveryId));
-        if (work == null) {
+        // Optional, not null: the callback's "nothing to send" must survive
+        // TransactionTemplate.execute, whose result Sonar reads as non-null.
+        Optional<ClaimedWork> loaded = transactionTemplate.execute(status -> loadWork(deliveryId));
+        if (loaded.isEmpty()) {
             return false;
         }
+        ClaimedWork work = loaded.get();
 
         long timestamp = Instant.now(clock).getEpochSecond();
         String signature = WebhookSigner.sign(work.secret(), timestamp, work.payload());
@@ -128,20 +134,20 @@ public class WebhookDeliveryDispatchService {
      * (decrypting the secret via the entity read) and parks the row as a
      * terminal ERROR if the endpoint was switched off since enqueue.
      */
-    private ClaimedWork loadWork(UUID deliveryId) {
+    private Optional<ClaimedWork> loadWork(UUID deliveryId) {
         WebhookDelivery delivery = deliveryRepository.findById(deliveryId).orElse(null);
         if (delivery == null) {
-            return null;
+            return Optional.empty();
         }
         WebhookEndpoint endpoint = delivery.getEndpoint();
         if (endpoint.getStatus() != WebhookEndpointStatus.ACTIVE) {
             delivery.setStatus(WebhookDeliveryStatus.ERROR);
             delivery.setLastError("Endpoint is " + endpoint.getStatus() + ".");
             deliveryRepository.save(delivery);
-            return null;
+            return Optional.empty();
         }
-        return new ClaimedWork(endpoint.getUrl(), endpoint.getSecret(), delivery.getPayload(),
-            delivery.getEventType().name(), delivery.getId().toString());
+        return Optional.of(new ClaimedWork(endpoint.getUrl(), endpoint.getSecret(), delivery.getPayload(),
+            delivery.getEventType().name(), delivery.getId().toString()));
     }
 
     /** Runs inside a short transaction: the attempt was already counted by the claim. */
@@ -165,7 +171,10 @@ public class WebhookDeliveryDispatchService {
             ? result.error()
             : "Receiver returned HTTP " + result.httpStatus();
         delivery.setLastError(truncate(error));
-        if (delivery.getAttempts() >= properties.getMaxAttempts()) {
+        // Refused before sending (the host now resolves inside, or the URL is
+        // no longer public HTTPS): nothing was sent, and a retry would be
+        // refused too, so it is terminal at once and strikes the endpoint.
+        if (result.refused() || delivery.getAttempts() >= properties.getMaxAttempts()) {
             delivery.setStatus(WebhookDeliveryStatus.ERROR);
             strike(endpoint);
         }

@@ -21,6 +21,11 @@
         {{ 'STORYBOARD.EMPTY' | translate }}
       </p>
     } @else if (summary(); as s) {
+      @if (s.recordsWithheld) {
+        <p class="storyboard__empty" role="note" data-testid="storyboard-records-withheld">
+          {{ 'CHART.RECORDS_WITHHELD' | translate }}
+        </p>
+      }
       <div class="storyboard__sections">
         <!-- Allergies -->
         <div
@@ -50,7 +55,7 @@
                     <span class="storyboard__chip-label">{{ a.allergenDisplay }}</span>
                     @if (a.severity) {
                       <span class="storyboard__chip-severity">{{
-                        'STORYBOARD.SEVERITY.' + a.severity | translate
+                        a.severity | keyLabel: 'STORYBOARD.SEVERITY.'
                       }}</span>
                     }
                   </div>
@@ -65,6 +70,11 @@
             </ul>
           } @else {
             <p class="storyboard__empty">{{ 'STORYBOARD.NO_KNOWN_ALLERGIES' | translate }}</p>
+          }
+          @if (s.allergiesWithheld) {
+            <p class="storyboard__empty" role="note">
+              {{ 'CHART.ALLERGIES_WITHHELD' | translate }}
+            </p>
           }
         </div>
         <!-- Problems -->
@@ -157,6 +167,18 @@
                 </div>
               }
             </dl>
+          } @else if (s.lastEncounter; as last) {
+            <p class="storyboard__empty" data-testid="storyboard-last-visit">
+              {{ 'STORYBOARD.NO_ACTIVE_ENCOUNTER' | translate }}
+              {{
+                'STORYBOARD.LAST_VISIT'
+                  | translate
+                    : {
+                        date: (last.encounterDate | serverTime | date: 'shortDate' | dash),
+                        department: (last.departmentName | dash),
+                      }
+              }}
+            </p>
           } @else {
             <p class="storyboard__empty">{{ 'STORYBOARD.NO_ACTIVE_ENCOUNTER' | translate }}</p>
           }
@@ -172,7 +194,7 @@
           @if (hasCodeStatus() && s.codeStatus; as cs) {
             @if (cs.status) {
               <span class="storyboard__pill" [ngClass]="codeStatusPillClass(cs.status)">
-                {{ cs.status | enumLabel: 'status' }}
+                {{ cs.status | enumLabel: 'codeStatus' }}
               </span>
             }
             @if (activeDirectives().length > 0) {
@@ -180,7 +202,7 @@
                 @for (d of activeDirectives(); track d.id) {
                   <li class="storyboard__chip storyboard__chip--neutral">
                     <span class="storyboard__chip-label">
-                      {{ d.directiveType }}
+                      {{ d.directiveType | enumLabel: 'advanceDirectiveType' }}
                     </span>
                     @if (d.status === 'PENDING') {
                       <span class="storyboard__chip-detail">{{
@@ -188,7 +210,9 @@
                       }}</span>
                     }
                     @if (d.effectiveDate) {
-                      <span class="storyboard__chip-detail">{{ d.effectiveDate }}</span>
+                      <span class="storyboard__chip-detail">{{
+                        d.effectiveDate | serverTime | date: 'mediumDate'
+                      }}</span>
                     }
                   </li>
                 }

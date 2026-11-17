@@ -63,8 +63,7 @@ public class IntegrationHealthActionService {
      */
     public IntegrationProbeResultDTO testConnection(String integrationId, UUID organizationId) {
         IntegrationConnectivityProbe probe = Optional.ofNullable(probesById.get(integrationId))
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "No connectivity probe registered for integration: " + integrationId));
+            .orElseThrow(() -> new ResourceNotFoundException("integration.probe.notRegistered", integrationId));
 
         long start = System.nanoTime();
         Probe outcome;
@@ -97,7 +96,7 @@ public class IntegrationHealthActionService {
 
     /**
      * Trigger an asynchronous re-sync for {@code integrationId}. Throws
-     * {@link BusinessRuleException} (HTTP 422 via the ControllerAdvice
+     * {@link BusinessRuleException} (HTTP 400 via the ControllerAdvice
      * mapping) when the integration is registered but has no Resyncable
      * impl — the operator can then decide whether to wait for the spec
      * or skip the action. {@link ResourceNotFoundException} (404) when
@@ -122,6 +121,11 @@ public class IntegrationHealthActionService {
         }
     }
 
+    /** QA D851: whether "Test connection" has a probe to run for this integration. */
+    public boolean supportsProbe(String integrationId) {
+        return probesById.containsKey(integrationId);
+    }
+
     /** Pre-flight check used by the controller before dispatching @Async. */
     public boolean supportsResync(String integrationId) {
         return resyncablesById.containsKey(integrationId);
@@ -137,7 +141,7 @@ public class IntegrationHealthActionService {
      */
     public List<IntegrationHistoryBucketDTO> getHistory(String integrationId, int windowHours) {
         if (windowHours <= 0 || windowHours > 168) {
-            throw new BusinessRuleException("windowHours must be between 1 and 168 (got " + windowHours + ")");
+            throw BusinessRuleException.ofKey("integration.history.window.invalid", windowHours);
         }
         LocalDateTime since = LocalDateTime.now().minus(windowHours, ChronoUnit.HOURS);
         List<IntegrationHealthEvent> rows = eventRepository.findRecentForIntegration(integrationId, since);

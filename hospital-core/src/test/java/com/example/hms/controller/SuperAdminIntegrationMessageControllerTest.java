@@ -2,6 +2,8 @@ package com.example.hms.controller;
 
 import com.example.hms.enums.integration.IntegrationMessageDirection;
 import com.example.hms.enums.integration.IntegrationMessageStatus;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.exception.GlobalExceptionHandler;
 import com.example.hms.payload.dto.superadmin.IntegrationMessageEventDTO;
 import com.example.hms.payload.dto.superadmin.IntegrationMessagePageDTO;
 import com.example.hms.service.SuperAdminIntegrationMessageService;
@@ -13,6 +15,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,6 +28,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 class SuperAdminIntegrationMessageControllerTest {
@@ -137,5 +143,21 @@ class SuperAdminIntegrationMessageControllerTest {
 
         assertThat(response.getBody()).isSameAs(dto);
         verify(service).replay(id);
+    }
+
+    @Test
+    void replayOfAPurgedRowAnswers409NotA500() throws Exception {
+        // The service refuses a row whose content retention erased (V177)
+        // with a ConflictException; through the real advice that is a 409
+        // the operator can read, not an "unexpected error".
+        UUID id = UUID.randomUUID();
+        when(service.replay(id)).thenThrow(new ConflictException(
+            "The content of this integration message was purged after the 180-day retention period"));
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(controller)
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
+
+        mvc.perform(post("/super-admin/integration-messages/{id}/replay", id))
+            .andExpect(status().isConflict());
     }
 }

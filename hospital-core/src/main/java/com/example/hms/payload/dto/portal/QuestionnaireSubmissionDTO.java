@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.portal;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,6 +24,6 @@ public class QuestionnaireSubmissionDTO {
      * JSON object mapping question IDs to answers, e.g.
      * {"q1": true, "q2": 7, "q3": "No known allergies"}
      */
-    @NotNull
+    @NotBlank
     private String responses;
 }

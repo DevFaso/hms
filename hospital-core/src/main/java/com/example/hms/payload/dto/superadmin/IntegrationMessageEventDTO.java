@@ -12,6 +12,10 @@ import java.util.UUID;
  * payload is included so an operator can confirm what actually crossed
  * the wire; the recorder truncates to 64 KB so this DTO can never be
  * a memory hazard.
+ *
+ * <p>{@code payloadPurgedAt} is set when the retention sweep erased the
+ * content (V177); {@code payload} is then null and the row cannot be
+ * replayed. A null payload with no purge stamp is a row that never had one.
  */
 @Builder
 public record IntegrationMessageEventDTO(
@@ -22,6 +26,7 @@ public record IntegrationMessageEventDTO(
     String messageType,
     String correlationId,
     String payload,
+    LocalDateTime payloadPurgedAt,
     IntegrationMessageStatus status,
     String errorMessage,
     Integer attemptCount,

@@ -41,6 +41,8 @@ export interface LinkInsuranceRequest {
   primary?: boolean;
   payerCode: string;
   policyNumber: string;
+  /** QA D925: the insurer's name; a new policy is named after its payer when absent. */
+  providerName?: string;
 }
 
 export interface PatientInsuranceUpdateRequest {

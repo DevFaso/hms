@@ -22,10 +22,10 @@ import com.example.hms.repository.ChatMessageRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.CustomUserDetails;
+import org.springframework.security.access.AccessDeniedException;
+import com.example.hms.security.PrincipalUserIds;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -44,15 +44,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import com.example.hms.repository.PatientRepository;
-import com.example.hms.service.i18n.NotificationLocales;
-import com.example.hms.service.i18n.PatientLocaleResolver;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChatMessageServiceImpl implements ChatMessageService {
+    private static final String ROLE_PREFIX = "ROLE_";
     private static final String USER_NOT_FOUND_KEY = "user.notfound";
+    private static final String CONVERSATION_NOT_FOUND_KEY = "chat.conversation.notFound";
     private static final String TIMESTAMP_FIELD = "timestamp";
 
     /**
@@ -72,6 +71,21 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         ROLE_DOCTOR, "ROLE_PHYSICIAN", "ROLE_SURGEON", ROLE_NURSE, ROLE_MIDWIFE
     );
 
+    /**
+     * Whether a patient may message this user: the same role test the send
+     * path applies, shared so a picker (the portal care team, QA D115) never
+     * offers a recipient whose send would be refused.
+     */
+    public static boolean holdsClinicalCareRole(User user) {
+        return user != null && user.getUserRoles() != null && user.getUserRoles().stream()
+            .filter(ur -> ur.getRole() != null && ur.getRole().getName() != null)
+            .map(ur -> {
+                String roleName = ur.getRole().getName();
+                return roleName.startsWith(ROLE_PREFIX) ? roleName : ROLE_PREFIX + roleName;
+            })
+            .anyMatch(CLINICAL_CARE_ROLES::contains);
+    }
+
 
     private static final int MAX_ATTACHMENTS_PER_MESSAGE = 4;
     private static final int MIN_AUDIO_DURATION_SECONDS = 1;
@@ -81,28 +95,32 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final ChatMessageMapper chatMessageMapper;
-    private final MessageSource messageSource;
     private final UserRoleHospitalAssignmentRepository userRoleHospitalAssignmentRepository;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
     private final NotificationService notificationService;
     private final ChatAttachmentRepository chatAttachmentRepository;
     private final FileUploadService fileUploadService;
-    private final PatientRepository patientRepository;
-    private final PatientLocaleResolver patientLocaleResolver;
+    private final com.example.hms.repository.PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
 
     @Override
     @Transactional
     public ChatMessageResponseDTO sendMessage(ChatMessageRequestDTO dto, Locale locale) {
         boolean hasContent = dto.getContent() != null && !dto.getContent().isBlank();
         boolean hasAttachments = dto.getAttachments() != null && !dto.getAttachments().isEmpty();
-        if (!hasContent && !hasAttachments) {
-            throw new IllegalArgumentException("A message must carry either content or at least one attachment");
-        }
+        boolean namesRecipient = dto.getRecipientId() != null
+            || (dto.getRecipientEmail() != null && !dto.getRecipientEmail().isBlank());
+        // QA D877: refusals are bundle keys, read in the sender's language.
+        // QA D1299 (round 28): an empty body named the message only, with no
+        // field, and the recipient on the next press; both are named at once.
+        com.example.hms.exception.RequiredFields.check()
+            .require(namesRecipient, "recipientId", "chat.recipient.required")
+            .require(hasContent || hasAttachments, "content", "chat.message.empty")
+            .orThrow();
 
         UUID currentUserId = getCurrentUserId(); // Sender ID
 
         User sender = userRepository.findById(currentUserId)
-            .orElseThrow(() -> new ResourceNotFoundException("Sender not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("chat.sender.notFound", currentUserId));
 
         // Resolve recipient by UUID or email
         User recipient;
@@ -110,23 +128,23 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             recipient = userRepository.findById(dto.getRecipientId())
                 .orElseGet(() -> staffRepository.findById(dto.getRecipientId())
                     .map(Staff::getUser)
-                    .orElseThrow(() -> new ResourceNotFoundException("Recipient not found")));
+                    .orElseThrow(() -> new ResourceNotFoundException("chat.recipient.notFound", dto.getRecipientId())));
         } else if (dto.getRecipientEmail() != null && !dto.getRecipientEmail().isBlank()) {
             recipient = userRepository.findByEmail(dto.getRecipientEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("Recipient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("chat.recipient.notFound", dto.getRecipientEmail()));
         } else {
-            throw new IllegalArgumentException("Either recipientId or recipientEmail is required");
+            // QA D1282: the refusal names the field, so the form can mark it.
+            throw new com.example.hms.exception.FieldBusinessException("recipientId", "chat.recipient.required");
         }
 
         if (sender.getId().equals(recipient.getId())) {
-            throw new SecurityException("Cannot send a chat message to yourself.");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.recipient.self"));
         }
 
         // Enforce role-based messaging hierarchy. Sender roles are
-        // read from SecurityContextHolder inside the validator; the
-        // sender User itself is not needed (Sonar S1172 / Pattern 18
-        // in docs/SonarQubeInstructions.md).
-        validateMessageHierarchy(recipient);
+        // read from SecurityContextHolder inside the validator; the sender
+        // is passed for the patient/clinician shared-hospital check.
+        validateMessageHierarchy(sender, recipient);
 
         // Check if sender is SUPER_ADMIN (skip hospital/assignment validation)
         boolean isSuperAdmin = isSuperAdminContext();
@@ -155,7 +173,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             } else {
                 // No hospital context provided — just ensure the sender is a legitimate active user
                 if (!userRoleHospitalAssignmentRepository.existsByUserIdAndActiveTrue(sender.getId())) {
-                    throw new SecurityException("Sender has no active role assignment in the system.");
+                    throw new AccessDeniedException("Sender has no active role assignment in the system.");
                 }
                 // assignment stays null — cross-hospital / general chat
             }
@@ -174,17 +192,12 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         List<ChatAttachment> persistedAttachments = persistAttachments(saved, dto.getAttachments());
 
-        // The bell entry is read by the RECIPIENT, so it is rendered in their
-        // language, not the sender's request locale: a patient's stated
-        // language when they have one, otherwise the staff locale.
-        Locale recipientLocale = patientRepository.findByUserId(recipient.getId())
-            .map(patient -> patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK))
-            .orElse(NotificationLocales.STAFF);
-        notificationService.createNotification(
-            messageSource.getMessage("chat.newMessage.notification",
-                new Object[]{(sender.getFirstName() + " " + sender.getLastName()).trim()}, recipientLocale),
-            recipient.getUsername()
-        );
+        // The bell entry is read by the RECIPIENT, so it is rendered in the
+        // language they read it in, never the sender's (QA D665). QA D983: typed
+        // CHAT_MESSAGE, so the bell labels it and opens the conversation.
+        notificationService.createNotification("chat.newMessage.notification",
+            new Object[]{(sender.getFirstName() + " " + sender.getLastName()).trim()},
+            recipient.getUsername(), "CHAT_MESSAGE");
 
         return chatMessageMapper.toChatMessageResponseDTO(saved, persistedAttachments);
     }
@@ -206,27 +219,26 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         }
         if (incoming.size() > MAX_ATTACHMENTS_PER_MESSAGE) {
             throw new IllegalArgumentException(
-                "A chat message may carry at most " + MAX_ATTACHMENTS_PER_MESSAGE + " attachments");
+                com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.tooMany", MAX_ATTACHMENTS_PER_MESSAGE));
         }
 
         List<ChatAttachment> persisted = new ArrayList<>(incoming.size());
         for (ChatAttachmentDTO dto : incoming) {
             if (dto == null) {
-                throw new IllegalArgumentException("Attachment payload is required");
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.required"));
             }
             if (dto.getKind() == null) {
-                throw new IllegalArgumentException("Attachment kind is required");
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.kindRequired"));
             }
             FileUploadService.StoredFileDescriptor descriptor;
             try {
                 descriptor = fileUploadService.resolveChatAttachment(dto.getStorageKey(), dto.getKind());
             } catch (java.io.IOException ex) {
-                throw new IllegalArgumentException("Failed to resolve chat attachment", ex);
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.unresolvable"), ex);
             }
             Integer duration = clampAudioDuration(dto.getKind(), dto.getDurationSeconds());
             if (chatAttachmentRepository.existsByStorageKey(descriptor.storageKey())) {
-                throw new IllegalArgumentException(
-                    "Attachment storageKey already linked to another message");
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.alreadyLinked"));
             }
             ChatAttachment attachment = ChatAttachment.builder()
                 .message(message)
@@ -242,8 +254,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             try {
                 persisted.add(chatAttachmentRepository.saveAndFlush(attachment));
             } catch (org.springframework.dao.DataIntegrityViolationException ex) {
-                throw new IllegalArgumentException(
-                    "Attachment storageKey already linked to another message", ex);
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.alreadyLinked"), ex);
             }
         }
         return persisted;
@@ -254,12 +265,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             return null;
         }
         if (durationSeconds == null) {
-            throw new IllegalArgumentException("Voice memo duration is required");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.voiceMemo.durationRequired"));
         }
         if (durationSeconds < MIN_AUDIO_DURATION_SECONDS || durationSeconds > MAX_AUDIO_DURATION_SECONDS) {
-            throw new IllegalArgumentException(
-                "Voice memo duration must be between " + MIN_AUDIO_DURATION_SECONDS
-                    + " and " + MAX_AUDIO_DURATION_SECONDS + " seconds");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.voiceMemo.durationRange",
+                MIN_AUDIO_DURATION_SECONDS, MAX_AUDIO_DURATION_SECONDS));
         }
         return durationSeconds;
     }
@@ -303,7 +313,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
      * caller's effective authorities. Sonar S1172 / Pattern 18 in
      * docs/SonarQubeInstructions.md.</p>
      */
-    private void validateMessageHierarchy(User recipient) {
+    private void validateMessageHierarchy(User sender, User recipient) {
         // SUPER_ADMIN bypasses all hierarchy checks
         if (isSuperAdminContext()) {
             return;
@@ -320,7 +330,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .filter(ur -> ur.getRole() != null)
             .map(ur -> {
                 String roleName = ur.getRole().getName();
-                return roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
+                return roleName.startsWith(ROLE_PREFIX) ? roleName : ROLE_PREFIX + roleName;
             })
             .collect(java.util.stream.Collectors.toSet());
 
@@ -336,8 +346,35 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             ? (senderIsStaff || recipientIsClinical)
             : senderIsClinical;
 
+        // QA D197: a refusal is a 403, not a raw SecurityException (which answered 500).
         if (!allowed) {
-            throw new SecurityException("Your role does not permit messaging this user.");
+            // QA D433: a refusal the sender can read, in their language.
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("chat.send.roleNotPermitted"));
+        }
+
+        // QA D170: the patient boundary is also a relationship. A patient reaches a
+        // clinician only at a hospital where the patient holds an active registration
+        // and the clinician an active assignment; a clinician reaches a patient only
+        // on the same terms.
+        if (!senderIsStaff && recipientIsStaff) {
+            requireSharedHospital(sender.getId(), recipient.getId());
+        } else if (senderIsStaff && !recipientIsStaff) {
+            requireSharedHospital(recipient.getId(), sender.getId());
+        }
+    }
+
+    private void requireSharedHospital(UUID patientUserId, UUID staffUserId) {
+        boolean shared = patientHospitalRegistrationRepository.findByPatientUserIdAndActiveTrue(patientUserId)
+            .stream()
+            .map(r -> r.getHospital() == null ? null : r.getHospital().getId())
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .anyMatch(hospitalId -> userRoleHospitalAssignmentRepository
+                .existsByUserIdAndHospitalIdAndActiveTrue(staffUserId, hospitalId));
+        if (!shared) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("chat.send.careTeamOnly"));
         }
     }
 
@@ -345,14 +382,14 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         boolean exists = userRoleHospitalAssignmentRepository
             .existsByUserIdAndHospitalIdAndActiveTrue(senderId, hospitalId);
         if (!exists) {
-            throw new SecurityException("Sender is not assigned to the specified hospital.");
+            throw new AccessDeniedException("Sender is not assigned to the specified hospital.");
         }
     }
 
     private UserRoleHospitalAssignment getSenderAssignment(UUID userId, UUID hospitalId, String roleCode) {
         return userRoleHospitalAssignmentRepository
             .findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, hospitalId, roleCode)
-            .orElseThrow(() -> new ResourceNotFoundException("No active assignment with role " + roleCode + " found for user in hospital"));
+            .orElseThrow(() -> new ResourceNotFoundException("chat.roleAssignment.notFound", roleCode));
     }
 
     protected UUID getCurrentUserId() {
@@ -361,23 +398,20 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             throw new SecurityException("Unauthorized: No authenticated user found");
         }
 
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof CustomUserDetails userDetails) {
-            return userDetails.getUserId();
-        }
-
-        throw new SecurityException("Invalid principal type in security context");
+        // The one principal -> local user id rule: a password-path principal's
+        // id, or the account the Keycloak filter verified for this request.
+        return PrincipalUserIds.of(authentication)
+            .orElseThrow(() -> new SecurityException("Invalid principal type in security context"));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getChatHistory(UUID user1Id, UUID user2Id, int page, int size, Locale locale) {
+        requireCallerIsOneOf(user1Id, user2Id);
         User user1 = userRepository.findById(user1Id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{user1Id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, user1Id));
         User user2 = userRepository.findById(user2Id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{user2Id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, user2Id));
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages = chatMessageRepository.findChatBetweenUsers(user1, user2, pageable);
@@ -391,12 +425,12 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Override
     @Transactional
     public void markMessagesAsRead(UUID senderId, UUID recipientId, Locale locale) {
+        // Only the recipient reads a message; nobody else may flip its read flag.
+        requireCallerIsOneOf(recipientId, recipientId);
         User sender = userRepository.findById(senderId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{senderId}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, senderId));
         User recipient = userRepository.findById(recipientId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{recipientId}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, recipientId));
 
         List<ChatMessage> messages = chatMessageRepository.findUnreadMessages(sender, recipient);
         messages.forEach(m -> m.setRead(true));
@@ -406,6 +440,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Override
     @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> searchMessages(UUID user1Id, UUID user2Id, String keyword, int page, int size) {
+        requireCallerIsOneOf(user1Id, user2Id);
         Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages = chatMessageRepository
             .searchMessagesBetweenUsers(user1Id, user2Id, keyword, pageable);
@@ -419,6 +454,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Override
     @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getAllMessagesForUser(UUID userId, Boolean unread, int page, int size) {
+        requireCallerIsOneOf(userId, userId);
         Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages;
         if (Boolean.TRUE.equals(unread)) {
@@ -436,7 +472,10 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Override
     @Transactional(readOnly = true)
     public List<ChatConversationSummaryDTO> getUserConversations(UUID userId, int page, int size) {
+        requireCallerIsOneOf(userId, userId);
         int offset = page * size;
+        User currentUser = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
 
         List<Object[]> rawResults = chatMessageRepository.findLatestConversations(userId, size, offset);
 
@@ -455,14 +494,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             User otherUser = userRepository.findById(otherUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.notFound", otherUserId));
 
-            User currentUser = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
-
             int unreadCount = chatMessageRepository.countBySenderAndRecipientAndReadFalse(otherUser, currentUser);
 
             return ChatConversationSummaryDTO.builder()
                 .conversationUserId(otherUser.getId())
-                .conversationUserName(otherUser.getFirstName() + " " + otherUser.getLastName())
+                .conversationUserName(displayName(otherUser))
                 .lastMessageContent(content)
                 .lastMessageTimestamp(timestamp)
                 .lastMessageRead(read)
@@ -472,27 +508,67 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getMessagesBySenderEmail(String email) {
+        requireCallerIdentity(email, User::getEmail);
         List<ChatMessage> messages = chatMessageRepository.findBySenderEmail(email);
         return mapWithAttachments(messages);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getMessagesByRecipientEmail(String email) {
+        requireCallerIdentity(email, User::getEmail);
         List<ChatMessage> messages = chatMessageRepository.findByRecipientEmail(email);
         return mapWithAttachments(messages);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getMessagesBySenderUsername(String username) {
+        requireCallerIdentity(username, User::getUsername);
         List<ChatMessage> messages = chatMessageRepository.findBySenderUsername(username);
         return mapWithAttachments(messages);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getMessagesByRecipientUsername(String username) {
+        requireCallerIdentity(username, User::getUsername);
         List<ChatMessage> messages = chatMessageRepository.findByRecipientUsername(username);
         return mapWithAttachments(messages);
+    }
+
+    /**
+     * Chat content is readable by its two participants only (QA D301). The
+     * read endpoints take user ids in the path; a caller who is not one of
+     * them gets the same 404 as an unknown user, so ids reveal nothing about
+     * who talks to whom. There is no role bypass: a super admin is not a
+     * party to a private conversation either.
+     */
+    private void requireCallerIsOneOf(UUID first, UUID second) {
+        UUID caller = getCurrentUserId();
+        if (!caller.equals(first) && !caller.equals(second)) {
+            // QA D433: still a 404 (no oracle), but it names the conversation,
+            // not "user not found" with an id the caller never asked about.
+            throw new ResourceNotFoundException(CONVERSATION_NOT_FOUND_KEY);
+        }
+    }
+
+    /** The by-email / by-username lookups answer for the caller's own address only (QA D301/D343). */
+    private void requireCallerIdentity(String requested, java.util.function.Function<User, String> attribute) {
+        UUID caller = getCurrentUserId();
+        String own = userRepository.findById(caller).map(attribute).orElse(null);
+        if (requested == null || own == null || !own.equalsIgnoreCase(requested.trim())) {
+            throw new ResourceNotFoundException(CONVERSATION_NOT_FOUND_KEY);
+        }
+    }
+
+    private static String displayName(User user) {
+        String name = java.util.stream.Stream.of(user.getFirstName(), user.getLastName())
+            .filter(part -> part != null && !part.isBlank())
+            .collect(java.util.stream.Collectors.joining(" "));
+        return name.isBlank() ? user.getUsername() : name;
     }
 
     private List<ChatMessageResponseDTO> mapWithAttachments(List<ChatMessage> messages) {
@@ -506,7 +582,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Transactional(readOnly = true)
     public ChatAttachmentPayload downloadAttachment(UUID attachmentId, String requesterUsername) {
         ChatAttachment attachment = chatAttachmentRepository.findById(attachmentId)
-            .orElseThrow(() -> new ResourceNotFoundException("Attachment not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("chat.attachment.notFound", attachmentId));
         ChatMessage message = attachment.getMessage();
         // Participant gate: only the carrying message's two parties may
         // read the bytes. Everyone else — including other staff at the
@@ -518,7 +594,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
                 || (message.getRecipient() != null
                     && requesterUsername.equals(message.getRecipient().getUsername())));
         if (!participant) {
-            throw new ResourceNotFoundException("Attachment not found");
+            throw new ResourceNotFoundException("chat.attachment.notFound", attachmentId);
         }
         java.nio.file.Path path =
             fileUploadService.resolveStoredFile(attachment.getStorageKey(), "chat-attachments");

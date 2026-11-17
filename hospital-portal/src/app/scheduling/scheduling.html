@@ -3,21 +3,21 @@
     <div class="page-title-group">
       <h1>
         <span class="material-symbols-outlined">calendar_month</span>
-        @if (isSchedulingAdmin) {
+        @if (isSchedulingAdmin && canManageSchedules()) {
           {{ 'SCHEDULING.TITLE' | translate }}
         } @else {
           {{ 'SCHEDULING.PROVIDER_AVAILABILITY' | translate }}
         }
       </h1>
       <p class="subtitle">
-        @if (isSchedulingAdmin) {
+        @if (isSchedulingAdmin && canManageSchedules()) {
           {{ 'SCHEDULING.SUBTITLE' | translate }}
         } @else {
           {{ 'SCHEDULING.SUBTITLE_PROVIDER' | translate }}
         }
       </p>
     </div>
-    @if (isSchedulingAdmin) {
+    @if (isSchedulingAdmin && canManageSchedules()) {
       <div class="page-actions">
         <button class="btn-primary" (click)="openShiftModal()">
           <span class="material-symbols-outlined">add</span>
@@ -32,7 +32,7 @@
   </div>
 
   <!-- Summary Cards -->
-  @if (isSchedulingAdmin) {
+  @if (isSchedulingAdmin && canManageSchedules()) {
     <div class="summary-row">
       <div class="summary-card shifts-card">
         <span class="material-symbols-outlined">event_note</span>
@@ -76,7 +76,7 @@
   }
 
   <!-- View Toggle -->
-  @if (isSchedulingAdmin) {
+  @if (isSchedulingAdmin && canManageSchedules()) {
     <div class="tabs">
       <button class="tab" [class.active]="activeView() === 'shifts'" (click)="setView('shifts')">
         <span class="material-symbols-outlined">event_note</span>
@@ -98,7 +98,7 @@
       <div class="schedule-header">
         <h3>
           <span class="material-symbols-outlined">view_week</span>
-          @if (isSchedulingAdmin) {
+          @if (isSchedulingAdmin && canManageSchedules()) {
             {{ 'SCHEDULING.WEEKLY_SCHEDULE' | translate }}
           } @else {
             {{ 'SCHEDULING.WEEKLY_STAFF_AVAILABILITY' | translate }}
@@ -136,7 +136,7 @@
           <span>{{ 'SCHEDULING.LOADING_SHIFTS' | translate }}</span>
         </div>
       } @else {
-        @if (shifts().length === 0 && isSchedulingAdmin) {
+        @if (shifts().length === 0 && isSchedulingAdmin && canManageSchedules()) {
           <div class="week-empty-hint">
             <span class="material-symbols-outlined" aria-hidden="true">event_available</span>
             <div>
@@ -174,15 +174,17 @@
                       <span class="shift-staff-name">{{ shift.staffName }}</span>
                       <span class="shift-time">{{ formatShiftRange(shift) }}</span>
                       @if (shift.crossMidnight && shift.shiftEndDate === day.date) {
-                        <span class="cross-midnight-badge">{{
+                        {{ ' '
+                        }}<span class="cross-midnight-badge">{{
                           'SCHEDULING.SHIFT_CONTD' | translate
                         }}</span>
                       }
-                      <span class="shift-meta">
+                      {{ ' '
+                      }}<span class="shift-meta">
                         <span class="material-symbols-outlined">{{
                           shiftTypeIcon(shift.shiftType)
                         }}</span>
-                        {{ formatShiftType(shift.shiftType) }}
+                        {{ shift.shiftType | enumLabel: 'shiftType' }}
                       </span>
                     </div>
                     <span class="shift-status-badge" [attr.data-status]="shift.status">
@@ -192,7 +194,7 @@
                 } @empty {
                   <div class="no-shift">{{ 'SCHEDULING.NO_SHIFTS_PLANNED' | translate }}</div>
                 }
-                @if (isSchedulingAdmin) {
+                @if (isSchedulingAdmin && canManageSchedules()) {
                   <button
                     class="add-day-shift"
                     (click)="openShiftModal(day.date)"
@@ -273,8 +275,9 @@
             <div class="leave-details">
               <div class="leave-title-row">
                 <span class="leave-staff-name">{{ leave.staffName }}</span>
-                <span class="leave-type-label">{{ formatLeaveType(leave.leaveType) }}</span>
-                <span class="leave-status-badge" [attr.data-status]="leave.status">{{
+                <span class="leave-type-label">{{ leave.leaveType | enumLabel: 'leaveType' }}</span>
+                {{ ' '
+                }}<span class="leave-status-badge" [attr.data-status]="leave.status">{{
                   leave.status | enumLabel: 'leaveStatus'
                 }}</span>
               </div>
@@ -310,7 +313,8 @@
               }
               @if (leave.reviewedByName) {
                 <span class="reviewed-by"
-                  >{{ 'SCHEDULING.REVIEWED' | translate }}: {{ leave.reviewedByName }}</span
+                  >{{ 'SCHEDULING.REVIEWED' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ leave.reviewedByName }}</span
                 >
               }
               @if (leave.managerNote) {
@@ -325,8 +329,14 @@
 </div>
 
 <!-- ═══ BULK SCHEDULE MODAL ═══ -->
-@if (bulkModalOpen() && isSchedulingAdmin) {
-  <dialog class="modal-panel" open aria-labelledby="bulk-modal-title">
+@if (bulkModalOpen() && isSchedulingAdmin && canManageSchedules()) {
+  <dialog
+    appModalDialog
+    (escaped)="closeBulkModal()"
+    class="modal-panel"
+    open
+    aria-labelledby="bulk-modal-title"
+  >
     <!-- Header -->
     <div class="modal-header">
       <div class="modal-title-group">
@@ -373,9 +383,10 @@
               <span class="chip-avatar">{{ staffInitials(selectedStaff()!) }}</span>
               <div class="chip-info">
                 <span class="chip-name">{{ selectedStaff()!.name }}</span>
-                <span class="chip-sub">{{
-                  selectedStaff()!.jobTitle ??
-                    selectedStaff()!.roleName ??
+                {{ ' '
+                }}<span class="chip-sub">{{
+                  (selectedStaff()!.jobTitle | enumLabel: 'jobTitle') ||
+                    (selectedStaff()!.roleName | roleLabel) ||
                     ('SCHEDULING.STAFF_FALLBACK' | translate)
                 }}</span>
               </div>
@@ -393,13 +404,18 @@
             <div class="staff-search-wrap">
               <span class="material-symbols-outlined search-icon">search</span>
               <input
+                required
+                data-escape-discards
                 id="bulk-staffSearch"
+                [attr.data-submit-blank]="selectedStaff() ? 'false' : 'true'"
                 class="form-input staff-search-input"
                 type="text"
                 [placeholder]="'SCHEDULING.SEARCH_STAFF_PLACEHOLDER' | translate"
                 [value]="staffQuery()"
                 (input)="onStaffQueryChange($any($event.target).value)"
                 (blur)="closeSuggestions()"
+                [appListEscape]="staffSuggestionsOpen()"
+                (listEscape)="staffSuggestionsOpen.set(false)"
                 autocomplete="off"
               />
               @if (staffLoading()) {
@@ -411,30 +427,26 @@
                   [attr.aria-label]="'SCHEDULING.ARIA.STAFF_SUGGESTIONS' | translate"
                 >
                   @for (s of staffSuggestions(); track s.id) {
-                    <li>
-                      <button
-                        type="button"
-                        class="suggestion-item"
-                        (click)="selectStaff(s)"
-                        (mousedown)="$event.preventDefault()"
-                      >
-                        <span class="sug-avatar">{{ staffInitials(s) }}</span>
-                        <div class="sug-info">
-                          <span class="sug-name">{{ s.name }}</span>
-                          <span class="sug-meta">
-                            {{
-                              s.jobTitle ?? s.roleName ?? ('SCHEDULING.STAFF_FALLBACK' | translate)
-                            }}
-                            @if (s.departmentName) {
-                              &nbsp;·&nbsp; {{ s.departmentName }}
-                            }
-                          </span>
-                          <span class="sug-hospital">
-                            <span class="material-symbols-outlined">local_hospital</span>
-                            {{ s.hospitalName ?? ('SCHEDULING.UNKNOWN_HOSPITAL' | translate) }}
-                          </span>
-                        </div>
-                      </button>
+                    <li class="suggestion-item" (mousedown)="selectStaff(s)">
+                      <span class="sug-avatar">{{ staffInitials(s) }}</span>
+                      <div class="sug-info">
+                        <span class="sug-name">{{ s.name }}</span>
+                        {{ ' '
+                        }}<span class="sug-meta">
+                          {{
+                            (s.jobTitle | enumLabel: 'jobTitle') ||
+                              (s.roleName | roleLabel) ||
+                              ('SCHEDULING.STAFF_FALLBACK' | translate)
+                          }}
+                          @if (s.departmentName) {
+                            &nbsp;·&nbsp; {{ s.departmentName }}
+                          }
+                        </span>
+                        <span class="sug-hospital">
+                          <span class="material-symbols-outlined">local_hospital</span>
+                          {{ s.hospitalName ?? ('SCHEDULING.UNKNOWN_HOSPITAL' | translate) }}
+                        </span>
+                      </div>
                     </li>
                   }
                 </ul>
@@ -458,16 +470,13 @@
                 <span class="locked-name">{{
                   selectedStaff()!.hospitalName ?? ('ENCOUNTERS.HOSPITAL' | translate)
                 }}</span>
-                <span class="locked-sub"
-                  >{{ 'SCHEDULING.AUTO_MATCHED' | translate }} ·
-                  <span class="uuid-pill"
-                    >{{ selectedStaff()!.hospitalId | slice: 0 : 8 }}…</span
-                  ></span
-                >
+                <!-- QA D992 class: the hospital's name is above; its id is never shown. -->
+                {{ ' ' }}<span class="locked-sub">{{ 'SCHEDULING.AUTO_MATCHED' | translate }}</span>
               </div>
             </div>
           } @else {
             <input
+              required
               id="bulk-hospitalId"
               class="form-input"
               type="text"
@@ -486,7 +495,13 @@
             {{ (singleShiftMode() ? 'SCHEDULING.DAY' : 'SCHEDULING.START_DATE') | translate }}
             <span class="required">*</span>
           </label>
-          <input id="bulk-startDate" class="form-input" type="date" [(ngModel)]="bulk.startDate" />
+          <input
+            required
+            id="bulk-startDate"
+            class="form-input"
+            type="date"
+            [(ngModel)]="bulk.startDate"
+          />
         </div>
         @if (!singleShiftMode()) {
           <div class="form-group">
@@ -494,7 +509,14 @@
               <span class="material-symbols-outlined">event</span>
               {{ 'SCHEDULING.END_DATE' | translate }} <span class="required">*</span>
             </label>
-            <input id="bulk-endDate" class="form-input" type="date" [(ngModel)]="bulk.endDate" />
+            <input
+              required
+              id="bulk-endDate"
+              class="form-input"
+              type="date"
+              [attr.min]="bulk.startDate || null"
+              [(ngModel)]="bulk.endDate"
+            />
           </div>
         }
       </div>
@@ -506,22 +528,39 @@
             <span class="material-symbols-outlined">schedule</span>
             {{ 'SCHEDULING.START_TIME' | translate }} <span class="required">*</span>
           </label>
-          <input id="bulk-startTime" class="form-input" type="time" [(ngModel)]="bulk.startTime" />
+          <input
+            required
+            id="bulk-startTime"
+            class="form-input"
+            type="time"
+            [(ngModel)]="bulk.startTime"
+          />
         </div>
         <div class="form-group">
           <label class="form-label" for="bulk-endTime">
             <span class="material-symbols-outlined">schedule</span>
-            {{ 'SCHEDULING.END_TIME' | translate }} <span class="required">*</span>
-            <span class="form-hint">({{ 'SCHEDULING.CAN_BE_NEXT_DAY' | translate }})</span>
+            {{ 'SCHEDULING.END_TIME' | translate }} <span class="required">*</span> {{ ' '
+            }}<span class="form-hint">({{ 'SCHEDULING.CAN_BE_NEXT_DAY' | translate }})</span>
           </label>
-          <input id="bulk-endTime" class="form-input" type="time" [(ngModel)]="bulk.endTime" />
+          <input
+            required
+            id="bulk-endTime"
+            class="form-input"
+            type="time"
+            [(ngModel)]="bulk.endTime"
+          />
         </div>
         <div class="form-group">
           <label class="form-label" for="bulk-shiftType">
             <span class="material-symbols-outlined">brightness_4</span>
             {{ 'SCHEDULING.SHIFT_TYPE' | translate }} <span class="required">*</span>
           </label>
-          <select id="bulk-shiftType" class="form-input form-select" [(ngModel)]="bulk.shiftType">
+          <select
+            required
+            id="bulk-shiftType"
+            class="form-input form-select"
+            [(ngModel)]="bulk.shiftType"
+          >
             <option value="MORNING">{{ 'SCHEDULING.MORNING' | translate }}</option>
             <option value="AFTERNOON">{{ 'SCHEDULING.AFTERNOON' | translate }}</option>
             <option value="EVENING">{{ 'SCHEDULING.EVENING' | translate }}</option>
@@ -645,21 +684,46 @@
       <button class="btn-ghost" (click)="closeBulkModal()" [disabled]="bulkSubmitting()">
         {{ 'COMMON.CANCEL' | translate }}
       </button>
-      <button
-        class="btn-primary"
-        (click)="singleShiftMode() ? submitShift() : submitBulk()"
-        [disabled]="bulkSubmitting()"
-      >
-        @if (bulkSubmitting()) {
-          <span class="spinner-sm"></span>
-          {{ 'SCHEDULING.SCHEDULING' | translate }}
-        } @else {
-          <span class="material-symbols-outlined">bolt</span>
-          {{
-            (singleShiftMode() ? 'SCHEDULING.ADD_SHIFT' : 'SCHEDULING.GENERATE_SHIFTS') | translate
-          }}
-        }
-      </button>
+      @if (singleShiftMode()) {
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          data-testid="single-shift-submit"
+          (click)="submitShift()"
+          [disabled]="bulkSubmitting()"
+        >
+          @if (bulkSubmitting()) {
+            <span class="spinner-sm"></span>
+            {{ 'SCHEDULING.SCHEDULING' | translate }}
+          } @else {
+            <span class="material-symbols-outlined">bolt</span>
+            {{
+              (singleShiftMode() ? 'SCHEDULING.ADD_SHIFT' : 'SCHEDULING.GENERATE_SHIFTS')
+                | translate
+            }}
+          }
+        </button>
+      } @else {
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitBulk()"
+          [disabled]="bulkSubmitting()"
+        >
+          @if (bulkSubmitting()) {
+            <span class="spinner-sm"></span>
+            {{ 'SCHEDULING.SCHEDULING' | translate }}
+          } @else {
+            <span class="material-symbols-outlined">bolt</span>
+            {{
+              (singleShiftMode() ? 'SCHEDULING.ADD_SHIFT' : 'SCHEDULING.GENERATE_SHIFTS')
+                | translate
+            }}
+          }
+        </button>
+      }
     </div>
   </dialog>
 }

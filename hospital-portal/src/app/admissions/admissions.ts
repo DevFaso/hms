@@ -1,19 +1,30 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
+import { HttpErrorResponse } from '@angular/common/http';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
   AdmissionService,
   AdmissionResponse,
   AdmissionRequest,
+  AdmissionUpdateRequest,
   AdmissionType,
   AdmissionStatus,
   AcuityLevel,
 } from '../services/admission.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, StaffResponse, isPhysician } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
@@ -22,10 +33,34 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { OrderSetPickerComponent } from './order-set-picker/order-set-picker.component';
 import { AuthService } from '../auth/auth.service';
-import { AppliedOrderSetSummary } from '../services/order-set.service';
+import { ActionKey, actionRoles } from '../core/action-permissions';
+import {
+  appliedOrderCount,
+  appliedResultKey,
+  AppliedOrderSetSummary,
+} from '../services/order-set.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import {
+  fromServerDateTime,
+  serverInstant,
+  toLocalInputValue,
+  toServerDateTime,
+} from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
+import { DischargeService, DischargeSummary } from '../services/discharge.service';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+
+/** The bed-release reason's field (QA D1100), marked when it is refused. */
+const UNASSIGN_REASON_ID = 'admission-unassign-bed-reason';
+/** QA D1381: the stay's cancellation reason (server key `reason`). */
+const CANCEL_REASON_ID = 'admission-cancel-reason';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -34,10 +69,27 @@ interface OrderSetPickerCtx {
   orderingStaffId: string;
 }
 
+/** QA D603: the stay statuses that may still be cancelled (mirrors AdmissionServiceImpl). */
+const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
+
+/** QA D1428: a stay still open (AdmissionStatus.OPEN on the server). */
+const OPEN_STATUSES: ReadonlySet<string> = new Set([
+  'PENDING',
+  'ACTIVE',
+  'ON_LEAVE',
+  'AWAITING_DISCHARGE',
+]);
+
 @Component({
   selector: 'app-admissions',
   standalone: true,
   imports: [
+    ListEscapeDirective,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    BackdropCloseDirective,
+    PersonNamePipe,
+    PatientSublinePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -50,6 +102,8 @@ interface OrderSetPickerCtx {
   styleUrl: './admissions.scss',
 })
 export class AdmissionsComponent implements OnInit {
+  /** D622: admission times are UTC wall clock; show them in the user's zone. */
+  protected readonly fromServerDateTime = fromServerDateTime;
   private readonly admissionService = inject(AdmissionService);
   private readonly hospitalService = inject(HospitalService);
   private readonly staffService = inject(StaffService);
@@ -59,20 +113,66 @@ export class AdmissionsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
+  /** The page's document: the bed-release dialog's field is marked in it (QA D1100). */
+  private readonly doc = inject(DOCUMENT);
   private readonly auth = inject(AuthService);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly bedService = inject(BedService);
+  private readonly dischargeService = inject(DischargeService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;
+  /**
+   * QA D427/D527: each admission action mirrors its endpoint (core/action-permissions):
+   * a nurse may update, apply order sets and move beds, but only a doctor admits,
+   * discharges or cancels; she was offered Delete and got a 403.
+   */
+  protected readonly canAdmit = computed(() => this.can('admissionCreate'));
+  /**
+   * Policy 2 (2026-11-09, provisional): a midwife who is not also a doctor may admit a
+   * woman in labour, nothing else. The server enforces it (AdmissionServiceImpl); the
+   * form is narrowed to match: labour and delivery only, and she is the admitting provider.
+   */
+  protected readonly midwifeAdmitsLabourOnly = computed(
+    // rbac-inline-ok: narrows the form's choices; the admit permission itself is admissionCreate
+    () => this.canAdmit() && !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']),
+  );
+  /**
+   * QA D1634: the admitting-provider field's words. A midwife admitting is not
+   * a "Médecin / Médico"; the label and the empty option are neutral then.
+   */
+  protected readonly admittingProviderKeys = computed(() =>
+    this.midwifeAdmitsLabourOnly()
+      ? { label: 'ADMISSIONS.ADMITTING_CLINICIAN', select: 'ADMISSIONS.SELECT_CLINICIAN' }
+      : { label: 'ADMISSIONS.ADMITTING_PROVIDER', select: 'ADMISSIONS.SELECT_PROVIDER' },
+  );
+  protected readonly canEditAdmission = computed(() => this.can('admissionUpdate'));
+  protected readonly canApplyOrderSets = computed(() => this.can('admissionApplyOrderSets'));
+  protected readonly canAssignBed = computed(() => this.can('admissionAssignBed'));
+  protected readonly canUnassignBed = computed(() => this.can('admissionUnassignBed'));
+  protected readonly canDischarge = computed(() => this.can('admissionDischarge'));
+  protected readonly canCancelAdmission = computed(() => this.can('admissionCancel'));
+
+  private can(action: ActionKey): boolean {
+    return this.roleContext.hasAnyActiveRole(actionRoles(action));
+  }
 
   admissions = signal<AdmissionResponse[]>([]);
   filtered = signal<AdmissionResponse[]>([]);
   loading = signal(true);
   searchTerm = '';
   activeTab = signal<'all' | 'admitted' | 'discharged'>('all');
-  readonly statuses: AdmissionStatus[] = [
+  readonly statusFilter = signal<AdmissionStatus | ''>('');
+  readonly typeFilter = signal<AdmissionType | ''>('');
+  readonly acuityFilter = signal<AcuityLevel | ''>('');
+  readonly bedFilter = signal<'' | 'missing' | 'recorded'>('');
+  readonly sortOrder = signal<'newest' | 'oldest' | 'patient'>('newest');
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(10);
+  readonly loadError = signal(false);
+  private listRequest = 0;
+  readonly statusOptions: AdmissionStatus[] = [
     'PENDING',
     'ACTIVE',
     'ON_LEAVE',
@@ -81,9 +181,119 @@ export class AdmissionsComponent implements OnInit {
     'CANCELLED',
     'TRANSFERRED',
     'DECEASED',
+    'CLOSED_IN_ERROR',
   ];
-  statusFilter = signal<AdmissionStatus | 'ALL'>('ALL');
-  missingBedOnly = signal(false);
+  readonly summaryMetrics = computed(() => [
+    {
+      id: 'active',
+      label: 'ADMISSIONS.ADMITTED',
+      icon: 'hotel',
+      tone: 'open',
+      count: this.countByStatus('ACTIVE'),
+    },
+    {
+      id: 'pending',
+      label: 'ADMISSIONS.PENDING',
+      icon: 'schedule',
+      tone: 'progress',
+      count: this.countByStatus('PENDING'),
+    },
+    {
+      id: 'missing-bed',
+      label: 'ADMISSIONS.ACTIVE_WITHOUT_BED',
+      icon: 'bed',
+      tone: 'warning',
+      count: this.admissions().filter((a) => a.status === 'ACTIVE' && !this.hasRecordedBed(a))
+        .length,
+    },
+    {
+      id: 'awaiting-discharge',
+      label: 'ADMISSIONS.DISCHARGE_PREPARATION',
+      icon: 'assignment_turned_in',
+      tone: 'progress',
+      count: this.countByStatus('AWAITING_DISCHARGE'),
+    },
+    {
+      id: 'discharged',
+      label: 'ADMISSIONS.DISCHARGED',
+      icon: 'logout',
+      tone: 'completed',
+      count: this.countByStatus('DISCHARGED'),
+    },
+  ]);
+  readonly selectedMetric = computed(() => {
+    if (this.statusFilter() === 'ACTIVE' && this.bedFilter() === 'missing') return 'missing-bed';
+    if (this.bedFilter()) return '';
+    return (
+      (
+        {
+          ACTIVE: 'active',
+          PENDING: 'pending',
+          AWAITING_DISCHARGE: 'awaiting-discharge',
+          DISCHARGED: 'discharged',
+        } as Partial<Record<AdmissionStatus, string>>
+      )[this.statusFilter() as AdmissionStatus] ?? ''
+    );
+  });
+  readonly totalPages = computed(() =>
+    Math.max(1, Math.ceil(this.filtered().length / this.pageSize())),
+  );
+  readonly currentPage = computed(() => Math.min(this.pageIndex(), this.totalPages() - 1));
+  readonly pagedAdmissions = computed(() =>
+    this.filtered().slice(
+      this.currentPage() * this.pageSize(),
+      (this.currentPage() + 1) * this.pageSize(),
+    ),
+  );
+  readonly resultStart = computed(() =>
+    this.filtered().length ? this.currentPage() * this.pageSize() + 1 : 0,
+  );
+  readonly resultEnd = computed(() =>
+    Math.min((this.currentPage() + 1) * this.pageSize(), this.filtered().length),
+  );
+
+  hasRecordedBed(a: AdmissionResponse): boolean {
+    return !!(a.bedId || a.roomBed?.trim());
+  }
+
+  setStatusFilter(status: AdmissionStatus | ''): void {
+    this.activeTab.set('all');
+    this.statusFilter.set(status);
+    this.applyFilter();
+  }
+
+  selectMetric(id: string): void {
+    if (this.selectedMetric() === id) {
+      this.resetFilters();
+      return;
+    }
+    this.resetFilters();
+    const statuses: Record<string, AdmissionStatus> = {
+      active: 'ACTIVE',
+      pending: 'PENDING',
+      'missing-bed': 'ACTIVE',
+      'awaiting-discharge': 'AWAITING_DISCHARGE',
+      discharged: 'DISCHARGED',
+    };
+    this.statusFilter.set(statuses[id] ?? '');
+    if (id === 'missing-bed') this.bedFilter.set('missing');
+    this.applyFilter();
+  }
+
+  resetFilters(): void {
+    this.searchTerm = '';
+    this.activeTab.set('all');
+    this.statusFilter.set('');
+    this.typeFilter.set('');
+    this.acuityFilter.set('');
+    this.bedFilter.set('');
+    this.sortOrder.set('newest');
+    this.applyFilter();
+  }
+
+  setPage(index: number): void {
+    this.pageIndex.set(Math.max(0, Math.min(index, this.totalPages() - 1)));
+  }
 
   /**
    * When non-null, the order-set picker is rendered as a modal-style
@@ -100,7 +310,38 @@ export class AdmissionsComponent implements OnInit {
 
   hospitals = signal<HospitalResponse[]>([]);
   staffMembers = signal<StaffResponse[]>([]);
+  /**
+   * QA D618 (D176/D527): the server records the caller as the discharging
+   * provider (only a super-admin in global view may name another), so the
+   * discharge form offers the caller alone. It listed every physician and a
+   * pick other than oneself was refused with a 403.
+   */
+  readonly dischargeProviders = computed<Pick<StaffResponse, 'id' | 'name' | 'email'>[]>(() => {
+    if (this.isSuperAdmin() && this.globalView()) {
+      return this.staffMembers();
+    }
+    const profile = this.auth.getUserProfile();
+    const myStaffId = profile?.staffId;
+    if (!myStaffId) {
+      return [];
+    }
+    const mine = this.staffMembers().find((s) => s.id === myStaffId);
+    if (mine) {
+      return [mine];
+    }
+    const name = `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim();
+    return [{ id: myStaffId, name, email: profile?.email ?? '' }];
+  });
   private allStaff: StaffResponse[] = [];
+  /**
+   * QA D918: the physicians offered are those of the stay's hospital. The
+   * list was loaded once for the home hospital, so a super-admin working on
+   * hospital B was offered A's physicians, which the server refuses. A newer
+   * hospital cancels the load of an older one.
+   */
+  private readonly staffHospital$ = new Subject<string>();
+  /** The hospital the staff list was last requested for. */
+  private staffHospitalId: string | null = null;
   departments = signal<DepartmentOption[]>([]);
   departmentsLoading = signal(false);
   departmentsFailed = signal(false);
@@ -135,9 +376,16 @@ export class AdmissionsComponent implements OnInit {
   showDischargeModal = signal(false);
   dischargingAdm = signal<AdmissionResponse | null>(null);
   discharging = signal(false);
+  /**
+   * QA D1596: the discharge summary already written for the stay. It is the
+   * one source of the diagnosis (shown, not typed again), and a finalized one
+   * takes no further instructions; a draft gets the dialog's added to it.
+   */
+  staySummary = signal<DischargeSummary | null>(null);
   dischargeForm = {
     dischargeDisposition: 'HOME' as string,
     dischargeSummary: '',
+    dischargeDiagnosis: '',
     dischargeInstructions: '',
     dischargingProviderId: '',
   };
@@ -166,6 +414,11 @@ export class AdmissionsComponent implements OnInit {
     },
     { value: 'OTHER', labelKey: 'ADMISSIONS.DISPOSITION_OTHER' },
   ];
+
+  /** The types the New admission form offers: a midwife's is labour and delivery alone. */
+  protected readonly formAdmissionTypes = computed<AdmissionType[]>(() =>
+    this.midwifeAdmitsLabourOnly() ? ['LABOR_DELIVERY'] : this.admissionTypes,
+  );
 
   admissionTypes: AdmissionType[] = [
     'EMERGENCY',
@@ -207,20 +460,34 @@ export class AdmissionsComponent implements OnInit {
     // for global view). See docs/super-admin-cross-tenant-design.md.
     this.scopeUrl.applyUrlScopeSync(this.route);
 
+    const tab = this.route.snapshot.queryParamMap.get('tab');
+    if (tab === 'admitted' || tab === 'discharged') this.activeTab.set(tab);
     this.load();
     this.loadAssignedHospitals();
-    // ── TENANT ISOLATION: scope staff list to active hospital ──
-    const hid = this.roleContext.activeHospitalId;
-    this.staffService.list(hid ?? undefined).subscribe((s) => {
-      this.allStaff = s ?? [];
-      this.staffMembers.set(s ?? []);
-    });
+    // ── TENANT ISOLATION: scope staff list to the stay's hospital ──
+    this.staffHospital$
+      .pipe(
+        distinctUntilChanged(),
+        switchMap((hid) =>
+          this.staffService.list(hid).pipe(catchError(() => of([] as StaffResponse[]))),
+        ),
+      )
+      .subscribe((s) => {
+        this.allStaff = s ?? [];
+        // Physicians only: the server refuses a nurse or a midwife as admitting,
+        // attending or discharging provider (QA D84, D176).
+        // A midwife admitting a woman in labour is her own admitting provider.
+        const myStaffId = this.auth.getUserProfile()?.staffId;
+        this.staffMembers.set(
+          this.midwifeAdmitsLabourOnly()
+            ? (s ?? []).filter((m) => !!myStaffId && m.id === myStaffId)
+            : (s ?? []).filter(isPhysician),
+        );
+      });
+    this.loadStaffFor(
+      this.roleContext.effectiveHospitalIdForRequest() ?? this.roleContext.activeHospitalId,
+    );
     this.initPatientSearch();
-
-    const tab = this.route.snapshot.queryParamMap.get('tab');
-    if (tab === 'admitted' || tab === 'discharged') {
-      this.activeTab.set(tab);
-    }
   }
 
   emptyForm(): AdmissionRequest {
@@ -244,6 +511,8 @@ export class AdmissionsComponent implements OnInit {
         next: (h) => {
           this.hospitals.set([h]);
           this.form.hospitalId = h.id;
+          // The modal may already be open when the hospital arrives (D153).
+          if (this.showModal() && !this.editing()) this.loadDepartmentsFor(h.id);
         },
       });
     }
@@ -263,17 +532,16 @@ export class AdmissionsComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          // ── TENANT ISOLATION: scope patient search to active hospital ──
-          const hid = this.roleContext.activeHospitalId ?? undefined;
-          return this.patientService.list(hid, q);
+          // ── TENANT ISOLATION: scope patient search to the form's hospital ──
+          return this.patientService.list(this.patientSearchHospitalId(), q);
         }),
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -303,6 +571,15 @@ export class AdmissionsComponent implements OnInit {
     this.patientQuery.set('');
   }
 
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the form's hospital, else the request scope, which for
+   * a super-admin is the hospital the scope chip picked, not their home one.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
+  }
+
   patientInitials(p: PatientResponse): string {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
   }
@@ -311,7 +588,19 @@ export class AdmissionsComponent implements OnInit {
   onHospitalChange(hospitalId: string): void {
     this.form.hospitalId = hospitalId;
     this.form.departmentId = undefined;
+    // QA D918: a physician of the previous hospital is refused at this one.
+    this.form.admittingProviderId = '';
     this.loadDepartmentsFor(hospitalId);
+    this.loadStaffFor(hospitalId);
+  }
+
+  /** QA D918: (re)load the physicians of `hospitalId`; a no-op when unchanged. */
+  loadStaffFor(hospitalId: string | null | undefined): void {
+    if (!hospitalId || hospitalId === this.staffHospitalId) return;
+    this.staffHospitalId = hospitalId;
+    // The previous hospital's physicians must not be pickable while this loads.
+    this.staffMembers.set([]);
+    this.staffHospital$.next(hospitalId);
   }
 
   /**
@@ -346,6 +635,10 @@ export class AdmissionsComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
+    if (this.midwifeAdmitsLabourOnly()) {
+      this.form.admissionType = 'LABOR_DELIVERY';
+      this.form.admittingProviderId = this.auth.getUserProfile()?.staffId ?? '';
+    }
     this.editing.set(false);
     this.editingId.set(null);
     this.selectedPatient.set(null);
@@ -356,6 +649,11 @@ export class AdmissionsComponent implements OnInit {
       const h = this.hospitals();
       if (h.length === 1) this.form.hospitalId = h[0].id;
     }
+    // QA D153: a single-hospital user never picks a hospital, so the
+    // (change) that loads the departments never fired and the list stayed
+    // empty. Load them for whatever hospital the form already carries.
+    this.loadDepartmentsFor(this.form.hospitalId);
+    this.loadStaffFor(this.form.hospitalId);
     this.showModal.set(true);
   }
 
@@ -385,10 +683,10 @@ export class AdmissionsComponent implements OnInit {
   onOrderSetApplied(summary: AppliedOrderSetSummary): void {
     // Compute the real created/skipped counts from the backend summary
     // so the toast shows accurate numbers instead of empty placeholders.
-    const count =
-      summary.prescriptionIds.length + summary.labOrderIds.length + summary.imagingOrderIds.length;
+    const count = appliedOrderCount(summary);
+    // QA D1439: the panel's own sentence, singular for one.
     this.toast.success(
-      this.translate.instant('ORDER_SETS.APPLIED_RESULT', {
+      this.translate.instant(appliedResultKey(count), {
         count,
         skipped: summary.skippedItemCount,
       }),
@@ -396,6 +694,9 @@ export class AdmissionsComponent implements OnInit {
   }
 
   openEdit(a: AdmissionResponse): void {
+    // QA D1428: the room of a stay that holds a bed is that bed; it moves by assignment or transfer.
+    this.editingHoldsBed.set(!!a.bedId);
+    this.editingHadDepartment.set(!!a.departmentId);
     this.form = {
       patientId: a.patientId ?? '',
       hospitalId: a.hospitalId ?? '',
@@ -404,7 +705,8 @@ export class AdmissionsComponent implements OnInit {
       roomBed: a.roomBed,
       admissionType: a.admissionType ?? 'ELECTIVE',
       acuityLevel: a.acuityLevel ?? 'MODERATE',
-      admissionDateTime: a.admissionDateTime?.substring(0, 10) ?? '',
+      // QA D622: the API's UTC wall clock, shown in the user's zone (a date alone left the input blank).
+      admissionDateTime: a.admissionDateTime ? toLocalInputValue(a.admissionDateTime) : '',
       chiefComplaint: a.chiefComplaint ?? '',
       admissionNotes: a.admissionNotes,
     };
@@ -413,8 +715,11 @@ export class AdmissionsComponent implements OnInit {
       firstName: a.patientName?.split(' ')[0] ?? '',
       lastName: a.patientName?.split(' ').slice(1).join(' ') ?? '',
       email: '',
+      // QA D912: reopening an admission keeps this hospital's MRN on the chip.
+      mrn: a.patientMrn ?? undefined,
     } as PatientResponse);
     this.loadDepartmentsFor(a.hospitalId ?? '');
+    this.loadStaffFor(a.hospitalId);
     this.editing.set(true);
     this.editingId.set(a.id);
     this.showModal.set(true);
@@ -426,9 +731,16 @@ export class AdmissionsComponent implements OnInit {
 
   submitForm(): void {
     this.saving.set(true);
+    // QA D622: datetime-local is the user's wall clock; the API stores the UTC one.
+    const payload: AdmissionRequest = {
+      ...this.form,
+      admissionDateTime: this.form.admissionDateTime
+        ? toServerDateTime(this.form.admissionDateTime)
+        : this.form.admissionDateTime,
+    };
     const op = this.editing()
-      ? this.admissionService.update(this.editingId()!, this.form)
-      : this.admissionService.create(this.form);
+      ? this.admissionService.update(this.editingId()!, this.updatePayload())
+      : this.admissionService.create(payload);
     op.subscribe({
       next: () => {
         this.toast.success(
@@ -438,14 +750,60 @@ export class AdmissionsComponent implements OnInit {
         this.saving.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ADMISSIONS.SAVE_FAILED'));
+      // The server says why (a nurse as admitting provider, QA D176) in the
+      // caller's language; the generic text is the fallback only.
+      error: (err: HttpErrorResponse) => {
+        this.toast.error(err?.error?.message ?? this.translate.instant('ADMISSIONS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
   }
 
+  /** QA D1428: a closed stay's record is protected: the row offers no edit, as the server refuses it. */
+  isEditable(a: AdmissionResponse): boolean {
+    return OPEN_STATUSES.has(a.status);
+  }
+
+  /** QA D1428: the stay being edited holds a structured bed. */
+  readonly editingHoldsBed = signal(false);
+
+  /**
+   * QA D1672: the update keeps the stay's department when none is sent, so a
+   * stay that has one is moved to another, never back to "any department".
+   */
+  readonly editingHadDepartment = signal(false);
+
+  /**
+   * QA D1672: the edit sent the whole admission form; the update took none of
+   * the complaint, type, time or clinician, answered 200 and kept the old
+   * values behind "Admission updated". It now sends only what the update
+   * takes (the server refuses anything else by name); the patient, hospital,
+   * type, time and admitting clinician are read-only in the dialog.
+   */
+  private updatePayload(): AdmissionUpdateRequest {
+    return {
+      departmentId: this.form.departmentId || undefined,
+      roomBed: this.form.roomBed,
+      acuityLevel: this.form.acuityLevel,
+      admissionNotes: this.form.admissionNotes,
+      chiefComplaint: this.form.chiefComplaint,
+    };
+  }
+
+  /**
+   * QA D603: only a stay still in progress can be cancelled. A discharged,
+   * transferred or deceased stay carries a finalized summary and an invoice;
+   * the server refuses the delete, so the row offers none.
+   */
+  isCancellable(a: AdmissionResponse): boolean {
+    return CANCELLABLE_STATUSES.has(a.status);
+  }
+
+  /** QA D1381 (round 32): why the stay is cancelled (required; kept on the admission). */
+  readonly deleteReason = signal('');
+
   confirmDelete(a: AdmissionResponse): void {
+    this.deleteReason.set('');
     this.deletingAdm.set(a);
     this.showDeleteConfirm.set(true);
   }
@@ -454,16 +812,24 @@ export class AdmissionsComponent implements OnInit {
     this.deletingAdm.set(null);
   }
   executeDelete(): void {
+    const reason = this.deleteReason().trim();
+    if (!reason) {
+      // QA D1381: the blank reason is marked where it is, as the server refuses it.
+      const message = this.translate.instant('ORDER_LIFECYCLE.CANCEL_REASON_REQUIRED');
+      refuseFields(this.doc, [CANCEL_REASON_ID], [CANCEL_REASON_ID], message);
+      return;
+    }
+    refuseFields(this.doc, [], [CANCEL_REASON_ID], '');
     this.deleting.set(true);
-    this.admissionService.delete(this.deletingAdm()!.id).subscribe({
+    this.admissionService.delete(this.deletingAdm()!.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ADMISSIONS.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ADMISSIONS.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ADMISSIONS.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -472,18 +838,32 @@ export class AdmissionsComponent implements OnInit {
   /* ── Discharge ── */
   confirmDischarge(a: AdmissionResponse): void {
     this.dischargingAdm.set(a);
+    this.loadStaffFor(a.hospitalId);
     this.dischargeForm = {
       dischargeDisposition: 'HOME',
       dischargeSummary: '',
+      dischargeDiagnosis: '',
       dischargeInstructions: '',
-      dischargingProviderId: '',
+      // QA D503 class: the server records the caller as the discharging provider.
+      dischargingProviderId: this.auth.getUserProfile()?.staffId ?? '',
     };
+    this.staySummary.set(null);
+    const stayEncounterId = a.encounterId;
+    if (stayEncounterId) {
+      this.dischargeService.summaryForEncounter(stayEncounterId).subscribe((summary) => {
+        if (!summary || this.dischargingAdm()?.id !== a.id) return;
+        this.staySummary.set(summary);
+        this.dischargeForm.dischargeDiagnosis = summary.dischargeDiagnosis ?? '';
+        if (summary.isFinalized) this.dischargeForm.dischargeInstructions = '';
+      });
+    }
     this.showDischargeModal.set(true);
   }
 
   cancelDischarge(): void {
     this.showDischargeModal.set(false);
     this.dischargingAdm.set(null);
+    this.staySummary.set(null);
   }
 
   executeDischarge(): void {
@@ -493,7 +873,14 @@ export class AdmissionsComponent implements OnInit {
       .discharge(adm.id, {
         dischargeDisposition: this.dischargeForm.dischargeDisposition,
         dischargeSummary: this.dischargeForm.dischargeSummary,
-        dischargeInstructions: this.dischargeForm.dischargeInstructions || undefined,
+        // QA D1596: with a written summary, its diagnosis is the one the server keeps.
+        dischargeDiagnosis: this.staySummary()
+          ? undefined
+          : this.dischargeForm.dischargeDiagnosis.trim(),
+        dischargeInstructions:
+          this.staySummary()?.isFinalized || !this.dischargeForm.dischargeInstructions.trim()
+            ? undefined
+            : this.dischargeForm.dischargeInstructions,
         dischargingProviderId: this.dischargeForm.dischargingProviderId,
       })
       .subscribe({
@@ -503,8 +890,10 @@ export class AdmissionsComponent implements OnInit {
           this.discharging.set(false);
           this.load();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('ADMISSIONS.DISCHARGE_ERROR'));
+        error: (err: HttpErrorResponse) => {
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('ADMISSIONS.DISCHARGE_ERROR'),
+          );
           this.discharging.set(false);
         },
       });
@@ -517,7 +906,7 @@ export class AdmissionsComponent implements OnInit {
     this.selectedBedId.set('');
     this.availableBeds.set([]);
     this.bedsLoading.set(true);
-    this.bedService.getAvailableBeds().subscribe({
+    this.bedService.getAvailableBeds(adm.patientId).subscribe({
       next: (beds) => {
         this.availableBeds.set(beds);
         this.bedsLoading.set(false);
@@ -548,40 +937,81 @@ export class AdmissionsComponent implements OnInit {
         this.closeBedAssign();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED'),
+        );
         this.bedAssigning.set(false);
       },
     });
   }
 
-  unassignBed(adm: AdmissionResponse): void {
-    this.admissionService.unassignBed(adm.id).subscribe({
+  /* ── Free the bed (QA D1100: confirmed, with a reason; the server audits it) ── */
+  readonly unassigningAdm = signal<AdmissionResponse | null>(null);
+  readonly unassignReason = signal('');
+  readonly unassigning = signal(false);
+
+  openUnassignBed(adm: AdmissionResponse): void {
+    this.unassignReason.set('');
+    this.unassigningAdm.set(adm);
+  }
+
+  closeUnassignBed(): void {
+    this.unassigningAdm.set(null);
+  }
+
+  confirmUnassignBed(): void {
+    const adm = this.unassigningAdm();
+    if (!adm) return;
+    const reason = this.unassignReason().trim();
+    if (!reason) {
+      const message = this.translate.instant('ADMISSION_BED.RELEASE_REASON_REQUIRED');
+      refuseFields(this.doc, [UNASSIGN_REASON_ID], [UNASSIGN_REASON_ID], message);
+      return;
+    }
+    this.unassigning.set(true);
+    this.admissionService.unassignBed(adm.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ADMISSIONS.BED_UNASSIGNED'));
+        this.unassigning.set(false);
+        this.closeUnassignBed();
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED')),
+      error: (err: unknown) => {
+        this.unassigning.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED'),
+        );
+      },
     });
   }
 
   /** Re-fetch under the new cross-tenant scope when the chip emits. */
   onScopeChange(_hospitalId: string | null): void {
+    this.closeOrderSetPicker();
+    this.closeBedAssign();
     this.load();
   }
 
   load(): void {
+    const request = ++this.listRequest;
     this.loading.set(true);
+    this.loadError.set(false);
     // Re-fetch under the current cross-tenant scope (header alone
     // drives the backend; super-admin global view sends no header,
     // backend falls through to unscoped findAll).
     this.admissionService.getAll().subscribe({
       next: (list) => {
+        if (request !== this.listRequest) return;
         this.admissions.set(list ?? []);
         this.applyFilter();
         this.loading.set(false);
       },
       error: () => {
+        if (request !== this.listRequest) return;
+        this.admissions.set([]);
+        this.filtered.set([]);
+        this.loadError.set(true);
         this.toast.error(this.translate.instant('ADMISSIONS.LOAD_FAILED'));
         this.loading.set(false);
       },
@@ -590,39 +1020,9 @@ export class AdmissionsComponent implements OnInit {
 
   setTab(tab: 'all' | 'admitted' | 'discharged'): void {
     this.activeTab.set(tab);
-    this.statusFilter.set(
-      tab === 'admitted' ? 'ACTIVE' : tab === 'discharged' ? 'DISCHARGED' : 'ALL',
-    );
-    this.missingBedOnly.set(false);
+    this.statusFilter.set('');
+    this.bedFilter.set('');
     this.applyFilter();
-  }
-
-  setStatus(status: AdmissionStatus | 'ALL'): void {
-    this.statusFilter.set(status);
-    this.missingBedOnly.set(false);
-    this.activeTab.set(
-      status === 'ACTIVE' ? 'admitted' : status === 'DISCHARGED' ? 'discharged' : 'all',
-    );
-    this.applyFilter();
-  }
-
-  isBedMissing(admission: AdmissionResponse): boolean {
-    return !admission.bedId && !admission.roomBed?.trim();
-  }
-
-  missingBedCount(): number {
-    return this.admissions().filter((a) => a.status === 'ACTIVE' && this.isBedMissing(a)).length;
-  }
-
-  filterMissingBeds(): void {
-    this.setStatus('ACTIVE');
-    this.missingBedOnly.set(true);
-    this.applyFilter();
-  }
-
-  resetFilters(): void {
-    this.searchTerm = '';
-    this.setTab('all');
   }
 
   applyFilter(): void {
@@ -630,18 +1030,35 @@ export class AdmissionsComponent implements OnInit {
     const tab = this.activeTab();
     if (tab === 'admitted') list = list.filter((a) => a.status === 'ACTIVE');
     else if (tab === 'discharged') list = list.filter((a) => a.status === 'DISCHARGED');
-    if (this.statusFilter() !== 'ALL') list = list.filter((a) => a.status === this.statusFilter());
-    if (this.missingBedOnly()) list = list.filter((a) => this.isBedMissing(a));
+    if (this.statusFilter()) list = list.filter((a) => a.status === this.statusFilter());
+    if (this.typeFilter()) list = list.filter((a) => a.admissionType === this.typeFilter());
+    if (this.acuityFilter()) list = list.filter((a) => a.acuityLevel === this.acuityFilter());
+    if (this.bedFilter())
+      list = list.filter((a) => this.hasRecordedBed(a) === (this.bedFilter() === 'recorded'));
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
         (a) =>
-          (a.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(a.patientName, term) ||
           (a.chiefComplaint ?? '').toLowerCase().includes(term) ||
-          (a.roomBed ?? '').toLowerCase().includes(term),
+          (a.roomBed ?? '').toLowerCase().includes(term) ||
+          (a.encounterCode ?? '').toLowerCase().includes(term) ||
+          (a.patientMrn ?? '').toLowerCase().includes(term) ||
+          (a.hospitalName ?? '').toLowerCase().includes(term) ||
+          (a.departmentName ?? '').toLowerCase().includes(term),
       );
     }
+    const timestamp = (a: AdmissionResponse): number => {
+      const value = a.admissionDateTime ? serverInstant(a.admissionDateTime).getTime() : 0;
+      return Number.isFinite(value) ? value : 0;
+    };
+    list = [...list].sort((a, b) =>
+      this.sortOrder() === 'patient'
+        ? (a.patientName ?? '').localeCompare(b.patientName ?? '')
+        : (timestamp(a) - timestamp(b)) * (this.sortOrder() === 'oldest' ? 1 : -1),
+    );
     this.filtered.set(list);
+    this.pageIndex.set(0);
   }
 
   getStatusClass(status: string): string {
@@ -654,6 +1071,16 @@ export class AdmissionsComponent implements OnInit {
         return 'status-pending';
       case 'TRANSFERRED':
         return 'status-transferred';
+      case 'DECEASED':
+        return 'status-deceased';
+      case 'CLOSED_IN_ERROR':
+        return 'status-cancelled';
+      case 'CANCELLED':
+        return 'status-cancelled';
+      case 'ON_LEAVE':
+        return 'status-leave';
+      case 'AWAITING_DISCHARGE':
+        return 'status-pending';
       default:
         return '';
     }

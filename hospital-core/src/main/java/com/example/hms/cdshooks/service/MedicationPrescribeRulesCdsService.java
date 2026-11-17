@@ -42,16 +42,28 @@ import java.util.UUID;
 @Component
 public class MedicationPrescribeRulesCdsService implements CdsHookService {
 
+    /** Card wording in the caller's language (D61); English when built outside Spring. */
+    private com.example.hms.cdshooks.CdsCardText text = com.example.hms.cdshooks.CdsCardText.ENGLISH;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCardText(com.example.hms.cdshooks.CdsCardText text) {
+        this.text = text;
+    }
+
     private static final String ID = "hms-medication-prescribe-rules";
-    private static final Source SOURCE = new Source(
-        "HMS medication-prescribe rules",
-        null,
-        null
-    );
+    private static final String SOURCE_LABEL = "HMS medication-prescribe rules";
 
     private final CdsRuleEngine ruleEngine;
     private final PatientRepository patientRepository;
     private final MedicationCatalogItemRepository catalogRepository;
+
+    /** QA D1183: the shared allergy cards; absent in unit tests built by hand. */
+    private MedicationAllergyCdsService allergyCheck;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAllergyCheck(MedicationAllergyCdsService allergyCheck) {
+        this.allergyCheck = allergyCheck;
+    }
 
     public MedicationPrescribeRulesCdsService(CdsRuleEngine ruleEngine,
                                               PatientRepository patientRepository,
@@ -78,13 +90,13 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
     }
 
     @Override
-    public CdsHookResponse evaluate(CdsHookRequest request) {
+    public CdsHookResponse evaluate(CdsHookRequest request, UUID callerHospitalId) {
         UUID patientId = CdsHookContext.requirePatientId(request);
         if (patientId == null) return CdsHookResponse.empty();
         Patient patient = patientRepository.findByIdUnscoped(patientId).orElse(null);
         if (patient == null) return CdsHookResponse.empty();
 
-        UUID hospitalId = patient.getHospitalId();
+        UUID hospitalId = CdsHookContext.hospitalScope(callerHospitalId, patient);
 
         List<CdsCard> cards = new ArrayList<>();
         for (Map<String, Object> draft : CdsHookContext.medicationDrafts(request)) {
@@ -95,11 +107,17 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
             ProposedMedication proposed = MedicationDraftExtractor.extract(draft);
             if (proposed.name() == null && proposed.code() == null) continue;
 
+            // QA D1183 (round 23): the allergy stop's cards while the order is
+            // composed - the same rule as the prescription and order-sign.
+            if (allergyCheck != null && proposed.name() != null) {
+                cards.addAll(allergyCheck.allergyCardsForPatient(patientId, hospitalId, proposed.name(), proposed.code()));
+            }
             cards.addAll(ruleEngine.evaluateProposedPrescription(
                 patient, hospitalId,
                 proposed.name(),
                 proposed.code(),
-                proposed.dose()
+                proposed.dose(),
+                proposed.route()
             ));
 
             tallManAdvisory(hospitalId, proposed).ifPresent(cards::add);
@@ -135,10 +153,10 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
             .map(MedicationCatalogItem::getTallManName)
             .filter(s -> s != null && !s.isBlank())
             .map(tallMan -> new CdsCard(
-                "Confusable name — verify spelling",
-                "Use ISMP tall-man lettering: " + tallMan,
+                text.get("cds.tallMan.summary", "Confusable name — verify spelling"),
+                text.get("cds.tallMan.detail", "Use ISMP tall-man lettering: {0}", tallMan),
                 CdsCard.Indicator.INFO,
-                SOURCE,
+                new Source(text.get("cds.source.prescribeRules", SOURCE_LABEL), null, null),
                 null, null, null, null
             ));
     }

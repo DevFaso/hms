@@ -48,6 +48,14 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class TreatmentConsentServiceImplTest {
 
+    // QA D1232 (round 24): the refusals are message keys now; the assertions
+    // read them in English through the real bundles (set up in setUp).
+    @org.junit.jupiter.api.AfterEach
+    void resetRefusalLocale() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock private PatientTreatmentConsentRepository consentRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;
@@ -65,6 +73,8 @@ class TreatmentConsentServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();
         hospital.setId(hospitalId);
@@ -82,7 +92,7 @@ class TreatmentConsentServiceImplTest {
         patient.setHospitalRegistrations(Set.of(registration));
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(consentRepository.save(any(PatientTreatmentConsent.class))).thenAnswer(i -> i.getArgument(0));
         when(staffRepository.findByUserIdAndHospitalId(any(), any())).thenReturn(Optional.empty());
         when(userRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
@@ -110,6 +120,8 @@ class TreatmentConsentServiceImplTest {
     void verbalConsentHasNoDigest() {
         TreatmentConsentRequestDTO verbal = TreatmentConsentRequestDTO.builder()
             .method(TreatmentConsentMethod.VERBAL)
+            // QA D1148: a consent names who gave it, verbal too.
+            .signedName("Awa Kaboré")
             .build();
 
         TreatmentConsentResponseDTO created =
@@ -117,6 +129,20 @@ class TreatmentConsentServiceImplTest {
 
         assertThat(created.getSignatureHash()).isNull();
         assertThat(created.getMethod()).isEqualTo(TreatmentConsentMethod.VERBAL);
+    }
+
+    @Test
+    void aConsentRecordedInTheChartNamesItsSigner_D1148() {
+        for (String blank : new String[] {null, "", "  "}) {
+            TreatmentConsentRequestDTO unsigned = TreatmentConsentRequestDTO.builder()
+                .method(TreatmentConsentMethod.VERBAL)
+                .signedName(blank)
+                .build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                    service.record(patientId, hospitalId, null, TreatmentConsentSource.MANUAL, unsigned))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("field").isEqualTo("signedName");
+        }
     }
 
     @Test
@@ -134,13 +160,13 @@ class TreatmentConsentServiceImplTest {
         UUID foreignHospitalId = UUID.randomUUID();
         Hospital foreign = new Hospital();
         foreign.setId(foreignHospitalId);
-        when(hospitalRepository.findById(foreignHospitalId)).thenReturn(Optional.of(foreign));
+        when(hospitalRepository.findClinicalById(foreignHospitalId)).thenReturn(Optional.of(foreign));
         TreatmentConsentRequestDTO request = electronic();
 
         assertThatThrownBy(() -> service.record(patientId, foreignHospitalId, null,
             TreatmentConsentSource.MANUAL, request))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not registered");
+            // QA D1870: "not here" is "not found", like GET /patients/{id}, never a distinct refusal.
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     @Test
@@ -167,7 +193,7 @@ class TreatmentConsentServiceImplTest {
         // Same message as unknown-patient: the caller learns nothing.
         assertThatThrownBy(() -> service.getForPatient(patientId, foreignScope))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Patient not found");
+            .hasFieldOrPropertyWithValue("messageKey", "patient.notFound");
     }
 
     @Test
@@ -237,7 +263,7 @@ class TreatmentConsentServiceImplTest {
 
         assertThatThrownBy(() -> service.revoke(rowId, foreignScope, null, "reason"))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Consent record not found");
+            .hasFieldOrPropertyWithValue("messageKey", "treatmentConsent.notFound");
     }
 
     @Test

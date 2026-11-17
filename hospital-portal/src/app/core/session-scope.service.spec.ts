@@ -45,6 +45,7 @@ describe('SessionScopeService', () => {
       'getRoles',
       'getUserProfile',
       'setUserProfile',
+      'logout',
     ]);
     auth.getRoles.and.returnValue(['ROLE_NURSE']);
     auth.getUserProfile.and.callFake(() => stored);
@@ -96,12 +97,54 @@ describe('SessionScopeService', () => {
     expect(stored?.licenseNumber).toBe('BF-123');
   });
 
-  it('marks the super-admin global default from the live roles, not the token', () => {
+  it('does not promote an internal selected role when bootstrap lists super-admin account assignments', () => {
     auth.getRoles.and.returnValue(['ROLE_DOCTOR']);
-    service.applyBootstrap(bootstrap({ roles: ['ROLE_SUPER_ADMIN'], superAdmin: true }));
+    service.applyBootstrap(
+      bootstrap({ roles: ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'], superAdmin: true }),
+    );
 
+    expect(roleContext.activeRoles).toEqual(['ROLE_DOCTOR']);
+    expect(roleContext.activeRole).toBe('ROLE_DOCTOR');
+    expect(roleContext.globalView()).toBeFalse();
+    expect(roleContext.effectiveHospitalIdForRequest()).toBe(h1);
+  });
+
+  it('retains the live-role hydration contract for an SSO session', () => {
+    auth.getRoles.and.returnValue(['ROLE_DOCTOR']);
+    service.applyBootstrap(
+      bootstrap({ authSource: 'keycloak', roles: ['ROLE_SUPER_ADMIN'], superAdmin: true }),
+    );
     expect(roleContext.activeRoles).toEqual(['ROLE_SUPER_ADMIN']);
     expect(roleContext.globalView()).toBeTrue();
+  });
+
+  it('carries the provider-user flag into the role context, and clears it on the next bootstrap', () => {
+    service.applyBootstrap(bootstrap({ providerUser: true }));
+    expect(roleContext.providerUser()).toBeTrue();
+
+    service.applyBootstrap(bootstrap());
+    expect(roleContext.providerUser()).toBeFalse();
+  });
+
+  it('a clinician signs in after a pharmacy user, with a failed bootstrap: the broadcast gate opens for them', () => {
+    // The pharmacy user's session.
+    auth.getRoles.and.returnValue(['ROLE_PHARMACIST']);
+    service.applyBootstrap(bootstrap({ roles: ['ROLE_PHARMACIST'], providerUser: true }));
+    expect(roleContext.providerUser()).toBeTrue();
+
+    // Sign-out (AuthService.logout clears the session flags).
+    roleContext.clearSession();
+    expect(roleContext.providerUser()).toBeFalse();
+    expect(roleContext.sessionResolved()).toBeFalse();
+
+    // The clinician's bootstrap fails: resolved from the stored profile, never the old flag.
+    roleContext.setProviderUser(true); // even if something left it set
+    auth.sessionBootstrap.and.returnValue(throwError(() => new Error('down')));
+    service.hydrate().subscribe();
+
+    // The shell's gate: resolved and not a provider user.
+    expect(roleContext.sessionResolved()).toBeTrue();
+    expect(roleContext.providerUser()).toBeFalse();
   });
 
   it('falls back to the stored profile when the server cannot be asked, and emits null', () => {

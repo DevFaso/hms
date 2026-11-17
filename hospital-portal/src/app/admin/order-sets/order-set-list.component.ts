@@ -1,14 +1,19 @@
+import { allRows } from '../../shared/all-pages';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Subject, Subscription, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
+import { Subject, Subscription, debounceTime, switchMap } from 'rxjs';
 
 import { OrderSetService, OrderSetSummary } from '../../services/order-set.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
+import { refusalReason } from '../../shared/refusal-reason';
 
 /**
  * Admin list view for CPOE order-set templates. Hospital-scoped via
@@ -18,7 +23,15 @@ import { AuthService } from '../../auth/auth.service';
 @Component({
   selector: 'app-order-set-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [
+    ReasonDialogComponent,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="order-set-admin" data-testid="order-set-admin">
@@ -68,8 +81,9 @@ import { AuthService } from '../../auth/auth.service';
                 <td>{{ os.name }}</td>
                 <td>v{{ os.version }}</td>
                 <td>{{ os.orderCount }}</td>
-                <td>{{ os.admissionType }}</td>
-                <td>{{ os.updatedAt | date: 'short' }}</td>
+                <!-- QA D859: ELECTIVE was shown raw in FR and ES -->
+                <td>{{ os.admissionType | enumLabel: 'admissionType' }}</td>
+                <td>{{ os.updatedAt | serverTime | date: 'short' }}</td>
                 <td class="actions">
                   <a
                     class="action-link"
@@ -99,6 +113,17 @@ import { AuthService } from '../../auth/auth.service';
         </p>
       }
     </section>
+
+    <!-- QA D1201 (round 22): the reason is asked in the shared dialog, never a browser prompt. -->
+    @if (deactivating(); as os) {
+      <app-reason-dialog
+        titleKey="ORDER_SETS.DEACTIVATE_REASON_PROMPT"
+        confirmKey="ORDER_SETS.DEACTIVATE"
+        [busy]="deactivateBusy()"
+        (confirmed)="confirmDeactivate(os, $event)"
+        (cancelled)="deactivating.set(null)"
+      />
+    }
   `,
   styles: [
     `
@@ -144,17 +169,17 @@ export class OrderSetListComponent implements OnInit {
     this.searchSub = this.searchSubject
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((term) => {
           this.loading.set(true);
           this.error.set(false);
           const hid = this.roleContext.effectiveHospitalIdForRequest() ?? '';
-          return this.orderSetService.list(hid, term);
+          // QA D1347: every order set the search matches (all pages), not the first 20.
+          return allRows((page, size) => this.orderSetService.list(hid, term, page, size));
         }),
       )
       .subscribe({
-        next: (page) => {
-          this.rows.set(page.content ?? []);
+        next: (rows) => {
+          this.rows.set(rows);
           this.loading.set(false);
         },
         error: () => {
@@ -175,21 +200,36 @@ export class OrderSetListComponent implements OnInit {
     return os.id;
   }
 
+  /** QA D1201: the order set being deactivated; the shared reason dialog asks why. */
+  protected readonly deactivating = signal<OrderSetSummary | null>(null);
+  protected readonly deactivateBusy = signal(false);
+
   protected deactivate(os: OrderSetSummary): void {
-    const reason = globalThis.prompt(this.translate.instant('ORDER_SETS.DEACTIVATE_REASON_PROMPT'));
-    if (!reason?.trim()) return;
+    this.deactivating.set(os);
+  }
+
+  protected confirmDeactivate(os: OrderSetSummary, reason: string): void {
+    if (this.deactivateBusy()) return;
     const actor = this.auth.getUserProfile()?.staffId ?? '';
     if (!actor) {
       this.toast.error(this.translate.instant('ORDER_SETS.NO_STAFF_CONTEXT'));
       return;
     }
-    this.orderSetService.deactivate(os.id, reason.trim(), actor).subscribe({
+    this.deactivateBusy.set(true);
+    this.orderSetService.deactivate(os.id, reason, actor).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ORDER_SETS.DEACTIVATED'));
+        this.deactivateBusy.set(false);
+        this.deactivating.set(null);
         // Refresh list.
         this.searchSubject.next(this.searchTerm());
       },
-      error: () => this.toast.error(this.translate.instant('ORDER_SETS.DEACTIVATE_FAILED')),
+      error: (err: unknown) => {
+        this.deactivateBusy.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ORDER_SETS.DEACTIVATE_FAILED'),
+        );
+      },
     });
   }
 }

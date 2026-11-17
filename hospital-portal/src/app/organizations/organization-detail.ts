@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   OnInit,
@@ -6,7 +7,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -20,7 +21,13 @@ import {
   TenantLifecycleResponse,
 } from '../services/organization.service';
 import { ToastService } from '../core/toast.service';
+import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type LifecycleAction = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
 interface ActionConfig {
@@ -84,7 +91,17 @@ const ACTION_CONFIG: Record<LifecycleAction, ActionConfig> = {
 @Component({
   selector: 'app-organization-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
+  imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    OrgTextPipe,
+  ],
   templateUrl: './organization-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-detail.scss',
@@ -201,7 +218,10 @@ export class OrganizationDetailComponent implements OnInit {
       error: (err) => {
         this.submitting.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('TENANT_LIFECYCLE.TOAST.ACTION_FAILED'),
+          err instanceof HttpErrorResponse && isStepUpRefusal(err)
+            ? this.translate.instant(stepUpRefusalKey(err))
+            : (err?.error?.message ??
+                this.translate.instant('TENANT_LIFECYCLE.TOAST.ACTION_FAILED')),
         );
       },
     });

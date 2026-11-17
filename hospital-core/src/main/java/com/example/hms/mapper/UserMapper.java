@@ -66,20 +66,32 @@ public class UserMapper {
     /**
      * Preferred: maps from user + assignments when you have them (e.g., after
      * admin-register).
-     * Uses assignments to compute active state and roles more accurately.
+     * Uses assignments to compute roles more accurately; {@code active} is the
+     * account's own flag (QA D910).
      */
     public UserResponseDTO toResponseDTO(User user, Set<UserRoleHospitalAssignment> assignments) {
         if (user == null)
             return null;
 
         // roles from assignments (distinct, ordered)
-        Set<Role> rolesFromAssignments = safeRolesFromAssignments(assignments);
+        // Only ACTIVE assignments hold a role: an inactive row (a retired
+        // grant, or a ROLE_PATIENT a registration attached to a staff account)
+        // must not show as a second role. A user with no active row at all (a
+        // patient still awaiting verification) falls back to every row, then
+        // to user_roles, as before.
+        Set<Role> rolesFromAssignments = safeRolesFromAssignments(activeOnly(assignments));
+        if (rolesFromAssignments.isEmpty()) {
+            rolesFromAssignments = safeRolesFromAssignments(assignments);
+        }
         Set<Role> roles = !rolesFromAssignments.isEmpty() ? rolesFromAssignments : safeRolesFromUserRoles(user);
         Set<RoleSummaryDTO> roleDtos = mapRolesToSummaryDTOs(roles);
 
-        // active: any active assignment? fallback to user.isActive()
-        boolean active = (assignments != null && assignments.stream().anyMatch(UserRoleHospitalAssignment::getActive))
-                || user.isActive();
+        // QA D910: the ACCOUNT's status, as the list, the database and sign-in
+        // read it. An account switched off kept answering active here because
+        // one of its assignments was still on, so switching the account off
+        // looked like it had not worked. Whether a role is on at a hospital is
+        // the assignments' business, not this flag's.
+        boolean active = user.isActive();
 
         // profile derivation
         String profileType = deriveProfileType(user);
@@ -161,6 +173,14 @@ public class UserMapper {
                 .map(UserRole::getRole)
                 .filter(Objects::nonNull)
                 // preserve insertion order for stability
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private static Set<UserRoleHospitalAssignment> activeOnly(Set<UserRoleHospitalAssignment> assignments) {
+        if (assignments == null || assignments.isEmpty())
+            return Collections.emptySet();
+        return assignments.stream()
+                .filter(a -> a != null && Boolean.TRUE.equals(a.getActive()))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 

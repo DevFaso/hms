@@ -1,3 +1,5 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { resetStoredLangForTests } from '../../../shared/i18n/app-locale';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -34,13 +36,15 @@ describe('ProxyDataViewerComponent', () => {
       'getMyProxyAccess',
       'getProxyAppointments',
       'getProxyMedications',
-      'getProxyLabResults',
+      'getProxyLabResultsPage',
+      'getProxyLabResultTotal',
       'getProxyBilling',
       'getProxyRecords',
     ]);
     portal.getProxyAppointments.and.returnValue(of([]));
     portal.getProxyMedications.and.returnValue(of([]));
-    portal.getProxyLabResults.and.returnValue(of([]));
+    portal.getProxyLabResultsPage.and.returnValue(of({ items: [], hasMore: false }));
+    portal.getProxyLabResultTotal.and.returnValue(of(0));
     portal.getProxyBilling.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
@@ -117,7 +121,7 @@ describe('ProxyDataViewerComponent', () => {
     component.selectTab('appointments');
     component.selectTab('labResults');
 
-    expect(portal.getProxyLabResults).toHaveBeenCalledTimes(1);
+    expect(portal.getProxyLabResultsPage).toHaveBeenCalledTimes(1);
     expect(portal.getProxyAppointments).toHaveBeenCalledTimes(1);
   });
 
@@ -183,5 +187,180 @@ describe('ProxyDataViewerComponent', () => {
     const records = fixture.nativeElement.querySelector('[data-testid="proxy-records"]');
     expect(records.textContent).toContain('Hemoglobin');
     expect(records.textContent).toContain('PORTAL.LAB_RESULTS.PENDING_RESULT');
+  });
+  it('QA D1116: a released lab value and its range read in the reader notation', () => {
+    const previousLang = localStorage.getItem('lang');
+    localStorage.setItem('lang', 'fr');
+    resetStoredLangForTests();
+    try {
+      portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_RECORDS')]));
+      portal.getProxyRecords.and.returnValue(
+        of({
+          profile: {} as never,
+          recentLabResults: [
+            {
+              id: 'l2',
+              testName: 'Kaliémie',
+              result: '2.5',
+              referenceRange: '3.5 - 5 mmol/L',
+              status: 'COMPLETED',
+              collectedDate: '2026-09-20T08:00:00',
+              released: true,
+              isPending: false,
+              isAbnormal: true,
+              unit: 'mmol/L',
+              orderedBy: '',
+              performedBy: '',
+              category: '',
+              notes: '',
+              resultedAt: '',
+            },
+          ],
+          currentMedications: [],
+          latestVitals: [],
+          immunizations: [],
+          allergies: [],
+          activeDiagnoses: [],
+        }),
+      );
+      fixture.detectChanges();
+      const records: HTMLElement = fixture.nativeElement.querySelector(
+        '[data-testid="proxy-records"]',
+      );
+      expect(records.textContent).toContain('2,5');
+      expect(records.textContent).not.toContain('2.5');
+    } finally {
+      if (previousLang === null) localStorage.removeItem('lang');
+      else localStorage.setItem('lang', previousLang);
+      resetStoredLangForTests();
+    }
+  });
+
+  /**
+   * QA D1212 (round 23): a proxy opening a grantor registered at another
+   * hospital got 404 "Patient introuvable…" and read only the generic
+   * "Impossible de charger cette section". The server's reason is shown.
+   */
+  it("QA D1212: a tab the server refuses shows the server's reason, not a bare generic line", () => {
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_APPOINTMENTS')]));
+    portal.getProxyAppointments.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 404,
+            error: { message: 'Patient introuvable pour cet accès.' },
+          }),
+      ),
+    );
+    fixture.detectChanges();
+    const reason = fixture.nativeElement.querySelector('[data-testid="proxy-tab-error-reason"]');
+    expect(reason?.textContent).toContain('Patient introuvable pour cet accès.');
+  });
+
+  it('QA D1212: a 5xx body never reaches the proxy; the generic line stays', () => {
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_APPOINTMENTS')]));
+    portal.getProxyAppointments.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 500, error: { message: 'NullPointerException' } }),
+      ),
+    );
+    fixture.detectChanges();
+    const reason = fixture.nativeElement.querySelector('[data-testid="proxy-tab-error-reason"]');
+    expect(reason?.textContent).toContain('PORTAL.FAMILY.VIEWER.LOAD_FAILED');
+    expect(reason?.textContent).not.toContain('NullPointerException');
+  });
+
+  it('QA D1212: grants that could not be read are a failure with its reason, not "no access"', () => {
+    portal.getMyProxyAccess.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 403, error: { message: 'Session expirée.' } }),
+      ),
+    );
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="proxy-no-access"]')).toBeNull();
+    const failed = fixture.nativeElement.querySelector('[data-testid="proxy-grant-failed"]');
+    expect(failed?.textContent).toContain('Session expirée.');
+  });
+
+  it("QA D1213 (sibling): the Labs tab pages the grantor's older results", () => {
+    const row = (id: string) =>
+      ({ id, testName: id, result: '1', unit: '', isPending: false }) as never;
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_LAB_RESULTS')]));
+    portal.getProxyLabResultsPage.and.callFake((_id: string, offset: number) =>
+      of(
+        offset === 0
+          ? { items: [row('a'), row('b')], hasMore: true }
+          : { items: [row('c')], hasMore: false },
+      ),
+    );
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelectorAll('[data-testid="proxy-labs-table"] tbody tr').length).toBe(2);
+    el.querySelector<HTMLButtonElement>('[data-testid="proxy-labs-load-more"]')!.click();
+    fixture.detectChanges();
+    expect(portal.getProxyLabResultsPage).toHaveBeenCalledWith('p-1', 2);
+    expect(el.querySelectorAll('[data-testid="proxy-labs-table"] tbody tr').length).toBe(3);
+    expect(el.querySelector('[data-testid="proxy-labs-load-more"]')).toBeNull();
+  });
+
+  it('QA D1398 / D1399: the medications tab pages every row with the total, as needed marked', () => {
+    const med = (id: string, extra = {}) =>
+      ({
+        id,
+        medicationName: 'Paracétamol',
+        dosage: '',
+        frequency: 'q6h',
+        status: 'ACTIVE',
+        ...extra,
+      }) as never;
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_MEDICATIONS')]));
+    portal.getProxyMedications.and.returnValue(
+      of([
+        med('prn', { asNeeded: true, prnMinIntervalHours: 6 }),
+        ...Array.from({ length: 30 }, (_, i) => med('m' + i)),
+      ]),
+    );
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelectorAll('[data-testid="proxy-medications-table"] tbody tr').length).toBe(20);
+    expect(component.medicationRows.total()).toBe(31);
+    expect(el.querySelector('[data-testid="proxy-med-prn-prn"]')?.textContent).toContain(
+      'PORTAL.MEDICATIONS.AS_NEEDED_INTERVAL',
+    );
+    (el.querySelector('[data-testid="proxy-med-more"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(el.querySelectorAll('[data-testid="proxy-medications-table"] tbody tr').length).toBe(31);
+    expect(el.querySelector('[data-testid="proxy-med-more"]')).toBeNull();
+  });
+
+  it('QA D1394: a lab value nothing graded is marked on the proxy tab', () => {
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_LAB_RESULTS')]));
+    portal.getProxyLabResultTotal.and.returnValue(of(121));
+    portal.getProxyLabResultsPage.and.returnValue(
+      of({
+        items: [{ id: 'u', testName: 'K', result: '>1', isUngraded: true } as never],
+        hasMore: false,
+      }),
+    );
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelector('[data-testid="proxy-lab-not-graded-u"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="proxy-lab-count"]')).not.toBeNull();
+    expect(component.labTotal()).toBe(121);
+  });
+
+  it('QA D1413: the billing tab names the hospital that issued each invoice', () => {
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_BILLING')]));
+    portal.getProxyBilling.and.returnValue(
+      of([{ id: 'i', invoiceNumber: '1', facility: 'CHU de Bogodogo', status: 'SENT' } as never]),
+    );
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="proxy-billing-table"]')
+        ?.textContent,
+    ).toContain('CHU de Bogodogo');
   });
 });

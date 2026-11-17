@@ -2,18 +2,19 @@ package com.example.hms.service;
 
 
 import com.example.hms.enums.AppointmentStatus;
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.platform.WebhookEventType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AppointmentMapper;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
-import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
-import com.example.hms.model.UserRole;
+import com.example.hms.security.EffectiveRoles;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AppointmentFilterDTO;
 import com.example.hms.payload.dto.AppointmentRequestDTO;
@@ -28,8 +29,11 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.specification.AppointmentSpecification;
+import com.example.hms.utility.DisplayDates;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -63,15 +67,39 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AppointmentServiceImpl implements AppointmentService {
+
+    /** QA D1488: a status that keeps a visit going, refused for a patient who has died. */
+    private static final Set<AppointmentStatus> STATUSES_THAT_KEEP_A_VISIT_LIVE = Set.of(
+        AppointmentStatus.CONFIRMED, AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING,
+        AppointmentStatus.RESCHEDULED, AppointmentStatus.IN_PROGRESS);
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_STAFF_ID = "staffId";
+    private static final String FIELD_START_TIME = "startTime";
+
+    private static final String USER_NOT_FOUND_BY_USERNAME_KEY = "user.notFoundByUsername";
+    private static final String PATIENT_NOT_FOUND_FOR_USER_KEY = "patient.notFoundForUser";
+    private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+    private static final String STAFF_ASSIGNMENT_MISSING_KEY = "appointment.staffAssignment.missing";
+    private static final String INVALID_TRANSITION_KEY = "appointment.status.invalidTransition";
+
     @Override
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getAppointmentsByPatientUsername(String patientUsername, Locale locale, String username) {
-        User patientUser = userRepository.findByUsername(patientUsername)
-            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + patientUsername));
-        Patient patient = patientRepository.findByUserId(patientUser.getId())
-            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + patientUsername));
-
         User currentUser = getUserOrThrow(username);
+        User patientUser = userRepository.findByUsername(patientUsername)
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, patientUsername));
+        // A patient caller may name only themselves: another account answers
+        // as an unknown username does, before the patient lookup below, which
+        // would otherwise tell an account with a patient row from one without.
+        // Compared as user ids, not strings -- usernames resolve
+        // case-insensitively (lower(u.username) = lower(:username)).
+        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.APPOINTMENT_READS)
+                && !patientUser.getId().equals(currentUser.getId())) {
+            throw new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, patientUsername);
+        }
+        Patient patient = patientRepository.findByUserId(patientUser.getId())
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, patientUsername));
+
         return getAppointmentsByPatientScoped(patient.getId(), currentUser);
     }
     private final EmailService emailService;
@@ -81,6 +109,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private final AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
@@ -104,6 +133,20 @@ public class AppointmentServiceImpl implements AppointmentService {
      * browser) is never the one used for it.
      */
     private final com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
+    /**
+     * The three reads by id, patient id and patient username admit
+     * ROLE_PATIENT. Owning the record was one road in and hospital scope the
+     * other, and a patient holds a ROLE_PATIENT assignment at the hospitals
+     * that registered them — so hospital scope handed a patient every other
+     * patient's appointments there. A patient-only caller now reads their own.
+     */
+    private final PatientSubjectReadGuard subjectReadGuard;
+    /** QA D788: an appointment is COMPLETED by its visit's check-out, never ahead of it. */
+    private final com.example.hms.repository.EncounterRepository encounterRepository;
+    /** QA D1060 / D1063: the slot rules set the visit length and refuse a slot held for an offer. */
+    private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+    /** QA D1429: an overbooking is on the audit trail. */
+    private final AuditEventLogService auditEventLogService;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -111,19 +154,44 @@ public class AppointmentServiceImpl implements AppointmentService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    /**
+     * QA D985: booking or cancelling the visit a recall asks for moves the
+     * recall. Setter-injected so the many unit tests that build this service
+     * by constructor keep compiling; null there, and then nothing is linked.
+     */
+    private com.example.hms.service.scheduling.PatientRecallService recallService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setRecallService(com.example.hms.service.scheduling.PatientRecallService recallService) {
+        this.recallService = recallService;
+    }
+
     private static final Logger log = LoggerFactory.getLogger(AppointmentServiceImpl.class);
     private static final String USER_NOT_FOUND_PREFIX = "User not found: ";
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): this
     // error-message prefix appears 3x in this file. Naming follows the
     // existing USER_NOT_FOUND_PREFIX sibling above.
-    private static final String PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX = "Patient not found for username: ";
-    private static final String APPOINTMENT_NOT_FOUND_MESSAGE = "Appointment not found";
+    /** What an unknown patient id answers on the by-patient read, and so what a refused one answers too. */
     private static final String ROLE_SUPER_ADMIN_CODE = "ROLE_SUPER_ADMIN";
     private static final String ROLE_ADMIN_CODE = "ROLE_ADMIN";
     private static final String ROLE_PATIENT_CODE = "ROLE_PATIENT";
     private static final String ROLE_DOCTOR_CODE = "ROLE_DOCTOR";
     private static final String ROLE_NURSE_CODE = "ROLE_NURSE";
     private static final String ROLE_RECEPTIONIST_CODE = "ROLE_RECEPTIONIST";
+
+    /**
+     * QA D823: every role that books FOR a patient, i.e. every role
+     * {@code AppointmentController.APPOINTMENT_BOOK_ROLES} admits except
+     * PATIENT. This list used to name only admin, doctor, nurse and
+     * receptionist, so a midwife (or a STAFF account) the controller let in was
+     * treated as a patient booking for herself, and her booking for a patient
+     * she can read answered 404 "patient not found". Guarded by
+     * {@code AppointmentBookingRolesGuardTest}: a role added to the controller
+     * without being added here fails the build.
+     */
+    static final List<String> STAFF_BOOKING_ROLES = List.of(
+        ROLE_SUPER_ADMIN_CODE, "ROLE_HOSPITAL_ADMIN", ROLE_ADMIN_CODE, "ROLE_STAFF",
+        ROLE_RECEPTIONIST_CODE, ROLE_DOCTOR_CODE, ROLE_NURSE_CODE, "ROLE_MIDWIFE");
 
     /** Allowed status transitions: current → set of valid next statuses. */
     private static final Map<AppointmentStatus, Set<AppointmentStatus>> VALID_TRANSITIONS;
@@ -133,7 +201,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         // SCHEDULED is reachable from CONFIRMED because moving a confirmed
         // appointment to a new time invalidates the confirmation — the patient
         // agreed to a DIFFERENT slot, and being asked again is the point.
-        m.put(AppointmentStatus.SCHEDULED,   EnumSet.of(AppointmentStatus.CONFIRMED, AppointmentStatus.CHECKED_IN, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED));
+        // QA D946: a SCHEDULED appointment whose time has passed is marked
+        // NO_SHOW directly (the temporal guard still applies); the desk used to
+        // record a confirmation the patient never gave just to reach it.
+        m.put(AppointmentStatus.SCHEDULED,   EnumSet.of(AppointmentStatus.CONFIRMED, AppointmentStatus.CHECKED_IN, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED, AppointmentStatus.NO_SHOW));
         m.put(AppointmentStatus.CONFIRMED,   EnumSet.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_PROGRESS, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW));
         // CHECKED_IN had NO entry at all. ReceptionServiceImpl.checkInPatient
         // sets it directly on the entity, bypassing this map, so check-in
@@ -141,7 +212,16 @@ public class AppointmentServiceImpl implements AppointmentService {
         // subsequent action, and a checked-in appointment could never be
         // completed, marked no-show or cancelled. It sat CHECKED_IN forever
         // while the encounter carried the clinical workflow on alone.
-        m.put(AppointmentStatus.CHECKED_IN,  EnumSet.of(AppointmentStatus.IN_PROGRESS, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW, AppointmentStatus.CANCELLED));
+        //
+        // QA D1126 (round 20): no NO_SHOW and no CANCELLED from CHECKED_IN. A
+        // checked-in patient came (so not a no-show), has an open visit and
+        // may have paid a copay at the desk: cancelling the appointment alone
+        // dropped the patient from triage with the visit still open and the
+        // copay still PAID. A checked-in visit is closed from the reception
+        // queue ("close without a consultation", EncounterServiceImpl.closeUnseen),
+        // which needs a reason, cancels this appointment with it, and refuses
+        // while a paid copay stands. See requireNotCheckedInForCancel.
+        m.put(AppointmentStatus.CHECKED_IN,  EnumSet.of(AppointmentStatus.IN_PROGRESS, AppointmentStatus.COMPLETED));
         m.put(AppointmentStatus.IN_PROGRESS, EnumSet.of(AppointmentStatus.COMPLETED, AppointmentStatus.FAILED, AppointmentStatus.NO_SHOW));
         m.put(AppointmentStatus.RESCHEDULED, EnumSet.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED));
         m.put(AppointmentStatus.COMPLETED,   EnumSet.noneOf(AppointmentStatus.class));
@@ -152,9 +232,154 @@ public class AppointmentServiceImpl implements AppointmentService {
         VALID_TRANSITIONS = Collections.unmodifiableMap(m);
     }
 
+    /** QA D1126 / D1132: the moves that drop a booked visit, and so need a reason. */
+    private static final Set<AppointmentStatus> NEEDS_STATUS_REASON =
+        EnumSet.of(AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW);
+
+    /** QA D1126: the longest reason kept (status_reason, V255). */
+    static final int STATUS_REASON_MAX = 500;
+
+    /**
+     * QA D1126 / D1132 (round 20): the reason a move to CANCELLED or NO_SHOW
+     * must carry, trimmed, on every staff write path (the status action and
+     * the edit form). PUT /appointments/{id}/status?action=CANCEL with no body
+     * answered 200 and nothing recorded why the visit was dropped. Null for
+     * any other status (a reason describes the drop, not the next status).
+     */
+    public static String requireStatusReason(AppointmentStatus status, String reason) {
+        return requireStatusReason(status, reason, "statusReason");
+    }
+
+    /**
+     * QA D1299 (round 28): the refusal names the request field that carries
+     * the reason ({@code reason} on the status action, {@code statusReason} on
+     * the booking and edit forms), so the form can mark it; it answered a
+     * message with no field before.
+     */
+    public static String requireStatusReason(AppointmentStatus status, String reason, String field) {
+        if (!NEEDS_STATUS_REASON.contains(status)) {
+            return null;
+        }
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException(field, "appointment.status.reasonRequired",
+                AppointmentStatus.labelOf(status));
+        }
+        if (trimmed.length() > STATUS_REASON_MAX) {
+            throw new com.example.hms.exception.FieldBusinessException(field, "appointment.status.reasonTooLong",
+                STATUS_REASON_MAX);
+        }
+        return trimmed;
+    }
+
+    /**
+     * QA D1126 (round 20): a checked-in appointment is not cancelled or marked
+     * a no-show from the appointment; the desk closes the visit from the
+     * reception queue, where the copay is checked. A clear refusal rather than
+     * the generic "transition not allowed".
+     */
+    private static void requireNotCheckedInForCancel(AppointmentStatus current, AppointmentStatus requested) {
+        if (current == AppointmentStatus.CHECKED_IN && NEEDS_STATUS_REASON.contains(requested)) {
+            throw new BusinessException("appointment.status.checkedInCloseFromQueue",
+                AppointmentStatus.labelOf(requested));
+        }
+    }
+
     /** Statuses that require the appointment time window to have started. */
     private static final Set<AppointmentStatus> REQUIRES_APPOINTMENT_STARTED =
         EnumSet.of(AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW);
+
+    /**
+     * COMPLETED and NO_SHOW only once the visit has started, on every write
+     * path (status action and PUT alike; review round 8: the PUT skipped it),
+     * judged on the hospital's clock as the portal booking is (review round 15).
+     */
+    private static void requireStartedFor(AppointmentStatus status, LocalDateTime appointmentStart,
+                                          Hospital hospital) {
+        if (REQUIRES_APPOINTMENT_STARTED.contains(status)
+                && com.example.hms.utility.HospitalCalendar.now(hospital).isBefore(appointmentStart)) {
+            throw new com.example.hms.exception.FieldBusinessException("status", "appointment.status.notStartedYet",
+                AppointmentStatus.labelOf(status),
+                DisplayDates.dateTime(appointmentStart));
+        }
+    }
+
+    /** A cancelled, missed or being-moved visit gives its inventory slot back (P3 #22, QA D937). */
+    private static boolean releasesSlotInventory(AppointmentStatus status) {
+        return status == AppointmentStatus.CANCELLED || status == AppointmentStatus.RESCHEDULED
+            || status == AppointmentStatus.NO_SHOW;
+    }
+
+    /** The ids, date and times a staff edit must carry. */
+    private static void requireCompleteEdit(AppointmentRequestDTO request) {
+        // QA D1355 class (round 30): every missing field named in one refusal,
+        // not the patient first and the clinician one press later.
+        // QA D1060: the end time is the slot rules', never the caller's, so only the start is required.
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(request.getPatientId(), "patientId", "appointment.patient.required")
+            .requireValue(request.getStaffId(), FIELD_STAFF_ID, "appointment.staff.required")
+            .requireValue(request.getHospitalId(), "hospitalId", "appointment.hospital.required")
+            .requireValue(request.getAppointmentDate(), "appointmentDate", "appointment.date.required")
+            .requireValue(request.getStartTime(), FIELD_START_TIME, "appointment.timeRange.invalid")
+            .orThrow();
+    }
+
+    /**
+     * QA D937 (review round 8): a freed booking (NO_SHOW) that a status action
+     * puts back into a slot-holding status (RESCHEDULED) holds its own time
+     * again. That time may have been rebooked since the slot was freed:
+     * refused then, so the clinician is never double-booked; the desk moves
+     * the visit to a new time instead (the PUT checks that time).
+     */
+    private void requireFreedSlotStillFree(Appointment appointment, AppointmentStatus currentStatus,
+                                           AppointmentStatus newStatus) {
+        if (AppointmentStatus.holdsSlot(currentStatus) || !newStatus.holdsSlot() || appointment.getStaff() == null) {
+            return;
+        }
+        LocalDate day = appointment.getAppointmentDate();
+        boolean taken = AppointmentSlotRules.overlapsHeldSlot(
+            appointmentRepository.findByStaff_IdAndAppointmentDate(appointment.getStaff().getId(), day),
+            appointment.getId(),
+            LocalDateTime.of(day, appointment.getStartTime()),
+            LocalDateTime.of(day, appointment.getEndTime()));
+        if (taken) {
+            throw new BusinessException("appointment.status.slotRebooked");
+        }
+    }
+
+    /**
+     * What an edit (PUT) that changed the status sets off, as the status
+     * action does: a cancelled, missed or parked visit frees its inventory slot
+     * (review round 8), and the recall it answered is reopened or closed (QA
+     * D985). Only a status change: a note on a completed visit must not
+     * re-close its recall (review round 15).
+     */
+    private void afterEditMovedStatus(Appointment saved) {
+        if (releasesSlotInventory(saved.getStatus())) {
+            slotInventoryService.releaseForAppointment(saved.getId());
+        }
+        followUpRecalls(saved.getId(), saved.getStatus());
+    }
+
+    /**
+     * QA D985: a visit that will not happen reopens the recall it answered
+     * (cancelled, missed, or started and FAILED: review round 15); one that
+     * took place fulfils it. The same rule on the status action and the edit form.
+     */
+    private void followUpRecalls(UUID appointmentId, AppointmentStatus status) {
+        if (recallService == null) {
+            return;
+        }
+        if (!AppointmentStatus.holdsSlot(status) || status == AppointmentStatus.FAILED) {
+            recallService.reopenRecallsOf(appointmentId);
+        } else if (status == AppointmentStatus.COMPLETED) {
+            recallService.completeRecallsOf(appointmentId);
+        } else if (status == AppointmentStatus.RESCHEDULED) {
+            // The only road out of NO_SHOW/FAILED: the visit is back, and so
+            // are the recalls it answered (review round 18).
+            recallService.rescheduleRecallsOf(appointmentId);
+        }
+    }
 
     /**
      * Reject a status change on the update path that the state machine would
@@ -170,10 +395,39 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (requested == null || requested == current) {
             return;
         }
+        requireNotCheckedInForCancel(current, requested);
         Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(current, Set.of());
         if (!allowed.contains(requested)) {
-            throw new BusinessException(
-                String.format("Cannot transition from %s to %s", current, requested));
+            throw new com.example.hms.exception.FieldBusinessException("status", INVALID_TRANSITION_KEY,
+                AppointmentStatus.labelOf(current), AppointmentStatus.labelOf(requested));
+        }
+    }
+
+    /**
+     * QA D788: an appointment whose patient was checked in is COMPLETED by the
+     * check-out of that visit ({@code EncounterServiceImpl.checkOut}), never by
+     * hand ahead of it. The desk marked the appointment of a never-seen visit
+     * COMPLETED from CHECKED_IN, so the day's figures counted a consultation
+     * that did not happen. Refused while no visit linked to the appointment is
+     * COMPLETED; an appointment with no visit at all (never checked in) keeps
+     * the manual completion the state machine allows.
+     */
+    private void requireVisitCompletedBeforeAppointment(Appointment appointment, AppointmentStatus requested) {
+        if (requested != AppointmentStatus.COMPLETED
+                || appointment.getStatus() == AppointmentStatus.COMPLETED
+                || appointment.getId() == null) {
+            return;
+        }
+        List<com.example.hms.model.Encounter> visits =
+            encounterRepository.findByAppointmentIdIn(List.of(appointment.getId()));
+        if (visits.isEmpty()) {
+            return;
+        }
+        boolean seen = visits.stream()
+            .anyMatch(v -> v.getStatus() == com.example.hms.enums.EncounterStatus.COMPLETED);
+        if (!seen) {
+            com.example.hms.enums.EncounterStatus open = visits.get(0).getStatus();
+            throw new BusinessException("appointment.complete.visitNotCompleted", com.example.hms.enums.EncounterStatus.labelOf(open));
         }
     }
 
@@ -183,7 +437,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private User getUserOrThrow(String username) {
         return userRepository.findByUsername(username)
-            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + username));
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, username));
     }
 
     /**
@@ -204,37 +458,36 @@ public class AppointmentServiceImpl implements AppointmentService {
         return hospitals;
     }
 
+    /** Holds any of {@link #STAFF_BOOKING_ROLES}, by the same active-assignment rule as {@link #hasRole}. */
+    private boolean isStaffBooker(User user) {
+        if (user == null) {
+            return false;
+        }
+        List<UserRoleHospitalAssignment> assignments = assignmentRepository.findAllByUserId(user.getId());
+        return STAFF_BOOKING_ROLES.stream().anyMatch(code -> EffectiveRoles.holds(user, assignments, code));
+    }
+
     private boolean hasRole(User user, String roleCode) {
         if (user == null) {
             log.warn("hasRole() check failed: user is null");
             return false;
         }
 
-        List<String> userRoleCodes = user.getUserRoles() == null ? List.of() : user.getUserRoles().stream()
-            .map(UserRole::getRole)
-            .filter(Objects::nonNull)
-            .map(Role::getCode)
-            .filter(Objects::nonNull)
-            .toList();
+        // Same rule as sign-in (EffectiveRoles): only an ACTIVE assignment
+        // grants a governed role, and a leftover user-level ROLE_PATIENT on a
+        // staff account never narrows a receptionist's search to their own
+        // patient appointments (QA D74, D132).
+        return EffectiveRoles.holds(user, assignmentRepository.findAllByUserId(user.getId()), roleCode);
+    }
 
-        boolean directMatch = userRoleCodes.stream().anyMatch(code -> code.equalsIgnoreCase(roleCode));
-        if (directMatch) {
-            log.debug("hasRole() direct match: user={}, roleCode={}, userRoleCodes={}", user.getUsername(), roleCode, userRoleCodes);
-            return true;
-        }
-
-        var assignmentCodes = assignmentRepository.findAllByUserId(user.getId()).stream()
-            .filter(assignment -> Boolean.TRUE.equals(assignment.getActive()))
-            .map(UserRoleHospitalAssignment::getRole)
-            .filter(Objects::nonNull)
-            .map(Role::getCode)
-            .filter(Objects::nonNull)
-            .toList();
-
-        boolean assignmentMatch = assignmentCodes.stream().anyMatch(code -> code.equalsIgnoreCase(roleCode));
-        log.debug("hasRole() checking assignments: user={}, roleCode={}, userRoleCodes={}, assignmentCodes={}",
-            user.getUsername(), roleCode, userRoleCodes, assignmentCodes);
-        return assignmentMatch;
+    /**
+     * QA D351: the booked reason and notes. The reason was never stored on a
+     * staff booking, so the reception queue and the doctor's worklist fell
+     * back to the chief complaint triage recorded.
+     */
+    static void applyBookingText(Appointment appointment, AppointmentRequestDTO request) {
+        appointment.setNotes(request.getNotes());
+        appointment.setReason(request.getReason());
     }
 
     /* =======================
@@ -246,44 +499,49 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentSummaryDTO createAppointment(AppointmentRequestDTO request, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
 
+        // Authorization: staff book for any patient registered at the booking
+        // hospital; a pure patient books only for themselves (QA D823: one list
+        // for every staff booking role, so a midwife is not taken for a patient).
+        boolean isStaffOrAdmin = isStaffBooker(currentUser);
+
         // --- Patient resolution (falls back to authenticated user) ---
-        final Patient patient = resolvePatient(request, locale, username);
-
-        // Authorization: Staff/admins can book for any patient; pure patients can only book for themselves
-        boolean isStaffOrAdmin = isSuperAdmin(currentUser)
-            || hasRole(currentUser, "ROLE_HOSPITAL_ADMIN")
-            || hasRole(currentUser, ROLE_ADMIN_CODE)
-            || hasRole(currentUser, ROLE_DOCTOR_CODE)
-            || hasRole(currentUser, ROLE_NURSE_CODE)
-            || hasRole(currentUser, ROLE_RECEPTIONIST_CODE);
-
-        log.debug("🔐 Authorization check: user={}, isStaffOrAdmin={}, isSuperAdmin={}, hasAdmin={}, hasDoctor={}, hasNurse={}, hasReceptionist={}",
-            currentUser.getUsername(),
-            isStaffOrAdmin,
-            isSuperAdmin(currentUser),
-            hasRole(currentUser, ROLE_ADMIN_CODE),
-            hasRole(currentUser, ROLE_DOCTOR_CODE),
-            hasRole(currentUser, ROLE_NURSE_CODE),
-            hasRole(currentUser, ROLE_RECEPTIONIST_CODE));
-
-        // If user is NOT staff/admin (i.e., they're a pure patient role), enforce self-booking
-        if (!isStaffOrAdmin) {
-            log.warn("❌ User {} is NOT staff/admin, enforcing self-booking restriction", currentUser.getUsername());
-            if (patient.getUser() == null || !patient.getUser().getId().equals(currentUser.getId())) {
-                throw new AccessDeniedException("Patients can only book appointments for themselves.");
-            }
-        } else {
-            log.info("✅ User {} is staff/admin, allowing booking for any patient", currentUser.getUsername());
-        }
+        // A pure patient books only for themselves. Naming anyone else answers
+        // exactly as naming an unknown patient does — the same 404 and message
+        // for that identifier — where it used to be a 403 for a real patient
+        // beside a 404 for a made-up one, which told a patient which ids,
+        // usernames and emails exist.
+        // QA D824: a staff booking names its patient by id. It used to fall
+        // back to the CALLER's own patient record when patientId was absent,
+        // so a receptionist whose account was (wrongly) linked to a patient
+        // row booked that patient without choosing anyone.
+        final Patient patient = isStaffOrAdmin
+            ? resolvePatientForStaffBooking(request)
+            : resolveOwnPatientForBooking(request, currentUser);
 
         // --- Hospital resolution (single block) ---
-        final Hospital hospital = resolveHospital(request, locale);
+        final Hospital hospital = resolveHospital(request);
 
         // auth scope
         requireHospitalScope(currentUser, hospital.getId(), locale);
 
+        // QA D401: staff book into the hospital's own schedule, so the patient
+        // must be registered there; otherwise the same 404 as an unknown id
+        // (the booking response used to hand back the patient's name and phone).
+        if (isStaffOrAdmin) {
+            patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+        }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());
+
+        var bookingIdentity = com.example.hms.service.support.AppointmentBookingIdentity.staff(
+            currentUser.getId(), patient.getId(), hospital.getId(), request);
+        var replay = bookingIdentity.replay(appointmentRepository);
+        if (replay.isPresent()) {
+            return bookingSummary(replay.get());
+        }
+
         // --- Staff resolution ---
-        final Staff staff = resolveStaff(request, locale);
+        final Staff staff = resolveStaff(request);
 
         // staff must belong to hospital
         if (!staff.getHospital().getId().equals(hospital.getId())) {
@@ -295,45 +553,38 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         // --- Staff role assignment in this hospital ---
         final UserRoleHospitalAssignment assignment = assignmentRepository
-            .findByUserIdAndHospitalId(staff.getUser().getId(), hospital.getId())
+            .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
             .stream().findFirst()
-            .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
+            .orElseThrow(() -> new BusinessException(STAFF_ASSIGNMENT_MISSING_KEY));
 
-        // --- Time validations (default endTime = startTime + 30 min) ---
-        LocalTime endTime = request.getEndTime() != null
-                ? request.getEndTime()
-                : request.getStartTime().plusMinutes(30);
+        // --- Time validations ---
+        // QA D1060: the slot rules decide how long the visit lasts (the generated
+        // slot, else the session template's slot length, else 30 minutes). An
+        // end time in the request is ignored: a patient booked a clinician's
+        // whole day through this endpoint.
+        requireBookingStart(request);
+        LocalTime endTime = slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), endTime);
-        if (!requestedEnd.isAfter(requestedStart)) {
-            throw new BusinessException("Appointment end time must be after start time");
-        }
+        // QA D1473: an overbook reason does not make a time already gone a booking.
+        requireNotAlreadyPast(requestedStart, hospital);
+        // QA D1063: a slot held for a waitlist offer is not given to anyone else.
+        slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
 
-        // schedule check
-        if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new BusinessException(messageSource.getMessage(
-                "appointment.staff.unavailable.schedule",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime()},
-                locale
-            ));
-        }
+        // Serialize the existing overlap check with other bookings for this clinician.
+        staffRepository.findLockedById(staff.getId());
+        requireClinicianFreeForBooking(staff, request, requestedStart, requestedEnd, locale);
 
-        // overlap check
-        boolean hasConflict = appointmentRepository
-            .findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate())
-            .stream()
-            .anyMatch(existing -> {
-                LocalDateTime es = LocalDateTime.of(existing.getAppointmentDate(), existing.getStartTime());
-                LocalDateTime ee = LocalDateTime.of(existing.getAppointmentDate(), existing.getEndTime());
-                return requestedStart.isBefore(ee) && es.isBefore(requestedEnd);
-            });
-        if (hasConflict) {
-            throw new BusinessException(messageSource.getMessage(
-                "appointment.staff.unavailable",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime(), endTime},
-                locale
-            ));
+        // QA D1429: staff may book outside a published free slot, with a reason; a
+        // patient reaching this endpoint books a published free slot, like on the portal.
+        com.example.hms.model.scheduling.AppointmentSlot patientSlot = null;
+        if (!isStaffOrAdmin) {
+            patientSlot = slotPolicy.requirePublishedFreeSlot(staff.getId(), requestedStart, hospital.getId(), null);
+            AppointmentSlotRules.requirePatientBookable(requestedStart, requestedEnd, nowAt(hospital));
         }
+        String overbookReason = isStaffOrAdmin
+            ? slotPolicy.overbookReasonOffSlot(staff.getId(), requestedStart, hospital.getId(), request.getOverbookReason())
+            : null;
 
         // --- Create only scheduling data ---
         Appointment appointment = new Appointment();
@@ -344,13 +595,29 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setAppointmentDate(request.getAppointmentDate());
         appointment.setStartTime(request.getStartTime());
         appointment.setEndTime(endTime);
-    appointment.setNotes(request.getNotes());
-    AppointmentStatus status = Optional.ofNullable(request.getStatus()).orElse(AppointmentStatus.SCHEDULED);
+        applyBookingText(appointment, request);
+    // QA D1429: a patient books a live visit, as on the portal: a dead one must not take a slot nobody frees.
+    AppointmentStatus status = isStaffOrAdmin
+        ? Optional.ofNullable(request.getStatus()).orElse(AppointmentStatus.SCHEDULED)
+        : AppointmentStatus.SCHEDULED;
     appointment.setStatus(status);
+        // QA D1126: a booking written straight as CANCELLED or NO_SHOW needs its reason too.
+        appointment.setStatusReason(requireStatusReason(status, request.getStatusReason()));
         appointment.setCreatedBy(currentUser);
         appointment.setAssignment(assignment);
+        appointment.setOverbookReason(overbookReason);
 
+        bookingIdentity.stamp(appointment);
         Appointment saved = appointmentRepository.save(appointment);
+        appointmentRepository.flush();
+        if (patientSlot != null) {
+            slotPolicy.takeSlot(patientSlot, saved);
+        }
+        auditOverbooking(saved, hospital, AuditEventType.APPOINTMENT_CREATED);
+        // QA D985: the recall this visit answers is now scheduled.
+        if (recallService != null && AppointmentStatus.holdsSlot(saved.getStatus())) {
+            recallService.scheduleOpenRecallFor(saved, request.getRecallId());
+        }
 
         // Outbound webhooks (Tier 2 item 45): thin id-reference only. The
         // publisher defers to AFTER COMMIT and enqueues in its own
@@ -369,10 +636,10 @@ public class AppointmentServiceImpl implements AppointmentService {
                 Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
                 emailService.sendAppointmentConfirmationEmail(
                     patient.getEmail(),
-                    patient.getFirstName() + " " + patient.getLastName(),
+                    patient.getFullName(),
                     hospital.getName(),
                     staff.getUser().getFirstName() + " " + staff.getUser().getLastName(),
-                    saved.getAppointmentDate().toString(),
+                    com.example.hms.utility.DisplayDates.date(saved.getAppointmentDate(), mailLocale),
                     saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
                     hospital.getEmail(),
                     hospital.getPhoneNumber(),
@@ -385,7 +652,17 @@ public class AppointmentServiceImpl implements AppointmentService {
             }
         }
 
-        // --- Return lean summary (no null bloat) ---
+        return bookingSummary(saved);
+    }
+
+    private static void requireBookingStart(AppointmentRequestDTO request) {
+        if (request.getStartTime() == null || request.getAppointmentDate() == null) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.timeRange.invalid");
+        }
+    }
+
+    private AppointmentSummaryDTO bookingSummary(Appointment saved) {
+        // Return the same shape for a creation and a replay.
         Patient p = saved.getPatient();
         Staff s = saved.getStaff();
         Department d = saved.getDepartment();
@@ -397,7 +674,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             .startTime(saved.getStartTime())
             .endTime(saved.getEndTime())
             .patientId(p.getId())
-            .patientName(p.getFirstName() + " " + p.getLastName())
+            .patientName(p.getFullName())
             .patientEmail(p.getEmail())
             .patientPhone(p.getPhoneNumberPrimary())
             .staffId(s.getId())
@@ -418,105 +695,170 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     /* ------- small private helpers to keep createAppointment tidy ------- */
 
-    private Patient resolvePatient(AppointmentRequestDTO request, Locale locale, String authenticatedUsername) {
+    /**
+     * The patient a staff member books for: the one named by {@code patientId},
+     * and nobody else. Never the caller's own patient record (QA D824), and
+     * never a username or an e-mail fragment, whose "contains" match picked
+     * whichever patient came first.
+     */
+    private Patient resolvePatientForStaffBooking(AppointmentRequestDTO request) {
+        if (request.getPatientId() == null) {
+            throw new FieldBusinessException("patientId", "appointment.patient.required");
+        }
+        return resolvePatient(request.getPatientId());
+    }
+
+    /**
+     * Unscoped on purpose: multi-hospital patients have Patient.hospitalId set
+     * to the FIRST hospital, so the tenant-scoped findById misses them when
+     * accessed from a different hospital context. The registration guard then
+     * scopes a staff booking to the booking hospital.
+     */
+    private Patient resolvePatient(UUID patientId) {
+        return patientRepository.findByIdUnscoped(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
+    }
+
+    /**
+     * The patient a pure patient books for: themselves. Each way of naming a
+     * patient answers a foreign one exactly as {@link #resolvePatient} answers
+     * one that does not exist, and asks ownership before loading anything a
+     * made-up identifier would not also reach.
+     */
+    private Patient resolveOwnPatientForBooking(AppointmentRequestDTO request, User currentUser) {
         if (request.getPatientId() != null) {
-            // Use unscoped lookup: multi-hospital patients have Patient.hospitalId set
-            // to the FIRST hospital, so the tenant-scoped findById misses them when
-            // accessed from a different hospital context.
-            return patientRepository.findByIdUnscoped(request.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                    messageSource.getMessage("patient.notfound", new Object[]{request.getPatientId()},
-                        "Patient not found with ID: " + request.getPatientId(), locale)));
-        } else if (request.getPatientUsername() != null) {
-            UUID userId = userRepository.findByUsername(request.getPatientUsername())
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + request.getPatientUsername()))
-                .getId();
-            return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + request.getPatientUsername()));
-        } else if (request.getPatientEmail() != null) {
-            return patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
-                .stream().findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found for email: " + request.getPatientEmail()));
+            if (!patientRepository.existsByIdAndUserId(request.getPatientId(), currentUser.getId())) {
+                throw new ResourceNotFoundException("patient.notfound", request.getPatientId());
+            }
+            return resolvePatient(request.getPatientId());
         }
-        // Fallback: use the authenticated user's identity (supports mobile/patient-portal clients)
-        if (authenticatedUsername != null) {
-            UUID userId = userRepository.findByUsername(authenticatedUsername)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + authenticatedUsername))
-                .getId();
-            return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + authenticatedUsername));
+        if (request.getPatientUsername() != null) {
+            if (!request.getPatientUsername().equalsIgnoreCase(currentUser.getUsername())) {
+                throw new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, request.getPatientUsername());
+            }
+            return ownPatientRecord(currentUser, request.getPatientUsername());
         }
-        throw new BusinessException("Patient identifier required");
+        if (request.getPatientEmail() != null) {
+            // QA round 16 residual #13 (class): a family can share an email, so the
+            // first match may be a relative's record; only the caller's own counts.
+            Patient named = patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
+                .stream()
+                .filter(p -> p.getUser() != null && currentUser.getId().equals(p.getUser().getId()))
+                .findFirst().orElse(null);
+            if (named == null) {
+                throw new ResourceNotFoundException("patient.notFoundByIdentifier", request.getPatientEmail());
+            }
+            return named;
+        }
+        // No patient named (the mobile and patient-portal clients): the
+        // caller's own record -- for a patient only. Any other caller that
+        // reaches here (a role outside the staff list) names its patient.
+        if (!hasRole(currentUser, ROLE_PATIENT_CODE)) {
+            throw new FieldBusinessException("patientId", "appointment.patient.required");
+        }
+        return ownPatientRecord(currentUser, currentUser.getUsername());
     }
 
-    private Hospital resolveHospital(AppointmentRequestDTO request, Locale locale) {
+    /** The patient row linked to the caller's own account. */
+    private Patient ownPatientRecord(User currentUser, String named) {
+        return patientRepository.findByUserId(currentUser.getId())
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, named));
+    }
+
+    /**
+     * The booking hospital, by id, code or name. A provider facility answers
+     * exactly as an unknown one: nobody books an appointment at a pharmacy or
+     * laboratory (provider plan AC-11).
+     */
+    private Hospital resolveHospital(AppointmentRequestDTO request) {
         if (request.getHospitalId() != null) {
-            return hospitalRepository.findById(request.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                    messageSource.getMessage("hospital.notfound", new Object[]{request.getHospitalId()}, locale)));
+            return hospitalRepository.findClinicalById(request.getHospitalId())
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", request.getHospitalId()));
         } else if (request.getHospitalCode() != null) {
-            return hospitalRepository.findByCodeIgnoreCase(request.getHospitalCode())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found for code: " + request.getHospitalCode()));
+            return hospitalRepository.findClinicalByCodeIgnoreCase(request.getHospitalCode())
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalCode()));
         } else if (request.getHospitalName() != null) {
-            return hospitalRepository.findByNameIgnoreCase(request.getHospitalName())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found for name: " + request.getHospitalName()));
+            return hospitalRepository.findClinicalByNameIgnoreCase(request.getHospitalName())
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalName()));
         }
-        throw new BusinessException("Hospital identifier required");
+        throw new FieldBusinessException("hospitalId", "appointment.hospital.required");
     }
 
-    private Staff resolveStaff(AppointmentRequestDTO request, Locale locale) {
+    private Staff resolveStaff(AppointmentRequestDTO request) {
         if (request.getStaffId() != null) {
             return staffRepository.findById(request.getStaffId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                    messageSource.getMessage("staff.notfound", new Object[]{request.getStaffId()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", request.getStaffId()));
         } else if (request.getStaffEmail() != null) {
             UUID userId = userRepository.findByEmail(request.getStaffEmail())
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + request.getStaffEmail()))
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", request.getStaffEmail()))
                 .getId();
             return staffRepository.findByUserId(userId).stream().findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Staff not found for email: " + request.getStaffEmail()));
+                .orElseThrow(() -> new ResourceNotFoundException("staff.notFoundByIdentifier", request.getStaffEmail()));
         } else if (request.getStaffUsername() != null) {
             UUID userId = userRepository.findByUsername(request.getStaffUsername())
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + request.getStaffUsername()))
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, request.getStaffUsername()))
                 .getId();
             return staffRepository.findByUserId(userId).stream().findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Staff not found for username: " + request.getStaffUsername()));
+                .orElseThrow(() -> new ResourceNotFoundException("staff.notFoundByIdentifier", request.getStaffUsername()));
         }
-        throw new BusinessException("Staff identifier required");
+        throw new FieldBusinessException(FIELD_STAFF_ID, "appointment.staff.required");
     }
 
     private Department resolveDepartment(AppointmentRequestDTO request, Hospital hospital, Staff staff) {
         // 1. Explicit departmentId in the request
         if (request.getDepartmentId() != null) {
+            // Only a department of the appointment's hospital: a caller-supplied
+            // id from another hospital is "not found", not a cross-tenant link.
             return departmentRepository.findById(request.getDepartmentId())
+                .filter(d -> d.getHospital() != null && hospital.getId().equals(d.getHospital().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
         }
         // 2. departmentCode in the request
         if (request.getDepartmentCode() != null) {
             return departmentRepository.findByHospitalIdAndCodeIgnoreCase(hospital.getId(), request.getDepartmentCode())
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found for code: " + request.getDepartmentCode()));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFoundByIdentifier", request.getDepartmentCode()));
         }
         // 3. departmentName in the request
         if (request.getDepartmentName() != null) {
             return departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), request.getDepartmentName())
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found for name: " + request.getDepartmentName()));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFoundByIdentifier", request.getDepartmentName()));
         }
         // 4. Staff's own department (doctors/nurses usually have one)
         if (staff.getDepartment() != null) {
             return staff.getDepartment();
         }
-        // 5. Fallback: first available department in the hospital
-        //    Covers roles like RECEPTIONIST that are not tied to a specific department.
-        List<Department> hospitalDepts = departmentRepository.findByHospitalId(hospital.getId());
-        if (!hospitalDepts.isEmpty()) {
-            log.debug("resolveDepartment: staff {} has no department; using first hospital department '{}'",
-                staff.getId(), hospitalDepts.get(0).getName());
-            return hospitalDepts.get(0);
-        }
-        throw new BusinessException("No departments found for hospital " + hospital.getId()
-            + ". Please add a department or specify departmentId in the request.");
+        // 5. No department named and the clinician has none: refuse (QA D99).
+        //    This used to file the booking under the hospital's FIRST
+        //    department (alphabetically, e.g. the laboratory), a silent and
+        //    wrong placement the patient's chart then carried.
+        throw new com.example.hms.exception.FieldBusinessException("departmentId", "appointment.department.required");
     }
 
+
+    /**
+     * QA D1018: the department an edit files the visit under. A department the
+     * request names wins (same lookup as a booking, scoped to the hospital);
+     * a visit moved to another hospital is filed as a new booking would be; a
+     * visit moved to another clinician who has a department follows them;
+     * otherwise it stays where it was.
+     */
+    private Department resolveDepartmentForEdit(AppointmentRequestDTO request, Hospital hospital, Staff staff,
+                                                Appointment existing) {
+        boolean named = request.getDepartmentId() != null || request.getDepartmentCode() != null
+            || request.getDepartmentName() != null;
+        UUID oldStaffId = existing.getStaff() != null ? existing.getStaff().getId() : null;
+        UUID oldHospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        boolean staffChanged = oldStaffId != null && !oldStaffId.equals(staff.getId());
+        boolean hospitalChanged = oldHospitalId != null && !oldHospitalId.equals(hospital.getId());
+        // A visit moved to another hospital never keeps the old hospital's department.
+        if (named || hospitalChanged) {
+            return resolveDepartment(request, hospital, staff);
+        }
+        if (staffChanged && staff.getDepartment() != null) {
+            return staff.getDepartment();
+        }
+        return existing.getDepartment();
+    }
 
     /* =======================
        UPDATE
@@ -528,79 +870,65 @@ public class AppointmentServiceImpl implements AppointmentService {
         User currentUser = getUserOrThrow(username);
 
         Appointment existing = appointmentRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_MESSAGE));
+            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, id));
 
-        // Null checks for required IDs
-        if (request.getPatientId() == null) {
-            throw new BusinessException("Patient ID must not be null");
-        }
-        if (request.getStaffId() == null) {
-            throw new BusinessException("Staff ID must not be null");
-        }
-        if (request.getHospitalId() == null) {
-            throw new BusinessException("Hospital ID must not be null");
-        }
-        if (request.getAppointmentDate() == null) {
-            throw new BusinessException("Appointment date must not be null");
-        }
-        if (request.getStartTime() == null || request.getEndTime() == null) {
-            throw new BusinessException("Appointment start and end time must not be null");
-        }
+        requireCompleteEdit(request);
 
-        requireHospitalScope(currentUser, existing.getHospital().getId(), locale);
+        requireAppointmentVisible(currentUser, existing);
+        // QA D788: the edit form is the other road to COMPLETED; refused as the
+        // status action refuses it, before anything else is looked up.
+        requireVisitCompletedBeforeAppointment(existing, request.getStatus());
 
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Staff staff = staffRepository.findById(request.getStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException("Staff not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getStaffId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
         if (!staff.getHospital().getId().equals(hospital.getId())) {
             throw new AccessDeniedException("Staff does not belong to selected hospital");
         }
+        // QA D401: an update may move the appointment to another hospital or
+        // patient; the patient must be registered where it lands.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospital.getId())
+        UserRoleHospitalAssignment assignment = assignmentRepository
+            .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
             .stream()
             .findFirst()
-            .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
+            .orElseThrow(() -> new BusinessException(STAFF_ASSIGNMENT_MISSING_KEY));
 
+        // QA D1060: the slot rules set the length. A visit kept at its date,
+        // start and clinician keeps its own end (an edit of the notes or the
+        // status never re-times it); a moved one takes the slot length where
+        // it lands. The end time in the request is ignored.
+        boolean moved = movesTheVisit(request, existing, staff);
+        request.setEndTime(moved || existing.getEndTime() == null
+            ? slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime())
+            : existing.getEndTime());
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), request.getEndTime());
-
-        // --- Staff Schedule Check ---
-        boolean staffAvailable = staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart);
-        if (!staffAvailable) {
-            throw new BusinessException(messageSource.getMessage(
-                "appointment.staff.unavailable.schedule",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime()},
-                locale
-            ));
+        if (moved) {
+            // QA D1063: nor is it moved onto a slot held for a waitlist offer.
+            slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
         }
 
-        boolean hasConflict = appointmentRepository
-            .findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()).stream()
-            .filter(a -> !a.getId().equals(id))
-            .anyMatch(existingAppointment -> {
-                LocalDateTime es = LocalDateTime.of(existingAppointment.getAppointmentDate(), existingAppointment.getStartTime());
-                LocalDateTime ee = LocalDateTime.of(existingAppointment.getAppointmentDate(), existingAppointment.getEndTime());
-                return requestedStart.isBefore(ee) && es.isBefore(requestedEnd);
-            });
-
-        if (hasConflict) {
-            throw new BusinessException(messageSource.getMessage(
-                "appointment.staff.unavailable",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime(), request.getEndTime()},
-                locale
-            ));
-        }
+        requireStaffScheduledForEdit(staff, request, requestedStart, locale);
+        requireNoConflictForEdit(id, existing, staff, request, requestedStart, requestedEnd, locale);
+        // QA D1429: a move outside a published free slot needs its reason, and a move
+        // onto one drops the old reason; an edit that keeps the time keeps what is there.
+        String overbookReason = moved
+            ? slotPolicy.overbookReasonOffSlot(staff.getId(), requestedStart, hospital.getId(), request.getOverbookReason())
+            : existing.getOverbookReason();
 
         // Capture old schedule before mapper overwrites fields
         LocalDate   oldDate  = existing.getAppointmentDate();
         LocalTime   oldStart = existing.getStartTime();
         LocalTime   oldEnd   = existing.getEndTime();
+        UUID        oldStaffId = existing.getStaff() != null ? existing.getStaff().getId() : null;
 
         // The update path used to write request.getStatus() straight onto the
         // entity with no transition check at all, while
@@ -609,20 +937,231 @@ public class AppointmentServiceImpl implements AppointmentService {
         // status the state machine says must be passed through, reached by a
         // route that never consulted the state machine. A rule enforced on one
         // of two write paths is not a rule.
-        requireValidStatusChange(existing.getStatus(), request.getStatus());
+        AppointmentStatus statusBefore = existing.getStatus();
+        requireValidStatusChange(statusBefore, request.getStatus());
+        boolean statusMoved = request.getStatus() != null && request.getStatus() != statusBefore;
+        if (statusMoved && STATUSES_THAT_KEEP_A_VISIT_LIVE.contains(request.getStatus())) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        }
+        if (statusMoved) {
+            // The same temporal guard as the status action (review round 8).
+            // Both the visit's own time and the time it is moved to must have
+            // started: one PUT cannot move a future visit into the past and mark
+            // it a no-show in the same breath (review round 15).
+            requireStartedFor(request.getStatus(),
+                LocalDateTime.of(existing.getAppointmentDate(), existing.getStartTime()), hospital);
+            requireStartedFor(request.getStatus(), requestedStart, hospital);
+        }
+        if (!request.getAppointmentDate().equals(existing.getAppointmentDate())
+                || !request.getStartTime().equals(existing.getStartTime())) {
+            // QA D1473: nor is a visit moved to a time already gone (after the status judgement
+            // above, which names the worse fault first). Giving a visit under way to another
+            // clinician keeps its time, and stays possible.
+            requireNotAlreadyPast(requestedStart, hospital);
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+            // QA D1476: nor moved on for a registration the desk deactivated; keeping its time,
+            // it can still take a note, another clinician or a cancellation.
+            patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());
+        }
+        // QA D1126: the edit form drops a visit only with a reason, like the status action.
+        String statusReason = statusMoved ? requireStatusReason(request.getStatus(), request.getStatusReason()) : null;
 
+        // QA D1018 / D923: the department is part of the edit. The PUT used to
+        // answer 200 and keep the old one, so a visit moved to a paediatrician
+        // stayed filed under general medicine. Resolved after the status
+        // checks, so their refusals come first as before.
+        Department department = resolveDepartmentForEdit(request, hospital, staff, existing);
         appointmentMapper.updateAppointmentFromDto(request, existing, patient, staff, hospital);
+        existing.setDepartment(department);
         existing.setAssignment(assignment);
+        existing.setOverbookReason(overbookReason);
         existing.setUpdatedAt(LocalDateTime.now());
+        if (statusMoved) {
+            existing.setStatusReason(statusReason);
+        }
 
-        Appointment saved = appointmentRepository.save(existing);
+        // QA D923: flush BEFORE the refresh. refresh() reloads the row from the
+        // database, so refreshing an entity whose edits were still only in the
+        // persistence context threw every edit away: the PUT answered 200 with
+        // the old date, time and notes, and nothing was written.
+        Appointment saved = appointmentRepository.saveAndFlush(existing);
         entityManager.refresh(saved);
+        if (statusMoved) {
+            afterEditMovedStatus(saved);
+        }
+        if (moved) {
+            auditOverbooking(saved, hospital, AuditEventType.APPOINTMENT_UPDATED);
+        }
+
+        // QA D1013 (sibling): a visit moved off the inventory slot it was
+        // booked from, or to another clinician, frees that slot; it used to
+        // stay BOOKED for an appointment that was no longer there.
+        boolean leftItsSlot = !saved.getAppointmentDate().equals(oldDate)
+            || !saved.getStartTime().equals(oldStart)
+            || !saved.getEndTime().equals(oldEnd)
+            || !Objects.equals(oldStaffId, staff.getId());
+        if (leftItsSlot) {
+            slotInventoryService.releaseForAppointment(saved.getId());
+        }
 
         // Outbound webhooks (Tier 2 item 45): a moved visit is a reschedule
         // regardless of which write path moved it.
         publishRescheduleIfMoved(saved, oldDate, oldStart, oldEnd);
 
-        // Notify patient when date/time changes (treat as reschedule)
+        sendRescheduleEmailIfMoved(saved, oldDate, oldStart, oldEnd);
+
+        return appointmentMapper.toAppointmentResponseDTO(saved);
+    }
+
+    /** The clinician's schedule covers the start, and no visit holding its slot overlaps it. */
+    private void requireClinicianFreeForBooking(Staff staff, AppointmentRequestDTO request, LocalDateTime requestedStart,
+                                                LocalDateTime requestedEnd, Locale locale) {
+        // schedule check
+        if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
+            throw new com.example.hms.exception.FieldBusinessException("appointmentDate", "appointment.staff.unavailable.schedule",
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()));
+        }
+
+        // overlap check
+        // QA D937: a cancelled booking or a no-show frees its slot.
+        boolean hasConflict = AppointmentSlotRules.overlapsHeldSlot(
+            appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()),
+            null, requestedStart, requestedEnd);
+        if (hasConflict) {
+            // QA D1367 (round 31): the time the slot is held at is named, so the form marks it.
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.staff.unavailable",
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()), DisplayDates.time(requestedEnd.toLocalTime(), LocaleContextHolder.getLocale()));
+        }
+    }
+
+    /**
+     * QA D1473: the desk may overbook, not book the past: today 02:30 at 06:05 was accepted
+     * with a reason, and could be marked a no-show at once. Judged to the minute on the
+     * hospital's clock, so the minute the desk reads on the wall is still bookable.
+     */
+    private static void requireNotAlreadyPast(LocalDateTime start, Hospital hospital) {
+        if (isAlreadyPast(start, hospital)) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "portal.booking.pastTime");
+        }
+    }
+
+    private static boolean isAlreadyPast(LocalDateTime start, Hospital hospital) {
+        return start.isBefore(nowAt(hospital).truncatedTo(java.time.temporal.ChronoUnit.MINUTES));
+    }
+
+    /** The visit being moved keeps its time: only another clinician is asked about, not the past. */
+    private boolean keepsItsTime(UUID movedAppointmentId, java.time.LocalDate date, java.time.LocalTime time,
+                                 Hospital hospital) {
+        return movedAppointmentId != null && appointmentRepository.findById(movedAppointmentId)
+            // The id comes from the request: another hospital's visit answers as no visit.
+            .filter(moved -> moved.getHospital() != null && hospital.getId().equals(moved.getHospital().getId()))
+            .filter(moved -> date.equals(moved.getAppointmentDate()) && time.equals(moved.getStartTime()))
+            .isPresent();
+    }
+
+    /**
+     * QA D1474: what the booking would say about this time, asked while the desk types, so it
+     * is told at once rather than after writing an overbook reason: the same past, schedule and
+     * overlap rules as {@link #createAppointment}. Null when the time can be booked (with or
+     * without a reason, which {@code isOffSlot} on the form asks about).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public String bookingTimeRefusal(UUID staffId, java.time.LocalDate date, java.time.LocalTime time,
+                                     UUID movedAppointmentId, Locale locale, String username) {
+        User currentUser = getUserOrThrow(username);
+        Staff staff = staffRepository.findById(staffId)
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", staffId));
+        Hospital hospital = staff.getHospital();
+        // A clinician of another hospital answers as an unknown one: this read names no one's existence.
+        if (!hasHospitalAccess(currentUser, hospital.getId())) {
+            throw new ResourceNotFoundException("staff.notfound", staffId);
+        }
+        LocalTime endTime = slotPolicy.endFor(staffId, date, time);
+        LocalDateTime start = LocalDateTime.of(date, time);
+        LocalDateTime end = LocalDateTime.of(date, endTime);
+        if (isAlreadyPast(start, hospital) && !keepsItsTime(movedAppointmentId, date, time, hospital)) {
+            return messageSource.getMessage("portal.booking.pastTime", null, locale);
+        }
+        Object[] args = {staffId, DisplayDates.date(date, locale), DisplayDates.time(time, locale),
+            DisplayDates.time(endTime, locale)};
+        if (!staffAvailabilityService.isStaffAvailable(staffId, start)) {
+            return messageSource.getMessage("appointment.staff.unavailable.schedule", args, locale);
+        }
+        boolean taken = AppointmentSlotRules.overlapsHeldSlot(
+            appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, date), movedAppointmentId, start, end);
+        return taken ? messageSource.getMessage("appointment.staff.unavailable", args, locale) : null;
+    }
+
+    private static LocalDateTime nowAt(Hospital hospital) {
+        return com.example.hms.utility.HospitalCalendar.now(hospital);
+    }
+
+    /**
+     * QA D1429: an overbooking is on the audit trail, with no free text (the reason stays
+     * on the appointment). A failed audit never breaks the booking.
+     */
+    private void auditOverbooking(Appointment saved, Hospital hospital, AuditEventType eventType) {
+        if (saved == null || saved.getOverbookReason() == null) {
+            return;
+        }
+        try {
+            auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .eventType(eventType)
+                .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                .entityType(WEBHOOK_RESOURCE_APPOINTMENT)
+                .resourceId(saved.getId() != null ? saved.getId().toString() : null)
+                .userName(com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUsername())
+                .hospitalName(hospital.getName())
+                .eventDescription("Appointment overbooked outside the published slots")
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to audit the overbooking of appointment {}: {}", saved.getId(), ex.getMessage());
+        }
+    }
+
+    /**
+     * QA D1060: whether an edit moves the visit (another date, start or
+     * clinician); a moved visit takes the slot length where it lands.
+     */
+    private static boolean movesTheVisit(AppointmentRequestDTO request, Appointment existing, Staff staff) {
+        return !request.getAppointmentDate().equals(existing.getAppointmentDate())
+            || !request.getStartTime().equals(existing.getStartTime())
+            || existing.getStaff() == null || !staff.getId().equals(existing.getStaff().getId());
+    }
+
+    /** The clinician's schedule must cover the edited start. */
+    private void requireStaffScheduledForEdit(Staff staff, AppointmentRequestDTO request,
+                                              LocalDateTime requestedStart, Locale locale) {
+        if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STAFF_ID, "appointment.staff.unavailable.schedule",
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()));
+        }
+    }
+
+    /**
+     * QA D937: the appointment being moved, a cancelled booking and a
+     * no-show never conflict. Nor does the edit itself when the visit
+     * ends up not holding its slot (review round 9): a missed or cancelled
+     * visit whose freed time was rebooked can still take a note or a cancel.
+     */
+    private void requireNoConflictForEdit(UUID id, Appointment existing, Staff staff, AppointmentRequestDTO request,
+                                          LocalDateTime requestedStart, LocalDateTime requestedEnd, Locale locale) {
+        AppointmentStatus resultingStatus = request.getStatus() != null ? request.getStatus() : existing.getStatus();
+        boolean hasConflict = AppointmentStatus.holdsSlot(resultingStatus)
+            && AppointmentSlotRules.overlapsHeldSlot(
+                appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()),
+                id, requestedStart, requestedEnd);
+        if (hasConflict) {
+            // QA D1367 (round 31): the time the slot is held at is named, so the form marks it.
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.staff.unavailable",
+                staff.getId(), DisplayDates.date(request.getAppointmentDate(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getStartTime(), LocaleContextHolder.getLocale()), DisplayDates.time(request.getEndTime(), LocaleContextHolder.getLocale()));
+        }
+    }
+
+    /** Notify the patient when the date or time changed (treated as a reschedule). */
+    private void sendRescheduleEmailIfMoved(Appointment saved, LocalDate oldDate,
+                                            LocalTime oldStart, LocalTime oldEnd) {
         boolean dateChanged  = !saved.getAppointmentDate().equals(oldDate);
         boolean startChanged = !saved.getStartTime().equals(oldStart);
         boolean endChanged   = !saved.getEndTime().equals(oldEnd);
@@ -634,10 +1173,10 @@ public class AppointmentServiceImpl implements AppointmentService {
                 Locale mailLocale = patientLocaleResolver.resolve(pt, EmailService.DEFAULT_RECIPIENT_LOCALE);
                 emailService.sendAppointmentRescheduledEmail(
                     pt.getEmail(),
-                    pt.getFirstName() + " " + pt.getLastName(),
+                    pt.getFullName(),
                     h.getName(),
                     st.getUser().getFirstName() + " " + st.getUser().getLastName(),
-                    saved.getAppointmentDate().toString(),
+                    com.example.hms.utility.DisplayDates.date(saved.getAppointmentDate(), mailLocale),
                     saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
                     h.getEmail(), h.getPhoneNumber(),
                     frontendBaseUrl + appointmentLinks.getReschedulePath() + saved.getId(),
@@ -647,8 +1186,6 @@ public class AppointmentServiceImpl implements AppointmentService {
                 log.warn("Failed to send reschedule email for appointment {}: {}", saved.getId(), e.getMessage());
             }
         }
-
-        return appointmentMapper.toAppointmentResponseDTO(saved);
     }
 
     /** Emits the item-45 reschedule event iff the schedule actually moved. */
@@ -670,12 +1207,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     @Transactional
-    public AppointmentResponseDTO confirmOrCancelAppointment(UUID appointmentId, String action, Locale locale, String username) {
+    public AppointmentResponseDTO confirmOrCancelAppointment(UUID appointmentId, String action, String reason,
+                                                             Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
         Appointment appointment = appointmentRepository.findById(appointmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_MESSAGE));
+            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointmentId));
 
-        requireHospitalScope(currentUser, appointment.getHospital().getId(), locale);
+        requireAppointmentVisible(currentUser, appointment);
 
         AppointmentStatus newStatus;
         switch (action.toLowerCase()) {
@@ -692,36 +1230,46 @@ public class AppointmentServiceImpl implements AppointmentService {
             case "reschedule" -> newStatus = AppointmentStatus.RESCHEDULED;
             case "in_progress"-> newStatus = AppointmentStatus.IN_PROGRESS;
             case "fail"       -> newStatus = AppointmentStatus.FAILED;
-            default -> throw new BusinessException("Invalid action: " + action);
+            // QA D1374 (round 31): the query parameter is named.
+            default -> throw new com.example.hms.exception.FieldBusinessException("action", "appointment.invalidAction", action);
+        }
+
+        // QA D1488: closing a dead patient's visit stays open; putting it back into play does not.
+        if (STATUSES_THAT_KEEP_A_VISIT_LIVE.contains(newStatus)) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(appointment.getPatient());
         }
 
         // ── Validate status transition ──
         AppointmentStatus currentStatus = appointment.getStatus();
+        requireNotCheckedInForCancel(currentStatus, newStatus);
         Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(currentStatus, Set.of());
         if (!allowed.contains(newStatus)) {
-            throw new BusinessException(
-                String.format("Cannot transition from %s to %s", currentStatus, newStatus));
+            throw new BusinessException(INVALID_TRANSITION_KEY,
+                AppointmentStatus.labelOf(currentStatus), AppointmentStatus.labelOf(newStatus));
         }
+        requireVisitCompletedBeforeAppointment(appointment, newStatus);
 
         // ── Temporal guard: COMPLETED / NO_SHOW only after appointment start time ──
-        if (REQUIRES_APPOINTMENT_STARTED.contains(newStatus)) {
-            LocalDateTime appointmentStart = LocalDateTime.of(
-                appointment.getAppointmentDate(), appointment.getStartTime());
-            if (LocalDateTime.now().isBefore(appointmentStart)) {
-                throw new BusinessException(
-                    String.format("Cannot mark appointment as %s before its scheduled start time (%s)",
-                        newStatus, appointmentStart));
-            }
-        }
+        requireStartedFor(newStatus, LocalDateTime.of(appointment.getAppointmentDate(), appointment.getStartTime()),
+            appointment.getHospital());
+
+        requireFreedSlotStillFree(appointment, currentStatus, newStatus);
+        // QA D1126 / D1132: a cancel or a no-show needs the reason, and keeps it.
+        String statusReason = requireStatusReason(newStatus, reason, "reason");
 
         appointment.setStatus(newStatus);
+        appointment.setStatusReason(statusReason);
         appointmentRepository.save(appointment);
 
         // The appointment owns its slot (P3 #22): once the visit is cancelled
         // or moved, the slot goes back into circulation.
-        if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.RESCHEDULED) {
+        // QA D937: a no-show frees its time like a cancel, in the inventory too.
+        if (releasesSlotInventory(newStatus)) {
             slotInventoryService.releaseForAppointment(appointment.getId());
         }
+        // QA D985: a recall scheduled with a visit that will not happen is open
+        // again; one whose visit took place is fulfilled.
+        followUpRecalls(appointment.getId(), newStatus);
 
         // Outbound webhooks (Tier 2 item 45).
         if (newStatus == AppointmentStatus.CANCELLED) {
@@ -736,9 +1284,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         Patient patient = appointment.getPatient();
         Staff staff = appointment.getStaff();
         Hospital hospital = appointment.getHospital();
-        String patientName = patient.getFirstName() + " " + patient.getLastName();
+        String patientName = patient.getFullName();
         String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
-        String appointmentDate = appointment.getAppointmentDate().toString();
         String appointmentTime = appointment.getStartTime().toString() + " - " + appointment.getEndTime().toString();
         String hospitalEmail = hospital.getEmail();
         String hospitalPhone = hospital.getPhoneNumber();
@@ -750,6 +1297,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
             try {
                 Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
+                // QA D1710 class: the day in the patient's own way of writing it, never the ISO text.
+                String appointmentDate = com.example.hms.utility.DisplayDates.date(appointment.getAppointmentDate(),
+                    mailLocale);
                 switch (newStatus) {
                     case CONFIRMED -> emailService.sendAppointmentConfirmationEmail(
                         patient.getEmail(), patientName, hospital.getName(), staffName,
@@ -789,12 +1339,20 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentResponseDTO getAppointmentById(UUID id, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
         Appointment appointment = appointmentRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_MESSAGE));
+            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, id));
+
+        // A patient caller reads only their own: another patient's appointment
+        // answers exactly as a missing id does. Without this, the hospital
+        // scope below admitted any appointment at a hospital where the patient
+        // is registered.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.APPOINTMENT_READS, appointment.getPatient())) {
+            throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointment.getId());
+        }
 
         if (!isSuperAdmin(currentUser)) {
             boolean isPatient = appointment.getPatient().getUser().getId().equals(currentUser.getId());
             if (!isPatient && !hasHospitalAccess(currentUser, appointment.getHospital().getId())) {
-                throw new AccessDeniedException(messageSource.getMessage("access.denied", NO_ARGS, locale));
+                throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointment.getId());
             }
         }
     // On GET, return full details (existing mapping)
@@ -843,9 +1401,9 @@ public class AppointmentServiceImpl implements AppointmentService {
     public void deleteAppointment(UUID id, Locale locale, String username) {
         User user = getUserOrThrow(username);
         Appointment appointment = appointmentRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_MESSAGE));
+            .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, id));
 
-        requireHospitalScope(user, appointment.getHospital().getId(), locale);
+        requireAppointmentVisible(user, appointment);
 
         appointmentRepository.delete(appointment);
         log.info("Deleted appointment with ID: {}", id);
@@ -859,6 +1417,11 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getAppointmentsByPatientId(UUID patientId, Locale locale, String username) {
         User user = getUserOrThrow(username);
+        // A patient caller reads only their own. Another patient's id answers
+        // exactly as an unknown one does, before the patient lookup.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.APPOINTMENT_READS, patientId)) {
+            throw new ResourceNotFoundException("patient.notFound", patientId);
+        }
         return getAppointmentsByPatientScoped(patientId, user);
     }
 
@@ -882,7 +1445,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // the self-access check below then dereferences it. Rather than leave
         // the two halves disagreeing, pin the contract the callers already
         // honour: no user, no scoped read.
-        Objects.requireNonNull(user, "A resolved user is required to scope patient appointments.");
+        Objects.requireNonNull(user, "user");
         if (isSuperAdmin(user)) {
             return appointmentRepository.findByPatient_Id(patientId).stream()
                 .map(appointmentMapper::toAppointmentResponseDTO)
@@ -890,7 +1453,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         // patient.getUser() is nullable in practice — the same dangling-FK class
         // that produced the registrations 500 (a patient row whose user was
@@ -928,7 +1491,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private List<AppointmentResponseDTO> getAppointmentsByStaffScoped(UUID staffId, User user) {
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException("Staff not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
 
         if (isSuperAdmin(user)) {
             return appointmentRepository.findByStaff_Id(staffId).stream()
@@ -946,13 +1509,15 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getAppointmentsByDoctorId(UUID staffId, Locale locale) {
         // ── Hospital scope enforcement: filter results to the caller's hospital scope ──
-        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        if (context.isSuperAdmin()) {
+        // Global view only for a verified super-admin who named no hospital; a
+        // super-admin who named one reads it like anyone else.
+        ActingScope scope = ActingScopeResolver.currentScope();
+        if (scope instanceof ActingScope.Global) {
             return appointmentRepository.findByStaff_Id(staffId).stream()
                 .map(appointmentMapper::toAppointmentResponseDTO)
                 .toList();
         }
-        UUID activeHospitalId = context.getActiveHospitalId();
+        UUID activeHospitalId = scope instanceof ActingScope.Pinned pinned ? pinned.hospitalId() : null;
         if (activeHospitalId == null) {
             log.warn("getAppointmentsByDoctorId: no active hospital context, returning empty");
             return List.of();
@@ -1002,8 +1567,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private Set<UUID> resolveHospitalScope(User user) {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
-        if (context.isSuperAdmin()) {
-            LinkedHashSet<UUID> superAdminScope = hospitalRepository.findAll().stream()
+        UUID pinnedHospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
+        if (context.isSuperAdmin() && pinnedHospitalId != null) {
+            // A super-admin who named a hospital reads that one (D1).
+            return Set.of(pinnedHospitalId);
+        }
+        if (context.isGlobalView()) {
+            LinkedHashSet<UUID> superAdminScope = hospitalRepository.findAllHospitals().stream()
                 .map(Hospital::getId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
@@ -1017,10 +1587,10 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         if (log.isDebugEnabled()) {
             log.debug("resolveScope → context snapshot for {}: activeHospital={} permitted={} actual={}", user.getUsername(),
-                context.getActiveHospitalId(), context.getPermittedHospitalIds(), actualHospitalIds);
+                pinnedHospitalId, context.getPermittedHospitalIds(), actualHospitalIds);
             logHospitalLookup("assignments", actualHospitalIds);
         }
-        UUID activeCandidate = resolveActiveHospitalCandidate(context, actualHospitalIds);
+        UUID activeCandidate = resolveActiveHospitalCandidate(actualHospitalIds);
         if (activeCandidate != null) {
             return Set.of(activeCandidate);
         }
@@ -1055,8 +1625,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         logHospitalLookup("scope", hospitalScope);
     }
 
-    private UUID resolveActiveHospitalCandidate(HospitalContext context, Set<UUID> actualHospitalIds) {
-        UUID activeHospitalId = context.getActiveHospitalId();
+    private UUID resolveActiveHospitalCandidate(Set<UUID> actualHospitalIds) {
+        UUID activeHospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (activeHospitalId == null) {
             return null;
         }
@@ -1108,6 +1678,17 @@ public class AppointmentServiceImpl implements AppointmentService {
             return true;
         }
         return resolveHospitalScope(user).contains(hospitalId);
+    }
+
+    /**
+     * QA D259: an appointment at a hospital outside the caller's scope answers exactly
+     * as a missing id does (404), like every other tenant-scoped resource — a 403 told
+     * a prober the id exists.
+     */
+    private void requireAppointmentVisible(User user, Appointment appointment) {
+        if (!hasHospitalAccess(user, appointment.getHospital().getId())) {
+            throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointment.getId());
+        }
     }
 
     private void requireHospitalScope(User user, UUID hospitalId, Locale locale) {
@@ -1200,8 +1781,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (patient == null) {
             return null;
         }
-        String first = patient.getFirstName() == null ? "" : patient.getFirstName();
-        String last = patient.getLastName() == null ? "" : patient.getLastName();
-        return (first + " " + last).trim();
+        String fullName = patient.getFullName();
+        return fullName != null ? fullName : "";
     }
 }

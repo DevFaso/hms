@@ -1,124 +1,103 @@
 package com.example.hms.security.oidc;
 
+import com.example.hms.model.User;
+import com.example.hms.repository.UserRepository;
 import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
-import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
-import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
-import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
-
 /**
- * Translates Keycloak custom claims into a {@link HospitalContext} that the
- * existing tenant-scoped repositories ({@code TenantScopeSpecification},
- * {@code TenantContextAccessor}) and {@code @PreAuthorize} expressions can
- * consume identically to the legacy {@code JwtAuthenticationFilter} path.
+ * Builds the {@link HospitalContext} of a Keycloak-authenticated request from
+ * the SAME live computation the password path uses
+ * ({@link ActingScopeResolver#liveContext}), keyed on the local user id
+ * (docs/security/tenant-resolution.md §3.2).
  *
- * <p>The {@code hms-claims} client scope (see
- * {@code keycloak/realm-export.json}) emits two custom claims:
- * <ul>
- *   <li>{@code hospital_id} — a single UUID string identifying the
- *       caller's primary/active hospital.</li>
- *   <li>{@code role_assignments} — a list of {@code "<ROLE>@<hospital-uuid>"}
- *       strings describing every (role, hospital) pair the caller holds.</li>
- * </ul>
+ * <p>The local user id comes <b>only</b> from the {@code appUserId} claim,
+ * which {@code keycloak/realm-export.json} maps from the {@code app_user_id}
+ * user attribute ({@code scripts/keycloak-migration} backfills it). There is
+ * no fallback to {@code preferred_username}, email or {@code sub}: an identity
+ * link must not rest on a username the local table cannot tell apart by case.
+ * The claimed account must also be the one the token names — its username or
+ * email equals the principal name — so a mis-set attribute cannot borrow
+ * another account's hospitals. A token with no {@code appUserId}, or one
+ * failing either check, gets the {@code NO_LOCAL_USER} context: no hospital,
+ * not a super-admin.
  *
- * <p>Defensive parsing: malformed entries (missing delimiter, non-UUID
- * fragments) are skipped with a debug log rather than failing the request.
- * Claim shape is owned by the realm protocol mappers and can drift; an
- * authenticated user with a malformed claim should still see the most
- * restrictive scope (empty), not a 500.</p>
+ * <p>The token's {@code hospital_id} and {@code role_assignments} claims are
+ * no longer authorization inputs (Q5, option A): an assignment granted or
+ * revoked in HMS counts on the next request instead of when the realm
+ * attributes are next rewritten, and a SUPER_ADMIN realm role the assignment
+ * table does not back grants no global view.
  */
 @Component
 public class KeycloakHospitalContextResolver {
 
     private static final Logger log = LoggerFactory.getLogger(KeycloakHospitalContextResolver.class);
 
-    static final String CLAIM_HOSPITAL_ID = "hospital_id";
-    static final String CLAIM_ROLE_ASSIGNMENTS = "role_assignments";
-    static final String CLAIM_PREFERRED_USERNAME = "preferred_username";
+    static final String CLAIM_APP_USER_ID = "appUserId";
 
-    private static final char ROLE_HOSPITAL_DELIMITER = '@';
+    private final UserRepository userRepository;
+    private final ActingScopeResolver actingScopeResolver;
 
-    public HospitalContext resolve(Jwt jwt, Collection<? extends GrantedAuthority> authorities) {
-        UUID activeHospital = parseUuid(jwt.getClaimAsString(CLAIM_HOSPITAL_ID));
-        Set<UUID> permittedHospitalIds = parseRoleAssignments(jwt.getClaim(CLAIM_ROLE_ASSIGNMENTS));
-        if (activeHospital != null) {
-            permittedHospitalIds.add(activeHospital);
-        }
-
-        boolean superAdmin = hasAuthority(authorities, ROLE_SUPER_ADMIN);
-        boolean hospitalAdmin = hasAuthority(authorities, ROLE_HOSPITAL_ADMIN);
-
-        return HospitalContext.builder()
-                .principalUsername(jwt.getClaimAsString(CLAIM_PREFERRED_USERNAME))
-                .activeHospitalId(activeHospital)
-                .permittedHospitalIds(Set.copyOf(permittedHospitalIds))
-                .superAdmin(superAdmin)
-                .hospitalAdmin(hospitalAdmin)
-                .build();
-    }
-
-    private Set<UUID> parseRoleAssignments(Object claim) {
-        Set<UUID> ids = new LinkedHashSet<>();
-        if (!(claim instanceof Collection<?> entries)) {
-            return ids;
-        }
-        for (Object entry : entries) {
-            UUID hospitalId = hospitalIdFromAssignment(entry);
-            if (hospitalId != null) {
-                ids.add(hospitalId);
-            }
-        }
-        return ids;
+    public KeycloakHospitalContextResolver(UserRepository userRepository, ActingScopeResolver actingScopeResolver) {
+        this.userRepository = userRepository;
+        this.actingScopeResolver = actingScopeResolver;
     }
 
     /**
-     * Parse a single {@code "<ROLE>@<hospital-uuid>"} entry into the trailing
-     * UUID, or return {@code null} when the entry is missing, malformed, or
-     * carries a non-UUID hospital fragment.
+     * @param jwt           the validated Keycloak token
+     * @param principalName the name {@link KeycloakJwtAuthenticationConverter} resolved
+     *                      ({@code preferred_username}, else email, else {@code sub})
      */
-    private UUID hospitalIdFromAssignment(Object entry) {
-        if (entry == null) {
-            return null;
+    public HospitalContext resolve(Jwt jwt, String principalName) {
+        Optional<UUID> localUserId = linkedLocalUser(jwt, principalName);
+        if (localUserId.isEmpty()) {
+            return ActingScopeResolver.unlinkedContext(principalName);
         }
-        String value = entry.toString();
-        int delim = value.indexOf(ROLE_HOSPITAL_DELIMITER);
-        if (delim <= 0 || delim >= value.length() - 1) {
-            log.debug("Ignoring malformed role_assignments entry: {}", value);
-            return null;
-        }
-        return parseUuid(value.substring(delim + 1));
+        return actingScopeResolver.liveContext(localUserId.get(), principalName);
     }
 
-    private UUID parseUuid(String value) {
+    private Optional<UUID> linkedLocalUser(Jwt jwt, String principalName) {
+        UUID claimed = parseUuid(jwt.getClaimAsString(CLAIM_APP_USER_ID));
+        if (claimed == null) {
+            log.debug("[OIDC] Token carries no usable appUserId claim; no local account is linked");
+            return Optional.empty();
+        }
+        Optional<User> user = userRepository.findById(claimed);
+        if (user.isEmpty() || user.get().isDeleted() || !namesMatch(user.get(), principalName)) {
+            // The claimed id and the principal name are not echoed: the id is
+            // an account identifier and the name is PII.
+            log.warn("[OIDC] appUserId claim does not match a live local account for this principal; "
+                + "treating the request as unlinked");
+            return Optional.empty();
+        }
+        return Optional.of(claimed);
+    }
+
+    private static boolean namesMatch(User user, String principalName) {
+        if (principalName == null || principalName.isBlank()) {
+            return false;
+        }
+        String name = principalName.trim().toLowerCase(Locale.ROOT);
+        return (user.getUsername() != null && user.getUsername().trim().toLowerCase(Locale.ROOT).equals(name))
+            || (user.getEmail() != null && user.getEmail().trim().toLowerCase(Locale.ROOT).equals(name));
+    }
+
+    private static UUID parseUuid(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         try {
             return UUID.fromString(value.trim());
         } catch (IllegalArgumentException ex) {
-            log.debug("Ignoring non-UUID hospital identifier from JWT claim: {}", value);
             return null;
         }
-    }
-
-    private static boolean hasAuthority(Collection<? extends GrantedAuthority> authorities, String role) {
-        if (authorities == null) {
-            return false;
-        }
-        for (GrantedAuthority a : authorities) {
-            if (a != null && role.equalsIgnoreCase(a.getAuthority())) {
-                return true;
-            }
-        }
-        return false;
     }
 }

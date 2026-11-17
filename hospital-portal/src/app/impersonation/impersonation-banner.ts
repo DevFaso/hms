@@ -10,7 +10,7 @@ import { ImpersonationService } from '../services/impersonation.service';
   standalone: true,
   imports: [TranslateModule],
   templateUrl: './impersonation-banner.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './impersonation-banner.scss',
 })
 export class ImpersonationBannerComponent {

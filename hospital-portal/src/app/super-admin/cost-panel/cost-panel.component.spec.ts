@@ -45,6 +45,13 @@ describe('CostPanelComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="cost-error"]')).toBeNull();
   });
 
+  it('renders the feature-disabled state on 204, the flag-off answer (D248)', () => {
+    svc.perTenant.and.returnValue(of(null));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="cost-disabled"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="cost-error"]')).toBeNull();
+  });
+
   it('renders the generic error state on non-404 failures', () => {
     svc.perTenant.and.returnValue(throwError(() => ({ status: 500 })));
     fixture.detectChanges();

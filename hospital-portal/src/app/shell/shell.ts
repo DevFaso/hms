@@ -1,15 +1,20 @@
+import { HospitalNetworkWorkspaceComponent } from '../shared/hospital-network-workspace/hospital-network-workspace';
+import { EMPI_MATCHER_ROLES, EmpiStatusService } from '../reception/empi-status.service';
 import {
   Component,
   computed,
   effect,
   inject,
   signal,
+  untracked,
   OnInit,
   OnDestroy,
   ElementRef,
   ViewChild,
   AfterViewInit,
   ChangeDetectionStrategy,
+  Injector,
+  afterNextRender,
 } from '@angular/core';
 import { NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -23,6 +28,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { roleSatisfies } from '../core/role-equivalence';
 import { ToastService } from '../core/toast.service';
 import { IdleService } from '../core/idle.service';
+import { isCriticalNotification, notificationIcon } from '../core/notification-icon';
 import { NotificationService, Notification } from '../services/notification.service';
 import { LockScreenComponent } from '../lock-screen/lock-screen';
 import { ImpersonationBannerComponent } from '../impersonation/impersonation-banner';
@@ -32,8 +38,17 @@ import { EmergencyBroadcastService } from '../services/emergency-broadcast.servi
 import { DowntimeBannerComponent } from '../downtime/downtime-banner';
 import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
-import { NAV_GROUP_IDS, navGroupForRoute, navGroupTranslationKey } from './nav-groups';
+import {
+  NAV_GROUP_IDS,
+  PROVIDER_NAV,
+  navGroupForRoute,
+  navGroupTranslationKey,
+  providerNavEntries,
+} from './nav-groups';
+import { ProviderContextService } from '../core/provider-context.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { DrawerDialogDirective } from '../shared/a11y/drawer-dialog.directive';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -41,6 +56,8 @@ import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospit
 import { clearReportedSilent403s } from '../interceptors/error.interceptor';
 import { storedLang, switchLanguage } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 interface NavItem {
   icon: string;
@@ -51,10 +68,18 @@ interface NavItem {
   roles?: string[];
 }
 
+/** The breakpoint where the sidebar becomes a drawer (shell.scss "Mobile"). */
+export const MOBILE_SIDEBAR_QUERY = '(max-width: 768px)';
+
+function isMobileViewport(): boolean {
+  return globalThis.matchMedia?.(MOBILE_SIDEBAR_QUERY).matches ?? false;
+}
+
 @Component({
   selector: 'app-shell',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     RouterOutlet,
     RouterLink,
@@ -65,16 +90,22 @@ interface NavItem {
     DowntimeBannerComponent,
     HospitalScopeChipComponent,
     HospitalScopeHintComponent,
+    HospitalNetworkWorkspaceComponent,
     TranslateModule,
     SkipLinkComponent,
     BrandMarkComponent,
     RoleLabelPipe,
+    ModalDialogDirective,
+    DrawerDialogDirective,
   ],
   templateUrl: './shell.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './shell.scss',
 })
 export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
+  /** QA D423: critical alerts get their own icon and spoken label in the bell panel. */
+  protected readonly notificationIcon = notificationIcon;
+  protected readonly isCriticalNotification = isCriticalNotification;
   /**
    * v1.0 row 11: target for the skip-link and the programmatic focus
    * landing on every route change. Carries tabindex="-1" so it can
@@ -97,13 +128,107 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly impersonation = inject(ImpersonationService);
   private readonly emergencyBroadcast = inject(EmergencyBroadcastService);
   private readonly downtime = inject(DowntimeService);
+  /** Whether this session acts at a provider facility (provider plan AC-12). */
+  private readonly providerContext = inject(ProviderContextService);
+  private readonly empiStatus = inject(EmpiStatusService);
   readonly translate = inject(TranslateService);
+  private readonly confirmService = inject(ConfirmService);
+  private readonly injector = inject(Injector);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
 
   currentLang = signal<string>(storedLang());
 
-  sidebarCollapsed = signal(false);
+  /**
+   * On a phone the sidebar is a drawer over the page: it starts closed and
+   * closes after each navigation. Open by default, it covered the topbar —
+   * including the FR/EN/ES switch, whose taps then landed on the drawer and
+   * "did nothing" (QA D116).
+   */
+  sidebarCollapsed = signal(isMobileViewport());
+  /** Whether the viewport is a phone's (the sidebar is then a drawer over the page). */
+  private readonly phoneViewport = signal(isMobileViewport());
+  /**
+   * QA D1153 / D1125 (round 21): the drawer open on a phone is a modal over the
+   * page (appDrawerDialog: focus in, Tab kept inside, Escape from anywhere,
+   * focus back to Menu); the page behind it is inert. On a wide screen the
+   * expanded sidebar is a landmark beside the page, never a modal.
+   */
+  readonly phoneDrawerOpen = computed(() => this.phoneViewport() && !this.sidebarCollapsed());
+  private readonly phoneQuery = globalThis.matchMedia?.(MOBILE_SIDEBAR_QUERY);
+  private readonly onPhoneQueryChange = (event: MediaQueryListEvent): void =>
+    this.phoneViewport.set(event.matches);
+  readonly sidebarMinWidth = 240;
+  readonly sidebarMaxWidth = 420;
+  readonly sidebarWidth = signal(this.savedSidebarWidth());
+  readonly sidebarResizing = signal(false);
+  private sidebarPointerId: number | null = null;
+  private sidebarDragStart = { x: 0, width: 260 };
+
+  private savedSidebarWidth(): number {
+    try {
+      const saved = Number(globalThis.localStorage?.getItem('hms.sidebar.width'));
+      return Number.isFinite(saved) && saved >= 240 && saved <= 420 ? saved : 260;
+    } catch {
+      return 260;
+    }
+  }
+
+  private saveSidebarWidth(): void {
+    try {
+      globalThis.localStorage?.setItem('hms.sidebar.width', String(this.sidebarWidth()));
+    } catch {
+      // Width remains usable when browser storage is unavailable.
+    }
+  }
+
+  startSidebarResize(event: PointerEvent): void {
+    if (event.button !== 0 || this.sidebarCollapsed() || isMobileViewport()) return;
+    event.preventDefault();
+    this.sidebarPointerId = event.pointerId;
+    this.sidebarDragStart = { x: event.clientX, width: this.sidebarWidth() };
+    this.sidebarResizing.set(true);
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  moveSidebarResize(event: PointerEvent): void {
+    if (this.sidebarPointerId !== event.pointerId) return;
+    const width = this.sidebarDragStart.width + event.clientX - this.sidebarDragStart.x;
+    this.sidebarWidth.set(
+      Math.round(Math.min(this.sidebarMaxWidth, Math.max(this.sidebarMinWidth, width))),
+    );
+  }
+
+  endSidebarResize(event: PointerEvent, cancelled = false): void {
+    if (this.sidebarPointerId !== event.pointerId) return;
+    if (cancelled) this.sidebarWidth.set(this.sidebarDragStart.width);
+    const handle = event.currentTarget as HTMLElement;
+    this.sidebarPointerId = null;
+    this.sidebarResizing.set(false);
+    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+    if (!cancelled) this.saveSidebarWidth();
+  }
+
+  resizeSidebarWithKey(event: KeyboardEvent): void {
+    const widths: Record<string, number> = {
+      ArrowLeft: this.sidebarWidth() - 16,
+      ArrowRight: this.sidebarWidth() + 16,
+      Home: this.sidebarMinWidth,
+      End: this.sidebarMaxWidth,
+    };
+    if (!(event.key in widths)) return;
+    event.preventDefault();
+    this.sidebarWidth.set(
+      Math.min(this.sidebarMaxWidth, Math.max(this.sidebarMinWidth, widths[event.key])),
+    );
+    this.saveSidebarWidth();
+  }
+
+  resetSidebarWidth(): void {
+    this.sidebarWidth.set(260);
+    this.saveSidebarWidth();
+  }
+
   profileMenuOpen = signal(false);
   notifPanelOpen = signal(false);
   unreadCount = signal(0);
@@ -261,6 +386,31 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       // ARRIVE, not places you go, and they live in the topbar where the
       // badge is visible from every page. /chat and /my-notifications still
       // route — the topbar links to them.
+    }
+
+    // A user acting at a provider facility (a private pharmacy or laboratory)
+    // sees the provider shell only: the hospital pages would all answer 404
+    // there (the backend confines provider users to their allow-list).
+    const provider = this.providerContext.settings();
+    if (provider) {
+      return providerNavEntries(provider.facilityType, provider.providerAdmin).map((entry) => ({
+        icon: entry.icon,
+        label: entry.label,
+        translationKey: entry.translationKey,
+        route: entry.route,
+      }));
+    }
+    // A provider user whose settings are being asked again or failed for now
+    // (pending, error): the provider home only, never the hospital nav,
+    // every entry of which would 404 under provider confinement.
+    const status = this.providerContext.status();
+    if (this.roleContext.providerUser() && (status === 'pending' || status === 'error')) {
+      return PROVIDER_NAV.filter((entry) => entry.route === '/provider').map((entry) => ({
+        icon: entry.icon,
+        label: entry.label,
+        translationKey: entry.translationKey,
+        route: entry.route,
+      }));
     }
 
     // MVP-5: when the active role is super admin, the side-nav drops the
@@ -467,6 +617,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
+        icon: 'pending_actions',
+        label: 'Unsigned notes',
+        translationKey: 'NAV.UNSIGNED_NOTES',
+        route: '/unsigned-notes',
+        // Mirrors UnsignedNoteController's @PreAuthorize (provisional platform rule).
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      },
+      {
         icon: 'monitoring',
         label: 'Disease Surveillance',
         translationKey: 'NAV.MORBIDITY',
@@ -578,12 +736,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         permission: 'View Prescriptions',
         // Mirrors the /prescriptions RoleGuard (midwife added there in the
         // same change — the backend list endpoint always admitted midwives).
+        //
+        // Gap G9: ROLE_PHARMACY_VERIFIER was withheld because GET
+        // /prescriptions and GET /prescriptions/{id} did not admit it, so the
+        // entry would have opened a page that toasts "failed to load" — the
+        // role held /pharmacist-verify and /request-clarification and could
+        // read neither the order it was judging nor the prescriber's answer to
+        // its own question. Both reads admit it now
+        // (PrescriptionControllerTest pins them), the route guard always did,
+        // and the role carries the 'View Prescriptions' permission.
+        // ROLE_ADMIN is withheld for the same reason G9 was: neither backend
+        // read admits it, so the entry opened a page that could only fail.
         roles: [
           'ROLE_DOCTOR',
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_PHARMACIST',
-          'ROLE_ADMIN',
+          'ROLE_PHARMACY_VERIFIER',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -635,13 +804,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'In-Basket',
         translationKey: 'NAV.IN_BASKET',
         route: '/in-basket',
-        permission: 'View Patient Records',
+        // Roles only (no permission key): billing staff, who do not get
+        // 'View Patient Records', read the pre-authorisation follow-up here
+        // (provisional rule 1, 2026-11-15). The route guard uses the same roles.
         roles: [
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_RECEPTIONIST',
           'ROLE_DOCTOR',
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_LAB_TECHNICIAN',
           'ROLE_LAB_MANAGER',
+          'ROLE_LAB_DIRECTOR',
+          'ROLE_PHARMACIST',
+          'ROLE_PHARMACY_VERIFIER',
+          'ROLE_PHYSICIAN',
+          'ROLE_SURGEON',
+          'ROLE_BILLING_SPECIALIST',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -657,6 +836,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_RADIOLOGIST',
+          // User decision 2026-11-14: read-only Imagerie for the admin roles.
+          'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -711,6 +892,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_BILLING_SPECIALIST',
           'ROLE_ACCOUNTANT',
           'ROLE_RECEPTIONIST',
+        ],
+      },
+      {
+        icon: 'sell',
+        label: 'Price list',
+        translationKey: 'NAV.PRICE_LIST',
+        route: '/billing/tarifs',
+        permission: 'View Billing',
+        // Billing-money plan PR 2: mirrors the /billing/tarifs RoleGuard (the
+        // claims reviewer reads the tariff, not the invoices).
+        roles: [
+          'ROLE_SUPER_ADMIN',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ACCOUNTANT',
+          'ROLE_BILLING_SPECIALIST',
+          'ROLE_RECEPTIONIST',
+          'ROLE_CLAIMS_REVIEWER',
         ],
       },
       {
@@ -795,6 +993,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // doesn't see entries that the corresponding RoleGuard would 403 on.
     // (`permissions.hasPermission('*')` reads JWT roles, not the active role,
     // and the route gates already require ROLE_ADMIN / ROLE_SUPER_ADMIN.)
+    // A hospital admin onboards their own staff (QA D117): POST
+    // /users/admin-register admits the role and the page locks the hospital.
+    if (
+      this.hasAnyRole(['ROLE_HOSPITAL_ADMIN']) &&
+      !this.hasAnyRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])
+    ) {
+      items.push({
+        icon: 'manage_accounts',
+        label: 'Users',
+        translationKey: 'NAV.USERS',
+        route: '/users',
+      });
+    }
     if (this.hasAnyRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       // Role audit decision C1: an ADMIN is a back-office operations role,
       // not platform IT — Organizations / Roles / Platform / Analytics /
@@ -881,6 +1092,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.WEBHOOKS',
         route: '/webhooks',
       });
+      // QA D876: the DHIS2 export page had a route and no menu entry. Same
+      // roles as its RoleGuard; the route's hospital-scope gate still asks a
+      // super-admin in global view to pick a hospital first.
+      items.push({
+        icon: 'ios_share',
+        label: 'DHIS2 export',
+        translationKey: 'NAV.DHIS2',
+        route: '/admin/integrations/dhis2',
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      });
     }
     // Break-the-glass review (E8 #54) — mirrors the /break-glass-review RoleGuard.
     if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
@@ -955,9 +1176,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           label: 'Pharmacy Registry',
           translationKey: 'NAV.PHARMACY_REGISTRY',
           route: '/pharmacy-registry',
-          // Mirrors the /pharmacy-registry RoleGuard (E9 #68); the /pharmacies
-          // API admits clinicians and pharmacists only since E9 #67.
-          roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
+          // Mirrors the /pharmacy-registry RoleGuard (E9 #68, QA D39).
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         {
           icon: 'inventory_2',
@@ -976,6 +1196,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           label: 'Stock Adjustment',
           translationKey: 'NAV.STOCK_ADJUSTMENT',
           route: '/pharmacy/stock-adjustment',
+        },
+        {
+          // QA D967: mirrors the /pharmacy/controlled-register RoleGuard.
+          icon: 'local_police',
+          label: 'Controlled-Drug Register',
+          translationKey: 'NAV.CONTROLLED_REGISTER',
+          route: '/pharmacy/controlled-register',
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
         },
         {
           icon: 'medication',
@@ -1010,16 +1243,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // above omits the role, and it must — the inventory-page guards reject
     // verifiers. Only Dispensing + Stock Routing admit them (2026-08-23 audit).
     //
-    // Gap G9, re-audited 2026-09-24: there is deliberately NO /prescriptions
-    // entry here, and adding one would be a regression, not a fix. The route
-    // guard admits ROLE_PHARMACY_VERIFIER and the pharmacist-verify ceremony
-    // does live on that page, but the list the page opens with —
-    // GET /prescriptions — is @PreAuthorize'd to DOCTOR, NURSE, MIDWIFE,
-    // PHARMACIST, SUPER_ADMIN, and GET /prescriptions/{id} likewise omits the
-    // verifier. A nav entry would therefore land the role on a page that
-    // toasts "failed to load" every time. Until the backend admits the role
-    // to those two reads, the verifier's dispensing-side controls (including
-    // the G5 clarification, which the role IS on) are the reachable surface.
+    // Gap G9, resolved 2026-09-24: the role's /prescriptions entry is NOT
+    // pushed here — it is the clinical "Prescriptions" item above, whose
+    // roles list now names ROLE_PHARMACY_VERIFIER. Pushing a second copy
+    // would give a user holding PHARMACIST *and* PHARMACY_VERIFIER two
+    // identical entries.
     if (this.hasAnyRole(['ROLE_PHARMACY_VERIFIER'])) {
       items.push(
         {
@@ -1245,6 +1473,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/transfusions',
       });
     }
+    // Mortality register. Gate mirrors the /mortality route guard, which mirrors
+    // MortalityController's reader set.
+    if (
+      this.hasAnyRole([
+        'ROLE_DOCTOR',
+        'ROLE_SURGEON',
+        'ROLE_MIDWIFE',
+        'ROLE_NURSE',
+        'ROLE_QUALITY_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'history_edu',
+        label: 'Mortality register',
+        translationKey: 'NAV.MORTALITY',
+        route: '/mortality',
+      });
+    }
     // Microbiology workbench (P3 #19). Gate mirrors the /microbiology route
     // guard, which mirrors MicroCultureController.READ_ROLES.
     if (
@@ -1311,14 +1560,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // doctors could not reach the panel at all, the second reachability
     // defect on this same surface. Roles mirror the RoleGuard on
     // 'reception/empi-candidates'.
+    // QA D987: and only while the matcher is switched on; it answers 404 off.
     if (
-      this.hasAnyRole([
-        'ROLE_RECEPTIONIST',
-        'ROLE_NURSE',
-        'ROLE_DOCTOR',
-        'ROLE_HOSPITAL_ADMIN',
-        'ROLE_SUPER_ADMIN',
-      ])
+      (this.empiStatus.enabled() === true || this.empiStatus.failed()) &&
+      this.hasAnyRole([...EMPI_MATCHER_ROLES])
     ) {
       items.push({
         icon: 'join_inner',
@@ -1378,6 +1623,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       translationKey: 'NAV.INTEGRATION_MESSAGES',
       route: '/super-admin/integration-messages',
     });
+    // QA D876: the ADT auto-create defaults had a route and no menu entry
+    // (SUPER_ADMIN only, as AdtIntakeProviderConfigController).
+    items.push({
+      icon: 'input',
+      label: 'ADT intake',
+      translationKey: 'NAV.ADT_INTAKE',
+      route: '/admin/adt-intake-configs',
+    });
     items.push({
       icon: 'payments',
       label: 'Cost / Chargeback',
@@ -1408,6 +1661,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       translationKey: 'NAV.DATA_RESIDENCY',
       route: '/super-admin/data-residency',
     });
+    // Private pharmacies and laboratories: onboarding and verification (D5).
+    items.push({
+      icon: 'storefront',
+      label: 'Provider Facilities',
+      translationKey: 'NAV.PROVIDERS',
+      route: '/super-admin/providers',
+    });
   }
 
   /**
@@ -1416,12 +1676,55 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * backend permission set arrives), with any saved order re-applied on top.
    */
   navItems = signal<NavItem[]>([]);
+  protected readonly networkModuleTitleKey = computed(() => {
+    const explicit = this.scopeGate.moduleTitleKey();
+    if (explicit) return explicit;
+    const path = this.scopeGate.routePath();
+    return (
+      [...this.navItems()]
+        .filter((item) => path === item.route || path.startsWith(item.route + '/'))
+        .sort((a, b) => b.route.length - a.route.length)[0]?.translationKey ??
+      'HOSPITAL_NETWORK.TITLE'
+    );
+  });
+
+  /** The emergency-broadcast socket was opened by this shell (once). */
+  private broadcastOpened = false;
 
   constructor() {
+    // Ask whether this session acts at a provider facility, again whenever
+    // the scope changes or the session bootstrap resolves: the server answers
+    // for the facility the request acts at. The nav switches to the provider
+    // shell when it says so.
+    effect(() => {
+      this.roleContext.effectiveHospitalIdForRequest();
+      this.roleContext.sessionResolved();
+      this.roleContext.providerUser();
+      untracked(() => this.providerContext.load().subscribe({ error: () => undefined }));
+    });
+
     effect(() => {
       const base = this.baseNavItems();
       const saved = this.navOrder.load();
       this.navItems.set(saved ? this.navOrder.applyOrder(base, saved) : base);
+    });
+
+    // MVP-7b: subscribe to /topic/emergency-broadcast so a super-admin
+    // broadcast surfaces in the banner across every authenticated route. A
+    // provider user may not subscribe to it (the server refuses), so the
+    // socket is not opened for one, and not before the session bootstrap
+    // has said which one the user is (after a hard refresh the flag is only
+    // its initial false until then).
+    effect(() => {
+      if (
+        this.broadcastOpened ||
+        !this.roleContext.sessionResolved() ||
+        this.roleContext.providerUser()
+      ) {
+        return;
+      }
+      this.broadcastOpened = true;
+      untracked(() => this.emergencyBroadcast.connect());
     });
   }
 
@@ -1520,8 +1823,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit(): void {
+    // A test double of matchMedia may carry no listener API.
+    this.phoneQuery?.addEventListener?.('change', this.onPhoneQueryChange);
     this.userProfile.set(this.auth.getUserProfile());
     this.permissions.loadFromBackend();
+    // QA D987: the duplicate-patient entry depends on the matcher being on.
+    this.empiStatus.load();
 
     this.loadNotifications();
     this.loadUnreadMessages();
@@ -1531,10 +1838,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // page refresh while impersonating re-paints the banner instead of
     // silently dropping it.
     this.impersonation.refreshActive().subscribe({ error: () => undefined });
-
-    // MVP-7b: subscribe to /topic/emergency-broadcast so a super-admin
-    // broadcast surfaces in the banner across every authenticated route.
-    this.emergencyBroadcast.connect();
 
     // P3 #23a: poll the persisted downtime state — unlike the broadcast,
     // this survives login/refresh, so late arrivals still see the banner.
@@ -1567,17 +1870,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.routerSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe(() => {
-        // A successful navigation proves the chunk graph is healthy — re-arm
-        // the one-shot stale-chunk reload guard (see app.config.ts).
-        sessionStorage.removeItem('hms-chunk-reload');
+        const focusMain = () => this.mainContent?.nativeElement.focus({ preventScroll: true });
+        // QA D1153: the open phone drawer keeps the page inert until this
+        // render; <main> takes focus once it is reachable again (the drawer
+        // then leaves focus where it is instead of sending it back to Menu).
+        if (this.phoneDrawerOpen()) {
+          this.sidebarCollapsed.set(true);
+          afterNextRender(focusMain, { injector: this.injector });
+          return;
+        }
+        if (isMobileViewport()) this.sidebarCollapsed.set(true);
         // queueMicrotask defers until after the new component has
         // rendered into the outlet so focus actually lands on the
         // freshly painted <main>, not the previous one.
-        queueMicrotask(() => this.mainContent?.nativeElement.focus({ preventScroll: true }));
+        queueMicrotask(focusMain);
       });
   }
 
   ngOnDestroy(): void {
+    this.phoneQuery?.removeEventListener?.('change', this.onPhoneQueryChange);
     this.notifSub?.unsubscribe();
     this.readCountSub?.unsubscribe();
     this.routerSub?.unsubscribe();
@@ -1589,11 +1900,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private loadNotifications(): void {
+    // The bell previews the 10 newest (a preview: "see all" opens the list).
     this.notifService.getNotifications({ page: 0, size: 10 }).subscribe({
-      next: (page) => {
-        this.recentNotifications.set(page.content);
-        this.unreadCount.set(page.content.filter((n) => !n.read).length);
-      },
+      next: (page) => this.recentNotifications.set(page.content),
+    });
+    // QA D1347: the badge is the server's count of unread notifications, not
+    // the unread among the 10 newest (an 11th unread was never counted).
+    this.notifService.getNotifications({ read: false, page: 0, size: 1 }).subscribe({
+      next: (page) => this.unreadCount.set(page.totalElements ?? 0),
     });
   }
 
@@ -1745,7 +2059,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   // ── Other handlers ───────────────────────────────────────────
 
   toggleSidebar(): void {
+    this.sidebarPointerId = null;
+    this.sidebarResizing.set(false);
     this.sidebarCollapsed.update((v) => !v);
+  }
+
+  /** The mobile drawer's backdrop: a tap outside the drawer closes it. */
+  closeSidebar(): void {
+    this.sidebarCollapsed.set(true);
+  }
+
+  /**
+   * QA D1125: Escape inside the phone drawer closes it and gives focus back to
+   * the menu button (the drawer is hidden, so focus would fall to the page).
+   * On a wide screen the expanded sidebar is not an overlay: Escape leaves it.
+   */
+  closeSidebarFromKeyboard(): void {
+    if (this.sidebarCollapsed() || !isMobileViewport()) return;
+    // appDrawerDialog gives focus back to the Menu button that opened the drawer.
+    this.sidebarCollapsed.set(true);
   }
 
   toggleProfileMenu(): void {
@@ -1802,20 +2134,38 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.tearDownAndRedirect();
   }
 
+  /**
+   * D2001: the lock screen hit the account lockout (423). The server already
+   * revoked the session; sign out here too and say why on the sign-in page.
+   */
+  onLockScreenLockedOut(): void {
+    this.tearDownAndRedirect({ reason: 'locked' });
+  }
+
   /** Shared tear-down: stop idle, log out, redirect to login */
-  private tearDownAndRedirect(): void {
+  private tearDownAndRedirect(queryParams?: { reason: string }): void {
     this.idle.stop();
     this.permissions.clear();
     clearReportedSilent403s();
     this.auth.logout();
-    this.router.navigateByUrl('/login');
+    if (queryParams) {
+      void this.router.navigate(['/login'], { queryParams });
+    } else {
+      this.router.navigateByUrl('/login');
+    }
   }
 
   dismissToast(id: number): void {
     this.toast.dismiss(id);
   }
 
-  switchLang(lang: string): void {
-    if (switchLanguage(lang, this.translate)) this.currentLang.set(storedLang());
+  onLangSelect(event: Event): void {
+    void this.switchLang((event.target as HTMLSelectElement).value);
+  }
+
+  async switchLang(lang: string): Promise<void> {
+    if (await switchLanguage(lang, this.translate, this.confirmService)) {
+      this.currentLang.set(storedLang());
+    }
   }
 }

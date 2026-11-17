@@ -380,6 +380,85 @@ analyzer / sender is expected to handle the AE on its side.
 
 ---
 
+## Message log retention
+
+`clinical.integration_message_event` (the super-admin page at
+`/super-admin/integration-messages`) keeps **rows** and **content** on
+different clocks — user decision 2026-10-04, V177:
+
+| What | Kept for |
+| --- | --- |
+| The row: ids, integration (sender), organization, direction, message type, correlation id, status, error message (reason + MSH-10 control id), attempt count, timestamps | Indefinitely — it is audit evidence |
+| 1. Content (`payload`, the encrypted raw message, PID and all) of any row that is not `FAILED` | `hms.integration.retention.payload-days` (default **180**) after `received_at` |
+| 2. Content of **every** `FAILED` row, resolved or not | At most `hms.integration.retention.unresolved-max-days` (default **365**) after `received_at` — an absolute ceiling |
+| 3. Content of a **resolved** `FAILED` row (a later row shares its correlation id: a replay, or a newer occurrence of the same problem) | `payload-days` (**180**) after resolution — the first such later row — if that is sooner than rule 2 |
+| 4. Content of a `REPLAYED` row (the copy a replay writes) | `payload-days` (**180**) after the replay — rule 1, counted from the replay date |
+
+**A replay starts its own retention.** Replaying a failed message is a new,
+deliberate processing of it: the replay writes a new row with its own copy of
+the content and its own `received_at`, and that copy follows rule 1 from the
+replay date. So a message replayed on day 364 of its 365 has a copy that
+lasts until about 180 days after the replay; the ceiling in rule 2 bounds
+each failed row, not the message across replays (user decision, round 3 of
+PR #814).
+
+Nothing is kept for ever. While a failed message is replayable it keeps its
+content, but never past the ceiling. The ceiling is what bounds the rows that
+can never be resolved — a one-off failure nobody replays, a legacy row with no
+correlation id, a reject from a sender that was never allowlisted (or has a
+blank MSH-3/MSH-4), which the dispatcher records under a random correlation id
+— and a row superseded by a newer `FAILED` row that keeps absorbing retries
+(each fold refreshes that newer row, so the older one would otherwise never be
+"resolved past the window"). `received_at` on a dead letter is when the
+problem was *last* seen (a retry is folded into its row), so a problem that is
+still recurring keeps its current evidence.
+
+There is no separate, shorter rule for "non-replayable" failures: the replay
+endpoint accepts every `FAILED` row whose content has not been purged, so by
+its own rule every unresolved dead letter is replayable and rule 2 bounds it.
+`unresolved-max-days` must be at least `payload-days`; otherwise the sweep
+refuses to run.
+
+**When retention is off.** With `enabled=false`, or a configuration the sweep
+refuses (`payload-days` below 1, or `unresolved-max-days` below
+`payload-days`), nothing is erased, and the page says "Message content
+retention is OFF — content is kept until it is turned on" instead of quoting
+the windows. The page and the sweep read the same
+`IntegrationMessageRetentionPolicy`, so they cannot disagree.
+
+**The sweep.** `IntegrationMessageRetentionScheduler`, nightly at 03:30,
+ShedLock-guarded (`IntegrationMessageRetentionScheduler.purgeExpiredPayloads`).
+It sets `payload = NULL` and stamps `payload_purged_at` in batches of
+`batch-size` rows per transaction, at most `max-batches` batches per run, so
+a backlog (the first run on an old table) drains over several nights. The
+UPDATE re-checks eligibility, so a rerun or a second instance purges
+nothing twice. It logs a count only.
+
+| Property | Env | Default |
+| --- | --- | --- |
+| `hms.integration.retention.enabled` | `HMS_INTEGRATION_RETENTION_ENABLED` | `true` |
+| `hms.integration.retention.cron` | `HMS_INTEGRATION_RETENTION_CRON` | `0 30 3 * * *` |
+| `hms.integration.retention.payload-days` | `HMS_INTEGRATION_RETENTION_PAYLOAD_DAYS` | `180` (below 1 the sweep refuses to run) |
+| `hms.integration.retention.unresolved-max-days` | `HMS_INTEGRATION_RETENTION_UNRESOLVED_MAX_DAYS` | `365` (below `payload-days` the sweep refuses to run) |
+| `hms.integration.retention.batch-size` | `HMS_INTEGRATION_RETENTION_BATCH_SIZE` | `500` (clamped 1–5000) |
+| `hms.integration.retention.max-batches` | `HMS_INTEGRATION_RETENTION_MAX_BATCHES` | `200` |
+
+**What the operator sees.** A purged row stays in the search with
+"Content purged (retention policy)" in its action cell (the same label
+whichever rule applied; the purge date on hover),
+and its Replay button is disabled. `POST .../{id}/replay` on a purged row
+answers **409** ("purged under the retention policy, so it can no longer be
+replayed")
+and writes nothing. A row whose payload is empty *without* a purge stamp
+never had one (the inbound services record a reason, not a body).
+
+**Erasure is one-way.** There is no restore; lengthening `payload-days`
+only protects content not yet purged. To keep a specific message as
+evidence beyond the window, export it from the row-detail endpoint
+before it ages out.
+
+---
+
 ## Future direction (post v1.1)
 
 1. **Intake-provider config + auto-create.** Per-hospital config row

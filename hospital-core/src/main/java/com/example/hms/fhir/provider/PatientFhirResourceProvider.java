@@ -19,6 +19,8 @@ import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import com.example.hms.fhir.FhirTenantBoundary;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.fhir.everything.PatientEverythingParams;
 import com.example.hms.fhir.everything.PatientEverythingService;
 import com.example.hms.fhir.mapper.PatientFhirMapper;
@@ -31,6 +33,7 @@ import org.hl7.fhir.r4.model.OperationOutcome;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -40,8 +43,30 @@ import java.util.UUID;
 /**
  * FHIR R4 resource provider for {@code Patient}.
  *
- * <p>Read is tenant-scoped through {@link PatientRepository#findById(Object)} which
- * already applies hospital-context filters via the {@code tenantContext} bean.
+ * <p>Every resource is mapped inside a transaction: {@link #read} and
+ * {@link #search} are read-only transactional (method by method: a
+ * class-level read-only transaction would also wrap the writes), and the
+ * writes are mapped by {@link PatientFhirWriteService} inside its own. The
+ * mapper walks the LAZY {@code Patient.hospitalRegistrations}, open-in-view
+ * is off and the HAPI servlet opens no transaction, so mapping outside one
+ * was a 500 for every caller.
+ *
+ * <p>A resource carries the MRN of the hospital the request is bound to
+ * ({@link FhirTenantBoundary#boundHospital}) and no other: every hospital's
+ * MRN would tell a reader at A where else the patient is registered, and
+ * under which record number.
+ *
+ * <p>Tenancy, stated as it is rather than as it was once described. Read and
+ * {@code _id} search go through {@link PatientRepository#findById(Object)},
+ * which {@code TenantAwareJpaRepository} filters with
+ * {@code TenantScopeSpecification}: a patient is found when registered at ANY
+ * hospital the caller is permitted at (every assignment of a multi-hospital
+ * user, every hospital of a permitted organisation), and a super-admin is not
+ * filtered at all. That is wider than the active hospital the other FHIR
+ * providers anchor on. The {@code tenantContext} bean filters only the
+ * name/identifier search query. Writes do NOT rely on either: PUT and the
+ * conditional POST are gated on a registration at the active hospital inside
+ * {@link PatientFhirWriteService}.
  *
  * <p>Search is intentionally narrow at this stage — it covers the parameters
  * downstream consumers (OpenMRS, DHIS2 Tracker, OpenHIE) require for patient
@@ -57,13 +82,16 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     private final PatientFhirMapper patientMapper;
     private final PatientFhirWriteService writeService;
     private final PatientEverythingService everythingService;
+    private final FhirTenantBoundary tenantBoundary;
 
     public PatientFhirResourceProvider(
         PatientRepository patientRepository,
         PatientFhirMapper patientMapper,
         PatientFhirWriteService writeService,
-        PatientEverythingService everythingService
+        PatientEverythingService everythingService,
+        FhirTenantBoundary tenantBoundary
     ) {
+        this.tenantBoundary = tenantBoundary;
         this.patientRepository = patientRepository;
         this.patientMapper = patientMapper;
         this.writeService = writeService;
@@ -76,11 +104,13 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     }
 
     @Read
+    @Transactional(readOnly = true)
     public org.hl7.fhir.r4.model.Patient read(@IdParam IdType id) {
         UUID uuid = parseUuid(id);
+        UUID boundHospital = FhirTenantBoundary.boundHospital(HospitalContextHolder.getContextOrEmpty());
         Patient entity = patientRepository.findById(uuid)
             .orElseThrow(() -> new ResourceNotFoundException(id));
-        return patientMapper.toFhir(entity);
+        return patientMapper.toFhir(entity, boundHospital);
     }
 
     /**
@@ -92,6 +122,7 @@ public class PatientFhirResourceProvider implements IResourceProvider {
      * parameter (which matches first / last / concatenated name).
      */
     @Search
+    @Transactional(readOnly = true)
     public List<org.hl7.fhir.r4.model.Patient> search(
         @OptionalParam(name = "_id") TokenParam idParam,
         @OptionalParam(name = "identifier") TokenParam identifier,
@@ -101,11 +132,19 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         @OptionalParam(name = "email") TokenParam email,
         @OptionalParam(name = "active") TokenParam active
     ) {
+        UUID boundHospital = FhirTenantBoundary.boundHospital(HospitalContextHolder.getContextOrEmpty());
         if (idParam != null && idParam.getValue() != null) {
             UUID uuid = tryParseUuid(idParam.getValue());
             if (uuid == null) return Collections.emptyList();
+            // Asked BEFORE loading: the tenant boundary filters the bundle on
+            // the way out, but a patient registered elsewhere in the caller's
+            // organisation used to fail in the mapper (500) before it got
+            // there, while an unknown id answered an empty bundle.
+            if (!tenantBoundary.isVisible("Patient", uuid.toString(), boundHospital)) {
+                return Collections.emptyList();
+            }
             return patientRepository.findById(uuid)
-                .map(patientMapper::toFhir)
+                .map(patient -> patientMapper.toFhir(patient, boundHospital))
                 .map(List::of)
                 .orElseGet(Collections::emptyList);
         }
@@ -115,8 +154,9 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         String dob = (birthdate != null && birthdate.getValue() != null)
             ? birthdate.getValueAsString()
             : null;
-        String phonePattern = phone != null && phone.getValue() != null
-            ? "%" + phone.getValue() + "%"
+        // QA D942/D943: the same folds as every other patient search.
+        String phonePattern = phone != null
+            ? com.example.hms.utility.PatientMatchKeys.phoneContainsPattern(phone.getValue())
             : null;
         String emailPattern = email != null && email.getValue() != null
             ? "%" + email.getValue().toLowerCase() + "%"
@@ -126,19 +166,23 @@ public class PatientFhirResourceProvider implements IResourceProvider {
             : null;
 
         var sort = Sort.by(Sort.Order.asc("lastName"), Sort.Order.asc("firstName"));
+        // The page is capped, so it must be a page of the hospital the request
+        // is bound to (the interceptor has already refused a request with none): capping across every permitted hospital and then letting
+        // the tenant boundary drop the others silently loses the bound
+        // hospital's own matches past the cap.
         var page = patientRepository.searchPatientsExtended(
             mrn,
             namePattern,
             normalizeDob(dob),
             phonePattern,
             emailPattern,
-            null,
+            boundHospital,
             activeFlag,
             PageRequest.of(0, DEFAULT_PAGE_SIZE, sort)
         );
 
         return page.stream()
-            .map(patientMapper::toFhir)
+            .map(patient -> patientMapper.toFhir(patient, boundHospital))
             .toList();
     }
 
@@ -151,6 +195,10 @@ public class PatientFhirResourceProvider implements IResourceProvider {
      * <p>Feature-flagged: when {@code app.fhir.write.enabled=false}
      * (default) the write service throws {@code MethodNotAllowedException}
      * → 405.
+     *
+     * <p>The tenant gate is in {@link PatientFhirWriteService#update}: a
+     * patient not registered at the caller's active hospital answers the same
+     * 404 as one that does not exist.
      */
     @Update
     public MethodOutcome update(
@@ -182,10 +230,10 @@ public class PatientFhirResourceProvider implements IResourceProvider {
                 OperationOutcome.IssueType.BUSINESSRULE
             );
         }
-        Patient saved = writeService.update(uuid, resource);
+        org.hl7.fhir.r4.model.Patient saved = writeService.update(uuid, resource);
         return new MethodOutcome()
-            .setId(new IdType("Patient", saved.getId().toString()))
-            .setResource(patientMapper.toFhir(saved));
+            .setId(new IdType("Patient", saved.getIdElement().getIdPart()))
+            .setResource(saved);
     }
 
     /**
@@ -212,10 +260,10 @@ public class PatientFhirResourceProvider implements IResourceProvider {
                 OperationOutcome.IssueType.STRUCTURE
             );
         }
-        Patient resolved = writeService.conditionalCreate(conditionalUrl, resource);
+        org.hl7.fhir.r4.model.Patient resolved = writeService.conditionalCreate(conditionalUrl, resource);
         return new MethodOutcome()
-            .setId(new IdType("Patient", resolved.getId().toString()))
-            .setResource(patientMapper.toFhir(resolved))
+            .setId(new IdType("Patient", resolved.getIdElement().getIdPart()))
+            .setResource(resolved)
             .setCreated(false);
     }
 
@@ -293,8 +341,8 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     }
 
     private static String stringPattern(StringParam param) {
-        if (param == null || param.getValue() == null || param.getValue().isBlank()) return null;
-        return "%" + param.getValue().trim().toLowerCase() + "%";
+        if (param == null) return null;
+        return com.example.hms.utility.PatientMatchKeys.nameContainsPattern(param.getValue());
     }
 
     private static String normalizeDob(String raw) {

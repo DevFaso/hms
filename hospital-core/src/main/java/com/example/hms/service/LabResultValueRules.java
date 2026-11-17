@@ -1,0 +1,180 @@
+package com.example.hms.service;
+
+import com.example.hms.enums.AbnormalFlag;
+import com.example.hms.exception.FieldBusinessException;
+import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.LabTestReferenceRange;
+
+import java.text.Normalizer;
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
+
+/**
+ * Rules on a hand-entered lab result value, shared by create and amend.
+ *
+ * <ul>
+ *   <li>QA D288: a test whose reference ranges carry numeric limits is a
+ *       numeric test, so its value must be a number ("abc" was stored), and
+ *       may be negative only when one of its limits is (base excess is, a
+ *       haemoglobin is not; -1 was stored).</li>
+ *   <li>QA D286: a qualitative answer that reads positive ("Positif" on a
+ *       malaria RDT) is flagged ABNORMAL, since no numeric range can grade it
+ *       and it otherwise reached the in-basket as "not evaluated" and the
+ *       patient portal with a green check.</li>
+ * </ul>
+ */
+public final class LabResultValueRules {
+
+    /** Positive / detected / reactive in EN, FR and ES, as the whole answer or its first word. */
+    private static final java.util.Set<String> POSITIVE_WORDS = java.util.Set.of(
+        "POSITIF", "POSITIVE", "POSITIVO", "POSITIVA",
+        "DETECTE", "DETECTED", "DETECTADO", "DETECTADA",
+        "REACTIF", "REACTIVE", "REACTIVO", "REACTIVA",
+        "PRESENT", "PRESENTE", "PRESENCE",
+        "+", "++", "+++", "++++");
+
+    /** The first word of a folded answer: a run of letters, or a run of plus signs. */
+    private static final Pattern FIRST_WORD = Pattern.compile("^([A-Z]+|\\++)");
+
+    /** The comparator of a censored value, "<", ">", "<=", ">=" or their single-character forms, and the spaces after it. */
+    private static final Pattern CENSOR_PREFIX = Pattern.compile("^(<=|>=|<|>|\u2264|\u2265)\\s*");
+
+    /** The request field both callers read the value from (LabResultRequestDTO#resultValue). */
+    private static final String RESULT_VALUE = "resultValue";
+
+    private LabResultValueRules() {
+    }
+
+    /** Which side of its number a censored value lies on; {@link #EXACT} when it is a plain number. */
+    public enum Bound { EXACT, BELOW, ABOVE }
+
+    /** A lab value read as a number: the number, and which side of it the true value lies on. */
+    public record NumericValue(Bound bound, double number) {}
+
+    /**
+     * QA D1394: the ONE reading of a lab value as a number, for everything that
+     * compares it (grading, reflex thresholds). A plain or censored number, with
+     * a decimal point or a decimal comma ("6.5", "6,5", "&gt; 6,5", "&lt;=1.5"). Empty when
+     * it is not a finite number: "Positif", "abc", "NaN".
+     */
+    public static java.util.Optional<NumericValue> numericValue(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String trimmed = normalizeDecimalComma(rawValue).trim();
+        java.util.regex.Matcher censor = CENSOR_PREFIX.matcher(trimmed);
+        Bound bound = Bound.EXACT;
+        String number = trimmed;
+        if (censor.find()) {
+            bound = censor.group(1).startsWith("<") || "\u2264".equals(censor.group(1)) ? Bound.BELOW : Bound.ABOVE;
+            number = trimmed.substring(censor.end());
+        }
+        try {
+            double value = Double.parseDouble(number);
+            return Double.isNaN(value) || Double.isInfinite(value)
+                ? java.util.Optional.empty()
+                : java.util.Optional.of(new NumericValue(bound, value));
+        } catch (NumberFormatException notANumber) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    /** A plain or censored number written with a decimal comma: "7,9", "-0,5", "<0,5". */
+    private static final Pattern DECIMAL_COMMA = Pattern.compile("^((?:<=|>=|<|>|≤|≥)\\s*)?(-?\\d+),(\\d+)$");
+
+    /**
+     * QA D640: a French or Spanish keyboard writes "7,9". The value is stored
+     * with a point so that range grading, critical alerts and trends, which
+     * all parse it, read the same number. Anything else is returned as is.
+     */
+    public static String normalizeDecimalComma(String rawValue) {
+        if (rawValue == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = DECIMAL_COMMA.matcher(rawValue.trim());
+        if (!m.matches()) {
+            return rawValue;
+        }
+        String prefix = m.group(1) == null ? "" : m.group(1);
+        return prefix + m.group(2) + "." + m.group(3);
+    }
+
+    /**
+     * Refuses a value a numeric test cannot hold; does nothing for a test with no numeric limits.
+     * QA D1386 (round 32): the refusal names {@code resultValue}, so the dialog marks the field
+     * instead of showing only a toast.
+     */
+    static void requireValidValue(String rawValue, LabTestDefinition definition) {
+        if (rawValue == null || rawValue.isBlank() || definition == null) {
+            return;
+        }
+        List<LabTestReferenceRange> ranges = definition.getReferenceRanges();
+        if (ranges == null || ranges.stream().noneMatch(LabResultValueRules::hasNumericLimit)) {
+            return;
+        }
+        double value;
+        try {
+            // A censored value ("<0.5", ">200", "<=20") is a number with a
+            // comparator: the analyzer's or the method's limit of detection.
+            value = Double.parseDouble(CENSOR_PREFIX.matcher(rawValue.trim()).replaceFirst(""));
+        } catch (NumberFormatException ex) {
+            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.notNumeric");
+        }
+        if (Double.isNaN(value) || Double.isInfinite(value)) {
+            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.notNumeric");
+        }
+        if (value < 0 && ranges.stream().noneMatch(LabResultValueRules::hasNegativeLimit)) {
+            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.negative");
+        }
+    }
+
+    /** True when the value is a qualitative answer that reads positive. */
+    public static boolean isPositiveQualitative(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return false;
+        }
+        String trimmed = rawValue.trim();
+        try {
+            Double.parseDouble(trimmed.replace(',', '.'));
+            return false;
+        } catch (NumberFormatException ignored) {
+            // not a number: a qualitative answer
+        }
+        String folded = Normalizer.normalize(trimmed, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toUpperCase(Locale.ROOT);
+        java.util.regex.Matcher word = FIRST_WORD.matcher(folded);
+        return word.find() && POSITIVE_WORDS.contains(word.group(1));
+    }
+
+    /**
+     * The flag a hand-entered value carries: ABNORMAL for a positive
+     * qualitative answer; otherwise the existing flag, except that an
+     * ABNORMAL this rule set on the previous value is withdrawn when the
+     * value no longer reads positive.
+     */
+    static AbnormalFlag flagFor(String newValue, String previousValue, AbnormalFlag current) {
+        if (isPositiveQualitative(newValue)) {
+            return current == AbnormalFlag.CRITICAL ? current : AbnormalFlag.ABNORMAL;
+        }
+        if (current == AbnormalFlag.ABNORMAL && isPositiveQualitative(previousValue)) {
+            return null;
+        }
+        return current;
+    }
+
+    private static boolean hasNumericLimit(LabTestReferenceRange range) {
+        return range != null && (range.getMinValue() != null || range.getMaxValue() != null
+            || range.getCriticalLow() != null || range.getCriticalHigh() != null);
+    }
+
+    private static boolean hasNegativeLimit(LabTestReferenceRange range) {
+        return range != null && (isNegative(range.getMinValue()) || isNegative(range.getMaxValue())
+            || isNegative(range.getCriticalLow()) || isNegative(range.getCriticalHigh()));
+    }
+
+    private static boolean isNegative(Double limit) {
+        return limit != null && limit < 0;
+    }
+}

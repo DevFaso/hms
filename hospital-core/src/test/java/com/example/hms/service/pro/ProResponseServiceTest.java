@@ -124,7 +124,7 @@ class ProResponseServiceTest {
         plan.setId(UUID.randomUUID());
 
         lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         lenient().when(instrumentService.requireActive("EPDS")).thenReturn(instrument);
         lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
         lenient().when(responseRepository.saveAndFlush(any(ProResponse.class))).thenAnswer(inv -> {
@@ -259,7 +259,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.record(patientId, dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("cannot be in the future");
+                .extracting("messageKey").isEqualTo("pro.response.administeredInFuture");
             verify(responseRepository, never()).saveAndFlush(any());
         }
 
@@ -300,10 +300,35 @@ class ProResponseServiceTest {
             assertThat(foreign).isInstanceOf(ResourceNotFoundException.class);
             assertThat(((ResourceNotFoundException) foreign).getMessageKey())
                 .isEqualTo("patient.notfound");
-            // An attacker probing ids must not be able to tell "exists elsewhere" from "does not exist".
+            // An attacker probing ids must not be able to tell "exists elsewhere" from "does not exist":
+            // the same key, and the same sentence once each renders the id the caller asked for.
             assertThat(absent).isInstanceOf(ResourceNotFoundException.class)
-                .hasMessage(foreign.getMessage());
+                .hasMessage(foreign.getMessage().replace(patientId.toString(), missing.toString()));
+            assertThat(((ResourceNotFoundException) absent).getMessageKey()).isEqualTo("patient.notfound");
             verify(responseRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        void aClaimedHospitalThatIsNotTheActingOneIsNotFoundAndNothingIsSaved() {
+            // The patient IS registered at the claimed hospital; the caller acts elsewhere (QA D401).
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                com.example.hms.security.context.HospitalContext.builder()
+                    .activeHospitalId(UUID.randomUUID()).build());
+            try {
+                ProResponseCreateDTO dto = answers(Map.of(1, 1, 2, 1));
+                dto.setHospitalId(hospitalId);
+
+                assertThatThrownBy(() -> service.record(patientId, dto))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "patient.notfound");
+                UUID responseId = UUID.randomUUID();
+                assertThatThrownBy(() -> service.acknowledge(patientId, responseId, hospitalId, null))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "patient.notfound");
+                verify(responseRepository, never()).saveAndFlush(any());
+            } finally {
+                com.example.hms.security.context.HospitalContextHolder.clear();
+            }
         }
     }
 
@@ -366,7 +391,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.acknowledge(patientId, response.getId(), null, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Only a safety-item-positive response");
+                .extracting("messageKey").isEqualTo("pro.response.notCritical");
         }
 
         @Test
@@ -378,7 +403,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.acknowledge(patientId, response.getId(), null, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("already acknowledged by Dr Zongo");
+                .extracting("messageKey").isEqualTo("pro.response.alreadyAcknowledged");
             verify(responseRepository, never()).saveAndFlush(any());
         }
 
@@ -394,7 +419,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.acknowledge(patientId, response.getId(), null, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reload and retry");
+                .extracting("messageKey").isEqualTo("pro.response.acknowledgeConflict");
         }
 
         @Test
@@ -406,7 +431,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.acknowledge(patientId, responseId, null, null))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Screening response not found.");
+                .hasFieldOrPropertyWithValue("messageKey", "pro.response.notFound");
         }
     }
 
@@ -592,7 +617,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.recordForSelf(patient, dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("No screening is open for you");
+                .extracting("messageKey").isEqualTo("pro.response.noOpenScreening");
             verify(responseRepository, never()).saveAndFlush(any());
         }
 
@@ -603,7 +628,7 @@ class ProResponseServiceTest {
 
             assertThatThrownBy(() -> service.recordForSelf(patient, dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("No screening is open for you");
+                .extracting("messageKey").isEqualTo("pro.response.noOpenScreening");
             verify(responseRepository, never()).saveAndFlush(any());
         }
     }

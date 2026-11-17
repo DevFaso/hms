@@ -14,6 +14,8 @@ import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
+import com.example.hms.service.support.UserAccountAccess;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,18 +26,25 @@ import org.springframework.context.MessageSource;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class UserRoleHospitalAssignmentServiceImplTest {
 
@@ -51,8 +60,15 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private OrganizationRepository organizationRepository;
     @Mock private UserRoleHospitalAssignmentMapper mapper;
     @Mock private MessageSource messageSource;
+    @Mock private com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
+    @Mock private com.example.hms.repository.StaffRepository staffRepository;
+    @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
+    /** The caller rules have their own tests (UserAccountAccessTest, AssignmentGrantScopeTest); here a super-admin's scope. */
+    @Mock private com.example.hms.service.support.UserAccountAccess accountAccess;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock private com.example.hms.service.support.AssignmentReferences assignmentReferences;
 
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
@@ -101,6 +117,14 @@ class UserRoleHospitalAssignmentServiceImplTest {
         org.mockito.Mockito.lenient()
             .when(assignmentLinkService.buildProfileCompletionUrl(anyString()))
             .thenReturn("https://app/complete/" + VALID_CODE);
+        org.mockito.Mockito.lenient()
+            .when(accountAccess.assignmentScope())
+            .thenReturn(new com.example.hms.service.support.UserAccountAccess.AssignmentScope(true, java.util.Set.of()));
+        com.example.hms.service.support.UserAccountAccess.Grant anywhere =
+            mock(com.example.hms.service.support.UserAccountAccess.Grant.class);
+        org.mockito.Mockito.lenient()
+            .when(accountAccess.requireMayGrant(any()))
+            .thenReturn(anywhere);
     }
 
     // -----------------------------------------------------------------------
@@ -161,9 +185,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
         try {
             when(assignmentRepository.findById(assignment.getId()))
                 .thenReturn(Optional.of(assignment));
-            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-                    "registrar", "registrar", null))
-                .thenReturn(Optional.of(registrar));
+            when(accountAccess.currentUserId()).thenReturn(Optional.of(registrar.getId()));
+            when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
             when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -176,6 +199,25 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(assignment.getActive()).isTrue();
         assertThat(assignee.isActive()).isTrue();
         verify(userRepository).save(assignee);
+    }
+
+    @Test
+    void verifyAssignmentByCode_neverSwitchesOnAnAccountAnAdministratorDisabled() {
+        // V184: a super-admin disabled the invitee before their first sign-in.
+        // The outstanding code is refused outright: nothing confirmed, the
+        // assignment stays off, no credentials handed out.
+        assignee.setActive(false);
+        assignee.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE))
+            .thenReturn(Optional.of(assignment));
+
+        assertThatThrownBy(() -> service.verifyAssignmentByCode(VALID_CODE, VALID_PIN))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+
+        assertThat(assignment.getConfirmationVerifiedAt()).isNull();
+        assertThat(assignee.isActive()).isFalse();
+        verify(assignmentRepository, never()).save(any());
+        verify(userRepository, never()).save(assignee);
     }
 
     @Test
@@ -200,7 +242,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         // confirming this code is the expected mistake — and those refusals
         // count toward the login lockout. Without clearing the counter here
         // the holder is locked out at the moment activation succeeds.
-        verify(loginAttemptService).resetAttempts(assignee.getUsername());
+        verify(loginAttemptService).resetAttempts(assignee.getId());
     }
 
     // -----------------------------------------------------------------------
@@ -272,6 +314,40 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(assignment.getTempPlainPassword()).isNull();
     }
 
+    // ---- QA D418: anonymous re-send of a pending activation code ----
+
+    @Test
+    void resendPendingActivationCode_claimRefused_sendsNothing_D418() {
+        when(assignmentRepository.claimActivationResend(any(), anyString(), any(), any(), any())).thenReturn(0);
+
+        boolean sent = service.resendPendingActivationCode(assignment.getId(), java.time.Duration.ofMinutes(5));
+
+        assertThat(sent).isFalse();
+        verify(assignmentRepository, never()).findById(any());
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    void resendPendingActivationCode_claimed_sendsAFreshSixDigitCodeWithTheCooldownCutoff_D418() {
+        assignee.setPhoneNumber("+22670123456");
+        when(assignmentRepository.claimActivationResend(any(), anyString(), any(), any(), any())).thenReturn(1);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.ArgumentCaptor<String> code = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.ArgumentCaptor<LocalDateTime> now = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        org.mockito.ArgumentCaptor<LocalDateTime> cutoff = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+
+        boolean sent = service.resendPendingActivationCode(assignment.getId(), java.time.Duration.ofMinutes(5));
+
+        assertThat(sent).isTrue();
+        verify(assignmentRepository).claimActivationResend(
+            org.mockito.ArgumentMatchers.eq(assignment.getId()), code.capture(), now.capture(), cutoff.capture(),
+            org.mockito.ArgumentMatchers.eq(com.example.hms.security.provider.FacilityAssignmentGuard.CLOSED_STATES));
+        assertThat(code.getValue()).matches("[0-9]{6}");
+        assertThat(cutoff.getValue()).isEqualTo(now.getValue().minusMinutes(5));
+        // The notification went out (it reloads the row the claim updated).
+        verify(assignmentRepository).findById(assignment.getId());
+    }
+
     // ---- Delivery report: the registrar must learn when nothing was sent ----
 
     @Test
@@ -302,6 +378,80 @@ class UserRoleHospitalAssignmentServiceImplTest {
                 .as("targets are masked, never the raw address/number")
                 .extracting(com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getTarget)
                 .containsExactlyInAnyOrder("j***@hospital.com", "+226*****56");
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
+    @Test
+    void qaD1061_aDependantWithNoPhoneAndNoEmailIsNeverReportedAsSentBySms() {
+        // A child registered under a guardian's number: no login phone, no e-mail.
+        assignee.setPhoneNumber(null);
+        assignee.setEmail(null);
+        assignment.setTempPlainPassword("Temp@Secret123");
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(smsService.deliversRealSms()).thenReturn(true);
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            var report = com.example.hms.utility.ActivationDeliveryTracker.close();
+            assertThat(report)
+                .filteredOn(r -> "CREDENTIALS".equals(r.getPurpose()))
+                .isNotEmpty()
+                .extracting(com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getOutcome)
+                .doesNotContain("SENT");
+            verify(smsService, never()).send(org.mockito.ArgumentMatchers.isNull(), any());
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
+    @Test
+    void sendNotifications_skipsTheAssignmentMailWhenTheWelcomeMailCarriesTheCode() {
+        // D10: a new single-role staff account gets ONE mail (the welcome
+        // mail with the code); the role-assignment mail must not follow it.
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+
+        assignment.setConfirmationCode("602517");
+        assignment.setAssignmentCode("CTO-TEST-0001");
+        service.sendNotifications(assignment.getId(), true);
+
+        verify(emailService, never()).sendRoleAssignmentConfirmationEmail(
+            any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void sendNotifications_stillMailsTheCodeWhenTheWelcomeMailCannotCarryIt() {
+        // Without an assignment code the welcome mail has no link to carry the
+        // code with and falls back to "see the other mail": that mail must
+        // then still go out, or the new user never receives the code.
+        assignment.setConfirmationCode("602517");
+        assignment.setAssignmentCode(null);
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+
+        service.sendNotifications(assignment.getId(), true);
+
+        verify(emailService).sendRoleAssignmentConfirmationEmail(
+            any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void sendNotifications_reportsTheActivationMailAsQueuedNotSent() {
+        // The mail goes to the outbox (V173): a normal return means QUEUED,
+        // and the report must not claim the SMTP server has it yet.
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            assertThat(com.example.hms.utility.ActivationDeliveryTracker.close())
+                .filteredOn(r -> "EMAIL".equals(r.getChannel()))
+                .singleElement()
+                .satisfies(r -> assertThat(r.getOutcome()).isEqualTo("QUEUED"));
         } finally {
             com.example.hms.utility.ActivationDeliveryTracker.close();
         }
@@ -385,6 +535,54 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(com.example.hms.utility.ActivationDeliveryTracker.close()).isEmpty();
     }
 
+    @Test
+    void qaD1840_aPlatformWideAssignmentIsWordedAsSuchNeverAsTheScopeCode() {
+        // A super-admin's assignment has no hospital: the mail and both SMS name
+        // the platform, and no message is composed with the scope code GLOBAL.
+        assignment.setHospital(null);
+        assignee.setPhoneNumber("+22670123456");
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setPhoneNumber("+22699999999");
+        assignment.setRegisteredBy(registrar);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+
+        service.sendNotifications(assignment.getId());
+
+        // The mocked bundle answers each lookup with its key (the default).
+        verify(smsService).send("+22670123456", "sms.activation.staff.platform");
+        verify(smsService).send("+22699999999", "sms.activation.registrar.platform");
+        verify(emailService).sendRoleAssignmentConfirmationEmail(eq("jdoe@hospital.com"), anyString(), anyString(),
+            org.mockito.ArgumentMatchers.isNull(), anyString(), anyString(), any(), any(), any());
+        org.mockito.ArgumentCaptor<Object[]> args = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(messageSource, org.mockito.Mockito.atLeastOnce()).getMessage(anyString(), args.capture(), any(), any());
+        assertThat(args.getAllValues()).filteredOn(java.util.Objects::nonNull)
+            .flatExtracting(java.util.Arrays::asList).doesNotContain("GLOBAL");
+    }
+
+    @Test
+    void qaD1842_aRecipientRefusedByTheAllowlistIsNotReportedAsATransportFailure() {
+        assignee.setPhoneNumber("+22670123456");
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        doThrow(new com.example.hms.service.integration.SmsRecipientNotAllowedException())
+            .when(smsService).send(eq("+22670123456"), anyString());
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            assertThat(com.example.hms.utility.ActivationDeliveryTracker.close())
+                .filteredOn(r -> "SMS".equals(r.getChannel()) && "ACTIVATION".equals(r.getPurpose()))
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.getOutcome()).isEqualTo("RECIPIENT_NOT_ALLOWED");
+                    assertThat(r.getDetail()).contains("allowlist").doesNotContain("transport error");
+                    assertThat(r.getTarget()).isEqualTo("+226*****56");
+                });
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
     // ---- Tenant isolation: GET /assignments listing ----
 
     @Test
@@ -434,5 +632,864 @@ class UserRoleHospitalAssignmentServiceImplTest {
         service.getAllAssignments(org.springframework.data.domain.PageRequest.of(0, 10), null);
 
         verify(assignmentRepository).findAll(any(org.springframework.data.domain.Pageable.class));
+    }
+
+    // -- Assignments are soft-deleted (V175): clinical history keeps its assignment --
+
+    @Test
+    void removingAUsersAssignmentsDeactivatesThemAndDeletesNothing() {
+        UserRoleHospitalAssignment active = UserRoleHospitalAssignment.builder().active(true).build();
+        active.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment retiredEarlier = UserRoleHospitalAssignment.builder().active(false).build();
+        retiredEarlier.setId(UUID.randomUUID());
+        when(assignmentRepository.findByUserId(assignee.getId()))
+            .thenReturn(java.util.List.of(active, retiredEarlier));
+
+        service.deleteAllAssignmentsForUser(assignee.getId());
+
+        assertThat(active.getActive()).isFalse();
+        assertThat(retiredEarlier.getActive()).isFalse();
+        verify(assignmentRepository).saveAll(java.util.List.of(active));
+        verify(assignmentRepository, never()).deleteAll(any());
+        verify(assignmentRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void aRetiredAssignmentCannotBeSwitchedBackOnWithItsOldCode() {
+        // A pending invitation (never active, code still valid) for a user who
+        // is then removed: the invitee's code used to re-enable the
+        // assignment and the account through the public code-entry endpoint.
+        assignment.setActive(false);
+        assignment.setTempPlainPassword("Temp@1234");
+        assignee.setActive(false);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(java.util.List.of(assignment));
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+
+        service.deleteAllAssignmentsForUser(assignee.getId());
+
+        assertThat(assignment.getConfirmationCode()).isNull();
+        assertThat(assignment.getTempPlainPassword()).isNull();
+        verify(assignmentRepository).saveAll(java.util.List.of(assignment));
+        assertThatThrownBy(() -> service.verifyAssignmentByCode(VALID_CODE, VALID_PIN))
+            .isInstanceOf(BusinessException.class);
+        assertThat(assignment.getActive()).isFalse();
+        assertThat(assignee.isActive()).isFalse();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void deactivatingAPendingInvitationRevokesItsCode() {
+        UUID id = assignment.getId();
+        assignment.setActive(false);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+
+        service.deactivateAssignment(id);
+
+        assertThat(assignment.getConfirmationCode()).isNull();
+        verify(assignmentRepository).save(assignment);
+    }
+
+    /** A provider admin of {@code hospital}: the general scope covers nothing, the provider staff scope the facility. */
+    private void signedInAsProviderAdminHere() {
+        // Lenient: the provider staff paths must never read the general scope.
+        lenient().when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of()));
+        lenient().when(accountAccess.providerStaffScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(hospital.getId())));
+    }
+
+    @Test
+    void providerStaffDeactivationChecksEveryRowBeforeChangingAny() {
+        signedInAsProviderAdminHere();
+        UUID id = assignment.getId();
+        UUID outOfScope = UUID.randomUUID();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.findById(outOfScope)).thenReturn(Optional.empty());
+
+        List<UUID> oneOutOfScope = List.of(id, outOfScope);
+        assertThatThrownBy(() -> service.deactivateProviderStaffAssignments(oneOutOfScope))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+
+        service.deactivateProviderStaffAssignments(List.of(id));
+        assertThat(assignment.getActive()).isFalse();
+        assertThat(assignment.getConfirmationCode()).isNull();
+        verify(assignmentRepository).saveAll(List.of(assignment));
+        verify(accountAccess, never()).assignmentScope();
+    }
+
+    @Test
+    void providerStaffCodeReissueReadsTheProviderScopeOnceAndIssuesANewCode() {
+        signedInAsProviderAdminHere();
+        UUID id = assignment.getId();
+        assignment.setActive(false);
+        assignment.setConfirmationCode(null);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(assignment)).thenReturn(assignment);
+
+        service.regenerateProviderStaffAssignmentCodes(List.of(id, id), false);
+
+        assertThat(assignment.getConfirmationCode()).isNotBlank();
+        assertThat(assignment.getActive()).isFalse();
+        verify(accountAccess, times(1)).providerStaffScope();
+        verify(accountAccess, never()).assignmentScope();
+        verify(assignmentRepository, times(1)).save(assignment);
+    }
+
+    @Test
+    @SuppressWarnings("deprecation") // deleteAssignment is deprecated, and still reachable: it must refuse too
+    void aProviderAdminGetsNotFoundFromEveryGeneralAssignmentPathAtItsOwnFacility() {
+        signedInAsProviderAdminHere();
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+
+        assertThatThrownBy(() -> service.getAssignmentById(id)).isInstanceOf(ResourceNotFoundException.class);
+        UserRoleHospitalAssignmentRequestDTO change = new UserRoleHospitalAssignmentRequestDTO();
+        assertThatThrownBy(() -> service.updateAssignment(id, change))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deleteAssignment(id)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deactivateAssignment(id)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.regenerateAssignmentCode(id, false))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.resendNotifications(id)).isInstanceOf(ResourceNotFoundException.class);
+        verify(assignmentRepository, never()).save(any());
+        verify(assignmentRepository, never()).deleteById(any());
+        verify(assignmentRepository, never()).delete(any(UserRoleHospitalAssignment.class));
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment));
+        when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        service.retireAssignmentsForUserWithinCallerScope(assignee.getId());
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+        // ...while the provider staff page's own path still reaches the row.
+        service.deactivateProviderStaffAssignments(List.of(id));
+        assertThat(assignment.getActive()).isFalse();
+    }
+
+    @Test
+    void reassigningARetiredRoleSaysToReactivateIt() {
+        UserRoleHospitalAssignment retired = UserRoleHospitalAssignment.builder().active(false).build();
+        retired.setId(UUID.randomUUID());
+        when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+        when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+        when(assignmentRepository.existsByUserIdAndHospitalIdAndRoleId(assignee.getId(), hospital.getId(), role.getId()))
+            .thenReturn(true);
+        when(assignmentRepository.findByUserIdAndHospitalIdAndRoleId(assignee.getId(), hospital.getId(), role.getId()))
+            .thenReturn(Optional.of(retired));
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setUserId(assignee.getId());
+        dto.setRoleId(role.getId());
+        dto.setHospitalId(hospital.getId());
+        dto.setActive(false);
+
+        assertThatThrownBy(() -> service.assignRole(dto))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("Reactivate that assignment");
+    }
+
+    /**
+     * QA D772 replay: SUPER_ADMIN POSTs /assignments twice with the same
+     * {userId, hospitalId, roleName: ROLE_NURSE, active: true} and
+     * Accept-Language: fr. The 409 resolved its message in the JVM default
+     * locale (Locale.getDefault()), so it read in English.
+     */
+    @Test
+    void qaD772_duplicateAssignmentConflictSpeaksTheRequestLanguage() {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            UserRoleHospitalAssignment existing = UserRoleHospitalAssignment.builder().active(true).build();
+            existing.setId(UUID.randomUUID());
+            when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+            when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+            when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+            when(assignmentRepository.existsByUserIdAndHospitalIdAndRoleId(assignee.getId(), hospital.getId(), role.getId()))
+                .thenReturn(true);
+            org.mockito.Mockito.lenient().when(assignmentRepository.findByUserIdAndHospitalIdAndRoleId(assignee.getId(), hospital.getId(), role.getId()))
+                .thenReturn(Optional.of(existing));
+            when(messageSource.getMessage(eq("assignment.conflict"), any(), anyString(), eq(java.util.Locale.FRENCH)))
+                .thenReturn("Rôle déjà affecté à cet utilisateur pour cet hôpital.");
+            com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+                new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+            dto.setUserId(assignee.getId());
+            dto.setRoleId(role.getId());
+            dto.setHospitalId(hospital.getId());
+            dto.setActive(true);
+
+            assertThatThrownBy(() -> service.assignRole(dto))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                .hasMessage("Rôle déjà affecté à cet utilisateur pour cet hôpital.");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    /**
+     * QA D626/D664 replay: HOSPITAL_ADMIN_A POSTs /assignments
+     * {userId: NURSE2_A, hospitalId: A, roleName: 'ROLE_PATIENT'}; the grant
+     * check lets a hospital admin grant non-admin roles, so the row used to be
+     * saved (200, a pending patient assignment). Now the same 400 as admin-register.
+     */
+    @Test
+    void qaD664_postAssignmentsWithRolePatient_isRefusedAndSavesNothing() {
+        Role patient = new Role();
+        patient.setId(UUID.randomUUID());
+        patient.setName("ROLE_PATIENT");
+        patient.setCode("ROLE_PATIENT");
+        when(roleRepository.findByNameIgnoreCase("ROLE_PATIENT")).thenReturn(Optional.of(patient));
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setUserId(assignee.getId());
+        dto.setHospitalId(hospital.getId());
+        dto.setRoleName("ROLE_PATIENT");
+
+        assertThatThrownBy(() -> service.assignRole(dto))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("Register the patient from the patient form");
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    /** QA D664, the update sibling: PUT /assignments/{id} turning a nurse row into a patient row. */
+    @Test
+    void qaD664_putAssignmentChangingTheRoleToPatient_isRefused() {
+        Role patient = new Role();
+        patient.setId(UUID.randomUUID());
+        patient.setName("ROLE_PATIENT");
+        patient.setCode("ROLE_PATIENT");
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(roleRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        org.mockito.Mockito.lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setRoleId(patient.getId());
+
+        assertThatThrownBy(() -> service.updateAssignment(assignment.getId(), dto))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("Register the patient from the patient form");
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    /** QA D521: hospital admin A asks for a role it may not grant; the FAILURE row reaches A's audit log. */
+    @Test
+    void d521_aRefusedGrantIsAnchoredAtTheActingHospital() {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .activeHospitalId(hospital.getId())
+                .permittedHospitalIds(java.util.Set.of(hospital.getId()))
+                .build());
+        try {
+            org.mockito.Mockito.lenient().when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+            when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+            org.mockito.Mockito.lenient().when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+            when(accountAccess.requireMayGrant(any()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("no"));
+            com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+                new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+            dto.setUserId(assignee.getId());
+            dto.setRoleId(role.getId());
+            dto.setHospitalId(hospital.getId());
+
+            assertThatThrownBy(() -> service.assignRole(dto))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.ROLE_ASSIGNED);
+            assertThat(audit.getValue().getHospitalId()).isEqualTo(hospital.getId());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    /**
+     * QA D773 replay: HOSPITAL_ADMIN_A grants a role; the ROLE_ASSIGNED row used
+     * to carry the GRANTED role as roleName, which is the actor's role column,
+     * so the audit page read "Millogo, Patient(e)". The emitter no longer names
+     * a role: the audit service files it under the registrar's own role, and
+     * the granted role travels in the details.
+     */
+    @Test
+    void qaD773_roleAssignedAuditNeverStoresTheGrantedRoleAsTheActorRole() {
+        Role patient = new Role();
+        patient.setId(UUID.randomUUID());
+        patient.setName("ROLE_PATIENT");
+        patient.setCode("ROLE_PATIENT");
+        assignment.setRole(patient);
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setUsername("admin-a");
+        assignment.setRegisteredBy(registrar);
+
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "recordAssignmentAudit", assignment);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        com.example.hms.payload.dto.AuditEventRequestDTO row = audit.getValue();
+        assertThat(row.getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.ROLE_ASSIGNED);
+        assertThat(row.getUserId()).isEqualTo(registrar.getId());
+        assertThat(row.getRoleName()).isNull();
+        assertThat(row.getHospitalId()).isEqualTo(hospital.getId());
+        assertThat(row.getDetails().toString()).contains("assignedRole").contains("ROLE_PATIENT");
+    }
+
+    /** QA D773 sibling: ASSIGNMENT_CONFIRMED by an administrator is filed under the actor's role too. */
+    @Test
+    void qaD773_assignmentConfirmedAuditNeverStoresTheConfirmedRoleAsTheActorRole() {
+        User admin = new User();
+        admin.setId(UUID.randomUUID());
+        admin.setUsername("admin-a");
+
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+            service, "recordAssignmentConfirmationAudit", assignment, admin);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getRoleName()).isNull();
+        assertThat(audit.getValue().getUserId()).isEqualTo(admin.getId());
+    }
+
+    /**
+     * QA D671 replay: HOSPITAL_ADMIN_A, Accept-Language fr, POSTs
+     * /api/assignments/bulk-import with a row granting ROLE_SUPER_ADMIN. The
+     * grant check refuses it with its internal "Access denied", which used to
+     * be copied verbatim into results[0].message; the row now says it in the
+     * request's language.
+     */
+    @Test
+    void qaD671_bulkImportRowTheCallerMayNotGrantIsRefusedInTheRequestLanguage() {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            org.mockito.Mockito.lenient().when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+            org.mockito.Mockito.lenient().when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+            org.mockito.Mockito.lenient().when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+            when(accountAccess.requireMayGrant(any()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("Access denied"));
+            when(messageSource.getMessage(eq("error.access.denied"), any(), anyString(), eq(java.util.Locale.FRENCH)))
+                .thenReturn("Accès refusé");
+            String csv = "user_id,role_id,hospital_id\n"
+                + assignee.getId() + "," + role.getId() + "," + hospital.getId() + "\n";
+
+            com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportResponseDTO result =
+                service.bulkImportAssignments(com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportRequestDTO.builder()
+                    .csvContent(csv).delimiter(",").skipConflicts(true).build());
+
+            assertThat(result.getFailed()).isEqualTo(1);
+            assertThat(result.getResults().get(0).getMessage()).isEqualTo("Accès refusé");
+            verify(assignmentRepository, never()).save(any());
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    @Test
+    void anAssignmentAnEncounterWasRecordedUnderCannotBeHardDeleted() {
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(encounterRepository.existsByAssignment_Id(id)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.deleteAssignment(id))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("encounters were recorded under it");
+        verify(assignmentRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void anAssignmentADepartmentStillNamesIsRefusedInWordsNotAtTheForeignKey() {
+        // QA round 14: the department's fk_department_assignment came back as a 500.
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(assignmentReferences.referencingEntities(id))
+            .thenReturn(java.util.List.of("Department", "DepartmentTranslation"));
+
+        assertThatThrownBy(() -> service.deleteAssignment(id))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("still used by departments, department translations");
+        verify(assignmentRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void aKeyThePreCheckCannotSeeIsStillRefusedAsAConflict() {
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("fk"))
+            .when(assignmentRepository).flush();
+
+        assertThatThrownBy(() -> service.deleteAssignment(id))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("still used by other records");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void anUnreferencedAssignmentIsStillHardDeleted() {
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(encounterRepository.existsByAssignment_Id(id)).thenReturn(false);
+
+        service.deleteAssignment(id);
+
+        verify(assignmentRepository).deleteById(id);
+    }
+
+    @Test
+    void deletingTheLastAssignmentOfARoleDropsItsUserLevelLink() {
+        // QA D132: deleting the stray patient assignment left the user_roles
+        // link behind, which then counted as a global role at sign-in.
+        UUID id = assignment.getId();
+        assignee.addRole(role);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(encounterRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(assignmentRepository.findAllByUserId(assignee.getId())).thenReturn(java.util.List.of(assignment));
+
+        service.deleteAssignment(id);
+
+        assertThat(assignee.getUserRoles()).isEmpty();
+        verify(userRepository).save(assignee);
+    }
+
+    @Test
+    void deletingOneOfTwoAssignmentsOfARoleKeepsItsUserLevelLink() {
+        UUID id = assignment.getId();
+        assignee.addRole(role);
+        UserRoleHospitalAssignment sibling = new UserRoleHospitalAssignment();
+        sibling.setId(UUID.randomUUID());
+        sibling.setUser(assignee);
+        sibling.setRole(role);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(encounterRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(assignmentRepository.findAllByUserId(assignee.getId())).thenReturn(java.util.List.of(assignment, sibling));
+
+        service.deleteAssignment(id);
+
+        assertThat(assignee.getUserRoles()).hasSize(1);
+        verify(userRepository, never()).save(assignee);
+    }
+
+    @Test
+    void anActivePatientAssignmentIsRefusedWithATranslatedKey() {
+        // QA D194: the refusal was an English sentence.
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(Boolean.TRUE);
+
+        assertThatThrownBy(() -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                service, "enforceRoleScopeConstraints", dto, "ROLE_PATIENT", false))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+            .isEqualTo("assignment.patient.mustStartInactive");
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("D21: a restored invitee's unconfirmed invitations get fresh codes, mailed; confirmed rows are left alone")
+    void reissuesOnlyTheUnconfirmedInvitations() {
+        assignment.setActive(false);
+        assignment.setConfirmationCode(null); // revoked by the delete
+        assignment.setConfirmationVerifiedAt(null);
+        assignment.setConfirmationSentAt(java.time.LocalDateTime.now().minusDays(1));
+        UserRoleHospitalAssignment linkOnly = new UserRoleHospitalAssignment();
+        linkOnly.setId(UUID.randomUUID());
+        linkOnly.setUser(assignee);
+        linkOnly.setHospital(hospital);
+        linkOnly.setConfirmationSentAt(null); // a patient row activated by the e-mail link
+        UserRoleHospitalAssignment confirmed = new UserRoleHospitalAssignment();
+        confirmed.setId(UUID.randomUUID());
+        confirmed.setUser(assignee);
+        confirmed.setHospital(hospital);
+        confirmed.setConfirmationVerifiedAt(java.time.LocalDateTime.now().minusDays(5));
+        confirmed.setConfirmationCode(null);
+        when(assignmentRepository.findByUserId(assignee.getId()))
+            .thenReturn(java.util.List.of(assignment, linkOnly, confirmed));
+        when(assignmentRepository.save(org.mockito.ArgumentMatchers.any(UserRoleHospitalAssignment.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
+
+        int reissued = service.reissuePendingInvitationsForRestoredUser(assignee.getId());
+
+        org.assertj.core.api.Assertions.assertThat(reissued).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(assignment.getConfirmationCode()).isNotBlank();
+        org.assertj.core.api.Assertions.assertThat(assignment.getActive()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(confirmed.getConfirmationCode()).isNull();
+        org.assertj.core.api.Assertions.assertThat(linkOnly.getConfirmationCode()).isNull();
+        verify(eventPublisher)
+            .publishEvent(org.mockito.ArgumentMatchers.any(com.example.hms.event.AssignmentCreatedEvent.class));
+    }
+
+    // -----------------------------------------------------------------------
+    // QA D902: never your own assignment, never the last live super-admin's
+    // -----------------------------------------------------------------------
+
+    /** The fixture row, turned into the platform's global super-admin assignment. */
+    private void makeItTheSuperAdminRow() {
+        Role superAdmin = new Role();
+        superAdmin.setId(UUID.randomUUID());
+        superAdmin.setName("SUPER_ADMIN");
+        superAdmin.setCode("ROLE_SUPER_ADMIN");
+        assignment.setRole(superAdmin);
+        assignment.setHospital(null);
+        assignment.setActive(true);
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+    }
+
+    @Test
+    void qaD902_switchingOffTheLastSuperAdminRowThroughPutIsRefused() {
+        makeItTheSuperAdminRow();
+        when(assignmentRepository.findLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment));
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(false);
+
+        assertThatThrownBy(() -> service.updateAssignment(assignment.getId(), dto))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("no active super administrator");
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).save(any());
+        // #968 review: the one lock every removal takes comes before the count.
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(roleRepository, assignmentRepository);
+        order.verify(roleRepository).lockRolesWithCodes(Set.of("ROLE_SUPER_ADMIN", "SUPER_ADMIN"));
+        order.verify(assignmentRepository).findLiveAssignmentsWithRoleCodes(any());
+    }
+
+    @Test
+    void qaD902_aScopedRetireCountsTheRowsBeforeSwitchingThemOff() {
+        // #968 review: the check ran on the rows after retire() had switched
+        // them off, so none read as a live super-admin and it never refused.
+        makeItTheSuperAdminRow();
+        UserAccountAccess.AssignmentScope scope = mock(UserAccountAccess.AssignmentScope.class);
+        when(scope.everywhere()).thenReturn(false);
+        when(scope.shields(any(), any())).thenReturn(false);
+        when(scope.mayChange(any())).thenReturn(true);
+        when(accountAccess.assignmentScope()).thenReturn(scope);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment));
+        when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        when(assignmentRepository.findLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment));
+
+        UUID assigneeId = assignee.getId();
+        assertThatThrownBy(() -> service.retireAssignmentsForUserWithinCallerScope(assigneeId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("no active super administrator");
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void qaD902_reRolingYourOwnRowThroughPutIsRefused() {
+        makeItTheSuperAdminRow();
+        when(accountAccess.isSelf(assignee)).thenReturn(true);
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(false);
+
+        assertThatThrownBy(() -> service.updateAssignment(assignment.getId(), dto))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("your own assignment");
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD902_anEditThatKeepsTheGrantIsNotCheckedAtAll() {
+        makeItTheSuperAdminRow();
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(true);
+
+        service.updateAssignment(assignment.getId(), dto);
+
+        verify(assignmentRepository, never()).findLiveAssignmentsWithRoleCodes(any());
+    }
+
+    @Test
+    void qaD902_anotherLiveSuperAdminLetsTheRowGo() {
+        makeItTheSuperAdminRow();
+        UserRoleHospitalAssignment other = new UserRoleHospitalAssignment();
+        other.setId(UUID.randomUUID());
+        when(assignmentRepository.findLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment, other));
+
+        service.deactivateAssignment(assignment.getId());
+
+        assertThat(assignment.getActive()).isFalse();
+    }
+
+    @Test
+    void qaD902_theBulkProviderDeactivationRefusesTheCallersOwnRowBeforeChangingAny() {
+        signedInAsProviderAdminHere();
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(accountAccess.isSelf(assignee)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.deactivateProviderStaffAssignments(List.of(id)))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(assignmentRepository, never()).saveAll(any());
+    }
+
+    // -----------------------------------------------------------------------
+    // QA D907: deactivating a staff record ends the access it stood for there
+    // -----------------------------------------------------------------------
+
+    private UserRoleHospitalAssignment rowFor(String roleCode, Hospital at, boolean active, String code) {
+        Role r = new Role();
+        r.setId(UUID.randomUUID());
+        r.setCode(roleCode);
+        r.setName(roleCode);
+        UserRoleHospitalAssignment row = new UserRoleHospitalAssignment();
+        row.setId(UUID.randomUUID());
+        row.setUser(assignee);
+        row.setRole(r);
+        row.setHospital(at);
+        row.setActive(active);
+        row.setConfirmationCode(code);
+        return row;
+    }
+
+    @Test
+    void qaD907_theStaffRolesAtThatHospitalGoOffAndTheAccountStaysOn() {
+        assignee.setActive(true);
+        assignment.setActive(true);
+        assignment.setConfirmationCode(null);
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        elsewhere.setName("Other Hospital");
+        UserRoleHospitalAssignment pendingHere = rowFor("ROLE_LAB_TECHNICIAN", hospital, false, "654321");
+        UserRoleHospitalAssignment patientHere = rowFor("ROLE_PATIENT", hospital, true, null);
+        UserRoleHospitalAssignment doctorElsewhere = rowFor("ROLE_DOCTOR", elsewhere, true, null);
+        when(assignmentRepository.findByUserId(assignee.getId()))
+            .thenReturn(List.of(assignment, pendingHere, patientHere, doctorElsewhere));
+        User admin = new User();
+        admin.setId(UUID.randomUUID());
+        admin.setFirstName("Ada");
+        admin.setLastName("Admin");
+        when(accountAccess.currentUserId()).thenReturn(Optional.of(admin.getId()));
+        when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+
+        int retired = service.retireStaffAccessAtHospital(assignee.getId(), hospital.getId(), assignment.getId());
+
+        assertThat(retired).isEqualTo(2);
+        assertThat(assignment.getActive()).isFalse();
+        assertThat(pendingHere.getActive()).isFalse();
+        assertThat(pendingHere.getConfirmationCode()).as("its code can no longer switch it on").isNull();
+        assertThat(patientHere.getActive()).as("their own care is not a job").isTrue();
+        assertThat(doctorElsewhere.getActive()).as("a role at another hospital is not touched").isTrue();
+        assertThat(assignee.isActive()).as("the account stays on").isTrue();
+        verify(assignmentRepository).saveAll(List.of(assignment, pendingHere));
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<com.example.hms.payload.dto.AuditEventRequestDTO>> audit =
+            org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(auditEventLogService).logEvents(audit.capture());
+        List<com.example.hms.payload.dto.AuditEventRequestDTO> rows = audit.getValue();
+        assertThat(rows).hasSize(2)
+            .extracting(com.example.hms.payload.dto.AuditEventRequestDTO::getEventType)
+            .containsOnly(com.example.hms.enums.AuditEventType.ROLE_REVOKED);
+        assertThat(rows.get(0).getEventDescription())
+            .isEqualTo("Revoked role 'ROLE_NURSE' from John Doe: staff record deactivated");
+        assertThat(rows.get(0).getUserId()).isEqualTo(admin.getId());
+        assertThat(rows.get(0).getHospitalId()).isEqualTo(hospital.getId());
+    }
+
+    @Test
+    void qaD907_nobodyCutsTheirOwnAccess() {
+        assignment.setActive(true);
+        when(accountAccess.currentUserId()).thenReturn(Optional.of(assignee.getId()));
+        UUID userId = assignee.getId();
+        UUID hospitalId = hospital.getId();
+        UUID assignmentId = assignment.getId();
+
+        assertThatThrownBy(() -> service.retireStaffAccessAtHospital(userId, hospitalId, assignmentId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("your own assignment");
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+        verify(auditEventLogService, never()).logEvents(any());
+    }
+
+    @Test
+    void qaD907_anAdministratorRoleOutOfReachRefusesTheWholeDeactivation() {
+        assignment.setActive(true);
+        UserRoleHospitalAssignment adminHere = rowFor("ROLE_HOSPITAL_ADMIN", hospital, true, null);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment, adminHere));
+        UserAccountAccess.AssignmentScope scope = mock(UserAccountAccess.AssignmentScope.class);
+        when(scope.everywhere()).thenReturn(false);
+        when(scope.shields(any(), any())).thenReturn(false);
+        when(scope.mayChange(assignment)).thenReturn(true);
+        when(scope.mayChange(adminHere)).thenReturn(false);
+        when(scope.hospitalIds()).thenReturn(Set.of(hospital.getId()));
+        when(accountAccess.assignmentScope()).thenReturn(scope);
+        UUID userId = assignee.getId();
+        UUID hospitalId = hospital.getId();
+        UUID assignmentId = assignment.getId();
+
+        assertThatThrownBy(() -> service.retireStaffAccessAtHospital(userId, hospitalId, assignmentId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("super administrator must end that access");
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(adminHere.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void qaD907_aHospitalAdminSwitchesOffANurseAtTheHospitalTheyAdminister() {
+        assignment.setActive(true);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment));
+        when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(hospital.getId())));
+
+        assertThat(service.retireStaffAccessAtHospital(assignee.getId(), hospital.getId(), assignment.getId()))
+            .isEqualTo(1);
+        assertThat(assignment.getActive()).isFalse();
+    }
+
+    @Test
+    void qaD907_aRoleHeldThereIsNotAdministeringThatHospital() {
+        // #968 review: an administrator of A who is a nurse at B could switch
+        // off B's staff, whose record they can see.
+        assignment.setActive(true);
+        when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(UUID.randomUUID())));
+        UUID userId = assignee.getId();
+        UUID hospitalId = hospital.getId();
+        UUID assignmentId = assignment.getId();
+
+        assertThatThrownBy(() -> service.retireStaffAccessAtHospital(userId, hospitalId, assignmentId))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void qaD907_theLastSuperAdminKeepsTheirRole() {
+        makeItTheSuperAdminRow();
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment));
+        when(assignmentRepository.findLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment));
+        UUID userId = assignee.getId();
+        UUID hospitalId = hospital.getId();
+        UUID assignmentId = assignment.getId();
+
+        assertThatThrownBy(() -> service.retireStaffAccessAtHospital(userId, hospitalId, assignmentId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("no active super administrator");
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void qaD907_nothingLeftToSwitchOffChangesNothing() {
+        assignment.setActive(false);
+        assignment.setConfirmationCode(null);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment));
+
+        assertThat(service.retireStaffAccessAtHospital(assignee.getId(), hospital.getId(), assignment.getId()))
+            .isZero();
+        verify(assignmentRepository, never()).saveAll(any());
+        verify(auditEventLogService, never()).logEvents(any());
+    }
+
+    @Test
+    void qaD907_accessBackThroughTheCodeBringsTheStaffRecordBack() {
+        assignee.setActive(true);
+        assignment.setActive(false);
+        com.example.hms.model.Staff retiredStaff = new com.example.hms.model.Staff();
+        retiredStaff.setActive(false);
+        retiredStaff.setAssignment(assignment);
+        retiredStaff.setHospital(hospital);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(staffRepository.findByAssignment_Id(assignment.getId())).thenReturn(List.of(retiredStaff));
+
+        service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(retiredStaff.isActive()).isTrue();
+        verify(staffRepository).saveAll(List.of(retiredStaff));
+    }
+
+    @Test
+    void qaD907_aSuperAdminSwitchingTheRowBackOnBringsTheStaffRecordBack() {
+        assignment.setActive(false);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        doAnswer(inv -> {
+            UserRoleHospitalAssignment target = inv.getArgument(0);
+            UserRoleHospitalAssignmentRequestDTO request = inv.getArgument(1);
+            target.setActive(request.getActive());
+            return null;
+        }).when(mapper).updateEntity(any(), any(), any(), any());
+        com.example.hms.model.Staff retiredStaff = new com.example.hms.model.Staff();
+        retiredStaff.setActive(false);
+        retiredStaff.setHospital(hospital);
+        when(staffRepository.findByAssignment_Id(assignment.getId())).thenReturn(List.of(retiredStaff));
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(true);
+
+        service.updateAssignment(assignment.getId(), dto);
+
+        assertThat(retiredStaff.isActive()).isTrue();
+    }
+
+    @Test
+    void qaD907_aRowMovedToAnotherHospitalNeverRevivesTheOldHospitalsStaffRecord() {
+        // #968 review: a super-admin moved the row from A to B; B's admin
+        // re-invited it, and the code switched A's deactivated record back on.
+        Hospital previous = new Hospital();
+        previous.setId(UUID.randomUUID());
+        assignee.setActive(true);
+        assignment.setActive(false);
+        com.example.hms.model.Staff atPrevious = new com.example.hms.model.Staff();
+        atPrevious.setActive(false);
+        atPrevious.setHospital(previous);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(staffRepository.findByAssignment_Id(assignment.getId())).thenReturn(List.of(atPrevious));
+
+        service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(atPrevious.isActive()).isFalse();
+        verify(staffRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void qaD907_theRecordsOwnRowAtAnotherHospitalIsThatHospitalsBusiness() {
+        // Pins isStaffAccessAt: the staff record's own row counts only when it
+        // is platform-wide, never when it sits at another hospital.
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment ownRowElsewhere = rowFor("ROLE_NURSE", elsewhere, true, null);
+        assignment.setActive(true);
+        assignment.setConfirmationCode(null);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment, ownRowElsewhere));
+
+        int retired = service.retireStaffAccessAtHospital(assignee.getId(), hospital.getId(), ownRowElsewhere.getId());
+
+        assertThat(retired).isEqualTo(1);
+        assertThat(assignment.getActive()).isFalse();
+        assertThat(ownRowElsewhere.getActive()).isTrue();
+        verify(assignmentRepository).saveAll(List.of(assignment));
+    }
+
+    @Test
+    void qaD915_aHospitalAdminSwitchingARowOnIsToldWhyInTheirLanguage() {
+        // QA D915: the refusal was a hard-coded English sentence in every language.
+        assignment.setActive(false);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(true);
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        UUID id = assignment.getId();
+        try {
+            assertThatThrownBy(() -> service.updateAssignment(id, dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageStartingWith("Seul un super administrateur peut activer directement une affectation.");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+        assertThat(assignment.getActive()).isFalse();
+        verify(assignmentRepository, never()).save(any());
     }
 }

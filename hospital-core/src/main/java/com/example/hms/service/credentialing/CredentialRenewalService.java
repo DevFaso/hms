@@ -80,7 +80,7 @@ public class CredentialRenewalService {
                                                 String issuingAuthority,
                                                 String note) {
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", staffId));
 
         // 404-not-403: another hospital's staff member is indistinguishable
         // from one that does not exist.
@@ -88,7 +88,7 @@ public class CredentialRenewalService {
         if (hospitalId != null
                 && staff.getHospital() != null
                 && !hospitalId.equals(staff.getHospital().getId())) {
-            throw new ResourceNotFoundException("staff.notfound");
+            throw new ResourceNotFoundException("staff.notfound", staffId);
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -159,13 +159,13 @@ public class CredentialRenewalService {
     @Transactional(readOnly = true)
     public List<StaffCredentialRenewal> history(UUID staffId) {
         Staff staff = staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", staffId));
 
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
                 && staff.getHospital() != null
                 && !hospitalId.equals(staff.getHospital().getId())) {
-            throw new ResourceNotFoundException("staff.notfound");
+            throw new ResourceNotFoundException("staff.notfound", staffId);
         }
         return renewalRepository.findByStaffIdOrderByRecordedAtDesc(staffId);
     }

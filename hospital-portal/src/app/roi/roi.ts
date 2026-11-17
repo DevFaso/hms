@@ -14,7 +14,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Subject, Subscription, of, switchMap } from 'rxjs';
+import { Subject, Subscription, of, switchMap, forkJoin } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 
 import {
@@ -26,11 +26,13 @@ import {
 } from '../services/roi.service';
 import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+type WorklistStatus = RoiRequestStatus | 'ALL';
 type DecisionKind = 'fulfil' | 'deny' | 'cancel';
 
 /**
@@ -50,13 +52,14 @@ type DecisionKind = 'fulfil' | 'deny' | 'cancel';
   selector: 'app-roi',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     RouterModule,
     TranslateModule,
     PatientPickerComponent,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
+    ModalDialogDirective,
   ],
   templateUrl: './roi.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -68,17 +71,45 @@ export class RoiComponent implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
-  readonly statuses: RoiRequestStatus[] = ['PENDING', 'FULFILLED', 'DENIED', 'CANCELLED'];
+  readonly statuses: WorklistStatus[] = ['ALL', 'PENDING', 'FULFILLED', 'DENIED', 'CANCELLED'];
   readonly requesterTypes: RoiRequesterType[] = ['THIRD_PARTY', 'PATIENT'];
 
   /** One server page; the server caps at 200 anyway. */
   private static readonly PAGE_SIZE = 200;
 
-  activeStatus = signal<RoiRequestStatus>('PENDING');
+  activeStatus = signal<WorklistStatus>('PENDING');
   rows = signal<RoiRequest[]>([]);
   total = signal(0);
   loading = signal(false);
   loadFailed = signal(false);
+  readonly searchTerm = signal('');
+  readonly requesterFilter = signal<RoiRequesterType | ''>('');
+  readonly visibleRows = computed(() => {
+    const term = this.searchTerm().trim().toLocaleLowerCase();
+    return this.rows().filter(
+      (row) =>
+        (!this.requesterFilter() || row.requesterType === this.requesterFilter()) &&
+        (!term ||
+          [
+            row.patientName,
+            row.patientId,
+            row.requesterName,
+            row.purpose,
+            row.scopeDescription,
+          ].some((value) => value?.toLocaleLowerCase().includes(term))),
+    );
+  });
+  readonly patientRequestsLoaded = computed(
+    () => this.rows().filter((r) => r.requesterType === 'PATIENT').length,
+  );
+  readonly thirdPartyRequestsLoaded = computed(
+    () => this.rows().filter((r) => r.requesterType === 'THIRD_PARTY').length,
+  );
+
+  clearFilters(): void {
+    this.searchTerm.set('');
+    this.requesterFilter.set('');
+  }
 
   /* ── intake modal ── */
   showIntake = signal(false);
@@ -101,7 +132,6 @@ export class RoiComponent implements OnInit, OnDestroy {
   private dialogOpener: HTMLElement | null = null;
 
   readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
-  readonly scopeReady = this.roleCtx.hasHospitalScope;
   /** Mirrors RoiWorklistController.DECISION_ROLES exactly. */
   readonly canDecide = computed(() =>
     this.roleCtx.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
@@ -109,23 +139,38 @@ export class RoiComponent implements OnInit, OnDestroy {
 
   readonly truncated = computed(() => this.total() > this.rows().length);
 
-  private readonly load$ = new Subject<RoiRequestStatus>();
+  private readonly load$ = new Subject<WorklistStatus>();
   private loadSub?: Subscription;
 
   ngOnInit(): void {
     this.loadSub = this.load$
       .pipe(
-        // switchMap: only the LATEST selection may update the view, and a
-        // push while unpinned CANCELS the in-flight request - a slow
-        // response for the previous hospital or status arriving after the
-        // table was cleared must be dropped, not rendered.
+        // switchMap: only the LATEST status selection may update the view -
+        // a slow response for the previous status must be dropped, not
+        // rendered. A scope change rebuilds the page (the route gate).
         switchMap((status) => {
-          if (!this.scopeReady()) {
-            return of({ rows: [] as RoiRequest[], total: 0, failed: false });
-          }
           this.loading.set(true);
           this.loadFailed.set(false);
-          return this.roiService.worklist(status, 0, RoiComponent.PAGE_SIZE).pipe(
+          const source =
+            status === 'ALL'
+              ? forkJoin(
+                  (['PENDING', 'FULFILLED', 'DENIED', 'CANCELLED'] as RoiRequestStatus[]).map(
+                    (value) => this.roiService.worklist(value, 0, RoiComponent.PAGE_SIZE),
+                  ),
+                ).pipe(
+                  map((pages) => ({
+                    content: pages
+                      .flatMap((page) => page.content ?? [])
+                      .sort(
+                        (a, b) =>
+                          a.requestedOn.localeCompare(b.requestedOn) || a.id.localeCompare(b.id),
+                      )
+                      .slice(0, RoiComponent.PAGE_SIZE),
+                    totalElements: pages.reduce((sum, page) => sum + (page.totalElements ?? 0), 0),
+                  })),
+                )
+              : this.roiService.worklist(status, 0, RoiComponent.PAGE_SIZE);
+          return source.pipe(
             map((page) => ({
               rows: page.content ?? [],
               total: page.totalElements ?? 0,
@@ -143,28 +188,16 @@ export class RoiComponent implements OnInit, OnDestroy {
         this.total.set(state.total);
         this.loadFailed.set(state.failed);
       });
-    this.reloadForScope();
+    this.load$.next(this.activeStatus());
   }
 
   ngOnDestroy(): void {
     this.loadSub?.unsubscribe();
   }
 
-  onScopeChange(_hospitalId: string | null): void {
-    this.reloadForScope();
-  }
-
-  private reloadForScope(): void {
-    this.rows.set([]);
-    this.total.set(0);
-    this.loadFailed.set(false);
-    // Push even when unpinned: the emission is what cancels an in-flight
-    // response from the previously pinned hospital.
-    this.load$.next(this.activeStatus());
-  }
-
-  setStatus(status: RoiRequestStatus): void {
+  setStatus(status: WorklistStatus): void {
     this.activeStatus.set(status);
+    this.clearFilters();
     this.load$.next(status);
   }
 
@@ -293,8 +326,10 @@ export class RoiComponent implements OnInit, OnDestroy {
     return RoiComponent.ACTION_KEYS[kind];
   }
 
-  statusKey(status: RoiRequestStatus): string {
+  statusKey(status: WorklistStatus): string {
     switch (status) {
+      case 'ALL':
+        return 'ROI.STATUS_ALL';
       case 'PENDING':
         return 'ROI.STATUS_PENDING';
       case 'FULFILLED':

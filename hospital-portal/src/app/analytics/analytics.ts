@@ -17,6 +17,8 @@ import {
 } from '../services/dashboard.service';
 import { KpiCardsComponent } from './kpi-cards/kpi-cards.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { serverDateOrInstant } from '../shared/date-utils';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
 interface StatCard {
   /** i18n key, not text: the cards are rendered with | translate. */
@@ -30,7 +32,7 @@ interface StatCard {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [CommonModule, TranslateModule, KpiCardsComponent, EnumLabelPipe],
+  imports: [MeasurePipe, CommonModule, TranslateModule, KpiCardsComponent, EnumLabelPipe],
   templateUrl: './analytics.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analytics.scss',
@@ -81,14 +83,14 @@ export class AnalyticsComponent implements OnInit {
         bg: '#fef2f2',
       },
       {
-        labelKey: 'ANALYTICS.CARD.PRESCRIPTIONS',
+        labelKey: 'COMMON.LABEL.PRESCRIPTIONS',
         value: a.totalPrescriptions,
         icon: 'medication',
         color: '#06b6d4',
         bg: '#ecfeff',
       },
       {
-        labelKey: 'ANALYTICS.CARD.USERS',
+        labelKey: 'COMMON.LABEL.USERS',
         value: a.totalUsers,
         icon: 'group',
         color: '#6366f1',
@@ -183,7 +185,7 @@ export class AnalyticsComponent implements OnInit {
   }
 
   shortDate(dateStr: string): string {
-    const d = new Date(dateStr);
+    const d = serverDateOrInstant(dateStr); // #948 review: a LocalDate is that day, not UTC midnight
     return `${d.getMonth() + 1}/${d.getDate()}`;
   }
 }

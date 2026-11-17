@@ -37,6 +37,7 @@ public class BreakGlassDeclareRequestDTO {
     private String reason;
 
     @Min(15)
+    @jakarta.validation.constraints.Max(240)
     @Schema(description = "Optional override TTL in minutes (15–240). Defaults to 240 (4h).",
             example = "60")
     private Integer ttlMinutes;

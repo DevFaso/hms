@@ -9,14 +9,34 @@ import com.example.hms.payload.dto.clinical.labor.DeliveryRecordResponseDTO;
 import com.example.hms.payload.dto.clinical.labor.LaborAlertDTO;
 import com.example.hms.payload.dto.clinical.labor.LaborEpisodeResponseDTO;
 import com.example.hms.payload.dto.clinical.labor.PartographEntryResponseDTO;
+import com.example.hms.service.i18n.NotificationLocalizer;
+import com.example.hms.service.maternity.LaborAlertArgs;
+import com.example.hms.service.maternity.ObstetricAlertText;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
 
 /** Hand-written mapper for the Labor & Delivery DTOs (house convention — no MapStruct). */
 @Component
 public class LaborMapper {
+
+    private static final String ALERT_MSG_PREFIX = "labor.alert.msg.";
+
+    private final NotificationLocalizer localizer;
+
+    /** Without a localizer every alert shows its stored text. */
+    public LaborMapper() {
+        this(null);
+    }
+
+    @Autowired
+    public LaborMapper(NotificationLocalizer localizer) {
+        this.localizer = localizer;
+    }
 
     public LaborEpisodeResponseDTO toEpisodeResponse(LaborEpisode episode, long entryCount, boolean deliveryRecorded) {
         if (episode == null) {
@@ -27,6 +47,7 @@ public class LaborMapper {
             .patientId(episode.getPatient() != null ? episode.getPatient().getId() : null)
             .patientName(episode.getPatient() != null ? episode.getPatient().getFullName() : null)
             .hospitalId(episode.getHospital() != null ? episode.getHospital().getId() : null)
+            .hospitalName(episode.getHospital() != null ? episode.getHospital().getName() : null)
             .registrationId(episode.getRegistration() != null ? episode.getRegistration().getId() : null)
             .maternalHistoryId(episode.getMaternalHistory() != null ? episode.getMaternalHistory().getId() : null)
             .admittedByStaffName(episode.getAdmittedByStaff() != null ? episode.getAdmittedByStaff().getFullName() : null)
@@ -37,6 +58,13 @@ public class LaborMapper {
             .gestationalAgeWeeks(episode.getGestationalAgeWeeks())
             .gravida(episode.getGravida())
             .para(episode.getPara())
+            .transferredAt(episode.getTransferredAt())
+            .transferReason(episode.getTransferReason())
+            .transferHospitalId(episode.getTransferHospital() != null ? episode.getTransferHospital().getId() : null)
+            .transferHospitalName(episode.getTransferHospital() != null ? episode.getTransferHospital().getName() : null)
+            .transferredFromEpisodeId(episode.getTransferredFrom() != null ? episode.getTransferredFrom().getId() : null)
+            .transferredFromHospitalName(episode.getTransferredFrom() != null && episode.getTransferredFrom().getHospital() != null
+                ? episode.getTransferredFrom().getHospital().getName() : null)
             .activePhaseStartAt(episode.getActivePhaseStartAt())
             .status(episode.getStatus() != null ? episode.getStatus().name() : null)
             .outcome(episode.getOutcome() != null ? episode.getOutcome().name() : null)
@@ -76,7 +104,7 @@ public class LaborMapper {
             .urineProtein(entry.getUrineProtein())
             .urineAcetone(entry.getUrineAcetone())
             .notes(entry.getNotes())
-            .alerts(mapAlerts(entry.getAlerts()))
+            .alerts(mapAlerts(entry.getAlerts(), code -> LaborAlertArgs.ofEntry(code, entry, activePhaseStartAt)))
             .hoursSinceActivePhaseStart(hoursSince(activePhaseStartAt, entry.getObservationTime()))
             .build();
     }
@@ -105,11 +133,15 @@ public class LaborMapper {
             .estimatedBloodLossMl(record.getEstimatedBloodLossMl())
             .perinealTear(record.getPerinealTear() != null ? record.getPerinealTear().name() : null)
             .notes(record.getNotes())
-            .alerts(mapAlerts(record.getAlerts()))
+            .bornBeforeArrival(record.isBornBeforeArrival())
+            .bornBeforeArrivalReason(record.getBornBeforeArrivalReason())
+            .alerts(mapAlerts(record.getAlerts(), code -> LaborAlertArgs.ofDelivery(code, record)))
+            .newbornRegistrationPending(record.isNewbornRegistrationPending())
             .build();
     }
 
-    private List<LaborAlertDTO> mapAlerts(List<LaborAlert> alerts) {
+    /** QA D1427: the sentence in the reader's language, from the values of the row it warns about. */
+    private List<LaborAlertDTO> mapAlerts(List<LaborAlert> alerts, Function<String, Optional<List<Object>>> argsOfCode) {
         if (alerts == null || alerts.isEmpty()) {
             return List.of();
         }
@@ -118,7 +150,9 @@ public class LaborMapper {
                 .type(alert.getType() != null ? alert.getType().name() : null)
                 .severity(alert.getSeverity() != null ? alert.getSeverity().name() : null)
                 .code(alert.getCode())
-                .message(alert.getMessage())
+                .message(argsOfCode.apply(alert.getCode())
+                    .map(args -> ObstetricAlertText.render(localizer, ALERT_MSG_PREFIX, alert.getCode(), args, alert.getMessage()))
+                    .orElse(alert.getMessage()))
                 .triggeredBy(alert.getTriggeredBy())
                 .createdAt(alert.getCreatedAt())
                 .build())

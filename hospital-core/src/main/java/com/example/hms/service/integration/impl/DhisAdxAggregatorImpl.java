@@ -13,11 +13,11 @@ import com.example.hms.terminology.TerminologyCodes;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -56,9 +56,8 @@ public class DhisAdxAggregatorImpl implements DhisAdxAggregator {
                                                     Dhis2PeriodType periodType,
                                                     LocalDate periodStart,
                                                     LocalDate periodEnd) {
-        final Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + hospitalId));
+        final Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         final String orgUnitUid = hospital.getDhis2OrgUnitUid();
         if (orgUnitUid == null || orgUnitUid.isBlank()) {
@@ -66,20 +65,29 @@ public class DhisAdxAggregatorImpl implements DhisAdxAggregator {
                 "Hospital " + hospitalId + " has no DHIS2 organisation-unit UID configured");
         }
 
+        // QA D1003: a dose without a CVX code cannot be mapped; it is counted
+        // as one skipped group (and logged) rather than vanishing silently.
+        final long uncoded = immunizationRepository
+            .countUncodedForHospitalInRange(hospitalId, periodStart, periodEnd);
+        final int uncodedSkipped = uncoded > 0 ? 1 : 0;
+        if (uncoded > 0) {
+            log.info("DHIS2 ADX aggregator: skipping {} dose(s) without a CVX code for hospital={} period={}..{}",
+                uncoded, hospitalId, periodStart, periodEnd);
+        }
+
         // [hospitalId, range] -> list of [vaccineCode, count]
         final List<Object[]> rawCounts = immunizationRepository
             .countByVaccineCodeForHospitalInRange(hospitalId, periodStart, periodEnd);
         if (rawCounts.isEmpty()) {
-            log.info("DHIS2 ADX aggregator: no immunizations for hospital={} period={}..{}",
+            log.info("DHIS2 ADX aggregator: no coded immunizations for hospital={} period={}..{}",
                 hospitalId, periodStart, periodEnd);
-            return new AggregationResult(List.of(), 0, orgUnitUid);
+            return new AggregationResult(List.of(), uncodedSkipped, orgUnitUid);
         }
 
         // Batch resolve CVX -> DHIS2 dataElement UID in one query.
-        final Set<String> cvxCodes = new HashSet<>();
-        for (Object[] row : rawCounts) {
-            cvxCodes.add((String) row[0]);
-        }
+        final Set<String> cvxCodes = rawCounts.stream()
+            .map(row -> (String) row[0])
+            .collect(Collectors.toSet());
 
         final List<Dhis2DataElementMapping> mappings = mappingRepository
             .findByHospital_IdAndDatasetUidAndHmsConceptSystemAndHmsConceptCodeInAndActiveTrue(
@@ -97,7 +105,7 @@ public class DhisAdxAggregatorImpl implements DhisAdxAggregator {
         }
 
         final List<AggregatedDataValue> values = new ArrayList<>();
-        int skipped = 0;
+        int skipped = uncodedSkipped;
         for (Object[] row : rawCounts) {
             final String cvx = (String) row[0];
             final Long count = (Long) row[1];

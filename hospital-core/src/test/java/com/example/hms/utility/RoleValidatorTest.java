@@ -1,7 +1,6 @@
 package com.example.hms.utility;
 
-import com.example.hms.model.Hospital;
-import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.context.HospitalContext;
@@ -23,6 +22,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
@@ -38,13 +39,17 @@ import static org.mockito.Mockito.when;
  * </pre>
  *
  * The bug: when a super-admin user has exactly one active
- * {@link UserRoleHospitalAssignment} and that assignment is
+ * {@code UserRoleHospitalAssignment} and that assignment is
  * <b>global</b> (no hospital attached), the code did
  * {@code .getHospital().getId()} on a null reference. This used to be
  * unreachable because super-admins always had {@code X-Hospital-Id}
  * set, but the cross-tenant "global view" deliberately omits the
  * header — so the fallback path now fires and used to crash 10
  * dashboard endpoints simultaneously.
+ *
+ * <p>Since the one tenant resolver ({@code ActingScopeResolver}) the
+ * hospital-resolution methods here are adapters over it: the tests set the
+ * context the auth filters produce instead of stubbing assignment queries.
  */
 @ExtendWith(MockitoExtension.class)
 class RoleValidatorTest {
@@ -55,7 +60,7 @@ class RoleValidatorTest {
 
     @BeforeEach
     void setUp() {
-        roleValidator = new RoleValidator(assignmentRepository);
+        roleValidator = new RoleValidator(assignmentRepository, ActingScopeTestSupport.resolver(assignmentRepository, null));
     }
 
     @AfterEach
@@ -72,46 +77,30 @@ class RoleValidatorTest {
         assertThat(roleValidator.getCurrentHospitalId()).isNull();
     }
 
-    @Test
-    void getCurrentHospitalId_returnsNullWhenNoActiveAssignments() {
-        UUID userId = setAuthenticatedUser(UUID.randomUUID());
-        when(assignmentRepository.findByUser_IdAndActiveTrue(userId)).thenReturn(List.of());
-
-        assertThat(roleValidator.getCurrentHospitalId()).isNull();
-    }
-
-    @Test
-    void getCurrentHospitalId_returnsNullWhenMultipleActiveAssignments() {
-        UUID userId = setAuthenticatedUser(UUID.randomUUID());
-        when(assignmentRepository.findByUser_IdAndActiveTrue(userId))
-            .thenReturn(List.of(scopedAssignment(), scopedAssignment()));
-
-        assertThat(roleValidator.getCurrentHospitalId()).isNull();
-    }
-
-    @Test
-    void getCurrentHospitalId_returnsHospitalIdForSingleScopedAssignment() {
-        UUID userId = setAuthenticatedUser(UUID.randomUUID());
-        UUID hospitalId = UUID.randomUUID();
-        UserRoleHospitalAssignment assignment = scopedAssignment(hospitalId);
-        when(assignmentRepository.findByUser_IdAndActiveTrue(userId))
-            .thenReturn(List.of(assignment));
-
-        assertThat(roleValidator.getCurrentHospitalId()).isEqualTo(hospitalId);
-    }
-
     /**
-     * THE regression. Before the fix this NPE'd; after the fix it
-     * returns null so {@link RoleValidator#requireActiveHospitalId()}
-     * can fall through to its super-admin branch.
+     * {@code getCurrentHospitalId()} used to run its own "exactly one active
+     * assignment" query (and once NPE'd on a single GLOBAL assignment). It is
+     * the one resolver's answer now: the pinned hospital, else null, with no
+     * query of its own.
      */
     @Test
-    void getCurrentHospitalId_returnsNullForSingleGlobalAssignment() {
-        UUID userId = setAuthenticatedUser(UUID.randomUUID());
-        when(assignmentRepository.findByUser_IdAndActiveTrue(userId))
-            .thenReturn(List.of(globalAssignment()));
+    void getCurrentHospitalId_isThePinnedHospitalOfTheResolver() {
+        UUID hospitalId = UUID.randomUUID();
+        ActingScopeTestSupport.actingAt(UUID.randomUUID(), hospitalId);
+        assertThat(roleValidator.getCurrentHospitalId()).isEqualTo(hospitalId);
 
+        // Several hospitals and none named: no hospital, not the "only" one.
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .permittedHospitalIds(java.util.Set.of(UUID.randomUUID(), UUID.randomUUID()))
+            .scopeRefusal(com.example.hms.security.tenant.ActingScope.Reason.AMBIGUOUS)
+            .build());
         assertThat(roleValidator.getCurrentHospitalId()).isNull();
+
+        // A super-admin in global view (a single global assignment): null, no NPE.
+        ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
+        assertThat(roleValidator.getCurrentHospitalId()).isNull();
+
+        Mockito.verifyNoInteractions(assignmentRepository);
     }
 
     // ── requireActiveHospitalId ──────────────────────────────────────
@@ -132,21 +121,41 @@ class RoleValidatorTest {
     }
 
     /**
-     * The end-to-end case the cross-tenant slice hits in production:
-     * super-admin in global view (no X-Hospital-Id header so
-     * HospitalContext.activeHospitalId is null) AND the user has a
-     * single global assignment. Before the fix this NPE'd at
-     * getCurrentHospitalId line 95; after the fix the method returns
-     * null and lets the unscoped findAll path run.
+     * The global view a VERIFIED super-admin gets: null. And "step 4" is gone:
+     * a principal whose AUTHORITIES say super-admin while no verified context
+     * backs them (a test that skips the filter, an inflated authority list) is
+     * refused like anyone with no hospital, never given an unscoped read.
      */
     @Test
-    void requireActiveHospitalId_returnsNullForSuperAdminWithGlobalAssignment() {
-        UUID userId = setAuthenticatedUser(UUID.randomUUID(),
-            new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
-        when(assignmentRepository.findByUser_IdAndActiveTrue(userId))
-            .thenReturn(List.of(globalAssignment()));
-
+    void requireActiveHospitalId_isNullOnlyForAVerifiedSuperAdminInGlobalView() {
+        ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
         assertThat(roleValidator.requireActiveHospitalId()).isNull();
+
+        HospitalContextHolder.clear();
+        setAuthenticatedUser(UUID.randomUUID(), new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(roleValidator::requireActiveHospitalId)
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
+        Mockito.verifyNoInteractions(assignmentRepository);
+    }
+
+    /**
+     * Design Q1: a patient-only caller is bounded by ownership. Null means an
+     * unscoped super-admin to every caller of this method, so a patient must
+     * never receive it: the answer is a 403 PATIENT_OWNED, and the
+     * patient-reached path takes its hospital from the record instead.
+     */
+    @Test
+    void requireActiveHospitalId_refusesAPatientOwnedScopeInsteadOfAnsweringNull() {
+        HospitalContextHolder.setContext(com.example.hms.security.context.HospitalContext.builder()
+            .principalUserId(UUID.randomUUID())
+            .permittedHospitalIds(java.util.Set.of(UUID.randomUUID(), UUID.randomUUID()))
+            .patientOwned(true)
+            .build());
+        org.assertj.core.api.Assertions.assertThatThrownBy(roleValidator::requireActiveHospitalId)
+            .isInstanceOf(com.example.hms.exception.HospitalScopeRefusedException.class)
+            .extracting(e -> ((com.example.hms.exception.HospitalScopeRefusedException) e).getReason())
+            .isEqualTo(com.example.hms.exception.HospitalScopeRefusedException.PATIENT_OWNED);
     }
 
     /**
@@ -252,13 +261,15 @@ class RoleValidatorTest {
         HospitalContextHolder.setContext(
             HospitalContext.builder().superAdmin(false).build());
         assertThat(roleValidator.isSuperAdminFromJwtClaim()).isFalse();
-        // Authorities-based check disagrees — proving the two are independent.
-        assertThat(roleValidator.isSuperAdminFromAuth()).isTrue();
+        // The deprecated authorities-based check no longer disagrees: it
+        // follows the verified signal, so an inflated authority grants nothing.
+        assertThat(roleValidator.isSuperAdminFromAuth()).isFalse();
 
         // Context with superAdmin=true → true
         HospitalContextHolder.setContext(
             HospitalContext.builder().superAdmin(true).build());
         assertThat(roleValidator.isSuperAdminFromJwtClaim()).isTrue();
+        assertThat(roleValidator.isSuperAdminFromAuth()).isTrue();
     }
 
     // ── helpers ──────────────────────────────────────────────────────
@@ -276,23 +287,143 @@ class RoleValidatorTest {
         return userId;
     }
 
-    private UserRoleHospitalAssignment scopedAssignment() {
-        return scopedAssignment(UUID.randomUUID());
+    // ── The two-layer role split: the annotation expands, these do not ──
+    // RoleExpansion (E9 #67) makes a physician and a surgeon a doctor on the
+    // AUTHORITIES, so the endpoint guards admit them; the checks in this class
+    // match the stored ASSIGNMENT code and do not know that. These four pin
+    // the two predicates whose callers the co-sign fix touches.
+
+    @Test
+    void canCreatePrescription_admitsASurgeonTheEndpointGuardAlreadyAdmits() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("SURGEON"));
+
+        assertThat(roleValidator.canCreatePrescription(userId, hospitalId)).isTrue();
     }
 
-    private UserRoleHospitalAssignment scopedAssignment(UUID hospitalId) {
-        Hospital h = new Hospital();
-        h.setId(hospitalId);
-        UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
-        a.setHospital(h);
-        return a;
+    @Test
+    void canCreatePrescription_admitsAPhysician() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("PHYSICIAN"));
+
+        assertThat(roleValidator.canCreatePrescription(userId, hospitalId)).isTrue();
     }
 
-    private UserRoleHospitalAssignment globalAssignment() {
-        // Hospital deliberately left null — represents a SUPER_ADMIN
-        // role assigned without a tenant scope.
-        UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
-        a.setHospital(null);
-        return a;
+    @Test
+    void canCreatePrescription_stillRefusesARoleThatPrescribesNowhere() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("RECEPTIONIST"));
+
+        assertThat(roleValidator.canCreatePrescription(userId, hospitalId)).isFalse();
+    }
+
+    @Test
+    void canOrderLabTests_admitsASurgeonAndStillRefusesAMidwife() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("SURGEON"));
+        assertThat(roleValidator.canOrderLabTests(userId, hospitalId)).isTrue();
+
+        Mockito.reset(assignmentRepository);
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("MIDWIFE"));
+        // Deliberate: the endpoint admits a midwife, but nothing has
+        // established that a midwife orders lab tests.
+        assertThat(roleValidator.canOrderLabTests(userId, hospitalId)).isFalse();
+    }
+
+    /** QA D1164 (round 21): the walk-in takes the midwife (and a physician or surgeon) as its provider. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"MIDWIFE", "NURSE", "DOCTOR", "PHYSICIAN", "SURGEON",
+        "HOSPITAL_ADMIN"})
+    void isEncounterProvider_admitsEveryRoleThatRunsAVisit(String code) {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains(code));
+
+        assertThat(roleValidator.isEncounterProvider(userId, hospitalId)).isTrue();
+    }
+
+    @Test
+    void isEncounterProvider_refusesAReceptionist() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("RECEPTIONIST"));
+
+        assertThat(roleValidator.isEncounterProvider(userId, hospitalId)).isFalse();
+    }
+
+    private static com.example.hms.model.UserRoleHospitalAssignment assignmentInRole(String code) {
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(code);
+        com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setRole(role);
+        return assignment;
+    }
+
+    @Test
+    void isLabOrderingRole_matchesTheRolesCanOrderLabTestsAdmits() {
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("ROLE_DOCTOR"))).isTrue();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("physician"))).isTrue();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("ROLE_SURGEON"))).isTrue();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("NURSE"))).isTrue();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("ROLE_HOSPITAL_ADMIN"))).isFalse();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("ROLE_MIDWIFE"))).isFalse();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole("ROLE_RECEPTIONIST"))).isFalse();
+        assertThat(RoleValidator.isLabOrderingRole(assignmentInRole(null))).isFalse();
+        assertThat(RoleValidator.isLabOrderingRole(new com.example.hms.model.UserRoleHospitalAssignment())).isFalse();
+    }
+
+    /**
+     * Product decision 2026-10-28: a medical certificate is signed by any
+     * licensed physician at the visit's hospital - the doctor, physician and
+     * the specialist physicians this codebase seeds - and by no one else.
+     * The role is held at THAT hospital: the query is keyed on it.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON", "ROLE_ANESTHESIOLOGIST", "ROLE_RADIOLOGIST"})
+    void isLicensedPhysician_admitsEveryPhysicianRole(String heldRole) {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains(heldRole));
+        assertThat(roleValidator.isLicensedPhysician(userId, hospitalId)).isTrue();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_RECEPTIONIST", "ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN",
+        "ROLE_SUPER_ADMIN", "ROLE_PHARMACIST", "ROLE_LAB_SCIENTIST", "ROLE_PHYSIOTHERAPIST", "ROLE_STAFF"})
+    void isLicensedPhysician_refusesEveryOtherRole(String heldRole) {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains(heldRole));
+        assertThat(roleValidator.isLicensedPhysician(userId, hospitalId)).isFalse();
+    }
+
+    @Test
+    void licensedPhysicianRoleCodes_areExactlyTheSeededPhysicianRoles() {
+        assertThat(RoleValidator.LICENSED_PHYSICIAN_ROLE_CODES)
+            .containsExactly("DOCTOR", "PHYSICIAN", "SURGEON", "ANESTHESIOLOGIST", "RADIOLOGIST");
     }
 }

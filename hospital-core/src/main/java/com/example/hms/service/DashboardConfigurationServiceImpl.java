@@ -7,6 +7,7 @@ import com.example.hms.payload.dto.dashboard.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.dashboard.DashboardRoleConfigDTO;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.permission.PermissionCatalog;
+import com.example.hms.utility.RoleNames;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +28,6 @@ import java.util.UUID;
 public class DashboardConfigurationServiceImpl implements DashboardConfigurationService {
 
     private static final String UNKNOWN_ROLE_CODE = "ROLE_UNKNOWN";
-    private static final String UNKNOWN_ROLE_NAME = "Unknown Role";
 
     private static final Map<String, Integer> ROLE_PRIORITY = Map.ofEntries(
         Map.entry("ROLE_SUPER_ADMIN", 0),
@@ -95,7 +95,7 @@ public class DashboardConfigurationServiceImpl implements DashboardConfiguration
             mergedPermissions.addAll(fallbackPermissions);
             roleConfigs = List.of(new DashboardRoleConfigDTO(
                 UNKNOWN_ROLE_CODE,
-                UNKNOWN_ROLE_NAME,
+                null,
                 null,
                 null,
                 fallbackPermissions
@@ -124,11 +124,9 @@ public class DashboardConfigurationServiceImpl implements DashboardConfiguration
         return UNKNOWN_ROLE_CODE;
     }
 
+    /** The role's display token, bare ({@code DOCTOR}), or null when there is none to show. */
     private static String resolveRoleName(Role role) {
-        if (role == null || !StringUtils.hasText(role.getName())) {
-            return UNKNOWN_ROLE_NAME;
-        }
-        return role.getName();
+        return role == null ? null : RoleNames.bareRole(role.getName());
     }
 
     private static String assignmentHospitalKey(Hospital hospital) {

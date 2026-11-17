@@ -62,6 +62,9 @@ public class NursingNoteResponseDTO {
 
     private String narrative;
 
+    /** QA D1044: the title the nurse gave the note, when she gave one. */
+    private String title;
+
     private boolean lateEntry;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mmXXX")

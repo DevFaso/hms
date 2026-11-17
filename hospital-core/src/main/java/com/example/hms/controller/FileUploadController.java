@@ -41,6 +41,7 @@ public class FileUploadController {
 
     private final FileUploadService fileUploadService;
     private final UserService userService;
+    private final org.springframework.context.MessageSource messageSource;
     private static final String USER_NOT_FOUND_MESSAGE = "User not found";
 
     @Operation(summary = "Upload profile image", description = "Upload a profile image for the authenticated user")
@@ -69,7 +70,8 @@ public class FileUploadController {
             log.info("Profile image uploaded successfully for user: {}", userId);
 
             return ResponseEntity.ok(Map.of(
-                    "message", "Profile image uploaded successfully",
+                    // QA D911: in the reader's language.
+                    "message", messageSource.getMessage("user.profileImage.uploaded", null, org.springframework.context.i18n.LocaleContextHolder.getLocale()),
                     "imageUrl", imageUrl));
 
         } catch (IllegalArgumentException e) {
@@ -111,7 +113,8 @@ public class FileUploadController {
 
             log.info("Profile image deleted successfully for user: {}", userId);
 
-            return ResponseEntity.ok(new MessageResponse("Profile image deleted successfully"));
+            return ResponseEntity.ok(new MessageResponse(
+                messageSource.getMessage("user.profileImage.deleted", null, org.springframework.context.i18n.LocaleContextHolder.getLocale())));
 
         } catch (RuntimeException e) {
             log.error("Failed to delete profile image", e);

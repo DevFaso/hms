@@ -1,6 +1,5 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.Hospital;
@@ -11,17 +10,18 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.payload.dto.LabResultReferenceRangeDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
+import com.example.hms.service.lab.PatientLabResultGrade;
 import com.example.hms.service.lab.SupersededLabResults;
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.service.PatientLabResultService;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -43,12 +43,12 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
 
     private static final int DEFAULT_LIMIT = 25;
     private static final int MAX_LIMIT = 100;
-    private static final String STATUS_NORMAL = "NORMAL";
-    private static final String STATUS_ABNORMAL = "ABNORMAL";
-    private static final String STATUS_ABNORMAL_HIGH = "ABNORMAL_HIGH";
-    private static final String STATUS_ABNORMAL_LOW = "ABNORMAL_LOW";
-    private static final String STATUS_CRITICAL = "CRITICAL";
-    private static final String STATUS_PENDING = "PENDING";
+    /**
+     * Resolvable message key, not a sentence, and deliberately the same one
+     * {@code PatientChartAccess} throws — a refused staff read must be
+     * indistinguishable from "no such patient".
+     */
+    private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
 
     private final LabResultRepository labResultRepository;
     private final PatientChartAccess patientChartAccess;
@@ -56,33 +56,59 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     private final LabResultMapper labResultMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForPatient(UUID patientId, UUID hospitalId, int limit) {
-        return getLabResults(patientId, hospitalId, limit, false);
+        return getLabResults(patientId, hospitalId, limit, false, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getLabResultsForPatient(UUID patientId, UUID hospitalId, int limit,
+                                                                     boolean includeUnreleasedValues) {
+        return getLabResults(patientId, hospitalId, limit, false, includeUnreleasedValues);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, UUID hospitalId, int limit) {
-        return getLabResults(patientId, hospitalId, limit, true);
+        return getLabResults(patientId, hospitalId, limit, true, false);
     }
 
     /**
-     * @param redactUnreleased B3 — true on the patient-facing path: an
+     * @param portalView true on the patient-facing path — the patient (or an
+     *        authorized proxy) reading their own results, resolved from the
+     *        authenticated principal by {@code PatientPortalServiceImpl}. It
+     *        governs two things.
+     *
+     *        <p>B3 — redaction: an
      *        unreleased row keeps its identity (test, order, hospital) and
      *        {@code PENDING} but loses the value, unit, reference range,
      *        notes and performer. A preliminary value is the lab's until
      *        it is released; the patient learns only that one is coming.
+     *
+     *        <p>And scope: a {@code null} {@code hospitalId} is legitimate
+     *        ONLY here. The portal has no hospital scope to offer and the
+     *        patient owns every row, so the patient-only query is the right
+     *        one. On the staff path a null scope means the scope did not
+     *        resolve, and {@link #fetchRows} refuses rather than widening —
+     *        see the comment there.
      */
     private List<PatientLabResultResponseDTO> getLabResults(UUID patientId, UUID hospitalId, int limit,
-                                                            boolean redactUnreleased) {
+                                                            boolean portalView, boolean includeUnreleasedValues) {
         log.info("Fetching lab results for patient {} in hospital {}", patientId, hospitalId);
 
-        // See PatientChartAccess — cross-hospital safe, and adds the hospital
-        // authorization this read previously relied on the finder for.
-        Patient patient = patientChartAccess.require(patientId, hospitalId);
+        // Staff: the chart gate — cross-hospital safe, and the hospital
+        // authorization this read previously relied on the finder for. Portal:
+        // the caller already established whose record it is, and the staff
+        // gate is the wrong question for the patient themselves (with a scope
+        // it refuses a patient their own restricted chart, and with none it
+        // refuses a proxy) — see PatientChartAccess.requireOwnRecord.
+        Patient patient = portalView
+            ? patientChartAccess.requireOwnRecord(patientId)
+            : patientChartAccess.require(patientId, hospitalId);
 
         int effectiveLimit = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
         // Read the caller's limit first. If the pairing then removes rows —
@@ -94,62 +120,179 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         // rows to return one, and a fixed +1 still came up short whenever a
         // page held more than one pair.
 
-        List<LabResult> results = fetchRows(patient, hospitalId, effectiveLimit);
-        List<LabResult> visible = resolvePairs(results, redactUnreleased, effectiveLimit);
+        // QA D741: outside the laboratory a superseded result and a legacy
+        // duplicate are not current, on the portal and the staff view alike.
+        boolean clinicalReader = portalView || !includeUnreleasedValues;
+        List<LabResult> results = fetchRows(patient, hospitalId, effectiveLimit, portalView);
+        // QA D1213 (round 23): filter first, then cut. resolvePairs used to cut
+        // at the limit BEFORE currentFor removed the superseded rows, so a
+        // page of 20 showed 17 and the two oldest released results (a
+        // critical K 6.8 among them) could never be reached.
+        List<LabResult> visible = limited(currentFor(clinicalReader, resolvePairs(results, portalView)), effectiveLimit);
         // Only worth reading again if there are rows we have not seen AND the
         // wider read would actually be wider — at the cap it would repeat the
-        // identical query, and on the unscoped path that means loading the
-        // patient's whole result set a second time for nothing.
+        // identical query for nothing.
         if (visible.size() < effectiveLimit
             && results.size() >= effectiveLimit
             && effectiveLimit < MAX_LIMIT) {
-            results = fetchRows(patient, hospitalId, MAX_LIMIT);
-            visible = resolvePairs(results, redactUnreleased, effectiveLimit);
+            results = fetchRows(patient, hospitalId, MAX_LIMIT, portalView);
+            visible = limited(currentFor(clinicalReader, resolvePairs(results, portalView)), effectiveLimit);
         }
 
-        if (hospitalId != null) {
-            // Accounted on what the patient is actually shown, not on the wider
-            // window the pairing needed.
+        if (!portalView && hospitalId != null) {
+            // Accounted on what the staff caller is actually shown, not on the
+            // wider window the pairing needed. Never on the portal: the patient
+            // reading their own results, from every hospital, discloses
+            // nothing to anyone. On the staff path a row this hospital's
+            // laboratory performed for another hospital is its own disclosure
+            // reason (#751) and is counted there alone.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+            java.util.function.Predicate<LabResult> performedHere =
+                r -> !portalView && CrossHospitalReachRecorder.isPerformedHere(r, hospitalId);
             reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(
-                    visible.stream().map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
+                    visible.stream().filter(performedHere.negate())
+                        .map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
                 "Cross-hospital lab result read on the treatment relationship");
+            reachRecorder.recordReach(patient.getId(), hospitalId, requesterUserId, null,
+                CrossHospitalReachRecorder.reachOf(
+                    visible.stream().filter(performedHere)
+                        .map(r -> hospitalIdOf(r.getLabOrder())).toList(), hospitalId),
+                CrossHospitalReachRecorder.LAB_RESULT_PERFORMED_HERE_DESCRIPTION);
         }
 
+        Map<UUID, LocalDateTime> collectedAtByOrder = collectionTimesOf(visible);
         return visible.stream()
-            .map(result -> toResponse(result, redactUnreleased))
+            .map(result -> toResponse(result, clinicalReader, collectedAtByOrder))
             .toList();
+    }
+
+    private static List<LabResult> limited(List<LabResult> rows, int limit) {
+        return rows.size() <= limit ? rows : rows.subList(0, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, int offset, int limit) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        int pageSize = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
+        int skip = Math.max(offset, 0);
+        int needed = (int) Math.min((long) skip + pageSize, Integer.MAX_VALUE / 2);
+        // Read a window of the patient's rows, filter it, and widen it until
+        // it holds offset + limit current rows or the patient has no more
+        // rows: the filter never cuts a page short, and offset skips CURRENT
+        // rows only.
+        int window = needed;
+        List<LabResult> visible;
+        while (true) {
+            List<LabResult> rows = fetchRows(patient, null, window, true);
+            visible = ClinicalLabResultView.current(resolvePairs(rows, true));
+            if (visible.size() >= needed || rows.size() < window || window >= Integer.MAX_VALUE / 2) {
+                break;
+            }
+            window = (int) Math.min((long) window * 2, Integer.MAX_VALUE / 2);
+        }
+        int from = Math.min(skip, visible.size());
+        int to = Math.min(from + pageSize, visible.size());
+        List<LabResult> slice = visible.subList(from, to);
+        Map<UUID, LocalDateTime> collectedAtByOrder = collectionTimesOf(slice);
+        return slice.stream()
+            .map(result -> toResponse(result, true, collectedAtByOrder))
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countLabResultsForPatientPortal(UUID patientId) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        // Every row of the patient, filtered as the paged read filters them:
+        // a total that counted superseded rows would promise results the list
+        // never shows.
+        List<LabResult> rows = fetchRows(patient, null, Integer.MAX_VALUE / 2, true);
+        return ClinicalLabResultView.current(resolvePairs(rows, true)).size();
+    }
+
+    private static List<LabResult> currentFor(boolean clinicalReader, List<LabResult> rows) {
+        return clinicalReader ? ClinicalLabResultView.current(rows) : rows;
     }
 
     /**
      * The newest {@code window} rows for this patient, within the readable
      * hospitals when a hospital scope is in play.
+     *
+     * <p>The portal (the patient's own record) always reads every row of the
+     * patient, whatever hospital id it passes. A staff read is scoped to the
+     * readable hospitals, and a staff read with no scope is refused.
      */
-    private List<LabResult> fetchRows(Patient patient, UUID hospitalId, int window) {
-        Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate"));
+    private List<LabResult> fetchRows(Patient patient, UUID hospitalId, int window, boolean portalView) {
+        // id breaks resultDate ties: the second, wider read must put the same
+        // rows first, or a tie at the boundary could swap between the two.
+        Pageable pageable = PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "resultDate", "id"));
         List<LabResult> results;
+        if (portalView) {
+            // Patient portal: the caller IS the patient (or a proxy the portal
+            // already authorized) and every row belongs to them, from every
+            // hospital. The hospital id the portal resolved is deliberately NOT
+            // a scope: scoping it made the patient a staff reader of their own
+            // chart (foreign rows dropped by consent or restriction). Newest
+            // first, limited at the database; resultDate is NOT NULL.
+            return labResultRepository.findAllPatientResults(patient.getId(), pageable);
+        }
         if (hospitalId != null) {
-            Hospital hospital = hospitalRepository.findById(hospitalId)
+            Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
             // E9 #59b — results follow the patient across the readable
             // hospitals (lab rows carry no sensitivity tag, V158); every
             // foreign row surfaced is accounted.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
+            // #751 on the staff path: a result is readable where its order is
+            // handled, so staff also see what this hospital's own laboratory
+            // performed for another hospital. (Portal already returned above,
+            // reading every row the patient has from every hospital,
+            // unscoped.)
             results = labResultRepository
-                .findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(patient.getId(), readable, pageable);
+                .findPatientResultsReadableAt(patient.getId(), readable, hospital.getId(), false, pageable);
         } else {
-            // Fallback: patient-only query (no hospital scope) — common for patient portal
-            results = labResultRepository.findByLabOrder_Patient_Id(patient.getId()).stream()
-                .sorted((a, b) -> {
-                    if (a.getResultDate() == null && b.getResultDate() == null) return 0;
-                    if (a.getResultDate() == null) return 1;
-                    if (b.getResultDate() == null) return -1;
-                    return b.getResultDate().compareTo(a.getResultDate());
-                })
-                .limit(window)
-                .toList();
+            // A staff read with no hospital scope. This used to fall through to
+            // the patient-only query below, which returns EVERY hospital's rows
+            // for the patient: RecordAccessPolicy.readableHospitalIds never ran,
+            // and getLabResults' cross-hospital disclosure row is guarded on the
+            // same null, so the widened read was not even accounted.
+            //
+            // PatientChartAccess.require already denies a null scope for anyone
+            // but a super-admin, so what reached here was a super-admin in
+            // global view — including one acting as an inherited clinical role,
+            // since RoleExpansion grants that list before any @PreAuthorize
+            // runs. There is no scope for such a caller to be measured against,
+            // so widening is the only thing the old code could do. It refuses
+            // instead: pick a hospital (the scope picker) and the read is
+            // scoped, readable-checked and disclosed like every other.
+            //
+            // The chart's Labs tab used to send NO hospitalId in global view,
+            // which would have turned this refusal into an error card with a
+            // Retry that re-issued the same request forever. #731 closed that
+            // first: the Labs section now declines to read without a scope and
+            // renders the scope hint, so the two changes meet correctly and a
+            // super-admin is asked to pick a hospital rather than shown a
+            // failure. If a future caller reintroduces an unscoped read, it
+            // gets a 404 here — deliberately, because an unaccounted
+            // cross-tenant read is not an acceptable way to keep a tab
+            // populated.
+            //
+            // 404, not 403, and the same key PatientChartAccess throws: a
+            // caller who could not establish scope learns nothing about whether
+            // the patient or the rows exist.
+            //
+            // Logged, though. The response is deliberately opaque, which makes
+            // a scope-resolution failure indistinguishable from a genuine
+            // missing patient in the logs too — and those are very different
+            // operational events. The patient id only: it is already the
+            // subject of this request, and nothing about the caller's own
+            // tenancy belongs in a line that a 404 spike will be triaged from.
+            log.warn("Staff lab-result read refused: no hospital scope resolved for patient {}",
+                patient.getId());
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patient.getId());
         }
         return results;
     }
@@ -162,25 +305,22 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      * view, never from the record. Order completion applies the same rule, from
      * the same class. The staff path resolves nothing: both rows are the record.
      */
-    private List<LabResult> resolvePairs(List<LabResult> results, boolean redactUnreleased, int limit) {
+    private List<LabResult> resolvePairs(List<LabResult> results, boolean redactUnreleased) {
         if (!redactUnreleased) {
-            return results.stream().limit(limit).toList();
+            return results;
         }
         List<LabResult> known = withSiblingsOfSupersedableRows(results);
         // Judge everything we know, not just the page: a winner that is itself
         // superseded must be recognisable as such before it is folded in.
         Map<UUID, LabResult> replacements = SupersededLabResults.replacements(known, known);
         if (replacements.isEmpty()) {
-            return results.stream().limit(limit).toList();
+            return results;
         }
 
-        List<LabResult> survivors = new java.util.ArrayList<>(results.size());
         Set<UUID> present = new java.util.HashSet<>();
-        for (LabResult result : results) {
-            if (!replacements.containsKey(result.getId()) && present.add(result.getId())) {
-                survivors.add(result);
-            }
-        }
+        List<LabResult> survivors = new java.util.ArrayList<>(results.stream()
+            .filter(result -> !replacements.containsKey(result.getId()) && present.add(result.getId()))
+            .toList());
         // Only the rows on this page can pull a survivor in with them; a
         // sibling fetched purely to judge them is not something the patient
         // asked for.
@@ -193,23 +333,57 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         // them adjacent, so a tie can fall either side of the edge — and
         // dropping one without adding the other would take the test out of the
         // patient's view altogether.
-        for (LabResult winner : pageWinners) {
-            if (winner.getId() != null
+        survivors.addAll(pageWinners.stream()
+            .filter(winner -> winner.getId() != null
                 && !replacements.containsKey(winner.getId())
-                && present.add(winner.getId())) {
-                survivors.add(winner);
-            }
-        }
+                && present.add(winner.getId()))
+            .toList());
         survivors.sort(NEWEST_FIRST);
-        return survivors.stream().limit(limit).toList();
+        return survivors;
     }
 
-    /** The order the page is read in, applied again once a survivor is folded in. */
+    /**
+     * The order the page is read in (resultDate, then id, both descending),
+     * applied again once a survivor is folded in. QA D1213: the id tie-break
+     * is compared as the database compares a uuid (its text, byte by byte),
+     * so a re-sorted page keeps the order the query gave and two results at
+     * the same time never swap between pages.
+     */
     private static final java.util.Comparator<LabResult> NEWEST_FIRST =
         java.util.Comparator.comparing(LabResult::getResultDate,
-            java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
+                java.util.Comparator.nullsLast(java.util.Comparator.<LocalDateTime>reverseOrder()))
+            .thenComparing(r -> r.getId() == null ? "" : r.getId().toString(),
+                java.util.Comparator.<String>reverseOrder());
 
-    private PatientLabResultResponseDTO toResponse(LabResult result, boolean redactUnreleased) {
+    /**
+     * D49: when each order's specimen was actually collected - the earliest
+     * collection among its specimens. collectedAt used to be the ORDER time,
+     * which is not when anything was drawn; an order with no recorded
+     * collection now reports none rather than a time nobody observed.
+     */
+    private Map<UUID, LocalDateTime> collectionTimesOf(List<LabResult> results) {
+        Set<UUID> orderIds = results.stream()
+            .map(LabResult::getLabOrder)
+            .filter(java.util.Objects::nonNull)
+            .map(LabOrder::getId)
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        Map<UUID, LocalDateTime> earliest = new java.util.HashMap<>();
+        if (orderIds.isEmpty()) {
+            return earliest;
+        }
+        for (com.example.hms.model.LabSpecimen specimen : labSpecimenRepository.findByLabOrder_IdIn(orderIds)) {
+            if (specimen.getCollectedAt() == null || specimen.getLabOrder() == null) {
+                continue;
+            }
+            earliest.merge(specimen.getLabOrder().getId(), specimen.getCollectedAt(),
+                (a, b) -> a.isBefore(b) ? a : b);
+        }
+        return earliest;
+    }
+
+    private PatientLabResultResponseDTO toResponse(LabResult result, boolean redactUnreleased,
+                                                   Map<UUID, LocalDateTime> collectedAtByOrder) {
         LabOrder labOrder = result.getLabOrder();
         LabTestDefinition testDefinition = labOrder != null ? labOrder.getLabTestDefinition() : null;
         LabResultResponseDTO mapped = labResultMapper.toResponseDTO(result);
@@ -218,9 +392,12 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             .id(result.getId())
             .testName(resolveTestName(labOrder, mapped))
             .testCode(testDefinition != null ? testDefinition.getTestCode() : null)
-            .status(resolveStatus(result, mapped))
+            .status(PatientLabResultGrade.statusOf(result, result.getResultValue(), mapped))
             .released(result.isReleased())
-            .collectedAt(labOrder != null ? labOrder.getOrderDatetime() : null)
+            // QA D1016: a released correction is marked, so the patient does not
+            // read it as a second, unrelated result.
+            .corrected(result.isReleased() && com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
+            .collectedAt(labOrder != null ? collectedAtByOrder.get(labOrder.getId()) : null)
             .resultedAt(result.getResultDate())
             .orderedBy(resolveStaffName(labOrder != null ? labOrder.getOrderingStaff() : null))
             .category(testDefinition != null ? testDefinition.getCategory() : null)
@@ -234,7 +411,10 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         return response
             .value(result.getResultValue())
             .unit(unit)
-            .referenceRange(formatReferenceRange(mapped != null ? mapped.getReferenceRanges() : null, unit))
+            .referenceRange(PatientLabResultGrade.referenceTextOf(
+                labResultMapper.gradedReferenceRange(result), testDefinition))
+            .unitMismatch(mapped != null && mapped.isUnitMismatch())
+            .gradeUnknown(mapped != null && mapped.isGradeUnknown())
             .performedBy(resolveAssignmentUser(result.getAssignment()))
             .notes(result.getNotes())
             .build();
@@ -283,8 +463,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     }
 
     private String resolveUnit(LabResult result, LabTestDefinition definition) {
-        if (result.getResultUnit() != null && !result.getResultUnit().isBlank()) {
-            return result.getResultUnit();
+        String stated = com.example.hms.mapper.LabResultMapper.unitOf(result);
+        if (stated != null) {
+            return stated;
         }
         if (definition != null && definition.getUnit() != null && !definition.getUnit().isBlank()) {
             return definition.getUnit();
@@ -298,86 +479,16 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             && !order.getLabTestDefinition().getName().isBlank()) {
             return order.getLabTestDefinition().getName();
         }
-        if (order != null && order.getClinicalIndication() != null && !order.getClinicalIndication().isBlank()) {
-            return order.getClinicalIndication();
+        // QA D648: a deleted definition reads "deleted test" here as it does in the
+        // orders table above; the clinical indication is not a test name.
+        if (order != null && order.getLabTestDefinition() == null) {
+            return com.example.hms.utility.MessageUtil.resolveOrRaw(
+                com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
         }
         if (mapped != null && mapped.getLabTestName() != null && !mapped.getLabTestName().isBlank()) {
             return mapped.getLabTestName();
         }
         return "Lab Result";
-    }
-
-    /**
-     * B18 — two gradings can exist for one row: what the configured
-     * reference range says about the value, and the flag the analyzer
-     * (OBX-8) or the technologist recorded. Neither is discarded: the
-     * patient sees the MORE SEVERE of the two, with the direction taken
-     * from whichever source is directional (the range wins when both
-     * are, since it is the hospital's own range). So a row inside its
-     * range that the analyzer still flagged H reads ABNORMAL_HIGH, and an
-     * HH row never reads merely ABNORMAL_HIGH because the range was mild.
-     */
-    private String resolveStatus(LabResult result, LabResultResponseDTO mapped) {
-        if (!result.isReleased()) {
-            return STATUS_PENDING;
-        }
-        String fromRange = statusFromRange(mapped != null ? mapped.getSeverityFlag() : null);
-        String fromFlag = statusOf(result.getAbnormalFlag());
-        if (fromRange == null) {
-            return fromFlag;
-        }
-        int rangeRank = rank(fromRange);
-        int flagRank = rank(fromFlag);
-        if (rangeRank != flagRank) {
-            return rangeRank > flagRank ? fromRange : fromFlag;
-        }
-        return isDirectional(fromRange) || !isDirectional(fromFlag) ? fromRange : fromFlag;
-    }
-
-    /**
-     * What the configured reference range says, or null when there is
-     * none to grade against. Out of range is ABNORMAL with a direction,
-     * nothing more: CRITICAL comes only from a mapper severity that is
-     * itself CRITICAL or from the recorded flag. (An earlier reading
-     * upgraded an unacknowledged HIGH to CRITICAL as a review nudge; once
-     * merged with the analyzer flag that synthetic CRITICAL outranked an
-     * explicit N and reached the patient unreviewed.)
-     */
-    private static String statusFromRange(String severity) {
-        if (severity == null || severity.isBlank() || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity)) {
-            return null;
-        }
-        return switch (severity.toUpperCase(Locale.ROOT)) {
-            case STATUS_CRITICAL -> STATUS_CRITICAL;
-            case "HIGH" -> STATUS_ABNORMAL_HIGH;
-            case "LOW" -> STATUS_ABNORMAL_LOW;
-            default -> STATUS_NORMAL;
-        };
-    }
-
-    private static int rank(String status) {
-        return switch (status) {
-            case STATUS_CRITICAL -> 3;
-            case STATUS_ABNORMAL_HIGH, STATUS_ABNORMAL_LOW, STATUS_ABNORMAL -> 2;
-            default -> 1;
-        };
-    }
-
-    private static boolean isDirectional(String status) {
-        return STATUS_ABNORMAL_HIGH.equals(status) || STATUS_ABNORMAL_LOW.equals(status);
-    }
-
-    private static String statusOf(AbnormalFlag flag) {
-        if (flag == null) {
-            return STATUS_NORMAL;
-        }
-        return switch (flag) {
-            case CRITICAL -> STATUS_CRITICAL;
-            case ABNORMAL_HIGH -> STATUS_ABNORMAL_HIGH;
-            case ABNORMAL_LOW -> STATUS_ABNORMAL_LOW;
-            case ABNORMAL -> STATUS_ABNORMAL;
-            case NORMAL -> STATUS_NORMAL;
-        };
     }
 
     private String resolveStaffName(Staff staff) {
@@ -420,37 +531,5 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             return user.getUsername();
         }
         return null;
-    }
-
-    private String formatReferenceRange(List<LabResultReferenceRangeDTO> ranges, String fallbackUnit) {
-        if (ranges == null || ranges.isEmpty()) {
-            return null;
-        }
-        LabResultReferenceRangeDTO range = ranges.get(0);
-        Double min = range.getMinValue();
-        Double max = range.getMaxValue();
-        String unit = range.getUnit();
-        if (unit == null || unit.isBlank()) {
-            unit = fallbackUnit;
-        }
-        String unitSuffix = unit != null && !unit.isBlank() ? " " + unit : "";
-
-        if (min != null && max != null) {
-            return formatNumber(min) + " - " + formatNumber(max) + unitSuffix;
-        }
-        if (min != null) {
-            return ">= " + formatNumber(min) + unitSuffix;
-        }
-        if (max != null) {
-            return "<= " + formatNumber(max) + unitSuffix;
-        }
-        return null;
-    }
-
-    private String formatNumber(Double value) {
-        if (value == null) {
-            return null;
-        }
-        return new java.text.DecimalFormat("0.##").format(value);
     }
 }

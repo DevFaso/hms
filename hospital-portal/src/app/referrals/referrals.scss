@@ -1,3 +1,4 @@
+@use '../shared/styles/specialist-workspace' as specialist;
 @use '../shared/styles/page-common';
 
 .summary-cards {
@@ -528,3 +529,25 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+// QA D611: a refused cancel, inside the confirmation dialog.
+.form-error {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+/* QA D998: the referral says why its patient's chart does not open here. */
+.action-link.open-chart {
+  margin-left: 8px;
+}
+
+.chart-unavailable {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #555);
+}
+@include specialist.workspace;

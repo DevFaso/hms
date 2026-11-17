@@ -191,11 +191,13 @@ struct HealthRecordsView: View {
             let profile = vm.summary?.profile
             Text(profile?.fullName.isEmpty == false ? profile?.fullName ?? "my_chart".localized : "my_chart".localized)
                 .font(.title3.bold())
-                .foregroundColor(.accentColor)
+                .foregroundColor(Color("BrandPrimaryText"))
             if let mrn = profile?.mrn, !mrn.isEmpty {
                 Text(String(format: "mrn_format".localized, mrn)).font(.subheadline)
             }
-            let details = [profile?.dateOfBirth.map { String(format: "dob_format".localized, String($0.prefix(10))) }, profile?.gender, profile?.bloodType]
+            let details = [profile?.dateOfBirth.map { String(format: "dob_format".localized, String($0.prefix(10))) },
+                           EnumLabel.label(.gender, profile?.gender, rawFallback: true),
+                           profile?.bloodType]
                 .compactMap { $0 }
                 .filter { !$0.isEmpty }
             if !details.isEmpty {
@@ -226,7 +228,7 @@ struct HealthRecordsView: View {
             if let profile = vm.summary?.profile {
                 Section("Personal Information") {
                     if let dob = profile.dateOfBirth { HStack { Text("Date of Birth").foregroundColor(.secondary); Spacer(); Text(dob) } }
-                    if let gender = profile.gender { HStack { Text("Gender").foregroundColor(.secondary); Spacer(); Text(gender) } }
+                    if let gender = profile.gender { HStack { Text("Gender").foregroundColor(.secondary); Spacer(); Text(EnumLabel.text(.gender, gender, rawFallback: true)) } }
                     if let blood = profile.bloodType { HStack { Text("Blood Type").foregroundColor(.secondary); Spacer(); Text(blood) } }
                 }
             }
@@ -360,7 +362,7 @@ struct HealthRecordsView: View {
                         HStack {
                             Text(imm.vaccineName ?? "Vaccine").font(.headline)
                             Spacer()
-                            StatusBadge(text: imm.status?.capitalized ?? "—", color: "green")
+                            StatusBadge(text: EnumLabel.text(.immunizationStatus, imm.status), color: "green")
                         }
                         if let provider = imm.provider {
                             Text("By \(provider)").font(.caption).foregroundColor(.secondary)
@@ -389,13 +391,15 @@ struct HealthRecordsView: View {
                         HStack(alignment: .top) {
                             Text(plan.title ?? "Treatment plan").font(.headline)
                             Spacer()
-                            StatusBadge(text: plan.status?.capitalized ?? "—", color: "blue")
+                            // REVISIONS_REQUIRED printed as "Revisions_required",
+                            // in English inside the French build.
+                            StatusBadge(text: EnumLabel.text(.treatmentPlanStatus, plan.status), color: "blue")
                         }
                         if let goals = plan.goals, !goals.isEmpty {
                             Text(goals).font(.subheadline).foregroundColor(.secondary)
                         }
                         if let doctor = plan.doctorName, !doctor.isEmpty {
-                            SourceLine(parts: ["Created by \(doctor)"])
+                            SourceLine(parts: [String(format: "created_by_format".localized, doctor)])
                         }
                         let dates = [plan.startDate, plan.endDate].compactMap { $0?.prefix(10) }
                         if !dates.isEmpty {
@@ -422,7 +426,7 @@ struct HealthRecordsView: View {
                         HStack(alignment: .top) {
                             Text(referral.toSpecialty ?? "referrals".localized).font(.headline)
                             Spacer()
-                            StatusBadge(text: referral.status?.capitalized ?? "—", color: "blue")
+                            StatusBadge(text: EnumLabel.text(.referralStatus, referral.status), color: "blue")
                         }
                         if let doctor = referral.toDoctorName, !doctor.isEmpty {
                             Text(doctor).font(.subheadline).foregroundColor(.secondary)
@@ -430,7 +434,9 @@ struct HealthRecordsView: View {
                         if let reason = referral.reason, !reason.isEmpty {
                             Text(reason).font(.caption).foregroundColor(.secondary)
                         }
-                        SourceLine(parts: [referral.toHospitalName, referral.fromDoctorName.map { "From \($0)" }, referral.urgency])
+                        SourceLine(parts: [referral.toHospitalName,
+                                           referral.fromDoctorName.map { String(format: "referral_from_format".localized, $0) },
+                                           EnumLabel.label(.referralUrgency, referral.urgency)])
                         if let date = referral.referralDate {
                             Text(String(date.prefix(10))).font(.caption2).foregroundColor(.secondary)
                         }
@@ -462,10 +468,10 @@ private struct SourceLine: View {
         .joined(separator: "  |  ")
 
         if !text.isEmpty {
-            Text("Source: \(text)")
+            Text(String(format: "source_format".localized, text))
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundColor(Color("BrandBlue"))
+                .foregroundColor(Color("BrandPrimaryText"))
         }
     }
 }
@@ -479,7 +485,7 @@ struct TabChip: View {
             Text(title)
                 .font(.subheadline).bold()
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(isSelected ? Color.accentColor : Color(.secondarySystemBackground))
+                .background(isSelected ? Color("BrandPrimary") : Color(.secondarySystemBackground))
                 .foregroundColor(isSelected ? .white : .primary)
                 .cornerRadius(20)
         }

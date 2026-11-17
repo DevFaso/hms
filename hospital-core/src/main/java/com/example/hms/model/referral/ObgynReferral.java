@@ -188,7 +188,7 @@ public class ObgynReferral extends BaseEntity {
     // discrete appointment slot, and uses cancel(reason) for any decline path.
 
     public void acknowledge(String planSummary, User assignedObgyn) {
-        requireStatus("acknowledge", ObgynReferralStatus.SUBMITTED);
+        requireStatus(ObgynReferralStatus.SUBMITTED);
         this.status = ObgynReferralStatus.ACKNOWLEDGED;
         this.acknowledgementTimestamp = LocalDateTime.now();
         this.planSummary = planSummary;
@@ -196,15 +196,14 @@ public class ObgynReferral extends BaseEntity {
     }
 
     public void start() {
-        requireStatus("start", ObgynReferralStatus.ACKNOWLEDGED);
+        requireStatus(ObgynReferralStatus.ACKNOWLEDGED);
         this.status = ObgynReferralStatus.IN_PROGRESS;
     }
 
     public void complete(String planSummary, boolean updateCareTeam) {
         // Allow direct ACKNOWLEDGED → COMPLETED for retro-active close-out where the
         // midwife never clicked Start before recording the outcome.
-        requireStatus("complete",
-            ObgynReferralStatus.ACKNOWLEDGED, ObgynReferralStatus.IN_PROGRESS);
+        requireStatus(ObgynReferralStatus.ACKNOWLEDGED, ObgynReferralStatus.IN_PROGRESS);
         this.status = ObgynReferralStatus.COMPLETED;
         this.completionTimestamp = LocalDateTime.now();
         this.planSummary = planSummary;
@@ -215,26 +214,37 @@ public class ObgynReferral extends BaseEntity {
 
     public void cancel(String reason) {
         if (isTerminal(this.status)) {
-            throw new IllegalStateException(
-                "Cannot cancel referral in terminal status " + this.status);
+            // QA D1086 (the D1046 class): the refusal in the reader's language, as
+            // GeneralReferral words it, never "Cannot cancel … CANCELLED".
+            throw new IllegalStateException("referral.r7.cannotCancelTerminal");
         }
         this.status = ObgynReferralStatus.CANCELLED;
         this.cancelledTimestamp = LocalDateTime.now();
         this.cancellationReason = reason;
     }
 
-    private void requireStatus(String action, ObgynReferralStatus... allowed) {
+    private void requireStatus(ObgynReferralStatus... allowed) {
         for (ObgynReferralStatus s : allowed) {
             if (this.status == s) {
                 return;
             }
         }
-        throw new IllegalStateException(
-            "Cannot " + action + " referral in status " + this.status);
+        // QA D1086: keyed, as GeneralReferral's wrong-status refusal.
+        throw new IllegalStateException("referral.r7.wrongStatus");
     }
 
     private static boolean isTerminal(ObgynReferralStatus s) {
         return s == ObgynReferralStatus.COMPLETED
             || s == ObgynReferralStatus.CANCELLED;
     }
+
+    /**
+     * QA D1538 (round 40): placed as an emergency (URGENT/STAT) for a patient the obstetric rule would
+     * have refused (recorded male, or a child). The rule never refuses an emergency, a clinical decision
+     * still pending; the order is flagged here for review and the skip is audited
+     * (OBSTETRIC_RULE_SKIPPED_EMERGENCY).
+     */
+    @Column(name = "obstetric_rule_skipped", nullable = false)
+    @Builder.Default
+    private boolean obstetricRuleSkipped = false;
 }

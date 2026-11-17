@@ -1,11 +1,18 @@
 package com.example.hms.security;
 
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.enums.FacilityType;
+import com.example.hms.security.auth.TenantRoleAssignment;
+import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
+import com.example.hms.security.oidc.KeycloakHospitalContextResolver;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import java.util.HashMap;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -16,27 +23,47 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.security.Principal;
+import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class WebSocketSubscriptionInterceptorTest {
 
-    @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private TenantRoleAssignmentAccessor assignmentAccessor;
 
-    @InjectMocks private WebSocketSubscriptionInterceptor interceptor;
+    private WebSocketSubscriptionInterceptor interceptor;
 
     private final MessageChannel channel = mock(MessageChannel.class);
     private final UUID userId = UUID.randomUUID();
     private final UUID hospitalId = UUID.randomUUID();
+    private final Map<String, Object> session = new HashMap<>();
+
+    /** The ws-ticket principals of this test link through their own user id; no Keycloak resolver is needed. */
+    @SuppressWarnings("unchecked")
+    private static ObjectProvider<KeycloakHospitalContextResolver> keycloakResolverProvider() {
+        return mock(ObjectProvider.class);
+    }
+
+    @BeforeEach
+    void wire() {
+        interceptor = new WebSocketSubscriptionInterceptor(
+            new ProviderCallerResolver(assignmentAccessor, keycloakResolverProvider()), Clock.systemUTC());
+    }
+
+    private void holds(TenantRoleAssignment... assignments) {
+        when(assignmentAccessor.findAssignmentsForUser(userId)).thenReturn(List.of(assignments));
+    }
+
+    private static TenantRoleAssignment at(UUID hospital, String role) {
+        return new TenantRoleAssignment(hospital, null, role, role, true, FacilityType.HOSPITAL);
+    }
 
     private Principal userWithRoles(String... roles) {
         var details =
@@ -58,13 +85,13 @@ class WebSocketSubscriptionInterceptorTest {
             accessor.setUser(user);
         }
         accessor.setSessionId("s1");
+        accessor.setSessionAttributes(session);
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
     }
 
     @Test
     void allowsTrackerSubscriptionForActiveAssignment() {
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId))
-                .thenReturn(true);
+        holds(at(hospitalId, "ROLE_NURSE"));
         Message<byte[]> message =
                 frame(
                         StompCommand.SUBSCRIBE,
@@ -76,8 +103,7 @@ class WebSocketSubscriptionInterceptorTest {
 
     @Test
     void rejectsTrackerSubscriptionForForeignHospital() {
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, hospitalId))
-                .thenReturn(false);
+        holds(at(UUID.randomUUID(), "ROLE_NURSE"));
         Message<byte[]> message =
                 frame(
                         StompCommand.SUBSCRIBE,
@@ -89,7 +115,8 @@ class WebSocketSubscriptionInterceptorTest {
     }
 
     @Test
-    void superAdminBypassesTheAssignmentCheck() {
+    void verifiedSuperAdminBypassesTheAssignmentCheck() {
+        holds(at(null, "ROLE_SUPER_ADMIN"));
         Message<byte[]> message =
                 frame(
                         StompCommand.SUBSCRIBE,
@@ -97,12 +124,11 @@ class WebSocketSubscriptionInterceptorTest {
                         userWithRoles("ROLE_SUPER_ADMIN"));
 
         assertThat(interceptor.preSend(message, channel)).isSameAs(message);
-        verify(assignmentRepository, never())
-                .existsByUserIdAndHospitalIdAndActiveTrue(any(), any());
     }
 
     @Test
     void rejectsMalformedHospitalId() {
+        holds(at(hospitalId, "ROLE_NURSE"));
         Message<byte[]> message =
                 frame(
                         StompCommand.SUBSCRIBE,
@@ -115,7 +141,11 @@ class WebSocketSubscriptionInterceptorTest {
 
     @Test
     void allowsUserScopedAndSystemBroadcastDestinations() {
+        // A patient's ws-ticket holds no role a pharmacy or laboratory
+        // accepts: within the CONNECT window neither destination needs the
+        // assignments.
         Principal user = userWithRoles("ROLE_PATIENT");
+        interceptor.preSend(frame(StompCommand.CONNECT, null, user), channel);
         for (String destination :
                 List.of(
                         "/user/topic/notifications",
@@ -125,10 +155,12 @@ class WebSocketSubscriptionInterceptorTest {
             Message<byte[]> message = frame(StompCommand.SUBSCRIBE, destination, user);
             assertThat(interceptor.preSend(message, channel)).isSameAs(message);
         }
+        verifyNoInteractions(assignmentAccessor);
     }
 
     @Test
     void rejectsDestinationsOutsideTheWhitelist() {
+        holds(at(hospitalId, "ROLE_DOCTOR"));
         Principal user = userWithRoles("ROLE_DOCTOR");
         for (String destination :
                 List.of("/topic/messages", "/queue/anything", "/topic/patient-tracker", "/topic/other")) {
@@ -154,8 +186,9 @@ class WebSocketSubscriptionInterceptorTest {
 
     @Test
     void nonSubscribeFramesPassThroughUntouched() {
-        for (StompCommand command :
-                List.of(StompCommand.CONNECT, StompCommand.SEND, StompCommand.DISCONNECT)) {
+        // CONNECT and DISCONNECT pass; a SEND is held to the principal and
+        // provider rules (ProviderStompSubscriptionTest).
+        for (StompCommand command : List.of(StompCommand.CONNECT, StompCommand.DISCONNECT)) {
             Message<byte[]> message = frame(command, "/topic/patient-tracker/" + hospitalId, null);
             assertThat(interceptor.preSend(message, channel)).isSameAs(message);
         }

@@ -209,6 +209,11 @@
     &::placeholder {
       color: #6b7280;
     }
+    // QA D817: a required field left empty on submit.
+    &.invalid {
+      border-color: #dc2626;
+      box-shadow: 0 0 0 1px #dc2626;
+    }
   }
 }
 

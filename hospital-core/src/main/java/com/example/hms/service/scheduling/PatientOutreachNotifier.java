@@ -1,5 +1,8 @@
 package com.example.hms.service.scheduling;
 
+import java.util.Locale;
+import org.springframework.context.MessageSource;
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.enums.NotificationChannel;
 import com.example.hms.enums.NotificationType;
 import com.example.hms.model.NotificationPreference;
@@ -35,14 +38,21 @@ public class PatientOutreachNotifier {
     private final NotificationPreferenceRepository preferenceRepository;
     private final NotificationService notificationService;
     private final SmsService smsService;
+    private final MessageSource messageSource;
 
     /**
-     * Push a message to the patient over every enabled channel.
+     * Push a message to the patient over every enabled channel. The bell
+     * stores the key and renders it in the language the patient reads it in
+     * (QA D665); the SMS is sent once, rendered in {@code smsLocale}.
      *
      * @return true when at least one channel dispatched
      */
-    public boolean notifyPatient(Patient patient, String message) {
-        if (patient == null || message == null || message.isBlank()) {
+    public boolean notifyPatient(Patient patient, NotificationText text, Locale smsLocale) {
+        if (patient == null || text == null) {
+            return false;
+        }
+        String message = text.render(messageSource, smsLocale);
+        if (message == null || message.isBlank()) {
             return false;
         }
         String body = message.length() > MAX_SMS_LENGTH
@@ -54,7 +64,7 @@ public class PatientOutreachNotifier {
             && channelEnabled(portalUser, NotificationChannel.IN_APP)) {
             try {
                 notificationService.createNotification(
-                    body, portalUser.getUsername(), "APPOINTMENT_REMINDER");
+                    text.key(), text.args(), portalUser.getUsername(), "APPOINTMENT_REMINDER");
                 dispatched = true;
             } catch (RuntimeException ex) {
                 log.warn("In-app outreach failed for patient {}: {}", patient.getId(), ex.getMessage());

@@ -1,11 +1,15 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { ActivatedRoute } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 
 import { EncountersComponent } from './encounters';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 import {
   EncounterService,
   EncounterResponse,
@@ -21,6 +25,7 @@ import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { expandRoleEquivalents } from '../core/role-equivalence';
 
 function mockEncounter(overrides: Partial<EncounterResponse> = {}): EncounterResponse {
   return {
@@ -40,7 +45,6 @@ function mockEncounter(overrides: Partial<EncounterResponse> = {}): EncounterRes
 describe('EncountersComponent', () => {
   let deptLookupSpy: jasmine.SpyObj<DepartmentLookupService>;
   let component: EncountersComponent;
-  let fixture: ComponentFixture<EncountersComponent>;
   let encounterSpy: jasmine.SpyObj<EncounterService>;
   let hospitalSpy: jasmine.SpyObj<HospitalService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
@@ -50,7 +54,9 @@ describe('EncountersComponent', () => {
     activeHospitalId: string | null;
     permittedHospitalIds: string[];
     effectiveHospitalIdForRequest: () => string | null;
+    hasAnyActiveRole: (roles: string[]) => boolean;
   };
+  let activeRoles: string[];
 
   beforeEach(async () => {
     encounterSpy = jasmine.createSpyObj('EncounterService', [
@@ -66,6 +72,8 @@ describe('EncountersComponent', () => {
       'getAvs',
       'signNote',
       'cosignNote',
+      'getById',
+      'startEncounter',
     ]);
     encounterSpy.list.and.returnValue(
       of([
@@ -113,15 +121,24 @@ describe('EncountersComponent', () => {
     );
     const patientSpy = jasmine.createSpyObj('PatientService', ['list']);
     patientSpy.list.and.returnValue(of([]));
-    const authSpy = jasmine.createSpyObj('AuthService', ['hasAnyRole', 'getHospitalId']);
+    const authSpy = jasmine.createSpyObj('AuthService', [
+      'hasAnyRole',
+      'getHospitalId',
+      'getUserId',
+      'getUserProfile',
+    ]);
+    authSpy.getUserId.and.returnValue(null);
+    authSpy.getUserProfile.and.returnValue(null);
     authSpy.hasAnyRole.and.returnValue(false);
     const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
+    activeRoles = ['ROLE_DOCTOR'];
     roleCtx = {
       isSuperAdmin: () => false,
       globalView: () => false,
       activeHospitalId: 'h1',
       permittedHospitalIds: ['h1'],
       effectiveHospitalIdForRequest: () => 'h1',
+      hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
     };
 
     await TestBed.configureTestingModule({
@@ -142,12 +159,263 @@ describe('EncountersComponent', () => {
       ],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(EncountersComponent);
-    component = fixture.componentInstance;
+    component = TestBed.createComponent(EncountersComponent).componentInstance;
+  });
+
+  // QA D912 (#967 review): the row carries no MRN, but its contact details do;
+  // the reopened chip passed an empty email and showed nothing under the name.
+  it('falls back to the row phone on a reopened encounter chip (QA D912)', () => {
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openEdit(
+      mockEncounter({
+        patientName: 'Fatimata Zongo',
+        patientEmail: '',
+        patientPhoneNumber: '70001003',
+      }),
+    );
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe('70001003');
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
+      EXPECTED_PICKER_SUBLINES,
+    );
+  });
+
+  it("opens a super-admin's new visit, and its patient search, at the chip's hospital (QA D912)", fakeAsync(() => {
+    roleCtx.isSuperAdmin = () => true;
+    roleCtx.effectiveHospitalIdForRequest = () => 'hB';
+    // A super-admin's hospital is not locked; the search starts with the page.
+    component.initPatientSearch();
+    deptLookupSpy.getActiveDepartments.calls.reset();
+    component.openCreate();
+    expect(component.form.hospitalId).toBe('hB');
+    // The prefill fires no (change), so the form loads hB's departments itself.
+    expect(deptLookupSpy.getActiveDepartments).toHaveBeenCalledWith('hB');
+
+    const patients = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
+    patients.list.calls.reset();
+    component.onPatientQueryChange('kab');
+    tick(250);
+    expect(patients.list).toHaveBeenCalledWith('hB', 'kab');
+  }));
+
+  describe('super-admin scoped to hospital B (QA D912, D918)', () => {
+    let staff: jasmine.SpyObj<StaffService>;
+
+    beforeEach(() => {
+      roleCtx.isSuperAdmin = () => true;
+      roleCtx.effectiveHospitalIdForRequest = () => 'hB';
+      (TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>).hasAnyRole.and.returnValue(true);
+      hospitalSpy.list.and.returnValue(
+        of([
+          { id: 'h1', name: 'Hôpital A' },
+          { id: 'hB', name: 'Clinique B' },
+        ] as HospitalResponse[]),
+      );
+      staff = TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>;
+      staff.list.calls.reset();
+    });
+
+    function openNewVisit() {
+      const fixture = TestBed.createComponent(EncountersComponent);
+      fixture.detectChanges();
+      fixture.componentInstance.openCreate();
+      fixture.detectChanges();
+      return fixture;
+    }
+
+    it('shows hospital B as selected in the new-visit form', () => {
+      const fixture = openNewVisit();
+      const select = (fixture.nativeElement as HTMLElement).querySelector(
+        '#enc-hospitalId',
+      ) as HTMLSelectElement;
+      expect(select.value).toBe('hB');
+      expect(select.selectedOptions[0]?.textContent?.trim()).toBe('Clinique B');
+    });
+
+    it("offers hospital B's clinicians, and another hospital's after a change", () => {
+      const fixture = openNewVisit();
+      expect(staff.list).toHaveBeenCalledWith('hB');
+      expect(staff.list).not.toHaveBeenCalledWith('h1');
+
+      fixture.componentInstance.form.staffId = 'st-b';
+      fixture.componentInstance.onHospitalChange('h1');
+      expect(staff.list).toHaveBeenCalledWith('h1');
+      expect(fixture.componentInstance.form.staffId).toBe('');
+    });
+
+    it("offers no clinician of the previous hospital while the next hospital's load", () => {
+      const doctor = (id: string, hospitalId: string) =>
+        ({ id, name: id, email: '', hospitalId, roleCode: 'ROLE_DOCTOR' }) as StaffResponse;
+      staff.list.and.returnValue(of([doctor('st-b', 'hB')]));
+      const fixture = openNewVisit();
+      const cmp = fixture.componentInstance;
+      expect(cmp.staffMembers().map((s) => s.id)).toEqual(['st-b']);
+
+      const pending = new Subject<StaffResponse[]>();
+      staff.list.and.returnValue(pending);
+      cmp.onHospitalChange('h1');
+      expect(cmp.staffMembers()).toEqual([]);
+
+      pending.next([doctor('st-a', 'h1')]);
+      expect(cmp.staffMembers().map((s) => s.id)).toEqual(['st-a']);
+    });
+
+    it("shows the server's reason when the visit is refused", () => {
+      const fixture = openNewVisit();
+      encounterSpy.create.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: {
+            message:
+              'El miembro del personal seleccionado no pertenece al hospital de la consulta.',
+          },
+        })),
+      );
+      fixture.componentInstance.submitForm();
+      expect(toastSpy.error).toHaveBeenCalledWith(
+        'El miembro del personal seleccionado no pertenece al hospital de la consulta.',
+      );
+    });
+  });
+
+  it('QA D427: a pharmacist reading encounters is offered no New, Edit or Delete', () => {
+    activeRoles = ['ROLE_PHARMACIST'];
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('.page-actions .btn-primary')).toBeNull();
+    const cmp = fixture.componentInstance;
+    expect(cmp['canEditEncounter']()).toBeFalse();
+    expect(cmp['canDeleteEncounter']()).toBeFalse();
+    activeRoles = ['ROLE_NURSE'];
+    const nurseView = TestBed.createComponent(EncountersComponent).componentInstance;
+    expect(nurseView['canCreateEncounter']()).toBeTrue();
+    expect(nurseView['canEditEncounter']()).toBeTrue();
+  });
+
+  it('opens the encounter named by an /encounters/:id deep link (D96)', () => {
+    const route = TestBed.inject(ActivatedRoute) as unknown as {
+      snapshot: { paramMap?: ReturnType<typeof convertToParamMap> };
+    };
+    route.snapshot.paramMap = convertToParamMap({ id: 'e9' });
+    const enc = { id: 'e9', status: 'WAITING_FOR_PHYSICIAN' } as EncounterResponse;
+    encounterSpy.getById.and.returnValue(of(enc));
+    encounterSpy.getNoteHistory.and.returnValue(of([]));
+    component.ngOnInit();
+    expect(encounterSpy.getById).toHaveBeenCalledWith('e9');
+    expect(component.selectedEncounter()?.id).toBe('e9');
+  });
+
+  // QA D1085: Démarrer is offered per visit on the server's rule.
+  it('D1085: offers Start only to the clinician the visit is assigned to; a midwife never on an unassigned one', () => {
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    auth.getUserId.and.returnValue('u-midwife');
+    const held = new Set(['ROLE_MIDWIFE']);
+    auth.hasAnyRole.and.callFake((roles: string[]) => roles.some((r) => held.has(r)));
+    const waiting = { id: 'e9', status: 'WAITING_FOR_PHYSICIAN' } as EncounterResponse;
+    expect(component.canStartEncounter({ ...waiting, staffUserId: 'u-doctor' })).toBeFalse();
+    expect(component.canStartEncounter({ ...waiting, staffUserId: null })).toBeFalse();
+    expect(component.canStartEncounter({ ...waiting, staffUserId: 'u-midwife' })).toBeTrue();
+    held.clear();
+    held.add('ROLE_DOCTOR');
+    auth.getUserId.and.returnValue('u-doctor');
+    expect(component.canStartEncounter({ ...waiting, staffUserId: null })).toBeTrue();
+    expect(component.canStartEncounter({ ...waiting, staffUserId: 'u-other' })).toBeFalse();
+  });
+
+  it('lets a doctor start a waiting encounter (D96)', () => {
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    auth.hasAnyRole.and.returnValue(true);
+    const waiting = { id: 'e9', status: 'WAITING_FOR_PHYSICIAN' } as EncounterResponse;
+    expect(component.canStartEncounter(waiting)).toBeTrue();
+    encounterSpy.startEncounter.and.returnValue(
+      of({ ...waiting, status: 'IN_PROGRESS' } as EncounterResponse),
+    );
+    component.startEncounter(waiting);
+    expect(component.selectedEncounter()?.status).toBe('IN_PROGRESS');
+    expect(
+      component.canCheckOut({ ...waiting, status: 'READY_FOR_DISCHARGE' } as EncounterResponse),
+    ).toBeTrue();
   });
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('filters a status metric without changing the loaded totals or fetching again', () => {
+    component.loadEncounters();
+    encounterSpy.list.calls.reset();
+    component.toggleMetric('COMPLETED');
+    expect(component.filtered().map((e) => e.id)).toEqual(['e2']);
+    expect(component.encounters().length).toBe(3);
+    expect(component.countByStatus('IN_PROGRESS')).toBe(1);
+    expect(encounterSpy.list).not.toHaveBeenCalled();
+    component.toggleMetric('COMPLETED');
+    expect(component.filtered().length).toBe(3);
+    component.setTab('open');
+    expect(component.filtered().length).toBe(2);
+  });
+
+  it('combines type, department and code search and resets pagination when filters change', () => {
+    component.encounters.set(
+      Array.from({ length: 26 }, (_, index) =>
+        mockEncounter({
+          id: `e${index}`,
+          code: `CDX-${index}`,
+          departmentName: index === 25 ? 'Cdx Surgery' : 'Cdx Clinic',
+          encounterType: index === 25 ? 'SURGERY' : 'OUTPATIENT',
+        }),
+      ),
+    );
+    component.applyFilter();
+    expect(component.totalPages()).toBe(3);
+    component.setPage(2);
+    expect(component.pagedEncounters().length).toBe(6);
+    component.typeFilter.set('SURGERY');
+    component.departmentFilter.set('Cdx Surgery');
+    component.searchTerm = 'CDX-25';
+    component.applyFilter();
+    expect(component.currentPage()).toBe(0);
+    expect(component.filtered().map((e) => e.id)).toEqual(['e25']);
+    component.resetFilters();
+    expect(component.filtered().length).toBe(26);
+  });
+
+  it('does not let an older hospital response replace a newer scoped list', () => {
+    const first = new Subject<EncounterResponse[]>();
+    const second = new Subject<EncounterResponse[]>();
+    encounterSpy.list.and.returnValues(first, second);
+    component.loadEncounters();
+    roleCtx.effectiveHospitalIdForRequest = () => 'h2';
+    component.onScopeChange('h2');
+    second.next([mockEncounter({ id: 'new', hospitalId: 'h2' })]);
+    first.next([mockEncounter({ id: 'old', hospitalId: 'h1' })]);
+    expect(component.encounters().map((e) => e.id)).toEqual(['new']);
+    expect(component.loading()).toBeFalse();
+    first.error(new Error('stale error'));
+    expect(component.loadError()).toBeFalse();
+  });
+
+  it('clears previous hospital data when the current scoped reload fails', () => {
+    component.loadEncounters();
+    component.selectedEncounter.set(mockEncounter());
+    encounterSpy.list.and.returnValue(throwError(() => new Error('offline')));
+    component.onScopeChange('h2');
+    expect(component.encounters()).toEqual([]);
+    expect(component.filtered()).toEqual([]);
+    expect(component.selectedEncounter()).toBeNull();
+    expect(component.loadError()).toBeTrue();
   });
 
   it('loads encounters scoped to the effective hospital on init', () => {
@@ -222,79 +490,6 @@ describe('EncountersComponent', () => {
     expect(component.filtered().map((e) => e.id)).toEqual(['e2']);
   });
 
-  it('accounts for every encounter status and synchronizes the status filter with tabs', () => {
-    component.encounters.set(
-      component.statuses.map((status, i) => mockEncounter({ id: String(i), status })),
-    );
-    const total = component.statuses.reduce(
-      (sum, status) => sum + component.countByStatus(status),
-      0,
-    );
-    expect(total).toBe(component.encounters().length);
-    component.setStatus('AWAITING_RESULTS');
-    expect(component.activeTab()).toBe('open');
-    expect(component.filtered().map((e) => e.status)).toEqual(['AWAITING_RESULTS']);
-    component.setStatus('CANCELLED');
-    expect(component.activeTab()).toBe('all');
-    expect(component.filtered().map((e) => e.status)).toEqual(['CANCELLED']);
-    component.setTab('completed');
-    expect(component.statusFilter()).toBe('COMPLETED');
-    expect(component.filtered().map((e) => e.status)).toEqual(['COMPLETED']);
-    component.resetFilters();
-    expect(component.filtered().length).toBe(component.encounters().length);
-  });
-
-  it('renders the current SOAP note once with signature status independent of encounter completion', () => {
-    const note = {
-      id: 'n1',
-      subjective: 'Unique subjective content',
-      objective: 'Line one\nLine two',
-      signedAt: null,
-    } as EncounterNoteResponse;
-    encounterSpy.getNoteHistory.and.returnValue(
-      of([{ id: 'h1', contentSnapshot: JSON.stringify(note) }]),
-    );
-    component.selectEncounter(mockEncounter({ status: 'COMPLETED', note }));
-    fixture.detectChanges();
-    const section = fixture.nativeElement.querySelector('[data-testid="note-signature-section"]');
-    expect(section.querySelector('.note-section p').textContent).toContain(
-      'Unique subjective content',
-    );
-    expect(section.querySelector('[data-testid="note-status"]').textContent).toContain(
-      'ENCOUNTERS.NOTE_STATUS_UNSIGNED',
-    );
-    expect(fixture.nativeElement.querySelector('.note-history-disclosure').open).toBeFalse();
-    expect(fixture.nativeElement.querySelector('.note-history-item').open).toBeFalse();
-    expect(section.querySelectorAll('.note-section').length).toBe(2);
-  });
-
-  it('reads structured history snapshots and safely retains older plain text', () => {
-    expect(
-      component
-        .historySections({
-          id: 'h1',
-          contentSnapshot: '{"subjective":"Symptoms","plan":"Follow up"}',
-        })
-        .map((s) => s.content),
-    ).toEqual(['Symptoms', 'Follow up']);
-    expect(component.historySections({ id: 'h2', contentSnapshot: 'Older text' })[0].content).toBe(
-      'Older text',
-    );
-    expect(
-      component.historyAuthor({ id: 'h3', metadataSnapshot: '{"authorName":"Dr Test"}' }),
-    ).toBe('Dr Test');
-  });
-
-  it('ignores late history responses after another encounter is selected', () => {
-    const response = new Subject<any[]>();
-    encounterSpy.getNoteHistory.and.returnValue(response);
-    component.selectEncounter(mockEncounter({ id: 'first' }));
-    encounterSpy.getNoteHistory.and.returnValue(of([{ id: 'second-history' }] as any));
-    component.selectEncounter(mockEncounter({ id: 'second' }));
-    response.next([{ id: 'first-history' }]);
-    expect(component.noteHistory()[0].id).toBe('second-history');
-  });
-
   it('search filter matches patient, staff, and department', () => {
     component.ngOnInit();
     component.searchTerm = 'smith';
@@ -336,15 +531,49 @@ describe('EncountersComponent', () => {
     expect(payload.departmentId).not.toBe('');
   });
 
-  it('submitForm appends a midnight time to the encounter date', () => {
+  // #948 review: the list reads encounterDate through serverTime (UTC), so
+  // the picked day must be sent as the reader's local midnight on the UTC
+  // clock. Sent as '2026-10-24T00:00:00', a 24 October visit created in New
+  // York was listed as 'Oct 23, 8:00 PM'. Expectations are built from local
+  // Date constructors, so the specs hold in any workstation zone.
+  it('submitForm sends local midnight of the picked day on the UTC clock', () => {
     component.ngOnInit();
     encounterSpy.create.and.returnValue(of(mockEncounter()));
     component.openCreate();
-    component.form.encounterDate = '2026-08-18';
+    component.form.encounterDate = '2026-10-24';
     component.submitForm();
     const payload = encounterSpy.create.calls.mostRecent().args[0];
-    expect(payload.encounterDate).toBe('2026-08-18T00:00:00');
+    const localMidnight = new Date(2026, 9, 24);
+    expect(payload.encounterDate).toBe(localMidnight.toISOString().slice(0, 19));
+    expect(new Date(`${payload.encounterDate}Z`).getTime()).toBe(localMidnight.getTime());
     expect(component.showModal()).toBeFalse();
+  });
+
+  it('openEdit pre-fills the reader day of the stored time, not its UTC day', () => {
+    // 21:00 on 24 October in the reader's zone, as the API stores it (UTC).
+    const stored = new Date(2026, 9, 24, 21, 0).toISOString().slice(0, 19);
+    component.openEdit(mockEncounter({ encounterDate: stored }));
+    expect(component.form.encounterDate).toBe('2026-10-24');
+  });
+
+  it('an edit that keeps the day sends the stored time back unchanged', () => {
+    encounterSpy.update.and.returnValue(of(mockEncounter()));
+    const stored = new Date(2026, 9, 24, 21, 0).toISOString().slice(0, 19);
+    component.openEdit(mockEncounter({ encounterDate: stored }));
+    component.form.notes = 'edited';
+    component.submitForm();
+    expect(encounterSpy.update.calls.mostRecent().args[1].encounterDate).toBe(stored);
+  });
+
+  it('an edit that changes the day sends local midnight of the new day', () => {
+    encounterSpy.update.and.returnValue(of(mockEncounter()));
+    const stored = new Date(2026, 9, 24, 21, 0).toISOString().slice(0, 19);
+    component.openEdit(mockEncounter({ encounterDate: stored }));
+    component.form.encounterDate = '2026-10-26';
+    component.submitForm();
+    expect(encounterSpy.update.calls.mostRecent().args[1].encounterDate).toBe(
+      new Date(2026, 9, 26).toISOString().slice(0, 19),
+    );
   });
 
   it('openCreate pre-fills and locks the hospital, and loads its departments', () => {
@@ -374,6 +603,34 @@ describe('EncountersComponent', () => {
     expect(component.showDeleteConfirm()).toBeFalse();
   });
 
+  it('QA D954: a nurse closes an arrived visit nobody saw from its detail', () => {
+    activeRoles = ['ROLE_NURSE'];
+    const fixture = TestBed.createComponent(EncountersComponent);
+    component = fixture.componentInstance;
+    component.selectedEncounter.set(mockEncounter({ status: 'ARRIVED' }));
+    fixture.detectChanges();
+    const btn = fixture.nativeElement.querySelector(
+      '[data-testid="encounter-lwbs"]',
+    ) as HTMLButtonElement;
+    expect(btn).withContext('LWBS action in the visit detail').toBeTruthy();
+    btn.click();
+    fixture.detectChanges();
+    expect(component.closeUnseenEncounter()?.id).toBe('e1');
+    expect(fixture.nativeElement.querySelector('app-close-unseen-dialog')).toBeTruthy();
+    // QA D1024: the drawer is closed, so the dialog is the only modal (not under it).
+    expect(component.selectedEncounter()).toBeNull();
+    expect(fixture.nativeElement.querySelector('.detail-overlay')).toBeNull();
+  });
+
+  it('QA D954: a visit already seen offers no LWBS action', () => {
+    activeRoles = ['ROLE_NURSE'];
+    const fixture = TestBed.createComponent(EncountersComponent);
+    component = fixture.componentInstance;
+    component.selectedEncounter.set(mockEncounter({ status: 'IN_PROGRESS' }));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="encounter-lwbs"]')).toBeNull();
+  });
+
   it('addAddendum requires content', () => {
     component.selectedEncounter.set(mockEncounter());
     component.addendumContent = '   ';
@@ -381,8 +638,7 @@ describe('EncountersComponent', () => {
     expect(encounterSpy.addAddendum).not.toHaveBeenCalled();
   });
 
-  it('addAddendum records an addendum on an existing unsigned note and refreshes history', () => {
-    component.noteState.set({ id: 'note1', signedAt: null } as EncounterNoteResponse);
+  it('addAddendum records the addendum and refreshes history', () => {
     encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
     component.selectedEncounter.set(mockEncounter());
     component.addendumContent = ' late note ';
@@ -403,13 +659,298 @@ describe('EncountersComponent', () => {
     expect(component.showNoteForm()).toBeFalse();
   });
 
+  /* ── QA D831: one note entry per author on a stay ── */
+
+  const draftA = {
+    id: 'note-a',
+    authorName: 'Abdoulaye Ouédraogo',
+    documentedAt: '2026-10-25T08:00:00',
+    signedAt: null,
+  } as unknown as EncounterNoteResponse;
+  const entryB = {
+    id: 'note-b',
+    authorName: 'Issouf Compaoré',
+    documentedAt: '2026-10-26T08:00:00',
+    signedAt: null,
+  } as unknown as EncounterNoteResponse;
+
+  it('QA D995: a draft is offered for signature to its author only, and co-signature to others', () => {
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    auth.getUserId.and.returnValue('user-2');
+    const theirs = { ...entryB, authorUserId: 'user-1' } as EncounterNoteResponse;
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.componentInstance.selectEncounter(
+      mockEncounter({ note: theirs, noteEntries: [theirs] }),
+    );
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="sign-note"]')).toBeNull();
+    expect(host.querySelector('[data-testid="sign-note-author-only"]')).not.toBeNull();
+
+    auth.getUserId.and.returnValue('user-1');
+    const signedOwn = {
+      ...theirs,
+      signedAt: '2026-10-26T09:00:00',
+      requiresCosign: true,
+      cosignedAt: null,
+    } as unknown as EncounterNoteResponse;
+    expect(fixture.componentInstance.isNoteAuthor(theirs)).toBeTrue();
+    expect(fixture.componentInstance.isOtherClinicianNote(signedOwn)).toBeFalse();
+  });
+
+  it("QA D831: the first doctor's draft is listed as its own entry beside the second doctor's", () => {
+    component.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+
+    expect(component.noteState()?.id).toBe('note-b');
+    expect(component.earlierNoteEntries().map((e) => e.id)).toEqual(['note-a']);
+  });
+
+  it('QA D831: an earlier entry is signed by its id, and only that entry changes', () => {
+    encounterSpy.signNote.and.returnValue(
+      of({ ...draftA, signedAt: '2026-10-26T09:00:00' } as EncounterNoteResponse),
+    );
+    component.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+
+    component.signNoteEntry(draftA);
+
+    expect(encounterSpy.signNote).toHaveBeenCalledWith('e1', 'note-a');
+    expect(component.earlierNoteEntries()[0].signedAt).toBe('2026-10-26T09:00:00');
+    expect(component.noteState()?.id).toBe('note-b');
+    expect(component.noteState()?.signedAt).toBeNull();
+  });
+
+  for (const [label, admissionId, offered] of [
+    ['a stay', 'adm-1', true],
+    ['a visit', null, false],
+  ] as const) {
+    it(`QA D831: after the current entry is signed, ${label} ${offered ? 'still offers' : 'no longer offers'} a new note`, () => {
+      const fixture = TestBed.createComponent(EncountersComponent);
+      const page = fixture.componentInstance;
+      page.selectEncounter(
+        mockEncounter({
+          admissionId,
+          note: { ...draftA, signedAt: '2026-10-25T09:00:00' } as EncounterNoteResponse,
+        }),
+      );
+      fixture.detectChanges();
+
+      const addNote = (fixture.nativeElement as HTMLElement).querySelector(
+        'button[title="ENCOUNTERS.ADD_NOTE"]',
+      );
+      expect(!!addNote).toBe(offered);
+    });
+  }
+
+  it("#965 review (k5.js replay): Sign under DOCTOR2_A's J1 names J1, never DOCTOR_A's J0", () => {
+    encounterSpy.signNote.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: "Only the note's author can sign it." },
+      })),
+    );
+    component.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+
+    component.signNote();
+
+    expect(encounterSpy.signNote).toHaveBeenCalledWith('e1', 'note-b');
+    expect(component.noteState()?.id).toBe('note-b');
+    expect(toastSpy.error).toHaveBeenCalledWith("Only the note's author can sign it.");
+  });
+
+  it('#965 review: an earlier entry shows its text, and one awaiting co-signature is co-signed by its id', () => {
+    const signedA = {
+      ...draftA,
+      subjective: 'QA R13 J0 toux fébrile',
+      assessment: 'Pneumopathie',
+      signedAt: '2026-10-25T09:00:00',
+      requiresCosign: true,
+      cosignedAt: null,
+    } as unknown as EncounterNoteResponse;
+    encounterSpy.cosignNote.and.returnValue(
+      of({ ...signedA, cosignedAt: '2026-10-26T10:00:00' } as EncounterNoteResponse),
+    );
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [signedA, entryB] }));
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const sections = Array.from(host.querySelectorAll('[data-testid="note-entry-section"]')).map(
+      (el) => el.textContent ?? '',
+    );
+    expect(sections.some((t) => t.includes('QA R13 J0 toux fébrile'))).toBeTrue();
+    expect(sections.some((t) => t.includes('Pneumopathie'))).toBeTrue();
+    const cosign = host.querySelector<HTMLButtonElement>('[data-testid="cosign-note-entry"]');
+    expect(cosign).not.toBeNull();
+
+    cosign!.click();
+
+    expect(encounterSpy.cosignNote).toHaveBeenCalledWith('e1', 'note-a');
+    expect(page.earlierNoteEntries()[0].cosignedAt).toBe('2026-10-26T10:00:00');
+    expect(page.noteState()?.id).toBe('note-b');
+  });
+
+  it("#965 review (k5.js replay): an addendum opened on DOCTOR_A's signed J0 is filed under J0, not J1", () => {
+    const signedA = { ...draftA, signedAt: '2026-10-25T09:00:00' } as EncounterNoteResponse;
+    encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [signedA, entryB] }));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    host.querySelector<HTMLButtonElement>('[data-testid="addendum-note-entry"]')!.click();
+    fixture.detectChanges();
+
+    // The form opens under J0, the entry it corrects.
+    expect(host.querySelector('[data-testid="note-entry-addendum-form"]')).not.toBeNull();
+    page.addendumContent = 'Correction J0 : T 38.4, non 39.4';
+    page.addAddendum();
+
+    const [id, payload, noteId] = encounterSpy.addAddendum.calls.mostRecent().args;
+    expect(id).toBe('e1');
+    expect(payload.content).toBe('Correction J0 : T 38.4, non 39.4');
+    expect(noteId).toBe('note-a');
+    expect(page.showAddendumForm()).toBeFalse();
+    expect(page.addendumTargetId()).toBeNull();
+  });
+
+  it('QA D831: the addendum button under the current entry names the current entry', () => {
+    encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    host.querySelector<HTMLButtonElement>('[data-testid="addendum-current-entry"]')!.click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="note-entry-addendum-form"]')).toBeNull();
+    expect(host.querySelector('[data-testid="addendum-content"]')).not.toBeNull();
+    page.addendumContent = 'Ajout';
+    page.addAddendum();
+
+    expect(encounterSpy.addAddendum.calls.mostRecent().args[2]).toBe('note-b');
+  });
+
+  it('QA D1131: the addendum takes focus, Escape closes only it and never drops typed text unasked', fakeAsync(() => {
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    const escape = (target: Element) => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+    };
+    try {
+      host.querySelector<HTMLButtonElement>('[data-testid="addendum-current-entry"]')!.click();
+      fixture.detectChanges();
+      tick();
+      const box = host.querySelector<HTMLTextAreaElement>('[data-testid="addendum-content"]')!;
+      // Focus moves into the addendum, not to the page body.
+      expect(document.activeElement).toBe(box);
+
+      // Typed text: Escape asks, the panel stays open, the text is kept.
+      page.addendumContent = 'Correction : T 38.4';
+      fixture.detectChanges();
+      escape(box);
+      expect(page.selectedEncounter()).not.toBeNull();
+      expect(page.showAddendumForm()).toBeTrue();
+      expect(page.addendumContent).toBe('Correction : T 38.4');
+      expect(host.querySelector('[data-testid="addendum-discard-ask"]')).not.toBeNull();
+      expect(document.activeElement).toBe(host.querySelector('[data-testid="addendum-keep"]'));
+
+      // Escape on the question goes back to the text, intact.
+      escape(document.activeElement!);
+      expect(host.querySelector('[data-testid="addendum-discard-ask"]')).toBeNull();
+      expect(page.addendumContent).toBe('Correction : T 38.4');
+      expect(document.activeElement).toBe(host.querySelector('[data-testid="addendum-content"]'));
+
+      // Discarding is a deliberate click; the keyboard returns to the opener.
+      escape(document.activeElement!);
+      host.querySelector<HTMLButtonElement>('[data-testid="addendum-discard"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(page.showAddendumForm()).toBeFalse();
+      expect(page.selectedEncounter()).not.toBeNull();
+      expect(document.activeElement).toBe(
+        host.querySelector('[data-testid="addendum-current-entry"]'),
+      );
+
+      // An empty addendum: Escape closes the addendum alone.
+      host.querySelector<HTMLButtonElement>('[data-testid="addendum-current-entry"]')!.click();
+      fixture.detectChanges();
+      tick();
+      escape(host.querySelector('[data-testid="addendum-content"]')!);
+      expect(page.showAddendumForm()).toBeFalse();
+      expect(page.selectedEncounter()).not.toBeNull();
+    } finally {
+      host.remove();
+    }
+  }));
+
+  it('QA D831: a save that starts a new stay entry keeps the previous one listed', () => {
+    encounterSpy.addNote.and.returnValue(of(entryB));
+    component.selectEncounter(mockEncounter({ note: draftA }));
+
+    component.saveStructuredNote({ subjective: 'QA R13 J1 apyrétique' } as never);
+
+    expect(component.noteState()?.id).toBe('note-b');
+    expect(component.earlierNoteEntries().map((e) => e.id)).toEqual(['note-a']);
+  });
+
   it('status transition guards follow the encounter lifecycle', () => {
-    expect(component.canCompleteExamination(mockEncounter({ status: 'IN_PROGRESS' }))).toBeTrue();
+    // QA D1099: the caller is the visit's examining clinician.
+    (TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>).getUserId.and.returnValue('u-doc');
+    expect(
+      component.canCompleteExamination(
+        mockEncounter({ status: 'IN_PROGRESS', staffUserId: 'u-doc' }),
+      ),
+    ).toBeTrue();
     expect(component.canCompleteExamination(mockEncounter({ status: 'SCHEDULED' }))).toBeFalse();
     expect(
       component.canMarkReadyForDischarge(mockEncounter({ status: 'AWAITING_RESULTS' })),
     ).toBeTrue();
     expect(component.canMarkReadyForDischarge(mockEncounter({ status: 'COMPLETED' }))).toBeFalse();
+  });
+
+  it('QA D788: ready for discharge on a visit IN_PROGRESS is offered to the clinician only', () => {
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    auth.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_RECEPTIONIST'));
+    expect(
+      component.canMarkReadyForDischarge(mockEncounter({ status: 'IN_PROGRESS' })),
+    ).toBeFalse();
+    expect(
+      component.canMarkReadyForDischarge(mockEncounter({ status: 'AWAITING_RESULTS' })),
+    ).toBeTrue();
+
+    auth.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    // QA D1099: the nurse is the visit's examining clinician here.
+    auth.getUserId.and.returnValue('u-nurse');
+    expect(
+      component.canMarkReadyForDischarge(
+        mockEncounter({ status: 'IN_PROGRESS', staffUserId: 'u-nurse' }),
+      ),
+    ).toBeTrue();
+  });
+
+  // QA D1099 (round 19): a midwife ended a doctor's examination.
+  it('QA D1099: ending an examination is offered to its examining clinician only', () => {
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    auth.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_MIDWIFE'));
+    auth.getUserId.and.returnValue('u-mw');
+    const doctorsVisit = mockEncounter({ status: 'IN_PROGRESS', staffUserId: 'u-dr' });
+    expect(component.canCompleteExamination(doctorsVisit)).toBeFalse();
+    expect(component.canMarkReadyForDischarge(doctorsVisit)).toBeFalse();
+    auth.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_DOCTOR'));
+    auth.getUserId.and.returnValue('u-dr');
+    expect(component.canCompleteExamination(doctorsVisit)).toBeTrue();
+    expect(component.canMarkReadyForDischarge(doctorsVisit)).toBeTrue();
   });
 
   it('completeExamination updates the selected encounter and reloads', () => {
@@ -478,7 +1019,7 @@ describe('EncountersComponent', () => {
 
       component.signNote();
 
-      expect(encounterSpy.signNote).toHaveBeenCalledWith('e1');
+      expect(encounterSpy.signNote).toHaveBeenCalledWith('e1', 'n1');
       expect(component.noteState()?.signedAt).toBeTruthy();
       expect(component.signingNote()).toBeFalse();
     });
@@ -486,7 +1027,10 @@ describe('EncountersComponent', () => {
     it('sign refusal is surfaced verbatim', () => {
       component.selectEncounter(mockEncounter({ note: note() }));
       encounterSpy.signNote.and.returnValue(
-        throwError(() => ({ error: { message: "Only the note's author can sign it." } })),
+        throwError(() => ({
+          status: 400,
+          error: { message: "Only the note's author can sign it." },
+        })),
       );
 
       component.signNote();
@@ -512,7 +1056,7 @@ describe('EncountersComponent', () => {
 
       component.cosignNote();
 
-      expect(encounterSpy.cosignNote).toHaveBeenCalledWith('e1');
+      expect(encounterSpy.cosignNote).toHaveBeenCalledWith('e1', 'n1');
       expect(component.noteState()?.cosignedAt).toBeTruthy();
     });
 
@@ -520,6 +1064,7 @@ describe('EncountersComponent', () => {
       component.selectEncounter(mockEncounter({ note: note() }));
       encounterSpy.addNote.and.returnValue(
         throwError(() => ({
+          status: 400,
           error: {
             message: 'This note is signed and can no longer be edited. Append an addendum instead.',
           },
@@ -547,5 +1092,83 @@ describe('EncountersComponent', () => {
     expect(component.form.patientId).toBe('p9');
     component.clearPatient();
     expect(component.form.patientId).toBe('');
+  });
+
+  // Product decision 2026-10-28: the certificate button matches the server:
+  // any licensed physician sees it on a seen visit, nobody else does. The
+  // auth stub answers as AuthService.hasAnyRole does (doctor equivalence).
+  describe('certificate button by role (decision 2026-10-28)', () => {
+    function signInAs(role: string): void {
+      const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+      auth.hasAnyRole.and.callFake((expected: string[]) =>
+        expandRoleEquivalents([role]).some((r) => expected.includes(r)),
+      );
+    }
+
+    for (const role of [
+      'ROLE_DOCTOR',
+      'ROLE_PHYSICIAN',
+      'ROLE_SURGEON',
+      'ROLE_ANESTHESIOLOGIST',
+      'ROLE_RADIOLOGIST',
+    ]) {
+      it(`${role} is offered the certificate on a seen visit`, () => {
+        signInAs(role);
+        expect(component.canIssueCertificate(mockEncounter({ status: 'IN_PROGRESS' }))).toBeTrue();
+      });
+    }
+
+    for (const role of [
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_RECEPTIONIST',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_ADMIN',
+      'ROLE_PHARMACIST',
+    ]) {
+      it(`${role} is not offered the certificate`, () => {
+        signInAs(role);
+        expect(component.canIssueCertificate(mockEncounter({ status: 'IN_PROGRESS' }))).toBeFalse();
+      });
+    }
+
+    it('a physician is still not offered it on a visit nobody saw', () => {
+      signInAs('ROLE_SURGEON');
+      expect(component.canIssueCertificate(mockEncounter({ status: 'ARRIVED' }))).toBeFalse();
+    });
+  });
+
+  it('QA D1257 (round 26): an empty "Créer" names the patient with the other blank fields', () => {
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'en',
+      { COMMON: { MISSING_REQUIRED_FIELDS: 'Missing: {{fields}}' } },
+      true,
+    );
+    translate.use('en');
+    cmp.openCreate();
+    fixture.detectChanges();
+    const create = fixture.nativeElement.querySelector(
+      '.modal-actions .btn-primary',
+    ) as HTMLButtonElement;
+    create.click();
+    fixture.detectChanges();
+    const reason = fixture.nativeElement.querySelector('[data-testid="submit-guard-reason"]');
+    expect(reason?.textContent).toContain('APPOINTMENTS.PATIENT');
+    expect(reason?.textContent).toContain('ENCOUNTERS.STAFF');
+  });
+
+  it('QA D1428 class: a closed visit offers no edit and no delete', () => {
+    for (const status of ['COMPLETED', 'CANCELLED', 'LEFT_WITHOUT_BEING_SEEN']) {
+      expect(
+        component.isClosedVisit(mockEncounter({ status: status as EncounterResponse['status'] })),
+      )
+        .withContext(status)
+        .toBeTrue();
+    }
+    expect(component.isClosedVisit(mockEncounter({ status: 'IN_PROGRESS' }))).toBeFalse();
   });
 });

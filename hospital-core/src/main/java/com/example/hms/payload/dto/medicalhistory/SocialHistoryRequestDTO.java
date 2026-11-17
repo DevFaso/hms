@@ -17,6 +17,9 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Request to create or update social history")
+// QA D1318 class (round 29): the content rule is checked with the ids, in one answer.
+@com.example.hms.validation.AnyAnswer(metadata = {"patientId", "hospitalId", "recordedByStaffId", "recordedDate",
+    "versionNumber", "active"}, reportedOn = "additionalNotes", message = "{socialHistory.contentRequired}")
 public class SocialHistoryRequestDTO {
 
     @NotNull(message = "{socialHistory.patientId.required}")

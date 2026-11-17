@@ -1,3 +1,4 @@
+import type { PatientCreateRequest } from './patient.service';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -14,6 +15,20 @@ export interface UserSummary {
   roleName: string;
   profileType: string;
   roleCount: number;
+  /** QA D914: may the caller edit or delete this account (absent: yes). */
+  manageable?: boolean;
+}
+
+/**
+ * QA D790: one colleague in the chat's new-conversation picker
+ * (`GET /users/chat-recipients`): id, name and role, nothing else.
+ */
+export interface ChatRecipient {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  roleName?: string | null;
+  profileType?: string | null;
 }
 
 export interface UserSummaryPage {
@@ -40,10 +55,28 @@ export interface UserDetail {
   updatedAt: string;
   /** Present on admin-register responses: did the activation message go anywhere? */
   activationDelivery?: NotificationDeliveryStatus[];
+  /**
+   * Server-generated one-time credentials, present on an admin-register
+   * response ONLY when no e-mail or SMS could carry them. Show once, never store.
+   */
+  temporaryUsername?: string;
+  temporaryPassword?: string;
+  /** Registration responses only: true when this call created the account. */
+  newAccount?: boolean;
+  /** Patient registrations only: the patient record created with the account (QA D626). */
+  patientId?: string;
+  /** QA D838: the staff profile, shown read-only on the edit dialog. */
+  staffHospitalId?: string;
+  staffHospitalName?: string;
+  jobTitle?: string;
+  employmentType?: string;
+  specialization?: string;
+  licenseNumber?: string;
 }
 
 export interface AdminRegisterRequest {
-  username: string;
+  /** Optional on create: the server generates a temporary one (forceUsernameChange). */
+  username?: string;
   /** Optional for PATIENT registrations (phone-first); required for staff roles. */
   email?: string;
   password?: string;
@@ -59,6 +92,10 @@ export interface AdminRegisterRequest {
   departmentId?: string;
   specialization?: string;
   forcePasswordChange?: boolean;
+  /** QA D626: true only from the patient form; staff onboarding never registers a patient. */
+  patientRegistration?: boolean;
+  /** QA D626: required with patientRegistration; written with the account in one transaction. */
+  patient?: PatientCreateRequest;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -107,6 +144,15 @@ export class UserService {
     if (filters.includeDeleted) params = params.set('includeDeleted', 'true');
     if (filters.onlyDeleted) params = params.set('onlyDeleted', 'true');
     return this.http.get<UserSummaryPage>('/users/search', { params });
+  }
+
+  /**
+   * QA D790: `GET /users` is the administrators' directory; the chat picker
+   * reads the staff-wide, minimal colleague list instead.
+   */
+  chatRecipients(size = 200): Observable<ChatRecipient[]> {
+    const params = new HttpParams().set('size', String(size));
+    return this.http.get<ChatRecipient[]>('/users/chat-recipients', { params });
   }
 
   getById(id: string): Observable<UserDetail> {

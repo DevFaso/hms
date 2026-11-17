@@ -1,0 +1,619 @@
+package com.example.hms.service;
+
+import com.example.hms.enums.EncounterStatus;
+import com.example.hms.enums.EncounterType;
+import com.example.hms.model.Admission;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.model.discharge.DischargeSummary;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Opens the INPATIENT encounter of a hospital stay (QA D98, D135).
+ *
+ * <p>An admission used to be a row with no encounter, so the stay had nowhere
+ * to hang progress notes, the discharge summary or the after-visit summary,
+ * and the admission response carried {@code currentEncounterId: null}. The
+ * #881 round fixed the encounter screen around it but never created the
+ * encounter itself. Every admission now opens one, tagged with the
+ * admission's id (V193), which its discharge later closes (D134).
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AdmissionStayEncounterService {
+
+    /** nursing_tasks.completed_by_name and nurse_handoffs.completed_by_name. */
+    private static final int CLOSER_MAX = 200;
+    /** Room for the sentence around the reason, so its closing parenthesis stays. */
+    private static final int CLOSER_REASON_MAX = 150;
+    /** discharge_summaries.follow_up_instructions. */
+    private static final int FOLLOW_UP_MAX = 3000;
+
+    private final EncounterRepository encounterRepository;
+    private final StaffRepository staffRepository;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final com.example.hms.repository.NurseHandoffRepository nurseHandoffRepository;
+    private final com.example.hms.repository.NursingTaskRepository nursingTaskRepository;
+    private final org.springframework.context.MessageSource messageSource;
+    /** D426: a discharged stay gets its discharge-summary record, as a checkout does. */
+    private final com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
+    private final com.example.hms.repository.PrescriptionRepository prescriptionRepository;
+    /** QA D757: ends the stay's ward orders at discharge. */
+    private final StayOrderDiscontinuation stayOrders;
+
+    /**
+     * The attending physician runs the stay; the admitting provider stands in
+     * when none is named, or when the attending has no staff row or active
+     * role at this hospital. An admission that neither can lead is still
+     * admitted, as it was before stays had encounters, just without one: the
+     * encounter must never be the reason a patient cannot be admitted.
+     *
+     * @return the stay encounter, or {@code null} when no lead resolves
+     */
+    @Transactional
+    public Encounter openStayEncounter(Admission admission) {
+        Hospital hospital = admission.getHospital();
+        if (hospital == null || hospital.getId() == null) {
+            log.warn("Admission {} opened without a stay encounter: no hospital", admission.getId());
+            return null;
+        }
+        Lead lead = resolveLead(admission.getAttendingPhysician(), hospital);
+        if (lead == null) {
+            lead = resolveLead(admission.getAdmittingProvider(), hospital);
+        }
+        if (lead == null) {
+            log.warn("Admission {} opened without a stay encounter: no lead with an active role at hospital {}",
+                admission.getId(), hospital.getId());
+            return null;
+        }
+        Staff staff = lead.staff();
+        UserRoleHospitalAssignment assignment = lead.assignment();
+
+        LocalDateTime start = admission.getAdmissionDateTime() != null
+            ? admission.getAdmissionDateTime() : LocalDateTime.now();
+        Encounter encounter = Encounter.builder()
+            .patient(admission.getPatient())
+            .staff(staff)
+            .hospital(hospital)
+            .department(departmentOf(admission))
+            .assignment(assignment)
+            .encounterType(EncounterType.INPATIENT)
+            .encounterDate(start)
+            .arrivalTimestamp(start)
+            .chiefComplaint(admission.getChiefComplaint())
+            .status(EncounterStatus.IN_PROGRESS)
+            .admissionId(admission.getId())
+            .build();
+        encounter.setCode(newCode());
+        return encounterRepository.save(encounter);
+    }
+
+    private record Lead(Staff staff, UserRoleHospitalAssignment assignment) {
+    }
+
+    /**
+     * The encounter's staff row and assignment must belong to the admission's
+     * hospital (Encounter#validate): a clinician working at several hospitals
+     * has one staff row per hospital.
+     */
+    private Lead resolveLead(Staff candidate, Hospital hospital) {
+        UUID userId = candidate != null && candidate.getUser() != null ? candidate.getUser().getId() : null;
+        if (userId == null) {
+            return null;
+        }
+        Staff staff = candidate.getHospital() != null && hospital.getId().equals(candidate.getHospital().getId())
+            ? candidate
+            : staffRepository.findByUserIdAndHospitalId(userId, hospital.getId()).orElse(null);
+        if (staff == null) {
+            return null;
+        }
+        return assignmentRepository.findActiveStaffAssignment(userId, hospital.getId())
+            .map(assignment -> new Lead(staff, assignment))
+            .orElse(null);
+    }
+
+    /**
+     * Carries the discharge onto the stay's encounter before it is closed, so
+     * the after-visit summary built from it (DischargeSummaryServiceImpl's
+     * backfill) has the stay's follow-up instructions and diagnosis instead of
+     * an empty page (QA D151). Only blank fields are filled.
+     */
+    @Transactional
+    public void recordDischarge(Admission admission) {
+        applyDischarge(admission, null);
+    }
+
+    /**
+     * QA D218: as {@link #recordDischarge(Admission)}, with the diagnosis the
+     * discharging physician stated. A stated diagnosis wins over the admission's
+     * working diagnosis, which only fills a blank.
+     */
+    @Transactional
+    public void recordDischarge(Admission admission, String dischargeDiagnosis) {
+        applyDischarge(admission, dischargeDiagnosis);
+    }
+
+    private void applyDischarge(Admission admission, String dischargeDiagnosis) {
+        if (admission.getId() == null) {
+            return;
+        }
+        // QA D757: the ward orders end with the stay, before its summary is
+        // written, so only take-home orders reach the after-visit summary.
+        if (stayOrders != null) {
+            Staff by = admission.getDischargingProvider();
+            stayOrders.discontinueStayOrders(admission,
+                by != null && by.getUser() != null ? by.getUser().getId() : null);
+        }
+        encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()).ifPresent(enc -> {
+            fillStayEncounter(enc, admission, dischargeDiagnosis);
+            encounterRepository.save(enc);
+            recordStayDischargeSummary(admission, enc);
+        });
+        closePendingHandoffs(admission);
+        closePendingNursingTasks(admission);
+    }
+
+    /**
+     * QA D1435: every other way a stay ends without {@link #recordDischarge}
+     * (a death, an ADT^A03) ends its nursing work as a discharge does.
+     */
+    @Transactional
+    public void closeNursingWorkOfEndedStay(Admission admission) {
+        closePendingHandoffs(admission);
+        closePendingNursingTasks(admission);
+    }
+
+    /**
+     * QA D1393: what a cancelled stay does to its orders. Deliberately not
+     * {@link #recordDischarge(Admission)}: a cancelled stay never happened, so
+     * it writes no discharge summary and carries no diagnosis.
+     */
+    @Transactional
+    public void recordCancellation(Admission admission, UUID actorUserId) {
+        if (stayOrders != null) {
+            stayOrders.discontinueOrdersOfCancelledStay(admission, actorUserId);
+        }
+        closeNursingWorkOfCancelledStay(admission);
+    }
+
+    /**
+     * QA D1435 (round 34): the nursing work of a cancelled stay ends with it, or
+     * it stayed on the ward's boards for a patient who is not there. Neither a
+     * task nor a handoff names its stay; they name the patient, so "of this
+     * stay" is what was written since the stay opened. Work on the same patient
+     * from before the stay (the visit that preceded it) is left as it is. Both
+     * close as the discharge closes them (COMPLETED: the task board's default
+     * view hides nothing else), saying why in their closer; a task also keeps
+     * the stay's reason as its note.
+     */
+    private void closeNursingWorkOfCancelledStay(Admission admission) {
+        if (admission.getPatient() == null || admission.getHospital() == null) {
+            return;
+        }
+        UUID patientId = admission.getPatient().getId();
+        UUID hospitalId = admission.getHospital().getId();
+        LocalDateTime opened = stayOpenedAt(admission);
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
+        String reason = admission.getCancellationReason();
+        String closedBy = messageSource.getMessage("nurse.work.closedByStayCancel", new Object[] {truncate(reason, CLOSER_REASON_MAX)},
+            "Closed: stay cancelled", org.springframework.context.i18n.LocaleContextHolder.getLocale());
+        String closer = truncate(closedBy, CLOSER_MAX);
+
+        List<com.example.hms.model.NursingTask> tasks = nursingTaskRepository
+            .findByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, "PENDING").stream()
+            .filter(task -> writtenSince(task.getCreatedAt(), opened))
+            .toList();
+        for (var task : tasks) {
+            task.setStatus("COMPLETED");
+            task.setCompletedAt(now);
+            task.setCompletedByName(closer);
+            task.setCompletionNote(reason);
+        }
+        if (!tasks.isEmpty()) {
+            nursingTaskRepository.saveAll(tasks);
+        }
+
+        var handoffs = nurseHandoffRepository.findByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, "PENDING")
+            .stream().filter(handoff -> writtenSince(handoff.getCreatedAt(), opened)).toList();
+        for (var handoff : handoffs) {
+            handoff.setStatus("COMPLETED");
+            handoff.setCompletedAt(now);
+            handoff.setCompletedByName(closer);
+        }
+        if (!handoffs.isEmpty()) {
+            nurseHandoffRepository.saveAll(handoffs);
+        }
+    }
+
+    /** The earlier of the stated admission time (it may be backdated) and the row's own creation. */
+    private static LocalDateTime stayOpenedAt(Admission admission) {
+        LocalDateTime admitted = admission.getAdmissionDateTime();
+        LocalDateTime created = admission.getCreatedAt();
+        if (admitted == null || created == null) {
+            return admitted != null ? admitted : created;
+        }
+        return admitted.isBefore(created) ? admitted : created;
+    }
+
+    private static boolean writtenSince(LocalDateTime createdAt, LocalDateTime opened) {
+        return createdAt == null || opened == null || !createdAt.isBefore(opened);
+    }
+
+    /**
+     * QA D804: the stay's encounter follows the admission to its current
+     * department (a transfer, a bed in another department's ward, an edit of
+     * the admission). The encounter kept the department it was opened in, so
+     * the encounter list showed the admitting department while the
+     * after-visit summary named the discharging one. Only an open stay
+     * encounter moves here; the discharge carries the last move onto it.
+     */
+    @Transactional
+    public void followStayDepartment(Admission admission) {
+        if (admission == null || admission.getId() == null) {
+            return;
+        }
+        encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId())
+            .filter(enc -> enc.getStatus() == null || !enc.getStatus().isClosed())
+            .filter(enc -> moveToStayDepartment(enc, admission))
+            .ifPresent(encounterRepository::save);
+    }
+
+    /** @return whether the encounter's department changed */
+    private static boolean moveToStayDepartment(Encounter enc, Admission admission) {
+        com.example.hms.model.Department department = departmentOf(admission);
+        if (department == null || (enc.getDepartment() != null
+            && java.util.Objects.equals(enc.getDepartment().getId(), department.getId()))) {
+            return false;
+        }
+        enc.setDepartment(department);
+        return true;
+    }
+
+    private void fillStayEncounter(Encounter enc, Admission admission, String dischargeDiagnosis) {
+        // QA D804: the encounter is closed in the department the stay ends in.
+        moveToStayDepartment(enc, admission);
+        if (!isBlank(dischargeDiagnosis)) {
+            enc.setDischargeDiagnoses(toJsonArray(truncate(dischargeDiagnosis, 2000)));
+        }
+        if (isBlank(enc.getFollowUpInstructions()) && !isBlank(admission.getDischargeInstructions())) {
+            enc.setFollowUpInstructions(admission.getDischargeInstructions());
+        }
+        if (isBlank(enc.getNotes()) && !isBlank(admission.getDischargeSummary())) {
+            enc.setNotes(truncate(admission.getDischargeSummary(), 2048));
+        }
+        if (isBlank(enc.getDischargeDiagnoses()) && !isBlank(admission.getPrimaryDiagnosisDescription())) {
+            enc.setDischargeDiagnoses(toJsonArray(admission.getPrimaryDiagnosisDescription()));
+        }
+    }
+
+    /**
+     * QA D294: the same for the nurse's ad-hoc tasks — a PENDING task for a
+     * patient who has gone home stayed on the worklist, and turned overdue.
+     */
+    private void closePendingNursingTasks(Admission admission) {
+        if (admission.getPatient() == null || admission.getHospital() == null) {
+            return;
+        }
+        var pending = nursingTaskRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), admission.getHospital().getId(), "PENDING");
+        if (pending.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
+        String closedBy = messageSource.getMessage("nurse.handoff.closedByDischarge", null,
+            "Closed at discharge", org.springframework.context.i18n.LocaleContextHolder.getLocale());
+        for (var task : pending) {
+            task.setStatus("COMPLETED");
+            task.setCompletedAt(now);
+            task.setCompletedByName(closedBy);
+        }
+        nursingTaskRepository.saveAll(pending);
+    }
+
+    /**
+     * QA D234: once the patient has left, a pending handoff for them has no one
+     * to hand over to; it stayed PENDING on the nurse's list for ever. Every
+     * discharge path (direct, and the approval flow) comes through here.
+     */
+    private void closePendingHandoffs(Admission admission) {
+        if (admission.getPatient() == null || admission.getHospital() == null) {
+            return;
+        }
+        var pending = nurseHandoffRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), admission.getHospital().getId(), "PENDING");
+        if (pending.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        String closedBy = messageSource.getMessage("nurse.handoff.closedByDischarge", null,
+            "Closed at discharge", org.springframework.context.i18n.LocaleContextHolder.getLocale());
+        for (var handoff : pending) {
+            handoff.setStatus("COMPLETED");
+            handoff.setCompletedAt(now);
+            handoff.setCompletedByName(closedBy);
+        }
+        nurseHandoffRepository.saveAll(pending);
+    }
+
+    /**
+     * QA D426 (D322 not fixed): an inpatient discharge never wrote a discharge
+     * summary. Only the outpatient checkout did, and the patient-portal read
+     * backfilled one lazily, so the stay's after-visit summary had no medicines
+     * and no follow-up. The stay now records one at discharge: the medicines
+     * ordered on the stay, the discharge instructions and the follow-ups the
+     * discharging physician entered. An existing summary (written on the
+     * discharge screen) keeps its own content; QA D1596: the instructions the
+     * discharge dialog adds are carried into it, or the patient never read them.
+     */
+    private void recordStayDischargeSummary(Admission admission, Encounter enc) {
+        if (dischargeSummaryRepository == null || enc.getId() == null) {
+            return;
+        }
+        java.util.Optional<DischargeSummary> written = dischargeSummaryRepository.findByEncounter_Id(enc.getId());
+        if (written.isPresent()) {
+            DischargeSummary summary = written.get();
+            if (carryInstructions(summary, admission.getDischargeInstructions())) {
+                dischargeSummaryRepository.save(summary);
+            }
+            return;
+        }
+        Staff provider = admission.getDischargingProvider() != null
+            ? admission.getDischargingProvider() : enc.getStaff();
+        if (provider == null || enc.getAssignment() == null || enc.getPatient() == null || enc.getHospital() == null) {
+            log.warn("Admission {} discharged without a discharge summary: no provider or assignment", admission.getId());
+            return;
+        }
+        LocalDateTime when = admission.getActualDischargeDateTime() != null
+            ? admission.getActualDischargeDateTime() : LocalDateTime.now(java.time.ZoneId.systemDefault());
+        com.example.hms.model.discharge.DischargeSummary summary = new com.example.hms.model.discharge.DischargeSummary();
+        summary.setEncounter(enc);
+        summary.setPatient(enc.getPatient());
+        summary.setHospital(enc.getHospital());
+        summary.setDischargingProvider(provider);
+        summary.setAssignment(enc.getAssignment());
+        summary.setDischargeDate(when.toLocalDate());
+        summary.setDischargeTime(when);
+        summary.setDisposition(admission.getDischargeDisposition() != null
+            ? admission.getDischargeDisposition() : com.example.hms.enums.DischargeDisposition.HOME);
+        summary.setDischargeDiagnosis(stayDiagnosisText(admission, enc));
+        summary.setFollowUpInstructions(enc.getFollowUpInstructions());
+        // QA D1596: and the dialog's own, when the encounter already had others.
+        carryInstructions(summary, admission.getDischargeInstructions());
+        if (!isBlank(admission.getDischargeSummary())) {
+            summary.setHospitalCourse(admission.getDischargeSummary());
+        }
+        addStayMedications(summary, enc);
+        addStayFollowUps(summary, admission);
+        dischargeSummaryRepository.save(summary);
+    }
+
+    private String stayDiagnosisText(Admission admission, Encounter enc) {
+        String raw = enc.getDischargeDiagnoses();
+        String text = raw == null ? "" : raw.replaceAll("[\\[\\]\"]", "").trim();
+        if (!text.isEmpty()) {
+            return truncate(text, 5000);
+        }
+        if (!isBlank(admission.getPrimaryDiagnosisDescription())) {
+            return truncate(admission.getPrimaryDiagnosisDescription().trim(), 5000);
+        }
+        return messageSource.getMessage("dischargeSummary.diagnosis.notSpecified", null,
+            "Discharge diagnosis not specified at checkout.",
+            org.springframework.context.i18n.LocaleContextHolder.getLocale());
+    }
+
+    private void addStayMedications(com.example.hms.model.discharge.DischargeSummary summary, Encounter enc) {
+        var prescriptions = prescriptionRepository
+            .findByEncounter_Id(enc.getId(), com.example.hms.repository.PrescriptionRepository.EVERY_ORDER_OF_THE_VISIT)
+            .getContent();
+        for (com.example.hms.model.Prescription rx : prescriptions) {
+            // QA D757: a ward order ends with the stay; only an order the
+            // prescriber marked for home goes home.
+            if (!goesHome(rx)) {
+                continue;
+            }
+            summary.addMedicationReconciliation(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+                .medicationName(rx.getMedicationName())
+                .dosage(rx.getDosage())
+                .route(rx.getRoute())
+                .frequency(rx.getFrequency())
+                .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED)
+                .continueAtDischarge(true)
+                .prescriptionId(rx.getId())
+                .build());
+        }
+    }
+
+    private static boolean goesHome(com.example.hms.model.Prescription rx) {
+        if (!rx.isTakeHome()) {
+            return false;
+        }
+        // As at checkout (QA D152): an unsigned or withdrawn order does not go home.
+        var status = rx.getStatus();
+        return status != com.example.hms.enums.PrescriptionStatus.DRAFT
+            && status != com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE
+            && (status == null || !status.isWithdrawn());
+    }
+
+    private static void addStayFollowUps(com.example.hms.model.discharge.DischargeSummary summary, Admission admission) {
+        if (admission.getFollowUpAppointments() == null) {
+            return;
+        }
+        for (java.util.Map<String, Object> f : admission.getFollowUpAppointments()) {
+            com.example.hms.model.discharge.FollowUpAppointmentEntry entry = toFollowUp(f);
+            if (entry != null) {
+                summary.addFollowUpAppointment(entry);
+            }
+        }
+    }
+
+    /** One follow-up the physician entered, or null when the row says nothing usable. */
+    private static com.example.hms.model.discharge.FollowUpAppointmentEntry toFollowUp(java.util.Map<String, Object> f) {
+        if (f == null) {
+            return null;
+        }
+        LocalDate date = parseDate(firstText(f, "appointmentDate", "date", "preferredDate"));
+        String type = firstText(f, "appointmentType", "type");
+        String purpose = firstText(f, "purpose", "reason", "notes");
+        if (date == null && type == null && purpose == null) {
+            return null;
+        }
+        return com.example.hms.model.discharge.FollowUpAppointmentEntry.builder()
+            .appointmentType(type)
+            .providerName(firstText(f, "providerName", "provider"))
+            .specialty(firstText(f, "specialty"))
+            .appointmentDate(date)
+            .purpose(purpose)
+            .build();
+    }
+
+    private static String firstText(java.util.Map<String, Object> map, String... keys) {
+        for (String key : keys) {
+            Object value = map.get(key);
+            if (value != null && !value.toString().isBlank()) {
+                return value.toString().trim();
+            }
+        }
+        return null;
+    }
+
+    private static LocalDate parseDate(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value.length() > 10 ? value.substring(0, 10) : value);
+        } catch (java.time.format.DateTimeParseException ex) {
+            return null;
+        }
+    }
+
+    /**
+     * QA D1596: the discharge summary already written for this stay (on the
+     * discharge screen), if any. It is the one source of the stay's discharge
+     * diagnosis and instructions.
+     */
+    public java.util.Optional<DischargeSummary> writtenStaySummary(Admission admission) {
+        if (dischargeSummaryRepository == null || admission == null || admission.getId() == null) {
+            return java.util.Optional.empty();
+        }
+        return encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId())
+            .filter(enc -> enc.getId() != null)
+            .flatMap(enc -> dischargeSummaryRepository.findByEncounter_Id(enc.getId()));
+    }
+
+    /**
+     * QA D1596: what the discharge dialog may say once a summary is written.
+     * The diagnosis is the summary's (a different one is refused, never kept
+     * beside it); new instructions go into the summary, so a finalized
+     * (signed) summary, or one they would overflow, refuses them rather than
+     * dropping them. With no summary the dialog's diagnosis is required, as
+     * it builds the stay's summary.
+     *
+     * @return the diagnosis the stay is discharged with
+     */
+    public String dischargeDiagnosisOfStay(Admission admission, String statedDiagnosis, String instructions) {
+        java.util.Optional<DischargeSummary> written = writtenStaySummary(admission);
+        if (written.isEmpty()) {
+            if (isBlank(statedDiagnosis)) {
+                throw new com.example.hms.exception.FieldBusinessException("dischargeDiagnosis",
+                    "admissionDischarge.dischargeDiagnosis.required");
+            }
+            return statedDiagnosis.trim();
+        }
+        DischargeSummary summary = written.get();
+        String diagnosis = summary.getDischargeDiagnosis();
+        if (!isBlank(statedDiagnosis) && !sameText(statedDiagnosis, diagnosis)) {
+            throw new com.example.hms.exception.FieldBusinessException("dischargeDiagnosis",
+                "admission.discharge.diagnosisInSummary");
+        }
+        if (!isBlank(instructions) && !containsText(summary.getFollowUpInstructions(), instructions)) {
+            if (Boolean.TRUE.equals(summary.getIsFinalized())) {
+                throw new com.example.hms.exception.FieldBusinessException("dischargeInstructions",
+                    "admission.discharge.summaryFinalized");
+            }
+            if (mergedInstructions(summary.getFollowUpInstructions(), instructions).length() > FOLLOW_UP_MAX) {
+                throw new com.example.hms.exception.FieldBusinessException("dischargeInstructions",
+                    "admission.discharge.instructionsTooLong", FOLLOW_UP_MAX);
+            }
+        }
+        return isBlank(diagnosis) ? (isBlank(statedDiagnosis) ? null : statedDiagnosis.trim()) : diagnosis.trim();
+    }
+
+    /**
+     * QA D1596: the dialog's instructions, added once to a summary still open to edits.
+     * Review of #1131: instructions that would overflow the summary's column are refused
+     * on their field (the discharge rolls back), never dropped in silence.
+     */
+    static boolean carryInstructions(DischargeSummary summary, String instructions) {
+        if (isBlank(instructions) || Boolean.TRUE.equals(summary.getIsFinalized())
+            || containsText(summary.getFollowUpInstructions(), instructions)) {
+            return false;
+        }
+        String merged = mergedInstructions(summary.getFollowUpInstructions(), instructions);
+        if (merged.length() > FOLLOW_UP_MAX) {
+            throw new com.example.hms.exception.FieldBusinessException("dischargeInstructions",
+                "admission.discharge.instructionsTooLong", FOLLOW_UP_MAX);
+        }
+        summary.setFollowUpInstructions(merged);
+        return true;
+    }
+
+    private static String mergedInstructions(String current, String added) {
+        return isBlank(current) ? added.trim() : current.trim() + "\n\n" + added.trim();
+    }
+
+    private static boolean containsText(String haystack, String needle) {
+        return !isBlank(haystack) && normalized(haystack).contains(normalized(needle));
+    }
+
+    private static boolean sameText(String a, String b) {
+        return !isBlank(b) && normalized(a).equals(normalized(b));
+    }
+
+    private static String normalized(String value) {
+        return value.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static String truncate(String value, int max) {
+        return value.length() <= max ? value : value.substring(0, max);
+    }
+
+    /** The encounter keeps its discharge diagnoses as a JSON array of strings. */
+    private static String toJsonArray(String diagnosis) {
+        String escaped = diagnosis.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+        return "[\"" + escaped + "\"]";
+    }
+
+    private static com.example.hms.model.Department departmentOf(Admission admission) {
+        com.example.hms.model.Department department = admission.getDepartment();
+        if (department == null || department.getHospital() == null || admission.getHospital() == null
+            || !department.getHospital().getId().equals(admission.getHospital().getId())) {
+            return null;
+        }
+        return department;
+    }
+
+    private static String newCode() {
+        String date = LocalDate.now().toString().replace("-", "");
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
+        return "ENC-" + date + "-" + suffix;
+    }
+}

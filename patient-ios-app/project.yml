@@ -5,6 +5,9 @@ options:
     iOS: "17.0"
   xcodeVersion: "16.4"
   generateEmptyDirectories: true
+  # English is the base language, matching LocalizationManager's default and
+  # CFBundleDevelopmentRegion; fr.lproj and es.lproj are the translations.
+  developmentLanguage: en
   groupSortPosition: top
 
 # Phase 2.8.B: per-env release configurations for the Keycloak cutover.
@@ -26,7 +29,14 @@ configs:
 packages:
   AppAuth:
     url: https://github.com/openid/AppAuth-iOS.git
-    from: "1.7.5"
+    # EXACT, not `from:`. ITSAppUsesNonExemptEncryption: false below was
+    # audited against what AppAuth contains at THIS version (PKCE's SHA-256
+    # and SecRandomCopyBytes, nothing of its own). A floating range let every
+    # CI checkout re-resolve to whatever 1.x was newest, so a release adding a
+    # cipher would have made the declaration untrue with no diff to review.
+    # 1.7.6 is what `from: "1.7.5"` was resolving to on CI (run 36234083516).
+    # Bumping this line means re-checking that declaration in the same PR.
+    exactVersion: "1.7.6"
 
 settings:
   base:
@@ -70,6 +80,9 @@ targets:
         INFOPLIST_FILE: MediHubPatient/Resources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.bitnesttechs.hms.patient.native
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Without this the app tint and `Color.accentColor` stay system blue
+        # whatever AccentColor.colorset says — XcodeGen does not set it.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: true
         SWIFT_EMIT_LOC_STRINGS: "YES"
         IPHONEOS_DEPLOYMENT_TARGET: "17.0"
@@ -94,7 +107,13 @@ targets:
         # .deviceOwnerAuthenticationWithBiometrics: iOS TERMINATES an app
         # that reaches Face ID without a purpose string, and App Review
         # rejects for its absence.
-        NSFaceIDUsageDescription: Utiliser Face ID pour vous connecter à e-Keneya sans saisir votre mot de passe.
+        #
+        # This is the BASE (English) value, matching CFBundleDevelopmentRegion.
+        # iOS shows a purpose string in the device language only through
+        # InfoPlist.strings, so each of Resources/{en,fr,es}.lproj carries one;
+        # a purpose string added here must be added to all three.
+        NSFaceIDUsageDescription: Use Face ID to sign in to e-Keneya without typing your password.
+        CFBundleDevelopmentRegion: en
 
         # Without this, every upload lands in TestFlight as "Missing
         # Compliance" and reaches nobody until a human answers the export

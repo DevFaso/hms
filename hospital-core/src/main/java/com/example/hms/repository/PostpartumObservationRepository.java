@@ -29,6 +29,20 @@ public interface PostpartumObservationRepository extends JpaRepository<Postpartu
 
     Optional<PostpartumObservation> findFirstByCarePlan_IdOrderByObservationTimeDesc(UUID carePlanId);
 
+    /**
+     * QA D268, CR-06 class: a haemorrhage is on this plan when a row carries a HEMORRHAGE alert (the
+     * indicators) or a clinician attested the protocol. Either one keeps the 15-minute checks; a past
+     * row holding a true keeps them too, whatever set it.
+     */
+    @Query("""
+        select count(o) > 0 from PostpartumObservation o
+        where o.carePlan.id = :carePlanId
+          and (o.hemorrhageProtocolActivated = true
+               or exists (select 1 from o.alerts a
+                          where a.type = com.example.hms.enums.PostpartumAlertType.HEMORRHAGE))
+    """)
+    boolean existsHaemorrhageOnPlan(@Param("carePlanId") UUID carePlanId);
+
     Optional<PostpartumObservation> findByIdAndPatient_IdAndHospital_Id(UUID id, UUID patientId, UUID hospitalId);
 
     @Query("""
@@ -46,4 +60,30 @@ public interface PostpartumObservationRepository extends JpaRepository<Postpartu
         @Param("to") LocalDateTime to,
         Pageable pageable
     );
+
+    /**
+     * QA D1890: the observations since {@code from} that recorded a blood pressure, newest first,
+     * leaving out any observation a later one corrected (the correction is the reading, with or
+     * without a pressure). Filtered in the query, so pressure-less observations never push a
+     * severe reading out of the page.
+     */
+    @Query("""
+        select o from PostpartumObservation o
+        where o.patient.id = :patientId
+          and (:hospitalId is null or o.hospital.id = :hospitalId)
+          and o.observationTime >= :from
+          and (o.systolicBpMmHg is not null or o.diastolicBpMmHg is not null)
+          and not exists (select 1 from PostpartumObservation c where c.supersedesObservation = o)
+        order by o.observationTime desc
+    """)
+    List<PostpartumObservation> findBloodPressuresSince(
+        @Param("patientId") UUID patientId,
+        @Param("hospitalId") UUID hospitalId,
+        @Param("from") LocalDateTime from,
+        Pageable pageable
+    );
+
+    /** QA D658: the plan's observations after the one that raised an alert, newest first. */
+    List<PostpartumObservation> findByCarePlan_IdAndObservationTimeAfterOrderByObservationTimeDesc(
+        UUID carePlanId, java.time.LocalDateTime after);
 }

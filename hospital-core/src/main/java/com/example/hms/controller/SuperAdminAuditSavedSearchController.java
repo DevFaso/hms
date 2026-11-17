@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.StrictQueryParams;
 import com.example.hms.payload.dto.superadmin.AuditSavedSearchRequestDTO;
 import com.example.hms.payload.dto.superadmin.AuditSavedSearchResponseDTO;
 import com.example.hms.service.AuditSavedSearchService;
@@ -36,6 +37,7 @@ public class SuperAdminAuditSavedSearchController {
     private final AuditSavedSearchService service;
 
     @GetMapping
+    @StrictQueryParams
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "List the caller's own searches plus shared searches from other super admins",
         security = @SecurityRequirement(name = "bearerAuth"))

@@ -21,7 +21,8 @@ public class LabTestDefinitionMapper {
             return null;
         }
 
-        LabTestDefinition entity = LabTestDefinition.builder()
+        // The hospital is set by the service from the acting scope (D30/D73).
+        return LabTestDefinition.builder()
             .testCode(dto.getTestCode())
             .name(dto.getName())
             .category(dto.getCategory())
@@ -31,14 +32,14 @@ public class LabTestDefinitionMapper {
             .loincCode(dto.getLoincCode())
             .loincDisplay(dto.getLoincDisplay())
             .preparationInstructions(dto.getPreparationInstructions())
+            .expectedResult(dto.getExpectedResult())
             .turnaroundTimeMinutes(dto.getTurnaroundTime())
-            .active(dto.getActive() == null || dto.getActive())
+            // QA D535: a new definition is a DRAFT, and a DRAFT is not active;
+            // only the approval workflow's ACTIVATE step switches it on.
+            .active(false)
             .assignment(assignment)
             .referenceRanges(mapRangeDtosToEntities(dto.getReferenceRanges()))
             .build();
-
-        entity.setHospital(null);
-        return entity;
     }
 
 
@@ -55,14 +56,21 @@ public class LabTestDefinitionMapper {
                 .loincDisplay(entity.getLoincDisplay())
                 .sampleType(entity.getSampleType())
                 .preparationInstructions(entity.getPreparationInstructions())
+                .expectedResult(entity.getExpectedResult())
                 .turnaroundTime(entity.getTurnaroundTimeMinutes())
-                .active(entity.isActive())
+                // QA D535: "active" means orderable - a DRAFT (or any status
+                // short of ACTIVE) is never reported active, even for rows
+                // created before new definitions started inactive.
+                .active(entity.isOrderable())
                 .approvalStatus(entity.getApprovalStatus() != null ? entity.getApprovalStatus().name() : null)
                 .approvedById(entity.getApprovedById())
                 .approvedAt(entity.getApprovedAt())
+                .submittedById(entity.getSubmittedById())
                 .reviewedById(entity.getReviewedById())
                 .reviewedAt(entity.getReviewedAt())
                 .rejectionReason(entity.getRejectionReason())
+                .supersedesDefinitionId(entity.getSupersedesDefinitionId())
+                .versionNumber(entity.getVersionNumber() != null ? entity.getVersionNumber() : 1)
                 .referenceRanges(mapToDtoRanges(entity.getReferenceRanges()))
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
@@ -82,6 +90,7 @@ public class LabTestDefinitionMapper {
         entity.setLoincCode(dto.getLoincCode());
         entity.setLoincDisplay(dto.getLoincDisplay());
         entity.setPreparationInstructions(dto.getPreparationInstructions());
+        entity.setExpectedResult(dto.getExpectedResult());
         if (dto.getTurnaroundTime() != null) {
             entity.setTurnaroundTimeMinutes(dto.getTurnaroundTime());
         }
@@ -111,6 +120,10 @@ public class LabTestDefinitionMapper {
                 .ageMax(range.getAgeMax())
                 .gender(range.getGender())
                 .notes(range.getNotes())
+                .criticalLow(range.getCriticalLow())
+                .criticalHigh(range.getCriticalHigh())
+                .ageUnit(range.getAgeUnit())
+                .source(range.getSource())
                 .build())
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }
@@ -129,6 +142,10 @@ public class LabTestDefinitionMapper {
                 .ageMax(range.getAgeMax())
                 .gender(range.getGender())
                 .notes(range.getNotes())
+                .criticalLow(range.getCriticalLow())
+                .criticalHigh(range.getCriticalHigh())
+                .ageUnit(range.getAgeUnit())
+                .source(range.getSource())
                 .build())
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }

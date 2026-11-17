@@ -31,6 +31,11 @@ struct MedicationDTO: Codable, Identifiable, Hashable {
     /// The wire name of that request's status, so the app can tell "awaiting
     /// review" from "your provider put it on hold" without a second call.
     let refillRequestStatus: String?
+    /// G15: when a fill was marked ready for collection, and at which
+    /// pharmacy. Both nil when nothing is waiting; optional, so an older
+    /// payload decodes unchanged.
+    let readyForCollectionAt: String?
+    let readyForCollectionPharmacyName: String?
 
     /// Display name: prefer `name`, fall back to `medicationName`
     var displayName: String {
@@ -52,16 +57,14 @@ enum MedicationStatus: String, CaseIterable {
     /// App-side fallback for a status this build does not know yet.
     case unknown = "__UNKNOWN__"
 
-    /// A medication with no status at all is treated as current: the backend
-    /// only omits it when `@JsonInclude(NON_NULL)` drops a null, and
-    /// `resolveStatus` never returns one.
+    /// An absent status is `.unknown`, like the other three enums here.
+    /// `resolveStatus` never returns null today, but if that ever stops being
+    /// true the failure mode of assuming ACTIVE is a discontinued or finished
+    /// course badged green — the exact bug this mapping exists to prevent —
+    /// while "Status unavailable" costs nothing.
     init(wire: String?) {
         let trimmed = (wire ?? "").trimmingCharacters(in: .whitespaces).uppercased()
-        if trimmed.isEmpty {
-            self = .active
-        } else {
-            self = MedicationStatus(rawValue: trimmed) ?? .unknown
-        }
+        self = MedicationStatus(rawValue: trimmed) ?? .unknown
     }
 
     var labelKey: String {
@@ -124,6 +127,11 @@ struct PrescriptionDTO: Codable, Identifiable, Hashable {
     /// order is still at — or was filled by — the hospital's own dispensary.
     let pharmacyName: String?
     let instructions: String?
+    /// G15: when a fill was marked ready for collection, and at which
+    /// pharmacy. Both nil when nothing is waiting; optional, so an older
+    /// payload decodes unchanged.
+    let readyForCollectionAt: String?
+    let readyForCollectionPharmacyName: String?
 
     var displayName: String {
         if let display = medicationDisplayName, !display.isEmpty { return display }
@@ -151,7 +159,6 @@ enum PrescriptionStatus: String, CaseIterable {
     case dispensed = "DISPENSED"
     case partiallyFilled = "PARTIALLY_FILLED"
     case pendingStock = "PENDING_STOCK"
-    case requiresExternalFill = "REQUIRES_EXTERNAL_FILL"
     case sentToPartner = "SENT_TO_PARTNER"
     case partnerAccepted = "PARTNER_ACCEPTED"
     case partnerRejected = "PARTNER_REJECTED"
@@ -179,7 +186,6 @@ enum PrescriptionStatus: String, CaseIterable {
         case .dispensed: "rx_status_dispensed"
         case .partiallyFilled: "rx_status_partially_filled"
         case .pendingStock: "rx_status_pending_stock"
-        case .requiresExternalFill: "rx_status_requires_external_fill"
         case .sentToPartner: "rx_status_sent_to_partner"
         case .partnerAccepted: "rx_status_partner_accepted"
         case .partnerRejected: "rx_status_partner_rejected"
@@ -196,8 +202,8 @@ enum PrescriptionStatus: String, CaseIterable {
         case .dispensed, .partnerDispensed, .partnerAccepted: .positive
         case .pendingStock, .partiallyFilled, .pendingClarification, .pendingSignature: .attention
         case .partnerRejected, .transmissionFailed, .cancelled, .discontinued: .negative
-        case .draft, .signed, .transmitted, .sentToPartner, .requiresExternalFill,
-             .printedForPatient, .unknown: .neutral
+        case .draft, .signed, .transmitted, .sentToPartner, .printedForPatient,
+             .unknown: .neutral
         }
     }
 
@@ -211,7 +217,7 @@ enum PrescriptionStatus: String, CaseIterable {
         switch self {
         case .draft, .pendingSignature, .cancelled, .discontinued: false
         case .signed, .transmitted, .transmissionFailed, .pendingClarification, .dispensed,
-             .partiallyFilled, .pendingStock, .requiresExternalFill, .sentToPartner,
+             .partiallyFilled, .pendingStock, .sentToPartner,
              .partnerAccepted, .partnerRejected, .partnerDispensed, .printedForPatient,
              .unknown: true
         }

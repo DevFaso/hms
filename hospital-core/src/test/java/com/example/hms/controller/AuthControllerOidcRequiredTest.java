@@ -62,6 +62,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     "app.auth.oidc.issuer-uri=https://keycloak.example.com/realms/hms"
 })
 class AuthControllerOidcRequiredTest {
+    private org.springframework.context.MessageSource previousMessageSource;
+
+    @org.junit.jupiter.api.BeforeEach
+    void bindApiMessageBundles() {
+        // This MVC slice excludes MessageUtil's component; production binds it.
+        previousMessageSource = (org.springframework.context.MessageSource)
+            org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreApiMessageBundles() {
+        // Cached application contexts still use the source they installed.
+        com.example.hms.utility.MessageUtil.setMessageSource(previousMessageSource);
+    }
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
@@ -74,6 +89,7 @@ class AuthControllerOidcRequiredTest {
     @MockitoBean private UserService userService;
     @MockitoBean private UserCredentialLifecycleService userCredentialLifecycleService;
     @MockitoBean private TokenBlacklistService tokenBlacklistService;
+    @MockitoBean private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
     @MockitoBean private com.example.hms.security.IdleSessionGate idleSessionGate;
     @MockitoBean private com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
     @MockitoBean private LoginAttemptService loginAttemptService;
@@ -94,7 +110,7 @@ class AuthControllerOidcRequiredTest {
         login.setUsername("alice");
         login.setPassword("irrelevant-because-the-flag-blocks-this");
 
-        mockMvc.perform(post("/auth/login")
+        mockMvc.perform(post("/auth/login").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(login)))
                 .andExpect(status().isGone())
@@ -105,7 +121,7 @@ class AuthControllerOidcRequiredTest {
 
     @Test
     void refresh_returns410Gone_whenOidcRequired() throws Exception {
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"anything\"}"))
                 .andExpect(status().isGone())

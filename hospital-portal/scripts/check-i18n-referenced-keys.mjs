@@ -22,8 +22,10 @@
  *   node scripts/check-i18n-referenced-keys.mjs
  *   node scripts/check-i18n-referenced-keys.mjs --report-only   # never exit non-zero
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+
+import { walk } from './lib/walk.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const SRC = join(ROOT, 'src', 'app');
@@ -41,16 +43,16 @@ const DYNAMIC_SUFFIXES = {
   'SLOT_ADMIN.STATUS_': ['OPEN', 'HELD', 'BOOKED', 'BLOCKED'],
   'SLOT_ADMIN.DAY_': ['1', '2', '3', '4', '5', '6', '7'],
   'RECEPTION.RECALL_STATUS_': ['PENDING', 'NOTIFIED', 'SCHEDULED', 'CLOSED', 'CANCELLED'],
+  // QA D807: the newborn assessment's delivery picker labels the mode in code.
+  'LABOR.MODE_': [
+    'SPONTANEOUS_VAGINAL',
+    'VACUUM_EXTRACTION',
+    'FORCEPS',
+    'CAESAREAN_ELECTIVE',
+    'CAESAREAN_EMERGENCY',
+    'ASSISTED_BREECH',
+  ],
 };
-
-function walk(dir, out = []) {
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) walk(full, out);
-    else if (/\.(html|ts)$/.test(entry) && !entry.endsWith('.spec.ts')) out.push(full);
-  }
-  return out;
-}
 
 function flatten(node, prefix = '', out = new Set()) {
   for (const [key, value] of Object.entries(node)) {
@@ -78,12 +80,14 @@ const PATTERNS = [
   new RegExp(`translate\\.(?:instant|get|stream)\\(\\s*['"\`]${KEY}['"\`]`, 'g'),
   new RegExp(`translationKey:\\s*['"\`]${KEY}['"\`]`, 'g'),
   new RegExp(`(?:labelKey|valueKey):\\s*['"\`]${KEY}['"\`]`, 'g'),
+  // QA D1525: the ultrasound observations keep each answer's key by name.
+  new RegExp(`(?:trueKey|falseKey|notAssessedKey|legacyKey):\\s*['"\`]${KEY}['"\`]`, 'g'),
 ];
 
 const defined = flatten(JSON.parse(readFileSync(EN, 'utf8')));
 const referenced = new Map(); // key -> Set<file>
 
-for (const file of walk(SRC)) {
+for (const file of walk(SRC, ['.html', '.ts']).filter((f) => !f.endsWith('.spec.ts'))) {
   const text = readFileSync(file, 'utf8');
   for (const pattern of PATTERNS) {
     for (const match of text.matchAll(pattern)) {

@@ -1,6 +1,8 @@
 package com.example.hms.service;
 
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.utility.ElapsedTime;
+import com.example.hms.utility.PatientMatchKeys;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
@@ -9,6 +11,7 @@ import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.enums.SlotStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.CheckInRequestDTO;
@@ -46,11 +49,14 @@ import com.example.hms.repository.scheduling.AppointmentSlotRepository;
 import com.example.hms.payload.dto.scheduling.AppointmentSlotDTO;
 import com.example.hms.service.scheduling.PatientOutreachNotifier;
 import com.example.hms.service.scheduling.SlotInventoryService;
+import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,9 +68,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -74,17 +83,26 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ReceptionServiceImpl implements ReceptionService {
 
+    /** QA D1295 class: a patient's invoices at one hospital, all of them, newest first. */
+    public static final Pageable EVERY_INVOICE_NEWEST_FIRST =
+        Pageable.unpaged(Sort.by(Sort.Direction.DESC, "invoiceDate", "id"));
+    private static final String WAITLIST_ENTRY_NOT_FOUND_KEY = "waitlist.entry.notFound";
+
+
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final DateTimeFormatter EXPIRY_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final String WAITLIST_STATUS_WAITING = "WAITING";
     private static final String WAITLIST_STATUS_OFFERED = "OFFERED";
-    private static final String MSG_WAITLIST_NOT_FOUND = "Waitlist entry not found";
+    private static final String WAITLIST_STATUS_CLOSED = "CLOSED";
+    /** How far a slot's hold end may be from the offer's expiry and still be that offer's hold. */
+    private static final long OFFER_HOLD_TOLERANCE_MINUTES = 2;
     private static final int DEFAULT_OFFER_HOURS = 48;
     private static final String STATUS_ARRIVED = "ARRIVED";
     private static final String STATUS_WALK_IN = "WALK_IN";
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final String STATUS_CANCELLED = "CANCELLED";
+    private static final String STATUS_LEFT_WITHOUT_BEING_SEEN = "LEFT_WITHOUT_BEING_SEEN";
+    private static final String STATUS_NO_SHOW = "NO_SHOW";
     private static final String ENTITY_TYPE_ENCOUNTER = "ENCOUNTER";
 
     private final AppointmentRepository appointmentRepo;
@@ -101,10 +119,15 @@ public class ReceptionServiceImpl implements ReceptionService {
     private final AuditEventLogService auditEventLogService;
     private final com.example.hms.repository.UserRepository userRepo;
     private final com.example.hms.service.TreatmentConsentService treatmentConsentService;
+    /** QA D1591: the consent the patient gave at pre-check-in, read by the queue and the check-in. */
+    private final com.example.hms.repository.PatientTreatmentConsentRepository consentRepo;
     private final AppointmentSlotRepository slotRepo;
     private final SlotInventoryService slotInventoryService;
     private final PatientOutreachNotifier outreachNotifier;
     private final MessageSource messageSource;
+    private final com.example.hms.service.BillingInvoiceService billingInvoiceService;
+    /** QA D788: the flow board's "completed" drop is a check-out. Lazy: EncounterService is a large graph. */
+    private final org.springframework.beans.factory.ObjectProvider<EncounterService> encounterServiceProvider;
 
     /** Outreach has no request locale — explicit config, French by default. */
     @Value("${hms.scheduling.outreach.locale:fr}")
@@ -112,54 +135,34 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     // ── MVP 9: Dashboard Summary ─────────────────────────────────────────────
 
+    /**
+     * QA D1400 + D1401: every number on the strip is a count of the rows the
+     * queue shows, read through {@link ReceptionQueueFilters}: the same rows,
+     * the same computed status, the same rule as the filter the card opens.
+     * It used to count encounters by their raw status (47 against the queue's
+     * 102 ARRIVED: triage and waiting-for-physician were left out).
+     */
     @Override
     public ReceptionDashboardSummaryDTO getDashboardSummary(LocalDate date, UUID hospitalId) {
-        List<Appointment> appointments = appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, date);
-        List<UUID> appointmentIds = appointments.stream().map(Appointment::getId).toList();
-
-        List<Encounter> linkedEncounters = appointmentIds.isEmpty()
-                ? Collections.emptyList()
-                : encounterRepo.findByAppointmentIdIn(appointmentIds);
-
-        LocalDateTime dayStart = date.atStartOfDay();
-        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
-        List<Encounter> walkIns = encounterRepo.findWalkInsForHospitalAndPeriod(hospitalId, dayStart, dayEnd);
-
-        Map<UUID, Encounter> encounterByApptId = linkedEncounters.stream()
-                .filter(e -> e.getAppointment() != null)
-                .collect(Collectors.toMap(e -> e.getAppointment().getId(), e -> e, (a, b) -> a));
-
-        long arrivedCount = countByStatus(linkedEncounters, EncounterStatus.ARRIVED)
-                + countByStatus(walkIns, EncounterStatus.ARRIVED);
-        long inProgressCount = countByStatus(linkedEncounters, EncounterStatus.IN_PROGRESS)
-                + countByStatus(walkIns, EncounterStatus.IN_PROGRESS);
-        long noShowCount = appointments.stream()
-                .filter(a -> a.getStatus() == AppointmentStatus.NO_SHOW).count();
-        // completedCount: only encounter-side completions to avoid double-counting
-        // a scheduled appointment whose encounter is COMPLETED would otherwise add 2.
-        long completedCount = countByStatus(linkedEncounters, EncounterStatus.COMPLETED)
-                + countByStatus(walkIns, EncounterStatus.COMPLETED);
-        // "Scheduled" = appointments with no linked encounter yet, not no-show, not completed
-        long scheduledCount = appointments.stream()
-                .filter(a -> !encounterByApptId.containsKey(a.getId()))
-                .filter(a -> a.getStatus() != AppointmentStatus.NO_SHOW
-                        && a.getStatus() != AppointmentStatus.COMPLETED
-                        && a.getStatus() != AppointmentStatus.CANCELLED)
-                .count();
-        // waitingCount: arrived but not yet seen (i.e. not IN_PROGRESS), floored at 0
-        long waitingCount = Math.max(0, arrivedCount - inProgressCount);
+        List<VisitRow> rows = visitRows(date, hospitalId, null, null);
+        long arrivedCount = countOpenedBy(rows, STATUS_ARRIVED);
 
         return ReceptionDashboardSummaryDTO.builder()
                 .date(date)
                 .hospitalId(hospitalId)
-                .scheduledToday(scheduledCount)
+                .scheduledToday(countOpenedBy(rows, ReceptionQueueFilters.SCHEDULED))
                 .arrivedCount(arrivedCount)
-                .waitingCount(waitingCount)
-                .inProgressCount(inProgressCount)
-                .noShowCount(noShowCount)
-                .completedCount(completedCount)
-                .walkInCount(walkIns.size())
+                // Arrived and not yet seen: an ARRIVED row is exactly that.
+                .waitingCount(arrivedCount)
+                .inProgressCount(countOpenedBy(rows, STATUS_IN_PROGRESS))
+                .noShowCount(countOpenedBy(rows, STATUS_NO_SHOW))
+                .completedCount(countOpenedBy(rows, STATUS_COMPLETED))
+                .walkInCount(countOpenedBy(rows, STATUS_WALK_IN))
                 .build();
+    }
+
+    private static long countOpenedBy(List<VisitRow> rows, String filter) {
+        return rows.stream().filter(row -> row.filters().contains(filter)).count();
     }
 
     // ── MVP 9: Queue ─────────────────────────────────────────────────────────
@@ -167,23 +170,52 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Override
     public List<ReceptionQueueItemDTO> getQueue(LocalDate date, UUID hospitalId, String status,
                                                   UUID departmentId, UUID providerId) {
+        List<ReceptionQueueItemDTO> items = new ArrayList<>();
+        for (VisitRow row : visitRows(date, hospitalId, departmentId, providerId)) {
+            if (ReceptionQueueFilters.opens(status, row.filters())) {
+                items.add(row.isWalkIn()
+                        ? buildWalkInQueueItem(row)
+                        : buildQueueItem(row, hospitalId));
+            }
+        }
+        items.sort(Comparator.comparing(i -> i.getAppointmentTime() == null ? "" : i.getAppointmentTime()));
+        return items;
+    }
+
+    /**
+     * One row of the desk's day: a booked visit (with its encounter, once it
+     * has one) or a walk-in (an encounter with no appointment), its computed
+     * status, and the filters that open it. The summary, the queue, the flow
+     * board and the panels all read these, so they cannot disagree.
+     */
+    private record VisitRow(Appointment appointment, Encounter encounter, String status, Set<String> filters) {
+        boolean isWalkIn() {
+            return appointment == null;
+        }
+    }
+
+    private List<VisitRow> visitRows(LocalDate date, UUID hospitalId, UUID departmentId, UUID providerId) {
+        // QA D1021: today's queue also carries the visits still open from an
+        // earlier day (a walk-in at 23:57, a late check-in): they used to drop
+        // off at midnight, still ARRIVED, and the desk could neither close
+        // them nor mark them left-without-being-seen.
+        List<Encounter> carried = carriedOverVisits(hospitalId, date);
         List<Appointment> appointments = applyQueueFilters(
-                appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, date),
+                withCarriedAppointments(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, date), carried),
                 departmentId, providerId);
 
         Map<UUID, Encounter> encounterByApptId = buildEncounterMap(appointments);
-        List<ReceptionQueueItemDTO> items = new ArrayList<>();
-
+        List<VisitRow> rows = new ArrayList<>();
         for (Appointment appt : appointments) {
             Encounter encounter = encounterByApptId.get(appt.getId());
-            String computedStatus = computeStatus(appt, encounter);
-            if (excludedByStatusFilter(status, computedStatus)) continue;
-            items.add(buildQueueItem(appt, encounter, computedStatus, hospitalId));
+            String computed = computeStatus(appt, encounter);
+            rows.add(new VisitRow(appt, encounter, computed, ReceptionQueueFilters.of(computed, false)));
         }
-
-        addWalkInItems(items, hospitalId, date, status);
-        items.sort(Comparator.comparing(i -> i.getAppointmentTime() == null ? "" : i.getAppointmentTime()));
-        return items;
+        for (Encounter walkIn : walkInsShownOn(hospitalId, date, carried)) {
+            String computed = computeWalkInStatus(walkIn);
+            rows.add(new VisitRow(null, walkIn, computed, ReceptionQueueFilters.of(computed, true)));
+        }
+        return rows;
     }
 
     // ── MVP 9: Patient Snapshot ───────────────────────────────────────────────
@@ -239,8 +271,9 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .build();
 
         // Billing
+        // QA D1295 class: every invoice of the patient here, not an unordered first 100.
         List<BillingInvoice> invoices = invoiceRepo.findByPatient_IdAndHospital_Id(patientId, hospitalId,
-                PageRequest.of(0, 100)).getContent();
+                EVERY_INVOICE_NEWEST_FIRST).getContent();
         List<BillingInvoice> openInvoices = invoices.stream()
                 .filter(inv -> inv.getStatus() != InvoiceStatus.PAID
                         && inv.getStatus() != InvoiceStatus.CANCELLED
@@ -268,12 +301,14 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         return FrontDeskPatientSnapshotDTO.builder()
                 .patientId(patientId)
-                .fullName(patient.getFirstName() + " " + patient.getLastName())
+                .fullName(patient.getFullName())
                 .mrn(mrn)
                 .dob(patient.getDateOfBirth())
                 .phone(patient.getPhoneNumberPrimary())
                 .email(patient.getEmail())
-                .address(patient.getAddress())
+                // QA D1074: a legacy pipe-joined composite shows its street lines.
+                .address(com.example.hms.utility.PatientAddressText.display(
+                        patient.getAddress(), patient.getAddressLine1(), patient.getAddressLine2()))
                 .insurance(insuranceSummary)
                 .billing(billingSummary)
                 .alerts(alerts)
@@ -282,27 +317,22 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     // ── MVP 10: Insurance Issues ──────────────────────────────────────────────
 
+    /**
+     * QA D1401: the rows the queue flags, one for one: walk-ins and carried
+     * visits too. It used to read only the day's appointments (9 against 166
+     * flagged rows).
+     */
     @Override
     public List<InsuranceIssueDTO> getInsuranceIssues(LocalDate date, UUID hospitalId) {
-        List<Appointment> appointments = appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, date);
         LocalDate today = LocalDate.now();
-        List<InsuranceIssueDTO> issues = new ArrayList<>();
-
-        for (Appointment appt : appointments) {
-            if (appt.getStatus() == AppointmentStatus.CANCELLED
-                    || appt.getStatus() == AppointmentStatus.NO_SHOW) {
-                continue;
-            }
-            UUID pid = appt.getPatient().getId();
-            List<PatientInsurance> insurances = insuranceRepo
-                    .findByPatient_IdAndAssignment_Hospital_Id(pid, hospitalId);
-
-            String issueType = detectInsuranceIssue(insurances, today);
-            if (issueType != null) {
-                issues.add(buildInsuranceIssueItem(appt, pid, issueType, insurances));
-            }
-        }
-        return issues;
+        return getQueue(date, hospitalId, ReceptionQueueFilters.ALL, null, null).stream()
+                .filter(ReceptionQueueItemDTO::isHasInsuranceIssue)
+                .map(item -> {
+                    List<PatientInsurance> insurances = insuranceRepo
+                            .findByPatient_IdAndAssignment_Hospital_Id(item.getPatientId(), hospitalId);
+                    return buildInsuranceIssueItem(item, detectInsuranceIssue(insurances, today), insurances);
+                })
+                .toList();
     }
 
     private String detectInsuranceIssue(List<PatientInsurance> insurances, LocalDate today) {
@@ -317,24 +347,23 @@ public class ReceptionServiceImpl implements ReceptionService {
         return null;
     }
 
-    private InsuranceIssueDTO buildInsuranceIssueItem(Appointment appt, UUID pid,
-                                                       String issueType, List<PatientInsurance> insurances) {
-        Patient p = appt.getPatient();
+    private InsuranceIssueDTO buildInsuranceIssueItem(ReceptionQueueItemDTO item, String issueType,
+                                                       List<PatientInsurance> insurances) {
         PatientInsurance relevantInsurance = insurances.isEmpty() ? null : insurances.stream()
                 .filter(PatientInsurance::isPrimary)
                 .findFirst()
                 .orElse(insurances.get(0));
-        com.example.hms.patient.dto.PatientInsuranceDto insuranceDto = mapInsuranceDto(relevantInsurance);
         return InsuranceIssueDTO.builder()
-                .appointmentId(appt.getId())
-                .patientId(pid)
-                .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(null)
-                .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
+                .appointmentId(item.getAppointmentId())
+                .encounterId(item.getEncounterId())
+                .patientId(item.getPatientId())
+                .patientName(item.getPatientName())
+                .mrn(item.getMrn())
+                .appointmentTime(item.getAppointmentTime())
                 .issueType(issueType)
-                .clinicianName(providerName(appt))
-                .departmentName(appt.getDepartment() != null ? appt.getDepartment().getName() : null)
-                .insurance(insuranceDto)
+                .clinicianName(item.getProviderName())
+                .departmentName(item.getDepartmentName())
+                .insurance(mapInsuranceDto(relevantInsurance))
                 .build();
     }
 
@@ -354,7 +383,7 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     @Override
     public List<ReceptionQueueItemDTO> getPaymentsPending(LocalDate date, UUID hospitalId) {
-        return getQueue(date, hospitalId, "ALL", null, null).stream()
+        return getQueue(date, hospitalId, ReceptionQueueFilters.ALL, null, null).stream()
                 .filter(ReceptionQueueItemDTO::isHasOutstandingBalance)
                 .toList();
     }
@@ -363,13 +392,13 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     @Override
     public FlowBoardDTO getFlowBoard(LocalDate date, UUID hospitalId, UUID departmentId) {
-        List<ReceptionQueueItemDTO> all = getQueue(date, hospitalId, "ALL", departmentId, null);
+        List<ReceptionQueueItemDTO> all = getQueue(date, hospitalId, ReceptionQueueFilters.ALL, departmentId, null);
         return FlowBoardDTO.builder()
                 .scheduled(filterByStatus(all, "SCHEDULED"))
                 .confirmed(filterByStatus(all, "CONFIRMED"))
                 .arrived(filterByStatus(all, STATUS_ARRIVED))
                 .inProgress(filterByStatus(all, STATUS_IN_PROGRESS))
-                .noShow(filterByStatus(all, "NO_SHOW"))
+                .noShow(filterByStatus(all, STATUS_NO_SHOW))
                 .completed(filterByStatus(all, STATUS_COMPLETED))
                 .walkIn(filterByStatus(all, STATUS_WALK_IN))
                 .build();
@@ -378,8 +407,13 @@ public class ReceptionServiceImpl implements ReceptionService {
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private String computeStatus(Appointment appt, Encounter encounter) {
-        if (appt.getStatus() == AppointmentStatus.NO_SHOW) return "NO_SHOW";
-        if (appt.getStatus() == AppointmentStatus.CANCELLED) return "CANCELLED";
+        // Round 13: a patient who walked out is shown as such, not as the
+        // appointment's CANCELLED the close-unseen also writes.
+        if (encounter != null && encounter.getStatus() == EncounterStatus.LEFT_WITHOUT_BEING_SEEN) {
+            return STATUS_LEFT_WITHOUT_BEING_SEEN;
+        }
+        if (appt.getStatus() == AppointmentStatus.NO_SHOW) return STATUS_NO_SHOW;
+        if (appt.getStatus() == AppointmentStatus.CANCELLED) return STATUS_CANCELLED;
         if (appt.getStatus() == AppointmentStatus.COMPLETED && encounter == null) return STATUS_COMPLETED;
         if (encounter == null) return appt.getStatus().name();
         return switch (encounter.getStatus()) {
@@ -388,48 +422,68 @@ public class ReceptionServiceImpl implements ReceptionService {
             case IN_PROGRESS, AWAITING_RESULTS -> STATUS_IN_PROGRESS;
             case READY_FOR_DISCHARGE -> STATUS_IN_PROGRESS;
             case COMPLETED -> STATUS_COMPLETED;
-            case CANCELLED -> "CANCELLED";
+            case CANCELLED -> STATUS_CANCELLED;
+            case LEFT_WITHOUT_BEING_SEEN -> STATUS_LEFT_WITHOUT_BEING_SEEN;
             default -> appt.getStatus().name();
         };
     }
 
-    private ReceptionQueueItemDTO buildQueueItem(Appointment appt, Encounter encounter,
-                                                   String computedStatus, UUID hospitalId) {
+    private ReceptionQueueItemDTO buildQueueItem(VisitRow row, UUID hospitalId) {
+        Appointment appt = row.appointment();
+        Encounter encounter = row.encounter();
         Patient p = appt.getPatient();
         UUID pid = p.getId();
 
         return ReceptionQueueItemDTO.builder()
                 .appointmentId(appt.getId())
                 .patientId(pid)
-                .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(null)
+                .patientName(p.getFullName())
+                // QA D239: the MRN at this hospital, and the booked reason
+                // (else what triage recorded); both were hard-wired to null.
+                .mrn(p.getMrnForHospital(hospitalId))
                 .dateOfBirth(p.getDateOfBirth())
                 .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
                 .providerName(providerName(appt))
                 .departmentName(appt.getDepartment() != null ? appt.getDepartment().getName() : null)
-                .appointmentReason(appt.getReason())
-                .status(computedStatus)
+                .appointmentReason(visitReason(appt, encounter))
+                .deskAppointmentReason(deskVisitReason(appt, encounter))
+                .status(row.status())
+                .queueFilters(List.copyOf(row.filters()))
                 .waitMinutes(computeWaitMinutes(encounter))
                 .encounterId(encounter != null ? encounter.getId() : null)
-                .hasInsuranceIssue(detectInsuranceIssue(pid, hospitalId))
+                .hasInsuranceIssue(ReceptionQueueFilters.expectedAtTheDesk(row.status())
+                        && detectInsuranceIssue(pid, hospitalId))
                 .hasOutstandingBalance(detectOutstandingBalance(pid, hospitalId))
+                // QA D1489: the row does not offer a check-in that can only be refused.
+                .patientDeceased(com.example.hms.service.support.DeceasedPatientGuard.careBlocked(p))
+                .registrationInactive(ReceptionQueueFilters.expectedAtTheDesk(row.status())
+                        && registrationRepo.existsByPatientIdAndHospitalIdAndActiveFalse(pid, hospitalId))
+                // QA D1591: what the patient did at pre-check-in, consent included.
+                .preCheckedIn(Boolean.TRUE.equals(appt.getPreCheckedIn()))
+                .preCheckinTimestamp(Boolean.TRUE.equals(appt.getPreCheckedIn()) ? appt.getPreCheckinTimestamp() : null)
+                .preCheckInConsent(Boolean.TRUE.equals(appt.getPreCheckedIn())
+                        && consentRepo.existsByAppointment_IdAndSourceAndStatus(appt.getId(),
+                                com.example.hms.enums.TreatmentConsentSource.PRE_CHECK_IN,
+                                com.example.hms.enums.TreatmentConsentStatus.ACTIVE))
                 .build();
     }
 
-    private ReceptionQueueItemDTO buildWalkInQueueItem(Encounter walkIn, String computedStatus) {
+    private ReceptionQueueItemDTO buildWalkInQueueItem(VisitRow row) {
+        Encounter walkIn = row.encounter();
         Patient p = walkIn.getPatient();
         UUID walkInHospitalId = walkIn.getHospital() != null ? walkIn.getHospital().getId() : null;
         int waitMins = 0;
         if (walkIn.getStatus() == EncounterStatus.ARRIVED
                 || walkIn.getStatus() == EncounterStatus.TRIAGE
                 || walkIn.getStatus() == EncounterStatus.WAITING_FOR_PHYSICIAN) {
-            waitMins = (int) ElapsedTime.minutesBetween(walkIn.getEncounterDate(), LocalDateTime.now());
+            // QA D1039 class: from the arrival, never from the visit day's midnight.
+            waitMins = (int) com.example.hms.utility.EncounterWait.minutes(walkIn, LocalDateTime.now(java.time.ZoneId.systemDefault()));
         }
         return ReceptionQueueItemDTO.builder()
                 .appointmentId(null)
                 .patientId(p.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(null)
+                .patientName(p.getFullName())
+                .mrn(p.getMrnForHospital(walkInHospitalId))
                 .dateOfBirth(p.getDateOfBirth())
                 .appointmentTime(walkIn.getEncounterDate() != null
                         ? walkIn.getEncounterDate().toLocalTime().format(TIME_FMT) : null)
@@ -437,13 +491,48 @@ public class ReceptionServiceImpl implements ReceptionService {
                         ? walkIn.getStaff().getUser().getFirstName() + " " + walkIn.getStaff().getUser().getLastName()
                         : null)
                 .departmentName(walkIn.getDepartment() != null ? walkIn.getDepartment().getName() : null)
-                .appointmentReason("Walk-in")
-                .status(computedStatus)
+                .appointmentReason(walkInReason(walkIn))
+                .deskAppointmentReason(notBlank(walkIn.getDeskChiefComplaint()) ? walkIn.getDeskChiefComplaint() : null)
+                .status(row.status())
+                .queueFilters(List.copyOf(row.filters()))
                 .waitMinutes(waitMins)
                 .encounterId(walkIn.getId())
-                .hasInsuranceIssue(walkInHospitalId != null && detectInsuranceIssue(p.getId(), walkInHospitalId))
+                .hasInsuranceIssue(walkInHospitalId != null
+                        && ReceptionQueueFilters.expectedAtTheDesk(row.status())
+                        && detectInsuranceIssue(p.getId(), walkInHospitalId))
                 .hasOutstandingBalance(walkInHospitalId != null && detectOutstandingBalance(p.getId(), walkInHospitalId))
                 .build();
+    }
+
+    /**
+     * QA D944: a walk-in's reason is its chief complaint, else nothing: the
+     * queue shows its own translated placeholder. It used to be the English
+     * literal "Walk-in" in every language. Never the encounter notes: those
+     * are the clinician's, written during the visit, and not the desk's.
+     */
+    static String walkInReason(Encounter walkIn) {
+        return notBlank(walkIn.getChiefComplaint()) ? walkIn.getChiefComplaint() : null;
+    }
+
+    /** QA D239: the booked reason, else the chief complaint triage recorded, else the booking notes. */
+    static String visitReason(Appointment appt, Encounter encounter) {
+        if (notBlank(appt.getReason())) return appt.getReason();
+        if (encounter != null && notBlank(encounter.getChiefComplaint())) return encounter.getChiefComplaint();
+        return notBlank(appt.getNotes()) ? appt.getNotes() : null;
+    }
+
+    /**
+     * RCPT-CLIN (user decision 2026-11-06): the same row as a receptionist reads it. The booked
+     * reason, else what the desk itself typed, else the booking notes; never triage's complaint.
+     */
+    static String deskVisitReason(Appointment appt, Encounter encounter) {
+        if (notBlank(appt.getReason())) return appt.getReason();
+        if (encounter != null && notBlank(encounter.getDeskChiefComplaint())) return encounter.getDeskChiefComplaint();
+        return notBlank(appt.getNotes()) ? appt.getNotes() : null;
+    }
+
+    private static boolean notBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     private String providerName(Appointment appt) {
@@ -466,6 +555,58 @@ public class ReceptionServiceImpl implements ReceptionService {
         return appointments;
     }
 
+    /** QA D1021: the statuses of a visit nobody has finished with yet. */
+    static final Set<EncounterStatus> OPEN_VISIT_STATUSES = EnumSet.of(
+            EncounterStatus.ARRIVED, EncounterStatus.TRIAGE, EncounterStatus.WAITING_FOR_PHYSICIAN,
+            EncounterStatus.IN_PROGRESS, EncounterStatus.AWAITING_RESULTS, EncounterStatus.READY_FOR_DISCHARGE);
+
+    /**
+     * QA D1021: the visits begun on an earlier day and still open, shown on
+     * today's queue, board and counts. Only for today: a past or future day
+     * shows what happened on it.
+     */
+    private List<Encounter> carriedOverVisits(UUID hospitalId, LocalDate date) {
+        if (hospitalId == null || date == null) {
+            return List.of();
+        }
+        // "Today" is the hospital's calendar day (its organisation's zone),
+        // the day the desk asked for, not the server's.
+        LocalDate hospitalToday = com.example.hms.utility.HospitalCalendar.today(
+                hospitalRepo.findById(hospitalId).orElse(null), java.time.Clock.systemDefaultZone());
+        if (!date.equals(hospitalToday)) {
+            return List.of();
+        }
+        return encounterRepo.findOpenStartedBefore(hospitalId, date.atStartOfDay(), OPEN_VISIT_STATUSES);
+    }
+
+    /** The day's walk-ins plus the carried-over open ones (no appointment), each once. */
+    private List<Encounter> walkInsShownOn(UUID hospitalId, LocalDate date, List<Encounter> carried) {
+        List<Encounter> out = new ArrayList<>(encounterRepo.findWalkInsForHospitalAndPeriod(
+                hospitalId, date.atStartOfDay(), date.plusDays(1).atStartOfDay()));
+        Set<UUID> seen = out.stream().map(Encounter::getId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        for (Encounter e : carried) {
+            if (e.getAppointment() == null && (e.getId() == null || seen.add(e.getId()))) {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
+    /** The day's appointments plus those whose visit was carried over, each once. */
+    private static List<Appointment> withCarriedAppointments(List<Appointment> appointments, List<Encounter> carried) {
+        if (carried.isEmpty()) {
+            return appointments;
+        }
+        List<Appointment> out = new ArrayList<>(appointments);
+        Set<UUID> seen = appointments.stream().map(Appointment::getId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        carried.stream().map(Encounter::getAppointment).filter(Objects::nonNull)
+                .filter(a -> a.getId() == null || seen.add(a.getId()))
+                .forEach(out::add);
+        return out;
+    }
+
     private Map<UUID, Encounter> buildEncounterMap(List<Appointment> appointments) {
         List<UUID> appointmentIds = appointments.stream().map(Appointment::getId).toList();
         List<Encounter> linkedEncounters = appointmentIds.isEmpty()
@@ -476,33 +617,15 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .collect(Collectors.toMap(e -> e.getAppointment().getId(), e -> e, (a, b) -> a));
     }
 
-    private boolean excludedByStatusFilter(String filter, String computedStatus) {
-        return filter != null && !"ALL".equalsIgnoreCase(filter) && !computedStatus.equals(filter);
-    }
-
-    private void addWalkInItems(List<ReceptionQueueItemDTO> items, UUID hospitalId,
-                                 LocalDate date, String status) {
-        if (excludedByStatusFilter(status, STATUS_WALK_IN)
-                && excludedByStatusFilter(status, STATUS_ARRIVED)
-                && excludedByStatusFilter(status, STATUS_IN_PROGRESS)) {
-            return;
-        }
-        LocalDateTime dayStart = date.atStartOfDay();
-        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
-        List<Encounter> walkIns = encounterRepo.findWalkInsForHospitalAndPeriod(hospitalId, dayStart, dayEnd);
-
-        for (Encounter walkIn : walkIns) {
-            String computedStatus = computeWalkInStatus(walkIn);
-            if (excludedByStatusFilter(status, computedStatus)) continue;
-            items.add(buildWalkInQueueItem(walkIn, computedStatus));
-        }
-    }
-
     private String computeWalkInStatus(Encounter walkIn) {
         return switch (walkIn.getStatus()) {
             case ARRIVED, TRIAGE, WAITING_FOR_PHYSICIAN -> STATUS_ARRIVED;
             case IN_PROGRESS, AWAITING_RESULTS, READY_FOR_DISCHARGE -> STATUS_IN_PROGRESS;
             case COMPLETED -> STATUS_COMPLETED;
+            // A walk-in closed without a consultation is closed: it went back
+            // to the walk-in column as if it were still waiting.
+            case CANCELLED -> STATUS_CANCELLED;
+            case LEFT_WITHOUT_BEING_SEEN -> STATUS_LEFT_WITHOUT_BEING_SEEN;
             default -> STATUS_WALK_IN;
         };
     }
@@ -523,7 +646,8 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     private int computeWaitMinutes(Encounter encounter) {
         if (encounter != null && encounter.getStatus() == EncounterStatus.ARRIVED) {
-            return (int) ElapsedTime.minutesBetween(encounter.getEncounterDate(), LocalDateTime.now());
+            // QA D1039 class: from the arrival, never from the visit day's midnight.
+            return (int) com.example.hms.utility.EncounterWait.minutes(encounter, LocalDateTime.now(java.time.ZoneId.systemDefault()));
         }
         return 0;
     }
@@ -534,37 +658,80 @@ public class ReceptionServiceImpl implements ReceptionService {
         return total.subtract(paid);
     }
 
-    private long countByStatus(List<Encounter> encounters, EncounterStatus status) {
-        return encounters.stream().filter(e -> e.getStatus() == status).count();
-    }
-
     private List<ReceptionQueueItemDTO> filterByStatus(List<ReceptionQueueItemDTO> items, String status) {
         return items.stream().filter(i -> status.equals(i.getStatus())).toList();
     }
 
     // ── MVP 11: Duplicate Candidate Detection ─────────────────────────────────
 
+    /**
+     * QA D924: the phone number used to be ANDed with the name and the date of
+     * birth, and the phone is mandatory on the form, so only a patient with the
+     * same number was ever offered, and a second chart was created for
+     * everyone else. Candidates are now the patients whose name matches (a
+     * name + date-of-birth query first, then the name alone) OR who hold the
+     * same subscriber number, all folded by {@link PatientMatchKeys} (accents,
+     * phone formatting). The name scores 50, the date of birth 30 and the
+     * phone 20, with 40 to be offered: a same-name record is offered even with
+     * another date of birth (a transposed date must not hide it), and a shared
+     * family number alone is not.
+     */
     @Override
     public List<DuplicateCandidateDTO> getDuplicateCandidates(String name, String dob, String phone,
                                                                UUID hospitalId) {
-        String namePattern = (name != null && !name.isBlank())
-                ? "%" + name.trim().toLowerCase() + "%" : null;
-        String phonePattern = (phone != null && !phone.isBlank())
-                ? "%" + phone.trim() + "%" : null;
-        List<Patient> candidates = patientRepo.searchPatientsExtended(
-                null, namePattern, dob, phonePattern, null, hospitalId, true,
-                PageRequest.of(0, 20)).getContent();
+        if (hospitalId == null) {
+            // No hospital, no scope: a duplicate check never crosses tenants.
+            return List.of();
+        }
+        String namePattern = PatientMatchKeys.nameContainsPattern(name);
+        // QA D1274: a birth date in any accepted format, compared as yyyy-mm-dd.
+        String dobValue = PatientMatchKeys.birthDateKey(dob);
+        Map<UUID, Patient> candidates = new java.util.LinkedHashMap<>();
+        // The name is its own candidate source: a mistyped or transposed date
+        // of birth must not hide a same-name record (the D924 class, one field
+        // gating the others). The date only scores. A DOB alone (30) can never
+        // reach the threshold, so it asks nothing on its own.
+        if (namePattern != null && dobValue != null) {
+            // Same name and same date of birth first (80, a duplicate whatever
+            // the phone): a common name must not push it out of the capped
+            // name-only page below (review round 8).
+            patientRepo.searchPatientsExtended(
+                    null, namePattern, dobValue, null, null, hospitalId, true,
+                    PageRequest.of(0, 20)).getContent()
+                .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+        }
+        if (namePattern != null) {
+            patientRepo.searchPatientsExtended(
+                    null, namePattern, null, null, null, hospitalId, true,
+                    PageRequest.of(0, 20)).getContent()
+                .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+        }
+        String phoneKey = PatientMatchKeys.phoneKey(phone);
+        if (PatientMatchKeys.isSubscriberKey(phoneKey)) {
+            patientRepo.findAllByPhoneSubscriberAtHospital("%" + phoneKey, hospitalId,
+                    PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
+                .filter(Patient::isActive)
+                .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+        }
 
-        return candidates.stream()
-                .map(p -> {
-                    int score = computeConfidenceScore(p, name, dob, phone);
+        // Scored once, first: a shared family number alone (20) is dropped
+        // before anyone's registrations are read for an MRN.
+        String callingCode = com.example.hms.utility.PhoneNumbers.callingCodeForCountry(
+                hospitalRepo.findById(hospitalId).map(Hospital::getCountry).orElse(null));
+        Map<Patient, Integer> scored = new java.util.LinkedHashMap<>();
+        candidates.values().forEach(p -> scored.put(p, computeConfidenceScore(p, name, dobValue, phone, callingCode)));
+        return scored.entrySet().stream()
+                .filter(e -> e.getValue() >= 40)
+                .map(e -> {
+                    Patient p = e.getKey();
+                    int score = e.getValue();
                     String mrn = p.getHospitalRegistrations().stream()
                             .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
                             .map(PatientHospitalRegistration::getMrn)
                             .findFirst().orElse(null);
                     return DuplicateCandidateDTO.builder()
                             .patientId(p.getId())
-                            .fullName(p.getFirstName() + " " + p.getLastName())
+                            .fullName(p.getFullName())
                             .mrn(mrn)
                             .dateOfBirth(p.getDateOfBirth())
                             .phone(p.getPhoneNumberPrimary())
@@ -572,23 +739,29 @@ public class ReceptionServiceImpl implements ReceptionService {
                             .confidenceScore(score)
                             .build();
                 })
-                .filter(c -> c.getConfidenceScore() >= 40)
                 .sorted(Comparator.comparingInt(DuplicateCandidateDTO::getConfidenceScore).reversed())
                 .toList();
     }
 
-    private int computeConfidenceScore(Patient p, String name, String dob, String phone) {
+    /**
+     * Name 50 (accents and word order ignored), date of birth 30, same
+     * subscriber number 20. A shared family phone alone (20) is not a
+     * duplicate; the same name and birth date (80) is one whatever the phone.
+     */
+    private int computeConfidenceScore(Patient p, String name, String dob, String phone, String callingCode) {
         int score = 0;
-        if (name != null && !name.isBlank()) {
-            String fullName = (p.getFirstName() + " " + p.getLastName()).toLowerCase();
-            if (fullName.contains(name.trim().toLowerCase())) score += 50;
+        if (name != null && !name.isBlank()
+                && (PatientMatchKeys.nameContains(p.getFirstName() + " " + p.getLastName(), name)
+                    || PatientMatchKeys.nameContains(p.getLastName() + " " + p.getFirstName(), name)
+                    // QA D1103: the name as displayed, middle name included, is the same name.
+                    || PatientMatchKeys.nameContains(p.getFullName(), name))) {
+            score += 50;
         }
-        if (dob != null && !dob.isBlank() && p.getDateOfBirth() != null
-                && p.getDateOfBirth().toString().equals(dob)) {
+        if (dob != null && p.getDateOfBirth() != null && p.getDateOfBirth().toString().equals(dob)) {
             score += 30;
         }
-        if (phone != null && !phone.isBlank() && p.getPhoneNumberPrimary() != null
-                && p.getPhoneNumberPrimary().contains(phone.trim())) {
+        if (PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), phone, callingCode)
+                || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), phone, callingCode)) {
             score += 20;
         }
         return Math.min(score, 100);
@@ -596,14 +769,31 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     // ── MVP 11: Waitlist ──────────────────────────────────────────────────────
 
+    /**
+     * QA D1215 (round 23): a waitlist range that ends before it starts, or
+     * that ended before today at the hospital, can never be offered a slot.
+     * Both are refused on the end date, in the reader's language.
+     */
+    static void requireOfferableRange(java.time.LocalDate from, java.time.LocalDate to, Hospital hospital) {
+        if (to == null) {
+            return;
+        }
+        if (from != null && to.isBefore(from)) {
+            throw new com.example.hms.exception.FieldBusinessException("requestedDateTo", "waitlist.dateRange.reversed");
+        }
+        if (to.isBefore(com.example.hms.utility.HospitalCalendar.today(hospital))) {
+            throw new com.example.hms.exception.FieldBusinessException("requestedDateTo", "waitlist.dateRange.past");
+        }
+    }
+
     @Override
     @Transactional
     public WaitlistEntryResponseDTO addToWaitlist(WaitlistEntryRequestDTO req, UUID hospitalId,
                                                    String actorUsername) {
-        Hospital hospital = hospitalRepo.findById(hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+        Hospital hospital = hospitalRepo.findClinicalById(hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         Department department = departmentRepo.findById(req.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", req.getDepartmentId()));
         // Same fix as the snapshot above: a waitlist entry for a patient whose
         // first hospital is elsewhere would otherwise be impossible to create.
         Patient patient = patientRepo.findByIdUnscoped(req.getPatientId())
@@ -611,6 +801,11 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (!registrationRepo.existsByPatientIdAndHospitalId(req.getPatientId(), hospitalId)) {
             throw new ResourceNotFoundException("patient.notfound", req.getPatientId());
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D1476: nor is a deactivated registration put on the waitlist.
+        com.example.hms.service.support.PatientRegistrationGuard.refuseDeactivatedRegistration(
+                registrationRepo, req.getPatientId(), hospitalId);
+        requireOfferableRange(req.getRequestedDateFrom(), req.getRequestedDateTo(), hospital);
         Staff provider = (req.getPreferredProviderId() != null)
                 ? staffRepo.findById(req.getPreferredProviderId()).orElse(null)
                 : null;
@@ -646,16 +841,17 @@ public class ReceptionServiceImpl implements ReceptionService {
     public WaitlistEntryResponseDTO offerWaitlistSlot(UUID waitlistId, UUID hospitalId, UUID slotId,
                                                       Integer expiresInHours) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_WAITLIST_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
         if (!WAITLIST_STATUS_WAITING.equals(entry.getStatus())) {
-            throw new BusinessException("Only a waiting entry can be offered a slot.");
+            throw new BusinessException("reception.offer.notWaiting");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(entry.getPatient());
         if (slotId == null) {
-            throw new BusinessException("Choose a slot to offer.");
+            throw new com.example.hms.exception.FieldBusinessException("slotId", "reception.offer.slotRequired");
         }
         AppointmentSlot slot = slotRepo.findById(slotId)
                 .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
-                .orElseThrow(() -> new ResourceNotFoundException("Slot not found with ID: " + slotId));
+                .orElseThrow(() -> new ResourceNotFoundException("slot.notFound", slotId));
 
         LocalDateTime now = LocalDateTime.now();
         int hours = expiresInHours != null && expiresInHours > 0 ? expiresInHours : DEFAULT_OFFER_HOURS;
@@ -669,7 +865,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         // used to live here is now ElapsedTime, shared by every call site.
         long minutes = ElapsedTime.minutesBetween(now, expiry);
         if (minutes < 1) {
-            throw new BusinessException("That slot starts too soon to offer.");
+            throw new BusinessException("reception.offer.tooSoon");
         }
         // hold() re-validates availability and stamps HELD for the offer window,
         // so nobody else books the time while the patient decides.
@@ -689,13 +885,14 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Transactional
     public WaitlistEntryResponseDTO acceptWaitlistOffer(UUID waitlistId, UUID hospitalId) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_WAITLIST_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
         if (!WAITLIST_STATUS_OFFERED.equals(entry.getStatus()) || entry.getOfferedSlot() == null) {
-            throw new BusinessException("There is no open offer on this entry.");
+            throw new BusinessException("reception.offer.none");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(entry.getPatient());
         LocalDateTime now = LocalDateTime.now();
         if (entry.getOfferExpiresAt() != null && entry.getOfferExpiresAt().isBefore(now)) {
-            throw new BusinessException("The offer has expired. Offer another slot.");
+            throw new BusinessException("reception.offer.expired");
         }
         AppointmentSlot slot = entry.getOfferedSlot();
         if (slot.getStatus() == SlotStatus.HELD) {
@@ -706,9 +903,9 @@ public class ReceptionServiceImpl implements ReceptionService {
         AppointmentSlotDTO booked = slotInventoryService.book(
                 slot.getId(), entry.getPatient().getId(), entry.getReason());
         Appointment appointment = appointmentRepo.findById(booked.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", booked.getAppointmentId()));
         entry.setOfferedAppointment(appointment);
-        entry.setStatus("CLOSED");
+        entry.setStatus(WAITLIST_STATUS_CLOSED);
         return toWaitlistResponse(waitlistRepo.save(entry), hospitalId);
     }
 
@@ -716,9 +913,9 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Transactional
     public WaitlistEntryResponseDTO declineWaitlistOffer(UUID waitlistId, UUID hospitalId) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_WAITLIST_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
         if (!WAITLIST_STATUS_OFFERED.equals(entry.getStatus())) {
-            throw new BusinessException("There is no open offer on this entry.");
+            throw new BusinessException("reception.offer.none");
         }
         releaseOfferedSlot(entry);
         entry.setStatus(WAITLIST_STATUS_WAITING);
@@ -753,12 +950,29 @@ public class ReceptionServiceImpl implements ReceptionService {
      */
     private void releaseOfferedSlot(AppointmentWaitlist entry) {
         AppointmentSlot slot = entry.getOfferedSlot();
-        if (slot != null && slot.getStatus() == SlotStatus.HELD) {
+        if (slot != null && slot.getStatus() == SlotStatus.HELD && holdIsThisOffer(slot, entry)) {
             slot.setHeldUntil(null);
             slot.setHeldByUserId(null);
             slot.setStatus(SlotStatus.OPEN);
             slotRepo.save(slot);
         }
+    }
+
+    /**
+     * QA D1185 (round 22, review round 1): the hold on the slot is this offer's.
+     * offer() holds the slot until the offer expires, so the two times agree to
+     * the minute. Once an offer lapses, the slot can be held again by someone
+     * else before the sweep runs, and closing or declining the old entry must
+     * not free that other hold. An entry without an expiry (or a hold without
+     * an end) cannot be told apart and keeps the old behaviour.
+     */
+    static boolean holdIsThisOffer(AppointmentSlot slot, AppointmentWaitlist entry) {
+        if (entry.getOfferExpiresAt() == null || slot.getHeldUntil() == null) {
+            return true;
+        }
+        long apart = Math.abs(java.time.Duration.between(slot.getHeldUntil().atOffset(java.time.ZoneOffset.UTC),
+            entry.getOfferExpiresAt().atOffset(java.time.ZoneOffset.UTC)).toMinutes());
+        return apart <= OFFER_HOLD_TOLERANCE_MINUTES;
     }
 
     private void notifyOffer(AppointmentWaitlist entry, AppointmentSlot slot, LocalDateTime expiry) {
@@ -769,14 +983,13 @@ public class ReceptionServiceImpl implements ReceptionService {
             // language we can render gets it.
             Locale locale = patientLocaleResolver.resolve(
                     entry.getPatient(), Locale.forLanguageTag(outreachLocale));
-            String message = messageSource.getMessage("sms.waitlist.offer",
-                    new Object[]{
-                        slot.getStartAt().toLocalDate().format(DATE_FMT),
-                        slot.getStartAt().toLocalTime().format(TIME_FMT),
-                        hospitalName,
-                        expiry.format(EXPIRY_FMT)
-                    }, locale);
-            outreachNotifier.notifyPatient(entry.getPatient(), message);
+            NotificationText text = NotificationText.of("sms.waitlist.offer",
+                    // QA D1234 class: the patient's own way of writing a date, not dd/MM/yyyy.
+                    DisplayDates.date(slot.getStartAt().toLocalDate(), locale),
+                    DisplayDates.time(slot.getStartAt().toLocalTime(), locale),
+                    hospitalName,
+                    DisplayDates.dateTime(expiry, locale));
+            outreachNotifier.notifyPatient(entry.getPatient(), text, locale);
         } catch (RuntimeException ex) {
             // Outreach is best-effort: the desk can always phone the patient.
             log.warn("Waitlist offer notification failed for entry {}: {}",
@@ -786,10 +999,30 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     @Override
     @Transactional
-    public void closeWaitlistEntry(UUID waitlistId, UUID hospitalId) {
+    public void closeWaitlistEntry(UUID waitlistId, UUID hospitalId, String reason) {
+        // QA D1157 (round 21): closing an entry says why, on the server; an
+        // empty body closed it at once and nothing recorded the decision.
+        // QA round 29: the body is read before any lookup, so a missing reason
+        // is named whatever the entry's state.
+        String closeReason = com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
+            "waitlist.close.reasonRequired");
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_WAITLIST_NOT_FOUND));
-        entry.setStatus("CLOSED");
+                .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
+        // QA D1186 (round 22): a closed entry stays closed, and the reason it
+        // was closed with (the D1157 record) is never overwritten.
+        if (WAITLIST_STATUS_CLOSED.equals(entry.getStatus())) {
+            throw new BusinessException("waitlist.close.alreadyClosed");
+        }
+        // QA D1185 (round 22): closing an OFFERED entry withdraws the offer and
+        // frees the held slot at once, as a decline and the expiry sweep do;
+        // the slot stayed HELD (and out of search) until the hold expired.
+        if (WAITLIST_STATUS_OFFERED.equals(entry.getStatus())) {
+            releaseOfferedSlot(entry);
+            entry.setOfferedSlot(null);
+            entry.setOfferExpiresAt(null);
+        }
+        entry.setCloseReason(closeReason);
+        entry.setStatus(WAITLIST_STATUS_CLOSED);
         waitlistRepo.save(entry);
     }
 
@@ -800,7 +1033,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     public void attestEligibility(UUID insuranceId, UUID hospitalId, String actorUsername,
                                    EligibilityAttestationRequestDTO req) {
         PatientInsurance insurance = insuranceRepo.findByIdAndAssignment_Hospital_Id(insuranceId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Insurance record not found or out of scope"));
+                .orElseThrow(() -> new ResourceNotFoundException("patientinsurance.notfound", insuranceId));
         insurance.setVerifiedAt(LocalDateTime.now());
         insurance.setVerifiedBy(actorUsername);
         insurance.setEligibilityNotes(req.getEligibilityNotes());
@@ -809,11 +1042,23 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     // ── MVP 11: Encounter status update (flow board drag-and-drop) ────────────
 
+    /**
+     * Provisional platform rule (unsigned-note workflow): a closed visit's unsigned notes go to their authors'
+     * in-basket (UnsignedNoteHookGuardTest). Setter-injected; null in hand-built unit tests.
+     */
+    private com.example.hms.service.UnsignedNoteFollowUp unsignedNotes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUnsignedNotes(com.example.hms.service.UnsignedNoteFollowUp unsignedNotes) {
+        this.unsignedNotes = unsignedNotes;
+    }
+
+
     @Override
     @Transactional
     public void updateEncounterStatus(UUID encounterId, EncounterStatus status, UUID hospitalId, String callerUsername) {
         Encounter encounter = encounterRepo.findByIdAndHospital_Id(encounterId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", encounterId));
 
         // Ownership check: RECEPTIONIST and admin roles may move any encounter.
         // DOCTOR / NURSE / MIDWIFE may only move encounters assigned to them.
@@ -836,8 +1081,28 @@ public class ReceptionServiceImpl implements ReceptionService {
         }
 
         EncounterStatus previousStatus = encounter.getStatus();
-        encounter.setStatus(status);
-        encounterRepo.save(encounter);
+        // QA D788: the flow board writes a status directly. The desk never sets a
+        // clinical status, and nobody closes a visit here that the check-out
+        // (seen) or close-unseen (never seen) would refuse.
+        if (isAdminActor) {
+            EncounterClosureRules.requireDeskTransition(previousStatus, status);
+        } else {
+            // The encounter's own clinician (checked above): their consultation.
+            EncounterClosureRules.requireDirectTransition(previousStatus, status, true);
+        }
+        if (status == EncounterStatus.COMPLETED && previousStatus != EncounterStatus.COMPLETED) {
+            // A seen, examined visit dropped on "completed" is checked out: the
+            // appointment, the After-Visit Summary and the recall go with it.
+            encounterServiceProvider.getObject().checkOut(encounterId,
+                new com.example.hms.payload.dto.clinical.CheckOutRequestDTO(), callerUsername, false, hospitalId);
+        } else {
+            encounter.setStatus(status);
+            encounterRepo.save(encounter);
+            // The rules above send every close elsewhere; should one ever pass here, its notes are still followed.
+            if (unsignedNotes != null) {
+                unsignedNotes.visitClosed(encounter);
+            }
+        }
 
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userName(callerUsername)
@@ -866,11 +1131,34 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         // 1. Resolve appointment (required — walk-in handled by separate endpoint)
         if (request.getAppointmentId() == null) {
-            throw new IllegalArgumentException("appointmentId is required for check-in");
+            throw new FieldBusinessException("appointmentId", "reception.checkin.appointmentRequired");
+        }
+        // QA D149: a copay is money taken at the desk; it is validated before
+        // anything is written, and recorded below (it used to be dropped).
+        java.math.BigDecimal copay = request.getCopayAmount();
+        if (copay != null) {
+            if (copay.signum() < 0) {
+                throw new com.example.hms.exception.FieldBusinessException("copayAmount", "reception.checkin.copayNegative");
+            }
+            if (copay.stripTrailingZeros().scale() > 0) {
+                throw new com.example.hms.exception.FieldBusinessException("copayAmount", "billing.payment.wholeAmountOnly");
+            }
+            // QA D1293: a copay taken needs its method, refused before anything is written.
+            if (copay.signum() > 0 && request.getCopayMethod() == null) {
+                throw new FieldBusinessException("copayMethod", "billing.payment.methodRequired");
+            }
+            // QA D1611: refused before anything is written, as the missing method is.
+            if (copay.signum() > 0) {
+                com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(
+                    request.getCopayMethod(), "copayMethod");
+            }
         }
 
-        Appointment appointment = appointmentRepo.findById(request.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+        // QA D936: two check-ins of one appointment (double click, retry) are
+        // serialised; the second reads CHECKED_IN and is refused, so the patient
+        // is never billed two copays for one visit.
+        Appointment appointment = appointmentRepo.lockById(request.getAppointmentId()) // SELECT … FOR UPDATE
+                .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", request.getAppointmentId()));
 
         // Validate hospital scope
         if (hospitalId != null && !hospitalId.equals(appointment.getHospital().getId())) {
@@ -880,10 +1168,21 @@ public class ReceptionServiceImpl implements ReceptionService {
         // Validate appointment is in a check-in-eligible status
         AppointmentStatus currentStatus = appointment.getStatus();
         if (currentStatus != AppointmentStatus.SCHEDULED && currentStatus != AppointmentStatus.CONFIRMED) {
-            throw new IllegalStateException(
-                    "Cannot check in — appointment status is " + currentStatus
-                    + ". Only SCHEDULED or CONFIRMED appointments can be checked in.");
+            throw new BusinessException("reception.checkin.notEligible", AppointmentStatus.labelOf(currentStatus));
         }
+        // QA D630: a check-in is the patient at the desk TODAY. A 24 Oct
+        // appointment was checked in on 23 Oct and opened an encounter dated
+        // the 23rd. Another day's appointment is rescheduled, not checked in.
+        if (appointment.getAppointmentDate() != null && !appointment.getAppointmentDate().equals(now.toLocalDate())) {
+            throw new com.example.hms.exception.FieldBusinessException("appointmentId", "reception.checkin.notToday", DisplayDates.date(appointment.getAppointmentDate()));
+        }
+
+        // QA D1489: refused here, on the patient, as booking and walk-in are. It used to reach the
+        // consent call below, whose failure inside this transaction answered 500, and without consent
+        // it opened a visit on a registration the desk had deactivated.
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(appointment.getPatient());
+        com.example.hms.service.support.PatientRegistrationGuard.refuseDeactivatedRegistration(
+                registrationRepo, appointment.getPatient().getId(), appointment.getHospital().getId());
 
         // 2. Transition appointment to CHECKED_IN
         appointment.setStatus(AppointmentStatus.CHECKED_IN);
@@ -911,6 +1210,8 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         if (request.getChiefComplaint() != null && !request.getChiefComplaint().isBlank()) {
             encounter.setChiefComplaint(request.getChiefComplaint());
+            // RCPT-CLIN: the desk's own words, which triage's later complaint never replaces for it.
+            encounter.setDeskChiefComplaint(request.getChiefComplaint());
         }
         if (request.getNotes() != null && !request.getNotes().isBlank()) {
             encounter.setNotes(request.getNotes());
@@ -918,10 +1219,21 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         encounterRepo.save(encounter);
 
+        // 3a. QA D1591: the consent the patient already gave for this visit (at
+        // pre-check-in) carries onto its encounter, and is not recorded twice.
+        List<com.example.hms.model.PatientTreatmentConsent> givenConsents = consentRepo
+                .findByAppointment_IdAndStatus(appointment.getId(), com.example.hms.enums.TreatmentConsentStatus.ACTIVE);
+        for (com.example.hms.model.PatientTreatmentConsent given : givenConsents) {
+            if (given.getEncounter() == null) {
+                given.setEncounter(encounter);
+                consentRepo.save(given);
+            }
+        }
+
         // 3b. Consent-to-treat capture (P3 #21) — recorded, never gating.
         // Best effort by policy: a consent-recording failure must not roll
         // back the check-in the patient is standing at the desk for.
-        if (Boolean.TRUE.equals(request.getConsentObtained())) {
+        if (Boolean.TRUE.equals(request.getConsentObtained()) && givenConsents.isEmpty()) {
             try {
                 UUID actorUserId = userRepo.findByUsername(actorUsername)
                     .map(u -> u.getId()).orElse(null);
@@ -941,6 +1253,16 @@ public class ReceptionServiceImpl implements ReceptionService {
             }
         }
 
+        // 3c. QA D149: the copay collected at the desk becomes a paid invoice
+        // on this encounter, with its cash payment in the ledger.
+        // QA D975: in the method the desk chose, with its reference.
+        com.example.hms.model.PaymentTransaction copayPayment = null;
+        if (copay != null && copay.signum() > 0) {
+            UUID actorUserId = userRepo.findByUsername(actorUsername).map(u -> u.getId()).orElse(null);
+            copayPayment = billingInvoiceService.recordCheckInCopay(encounter, copay,
+                request.getCopayMethod(), request.getCopayReference(), actorUserId);
+        }
+
         // 4. Audit trail
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userName(actorUsername)
@@ -958,7 +1280,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 patient.getId(), appointment.getId(), encounter.getCode(), actorUsername);
 
         // 5. Build response
-        String patientName = patient.getFirstName() + " " + patient.getLastName();
+        String patientName = patient.getFullName();
         return CheckInResponseDTO.builder()
                 .appointmentId(appointment.getId())
                 .appointmentStatus(appointment.getStatus())
@@ -969,7 +1291,11 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .patientName(patientName)
                 .arrivalTimestamp(encounter.getArrivalTimestamp())
                 .chiefComplaint(encounter.getChiefComplaint())
-                .message("Patient " + patientName + " successfully checked in")
+                .copayInvoiceId(copayPayment != null && copayPayment.getInvoice() != null
+                        ? copayPayment.getInvoice().getId() : null)
+                .copayPaymentId(copayPayment != null ? copayPayment.getId() : null)
+                .message(messageSource.getMessage("reception.r7.checkedIn", new Object[] {patientName},
+                        org.springframework.context.i18n.LocaleContextHolder.getLocale()))
                 .build();
     }
 
@@ -1000,7 +1326,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .id(e.getId())
                 .hospitalId(e.getHospital().getId())
                 .patientId(p.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(mrn)
                 .departmentId(e.getDepartment().getId())
                 .departmentName(e.getDepartment().getName())
@@ -1018,6 +1344,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .offerExpiresAt(e.getOfferExpiresAt())
                 .createdAt(e.getCreatedAt())
                 .createdBy(e.getCreatedBy())
+                .closeReason(e.getCloseReason())
                 .build();
     }
 }

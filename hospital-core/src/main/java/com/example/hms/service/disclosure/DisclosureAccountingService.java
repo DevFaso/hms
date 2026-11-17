@@ -55,4 +55,17 @@ public interface DisclosureAccountingService {
      */
     Page<AccessLogEntryDTO> getEntries(UUID patientId, LocalDateTime from,
                                        LocalDateTime to, Pageable pageable);
+
+    /**
+     * QA D979: {@link #getAccounting} as the patient reads it: a repeat of the
+     * same kind, by the same person, from the same hospital, within 30 minutes
+     * shows once. The counts still add every row; the staff accounting is never
+     * folded.
+     */
+    DisclosureAccountingDTO getAccountingAsPatientSees(UUID patientId, LocalDateTime from,
+                                                       LocalDateTime to, Pageable pageable);
+
+    /** QA D979: {@link #getEntries} as the patient reads it (repeats folded). */
+    Page<AccessLogEntryDTO> getEntriesAsPatientSees(UUID patientId, LocalDateTime from,
+                                                    LocalDateTime to, Pageable pageable);
 }

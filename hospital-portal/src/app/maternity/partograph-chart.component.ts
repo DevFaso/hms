@@ -90,10 +90,13 @@ interface ChartPoint {
         >
           {{ 'LABOR.ALERT_LINE' | translate }}
         </text>
+        <!-- QA D811: drawn to the RIGHT of the action line's top end. Anchored
+             at its end and below it, the label ran back across the line it
+             names (the line climbs 1 cm/h to the left of that point). -->
         <text
-          [attr.x]="actionLine.x2 - 4"
-          [attr.y]="actionLine.y2 + 12"
-          text-anchor="end"
+          [attr.x]="actionLabel.x"
+          [attr.y]="actionLabel.y"
+          text-anchor="start"
           class="line-label action-label"
         >
           {{ 'LABOR.ACTION_LINE' | translate }}
@@ -262,6 +265,12 @@ export class PartographChartComponent {
     y1: this.yFor(4),
     x2: this.xFor(10),
     y2: this.yFor(10),
+  };
+
+  /** QA D811: the action line's label sits right of its top end, clear of the line. */
+  readonly actionLabel = {
+    x: this.actionLine.x2 + 4,
+    y: this.actionLine.y2 + 3,
   };
 
   readonly dilationPointsAttr = computed<ChartPoint[]>(() =>

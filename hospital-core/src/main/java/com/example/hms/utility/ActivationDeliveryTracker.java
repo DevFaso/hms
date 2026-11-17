@@ -4,6 +4,7 @@ import com.example.hms.payload.dto.NotificationDeliveryStatusDTO;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 /**
  * Collects activation-notification delivery outcomes across the layers of a
@@ -28,6 +29,10 @@ public final class ActivationDeliveryTracker {
     private static final ThreadLocal<List<NotificationDeliveryStatusDTO>> COLLECTED =
         new ThreadLocal<>();
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(ActivationDeliveryTracker.class);
+    private static final String DETAIL_SEND_FAILED = "send failed — transport error in server logs";
+    private static final String DETAIL_NOT_CONFIGURED = "mail transport not configured on this deployment";
+
     private ActivationDeliveryTracker() {
     }
 
@@ -49,6 +54,46 @@ public final class ActivationDeliveryTracker {
         List<NotificationDeliveryStatusDTO> list = COLLECTED.get();
         COLLECTED.remove();
         return list != null ? List.copyOf(list) : List.of();
+    }
+
+    /**
+     * Queue one email and report its outcome: QUEUED (the {@code EmailService}
+     * mails go to the outbox, never to SMTP on the request; see
+     * {@code EmailService#sendHtml}), or, when the send throws, FAILED on a
+     * deployment with a mail transport and NOT_CONFIGURED on one without. The
+     * address is reported masked, and the details are fixed text: a transport
+     * exception's message can embed the raw address, so only its class is
+     * logged.
+     *
+     * @param transportConfigured {@code EmailService::deliversRealEmail}
+     * @return true when the send did not throw
+     */
+    public static boolean sendEmailAndReport(String purpose, String to, Runnable send,
+                                             BooleanSupplier transportConfigured) {
+        String outcome;
+        String detail = null;
+        boolean sent;
+        try {
+            send.run();
+            outcome = NotificationDeliveryStatusDTO.OUTCOME_QUEUED;
+            sent = true;
+        } catch (RuntimeException ex) {
+            LOG.warn("⚠️ {} email not sent: {}", purpose, ex.getClass().getSimpleName());
+            boolean configured = transportConfigured.getAsBoolean();
+            outcome = configured
+                ? NotificationDeliveryStatusDTO.OUTCOME_FAILED
+                : NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED;
+            detail = configured ? DETAIL_SEND_FAILED : DETAIL_NOT_CONFIGURED;
+            sent = false;
+        }
+        report(NotificationDeliveryStatusDTO.builder()
+            .channel(NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
+            .purpose(purpose)
+            .outcome(outcome)
+            .target(maskEmail(to))
+            .detail(detail)
+            .build());
+        return sent;
     }
 
     /** {@code jdoe@hospital.com} → {@code j***@hospital.com}. */

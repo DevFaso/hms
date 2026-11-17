@@ -1,5 +1,6 @@
 package com.example.hms.fhir.bulk;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.NotImplementedOperationException;
@@ -50,9 +51,11 @@ import java.util.UUID;
  * {@code NOT_FOUND} (cross-tenant rejection is invisible).
  *
  * <p>Authorisation: a completed export is a bulk PHI extract, so kickoff
- * requires SUPER_ADMIN or HOSPITAL_ADMIN — checked here because the
- * HAPI servlet space ({@code /fhir/**}) carries no role gate of its
- * own. The status controller mirrors the same gate.
+ * requires SUPER_ADMIN or HOSPITAL_ADMIN. {@code SecurityConfig} admits the
+ * same pair on {@code POST /fhir/$export} and {@code /fhir/Patient/$export}
+ * ({@code FHIR_BULK_EXPORT_PATHS}); the check stays here as well because the
+ * service is the gate that knows it is an export. The status controller
+ * mirrors the same gate.
  *
  * <p>Feature-flagged via
  * {@link FhirOperationsProperties.BulkExport#isEnabled()}; flag-off now
@@ -128,7 +131,7 @@ public class FhirBulkExportService {
         validateOutputFormat(outputFormat);
         List<String> normalizedTypes = validateTypes(types);
 
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
             // The foundation pass created a null-tenant job here — a row
             // the deny-on-null status lookup could never return. Refusing
@@ -161,7 +164,7 @@ public class FhirBulkExportService {
      */
     @Transactional(readOnly = true)
     public Optional<FhirBulkExportJob> getJob(UUID jobId) {
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) return Optional.empty();
         return jobRepository.findByIdAndHospitalId(jobId, hospitalId);
     }
@@ -212,13 +215,11 @@ public class FhirBulkExportService {
     public Path resolveOutputFile(FhirBulkExportJob job, String fileName) {
         FhirBulkExportFile file = fileRepository
             .findByJob_IdAndFileName(job.getId(), fileName)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "No output file '" + fileName + "' on bulk-export job " + job.getId()));
+            .orElseThrow(() -> new ResourceNotFoundException("fhir.bulkExport.file.notFound", fileName, job.getId()));
         Path jobDir = storageRoot.resolve(job.getId().toString()).normalize();
         Path path = jobDir.resolve(file.getFileName()).normalize();
         if (!path.startsWith(jobDir) || !Files.exists(path)) {
-            throw new ResourceNotFoundException(
-                "Output file '" + fileName + "' is no longer on disk for job " + job.getId());
+            throw new ResourceNotFoundException("fhir.bulkExport.file.gone", fileName, job.getId());
         }
         return path;
     }

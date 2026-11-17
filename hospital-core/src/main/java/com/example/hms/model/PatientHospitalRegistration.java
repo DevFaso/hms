@@ -10,12 +10,18 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
+import jakarta.persistence.PostUpdate;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.Objects;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -46,7 +52,7 @@ import java.util.UUID;
 @NoArgsConstructor @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
-@ToString(exclude = {"patient", "hospital"})
+@ToString(exclude = {"patient", "hospital", "loaded"})
 public class PatientHospitalRegistration extends BaseEntity {
 
     @NotBlank @Size(max = 50)
@@ -74,10 +80,16 @@ public class PatientHospitalRegistration extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
+    /** QA D1430 (V270): why this registration was deactivated; null while it is active. */
+    @Column(name = "deactivation_reason", length = 500)
+    private String deactivationReason;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "stay_status", nullable = false, length = 40)
+    // QA D764: a registration is not a stay. It is REGISTERED until an
+    // admission opens; the admission service moves it to ADMITTED and back.
     @Builder.Default
-    private PatientStayStatus stayStatus = PatientStayStatus.ADMITTED;
+    private PatientStayStatus stayStatus = PatientStayStatus.REGISTERED;
 
     @Column(name = "stay_status_updated_at")
     private LocalDateTime stayStatusUpdatedAt;
@@ -120,32 +132,98 @@ public class PatientHospitalRegistration extends BaseEntity {
         setStayStatus(PatientStayStatus.ADMITTED);
     }
 
+    /**
+     * Ends the stay, never the registration. QA D1014: this used to clear
+     * {@code active} too, and every patient list, search and picker reads
+     * active registrations only, so an approved discharge made the patient
+     * vanish and impossible to readmit, book or see again (V244 restores the
+     * rows it ended). A discharged patient stays registered here.
+     */
     public void markDischarged() {
         this.readyByStaffId = null;
         this.readyForDischargeNote = null;
         setStayStatus(PatientStayStatus.DISCHARGED);
-        this.active = false;
     }
 
     public PatientHospitalRegistration(Patient patient, Hospital hospital) {
         this.patient = patient;
         this.hospital = hospital;
         this.active  = true;
-        this.stayStatus = PatientStayStatus.ADMITTED;
+        this.stayStatus = PatientStayStatus.REGISTERED;
         this.stayStatusUpdatedAt = LocalDateTime.now();
     }
 
     @PrePersist
+    private void normalizeOnPersist() {
+        requireClinicalHospital();
+        normalize();
+    }
+
+    /**
+     * The hospital and the active flag this row was last loaded or written
+     * with. Only the entity's own lifecycle callbacks set it: a final field
+     * with an initializer is outside the builder and the all-args
+     * constructor, and it has no getter, no setter and no toString.
+     */
+    @Transient
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private final LoadedState loaded = new LoadedState();
+
+    /** What the row held when it was last loaded or written. */
+    private static final class LoadedState {
+        private UUID hospitalId;
+        private boolean active;
+    }
+
+    @PostLoad
+    @PostPersist
+    @PostUpdate
+    private void rememberLoadedHospital() {
+        loaded.hospitalId = hospital == null ? null : hospital.getId();
+        loaded.active = active;
+    }
+
+    /**
+     * An update may deactivate or discharge a registration that a provider
+     * facility should never have held (a legacy or planted row, left where it
+     * was loaded), but it may not move any row, active or not, to a provider,
+     * nor re-activate one there. The facility type is read only when the
+     * hospital id changed or the row is re-activated: an ordinary update
+     * compares ids (a proxy's id needs no load) and never loads the hospital.
+     */
     @PreUpdate
+    private void normalizeOnUpdate() {
+        UUID hospitalId = hospital == null ? null : hospital.getId();
+        boolean moved = !Objects.equals(hospitalId, loaded.hospitalId);
+        boolean reactivated = active && !loaded.active;
+        if (moved || reactivated) {
+            requireClinicalHospital();
+        }
+        normalize();
+    }
+
     private void normalize() {
         ensureTemporalDefaults();
         ensurePatientFullName();
         normalizeTextualFields();
     }
 
+    /**
+     * A patient registers at a hospital only. A registration is the treatment
+     * relationship (E9 #58), so one at a pharmacy or laboratory would open the
+     * chart to it (provider plan §3.3, AC-10). The backstop; the registration
+     * service refuses a provider first, with the not-found answer.
+     */
+    private void requireClinicalHospital() {
+        if (hospital != null && hospital.isProvider()) {
+            throw new IllegalStateException("registration.hospital.notClinical");
+        }
+    }
+
     private void ensureTemporalDefaults() {
         if (registrationDate == null) registrationDate = LocalDate.now();
-        if (stayStatus == null) stayStatus = PatientStayStatus.ADMITTED;
+        if (stayStatus == null) stayStatus = PatientStayStatus.REGISTERED;
         if (stayStatusUpdatedAt == null) stayStatusUpdatedAt = LocalDateTime.now();
     }
 
@@ -153,10 +231,12 @@ public class PatientHospitalRegistration extends BaseEntity {
         if (patientFullName != null || patient == null) {
             return;
         }
-        String f = safeTrim(patient.getFirstName());
-        String m = safeTrim(patient.getMiddleName());
-        String l = safeTrim(patient.getLastName());
-        String full = ((f == null ? "" : f) + (m == null ? "" : " " + m) + (l == null ? "" : " " + l)).trim();
+        // QA D1036: a blank part adds nothing (a blank middle name used to
+        // leave two spaces between the first and the last name).
+        String full = java.util.stream.Stream.of(patient.getFirstName(), patient.getMiddleName(), patient.getLastName())
+            .map(this::safeTrim)
+            .filter(part -> part != null && !part.isEmpty())
+            .collect(java.util.stream.Collectors.joining(" "));
         patientFullName = full.isEmpty() ? null : full;
     }
 

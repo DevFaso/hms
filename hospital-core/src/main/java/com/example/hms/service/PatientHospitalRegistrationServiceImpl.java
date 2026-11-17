@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PatientStayStatus;
 import com.example.hms.exception.PatientAlreadyRegisteredException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientHospitalRegistrationMapper;
 import com.example.hms.model.Hospital;
@@ -25,17 +26,17 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRegistrationService {
+    private static final String REGISTRATION_NOT_FOUND_KEY = "registration.notFound";
+
 
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final PatientRepository patientRepository;
@@ -43,14 +44,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     private final PatientHospitalRegistrationMapper mapper;
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditService;
-
-    private static final String MRN_PREFIX = "mrn-";
-    private static final String ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    private static final SecureRandom RANDOM = new SecureRandom();
-    private static final int MRN_CODE_LENGTH = 7;
-    private static final int MAX_MRN_GENERATION_ATTEMPTS = 10;
-    private static final String MSG_REG_NOT_FOUND_ID = "Registration not found with ID: ";
-    private static final String MSG_REG_NOT_FOUND_MRN = "Registration not found with mrn: ";
+    private final PatientMrnGenerator mrnGenerator;
 
     // -------------------- CREATE --------------------
     @Override
@@ -62,16 +56,31 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         if (!isBlank(dto.getPatientUsername())) {
             String identifier = dto.getPatientUsername().trim();
             patient = patientRepository.findByUsernameOrEmail(identifier)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found with username/email: " + identifier));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", identifier));
         } else {
-            patient = patientRepository.findById(dto.getPatientId())
+            // QA D756: "Link to this hospital" sends the id of a patient who is
+            // registered ELSEWHERE - the tenant-scoped findById cannot see them
+            // by definition, so the link always answered 404. The lookup is
+            // unscoped, like the username path above; the write is authorised
+            // below: the caller may only register at their own acting hospital,
+            // and the link is audited.
+            // QA D1258: no patient named at all is a 400 naming the field.
+            if (dto.getPatientId() == null) {
+                throw new FieldBusinessException("patientId", "registration.patient.required");
+            }
+            patient = patientRepository.findByIdUnscoped(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", dto.getPatientId()));
         }
 
+        // A patient registers at a hospital only; a provider facility answers as
+        // an unknown one (provider plan AC-10, AC-11; the entity refuses it too).
+        if (isBlank(dto.getHospitalName()) && dto.getHospitalId() == null) {
+            throw new FieldBusinessException("hospitalId", "registration.hospital.required");
+        }
         final Hospital hospital = !isBlank(dto.getHospitalName())
-            ? hospitalRepository.findByName(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with name: " + dto.getHospitalName()))
-            : hospitalRepository.findById(dto.getHospitalId())
+            ? hospitalRepository.findClinicalByName(dto.getHospitalName())
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()))
+            : hospitalRepository.findClinicalById(dto.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
         log.info("Hospital retrieved: name={}", hospital.getName());
@@ -86,9 +95,9 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
 
         // Prevent duplicate registration for same hospital
         if (registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
+            // QA D771: in the request's language, and without the two UUIDs.
             throw new PatientAlreadyRegisteredException(
-                String.format("Patient '%s' is already registered to Hospital '%s'.", patient.getId(), hospital.getId())
-            );
+                com.example.hms.utility.MessageUtil.resolveOrRaw("registration.alreadyRegistered"));
         }
 
         // Minor guard
@@ -97,11 +106,12 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             && (isBlank(patient.getEmergencyContactName())
                 || isBlank(patient.getEmergencyContactPhone())
                 || isBlank(patient.getEmergencyContactRelationship()))) {
-            throw new IllegalArgumentException("Minor patients must have a guardian's contact information.");
+            throw new IllegalArgumentException("registration.minor.guardianRequired");
         }
 
-        // Generate mrn server-side (immutable)
-        String mrn = generateUniquemrn(hospital.getId());
+        // Generate mrn server-side (immutable) - QA D763: the same hospital
+        // format (CNK0123) as a registration opened by patient creation.
+        String mrn = mrnGenerator.generate(hospital);
 
         PatientHospitalRegistration registration = mapper.toEntity(dto, patient, hospital);
         registration.setMrn(mrn);
@@ -110,11 +120,49 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
 
         PatientHospitalRegistration saved = registrationRepository.save(registration);
 
-        log.info("✅ Registered Patient '{}' to Hospital '{}' with mrn '{}'", patient.getId(), hospital.getId(), mrn);
+        log.info("Registered patient {} at hospital {}", patient.getId(), hospital.getId());
 
         emitRegistrationAudit(saved, patient, hospital);
 
         return mapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D1430: deactivating takes a reason, refused on its field, and the reason is shown on the
+     * row; reactivating clears it. A row that stays inactive keeps the reason it was given.
+     */
+    private void applyActive(PatientHospitalRegistration registration, PatientHospitalRegistrationRequestDTO dto) {
+        if (registration.isActive() && !dto.isActive()) {
+            String reason = dto.getDeactivationReason();
+            if (reason == null || reason.isBlank()) {
+                throw new com.example.hms.exception.FieldBusinessException("deactivationReason",
+                    "registration.deactivation.reasonRequired");
+            }
+            registration.setDeactivationReason(reason.trim());
+        } else if (dto.isActive()) {
+            registration.setDeactivationReason(null);
+        }
+        registration.setActive(dto.isActive());
+    }
+
+    /** QA D1430: ending a patient's registration is on the audit trail; the reason stays on the row. */
+    private void auditIfDeactivated(PatientHospitalRegistration saved, boolean wasActive) {
+        if (!wasActive || saved.isActive()) {
+            return;
+        }
+        try {
+            auditService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.PATIENT_UPDATE)
+                .status(AuditStatus.SUCCESS)
+                .entityType("PatientHospitalRegistration")
+                .resourceId(saved.getId() != null ? saved.getId().toString() : null)
+                .userName(HospitalContextHolder.getContextOrEmpty().getPrincipalUsername())
+                .hospitalName(saved.getHospital() != null ? saved.getHospital().getName() : null)
+                .eventDescription("Patient registration deactivated")
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to emit audit for registration {}: {}", saved.getId(), ex.getMessage());
+        }
     }
 
     /** Linking a patient grants this hospital ongoing chart access — auditable. */
@@ -128,7 +176,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
                 .userName(HospitalContextHolder.getContextOrEmpty().getPrincipalUsername())
                 .hospitalName(hospital.getName())
                 .resourceName(patient.getId() != null ? patient.getId().toString() : null)
-                .eventDescription("Patient linked to hospital '" + hospital.getName() + "' (mrn " + saved.getMrn() + ")")
+                .eventDescription("Patient linked to hospital '" + hospital.getName() + "'")
                 .build());
         } catch (RuntimeException ex) {
             // Audit failure must never break the registration flow
@@ -157,12 +205,12 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     @Transactional(readOnly = true)
     public PatientHospitalRegistrationResponseDTO getById(UUID id) {
         PatientHospitalRegistration reg = registrationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id));
+            .orElseThrow(() -> new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id));
         // ── Tenant isolation: cross-hospital rows read as 404, not 403 ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null
             && (reg.getHospital() == null || !activeHospitalId.equals(reg.getHospital().getId()))) {
-            throw new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id);
+            throw new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id);
         }
         return mapper.toResponseDTO(reg);
     }
@@ -203,6 +251,18 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         int fromIndex = Math.min(page * size, registrations.size());
         int toIndex = Math.min(fromIndex + size, registrations.size());
         return registrations.subList(fromIndex, toIndex).stream()
+            .map(mapper::toResponseDTO)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByPatientAndHospital(
+        UUID patientId, UUID hospitalId, Boolean active
+    ) {
+        return scopeToActiveHospital(registrationRepository.findByPatientId(patientId)).stream()
+            .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
+            .filter(r -> active == null || r.isActive() == active)
             .map(mapper::toResponseDTO)
             .toList();
     }
@@ -270,10 +330,13 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         log.debug("Patching registration mrn: {}", mrn);
 
         PatientHospitalRegistration registration = registrationRepository.findByMrnAndHospitalName(mrn, dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_MRN + mrn));
+            .orElseThrow(() -> new ResourceNotFoundException("registration.notFoundByMrn", mrn));
 
+        boolean wasActive = registration.isActive();
         applyEditableFields(registration, dto, true);
+        requireClinicalOnReactivation(registration, wasActive);
         PatientHospitalRegistration updated = registrationRepository.save(registration);
+        auditIfDeactivated(updated, wasActive);
         log.info("✅ Patched registration mrn: {}", mrn);
         return mapper.toResponseDTO(updated);
     }
@@ -283,7 +346,9 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     public void deregisterPatient(UUID id) {
         log.debug("Deregister by registration UUID={}", id);
         PatientHospitalRegistration registration = registrationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id));
+            .orElseThrow(() -> new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(registration.getHospital(), REGISTRATION_NOT_FOUND_KEY, id);
         registrationRepository.delete(registration);
         log.info("🗑️ Deregistered Patient Registration ID '{}'", id);
     }
@@ -294,35 +359,46 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     public PatientHospitalRegistrationResponseDTO updateRegistration(UUID id, PatientHospitalRegistrationRequestDTO dto) {
         log.debug("Update by registration UUID={}", id);
         PatientHospitalRegistration registration = registrationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id));
+            .orElseThrow(() -> new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(registration.getHospital(), REGISTRATION_NOT_FOUND_KEY, id);
+        boolean wasActive = registration.isActive();
         applyEditableFields(registration, dto, false);
-        return mapper.toResponseDTO(registrationRepository.save(registration));
+        requireClinicalOnReactivation(registration, wasActive);
+        PatientHospitalRegistration saved = registrationRepository.save(registration);
+        auditIfDeactivated(saved, wasActive);
+        return mapper.toResponseDTO(saved);
     }
 
     // -------------------- helpers --------------------
+
+    /**
+     * A registration re-activated at a pharmacy or laboratory (legacy, or
+     * planted) is refused here with registerPatient's own answer, the
+     * hospital not found, before the entity's guard fails the commit with a
+     * 500. The update paths cannot move a registration to another facility;
+     * the entity guard stays the backstop for any that could.
+     */
+    private void requireClinicalOnReactivation(PatientHospitalRegistration registration, boolean wasActive) {
+        Hospital hospital = registration.getHospital();
+        if (wasActive || !registration.isActive() || hospital == null || hospital.getId() == null) {
+            return;
+        }
+        if (hospitalRepository.findClinicalById(hospital.getId()).isEmpty()) {
+            throw new ResourceNotFoundException("hospital.notFound", hospital.getId());
+        }
+    }
     private void validateRequest(PatientHospitalRegistrationRequestDTO dto) {
         boolean hasUserRef = !isBlank(dto.getPatientUsername()) || dto.getPatientId() != null;
         boolean hasHospitalRef = !isBlank(dto.getHospitalName()) || dto.getHospitalId() != null;
-        if (!hasUserRef) throw new IllegalArgumentException("Patient username or patientId is required.");
-        if (!hasHospitalRef) throw new IllegalArgumentException("Hospital name or hospitalId is required.");
-    }
-
-    /**
-     * Generates a unique mrn for the given hospital. Enforces uniqueness with repository checks.
-     */
-    private String generateUniquemrn(UUID hospitalId) {
-        for (int attempt = 1; attempt <= MAX_MRN_GENERATION_ATTEMPTS; attempt++) {
-            String generatedmrn = MRN_PREFIX + RANDOM.ints(MRN_CODE_LENGTH, 0, ALPHANUMERIC.length())
-                .mapToObj(ALPHANUMERIC::charAt)
-                .map(Object::toString)
-                .collect(Collectors.joining());
-
-            if (!registrationRepository.existsByMrnAndHospitalId(generatedmrn, hospitalId)) {
-                log.debug("Generated unique mrn '{}' (attempt {})", generatedmrn, attempt);
-                return generatedmrn;
-            }
-        }
-    throw new IllegalStateException("Failed to generate a unique mrn after " + MAX_MRN_GENERATION_ATTEMPTS + " attempts.");
+        // QA D1299 (round 28): an IllegalArgumentException carrying the key
+        // answered "Choisissez le patient à enregistrer." with no field, before
+        // the field-named check in applyEditableFields was ever reached. Both
+        // missing references are named in one refusal.
+        com.example.hms.exception.RequiredFields.check()
+            .require(hasUserRef, "patientId", "registration.patient.required")
+            .require(hasHospitalRef, "hospitalId", "registration.hospital.required")
+            .orThrow();
     }
 
     private boolean isBlank(String s) {
@@ -335,7 +411,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         }
 
         if (!isPatch || dto.isActive() != registration.isActive()) {
-            registration.setActive(dto.isActive());
+            applyActive(registration, dto);
         }
 
         if (!isPatch || dto.getCurrentRoom() != null) {
@@ -355,7 +431,10 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             registration.setStayStatus(status);
         }
 
-        if (!isPatch || dto.getReadyForDischargeNote() != null) {
+        // RCPT-CLIN: the desk neither reads this note nor sees its box, and its PUT carries the
+        // whole registration back: it kept emptying what an administrator had written.
+        boolean deskCaller = com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly();
+        if (!deskCaller && (!isPatch || dto.getReadyForDischargeNote() != null)) {
             registration.setReadyForDischargeNote(trim(dto.getReadyForDischargeNote()));
         }
     }

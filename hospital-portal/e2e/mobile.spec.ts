@@ -45,6 +45,29 @@ test.describe('Mobile Responsive', () => {
     await expect(page.locator('main .page-title')).toBeVisible({ timeout: 10_000 });
   });
 
+  test.describe('at 375px (D812)', () => {
+    test.use({ viewport: { width: 375, height: 812 } });
+
+    // Measures the HEADER, not only the page: the page did not overflow
+    // while the topbar was 736px wide and the profile menu sat off-screen.
+    test('the topbar fits and the profile menu is on screen', async ({ page }) => {
+      await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+      const topbar = page.locator('header.topbar');
+      await expect(topbar).toBeVisible({ timeout: 15_000 });
+      const widths = await topbar.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
+      expect(widths.sw).toBeLessThanOrEqual(widths.cw);
+      const profile = await page.locator('.profile-btn').boundingBox();
+      expect(profile).not.toBeNull();
+      expect(profile!.x + profile!.width).toBeLessThanOrEqual(375);
+    });
+
+    test('the drawer offers sign-out', async ({ page }) => {
+      await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+      await page.locator('.mobile-toggle').click();
+      await expect(page.getByTestId('sidebar-logout')).toBeVisible();
+    });
+  });
+
   test('topbar is visible at mobile viewport', async ({ page }) => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('header.topbar')).toBeVisible();

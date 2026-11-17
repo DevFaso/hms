@@ -13,10 +13,58 @@
 | Method | Path                              | Auth          | Purpose |
 | ------ | --------------------------------- | ------------- | ------- |
 | `GET`  | `/api/cds-services`               | **public**    | Service catalogue (per CDS Hooks spec). |
-| `POST` | `/api/cds-services/{serviceId}`   | Bearer JWT    | Invoke a service for a hook context. |
+| `POST` | `/api/cds-services/{serviceId}`   | Bearer JWT, clinical roles | Invoke a service for a hook context. |
 
 The discovery endpoint is intentionally unauthenticated — clients need to
-know what services exist before deciding whether to trigger them.
+know what services exist before deciding whether to trigger them. It carries
+no patient data.
+
+Invocation is admitted to `DOCTOR`, `NURSE`, `MIDWIFE`, `PHARMACIST` and
+`SUPER_ADMIN` (the same list that may acknowledge a card) and refused with
+`403` to everyone else, patients included. The patient in `context.patientId`
+must then be readable at the caller's hospital under the chart rule
+(`PatientChartAccess.require`); a patient at another hospital, a restricted
+chart, or an unresolved hospital scope answers `200 {"cards":[]}` — exactly
+what an unknown patient answers.
+
+## Which hospital's records a card is built from
+
+The chart gate above decides **whether** the caller may run a service on this
+patient. It does not decide **which** records the card reads, and that is on
+purpose: the services read the patient's records where the patient is
+anchored, not only the rows of the hospital the caller acts at.
+
+| Service | Records read |
+| ------- | ------------ |
+| `hms-patient-view` | allergies and problems from **every** hospital (`findByPatient_Id`) |
+| `hms-medication-allergy-check` | allergies from **every** hospital; its drug-drug check reads active prescriptions at the patient's **home hospital** |
+| `hms-bpa-protocols`, `hms-order-select-rules`, `hms-order-sign-rules`, `hms-medication-prescribe-rules` | vitals, active problems, active prescriptions and the formulary of the patient's **home hospital** (`Patient.hospitalId`, the hospital that first registered them) |
+
+So for a patient registered at hospital A and seen at hospital B, a clinician
+at B gets BPA and drug-safety cards derived from A's prescriptions, vitals and
+problems (and allergies from both), while the chart tabs at B show B's rows.
+**This is kept on purpose, as a drug-safety behaviour.** An interaction, a
+duplicate order or an allergy recorded at the patient's home hospital is
+exactly what the prescriber at B must be warned about, and narrowing the cards
+to B's rows would silently drop those warnings. A card carries the advisory
+(its summary and the conflicting drug or allergen), not the other hospital's
+chart.
+
+Two things bound it, and both are intended:
+
+- Only a clinician who may open this patient's chart at their own hospital
+  reaches a service at all (the gate above); an unknown patient, a patient at
+  another hospital or a restricted chart gets `200 {"cards":[]}`.
+- Roles that are not clinical do not see the panel: the portal renders
+  `<app-bpa-panel>` only for `CDS_CLINICIAN_ROLES`
+  (`hospital-portal/src/app/patients/patient-chart/chart-access.ts`), which
+  mirrors the backend's clinician list, so a receptionist, an administrator or
+  a laboratory role opens the chart without the panel and without a request
+  to `/api/cds-services`.
+
+A new service whose card would show another hospital's **record** rather than
+a safety advisory must not follow this rule: it reads the caller's hospital
+(or the readable set, as the chart tabs do).
 
 ## Services in P0.3
 

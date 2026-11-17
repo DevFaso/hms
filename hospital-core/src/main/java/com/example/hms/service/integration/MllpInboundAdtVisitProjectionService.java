@@ -43,6 +43,14 @@ public interface MllpInboundAdtVisitProjectionService {
     enum VisitProjectionResult {
         /** Sync is disabled or no PV1-19 was present — no-op by design. */
         SKIPPED,
+        /**
+         * PV1-19 is wider than {@code external_visit_number}: refused, never
+         * truncated (a cut visit number could reconcile someone else's
+         * visit). The demographic update still lands, so the message is still
+         * AA; the caller records a dead letter so the dropped visit step is
+         * visible instead of silent.
+         */
+        SKIPPED_OVER_WIDTH,
         /** PV1-19 matched an existing Admission; its control id was stamped. */
         ADMISSION_RECONCILED,
         /** PV1-19 matched an existing Encounter; its control id was stamped. */

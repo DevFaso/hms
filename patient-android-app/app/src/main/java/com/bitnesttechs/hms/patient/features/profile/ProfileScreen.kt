@@ -33,8 +33,8 @@ import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
 import com.bitnesttechs.hms.patient.core.models.PatientProfileDto
 import com.bitnesttechs.hms.patient.core.models.PatientProfileUpdateDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,7 +74,17 @@ fun ProfileScreen(
         saveResult?.let { snackbar.showSnackbar(it); viewModel.clearSaveResult() }
     }
 
-    LaunchedEffect(loggedOut) { if (loggedOut) onLogout() }
+    // An SSO sign-out also ends the Keycloak browser session (end-session
+    // endpoint), then leaves whatever it returned with; a password one leaves at once.
+    val keycloakEndSession by viewModel.keycloakEndSession.collectAsState()
+    val endSessionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { onLogout() }
+    LaunchedEffect(loggedOut) {
+        if (!loggedOut) return@LaunchedEffect
+        val endSession = keycloakEndSession
+        if (endSession == null || runCatching { endSessionLauncher.launch(endSession) }.isFailure) onLogout()
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -83,7 +93,7 @@ fun ProfileScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.profile)) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue, titleContentColor = Color.White
+                    containerColor = BrandPrimary, titleContentColor = Color.White
                 ),
                 actions = {
                     IconButton(onClick = {
@@ -115,7 +125,7 @@ fun ProfileScreen(
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -155,7 +165,7 @@ fun ProfileScreen(
                                         .data(fullUrl)
                                         .crossfade(true)
                                         .build(),
-                                    contentDescription = "Profile photo",
+                                    contentDescription = stringResource(R.string.profile_photo),
                                     modifier = Modifier
                                         .size(96.dp)
                                         .clip(CircleShape)
@@ -165,7 +175,7 @@ fun ProfileScreen(
                             } else {
                                 Surface(
                                     shape = CircleShape,
-                                    color = BrandBlue,
+                                    color = BrandPrimary,
                                     modifier = Modifier
                                         .size(96.dp)
                                         .clickable { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
@@ -183,13 +193,13 @@ fun ProfileScreen(
                             // Camera badge
                             Surface(
                                 shape = CircleShape,
-                                color = BrandBlue,
+                                color = BrandPrimary,
                                 shadowElevation = 4.dp,
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        Icons.Default.CameraAlt, "Change photo",
+                                        Icons.Default.CameraAlt, stringResource(R.string.change_photo),
                                         tint = Color.White,
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -207,12 +217,12 @@ fun ProfileScreen(
                                 Spacer(Modifier.height(4.dp))
                                 Surface(
                                     shape = RoundedCornerShape(20.dp),
-                                    color = BrandLightBlue
+                                    color = BrandSoft
                                 ) {
                                     Text(
                                         stringResource(R.string.mrn_prefix, it),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = BrandBlue,
+                                        color = BrandPrimary,
                                         fontWeight = FontWeight.Medium,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                                     )
@@ -306,11 +316,11 @@ fun ProfileScreen(
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
-                                    color = BrandLightBlue,
+                                    color = BrandSoft,
                                     modifier = Modifier.size(36.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.LocalPharmacy, null, tint = BrandBlue, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Default.LocalPharmacy, null, tint = BrandPrimary, modifier = Modifier.size(18.dp))
                                     }
                                 }
                                 Column(modifier = Modifier.weight(1f)) {
@@ -342,11 +352,11 @@ fun ProfileScreen(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = BrandLightBlue,
+                            color = BrandSoft,
                             modifier = Modifier.size(36.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Language, null, tint = BrandBlue, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Language, null, tint = BrandPrimary, modifier = Modifier.size(18.dp))
                             }
                         }
                         Column(modifier = Modifier.weight(1f)) {
@@ -356,6 +366,39 @@ fun ProfileScreen(
                                 fontWeight = FontWeight.Medium)
                         }
                         Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            // Password (an SSO account's password lives in Keycloak, not here)
+            if (viewModel.canChangePassword) {
+                item { ProfileSection(stringResource(R.string.password_label)) }
+                item {
+                    ProfileCard {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { navController?.navigate("change_password") }
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = BrandSoft,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Lock, null, tint = BrandPrimary, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                            Text(
+                                stringResource(R.string.change_password_title),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
@@ -411,6 +454,7 @@ fun ProfileScreen(
                                 .fillMaxWidth()
                                 .clickable {
                                     LocaleHelper.setLanguage(context, langCode)
+                                    viewModel.onLanguageChanged()
                                     showLanguageDialog = false
                                     // Recreate activity to apply locale
                                     (context as? android.app.Activity)?.recreate()
@@ -447,7 +491,7 @@ private fun ProfileSection(title: String) {
         title,
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold,
-        color = BrandBlue,
+        color = BrandPrimary,
         modifier = Modifier.padding(start = 4.dp)
     )
 }
@@ -478,11 +522,11 @@ private fun ProfileRow(icon: ImageVector, label: String, value: String) {
     ) {
         Surface(
             shape = RoundedCornerShape(10.dp),
-            color = BrandLightBlue,
+            color = BrandSoft,
             modifier = Modifier.size(36.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(18.dp))
+                Icon(icon, null, tint = BrandPrimary, modifier = Modifier.size(18.dp))
             }
         }
         Column(modifier = Modifier.weight(1f)) {
@@ -509,11 +553,11 @@ private fun EditableProfileRow(icon: ImageVector, label: String, value: String, 
     ) {
         Surface(
             shape = RoundedCornerShape(10.dp),
-            color = BrandLightBlue,
+            color = BrandSoft,
             modifier = Modifier.size(36.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(18.dp))
+                Icon(icon, null, tint = BrandPrimary, modifier = Modifier.size(18.dp))
             }
         }
         OutlinedTextField(
@@ -527,9 +571,9 @@ private fun EditableProfileRow(icon: ImageVector, label: String, value: String, 
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = Color(0xFF1C1B1F),
                 unfocusedTextColor = Color(0xFF1C1B1F),
-                focusedLabelColor = BrandBlue,
+                focusedLabelColor = BrandPrimary,
                 unfocusedLabelColor = Color(0xFF757575),
-                cursorColor = BrandBlue
+                cursorColor = BrandPrimary
             )
         )
     }

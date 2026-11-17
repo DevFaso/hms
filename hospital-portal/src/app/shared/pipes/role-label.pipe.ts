@@ -17,7 +17,7 @@ import { bareRole } from '../../core/role-token';
  *
  * This exists because the labels were being produced three other ways, all of
  * them English whatever the locale: `AuthService.formatRole` (deleted with
- * this pipe), `formatJobTitle` in the staff screens, and a bare
+ * this pipe), `formatJobTitle` in the staff screens (deleted with the jobTitle tranche), and a bare
  * `{{ role.name }}` in every role picker — which is what a French admin
  * registering a user actually saw:
  *

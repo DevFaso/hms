@@ -1,20 +1,33 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { of, Subject, throwError } from 'rxjs';
 
+import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { LabComponent } from './lab';
-import { LabService, LabOrderResponse, PerformingLab } from '../services/lab.service';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
+import {
+  LabService,
+  LabOrderResponse,
+  LabSpecimen,
+  LabTestDefinition,
+  PerformingLab,
+} from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { PatientService } from '../services/patient.service';
+import { PatientService, PatientResponse } from '../services/patient.service';
 import { ProfileService } from '../services/profile.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { PrintLabelService } from '../services/print-label.service';
-import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
+import { installFocusRescue, uninstallFocusRescue } from '../shared/a11y/focus-rescue';
 
 /**
  * Audit gap B1 on the order form and the worklist: a provider can send an
@@ -29,7 +42,8 @@ describe('LabComponent — performing laboratory', () => {
   let component: LabComponent;
   let labService: jasmine.SpyObj<LabService>;
   let auth: jasmine.SpyObj<AuthService>;
-  let scope: RoleContextStubState;
+  let scope: RoleContextStub;
+  let toast: jasmine.SpyObj<ToastService>;
 
   const labs: PerformingLab[] = [
     { id: LAB_B, name: 'Central Laboratory B', code: 'LABB' },
@@ -63,24 +77,42 @@ describe('LabComponent — performing laboratory', () => {
     };
   }
 
-  async function setup(roles: string[], orders: LabOrderResponse[], hospitalId = HOSPITAL_A) {
-    scope = { superAdmin: false, hospitalId, roles };
+  let patientService: jasmine.SpyObj<PatientService>;
+
+  async function setup(
+    roles: string[],
+    orders: LabOrderResponse[],
+    hospitalId = HOSPITAL_A,
+    query: Record<string, string> = {},
+  ) {
+    scope = roleContextStub({ superAdmin: false, hospitalId, roles });
 
     labService = jasmine.createSpyObj<LabService>('LabService', [
       'listOrders',
       'listTestDefinitions',
       'listPerformingLabs',
+      'checkDuplicates',
       'createOrder',
       'updateOrder',
       'deleteOrder',
+      'voidOrder',
       'listSpecimens',
       'createSpecimen',
       'receiveSpecimen',
+      'rejectSpecimen',
       'submitApprovalAction',
+      'getOrder',
+      'listOrderResults',
     ]);
     labService.listOrders.and.returnValue(of(orders));
+    labService.listSpecimens.and.returnValue(of([]));
+    labService.getOrder.and.callFake((id: string) =>
+      of(orders.find((o) => o.id === id) ?? order({ id })),
+    );
+    labService.listOrderResults.and.returnValue(of([]));
     labService.listTestDefinitions.and.returnValue(of([]));
     labService.listPerformingLabs.and.returnValue(of(labs));
+    labService.checkDuplicates.and.returnValue(of([]));
     labService.createOrder.and.returnValue(of(orders[0] ?? order({})));
     labService.updateOrder.and.returnValue(of(orders[0] ?? order({})));
 
@@ -91,13 +123,21 @@ describe('LabComponent — performing laboratory', () => {
     hospitalService.getMyHospitalAsResponse.and.returnValue(
       of({ id: hospitalId, name: 'Ordering Hospital A' } as unknown as HospitalResponse),
     );
-    const patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list', 'getById']);
     patientService.list.and.returnValue(of([]));
+    patientService.getById.and.returnValue(
+      of({ id: query['patientId'] ?? 'none', firstName: 'Awa', lastName: 'O' } as PatientResponse),
+    );
     const profileService = jasmine.createSpyObj<ProfileService>('ProfileService', [
       'getAssignments',
     ]);
     profileService.getAssignments.and.returnValue(of([]));
-    const toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'info',
+      'warning',
+    ]);
     const printService = jasmine.createSpyObj<PrintLabelService>('PrintLabelService', [
       'getSpecimenLabelPdf',
       'openForPrint',
@@ -120,7 +160,11 @@ describe('LabComponent — performing laboratory', () => {
         { provide: ToastService, useValue: toast },
         { provide: PrintLabelService, useValue: printService },
         { provide: AuthService, useValue: auth },
-        { provide: RoleContextService, useValue: roleContextStub(scope) },
+        { provide: RoleContextService, useValue: scope },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
       ],
     }).compileComponents();
 
@@ -128,6 +172,72 @@ describe('LabComponent — performing laboratory', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
   }
+
+  it('QA D956: /lab?new=1&patientId=… opens the order form on that patient', async () => {
+    await setup(['ROLE_DOCTOR'], [], HOSPITAL_A, { new: '1', patientId: 'pat-awa' });
+    expect(component.showModal()).toBeTrue();
+    expect(patientService.getById).toHaveBeenCalledWith('pat-awa', jasmine.anything());
+    expect(component.form.patientId).toBe('pat-awa');
+  });
+
+  it('/lab?order=<id> opens the drawer of that order once the list has loaded', async () => {
+    const linked = order({ id: 'o-linked', status: 'COMPLETED' });
+    await setup(['ROLE_DOCTOR'], [order({ id: 'o-other' }), linked], HOSPITAL_A, {
+      order: 'o-linked',
+    });
+    expect(component.selectedOrder()?.id).toBe('o-linked');
+    expect(component.filtered().some((o) => o.id === 'o-linked')).toBeTrue();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('/lab?order=<id> for an order out of scope says so and opens nothing', async () => {
+    await setup(['ROLE_DOCTOR'], [order({ id: 'o-other' })], HOSPITAL_A, { order: 'o-missing' });
+    expect(component.selectedOrder()).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('LAB.LINKED_ORDER_NOT_FOUND');
+  });
+
+  it('QA D956: a plain /lab opens no form', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    expect(component.showModal()).toBeFalse();
+  });
+
+  it('does not offer a midwife the order form the server refuses her (D106)', async () => {
+    await setup(['ROLE_MIDWIFE'], []);
+
+    expect(component.canCreateOrder()).toBeFalse();
+    expect(labService.listPerformingLabs).not.toHaveBeenCalled();
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    component.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
+  });
+
+  it('QA D1257 (round 26): an empty "Créer" names the patient with the other blank fields', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    const cmp = component;
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'en',
+      { COMMON: { MISSING_REQUIRED_FIELDS: 'Missing: {{fields}}' } },
+      true,
+    );
+    translate.use('en');
+    cmp.openCreate();
+    fixture.detectChanges();
+    const create = fixture.nativeElement.querySelector(
+      '.modal-actions .btn-primary',
+    ) as HTMLButtonElement;
+    create.click();
+    fixture.detectChanges();
+    const reason = fixture.nativeElement.querySelector('[data-testid="submit-guard-reason"]');
+    expect(reason?.textContent).toContain('PATIENTS.PATIENT_NAME');
+    expect(reason?.textContent).toContain('LAB.LAB_TEST');
+  });
 
   it('offers a provider the performing laboratories, defaulting to this hospital', async () => {
     await setup(['ROLE_DOCTOR'], []);
@@ -144,6 +254,277 @@ describe('LabComponent — performing laboratory', () => {
     expect(options).toEqual(['', LAB_B, 'lab-c']);
     expect(select.value).toBe('');
     expect(component.form.performingHospitalId).toBe('');
+  });
+
+  it('D48: offers only ACTIVE definitions to order, keeping the one an edited order names', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    const def = (
+      id: string,
+      approvalStatus: LabTestDefinition['approvalStatus'],
+      isActive = true,
+    ) => ({ id, testCode: id, testName: id, isActive, approvalStatus }) as LabTestDefinition;
+    component.labTestDefs.set([
+      def('active', 'ACTIVE'),
+      def('draft', 'DRAFT'),
+      def('approved', 'APPROVED'),
+      def('switched-off', 'ACTIVE', false),
+      def('retired', 'RETIRED'),
+    ]);
+
+    component.form.labTestDefinitionId = '';
+    expect(component.orderableTestDefs().map((d) => d.id)).toEqual(['active']);
+
+    component.form.labTestDefinitionId = 'retired';
+    expect(component.orderableTestDefs().map((d) => d.id)).toEqual(['active', 'retired']);
+  });
+
+  it('QA D177: the specimen form starts from the test definition sample type', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    labService.listSpecimens.and.returnValue(of([]));
+    component.labTestDefs.set([
+      {
+        id: 'cbc',
+        testCode: 'CBC',
+        testName: 'CBC',
+        sampleType: 'Sang total EDTA',
+      } as LabTestDefinition,
+    ]);
+
+    component.openSpecimens(order({ labTestCode: 'CBC' }));
+
+    expect(component.specimenForm.specimenType).toBe('Sang total EDTA');
+  });
+
+  it('QA D1428 class: a resulted or cancelled order offers no edit', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    const row = (status: string) => ({ status }) as unknown as LabOrderResponse;
+    for (const status of ['VERIFIED', 'COMPLETED', 'CANCELLED', 'ENTERED_IN_ERROR']) {
+      expect(component.isEditable(row(status)))
+        .withContext(status)
+        .toBeFalse();
+    }
+    expect(component.isEditable(row('ORDERED'))).toBeTrue();
+  });
+
+  it('QA D820: a voided order offers neither Receive nor Collect in its specimens modal', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    const collected = {
+      id: 'sp-1',
+      labOrderId: 'o-void',
+      accessionNumber: 'ACC-1',
+      barcodeValue: 'LAB-ACC-1',
+      specimenType: 'BLOOD',
+      collectedAt: null,
+      receivedAt: null,
+      currentLocation: null,
+      status: 'COLLECTED',
+      notes: null,
+    } as LabSpecimen;
+    labService.listSpecimens.and.returnValue(of([collected]));
+    const receiveLabel = (): HTMLElement | undefined =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.modal-body button'),
+      ).find((b) => b.textContent?.includes('LAB.RECEIVE'));
+
+    component.openSpecimens(order({ id: 'o-void', status: 'ENTERED_IN_ERROR' }));
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(component.canReceive(collected)).toBeFalse();
+    expect(receiveLabel())
+      .withContext('receive answers 400 and would queue an OML')
+      .toBeUndefined();
+    expect(host.querySelector('#specimen-type')).withContext('no collect form').toBeNull();
+    expect(host.querySelector('.modal-actions .btn-primary')).withContext('no Collect').toBeNull();
+    component.specimenForm.specimenType = 'BLOOD';
+    component.collectSpecimen();
+    expect(labService.createSpecimen).not.toHaveBeenCalled();
+
+    // The same specimen on an open order is still received, and the form shown.
+    component.closeSpecimens();
+    component.openSpecimens(order({ id: 'o-open', status: 'COLLECTED' }));
+    fixture.detectChanges();
+    expect(component.canReceive(collected)).toBeTrue();
+    expect(receiveLabel()).toBeDefined();
+    expect(host.querySelector('#specimen-type')).not.toBeNull();
+  });
+
+  it('QA D1109: an answered or cancelled order offers no Collect, and says why', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    labService.listSpecimens.and.returnValue(of([]));
+    const host = fixture.nativeElement as HTMLElement;
+
+    for (const status of ['RESULTED', 'VERIFIED', 'COMPLETED', 'CANCELLED']) {
+      component.openSpecimens(order({ id: 'o-' + status, status }));
+      fixture.detectChanges();
+      expect(component.specimensOrderAcceptsSpecimens()).withContext(status).toBeFalse();
+      expect(host.querySelector('#specimen-type'))
+        .withContext(status + ': no collect form')
+        .toBeNull();
+      expect(host.querySelector('[data-testid="specimen-order-closed"]'))
+        .withContext(status + ': the reason is shown')
+        .not.toBeNull();
+      component.closeSpecimens();
+    }
+
+    for (const status of ['ORDERED', 'PENDING', 'COLLECTED', 'RECEIVED', 'IN_PROGRESS']) {
+      component.openSpecimens(order({ id: 'o-' + status, status }));
+      fixture.detectChanges();
+      expect(component.specimensOrderAcceptsSpecimens()).withContext(status).toBeTrue();
+      expect(host.querySelector('#specimen-type')).withContext(status).not.toBeNull();
+      component.closeSpecimens();
+    }
+  });
+
+  describe('QA D963: priority and channel are labelled, and STAT stands out', () => {
+    it('offers exactly the priorities the server accepts, labelled, never the raw code', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      component.openCreate();
+      fixture.detectChanges();
+      const options = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#lab-priority option',
+        ),
+      ).filter((o) => o.value);
+      expect(options.map((o) => o.value)).toEqual(['ROUTINE', 'URGENT', 'STAT']);
+      // Labelled through the labOrderPriority domain (the English fallback
+      // here, with no locale loaded), never the wire code; ASAP is gone.
+      expect(options.find((o) => o.value === 'ROUTINE')?.textContent?.trim()).not.toBe('ROUTINE');
+      expect(options.find((o) => o.value === 'URGENT')?.textContent?.trim()).not.toBe('URGENT');
+      const channels = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#lab-orderChannel option',
+        ),
+      );
+      expect(channels.find((c) => c.value === 'PORTAL')?.textContent?.trim()).not.toBe('PORTAL');
+    });
+
+    it('badges a STAT order on the worklist and in the detail, and reads the channel', async () => {
+      const stat = order({ id: 'o-stat', priority: 'STAT' });
+      const routine = order({ id: 'o-routine', priority: 'ROUTINE' });
+      await setup(['ROLE_LAB_TECHNICIAN'], [stat, routine]);
+      const host = fixture.nativeElement as HTMLElement;
+      const statBadge = host.querySelector('[data-testid="lab-priority-o-stat"]');
+      expect(statBadge?.classList.contains('priority-stat')).toBeTrue();
+      // Lab requests: ROUTINE is the same badge on every row, neutral.
+      const routineBadge = host.querySelector('[data-testid="lab-priority-o-routine"]');
+      expect(routineBadge?.classList.contains('priority-routine')).toBeTrue();
+      expect(routineBadge?.classList.contains('priority-stat')).toBeFalse();
+
+      component.viewOrder(stat);
+      fixture.detectChanges();
+      const priority = host.querySelector('[data-testid="detail-priority"] .priority-badge');
+      expect(priority?.classList.contains('priority-stat')).toBeTrue();
+      // Sized to its text, not stretched across the field.
+      expect(priority?.classList.contains('fit-content')).toBeTrue();
+      expect(host.querySelector('.detail-panel')?.textContent).not.toContain('PORTAL');
+      // The channel is a secondary detail, not a main field.
+      expect(host.querySelector('[data-testid="detail-secondary"]')).not.toBeNull();
+    });
+  });
+
+  describe('QA D962: reject a specimen', () => {
+    const received = {
+      id: 'sp-9',
+      labOrderId: 'o-1',
+      accessionNumber: 'ACC-9',
+      barcodeValue: 'LAB-ACC-9',
+      specimenType: 'BLOOD',
+      collectedAt: null,
+      receivedAt: null,
+      currentLocation: null,
+      status: 'RECEIVED',
+      notes: null,
+    } as LabSpecimen;
+
+    it('the bench rejects a received specimen with a reason; the list reloads', async () => {
+      await setup(['ROLE_LAB_TECHNICIAN'], [order({ status: 'RECEIVED' })]);
+      labService.listSpecimens.and.returnValue(of([received]));
+      labService.rejectSpecimen.and.returnValue(
+        of({ ...received, status: 'REJECTED', rejectionReason: 'Hémolysé' }),
+      );
+      component.openSpecimens(order({ status: 'RECEIVED' }));
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+
+      host.querySelector<HTMLButtonElement>('[data-testid="reject-specimen-sp-9"]')!.click();
+      fixture.detectChanges();
+      const confirm = host.querySelector<HTMLButtonElement>('[data-testid="lab-reject-confirm"]')!;
+      expect(isSubmitBlocked(confirm)).withContext('a reason is mandatory').toBeTrue();
+      const reason = host.querySelector<HTMLTextAreaElement>('[data-testid="lab-reject-reason"]')!;
+      reason.value = '  Hémolysé ';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      confirm.click();
+
+      expect(labService.rejectSpecimen).toHaveBeenCalledWith('sp-9', 'Hémolysé');
+      expect(labService.listOrders.calls.count()).toBeGreaterThan(1);
+      expect(component.rejectingSpecimen()).toBeNull();
+    });
+
+    it('is not offered on an analysed or already rejected specimen, nor to the ordering doctor', async () => {
+      await setup(['ROLE_LAB_TECHNICIAN'], []);
+      component.openSpecimens(order({ status: 'RECEIVED' }));
+      expect(component.canReject(received)).toBeTrue();
+      expect(component.canReject({ ...received, status: 'PROCESSING' })).toBeFalse();
+      expect(component.canReject({ ...received, status: 'REJECTED' })).toBeFalse();
+      // Review of #975: once the order has a result the server refuses the rejection.
+      for (const status of ['RESULTED', 'VERIFIED', 'COMPLETED', 'ENTERED_IN_ERROR', 'CANCELLED']) {
+        component.openSpecimens(order({ status }));
+        expect(component.canReject(received)).withContext(status).toBeFalse();
+      }
+      TestBed.resetTestingModule();
+      await setup(['ROLE_DOCTOR'], []);
+      component.openSpecimens(order({ status: 'RECEIVED' }));
+      expect(component.canReject(received)).toBeFalse();
+    });
+
+    it('the order detail shows the doctor why a specimen was rejected', async () => {
+      const o = order({ status: 'ORDERED' });
+      await setup(['ROLE_DOCTOR'], [o]);
+      labService.listSpecimens.and.returnValue(
+        of([{ ...received, status: 'REJECTED', rejectionReason: 'Tube inadapté' } as LabSpecimen]),
+      );
+
+      component.viewOrder(o);
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="lab-order-rejected-sp-9"]',
+        )?.textContent,
+      ).toContain('Tube inadapté');
+    });
+  });
+
+  it('QA D227: the specimens modal names the order by its short code, not the raw UUID', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    labService.listSpecimens.and.returnValue(of([]));
+    const uuid = '3f2a9c1e-7b4d-4e8a-9c21-0d5e6f7a8b9c';
+
+    component.openSpecimens(order({ labOrderCode: uuid }));
+    fixture.detectChanges();
+
+    const title =
+      (fixture.nativeElement as HTMLElement).querySelector('.modal-header h2')?.textContent ?? '';
+    expect(title).toContain('#3F2A9C1E');
+    expect(title).not.toContain(uuid);
+  });
+
+  it('QA D177: picking a patient lists their encounters instead of asking for an id', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    const encounters = TestBed.inject(EncounterService);
+    spyOn(encounters, 'list').and.returnValue(
+      of([
+        { id: 'e-old', encounterDate: '2026-09-01T08:00:00' },
+        { id: 'e-new', encounterDate: '2026-10-01T08:00:00' },
+      ] as EncounterResponse[]),
+    );
+
+    component.selectPatient({ id: 'p-1', firstName: 'A', lastName: 'D' } as PatientResponse);
+
+    expect(encounters.list).toHaveBeenCalledWith(jasmine.objectContaining({ patientId: 'p-1' }));
+    expect(component.patientEncounters().map((e) => e.id)).toEqual(['e-new', 'e-old']);
   });
 
   it('does not fetch the laboratories for a user who cannot place orders', async () => {
@@ -171,6 +552,205 @@ describe('LabComponent — performing laboratory', () => {
     const payload = labService.createOrder.calls.mostRecent().args[0];
     expect(payload.performingHospitalId).toBeNull();
     expect('performingHospitalId' in payload).toBeTrue();
+  });
+
+  describe('the duplicate-order warning', () => {
+    const earlier = {
+      orderId: 'o-earlier',
+      labOrderCode: 'LAB-000023',
+      labTestName: 'Fasting glucose',
+      status: 'ORDERED',
+    };
+
+    it('shows the warning and sends nothing until "Order anyway"', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.form.patientId = 'p-1';
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+
+      expect(labService.checkDuplicates).toHaveBeenCalledWith('p-1', 'def-glu', jasmine.anything());
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.duplicateMatches()).toEqual([earlier]);
+      fixture.detectChanges();
+      const warning = fixture.nativeElement.querySelector('[data-testid="lab-duplicate-warning"]');
+      expect(warning?.textContent).toContain('LAB-000023');
+
+      component.orderAnyway();
+      expect(labService.createOrder).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ acknowledgedDuplicateOrderIds: ['o-earlier'] }),
+      );
+      expect(component.duplicateMatches()).toEqual([]);
+    });
+
+    it('sends the order without an acknowledgement when there is no duplicate', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+
+      component.openCreate();
+      component.submitForm();
+
+      const payload = labService.createOrder.calls.mostRecent().args[0];
+      expect('acknowledgedDuplicateOrderIds' in payload).toBeFalse();
+    });
+
+    it('never blocks the order when the check itself fails', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(throwError(() => new Error('down')));
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+    });
+
+    // Rex on #1150: a late preview reply never places an order.
+    it('ignores a preview reply that arrives after the form was closed', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      component.closeModal();
+      reply.next([]);
+
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('ignores a preview reply about a patient or test no longer on the form', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+      component.form.labTestDefinitionId = 'def-hgb';
+      reply.next([]);
+
+      expect(labService.createOrder).not.toHaveBeenCalled();
+      expect(component.duplicateMatches()).toEqual([]);
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('keeps the write lock when the dialog is closed and reopened during a save', async () => {
+      // Rex on #1150: closing released the lock, so a reopened form sent a second order.
+      await setup(['ROLE_DOCTOR'], []);
+      const written = new Subject<LabOrderResponse>();
+      labService.createOrder.and.returnValue(written);
+
+      component.openCreate();
+      component.submitForm();
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+      component.closeModal();
+      expect(component.saving()).toBeTrue();
+      component.openCreate();
+      component.submitForm();
+      component.orderAnyway();
+      expect(labService.createOrder).toHaveBeenCalledTimes(1);
+
+      written.next(order({}));
+      expect(component.saving()).toBeFalse();
+      component.openCreate();
+      component.submitForm();
+      expect(labService.createOrder).toHaveBeenCalledTimes(2);
+    });
+
+    it('tells the clinician about a duplicate the server found when placing the order', async () => {
+      // Rex on #1150: the preview saw none (or failed); the server's own check is not dropped.
+      await setup(['ROLE_DOCTOR'], []);
+      labService.createOrder.and.returnValue(
+        of(
+          order({
+            duplicateOfRecentOrder: true,
+            duplicateAcknowledged: false,
+            duplicateMatches: [{ orderId: 'o-earlier', labOrderCode: 'LAB-000023' }],
+          }),
+        ),
+      );
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+    });
+
+    it('says nothing more when the duplicate the server found was the one acknowledged', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.createOrder.and.returnValue(
+        of(order({ duplicateOfRecentOrder: true, duplicateAcknowledged: true })),
+      );
+
+      component.openCreate();
+      component.submitForm();
+
+      expect(toast.warning).not.toHaveBeenCalled();
+    });
+
+    it('places no order from a preview reply that arrives after leaving the page', async () => {
+      // Rex on #1150: the preview's subscription ends with the component.
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      fixture.destroy();
+      reply.next([]);
+      reply.error(new Error('late'));
+
+      expect(reply.observed).toBeFalse();
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('ignores the reply of an older check once a newer one was asked', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const first = new Subject<(typeof earlier)[]>();
+      const second = new Subject<(typeof earlier)[]>();
+      labService.checkDuplicates.and.returnValues(first, second);
+
+      component.openCreate();
+      component.submitForm();
+      component.submitForm();
+      first.next([]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+
+      second.next([earlier]);
+      expect(component.duplicateMatches()).toEqual([earlier]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('asks again instead of acknowledging a warning about another test', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.form.labTestDefinitionId = 'def-glu';
+      component.submitForm();
+      component.form.labTestDefinitionId = 'def-hgb';
+      labService.checkDuplicates.and.returnValue(of([]));
+      component.orderAnyway();
+
+      expect(labService.checkDuplicates).toHaveBeenCalledTimes(2);
+      const payload = labService.createOrder.calls.mostRecent().args[0];
+      expect(payload.labTestDefinitionId).toBe('def-hgb');
+      expect('acknowledgedDuplicateOrderIds' in payload).toBeFalse();
+    });
+
+    it('goes back to the form without ordering', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      labService.checkDuplicates.and.returnValue(of([earlier]));
+
+      component.openCreate();
+      component.submitForm();
+      component.dismissDuplicateWarning();
+
+      expect(component.duplicateMatches()).toEqual([]);
+      expect(labService.createOrder).not.toHaveBeenCalled();
+    });
   });
 
   it('brings an outsourced order back in-house from the edit form', async () => {
@@ -210,7 +790,7 @@ describe('LabComponent — performing laboratory', () => {
     // Each hospital once: the primary line is this laboratory, the hint is
     // who sent the order. Naming the ordering hospital on both lines left
     // the laboratory unnamed and told the reader nothing twice.
-    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(4)');
+    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(5)');
     expect(cell.querySelector('.cell-primary')!.textContent).toContain('Central Laboratory B');
     expect(cell.textContent!.match(/Ordering Hospital A/g)!.length).toBe(1);
     expect(component.actingHospitalName(incoming)).toBe('Central Laboratory B');
@@ -235,7 +815,7 @@ describe('LabComponent — performing laboratory', () => {
 
     // The other side of the same relationship: our hospital on the primary
     // line, the laboratory it went to on the hint, each named once.
-    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(4)');
+    const cell: HTMLElement = fixture.nativeElement.querySelector('.data-row td:nth-child(5)');
     expect(cell.querySelector('.cell-primary')!.textContent).toContain('Ordering Hospital A');
     expect(cell.textContent!.match(/Central Laboratory B/g)!.length).toBe(1);
     expect(component.counterpartLabelKey(outgoing)).toBe('LAB.SENT_TO');
@@ -271,7 +851,7 @@ describe('LabComponent — performing laboratory', () => {
       .not.toBeNull();
   });
 
-  it('keeps Edit and Delete for the hospital that placed the order', async () => {
+  it('keeps Edit for the clinician of the hospital that placed the order', async () => {
     const outgoing = order({
       performingHospitalId: LAB_B,
       performingHospitalName: 'Central Laboratory B',
@@ -279,7 +859,412 @@ describe('LabComponent — performing laboratory', () => {
     await setup(['ROLE_DOCTOR'], [outgoing]);
 
     expect(fixture.nativeElement.querySelector('.edit-link')).not.toBeNull();
+    // QA D527: DELETE /lab-orders/{id} admits ADMIN and SUPER_ADMIN only.
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
+  });
+
+  it('keeps Delete for the super-admin, whom DELETE /lab-orders/{id} admits', async () => {
+    await setup(['ROLE_SUPER_ADMIN'], [order({})]);
+
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  describe('a save answered after its dialog was closed and another opened (Rex P2 on #1150)', () => {
+    it('does not close, reset or toast over the dialog opened since, yet refreshes the list', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.createOrder.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      expect(component.saving()).toBeTrue();
+      component.closeModal();
+      component.openCreate();
+      component.form.testName = 'typed in the new dialog';
+      labService.listOrders.calls.reset();
+
+      reply.next(order({}));
+
+      expect(component.showModal()).toBeTrue();
+      expect(component.form.testName).toBe('typed in the new dialog');
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.saving()).withContext('the write lock is released').toBeFalse();
+      expect(labService.listOrders).toHaveBeenCalled();
+    });
+
+    it('names the operation that finished, not the one now open', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.updateOrder.and.returnValue(reply);
+
+      component.openEdit(order({ id: 'o-1' }));
+      component.submitForm();
+      reply.next(order({ id: 'o-1' }));
+
+      expect(toast.success).toHaveBeenCalledOnceWith('LAB.TOAST.UPDATED');
+      expect(component.showModal()).toBeFalse();
+    });
+
+    it('does not show an old failure over the dialog opened since', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.createOrder.and.returnValue(reply);
+
+      component.openCreate();
+      component.submitForm();
+      component.closeModal();
+      component.openEdit(order({ id: 'o-1' }));
+      reply.error({ status: 500 });
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(component.showModal()).toBeTrue();
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('a void answered late leaves the next void dialog open and silent', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], []);
+      const reply = new Subject<LabOrderResponse>();
+      labService.voidOrder.and.returnValue(reply);
+      const a = order({ id: 'o-a', status: 'COMPLETED' });
+      const b = order({ id: 'o-b', status: 'COMPLETED' });
+
+      component.openVoid(a);
+      component.voidReason.set('Wrong patient');
+      component.executeVoid();
+      component.closeVoid();
+      component.openVoid(b);
+      reply.next(order({ id: 'o-a' }));
+
+      expect(component.voidingOrder()).toBe(b);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.voiding()).toBeFalse();
+    });
+
+    it('a delete answered late leaves the next confirmation open and silent', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      const reply = new Subject<void>();
+      labService.deleteOrder.and.returnValue(reply);
+      const a = order({ id: 'o-a' });
+      const b = order({ id: 'o-b' });
+
+      component.confirmDelete(a);
+      component.executeDelete();
+      component.cancelDelete();
+      component.confirmDelete(b);
+      reply.next();
+
+      expect(component.deletingOrder()).toBe(b);
+      expect(component.showDeleteConfirm()).toBeTrue();
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('an approval answered late leaves the next approval dialog open and silent', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], []);
+      const reply = new Subject<LabTestDefinition>();
+      labService.submitApprovalAction.and.returnValue(reply);
+      const a = { id: 'def-a' } as LabTestDefinition;
+      const b = { id: 'def-b' } as LabTestDefinition;
+
+      component.openApprovalModal(a);
+      component.approvalAction.set('APPROVE');
+      component.submitApprovalAction();
+      component.closeApprovalModal();
+      component.openApprovalModal(b);
+      reply.next({ id: 'def-a', approvalStatus: 'APPROVED' } as LabTestDefinition);
+
+      expect(component.approvalTarget()).toBe(b);
+      expect(component.showApprovalModal()).toBeTrue();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.processingApproval()).toBeFalse();
+    });
+
+    it('a specimen collected late does not reset or reload another order specimens', async () => {
+      await setup(['ROLE_LAB_TECH'], []);
+      const reply = new Subject<LabSpecimen>();
+      labService.createSpecimen.and.returnValue(reply);
+
+      component.openSpecimens(order({ id: 'o-a', status: 'ORDERED' }));
+      component.specimenForm.specimenType = 'BLOOD';
+      component.collectSpecimen();
+      component.closeSpecimens();
+      component.openSpecimens(order({ id: 'o-b', status: 'ORDERED' }));
+      component.specimenForm.specimenType = 'typed for b';
+      labService.listSpecimens.calls.reset();
+
+      reply.next({ id: 's-1' } as LabSpecimen);
+
+      expect(component.specimenForm.specimenType).toBe('typed for b');
+      expect(labService.listSpecimens).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.specimenSaving()).toBeFalse();
+    });
+
+    it('a rejection answered late leaves the next rejection dialog open and silent', async () => {
+      await setup(['ROLE_LAB_TECH'], []);
+      const reply = new Subject<LabSpecimen>();
+      labService.rejectSpecimen.and.returnValue(reply);
+      const sa = { id: 's-a', status: 'COLLECTED' } as LabSpecimen;
+      const sb = { id: 's-b', status: 'COLLECTED' } as LabSpecimen;
+
+      component.openSpecimens(order({ id: 'o-a', status: 'COLLECTED' }));
+      component.openReject(sa);
+      component.rejectReason.set('Hemolysed');
+      component.executeReject();
+      component.closeReject();
+      component.openReject(sb);
+      labService.listOrders.calls.reset();
+      reply.next(sa);
+
+      expect(component.rejectingSpecimen()).toBe(sb);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(component.rejecting()).toBeFalse();
+      expect(labService.listOrders).toHaveBeenCalled();
+    });
+  });
+
+  describe('QA D820: void a COMPLETED order as entered in error', () => {
+    const voidButton = (id: string) =>
+      fixture.nativeElement.querySelector(
+        `[data-testid="lab-void-${id}"]`,
+      ) as HTMLButtonElement | null;
+
+    it('the lab director voids the COMPLETED order, with a reason, never a delete', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], [order({ id: 'lab-35', status: 'COMPLETED' })]);
+      labService.voidOrder.and.returnValue(of(order({ id: 'lab-35', status: 'ENTERED_IN_ERROR' })));
+
+      voidButton('lab-35')!.click();
+      fixture.detectChanges();
+      const confirm = fixture.nativeElement.querySelector(
+        '[data-testid="lab-void-confirm"]',
+      ) as HTMLButtonElement;
+      expect(isSubmitBlocked(confirm)).withContext('no reason yet').toBeTrue();
+
+      const reason = fixture.nativeElement.querySelector(
+        '[data-testid="lab-void-reason"]',
+      ) as HTMLTextAreaElement;
+      reason.value = '   ';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(isSubmitBlocked(confirm)).withContext('spaces are no reason').toBeTrue();
+
+      reason.value = '  Wrong patient  ';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(isSubmitBlocked(confirm)).toBeFalse();
+      labService.listOrders.calls.reset();
+      confirm.click();
+      fixture.detectChanges();
+
+      expect(labService.voidOrder).toHaveBeenCalledOnceWith('lab-35', 'Wrong patient');
+      expect(labService.deleteOrder).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalled();
+      expect(labService.listOrders).toHaveBeenCalled();
+      expect(component.voidingOrder()).toBeNull();
+    });
+
+    // QA D1284 (round 27; the D1270 sibling): the void reloads the worklist
+    // under the loading flag, the row's void button left with the table, and
+    // focus fell to APP-LAB. It now waits on the active tab (the table names
+    // it) and comes back to the order's row when the list is back.
+    it('QA D1284: after a void focus returns to the order row, never the page host', async () => {
+      installFocusRescue(document);
+      try {
+        const settle = async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        };
+        const listed = [
+          order({ id: 'lab-35', labOrderCode: 'LAB-000171', status: 'COMPLETED' }),
+          order({ id: 'lab-36', labOrderCode: 'LAB-000172', status: 'COMPLETED' }),
+        ];
+        await setup(['ROLE_LAB_DIRECTOR'], listed);
+        const page = fixture.nativeElement as HTMLElement;
+        if (!page.isConnected) document.body.appendChild(page);
+        const reload = new Subject<LabOrderResponse[]>();
+        labService.listOrders.and.returnValue(reload.asObservable());
+        labService.voidOrder.and.returnValue(
+          of(order({ id: 'lab-35', status: 'ENTERED_IN_ERROR' })),
+        );
+        const opener = voidButton('lab-35')!;
+        opener.focus();
+        opener.click();
+        fixture.detectChanges();
+        await settle();
+        const reason = page.querySelector<HTMLTextAreaElement>('[data-testid="lab-void-reason"]')!;
+        reason.value = 'Wrong patient';
+        reason.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        page.querySelector<HTMLButtonElement>('[data-testid="lab-void-confirm"]')!.click();
+        fixture.detectChanges();
+        await settle();
+        expect(document.activeElement).not.toBe(page);
+        expect(document.activeElement).not.toBe(document.body);
+        expect(document.activeElement).toBe(page.querySelector('.tabs .tab.active'));
+
+        reload.next([order({ ...listed[0], status: 'ENTERED_IN_ERROR' }), listed[1]]);
+        reload.complete();
+        fixture.detectChanges();
+        await settle();
+        const row = [...page.querySelectorAll<HTMLTableRowElement>('tr.data-row')].find(
+          (r) => r.cells[0]?.getAttribute('title') === 'LAB-000171',
+        );
+        if (row) {
+          expect(row.contains(document.activeElement)).withContext('the order row').toBeTrue();
+        } else {
+          expect(document.activeElement).toBe(page.querySelector('.tabs .tab.active'));
+        }
+      } finally {
+        uninstallFocusRescue();
+      }
+    });
+
+    it('a lab manager and a super-admin are offered it too', async () => {
+      await setup(['ROLE_LAB_MANAGER'], [order({ id: 'o-1', status: 'COMPLETED' })]);
+      expect(voidButton('o-1')).not.toBeNull();
+      TestBed.resetTestingModule();
+      await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-1', status: 'COMPLETED' })]);
+      expect(voidButton('o-1')).not.toBeNull();
+    });
+
+    it('the ordering clinician and the bench are not, as the endpoint refuses them', async () => {
+      for (const role of [
+        'ROLE_DOCTOR',
+        'ROLE_NURSE',
+        'ROLE_LAB_TECHNICIAN',
+        'ROLE_LAB_SCIENTIST',
+      ]) {
+        TestBed.resetTestingModule();
+        await setup([role], [order({ id: 'o-1', status: 'COMPLETED' })]);
+        expect(voidButton('o-1')).withContext(role).toBeNull();
+      }
+    });
+
+    it('a voided order is not voided again, and reads as entered in error', async () => {
+      await setup(
+        ['ROLE_LAB_DIRECTOR'],
+        [order({ id: 'o-v', status: 'ENTERED_IN_ERROR', cancellationReason: 'Wrong patient' })],
+      );
+      expect(voidButton('o-v')).toBeNull();
+      expect(component.getStatusClass('ENTERED_IN_ERROR')).toBe('status-badge status-cancelled');
+      component.viewOrder(component.orders()[0]);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement.querySelector('[data-testid="lab-order-reason"]') as HTMLElement)
+          .textContent,
+      ).toContain('Wrong patient');
+    });
+
+    it('a cancelled order is not offered a void', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], [order({ id: 'o-c', status: 'CANCELLED' })]);
+      expect(voidButton('o-c')).toBeNull();
+    });
+
+    it("the performing laboratory does not void another hospital's order", async () => {
+      await setup(
+        ['ROLE_LAB_DIRECTOR'],
+        [order({ id: 'o-in', status: 'COMPLETED', performingHospitalId: LAB_B })],
+        LAB_B,
+      );
+      expect(voidButton('o-in')).toBeNull();
+    });
+
+    it('shows the server refusal as written', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], [order({ id: 'o-1', status: 'COMPLETED' })]);
+      labService.voidOrder.and.returnValue(
+        throwError(() => ({ error: { message: 'Déjà déclarée saisie par erreur.' } })),
+      );
+      component.openVoid(component.orders()[0]);
+      component.voidReason.set('Wrong test');
+      component.executeVoid();
+      expect(toast.error).toHaveBeenCalledWith('Déjà déclarée saisie par erreur.');
+      expect(component.voidingOrder()).not.toBeNull();
+    });
+  });
+
+  it('QA D616: the lab technician sees no trash icon on an ORDERED or a COMPLETED order', async () => {
+    await setup(
+      ['ROLE_LAB_TECHNICIAN'],
+      [order({ id: 'o-ordered', status: 'ORDERED' }), order({ id: 'o-done', status: 'COMPLETED' })],
+    );
+
+    expect(fixture.nativeElement.querySelectorAll('tbody tr').length)
+      .withContext('both orders are rendered')
+      .toBeGreaterThanOrEqual(2);
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
+  });
+
+  it('QA D601/D616: the super-admin is offered delete on an ORDERED order but never on a COMPLETED one', async () => {
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-done', status: 'COMPLETED' })]);
+    expect(fixture.nativeElement.querySelector('.delete-link'))
+      .withContext('an order with results is part of the chart')
+      .toBeNull();
+
+    TestBed.resetTestingModule();
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-ordered', status: 'ORDERED' })]);
+    expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  it('QA D820: a voided order offers neither Edit nor Delete, which the server refuses', async () => {
+    // Voided before any result: the results-stage check alone let the trash through (409).
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-void', status: 'ENTERED_IN_ERROR' })]);
+    expect(fixture.nativeElement.querySelectorAll('tbody tr').length)
+      .withContext('the voided order is rendered')
+      .toBeGreaterThanOrEqual(1);
+    expect(fixture.nativeElement.querySelector('.edit-link'))
+      .withContext('edit answers 400 lab.order.enteredInError')
+      .toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link'))
+      .withContext('delete answers 409 lab.order.deleteClosed')
+      .toBeNull();
+
+    // The same caller on an open order is still offered both.
+    TestBed.resetTestingModule();
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-ordered', status: 'ORDERED' })]);
+    expect(fixture.nativeElement.querySelector('.edit-link')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  it('QA D616: a lab technician who also holds ROLE_ADMIN, with no role picked, gets the trash (the reported case)', async () => {
+    // No role equivalence maps LAB_TECHNICIAN to ADMIN (only physician roles
+    // expand, to DOCTOR). The /lab icon reaches a technician only through a
+    // second, admin role held alongside, or a build from before #920 gated it.
+    await setup(
+      ['ROLE_LAB_TECHNICIAN', 'ROLE_ADMIN'],
+      [order({ id: 'o-ordered', status: 'ORDERED' })],
+    );
+    expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  it('QA D527: a lab technician is offered no Edit or Delete on her own hospital order', async () => {
+    await setup(['ROLE_LAB_TECHNICIAN'], [order({})]);
+
+    expect(fixture.nativeElement.querySelector('.edit-link')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.specimen-link'))
+      .withContext('the bench keeps its specimen action')
+      .not.toBeNull();
+  });
+
+  it('QA D645: an order whose test was deleted shows the API label, not a dash', async () => {
+    await setup(
+      ['ROLE_LAB_TECHNICIAN'],
+      [order({ labTestName: 'Examen supprimé', labTestCode: '', labTestDefinitionMissing: true })],
+    );
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('tbody')?.textContent).toContain(
+      'Examen supprimé',
+    );
+  });
+
+  it('QA D527: the worklist and the detail panel never show the patient e-mail', async () => {
+    const o = order({});
+    await setup(['ROLE_LAB_TECHNICIAN'], [o]);
+    component.viewOrder(o);
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+      'aminata@example.test',
+    );
   });
 
   it('labels the worklist by the hospital the chip is pinned to, not the primary one', async () => {
@@ -292,7 +1277,7 @@ describe('LabComponent — performing laboratory', () => {
       performingHospitalName: 'Central Laboratory B',
     });
     await setup(['ROLE_SUPER_ADMIN'], [incoming], HOSPITAL_A);
-    scope.superAdmin = true;
+    scope.set({ superAdmin: true });
     TestBed.inject(RoleContextService).scopeToHospital(LAB_B);
     fixture.detectChanges();
 
@@ -349,45 +1334,72 @@ describe('LabComponent worklist tabs', () => {
     'VERIFIED',
     'COMPLETED',
     'CANCELLED',
+    // QA D820
+    'ENTERED_IN_ERROR',
   ];
 
-  it('keeps an order on the Pending tab while its specimen is collected and received', () => {
+  it('QA D601/D616: never offers delete on an order that carries results', () => {
+    for (const st of ['RESULTED', 'VERIFIED', 'COMPLETED']) {
+      expect(component.hasResultsStage(order(st)))
+        .withContext(st)
+        .toBeTrue();
+    }
+    for (const st of ['ORDERED', 'PENDING', 'COLLECTED', 'CANCELLED']) {
+      expect(component.hasResultsStage(order(st)))
+        .withContext(st)
+        .toBeFalse();
+    }
+  });
+
+  it('keeps an order In progress until its results are validated', () => {
     component.orders.set(lifecycle.map(order));
 
     component.setTab('pending');
 
+    // Lab requests: a result entered but not validated (RESULTED, VERIFIED) is not finished.
     expect(component.filtered().map((o) => o.status)).toEqual([
       'ORDERED',
       'PENDING',
       'COLLECTED',
       'RECEIVED',
       'IN_PROGRESS',
+      'RESULTED',
+      'VERIFIED',
     ]);
   });
 
-  it('shows resulted, verified and completed orders on the Completed tab', () => {
+  it('shows only validated (COMPLETED) orders on the Completed tab', () => {
     component.orders.set(lifecycle.map(order));
 
     component.setTab('completed');
 
-    expect(component.filtered().map((o) => o.status)).toEqual([
-      'RESULTED',
-      'VERIFIED',
-      'COMPLETED',
-    ]);
+    expect(component.filtered().map((o) => o.status)).toEqual(['COMPLETED']);
   });
 
   it('places every lifecycle state on exactly one tab, cancelled on neither', () => {
     for (const status of lifecycle) {
       const o = order(status);
       const tabs = Number(component.isPending(o)) + Number(component.isCompleted(o));
-      expect(tabs).toBe(status === 'CANCELLED' ? 0 : 1, status);
+      expect(tabs).toBe(status === 'CANCELLED' || status === 'ENTERED_IN_ERROR' ? 0 : 1, status);
     }
   });
 
-  it('badges COLLECTED and RECEIVED as specimen states and VERIFIED as done', () => {
-    expect(component.getStatusClass('RECEIVED')).toBe('status-badge status-collected');
+  it('badges each state once: RESULTED and VERIFIED await validation, never the finished green', () => {
     expect(component.getStatusClass('COLLECTED')).toBe('status-badge status-collected');
-    expect(component.getStatusClass('VERIFIED')).toBe('status-badge status-completed');
+    expect(component.getStatusClass('RECEIVED')).toBe('status-badge status-in_progress');
+    expect(component.getStatusClass('RESULTED')).toBe('status-badge status-awaiting');
+    expect(component.getStatusClass('VERIFIED')).toBe('status-badge status-awaiting');
+    expect(component.getStatusClass('COMPLETED')).toBe('status-badge status-completed');
+  });
+
+  it('labels every backend status through one state vocabulary', () => {
+    for (const status of lifecycle) {
+      expect(component.stateKey(status))
+        .withContext(status)
+        .toMatch(/^LAB\.STATE\./);
+    }
+    expect(component.stateKey('RESULTED')).toBe('LAB.STATE.AWAITING_VALIDATION');
+    expect(component.stateKey('VERIFIED')).toBe('LAB.STATE.AWAITING_VALIDATION');
+    expect(component.stateKey('COMPLETED')).toBe('LAB.STATE.COMPLETED');
   });
 });

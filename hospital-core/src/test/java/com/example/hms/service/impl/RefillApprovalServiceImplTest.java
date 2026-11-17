@@ -15,7 +15,6 @@ import com.example.hms.payload.dto.portal.RefillDecisionRequestDTO;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
-import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,12 +58,24 @@ class RefillApprovalServiceImplTest {
     @Mock private RefillRequestRepository refillRequestRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private StaffRepository staffRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private ControllerAuthUtils authUtils;
     @Mock private RoleValidator roleValidator;
     @Mock private Authentication auth;
     @Mock private PatientLocaleResolver patientLocaleResolver;
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
+    /** QA D792: real, over a mocked stay history, so the guard applies the rule itself. */
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
+    @Spy private com.example.hms.service.EndedStayOrderGuard endedStayOrders;
+
+    /** The guard needs its repository before Mockito spies and injects the fields, so both arrive here. */
+    RefillApprovalServiceImplTest(@Mock com.example.hms.repository.AdmissionRepository admissionRepository) {
+        this.admissionRepository = admissionRepository;
+        this.endedStayOrders = new com.example.hms.service.EndedStayOrderGuard(admissionRepository);
+    }
 
     @InjectMocks private RefillApprovalServiceImpl service;
 
@@ -145,7 +156,41 @@ class RefillApprovalServiceImplTest {
 
         assertThat(result.getStatus()).isEqualTo("APPROVED");
         assertThat(result.getProviderNotes()).isEqualTo("Approved — pick up by Friday");
-        verify(notificationService).createNotification(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+        verify(notificationService).created(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+    }
+
+    @Test
+    @DisplayName("QA D1276: each refill names its patient, with the MRN of the prescribing hospital only")
+    void theQueueNamesThePatientWithTheMrnOfThePrescribingHospital() {
+        com.example.hms.model.Hospital here = new com.example.hms.model.Hospital();
+        here.setId(UUID.randomUUID());
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        prescription.setHospital(here);
+        com.example.hms.model.PatientHospitalRegistration other = new com.example.hms.model.PatientHospitalRegistration();
+        other.setHospital(elsewhere);
+        other.setId(UUID.randomUUID());
+        other.setMrn("OTH0001");
+        other.setActive(true);
+        com.example.hms.model.PatientHospitalRegistration local = new com.example.hms.model.PatientHospitalRegistration();
+        local.setHospital(here);
+        local.setId(UUID.randomUUID());
+        local.setMrn("CHW0042");
+        local.setActive(true);
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(other, local)));
+        when(roleValidator.hasAnyAuthority("PHARMACIST")).thenReturn(true);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(here.getId());
+        when(refillRequestRepository.findByPrescription_Hospital_IdAndStatus(eq(here.getId()), eq(RefillStatus.REQUESTED),
+            any())).thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(pendingRefill())));
+
+        MedicationRefillResponseDTO card = service.listForProvider(auth, RefillStatus.REQUESTED,
+            org.springframework.data.domain.PageRequest.of(0, 20)).getContent().get(0);
+
+        assertThat(card.getPatientName()).isEqualTo("Alice Patient");
+        assertThat(card.getPatientMrn()).isEqualTo("CHW0042");
+        prescription.setHospital(null);
+        assertThat(RefillApprovalServiceImpl.mrnAtPrescribingHospital(pendingRefill()))
+            .as("no hospital, no MRN: never another hospital's").isNull();
     }
 
     @Test
@@ -160,7 +205,7 @@ class RefillApprovalServiceImplTest {
                 RefillDecisionRequestDTO.builder().providerNotes("Discontinued — see clinic").build());
 
         assertThat(result.getStatus()).isEqualTo("DENIED");
-        verify(notificationService).createNotification(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+        verify(notificationService).created(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
     }
 
     @Test
@@ -173,8 +218,8 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("APPROVED");
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+                .hasMessageContaining("patient.refill.decision.notPending");
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -255,9 +300,9 @@ class RefillApprovalServiceImplTest {
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService)
-                .createNotification(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+                .created(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
         assertThat(message.getValue())
-                .contains("on hold")
+                .contains("en attente")
                 .contains("Need an A1c before renewing");
     }
 
@@ -267,7 +312,19 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.pause(auth, refillId,
                 RefillDecisionRequestDTO.builder().providerNotes("   ").build()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reason is required");
+                .hasMessageContaining("patient.refill.decision.reasonRequired");
+        verify(refillRequestRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("QA D1315: reject — refuses without a reason, before any lookup, keyed providerNotes")
+    void aDenialWithoutAReasonIsRefused_D1315() {
+        for (RefillDecisionRequestDTO decision : java.util.Arrays.asList(null, new RefillDecisionRequestDTO(),
+                RefillDecisionRequestDTO.builder().providerNotes("  ").build())) {
+            assertThatThrownBy(() -> service.reject(auth, refillId, decision))
+                    .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                        ex -> assertThat(ex.getFieldErrors()).containsKey("providerNotes"));
+        }
         verify(refillRequestRepository, never()).findById(any());
     }
 
@@ -276,7 +333,7 @@ class RefillApprovalServiceImplTest {
     void pause_requiresBody() {
         assertThatThrownBy(() -> service.pause(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reason is required");
+                .hasMessageContaining("patient.refill.decision.reasonRequired");
     }
 
     @Test
@@ -300,7 +357,48 @@ class RefillApprovalServiceImplTest {
         when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(paused));
         when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(service.reject(auth, refillId, null).getStatus()).isEqualTo("DENIED");
+        // QA D1315 (assertion changed): a denial now needs its reason.
+        assertThat(service.reject(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("Arrêté").build()).getStatus()).isEqualTo("DENIED");
+    }
+
+    @Test
+    @DisplayName("QA D753: approving a CANCELLED refill answers a translated key, not English prose")
+    void d753_approveNonPendingUsesTranslatedKey() {
+        stubStaffResolution();
+        RefillRequest cancelled = pendingRefill();
+        cancelled.setStatus(RefillStatus.CANCELLED);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(cancelled));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getMessageKey()).isEqualTo("patient.refill.decision.notPending");
+                    assertThat(ex.getArgs()).containsExactly("CANCELLED");
+                });
+    }
+
+    @Test
+    @DisplayName("QA D753 guard: every refusal in RefillApprovalServiceImpl is a bundle key present in EN/FR/ES")
+    void d753_guard_noProseRefusals() throws Exception {
+        String src = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/example/hms/service/impl/RefillApprovalServiceImpl.java"));
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?:BusinessException|AccessDeniedException|ResourceNotFoundException)\\(\\s*\"([^\"]*)\"")
+                .matcher(src);
+        java.util.List<String> keys = new java.util.ArrayList<>();
+        while (m.find()) {
+            keys.add(m.group(1));
+        }
+        assertThat(keys).isNotEmpty().allSatisfy(k -> assertThat(k).doesNotContain(" "));
+        for (String locale : new String[] {"en", "fr", "es"}) {
+            java.util.Properties props = new java.util.Properties();
+            try (java.io.Reader r = java.nio.file.Files.newBufferedReader(java.nio.file.Path.of(
+                    "src/main/resources/i18n/messages-patient_" + locale + ".properties"))) {
+                props.load(r);
+            }
+            keys.stream().filter(k -> k.startsWith("patient.refill."))
+                    .forEach(k -> assertThat(props.getProperty(k)).as(locale + " " + k).isNotBlank());
+        }
     }
 
     @Test
@@ -314,8 +412,8 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.pause(auth, refillId,
                 RefillDecisionRequestDTO.builder().providerNotes("still waiting").build()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PAUSED");
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+                .hasMessageContaining("patient.refill.decision.notPending");
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -329,7 +427,7 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.pause(auth, refillId,
                 RefillDecisionRequestDTO.builder().providerNotes("reconsidering").build()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("DENIED");
+                .hasMessageContaining("patient.refill.decision.notPending");
     }
 
     @Test
@@ -380,7 +478,7 @@ class RefillApprovalServiceImplTest {
     }
 
     @Test
-    @DisplayName("approve — tells the patient the medication is ready to collect")
+    @DisplayName("approve — tells the patient the fill went to the pharmacy, never that it is ready (G15)")
     void approve_notifiesPatientToCollect() {
         stubStaffResolution();
         when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
@@ -390,8 +488,13 @@ class RefillApprovalServiceImplTest {
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService)
-                .createNotification(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
-        assertThat(message.getValue()).contains("ready to collect");
+                .created(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+        // Approval puts the fill back in the pharmacy's queue (SIGNED): nothing
+        // has been prepared yet, so "ready to collect" was a false promise that
+        // sent patients to a counter with nothing waiting for them.
+        assertThat(message.getValue())
+                .contains("transmise à la pharmacie pour préparation")
+                .doesNotContainIgnoringCase("prête");
     }
 
     @Test
@@ -421,12 +524,12 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("no longer be refilled");
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
 
         // The whole point: never leave a request APPROVED with nothing behind it.
         assertThat(pending.getStatus()).isEqualTo(RefillStatus.REQUESTED);
         verify(refillRequestRepository, never()).save(any(RefillRequest.class));
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -438,7 +541,76 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("new prescription");
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+    }
+
+    @Test
+    @DisplayName("QA D719: approve — refuses a refill of a completed controlled substance")
+    void approve_refusesControlledSubstance() {
+        stubStaffResolution();
+        prescription.setStatus(PrescriptionStatus.DISPENSED);
+        prescription.setControlledSubstance(true);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+    }
+
+    @Test
+    @DisplayName("QA D719 re-test: approve — refuses catalog-controlled morphine whose tick is false")
+    void approve_refusesCatalogControlledSubstance() {
+        stubStaffResolution();
+        prescription.setStatus(PrescriptionStatus.DISPENSED);
+        prescription.setControlledSubstance(false);
+        when(controlledResolver.isControlled(prescription)).thenReturn(true);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((BusinessException) e).getMessageKey()));
+    }
+
+    /**
+     * QA D792 (#953 review, round 3): approving a refill of a ward order of a
+     * discharged stay put it back to SIGNED in the pharmacy work queue, where
+     * every action on it is refused (stayEnded) and nothing ends it.
+     */
+    @Test
+    @DisplayName("QA D792: approve — refuses a refill of a ward order of a discharged stay")
+    void approve_refusesAWardOrderOfAnEndedStay() {
+        stubStaffResolution();
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        prescription.setHospital(hospital);
+        com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setHospital(hospital);
+        stay.setStatus(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+        com.example.hms.model.Encounter stayEncounter = new com.example.hms.model.Encounter();
+        stayEncounter.setAdmissionId(stay.getId());
+        stayEncounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        stayEncounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        prescription.setEncounter(stayEncounter);
+        when(admissionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId()))
+                .thenReturn(List.of(stay));
+        RefillRequest pending = pendingRefill();
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pending));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .matches(e -> "patient.refill.approveEndedStayOrder".equals(((BusinessException) e).getMessageKey()));
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+        assertThat(pending.getStatus()).isEqualTo(RefillStatus.REQUESTED);
+        verify(prescriptionRepository, never()).save(any(Prescription.class));
+        verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+
+        // A take-home order of the same stay goes home, and is refilled as asked.
+        prescription.setTakeHome(true);
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+        service.approve(auth, refillId, null);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
     }
 
     @Test
@@ -448,7 +620,8 @@ class RefillApprovalServiceImplTest {
         when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
         when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        service.reject(auth, refillId, null);
+        // QA D1315 (assertion changed): a denial now needs its reason.
+        service.reject(auth, refillId, RefillDecisionRequestDTO.builder().providerNotes("Arrêté").build());
 
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
         assertThat(prescription.getRefillsUsed()).isZero();
@@ -527,6 +700,6 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.countPendingForProvider(auth))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("staff record");
+                .hasMessageContaining("patient.refill.decision.noStaffRecord");
     }
 }

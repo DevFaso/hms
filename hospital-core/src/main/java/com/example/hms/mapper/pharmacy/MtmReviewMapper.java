@@ -17,6 +17,10 @@ public class MtmReviewMapper {
         return MtmReviewResponseDTO.builder()
                 .id(review.getId())
                 .patientId(review.getPatient() != null ? review.getPatient().getId() : null)
+                // QA D900: name and the MRN at the review's own hospital, never another tenant's.
+                .patientName(review.getPatient() != null ? review.getPatient().getFullName() : null)
+                .patientMrn(review.getPatient() != null && review.getHospital() != null
+                        ? review.getPatient().getMrnForHospital(review.getHospital().getId()) : null)
                 .hospitalId(review.getHospital() != null ? review.getHospital().getId() : null)
                 .pharmacistUserId(review.getPharmacistUser() != null ? review.getPharmacistUser().getId() : null)
                 .reviewDate(review.getReviewDate())

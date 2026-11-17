@@ -62,6 +62,7 @@ public class PatientInsuranceRequestDTO {
     @Schema(description = "Whether this is the primary insurance", defaultValue = "true")
     private boolean primary = true;
 
+    @com.example.hms.validation.ReportedOn("expirationDate")
     @AssertTrue(message = "{patientInsurance.dateRange.invalid}")
     @Schema(hidden = true)
     public boolean isDateRangeValid() {

@@ -19,6 +19,8 @@ public class NurseHandoffSummaryDTO {
     private String patientName;
     private String direction;
     private LocalDateTime updatedAt;
+    /** QA D1075: when the handoff was reported; updatedAt moves when it is completed. */
+    private LocalDateTime createdAt;
     /** Situation line — kept under the legacy name the card UI already renders. */
     private String note;
     private String background;
@@ -34,4 +36,9 @@ public class NurseHandoffSummaryDTO {
      */
     private LocalDateTime completedAt;
     private String completedByName;
+    /** QA D776: who the handoff is addressed to (null on legacy rows). */
+    private UUID recipientUserId;
+    private String recipientName;
+    /** QA D776: true when the caller may complete it (the recipient; anyone but the author on a legacy row). */
+    private Boolean completableByMe;
 }

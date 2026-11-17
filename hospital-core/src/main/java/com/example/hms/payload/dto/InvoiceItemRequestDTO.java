@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto;
 
+import com.example.hms.config.WholeIntegerDeserializer;
 import com.example.hms.enums.ItemCategory;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Min;
@@ -7,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -24,25 +26,31 @@ public class InvoiceItemRequestDTO {
 
     private UUID id;
 
-    @NotNull
+    /** Required on create; on update the line stays on its own invoice. QA D1300: named with the other fields. */
+    @NotNull(groups = com.example.hms.validation.OnCreate.class, message = "{invoiceitem.invoiceRequired}")
     private UUID billingInvoiceId;
 
     @NotBlank
+    @jakarta.validation.constraints.Size(max = 255)
     private String itemDescription;
 
     @NotNull
     @Min(1)
+    // QA D657: 1.5 was silently stored as 1; a fraction is now refused.
+    @JsonDeserialize(using = WholeIntegerDeserializer.class)
     private Integer quantity;
 
     @NotNull
-    @Digits(integer = 10, fraction = 2)
+    // QA D1483: too large and too precise are two reasons; the digit count only bounds what is parsed.
+    @jakarta.validation.constraints.DecimalMax(value = "9999999999.99", message = "{billing.amount.tooLarge}")
+    @Digits(integer = 30, fraction = 2, message = "{billing.payment.wholeAmountOnly}")
     @Positive
     private BigDecimal unitPrice;
 
     @NotNull
     private ItemCategory itemCategory;
 
-    @NotNull
+    /** The staff member the line is for; defaults to the caller's assignment. */
     private UUID assignmentId;
 
     private UUID relatedServiceId;

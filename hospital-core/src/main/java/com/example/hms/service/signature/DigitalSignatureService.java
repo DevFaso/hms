@@ -27,6 +27,12 @@ public interface DigitalSignatureService {
     SignatureResponseDTO signReport(SignatureRequestDTO request);
 
     /**
+     * QA D627: the caller's own unsigned, signable reports in the hospital they
+     * act in, for the sign picker. Empty when they have no staff record there.
+     */
+    java.util.List<com.example.hms.payload.dto.signature.SignableReportDTO> listSignableReports();
+
+    /**
      * Verify a signature against stored hash
      * 
      * @param request verification request containing signature value to verify

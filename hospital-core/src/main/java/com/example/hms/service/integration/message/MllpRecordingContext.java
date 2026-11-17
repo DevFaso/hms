@@ -1,6 +1,7 @@
 package com.example.hms.service.integration.message;
 
 import com.example.hms.model.Hospital;
+import com.example.hms.utility.Hl7SenderText;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -32,10 +33,6 @@ public final class MllpRecordingContext {
 
     /** The width of {@code integration_message_event.integration_id}. */
     private static final int INTEGRATION_ID_MAX = 120;
-
-    /** MSH-10 is 20 characters in HL7 v2.5, and unvalidated on the wire. */
-    private static final int CONTROL_ID_MAX = 20;
-
 
     private MllpRecordingContext() {}
 
@@ -161,26 +158,6 @@ public final class MllpRecordingContext {
         return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
-    /** Exactly what {@code MllpAllowedSenderServiceImpl.lookup} does. */
-    /**
-     * MSH-10 as it is safe to quote back, capped at the 20 characters HL7 v2
-     * allows it.
-     *
-     * <p>It is unvalidated sender text and it lands in
-     * {@code error_message}, which an operator reads. Uncapped, a sender
-     * padding MSH-10 writes two kilobytes of its own prose per probe into a
-     * table with no retention, and can shape it to imitate the fixed reason
-     * prefixes next to it — "cross-tenant rejection (MSH-10 x) identifier not
-     * found" reads like two findings and is one attacker's string.
-     */
-    public static String messageControlId(String messageControlId) {
-        if (!StringUtils.hasText(messageControlId)) {
-            return null;
-        }
-        String trimmed = messageControlId.trim();
-        return trimmed.length() > CONTROL_ID_MAX ? trimmed.substring(0, CONTROL_ID_MAX) : trimmed;
-    }
-
     /**
      * The correlation scope for a sender pair: normalised like the
      * {@link #integrationId} but <b>not truncated</b>.
@@ -199,6 +176,106 @@ public final class MllpRecordingContext {
             + "/" + normalised(sendingFacility);
     }
 
+    /**
+     * A dead-letter reason with MSH-10 appended - the one definition the ADT
+     * and A40 paths share.
+     *
+     * <p>Whole, not capped: {@code Hl7MessageInspector} refuses an MSH-10
+     * wider than the 255 of the columns it is stored in, and a shorter cap
+     * would make two control ids that share a prefix indistinguishable in the
+     * row that exists to tell them apart.
+     *
+     * <p>Quoted and escaped, because it is the sender's text inside a reason
+     * an operator reads as ours. Unquoted, an MSH-10 of
+     * {@code x) identifier not found; cross-tenant rejection (MSH-10 y}
+     * renders as several findings the sender wrote. In quotes, with {@code "}
+     * and backslash escaped, the value cannot end early, and any character
+     * that could reorder or hide the text around it (control, bidi, zero-width,
+     * separator, surrogate, private-use) is shown as a backslash-u hex escape
+     * rather than rendered.
+     */
+    public static String withControlId(String reason, String messageControlId) {
+        String quoted = quotedControlId(messageControlId);
+        return quoted != null ? reason + " (MSH-10 " + quoted + ")" : reason;
+    }
+
+    /**
+     * MSH-10 as it may be shown to an operator - in a dead-letter reason, an
+     * audit description, a merge note or a log line - or null when there is
+     * none. One rule for all of them: {@link Hl7SenderText#quote}, the rule for
+     * every piece of sender text, after stripping surrounding spaces.
+     *
+     * <p>Only spaces are stripped from the ends, not {@code String.trim()}'s
+     * whole control range: {@code ABC} and {@code ABC} followed by a BEL are
+     * different ids, MSA-2 echoes them differently, and they must not render
+     * the same here.
+     */
+    public static String quotedControlId(String messageControlId) {
+        String key = messageControlIdKey(messageControlId);
+        return key == null ? null : Hl7SenderText.quote(key);
+    }
+
+    /**
+     * MSH-10 as an idempotency key and as the stored control id: the value as
+     * sent, with only surrounding spaces stripped, or null when blank.
+     *
+     * <p><b>Not {@code String.trim()}.</b> {@code trim()} strips every
+     * character up to U+0020, so {@code ABC} and {@code ABC} followed by a BEL
+     * (or a tab, or an ESC) collapsed into one key: the second message read as
+     * a replay of the first and was acknowledged without being stored. The key
+     * is now the exact bounded value ({@code Hl7MessageInspector} holds MSH-10
+     * to its 255-character column untrimmed), the same value MSA-2 echoes and
+     * {@link #quotedControlId} shows.
+     *
+     * <p><b>Why spaces are still stripped.</b> Rows written before this rule
+     * hold {@code trim()}med ids, and a replay must still match them. HL7 v2
+     * string fields treat trailing blanks as insignificant, and senders that
+     * pad fixed-width fields do send them, so a space-padded retry of a message
+     * stored before the change must keep matching its row; stripping spaces
+     * keeps exactly that. What no longer matches a legacy row is a retry whose
+     * MSH-10 begins or ends with a control character: before the change it
+     * was stored without it, now its key keeps it, so a pre-change message
+     * retried after the deploy with such an id is stored a second time. That
+     * needs a malformed id and a retry spanning the deploy; it is accepted as
+     * the cost of no longer collapsing distinct ids.
+     */
+    public static String messageControlIdKey(String messageControlId) {
+        if (!StringUtils.hasText(messageControlId)) {
+            return null;
+        }
+        return stripSpaces(messageControlId);
+    }
+
+    /**
+     * MSH-3 or MSH-4 as part of an idempotency key: trimmed and upper-cased
+     * the way the allowlist matches it, or null when blank. One allowlisted
+     * sender is one sender however it cases its header, so its replay key
+     * must not split by case either - the same rule {@link #integrationId}
+     * already applies to the row it files.
+     */
+    public static String senderKey(String senderField) {
+        return StringUtils.hasText(senderField) ? senderField.trim().toUpperCase(Locale.ROOT) : null;
+    }
+
+    private static String stripSpaces(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && value.charAt(start) == ' ') {
+            start++;
+        }
+        while (end > start && value.charAt(end - 1) == ' ') {
+            end--;
+        }
+        return value.substring(start, end);
+    }
+
+    /**
+     * Exactly what {@code MllpAllowedSenderServiceImpl.lookup} does: trim and
+     * upper-case. The allowlist matches that way against values V62 stores
+     * canonically, so one sender may present its MSH-3/MSH-4 in any casing
+     * and still resolve — and everything derived from the pair has to agree
+     * with that, or one sender becomes several.
+     */
     private static String normalised(String value) {
         return StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "?";
     }

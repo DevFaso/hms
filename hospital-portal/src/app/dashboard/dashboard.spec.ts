@@ -1,20 +1,30 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { DashboardComponent } from './dashboard';
+import { DashboardComponent, currentMedications } from './dashboard';
+import type { MedicationSummary, PortalInvoice } from '../services/patient-portal.service';
 import { routes as appRoutes } from '../app.routes';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
 import { EncounterService } from '../services/encounter.service';
+import { LabService } from '../services/lab.service';
 import { signal } from '@angular/core';
 import { of, Subject, throwError } from 'rxjs';
 import {
   PatientTrackerWsService,
   PatientTrackerEvent,
 } from '../services/patient-tracker-ws.service';
+import { RoleContextService } from '../core/role-context.service';
+import {
+  ClinicalDashboard,
+  DashboardService,
+  DoctorResultQueueItem,
+  PatientSnapshot,
+} from '../services/dashboard.service';
+import { currentLocale } from '../shared/i18n/app-locale';
 
 /**
  * Every route literal the dashboard links to (tiles, quick actions, fetch
@@ -103,6 +113,7 @@ describe('Dashboard navigation & RBAC', () => {
 
     const permStub: Partial<PermissionService> = {
       hasPermission: (p: string) => permSet.has(p) || permSet.has('*'),
+      hasActivePermission: (p: string) => permSet.has(p) || permSet.has('*'),
       hasAnyPermission: (...ps: string[]) => ps.some((p) => permSet.has(p) || permSet.has('*')),
     };
 
@@ -172,6 +183,46 @@ describe('Dashboard navigation & RBAC', () => {
         );
       }
     }
+  });
+
+  it('recent activity shows no placeholder resource name (D260)', () => {
+    const admin = createComponent(['ROLE_HOSPITAL_ADMIN'], []);
+    expect(admin.auditResourceLabel('Unknown Resource')).toBeNull();
+    expect(admin.auditResourceLabel('  ')).toBeNull();
+    expect(admin.auditResourceLabel('Cardiologie')).toBe('Cardiologie');
+  });
+
+  it('recent activity reads an entity token in the reader language (D619)', () => {
+    const admin = createComponent(['ROLE_HOSPITAL_ADMIN'], []);
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { AUDIT_ENTITY_TYPE: { BILLING_INVOICE: 'Facture' } } },
+    });
+    translate.use('fr');
+    expect(admin.auditResourceLabel('BILLING_INVOICE')).toBe('Facture');
+    expect(admin.auditResourceLabel('BillingInvoice')).toBe('Facture');
+  });
+
+  it('upcoming card lists the next visits soonest first, today included, completed left out (D642)', () => {
+    const patient = createComponent(['ROLE_PATIENT'], []);
+    const d = new Date();
+    const iso = (offset: number) => {
+      const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset);
+      return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    };
+    const appt = (id: string, date: string, time: string, status: string) =>
+      ({ id, date, rawStartTime: time, status }) as any;
+    patient.myAppointments.set([
+      appt('later', iso(5), '09:00', 'SCHEDULED'),
+      appt('done', iso(1), '08:00', 'COMPLETED'),
+      appt('tomorrow', iso(1), '10:00', 'CONFIRMED'),
+      appt('today', iso(0), '23:30', 'SCHEDULED'),
+    ]);
+    expect(patient.upcomingAppointments().map((a: any) => a.id)).toEqual([
+      'today',
+      'tomorrow',
+      'later',
+    ]);
   });
 
   // ── Doctor quick actions include Lab and Referrals ───────────
@@ -291,6 +342,19 @@ describe('Dashboard navigation & RBAC', () => {
     expect(c.tasksToComplete()).toBe(4);
   });
 
+  it('the lab pending card counts every order still waiting on the bench (D107)', () => {
+    const c = createComponent(['ROLE_LAB_SCIENTIST'], []);
+    expect(c.labPendingCount()).toBeNull();
+    c.labOpsSummary.set({
+      statusOrdered: 3,
+      statusPending: 0,
+      statusCollected: 2,
+      statusReceived: 1,
+      statusInProgress: 5,
+    } as Parameters<typeof c.labOpsSummary.set>[0]);
+    expect(c.labPendingCount()).toBe(6);
+  });
+
   // ── Hero hospital chip ──────────────────────────────────────
 
   it('fetches the active hospital name for the clinician hero', () => {
@@ -369,7 +433,7 @@ describe('Dashboard navigation & RBAC', () => {
     expect(approvalCard?.value).toBe(3);
   });
 
-  it('labDirectorStatCards TAT should show N/A when avgTurnaroundMinutesToday is null', () => {
+  it('labDirectorStatCards TAT should show a dash (never English N/A) when avgTurnaroundMinutesToday is null', () => {
     const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
     c.isLabDirector.set(true);
     c.labDirectorDashboard.set({
@@ -389,7 +453,7 @@ describe('Dashboard navigation & RBAC', () => {
       recentApprovalAudit: [],
     });
     const tatCard = c.labDirectorStatCards().find((c) => c.key === 'avg_tat');
-    expect(tatCard?.value).toBe('N/A');
+    expect(tatCard?.value).toBe('—');
   });
 
   it('labDirectorNavTiles should return 11 tiles with badges for pending counts', () => {
@@ -465,10 +529,16 @@ describe('Dashboard navigation & RBAC', () => {
     });
     expect(c.qualityManagerStatCards().length).toBe(5);
     const passRateCard = c.qualityManagerStatCards().find((c) => c.key === 'pass_rate');
-    expect(passRateCard?.value).toBe('90.0%');
+    // D130: the decimal separator follows the UI language, never a bare dot.
+    const expected =
+      new Intl.NumberFormat(currentLocale(), {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }).format(90) + ' %';
+    expect(passRateCard?.value).toBe(expected);
   });
 
-  it('qualityManagerStatCards pass rate should show N/A when qualityPassRate is null', () => {
+  it('qualityManagerStatCards pass rate should show a dash when qualityPassRate is null', () => {
     const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
     c.isQualityManager.set(true);
     c.qualityManagerDashboard.set({
@@ -487,7 +557,7 @@ describe('Dashboard navigation & RBAC', () => {
       ordersToday: 0,
     });
     const passRateCard = c.qualityManagerStatCards().find((c) => c.key === 'pass_rate');
-    expect(passRateCard?.value).toBe('N/A');
+    expect(passRateCard?.value).toBe('—');
   });
 
   it('lab-director should take priority over lab-scientist in activeView', () => {
@@ -620,11 +690,22 @@ describe('Dashboard navigation & RBAC', () => {
     (c as unknown as { canAccessRoute(r: string): boolean }).canAccessRoute.call(c, r);
 
   it('canAccessRoute grants a nested child route the parent guard admits', () => {
-    // /patients/new declares no roles of its own; Angular still runs the
-    // /patients guard before activating it, so the child inherits it.
+    // ':id' declares no roles of its own; Angular still runs the /patients
+    // guard before activating it, so the child inherits it.
     const doctor = createComponent(['ROLE_DOCTOR'], []);
-    expect(gate(doctor, '/patients/new')).toBeTrue();
     expect(gate(doctor, '/patients/abc-123')).toBeTrue(); // ':id' segment
+  });
+
+  it('canAccessRoute applies a child route own roles on top of the parent (QA D55)', () => {
+    // /patients/new admits only the POST /patients registrars: the doctor
+    // passes the /patients guard but not the child's.
+    const doctor = createComponent(['ROLE_DOCTOR'], []);
+    expect(gate(doctor, '/patients/new')).toBeFalse();
+  });
+
+  it('canAccessRoute grants /patients/new to a patient registrar', () => {
+    const nurse = createComponent(['ROLE_NURSE'], []);
+    expect(gate(nurse, '/patients/new')).toBeTrue();
   });
 
   it('canAccessRoute denies a nested child route the parent guard rejects', () => {
@@ -696,6 +777,7 @@ describe('Dashboard onStartEncounter', () => {
 
     const permStub: Partial<PermissionService> = {
       hasPermission: () => true,
+      hasActivePermission: () => true,
       hasAnyPermission: () => true,
     };
 
@@ -786,6 +868,7 @@ describe('Dashboard i18n refactor coverage', () => {
 
     const permStub: Partial<PermissionService> = {
       hasPermission: (p: string) => permSet.has(p) || permSet.has('*'),
+      hasActivePermission: (p: string) => permSet.has(p) || permSet.has('*'),
       hasAnyPermission: (...ps: string[]) => ps.some((p) => permSet.has(p) || permSet.has('*')),
     };
 
@@ -940,7 +1023,7 @@ describe('Dashboard i18n refactor coverage', () => {
   it('hospitalAdminStatCards returns 14 cards when summary is loaded', () => {
     const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
     c.hospitalAdminSummary.set({
-      appointments: { todayTotal: 10, completed: 5, noShows: 1 },
+      appointments: { today: 10, completed: 5, noShows: 1 },
       admissions: { active: 3, admittedToday: 2, dischargedToday: 1 },
       consultations: { requested: 4, acknowledged: 2, overdue: 1 },
       staffing: { activeStaff: 20, onShiftToday: 12, staffOnLeaveToday: 1 },
@@ -996,9 +1079,10 @@ describe('Dashboard i18n refactor coverage', () => {
     });
   }
 
-  it('getApptStatusLabel returns the raw value for unknown statuses', () => {
-    const c = createComponent(['ROLE_DOCTOR']);
-    expect(c.getApptStatusLabel('SOMETHING_WEIRD')).toBe('SOMETHING_WEIRD');
+  it('D175: getApptStatusLabel never shows the raw CHECKED_IN token', () => {
+    const c = createComponent(['ROLE_NURSE']);
+    // No bundle is loaded here, so the shared vocabulary's English fallback answers.
+    expect(c.getApptStatusLabel('CHECKED_IN')).toBe('Checked In');
   });
 
   // ── Locale-aware time formatters ──────────────────────────────
@@ -1085,12 +1169,18 @@ describe('Dashboard i18n refactor coverage', () => {
     expect(c.getPaymentMethodColor('UNKNOWN')).toBe('#64748b');
   });
 
-  it('formatMethodLabel converts SNAKE_CASE underscores to spaces', () => {
+  it('formatMethodLabel is the locale-aware payment-method label, not an English prettifier', () => {
     const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
-    // Input is already upper-case so the title-case replace is a no-op —
-    // the only observable change is "_" → " ".
-    expect(c.formatMethodLabel('CREDIT_CARD')).toBe('CREDIT CARD');
-    expect(c.formatMethodLabel('bank_transfer')).toBe('Bank Transfer');
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'fr',
+      { PORTAL: { ENUM: { PAYMENT_METHOD: { CREDIT_CARD: 'Carte de crédit' } } } },
+      true,
+    );
+    translate.use('fr');
+    expect(c.formatMethodLabel('CREDIT_CARD')).toBe('Carte de crédit');
+    // An unkeyed value still degrades to readable words.
+    expect(c.formatMethodLabel('BANK_WIRE')).toBe('Bank Wire');
   });
 
   // ── Language-change subscription path ────────────────────────
@@ -1157,6 +1247,7 @@ describe('Dashboard live tracker refresh', () => {
 
     const permStub: Partial<PermissionService> = {
       hasPermission: () => false,
+      hasActivePermission: () => false,
       hasAnyPermission: () => false,
     };
 
@@ -1244,5 +1335,799 @@ describe('Dashboard patient lab tile styling', () => {
     expect(rule?.[1]).toContain('#fef3c7');
     expect(rule?.[1]).toContain('#b45309');
     expect(rule?.[1]).not.toContain('#d1fae5');
+  });
+});
+
+/**
+ * B6/B7 follow-up: the review-queue panel's acknowledge control used to
+ * filter the row locally and call nothing, although the endpoint exists —
+ * and clearing the failure flag along with the last row let a physician
+ * click a 502 into the green "all results reviewed" card.
+ */
+describe('result review queue - acknowledge and failure state', () => {
+  function buildDashboard(labServiceSpy: jasmine.SpyObj<LabService>) {
+    const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_DOCTOR']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_DOCTOR'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'testuser',
+      email: 'test@test.com',
+      roles: ['ROLE_DOCTOR'],
+      staffId: 's1',
+      active: true,
+    } as never);
+
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: {
+            hasPermission: () => true,
+            hasActivePermission: () => true,
+            hasAnyPermission: () => true,
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+        { provide: LabService, useValue: labServiceSpy },
+      ],
+    });
+    return TestBed.createComponent(DashboardComponent).componentInstance;
+  }
+
+  function queueItem(id: string) {
+    return {
+      id,
+      patientName: 'Awa Traore',
+      patientId: 'p-1',
+      testName: 'Potassium',
+      resultValue: '6.8',
+      abnormalFlag: 'CRITICAL',
+      resultedAt: '2026-09-20T09:30:00Z',
+    };
+  }
+
+  it('acknowledges against the server before removing the row', () => {
+    const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+    labServiceSpy.acknowledgeResult.and.returnValue(of(undefined));
+    const c = buildDashboard(labServiceSpy);
+    c.resultQueue.set([queueItem('r-1'), queueItem('r-2')]);
+
+    c.acknowledgeResult('r-1');
+
+    expect(labServiceSpy.acknowledgeResult).toHaveBeenCalledWith('r-1');
+    expect(c.resultQueue().map((r) => r.id)).toEqual(['r-2']);
+  });
+
+  it('keeps the row when the server refuses the acknowledgement', () => {
+    // A control that silently drops a CRITICAL row while the escalation
+    // sweep goes on paging for it is worse than one that reports a problem.
+    const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+    labServiceSpy.acknowledgeResult.and.returnValue(throwError(() => new Error('500')));
+    const c = buildDashboard(labServiceSpy);
+    c.resultQueue.set([queueItem('r-1')]);
+
+    c.acknowledgeResult('r-1');
+
+    expect(c.resultQueue().map((r) => r.id)).toEqual(['r-1']);
+    expect(TestBed.inject(ToastService).error).toHaveBeenCalled();
+  });
+
+  it('names the read-back ceremony when the server refuses with a 400', () => {
+    // The refusal reaches far more rows than the Critical section: a
+    // reference-range severity of HIGH stamps criticalNotifiedAt too, while
+    // the queue grades that row merely ABNORMAL. The server's answer is the
+    // only reliable way to tell.
+    const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+    labServiceSpy.acknowledgeResult.and.returnValue(throwError(() => ({ status: 400 }) as never));
+    const c = buildDashboard(labServiceSpy);
+    c.resultQueue.set([queueItem('r-1')]);
+
+    c.acknowledgeResult('r-1');
+
+    expect(c.resultQueue().map((r) => r.id)).toEqual(['r-1']);
+    expect(TestBed.inject(ToastService).error).toHaveBeenCalledWith('DASHBOARD.READ_BACK_REQUIRED');
+  });
+
+  it('ignores a second click while the first acknowledgement is in flight', () => {
+    const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+    labServiceSpy.acknowledgeResult.and.returnValue(new Subject<void>().asObservable());
+    const c = buildDashboard(labServiceSpy);
+    c.resultQueue.set([queueItem('r-1')]);
+
+    c.acknowledgeResult('r-1');
+    c.acknowledgeResult('r-1');
+
+    expect(labServiceSpy.acknowledgeResult).toHaveBeenCalledTimes(1);
+    expect(c.acknowledgingResults()).toEqual(['r-1']);
+  });
+
+  it('does not let a failed read be cleared by working through its stale rows', () => {
+    const labServiceSpy = jasmine.createSpyObj<LabService>('LabService', ['acknowledgeResult']);
+    labServiceSpy.acknowledgeResult.and.returnValue(of(undefined));
+    const c = buildDashboard(labServiceSpy);
+    c.resultQueue.set([queueItem('r-1')]);
+    c.resultQueueError.set(true);
+
+    c.acknowledgeResult('r-1');
+
+    expect(c.resultQueue().length).toBe(0);
+    // Still failed: only a read that succeeds may say otherwise.
+    expect(c.resultQueueError()).toBeTrue();
+  });
+});
+
+/**
+ * -- The review queue and the snapshot drawer are hospital-scoped (PR #742) --
+ *
+ * `GET /me/results/review-queue` now filters by the hospital the caller is
+ * acting in, and `GET /me/patients/{id}/snapshot` answers 404 rather than
+ * reading patient-wide. Both used to be read once, on mount, by a page that
+ * is NOT behind the route-level scope gate: the dashboard renders for every
+ * role and for a super-admin in global view, so the outlet is never rebuilt
+ * under it and the reaction has to live in the component.
+ *
+ * The clinical failure these cover: a released CRITICAL result at the
+ * clinician's other hospital appearing in no worklist they are watching,
+ * while the escalation sweep goes on chasing it.
+ */
+describe('dashboard - review queue and snapshot follow the hospital scope', () => {
+  let fixture: ComponentFixture<DashboardComponent>;
+  let component: DashboardComponent;
+  let dashboardService: jasmine.SpyObj<DashboardService>;
+  let trackerWs: jasmine.SpyObj<PatientTrackerWsService>;
+  let roleContext: RoleContextService;
+
+  /**
+   * Every read the doctor dashboard issues on load, stubbed wholesale so the
+   * fixture can be rendered: the reaction under test is a view effect, and it
+   * only runs on change detection.
+   */
+  const DOCTOR_READS: (keyof DashboardService)[] = [
+    'getClinicalDashboard',
+    'getCriticalStrip',
+    'getWorklist',
+    'getPatientFlow',
+    'getInbox',
+    'getRecentPatients',
+    'getResultReviewQueue',
+    'getPatientSnapshot',
+  ];
+
+  function build(hospitalId: string | null): void {
+    const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_DOCTOR']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_DOCTOR'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getHospitalId.and.returnValue(hospitalId);
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'testuser',
+      email: 'test@test.com',
+      roles: ['ROLE_DOCTOR'],
+      staffId: 's1',
+      active: true,
+    } as never);
+
+    trackerWs = jasmine.createSpyObj<PatientTrackerWsService>('PatientTrackerWsService', [
+      'connect',
+      'disconnect',
+      'getEvents',
+      'getConnectionState',
+    ]);
+    trackerWs.getEvents.and.returnValue(new Subject<PatientTrackerEvent>().asObservable());
+
+    dashboardService = jasmine.createSpyObj<DashboardService>('DashboardService', DOCTOR_READS);
+    for (const read of DOCTOR_READS) {
+      (dashboardService[read] as jasmine.Spy).and.returnValue(of([]));
+    }
+    dashboardService.getClinicalDashboard.and.returnValue(of({} as ClinicalDashboard));
+
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: {
+            hasPermission: () => false,
+            hasActivePermission: () => false,
+            hasAnyPermission: () => false,
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+        { provide: DashboardService, useValue: dashboardService },
+        { provide: PatientTrackerWsService, useValue: trackerWs },
+      ],
+    });
+
+    // The REAL RoleContextService, never a stub: the reaction under test is a
+    // signal effect, and a stub whose pick is a plain variable cannot drive it.
+    roleContext = TestBed.inject(RoleContextService);
+    roleContext.activeHospitalId = hospitalId;
+    // As the real service does: `AuthService.getHospitalId()` returns
+    // `effectiveHospitalIdForRequest()` verbatim, so it must follow the pick.
+    authStub.getHospitalId.and.callFake(() => roleContext.effectiveHospitalIdForRequest());
+
+    fixture = TestBed.createComponent(DashboardComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
+
+  /** The chip pinning a different hospital, as the super-admin picker does. */
+  function pickHospital(id: string): void {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.scopeToHospital(id);
+    fixture.detectChanges();
+  }
+
+  it('reads the queue once on load and again when the hospital changes', () => {
+    build('h-a');
+    expect(dashboardService.getResultReviewQueue).toHaveBeenCalledTimes(1);
+
+    pickHospital('h-b');
+
+    expect(dashboardService.getResultReviewQueue).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops the other hospital rows on the scope change, not when the new read lands', () => {
+    build('h-a');
+    component.resultQueue.set([
+      {
+        id: 'r-1',
+        patientName: 'Awa Traore',
+        patientId: 'p-1',
+        testName: 'Potassium',
+        resultValue: '6.8',
+        abnormalFlag: 'CRITICAL',
+        resultedAt: '2026-09-20T09:30:00Z',
+      },
+    ]);
+    // The new read never lands: the old rows must still be gone.
+    dashboardService.getResultReviewQueue.and.returnValue(
+      new Subject<DoctorResultQueueItem[]>().asObservable(),
+    );
+
+    pickHospital('h-b');
+
+    expect(component.resultQueue()).toEqual([]);
+    expect(component.resultQueueError()).toBeFalse();
+  });
+
+  it('clears the rest of the hospital-scoped panels on the switch, not only the queue', () => {
+    // B's review queue beside A's critical strip under one heading is the same
+    // lie in a different card.
+    build('h-a');
+    component.criticalStrip.set({ unacknowledgedCritical: 3 } as never);
+    component.worklistItems.set([{ id: 'w-1' } as never]);
+    component.recentPatients.set([{ id: 'p-9' } as never]);
+    // Nothing lands: the clearing must happen ON the switch, not when the new
+    // reads answer.
+    for (const read of DOCTOR_READS) {
+      (dashboardService[read] as jasmine.Spy).and.returnValue(new Subject<never>().asObservable());
+    }
+
+    pickHospital('h-b');
+
+    expect(component.criticalStrip()).toBeNull();
+    expect(component.worklistItems()).toEqual([]);
+    expect(component.recentPatients()).toEqual([]);
+  });
+
+  it('connects the tracker socket to the hospital picked from global view', () => {
+    // The socket is per hospital and was wired once, in ngOnInit. An account
+    // that lands unscoped connected nothing then — and must not be left
+    // without the live worklist refresh for the rest of the session.
+    build(null);
+    expect(trackerWs.connect).not.toHaveBeenCalled();
+
+    pickHospital('h-b');
+
+    expect(trackerWs.connect).toHaveBeenCalledWith('h-b');
+  });
+
+  it('re-points the tracker socket at the new hospital on a switch', () => {
+    build('h-a');
+    expect(trackerWs.connect).toHaveBeenCalledWith('h-a');
+
+    pickHospital('h-b');
+
+    expect(trackerWs.disconnect).toHaveBeenCalled();
+    expect(trackerWs.connect).toHaveBeenCalledWith('h-b');
+  });
+
+  it('does not leave the hero naming the hospital the reader just left', () => {
+    // The hero sat above the scope hint, so global view read "Hôpital A"
+    // directly over "select a hospital to continue".
+    build('h-a');
+    component.hospitalName.set('Hopital A');
+    component.departmentName.set('Pediatrie');
+
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.enableGlobalView();
+    fixture.detectChanges();
+
+    expect(component.hasHospitalScope()).toBeFalse();
+    expect(component.hospitalName()).toBeNull();
+    expect(component.departmentName()).toBeNull();
+  });
+
+  it('does not read the queue at all with no hospital in scope', () => {
+    build(null);
+
+    expect(dashboardService.getResultReviewQueue).not.toHaveBeenCalled();
+    expect(component.hasHospitalScope()).toBeFalse();
+    // Not an error either: the panel renders the scope hint, not a failure.
+    expect(component.resultQueueError()).toBeFalse();
+  });
+
+  it('closes the open snapshot on a scope change, because it is the other hospital record', () => {
+    build('h-a');
+    component.openPatientSnapshot('p-1');
+    expect(component.snapshotDrawerOpen()).toBeTrue();
+
+    pickHospital('h-b');
+
+    expect(component.snapshotDrawerOpen()).toBeFalse();
+    expect(component.patientSnapshot()).toBeNull();
+  });
+
+  it('declines the snapshot read with no scope and says which remedy applies', () => {
+    build(null);
+
+    component.openPatientSnapshot('p-1');
+
+    expect(dashboardService.getPatientSnapshot).not.toHaveBeenCalled();
+    // The drawer stays OPEN: closing it renders a refusal as a dead button.
+    expect(component.snapshotDrawerOpen()).toBeTrue();
+    expect(component.snapshotError()).toBe('NO_SCOPE');
+  });
+
+  it('keeps the drawer open and states the failure when the snapshot read fails', () => {
+    build('h-a');
+    dashboardService.getPatientSnapshot.and.returnValue(throwError(() => ({ status: 503 })));
+
+    component.openPatientSnapshot('p-1');
+
+    expect(component.snapshotDrawerOpen()).toBeTrue();
+    expect(component.snapshotError()).toBe('FAILED');
+    expect(component.patientSnapshot()).toBeNull();
+    expect(component.snapshotLoading()).toBeFalse();
+  });
+
+  it('tells a scoped 404 apart from an outage, because only one is worth retrying', () => {
+    // #742 refuses rather than reading patient-wide, so a 404 on a read that
+    // DID carry a scope means the patient is not reachable here. A Retry on
+    // that can only reproduce the same answer.
+    build('h-a');
+    dashboardService.getPatientSnapshot.and.returnValue(throwError(() => ({ status: 404 })));
+
+    component.openPatientSnapshot('p-1');
+
+    expect(component.snapshotDrawerOpen()).toBeTrue();
+    expect(component.snapshotError()).toBe('NOT_HERE');
+  });
+
+  it('treats a 200 with no payload as a failure, never as an empty drawer', () => {
+    // `getPatientSnapshot` maps `res.data` with no null guard, so this lands
+    // in `next`. Open, not loading and with no error renders nothing at all.
+    build('h-a');
+    dashboardService.getPatientSnapshot.and.returnValue(of(null as unknown as PatientSnapshot));
+
+    component.openPatientSnapshot('p-1');
+
+    expect(component.snapshotDrawerOpen()).toBeTrue();
+    expect(component.snapshotError()).toBe('FAILED');
+    expect(component.patientSnapshot()).toBeNull();
+  });
+
+  it('re-reads the same patient from the drawer Retry', () => {
+    build('h-a');
+    dashboardService.getPatientSnapshot.and.returnValue(throwError(() => ({ status: 500 })));
+    component.openPatientSnapshot('p-1');
+
+    dashboardService.getPatientSnapshot.and.returnValue(
+      of({ patientId: 'p-1' } as PatientSnapshot),
+    );
+    component.retryPatientSnapshot();
+
+    expect(dashboardService.getPatientSnapshot).toHaveBeenCalledTimes(2);
+    expect(dashboardService.getPatientSnapshot.calls.mostRecent().args).toEqual(['p-1']);
+    expect(component.snapshotError()).toBeNull();
+  });
+
+  it('ignores a snapshot that arrives after the drawer was closed', () => {
+    build('h-a');
+    const slow = new Subject<PatientSnapshot>();
+    dashboardService.getPatientSnapshot.and.returnValue(slow.asObservable());
+    component.openPatientSnapshot('p-1');
+    component.closePatientSnapshot();
+
+    slow.next({ patientId: 'p-1' } as PatientSnapshot);
+
+    expect(component.snapshotDrawerOpen()).toBeFalse();
+    expect(component.patientSnapshot()).toBeNull();
+  });
+});
+
+/**
+ * The patient's "My care team" card read `members`, a field the care-team
+ * endpoint never sends, so it never appeared. It now shows the current
+ * primary care provider from CareTeamDTO.primaryCare. Asserted through the
+ * DOM in French: the card only counts once it renders, translated.
+ */
+describe('Dashboard patient care-team card', () => {
+  function renderPatient(): ComponentFixture<DashboardComponent> {
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_PATIENT']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_PATIENT'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'awa',
+      email: 'awa@example.org',
+      roles: ['ROLE_PATIENT'],
+      active: true,
+    } as never);
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter(appRoutes),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: {
+            hasPermission: () => false,
+            hasActivePermission: () => false,
+            hasAnyPermission: () => false,
+          },
+        },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      DASHBOARD: { MY_CARE_TEAM: 'Mon équipe soignante' },
+      PORTAL: {
+        CARE_TEAM: { PRIMARY_PROVIDER: 'Médecin traitant', SINCE: 'Depuis le {{date}}' },
+      },
+    });
+    const fixture = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.loading.set(false);
+    return fixture;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const card = (f: ComponentFixture<DashboardComponent>): HTMLElement | null =>
+    (f.nativeElement as HTMLElement).querySelector('[data-testid="dashboard-care-team"]');
+
+  it('shows the current primary care provider, translated', () => {
+    const fixture = renderPatient();
+    fixture.componentInstance.myCareTeam.set({
+      primaryCare: {
+        id: 'pcp-1',
+        hospitalId: 'h-1',
+        hospitalName: 'CHU Yalgado',
+        doctorUserId: 'd-1',
+        doctorDisplay: 'Dr Awa Traoré',
+        startDate: '2026-01-15',
+        endDate: null,
+        current: true,
+      },
+      primaryCareHistory: [],
+    });
+    fixture.detectChanges();
+
+    const el = card(fixture);
+    expect(el).not.toBeNull();
+    expect(el!.querySelector('.card-title')?.textContent?.trim()).toBe('Mon équipe soignante');
+    expect(el!.querySelector('.ctm-name')?.textContent?.trim()).toBe('Dr Awa Traoré');
+    const roles = Array.from(el!.querySelectorAll('.ctm-role')).map((r) => r.textContent?.trim());
+    expect(roles[0]).toBe('Médecin traitant');
+    expect(roles[1]).toBe('CHU Yalgado');
+    expect(roles[2]).toMatch(/^Depuis le /);
+  });
+
+  it('stays out of the way when there is no current provider', () => {
+    const fixture = renderPatient();
+    fixture.componentInstance.myCareTeam.set({ primaryCare: null, primaryCareHistory: [] });
+    fixture.detectChanges();
+    expect(card(fixture)).toBeNull();
+  });
+});
+
+describe('Dashboard invoice aging (QA D283)', () => {
+  function render(): ComponentFixture<DashboardComponent> {
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_HOSPITAL_ADMIN'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'admin',
+      roles: ['ROLE_HOSPITAL_ADMIN'],
+      active: true,
+    } as any);
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: {
+            hasPermission: () => true,
+            hasActivePermission: () => true,
+            hasAnyPermission: () => true,
+          },
+        },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      DASHBOARD: {
+        AGING_CURRENT: 'À jour',
+        AGING_1_30: '1 à 30 jours',
+        AGING_31_60: '31 à 60 jours',
+        AGING_61_90: '61 à 90 jours',
+        AGING_90_PLUS: 'Plus de 90 jours',
+      },
+    });
+    translate.use('fr');
+    const fixture = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges(); // run ngOnInit first, then pin the state under test
+    const bucket = (label: string, total: number) => ({ label, count: 1, total });
+    fixture.componentInstance.hospitalAdminSummary.set({
+      invoiceAging: {
+        current: bucket('Current', 15000),
+        days1to30: bucket('1-30 days', 2500),
+        days31to60: bucket('31-60 days', 0),
+        days61to90: bucket('61-90 days', 0),
+        over90: bucket('90+ days', 0),
+      },
+    } as any);
+    fixture.componentInstance.isHospitalAdmin.set(true);
+    fixture.componentInstance.loading.set(false);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('formats amounts in XOF, never in dollars', () => {
+    const c = render().componentInstance;
+    const text = c.formatInvoiceAmount(15000);
+    expect(text).not.toContain('$');
+    expect(text).toContain('F');
+    expect(text.replaceAll(/\D/g, '')).toBe('15000');
+  });
+
+  it('renders the translated bucket label instead of the server English label', () => {
+    const el: HTMLElement = render().nativeElement;
+    const text = el.textContent ?? '';
+    expect(text).toContain('À jour');
+    expect(text).toContain('1 à 30 jours');
+    expect(text).not.toContain('Current');
+    expect(text).not.toContain('$');
+  });
+
+  it('recent activity shows the entity label, never a raw record id (QA D672)', () => {
+    const fixture = render();
+    TestBed.inject(TranslateService).setTranslation(
+      'fr',
+      { PORTAL: { ENUM: { AUDIT_ENTITY_TYPE: { PATIENT: 'Patient' } } } },
+      true,
+    );
+    const evt = (id: string, resourceName: string) => ({
+      id,
+      eventType: 'DATA_CREATE',
+      status: 'SUCCESS',
+      entityType: 'PATIENT',
+      resourceName,
+      userName: 'QA Admin',
+      eventTimestamp: '2026-10-23T10:00:00',
+    });
+    fixture.componentInstance.hospitalAdminSummary.set({
+      recentAuditEvents: [
+        evt('a1', '19ffd52b-aae7-4820-8408-6622564a3ac3'),
+        evt('a2', 'Patient 19ffd52b-aae7-4820-8408-6622564a3ac3'),
+      ],
+    } as any);
+    fixture.detectChanges();
+    const rows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.audit-row .audit-summary'),
+    ).map((r) => r.textContent ?? '');
+    expect(rows.length).toBe(2);
+    for (const text of rows) {
+      expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
+      expect(text).toContain('Patient');
+    }
+  });
+});
+
+describe('QA D316: dashboard current medications', () => {
+  it('keeps only the courses still running', () => {
+    const med = (id: string, status: string) => ({ id, status }) as unknown as MedicationSummary;
+    const out = currentMedications([
+      med('a', 'ACTIVE'),
+      med('b', 'COMPLETED'),
+      med('c', 'DISCONTINUED'),
+      med('d', 'ON_HOLD'),
+    ]);
+    expect(out.map((m) => m.id)).toEqual(['a']);
+  });
+});
+
+describe('QA D254: dashboard billing widget', () => {
+  function renderPatient(): ComponentFixture<DashboardComponent> {
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_PATIENT']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_PATIENT'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'awa',
+      email: 'awa@example.org',
+      roles: ['ROLE_PATIENT'],
+      active: true,
+    } as never);
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter(appRoutes),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: {
+            hasPermission: () => false,
+            hasActivePermission: () => false,
+            hasAnyPermission: () => false,
+          },
+        },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('en');
+    translate.use('en');
+    translate.setTranslation('en', {
+      PORTAL: { BILLING: { BALANCE_DUE: 'Balance due', CREDITED_TO: 'Credited to {{number}}' } },
+    });
+    const fixture = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.loading.set(false);
+    return fixture;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const invoice = (over: Partial<PortalInvoice>): PortalInvoice => ({
+    id: 'inv-1',
+    invoiceNumber: 'INV-1',
+    date: '2026-10-01',
+    dueDate: '2026-10-31',
+    amount: 5000,
+    paid: 5000,
+    balance: 0,
+    status: 'PAID',
+    facility: 'Clinic',
+    visitType: 'CONSULTATION',
+    ...over,
+  });
+
+  const rows = (f: ComponentFixture<DashboardComponent>): HTMLElement[] =>
+    Array.from(
+      (f.nativeElement as HTMLElement).querySelectorAll(
+        '[data-testid="dashboard-billing"] .patient-bill-row',
+      ),
+    );
+
+  it('shows the total of a paid invoice, not its zero balance', () => {
+    const fixture = renderPatient();
+    const c = fixture.componentInstance;
+    c.myInvoices.set([invoice({})]);
+    fixture.detectChanges();
+    const [row] = rows(fixture);
+    expect(row).toBeDefined();
+    const amount = row.querySelector('.bill-amount')?.textContent?.trim();
+    expect(amount).toBe(c.formatInvoiceAmount(5000));
+    expect(amount).not.toBe(c.formatInvoiceAmount(0));
+    expect(row.textContent).not.toContain('Balance due');
+    expect(row.querySelector('.bill-status')?.getAttribute('data-status')).toBe('PAID');
+  });
+
+  it('marks a folded copay as credited to the invoice it moved to', () => {
+    const fixture = renderPatient();
+    const c = fixture.componentInstance;
+    c.myInvoices.set([
+      invoice({
+        id: 'inv-2',
+        amount: 2000,
+        paid: 0,
+        balance: 0,
+        status: 'CANCELLED',
+        creditedTo: 'INV-9',
+      }),
+    ]);
+    fixture.detectChanges();
+    const [row] = rows(fixture);
+    expect(row.querySelector('.bill-amount')?.textContent?.trim()).toBe(
+      c.formatInvoiceAmount(2000),
+    );
+    const chip = row.querySelector('.bill-status');
+    expect(chip?.getAttribute('data-status')).toBe('CREDITED');
+    expect(chip?.textContent?.trim()).toBe('Credited to INV-9');
+  });
+
+  it('shows what is left on a part-paid invoice', () => {
+    const fixture = renderPatient();
+    const c = fixture.componentInstance;
+    c.myInvoices.set([invoice({ paid: 2000, balance: 3000, status: 'PARTIALLY_PAID' })]);
+    fixture.detectChanges();
+    const [row] = rows(fixture);
+    expect(row.querySelector('.bill-amount')?.classList).toContain('bill-due');
+    expect(row.textContent).toContain('Balance due');
+    expect(row.textContent).toContain(c.formatInvoiceAmount(3000));
   });
 });

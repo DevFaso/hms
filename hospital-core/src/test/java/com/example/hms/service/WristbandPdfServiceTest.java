@@ -133,6 +133,17 @@ class WristbandPdfServiceTest {
     }
 
     @Test
+    void qaD1036_theWristbandPrintsTheWholeNameMiddleNameIncludedNeverCut() throws Exception {
+        patient.setFirstName("Pélagie");
+        patient.setMiddleName("Wendkouni");
+        patient.setLastName("Kiemdé-Ouédraogo");
+
+        // 33 characters: it was cut at 28, mid-word; it now shrinks to fit the label.
+        assertThat(textOf(service.generateWristbandPdf(patientId, hospitalId)))
+            .contains("Pélagie Wendkouni Kiemdé-Ouédraogo").doesNotContain("…");
+    }
+
+    @Test
     void wristbandDatesFollowTheRequestLocale() throws Exception {
         LocaleContextHolder.setLocale(Locale.ENGLISH);
 
@@ -192,7 +203,7 @@ class WristbandPdfServiceTest {
         byte[] pdf = service.generateSpecimenLabelPdf(specimen.getId(), hospitalId);
 
         assertThat(new String(pdf, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
-        assertThat(textOf(pdf)).contains("ACC-20260822-00001", "Awa Kaboré", "Blood  22 août 2026 10:15");
+        assertThat(textOf(pdf)).contains("ACC-20260822-00001", "Awa Kaboré", "Blood 22 août 2026 10:15"); // QA D1091: fitted text is word-wrapped, so runs of spaces print as one
     }
 
     @Test
@@ -232,7 +243,7 @@ class WristbandPdfServiceTest {
 
         assertThatThrownBy(() -> service.generateSpecimenLabelPdf(specimenId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Specimen not found");
+            .hasFieldOrPropertyWithValue("messageKey", "labspecimen.notfound");
     }
 
     // ── Stock-lot label (Tier 2 item 34) ────────────────────────────────
@@ -311,6 +322,6 @@ class WristbandPdfServiceTest {
 
         assertThatThrownBy(() -> service.generateStockLotLabelPdf(lotId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Stock lot not found");
+            .hasFieldOrPropertyWithValue("messageKey", "stockLot.notFound");
     }
 }

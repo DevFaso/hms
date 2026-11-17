@@ -2,6 +2,7 @@ package com.example.hms.mapper;
 
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Encounter;
+import com.example.hms.model.encounter.EncounterNote;
 import com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO;
 import com.example.hms.payload.dto.clinical.CheckOutRequestDTO;
 import tools.jackson.core.JacksonException;
@@ -64,13 +65,109 @@ public class CheckOutMapper {
         // Follow-up appointment
         if (followUpAppointmentId != null) {
             builder.followUpAppointmentId(followUpAppointmentId);
-            if (request != null && request.getFollowUpAppointment() != null
-                    && request.getFollowUpAppointment().getPreferredDate() != null) {
-                builder.followUpAppointmentDate(request.getFollowUpAppointment().getPreferredDate());
-            }
+        }
+        // QA D321: the requested follow-up is shown even when no appointment
+        // was booked from it (checkout files it as a recall); it used to need an
+        // appointment id that checkout never passes, so it vanished from the AVS.
+        if (request != null && request.getFollowUpAppointment() != null
+                && request.getFollowUpAppointment().getPreferredDate() != null
+                && !request.getFollowUpAppointment().getPreferredDate().isBlank()) {
+            builder.followUpAppointmentDate(request.getFollowUpAppointment().getPreferredDate());
         }
 
-        return builder.build();
+        // Polish 2026-11-13: the identity band (date of birth, the MRN at the visit's hospital).
+        if (encounter.getPatient() != null) {
+            builder.patientDateOfBirth(encounter.getPatient().getDateOfBirth())
+                   .patientMrn(encounter.getHospital() != null
+                       ? encounter.getPatient().getMrnForHospital(encounter.getHospital().getId()) : null);
+        }
+        builder.inpatientStay(encounter.getAdmissionId() != null
+            || encounter.getEncounterType() == com.example.hms.enums.EncounterType.INPATIENT);
+
+        AfterVisitSummaryDTO summary = builder.build();
+        EncounterNote signed = encounter.getLatestSignedEncounterNote();
+        fillFromSignedNote(summary, signed);
+        // Polish 2026-11-13: "Signé par ... le ..." from the latest signed note.
+        if (signed != null && signed.getSignedAt() != null) {
+            summary.setSignedAt(signed.getSignedAt());
+            summary.setSignedByName(trimToNull(signed.getSignedByName()));
+        }
+        // Provisional platform rule: "not finalised" while a note of the visit waits for its signature.
+        summary.setPendingSignature(encounter.hasNoteAwaitingSignature());
+        return summary;
+    }
+
+    /**
+     * The summary used to read only the checkout form and the two encounter
+     * columns it writes, so a visit documented in a signed note but checked out
+     * with an empty form produced a summary with nothing in it (QA D42). Each
+     * blank section now falls back to the signed note: chief complaint and the
+     * assessment as the diagnosis; the patient instructions and the plan are
+     * always added to the follow-up (QA D730). Anything typed at checkout comes first, and an
+     * unsigned draft is never shown to the patient.
+     */
+    private static void fillFromSignedNote(AfterVisitSummaryDTO summary, EncounterNote note) {
+        if (note == null || note.getSignedAt() == null) {
+            return;
+        }
+        if (isBlank(summary.getChiefComplaint())) {
+            summary.setChiefComplaint(trimToNull(note.getChiefComplaint()));
+        }
+        if (summary.getDischargeDiagnoses() == null || summary.getDischargeDiagnoses().isEmpty()) {
+            String assessment = trimToNull(note.getAssessment());
+            summary.setDischargeDiagnoses(assessment != null ? List.of(assessment) : Collections.emptyList());
+        }
+        // QA D730: the summary kept only ONE of the note's two patient-facing
+        // sections (instructions, else plan) and dropped both as soon as the
+        // checkout form carried any follow-up text. The patient now gets what
+        // was typed at checkout, then the signed instructions, then the plan,
+        // each once.
+        summary.setFollowUpInstructions(joinDistinct(
+            trimToNull(summary.getFollowUpInstructions()),
+            trimToNull(note.getPatientInstructions()),
+            trimToNull(note.getPlan())));
+    }
+
+    /** Room left in {@code discharge_summaries.follow_up_instructions}. */
+    public static final int STORED_FOLLOW_UP_MAX = 3000;
+
+    /**
+     * QA D730/D744: the patient's after-visit summary is the stored discharge
+     * summary, not this DTO, so the round-10 fix above never reached it. Both
+     * paths now share this rule: the follow-up typed at checkout, then the
+     * signed note's patient instructions, then its plan, each once. An
+     * unsigned draft adds nothing. Capped to the stored column.
+     */
+    public static String followUpWithSignedNote(String followUp, EncounterNote note) {
+        String typed = trimToNull(followUp);
+        if (note == null || note.getSignedAt() == null) {
+            return typed;
+        }
+        String joined = joinDistinct(typed, trimToNull(note.getPatientInstructions()), trimToNull(note.getPlan()));
+        return joined != null && joined.length() > STORED_FOLLOW_UP_MAX
+            ? joined.substring(0, STORED_FOLLOW_UP_MAX) : joined;
+    }
+
+    private static String joinDistinct(String first, String second, String third) {
+        StringBuilder out = new StringBuilder();
+        for (String part : new String[] {first, second, third}) {
+            if (part == null || out.indexOf(part) >= 0) {
+                continue;
+            }
+            if (!out.isEmpty()) {
+                out.append("\n\n");
+            }
+            out.append(part);
+        }
+        return out.isEmpty() ? null : out.toString();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static String trimToNull(String value) {
+        return isBlank(value) ? null : value.trim();
     }
 
     /** Serialize a list of diagnoses to JSON text for persistence. */
@@ -97,10 +194,7 @@ public class CheckOutMapper {
 
     private String derivePatientName(Encounter enc) {
         if (enc.getPatient() == null) return null;
-        String first = enc.getPatient().getFirstName();
-        String last = enc.getPatient().getLastName();
-        if (first == null && last == null) return null;
-        return ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
+        return enc.getPatient().getFullName();
     }
 
     private String deriveProviderName(Encounter enc) {

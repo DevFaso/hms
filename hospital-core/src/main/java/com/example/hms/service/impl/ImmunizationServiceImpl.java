@@ -34,11 +34,14 @@ import com.example.hms.security.context.HospitalContextHolder;
 @Slf4j
 @Transactional
 public class ImmunizationServiceImpl implements ImmunizationService {
-    private static final String IMMUNIZATION_NOT_FOUND_PREFIX = "Immunization not found with id: ";
+    private static final String ENCOUNTER_NOT_FOUND_KEY = "encounter.notfound";
+    private static final String IMMUNIZATION_NOT_FOUND_KEY = "immunization.notFound";
+
 
 
     private final ImmunizationRepository immunizationRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
@@ -53,22 +56,34 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         Patient patient = patientRepository.findById(requestDTO.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", requestDTO.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(requestDTO.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(requestDTO.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
+        // QA r5 tenancy sweep: the row is written at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", requestDTO.getHospitalId());
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
-        Staff administeredBy = null;
-        if (requestDTO.getAdministeredByStaffId() != null) {
-            administeredBy = staffRepository.findById(requestDTO.getAdministeredByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getAdministeredByStaffId()));
-        }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D503 class: the vaccinator is the caller, not a colleague named in the body.
+        // QA D1003: a dose transcribed from a vaccination card or another
+        // facility's record was not given by the clinician who records it;
+        // it has no vaccinator here rather than a false one.
+        // The identity claim is checked either way (a colleague's id is refused);
+        // a transcribed dose then keeps no vaccinator here.
+        Staff actor = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(), hospital.getId());
+        Staff administeredBy = isTranscribed(requestDTO.getSourceOfRecord()) ? null : actor;
 
         Encounter encounter = null;
         if (requestDTO.getEncounterId() != null) {
             encounter = encounterRepository.findById(requestDTO.getEncounterId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Encounter not found with id: " + requestDTO.getEncounterId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId()));
+            // QA r5 tenancy sweep: the linked encounter is one of the caller's hospital.
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId());
         }
 
+        ImmunizationPlausibility.require(requestDTO, patient.getDateOfBirth(), null);
         PatientImmunization immunization = immunizationMapper.toEntity(requestDTO, patient, hospital, administeredBy, encounter);
+        refuseDuplicateDose(immunization, null);
         PatientImmunization savedImmunization = immunizationRepository.save(immunization);
 
         log.info("Immunization created with id: {}", savedImmunization.getId());
@@ -81,7 +96,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching immunization with id: {}", id);
         
         PatientImmunization immunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
 
         return immunizationMapper.toResponseDTO(immunization);
     }
@@ -115,6 +130,35 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         return immunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
                 .toList();
+    }
+
+    /**
+     * QA D1212 (round 24): the proxy health summary read the grantor's
+     * immunizations through {@link #getImmunizationsByPatientId}, whose
+     * tenant-scoped {@code existsById} answered "not found" for a grantor
+     * registered only at another hospital than the proxy's. The patient's own
+     * record is read as labs, medications and vitals read it on the portal:
+     * the patient row unscoped (the caller already established whose record
+     * it is), every hospital's rows, nothing accounted as a disclosure.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ImmunizationResponseDTO> getImmunizationsForPatientPortal(UUID patientId) {
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        // QA (round 54, the D1910/D1912 class): a dose removed or marked entered
+        // in error is not part of the patient's record; the portal, the apps and
+        // the health summary all read through here.
+        return immunizationRepository.findByPatient_IdOrderByAdministrationDateDesc(patient.getId()).stream()
+                .filter(ImmunizationServiceImpl::isLiveRecord)
+                .map(immunizationMapper::toResponseDTO)
+                .toList();
+    }
+
+    /** A dose still on the record: neither removed nor marked entered in error. */
+    static boolean isLiveRecord(PatientImmunization immunization) {
+        return !Boolean.FALSE.equals(immunization.getActive())
+            && !"ENTERED_IN_ERROR".equalsIgnoreCase(immunization.getStatus());
     }
 
     @Override
@@ -202,7 +246,9 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Marking reminder sent for immunization: {}", immunizationId);
 
         PatientImmunization immunization = immunizationRepository.findById(immunizationId)
-                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + immunizationId));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, immunizationId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(immunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, immunizationId);
 
         immunization.setReminderSent(true);
         immunization.setReminderSentDate(LocalDate.now());
@@ -216,14 +262,29 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Updating immunization with id: {}", id);
 
         PatientImmunization existingImmunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingImmunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, id);
+        ImmunizationPlausibility.require(requestDTO,
+            existingImmunization.getPatient() == null ? null : existingImmunization.getPatient().getDateOfBirth(),
+            existingImmunization);
 
+        // Review of #971: an edit that does not send a source keeps the stored
+        // one (and its vaccinator); only an explicit change to a transcribed
+        // source drops the vaccinator here.
+        if (requestDTO.getSourceOfRecord() == null || requestDTO.getSourceOfRecord().isBlank()) {
+            requestDTO.setSourceOfRecord(existingImmunization.getSourceOfRecord());
+        }
+        if (isTranscribed(requestDTO.getSourceOfRecord())) {
+            // QA D1003: corrected to a historical dose, it keeps no vaccinator here.
+            existingImmunization.setAdministeredBy(null);
+            requestDTO.setAdministeredByStaffId(null);
+        }
         // Update staff if changed
         if (requestDTO.getAdministeredByStaffId() != null && 
             (existingImmunization.getAdministeredBy() == null || 
              !existingImmunization.getAdministeredBy().getId().equals(requestDTO.getAdministeredByStaffId()))) {
-            Staff administeredBy = staffRepository.findById(requestDTO.getAdministeredByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getAdministeredByStaffId()));
+            Staff administeredBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(),
+                    com.example.hms.security.CallerIdentity.hospitalIdOf(existingImmunization.getHospital()));
             existingImmunization.setAdministeredBy(administeredBy);
         }
 
@@ -232,15 +293,73 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             (existingImmunization.getEncounter() == null || 
              !existingImmunization.getEncounter().getId().equals(requestDTO.getEncounterId()))) {
             Encounter encounter = encounterRepository.findById(requestDTO.getEncounterId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Encounter not found with id: " + requestDTO.getEncounterId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId()));
+            // The linked encounter is one of the immunization's own hospital.
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId());
             existingImmunization.setEncounter(encounter);
         }
 
         immunizationMapper.updateEntity(existingImmunization, requestDTO);
+        refuseDuplicateDose(existingImmunization, existingImmunization.getId());
         PatientImmunization updatedImmunization = immunizationRepository.save(existingImmunization);
 
         log.info("Immunization updated successfully: {}", id);
         return immunizationMapper.toResponseDTO(updatedImmunization);
+    }
+
+    /**
+     * QA D1003: the sources the immunization form writes for a dose that was
+     * not given here (a vaccination card, another facility's record, the
+     * family's report). Only these drop the vaccinator; a missing or legacy
+     * free-text source keeps the previous behaviour (review of #971).
+     */
+    static final java.util.Set<String> TRANSCRIBED_SOURCES =
+        java.util.Set.of("VACCINATION_CARD", "EXTERNAL_RECORD", "PATIENT_REPORT");
+
+    static boolean isTranscribed(String source) {
+        return source != null && TRANSCRIBED_SOURCES.contains(source);
+    }
+
+    /**
+     * QA D1248 (round 25): the same dose - patient, vaccine, administration
+     * date and dose number - was recorded a second and a third time with no
+     * warning. Another live row of the patient (any hospital: a dose is one
+     * event in the patient's life) with the same key refuses the write. A row
+     * removed or marked entered in error does not count.
+     */
+    private void refuseDuplicateDose(PatientImmunization candidate, UUID selfId) {
+        if (candidate.getPatient() == null || candidate.getAdministrationDate() == null) {
+            return;
+        }
+        boolean duplicate = immunizationRepository.findByPatient_IdAndActiveTrue(candidate.getPatient().getId()).stream()
+            .filter(other -> selfId == null || !selfId.equals(other.getId()))
+            .filter(ImmunizationServiceImpl::isLiveRecord)
+            .anyMatch(other -> sameDose(candidate, other));
+        if (duplicate) {
+            // QA D1365 (round 31): named on the date, so the dialog marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("administrationDate", "immunization.r25.duplicateDose");
+        }
+    }
+
+    static boolean sameDose(PatientImmunization a, PatientImmunization b) {
+        return java.util.Objects.equals(a.getAdministrationDate(), b.getAdministrationDate())
+            && java.util.Objects.equals(a.getDoseNumber(), b.getDoseNumber())
+            && sameVaccine(a, b);
+    }
+
+    /** The CVX code when both rows carry one; otherwise the vaccine's name, case and accents aside. */
+    static boolean sameVaccine(PatientImmunization a, PatientImmunization b) {
+        String codeA = blankToNull(a.getVaccineCode());
+        String codeB = blankToNull(b.getVaccineCode());
+        if (codeA != null && codeB != null) {
+            return codeA.equalsIgnoreCase(codeB);
+        }
+        String nameA = com.example.hms.utility.PatientMatchKeys.foldName(a.getVaccineDisplay());
+        return nameA != null && nameA.equals(com.example.hms.utility.PatientMatchKeys.foldName(b.getVaccineDisplay()));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     @Override
@@ -248,8 +367,13 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Deleting immunization with id: {}", id);
 
         PatientImmunization immunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(immunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, id);
 
+        // QA D1242 class (round 25): a removed dose stays removed; a repeat is refused.
+        if (Boolean.FALSE.equals(immunization.getActive())) {
+            throw new com.example.hms.exception.BusinessException("medicalHistory.r25.alreadyRemoved");
+        }
         immunization.setActive(false);
         immunizationRepository.save(immunization);
 

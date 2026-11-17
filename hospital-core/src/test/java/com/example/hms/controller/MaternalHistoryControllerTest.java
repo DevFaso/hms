@@ -125,6 +125,18 @@ class MaternalHistoryControllerTest {
         verify(maternalHistoryService).getMaternalHistoryById(historyId, username);
     }
 
+    /** QA D1082: a woman with no maternal history yet is 204, not 404. */
+    @Test
+    void getCurrentMaternalHistory_noneIsNoContent() {
+        when(maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username)).thenReturn(null);
+
+        ResponseEntity<MaternalHistoryResponseDTO> response = maternalHistoryController
+                .getCurrentMaternalHistory(patientId, authentication);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(response.getBody()).isNull();
+    }
+
     @Test
     void getCurrentMaternalHistory_shouldReturnCurrentVersion() {
         when(maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username))

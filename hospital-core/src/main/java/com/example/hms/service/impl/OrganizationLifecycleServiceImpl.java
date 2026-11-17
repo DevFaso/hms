@@ -5,7 +5,6 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.OrganizationLifecycleState;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.model.Organization;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.superadmin.TenantLifecycleActionRequestDTO;
@@ -23,6 +22,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
@@ -41,10 +41,8 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     // Action labels — used for transition validation, reason validation, and
     // MFA step-up messages. Kept as constants to dedupe per Sonar S1192.
     private static final String ACTION_SUSPEND = "suspend";
-    private static final String ACTION_RESTORE = "restore";
     private static final String ACTION_ARCHIVE = "archive";
     private static final String ACTION_SCHEDULE_PURGE = "schedule purge";
-    private static final String ACTION_CANCEL_PURGE = "cancel purge";
 
     private static final Set<OrganizationLifecycleState> SUSPENDABLE = EnumSet.of(
         OrganizationLifecycleState.ACTIVE
@@ -68,6 +66,12 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     private final AuditEventLogService auditEventLogService;
     private final OrganizationLifecycleStatusService lifecycleStatusService;
     private final MfaService mfaService;
+    /**
+     * The tenant-lifecycle clock: it stamps suspend/archive and writes
+     * {@code purgeScheduledFor}, which {@code TenantPurgeJob} compares against
+     * the same bean when it picks the orgs due for purge.
+     */
+    private final Clock clock;
 
     /**
      * When true, destructive transitions (suspend/archive/schedule-purge) require
@@ -96,9 +100,10 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
 
     @Override
     public TenantLifecycleResponseDTO suspend(UUID organizationId, TenantLifecycleActionRequestDTO request, String mfaToken) {
+        // QA round 29: the body before the state, so a missing reason is always named.
+        String reason = requireReason(request);
         Organization org = loadOrThrow(organizationId);
-        requireTransition(org, SUSPENDABLE, ACTION_SUSPEND);
-        String reason = requireReason(request, ACTION_SUSPEND);
+        requireTransition(org, SUSPENDABLE);
         requireStepUp(ACTION_SUSPEND, mfaToken);
 
         org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
@@ -107,7 +112,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
         // suspended tenant disappears from default org lists immediately,
         // not only from the JWT login path.
         org.setActive(false);
-        org.setSuspendedAt(Instant.now());
+        org.setSuspendedAt(Instant.now(clock));
         org.setSuspendedBy(currentActorId());
         org.setSuspensionReason(reason);
         organizationRepository.save(org);
@@ -120,7 +125,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     @Override
     public TenantLifecycleResponseDTO restore(UUID organizationId, TenantLifecycleActionRequestDTO request) {
         Organization org = loadOrThrow(organizationId);
-        requireTransition(org, RESTORABLE, ACTION_RESTORE);
+        requireTransition(org, RESTORABLE);
 
         OrganizationLifecycleState previous = org.getLifecycleState();
         org.setLifecycleState(OrganizationLifecycleState.ACTIVE);
@@ -140,16 +145,17 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
 
     @Override
     public TenantLifecycleResponseDTO archive(UUID organizationId, TenantLifecycleActionRequestDTO request, String mfaToken) {
+        // QA round 29: the body before the state, so a missing reason is always named.
+        String reason = requireReason(request);
         Organization org = loadOrThrow(organizationId);
-        requireTransition(org, ARCHIVABLE, ACTION_ARCHIVE);
-        String reason = requireReason(request, ACTION_ARCHIVE);
+        requireTransition(org, ARCHIVABLE);
         requireStepUp(ACTION_ARCHIVE, mfaToken);
 
         org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
         // Same rationale as suspend — flip the legacy `active` flag so
         // archived tenants are also hidden from any default-visibility query.
         org.setActive(false);
-        org.setArchivedAt(Instant.now());
+        org.setArchivedAt(Instant.now(clock));
         org.setArchivedBy(currentActorId());
         org.setArchiveReason(reason);
         organizationRepository.save(org);
@@ -161,20 +167,23 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
 
     @Override
     public TenantLifecycleResponseDTO schedulePurge(UUID organizationId, TenantLifecycleActionRequestDTO request, String mfaToken) {
+        // QA round 29: the body before the state, so a missing reason is always named.
+        String reason = requireReason(request);
         Organization org = loadOrThrow(organizationId);
-        requireTransition(org, PURGE_SCHEDULABLE, ACTION_SCHEDULE_PURGE);
-        String reason = requireReason(request, ACTION_SCHEDULE_PURGE);
-        requireStepUp(ACTION_SCHEDULE_PURGE, mfaToken);
+        requireTransition(org, PURGE_SCHEDULABLE);
 
         // `request` is guaranteed non-null here — requireReason() above throws
         // otherwise. Only the per-call override on getPurgeScheduledFor() is optional.
         Instant scheduledFor = request.getPurgeScheduledFor() != null
             ? request.getPurgeScheduledFor()
-            : Instant.now().plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
+            : Instant.now(clock).plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
 
-        if (scheduledFor.isBefore(Instant.now())) {
-            throw new BusinessRuleException("Purge cannot be scheduled in the past.");
+        if (scheduledFor.isBefore(Instant.now(clock))) {
+            throw BusinessRuleException.ofKey("organization.r7.purgeInPast");
         }
+        // Checked before the step-up, which would otherwise spend a backup code
+        // on a request that cannot run.
+        requireStepUp(ACTION_SCHEDULE_PURGE, mfaToken);
 
         org.setLifecycleState(OrganizationLifecycleState.PENDING_PURGE);
         org.setPurgeScheduledFor(scheduledFor);
@@ -191,7 +200,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     @Override
     public TenantLifecycleResponseDTO cancelPurge(UUID organizationId, TenantLifecycleActionRequestDTO request) {
         Organization org = loadOrThrow(organizationId);
-        requireTransition(org, PURGE_CANCELLABLE, ACTION_CANCEL_PURGE);
+        requireTransition(org, PURGE_CANCELLABLE);
 
         org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
         org.setPurgeScheduledFor(null);
@@ -210,22 +219,19 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
 
     private Organization loadOrThrow(UUID organizationId) {
         return organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Organization not found: " + organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
     }
 
-    private void requireTransition(Organization org, Set<OrganizationLifecycleState> allowed, String action) {
+    private void requireTransition(Organization org, Set<OrganizationLifecycleState> allowed) {
         if (!allowed.contains(org.getLifecycleState())) {
-            throw new BusinessRuleException(
-                "Cannot " + action + " organization in state " + org.getLifecycleState()
-                    + " (allowed: " + allowed + ")");
+            throw BusinessRuleException.ofKey("organization.r7.transitionRefused");
         }
     }
 
-    private String requireReason(TenantLifecycleActionRequestDTO request, String action) {
+    private String requireReason(TenantLifecycleActionRequestDTO request) {
         String reason = request != null ? request.getReason() : null;
         if (reason == null || reason.trim().isEmpty()) {
-            throw new BusinessRuleException("A reason is required to " + action + " an organization.");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "organization.r7.reasonRequired");
         }
         return reason.trim();
     }
@@ -237,7 +243,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
      * <ul>
      *   <li>{@code requireMfa=false} → no-op (emergency rollback only).
      *   <li>{@code requireMfa=true}, actor has MFA enrolled → token must be
-     *       present and valid; rejects with 401 {@code mfa_required} otherwise.
+     *       present and valid (or an unused backup code); 403 with a reason code otherwise.
      *   <li>{@code requireMfa=true}, actor has no MFA enrollment → if
      *       {@code requireMfaStrict=true}, reject; otherwise audit a
      *       SECURITY_ALERT_TRIGGERED event and allow through (so unenrolled
@@ -249,28 +255,12 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
             return;
         }
         UUID actorId = currentActorId();
-        if (actorId == null) {
-            // No principal — should not happen on an authenticated endpoint, but
-            // failing closed is the right call.
-            throw new UnauthorizedException("mfa_required: cannot resolve actor for " + action);
-        }
-        boolean enrolled;
-        try {
-            enrolled = mfaService.isMfaEnabled(actorId);
-        } catch (RuntimeException ex) {
-            log.warn("[TENANT-LIFECYCLE] MFA enrollment lookup failed for actor {}: {}",
-                actorId, ex.getMessage());
-            // Fail closed when we cannot resolve the actor's MFA status.
-            throw new UnauthorizedException("mfa_required: enrollment lookup unavailable");
-        }
-        if (enrolled) {
-            if (mfaToken == null || mfaToken.isBlank() || !mfaService.verifyCode(actorId, mfaToken)) {
-                throw new UnauthorizedException("mfa_required: invalid or missing X-Mfa-Token for " + action);
-            }
+        // The shared step-up (MfaService#requireStepUp): a current TOTP code or an
+        // unused backup code. A refusal answers 403 with a reason code and is
+        // audited there; only the non-strict bypass of an unenrolled actor
+        // comes back here, to be audited below.
+        if (mfaService.requireStepUp(actorId, mfaToken, "organization " + action, requireMfaStrict)) {
             return;
-        }
-        if (requireMfaStrict) {
-            throw new UnauthorizedException("mfa_required: actor must enrol MFA before performing " + action);
         }
         // Unenrolled actor passing through under non-strict mode — audit it so
         // ops has a paper trail of every destructive action that bypassed MFA.

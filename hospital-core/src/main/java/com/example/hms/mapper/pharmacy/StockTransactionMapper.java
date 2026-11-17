@@ -25,6 +25,10 @@ public class StockTransactionMapper {
             .reason(entity.getReason())
             .referenceId(entity.getReferenceId())
             .performedBy(entity.getPerformedByUser() != null ? entity.getPerformedByUser().getId() : null)
+            .performedByName(displayName(entity.getPerformedByUser()))
+            .witnessedBy(entity.getWitnessedByUser() != null ? entity.getWitnessedByUser().getId() : null)
+            .witnessedByName(displayName(entity.getWitnessedByUser()))
+            .stockLotNumber(entity.getStockLot() != null ? entity.getStockLot().getLotNumber() : null)
             .createdAt(entity.getCreatedAt())
             // FU-2: first-class RECEIPT fields
             .lotNumber(entity.getLotNumber())
@@ -33,6 +37,17 @@ public class StockTransactionMapper {
             .expiryDate(entity.getExpiryDate())
             .unitCost(entity.getUnitCost())
             .build();
+    }
+
+    /** "First Last", else the username; null when there is no user. */
+    static String displayName(User user) {
+        if (user == null) {
+            return null;
+        }
+        String first = user.getFirstName() == null ? "" : user.getFirstName().trim();
+        String last = user.getLastName() == null ? "" : user.getLastName().trim();
+        String full = (first + " " + last).trim();
+        return full.isEmpty() ? user.getUsername() : full;
     }
 
     public StockTransaction toEntity(StockTransactionRequestDTO dto,

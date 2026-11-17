@@ -10,10 +10,20 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface MicroCultureResultRepository extends JpaRepository<MicroCultureResult, UUID> {
+
+    /**
+     * QA CX-009: one change to a report at a time. Two people removing the two
+     * isolates of a validated report each counted two, and left none. Native, on
+     * the id alone, so the row the service then loads is read after the lock.
+     */
+    @Query(value = "SELECT CAST(id AS varchar) FROM lab.micro_culture_results WHERE id = :id FOR UPDATE",
+        nativeQuery = true)
+    Optional<String> lockRow(@Param("id") UUID id);
 
     @Query("""
             SELECT c FROM MicroCultureResult c

@@ -4,8 +4,8 @@ import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.payload.dto.recordaccess.RecordAccessPostureDTO;
 import com.example.hms.payload.dto.recordaccess.UpdatePostureRequestDTO;
 import com.example.hms.security.audit.WriteAudited;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.recordaccess.HospitalRecordAccessPostureService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -60,9 +59,15 @@ public class HospitalRecordAccessPostureController {
     public ResponseEntity<RecordAccessPostureDTO> set(@PathVariable UUID hospitalId,
                                                       @Valid @RequestBody UpdatePostureRequestDTO body,
                                                       Authentication auth) {
-        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-        boolean superAdmin = ctx.isSuperAdmin() || authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
-        if (!superAdmin && !Objects.equals(ctx.getActiveHospitalId(), hospitalId)) {
+        // HospitalIdNarrowingInterceptor has already narrowed the request to
+        // this path's hospital, or refused it with 403 when the caller may not
+        // act there. What is left to check is that the request really acts at
+        // it: the verified super-admin signal, never the authorities (the OR
+        // with an authority test this used to carry is gone).
+        ActingScope scope = ActingScopeResolver.currentScope();
+        boolean actingThere = scope instanceof ActingScope.Global
+            || (scope instanceof ActingScope.Pinned pinned && pinned.hospitalId().equals(hospitalId));
+        if (!actingThere) {
             throw new AccessDeniedException("A hospital admin may only set the posture of the hospital they are acting in.");
         }
         UUID actorUserId = authUtils.resolveUserId(auth).orElse(null);

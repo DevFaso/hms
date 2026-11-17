@@ -6,7 +6,13 @@ import android.content.Intent
 import android.net.Uri
 import com.bitnesttechs.hms.patient.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
 import net.openid.appauth.AuthState
 import net.openid.appauth.AuthorizationException
 import net.openid.appauth.AuthorizationRequest
@@ -161,6 +167,45 @@ class KeycloakAuthService @Inject constructor(
         return authorizationService.getEndSessionRequestIntent(request)
     }
 
+    /** A refresh token to revoke at Keycloak, captured before the session is cleared. */
+    data class Revocation(val endpoint: String, val refreshToken: String, val clientId: String)
+
+    /**
+     * What [revoke] needs, read from the stored AuthState: the refresh token
+     * and the `revocation_endpoint` of the discovery document. Null when
+     * there is no SSO session or the provider publishes no such endpoint.
+     */
+    fun pendingRevocation(): Revocation? {
+        val state = loadAuthState() ?: return null
+        val refreshToken = state.refreshToken?.takeIf { it.isNotBlank() } ?: return null
+        val endpoint = state.authorizationServiceConfiguration
+            ?.discoveryDoc
+            ?.docJson
+            ?.optString("revocation_endpoint")
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
+        return Revocation(endpoint, refreshToken, BuildConfig.KEYCLOAK_CLIENT_ID)
+    }
+
+    /**
+     * The HMS logout cannot revoke a Keycloak token, so an SSO sign-out also
+     * posts the refresh token to Keycloak (RFC 7009). Best effort: the
+     * caller ignores the outcome. Sent on a bare client — the API client
+     * would attach the patient's access token to a request for another host.
+     */
+    suspend fun revoke(revocation: Revocation) {
+        withContext(Dispatchers.IO) {
+            revocationClient.newCall(revocationRequest(revocation)).execute().close()
+        }
+    }
+
+    private val revocationClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+    }
+
     fun clear() {
         tokenStorage.clearOidc()
     }
@@ -186,6 +231,21 @@ class KeycloakAuthService @Inject constructor(
         } catch (_: org.json.JSONException) {
             null
         }
+    }
+
+    companion object {
+        /** The RFC 7009 request: form-encoded token, hint and public client id. */
+        fun revocationRequest(revocation: Revocation): Request =
+            Request.Builder()
+                .url(revocation.endpoint)
+                .post(
+                    FormBody.Builder()
+                        .add("token", revocation.refreshToken)
+                        .add("token_type_hint", "refresh_token")
+                        .add("client_id", revocation.clientId)
+                        .build()
+                )
+                .build()
     }
 
     /** PendingIntent helpers for future integration with launchAuthorizationRequest(). */

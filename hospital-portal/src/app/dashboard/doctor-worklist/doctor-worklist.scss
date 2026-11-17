@@ -160,6 +160,19 @@
   }
 }
 
+.wl-select {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
 .wl-avatar {
   width: 36px;
   height: 36px;

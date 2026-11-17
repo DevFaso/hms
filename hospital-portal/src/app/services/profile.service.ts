@@ -1,4 +1,5 @@
 import { HttpClient } from '@angular/common/http';
+import { NotificationDeliveryStatus } from '../shared/delivery-warnings';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
@@ -47,6 +48,11 @@ export interface CredentialHealth {
   recoveryContactCount: number;
   verifiedRecoveryContacts: number;
   hasPrimaryRecoveryContact: boolean;
+  /**
+   * D2000: an SMS transport is configured, so a PHONE recovery contact can
+   * receive its code. Absent or false: the portal does not offer PHONE.
+   */
+  phoneRecoveryAvailable?: boolean;
   mfaEnrollments: MfaEnrollment[];
   recoveryContacts: RecoveryContact[];
 }
@@ -59,6 +65,12 @@ export interface MfaEnrollment {
   primaryFactor: boolean;
   enrolledAt?: string;
   lastVerifiedAt?: string;
+  /**
+   * The server's rule (the one login uses): an active second factor, verified
+   * and enabled, so replacing it needs the step-up. The portal offers
+   * "Replace" from this flag only.
+   */
+  active?: boolean;
 }
 
 export interface RecoveryContact {
@@ -79,6 +91,12 @@ export interface Assignment {
   roleName?: string;
   roleCode?: string;
   active: boolean;
+}
+
+/** Answer of both email-change steps: a message and what was mailed where (masked). */
+export interface EmailChangeResponse {
+  message: string;
+  delivery?: NotificationDeliveryStatus[];
 }
 
 export interface ProfileUpdateRequest {
@@ -114,9 +132,26 @@ export class ProfileService {
     return this.http.get<UserProfile>(`/users/${userId}`);
   }
 
-  /** PUT /users/:id  — update user profile */
+  /** PUT /users/:id  — update user profile (names and phone; the email has its own endpoint) */
   updateProfile(userId: string, data: ProfileUpdateRequest): Observable<UserProfile> {
     return this.http.put<UserProfile>(`/users/${userId}`, data);
+  }
+
+  /**
+   * POST /auth/me/change-email — step 1 of changing the signed-in user's own
+   * email. Needs the current password; sends a code to the NEW address. The
+   * email does not change until {@link confirmOwnEmailChange} gets that code.
+   */
+  changeOwnEmail(currentPassword: string, newEmail: string): Observable<EmailChangeResponse> {
+    return this.http.post<EmailChangeResponse>('/auth/me/change-email', {
+      currentPassword,
+      newEmail,
+    });
+  }
+
+  /** POST /auth/me/change-email/confirm — step 2: the code; applies the change. */
+  confirmOwnEmailChange(code: string): Observable<EmailChangeResponse> {
+    return this.http.post<EmailChangeResponse>('/auth/me/change-email/confirm', { code });
   }
 
   /** GET /auth/credentials/me — credential health (MFA, recovery, password status) */
@@ -153,6 +188,11 @@ export class ProfileService {
     return this.http.post<void>('/auth/password/request', { email });
   }
 
+  /** POST /auth/password/request by phone — a phone-only account gets its link by SMS (QA D256). */
+  requestPasswordResetByPhone(phone: string): Observable<void> {
+    return this.http.post<void>('/auth/password/request', { phone });
+  }
+
   /** POST /auth/me/change-password — change own password */
   changePassword(currentPassword: string, newPassword: string): Observable<{ message: string }> {
     return this.http.post<{ message: string }>('/auth/me/change-password', {
@@ -164,6 +204,20 @@ export class ProfileService {
   /** POST /auth/me/change-username — change own username */
   changeUsername(newUsername: string): Observable<{ message: string }> {
     return this.http.post<{ message: string }>('/auth/me/change-username', { newUsername });
+  }
+
+  /**
+   * POST /auth/me/complete-setup — the forced first sign-in in ONE call: the
+   * new username (when forced) and the new password (when forced) change
+   * together, so a rename can no longer end the session before the password
+   * is saved. The caller signs out afterwards.
+   */
+  completeSetup(body: {
+    newUsername?: string;
+    currentPassword: string;
+    newPassword?: string;
+  }): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>('/auth/me/complete-setup', body);
   }
 
   /** PUT /auth/credentials/mfa — update MFA enrollments */
@@ -188,10 +242,11 @@ export class ProfileService {
   /** POST /auth/credentials/recovery/:id/send-code — send verification code */
   sendRecoveryVerificationCode(
     contactId: string,
+    confirmedContactValue: string,
   ): Observable<{ message: string; contactType: string }> {
     return this.http.post<{ message: string; contactType: string }>(
       `/auth/credentials/recovery/${contactId}/send-code`,
-      {},
+      { confirmedContactValue },
     );
   }
 

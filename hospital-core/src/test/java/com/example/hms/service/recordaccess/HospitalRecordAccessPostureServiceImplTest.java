@@ -49,7 +49,7 @@ class HospitalRecordAccessPostureServiceImplTest {
         hospital.setId(hospitalId);
         hospital.setIsolationMode(TenantIsolationMode.ROW_LEVEL);
         hospital.setRecordAccessPosture(RecordAccessPosture.TREATMENT_PRESUMED);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
     }
 
     @Test
@@ -89,7 +89,7 @@ class HospitalRecordAccessPostureServiceImplTest {
     @DisplayName("unknown hospital → 404 carrying the message key")
     void unknownHospital() {
         UUID ghost = UUID.randomUUID();
-        when(hospitalRepository.findById(ghost)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(ghost)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.get(ghost)).isInstanceOf(ResourceNotFoundException.class);
     }

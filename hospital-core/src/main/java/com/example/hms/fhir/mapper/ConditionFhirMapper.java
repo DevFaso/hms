@@ -40,7 +40,7 @@ public class ConditionFhirMapper {
 
         out.setCode(buildCode(src));
         out.setClinicalStatus(buildClinicalStatus(src));
-        out.setVerificationStatus(buildVerificationStatus());
+        out.setVerificationStatus(buildVerificationStatus(src));
         addSeverity(out, src);
         if (src.getOnsetDate() != null) {
             out.setOnset(new DateTimeType(Date.from(
@@ -103,7 +103,12 @@ public class ConditionFhirMapper {
             .setSystem(CLINICAL_STATUS_SYSTEM).setCode(normalized).setDisplay(normalized));
     }
 
-    private static CodeableConcept buildVerificationStatus() {
+    /** QA D1240 (round 25): a problem removed from the chart is FHIR's entered-in-error. */
+    private static CodeableConcept buildVerificationStatus(PatientProblem src) {
+        if (src.isEnteredInError()) {
+            return new CodeableConcept().addCoding(new Coding()
+                .setSystem(VERIFICATION_STATUS_SYSTEM).setCode("entered-in-error").setDisplay("Entered in Error"));
+        }
         return new CodeableConcept().addCoding(new Coding()
             .setSystem(VERIFICATION_STATUS_SYSTEM).setCode("confirmed").setDisplay("Confirmed"));
     }

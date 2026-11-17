@@ -18,4 +18,7 @@ public interface OrganizationSubscriptionRepository
     List<OrganizationSubscription> findByOrganizationId(UUID organizationId);
 
     List<OrganizationSubscription> findByPlanId(UUID planId);
+
+    /** QA D850: how many organizations hold this plan in the given status. */
+    long countByPlanIdAndStatus(UUID planId, OrganizationSubscription.Status status);
 }

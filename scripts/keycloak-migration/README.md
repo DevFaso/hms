@@ -22,6 +22,26 @@ user an `UPDATE_PASSWORD` + `VERIFY_EMAIL` action.
 4. Prints a summary (`total / created / skipped / failed / orphaned`) and
    exits with code 1 on any failure.
 
+## `app_user_id` backfill (run before the one-resolver backend deploys)
+
+The backend identifies a Keycloak principal **only** by the `appUserId` claim,
+mapped from the `app_user_id` user attribute (`keycloak/realm-export.json`), and
+checks that the account it names has the token's username or email
+(docs/security/tenant-resolution.md §3.2). The migration above now writes the
+attribute for every user it creates; users created before it did need the
+backfill, or the backend refuses them every hospital-scoped endpoint
+(`NO_LOCAL_USER`).
+
+```bash
+npm run backfill:app-user-id -- --check     # read-only: realm users missing, unknown or mismatched; exit 1 if any
+npm run backfill:app-user-id -- --dry-run   # what would be written
+npm run backfill:app-user-id                # write app_user_id = users.id, matched on username, then re-check
+```
+
+It matches on the exact username KC-4 used, rewrites only `app_user_id`
+(every other attribute round-trips), is idempotent, and ends with the same
+check as `--check`. The target is `missing = unknown = mismatched = 0`.
+
 ## Safety features
 
 - **Dry-run** (`--dry-run` or `MIGRATION_DRY_RUN=true`): logs what would be

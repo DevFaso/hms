@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { apiPrefixInterceptor } from './auth.interceptor';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { allHospitalsRequestOptions } from '../core/request-scope';
 
 describe('apiPrefixInterceptor', () => {
   let http: HttpClient;
@@ -13,6 +14,7 @@ describe('apiPrefixInterceptor', () => {
   let auth: jasmine.SpyObj<AuthService>;
   let router: jasmine.SpyObj<Router>;
   let effectiveHospitalId: string | null;
+  let superAdmin = false;
 
   beforeEach(() => {
     auth = jasmine.createSpyObj('AuthService', [
@@ -25,6 +27,7 @@ describe('apiPrefixInterceptor', () => {
     router = jasmine.createSpyObj('Router', ['navigate']);
     router.navigate.and.resolveTo(true);
     effectiveHospitalId = 'h1';
+    superAdmin = false;
 
     TestBed.configureTestingModule({
       providers: [
@@ -36,6 +39,7 @@ describe('apiPrefixInterceptor', () => {
           provide: RoleContextService,
           useValue: {
             effectiveHospitalIdForRequest: () => effectiveHospitalId,
+            isSuperAdmin: () => superAdmin,
           } as unknown as RoleContextService,
         },
       ],
@@ -45,6 +49,48 @@ describe('apiPrefixInterceptor', () => {
   });
 
   afterEach(() => httpMock.verify());
+
+  it('keeps an explicit row target in global view without leaking it to the next read', () => {
+    effectiveHospitalId = null;
+    auth.getToken.and.returnValue('t1');
+    auth.isExpired.and.returnValue(false);
+    http.put('/wards/w2', {}, { headers: { 'X-Hospital-Id': 'h2' } }).subscribe();
+    const write = httpMock.expectOne('/api/wards/w2');
+    expect(write.request.headers.get('X-Hospital-Id')).toBe('h2');
+    write.flush({});
+    http.get('/wards').subscribe();
+    const read = httpMock.expectOne('/api/wards');
+    expect(read.request.headers.has('X-Hospital-Id')).toBeFalse();
+    read.flush([]);
+  });
+  it('keeps staff writes in their session hospital even when a request supplies another target', () => {
+    auth.getToken.and.returnValue('t1');
+    auth.isExpired.and.returnValue(false);
+    http.put('/wards/w2', {}, { headers: { 'X-Hospital-Id': 'h2' } }).subscribe();
+    const write = httpMock.expectOne('/api/wards/w2');
+    expect(write.request.headers.get('X-Hospital-Id')).toBe('h1');
+    write.flush({});
+  });
+
+  it('PR #1163: a super-admin all-hospitals read goes without the pinned hospital; nobody else may drop it', () => {
+    auth.getToken.and.returnValue('t1');
+    auth.isExpired.and.returnValue(false);
+    superAdmin = true;
+    http.get('/imaging/orders', allHospitalsRequestOptions()).subscribe();
+    const all = httpMock.expectOne('/api/imaging/orders');
+    expect(all.request.headers.has('X-Hospital-Id')).toBeFalse();
+    all.flush([]);
+    http.get('/imaging/orders').subscribe();
+    const pinned = httpMock.expectOne('/api/imaging/orders');
+    expect(pinned.request.headers.get('X-Hospital-Id')).toBe('h1');
+    pinned.flush([]);
+
+    superAdmin = false;
+    http.get('/imaging/orders', allHospitalsRequestOptions()).subscribe();
+    const staff = httpMock.expectOne('/api/imaging/orders');
+    expect(staff.request.headers.get('X-Hospital-Id')).toBe('h1');
+    staff.flush([]);
+  });
 
   it('leaves absolute URLs untouched', () => {
     auth.getToken.and.returnValue('t1');
@@ -70,6 +116,32 @@ describe('apiPrefixInterceptor', () => {
     expect(req.request.headers.get('Authorization')).toBe('Bearer t1');
     expect(req.request.headers.get('X-Hospital-Id')).toBe('h1');
     req.flush([]);
+  });
+
+  it('sends the token but never X-Hospital-Id on the scope-establishing calls', () => {
+    auth.getToken.and.returnValue('t1');
+    auth.isExpired.and.returnValue(false);
+    for (const url of [
+      'auth/session/bootstrap',
+      'auth/logout',
+      'auth/token/refresh',
+      'me/assignments',
+      'auth/me/complete-setup',
+      'auth/me/change-password',
+      'auth/me/change-username',
+    ]) {
+      http.get(url).subscribe();
+      const req = httpMock.expectOne('/api/' + url);
+      expect(req.request.headers.get('Authorization')).withContext(url).toBe('Bearer t1');
+      expect(req.request.headers.has('X-Hospital-Id')).withContext(url).toBeFalse();
+      req.flush({});
+    }
+    for (const url of ['me/hospital', 'me/assignments/extra', 'auth/sessionless']) {
+      http.get(url).subscribe();
+      const req = httpMock.expectOne('/api/' + url);
+      expect(req.request.headers.get('X-Hospital-Id')).withContext(url).toBe('h1');
+      req.flush({});
+    }
   });
 
   it('normalizes a leading /api/ so the prefix is never doubled', () => {

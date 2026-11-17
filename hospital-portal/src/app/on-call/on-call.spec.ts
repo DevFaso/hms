@@ -2,15 +2,15 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { OnCallComponent } from './on-call';
 import { OnCallService, OnCallScheduleResponse } from '../services/on-call.service';
-import { StaffService } from '../services/staff.service';
+import { StaffResponse, StaffService } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { roleContextStub } from '../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
 
 /**
@@ -23,6 +23,7 @@ describe('OnCallComponent', () => {
   let component: OnCallComponent;
   let onCallService: jasmine.SpyObj<OnCallService>;
   let toast: jasmine.SpyObj<ToastService>;
+  let roleCtx: RoleContextStub;
 
   function entry(overrides: Partial<OnCallScheduleResponse>): OnCallScheduleResponse {
     return {
@@ -36,7 +37,7 @@ describe('OnCallComponent', () => {
     };
   }
 
-  function setup(activeRoles: string[], entries: OnCallScheduleResponse[]) {
+  function setup(activeRoles: string[], entries: OnCallScheduleResponse[], activeRole?: string) {
     onCallService = jasmine.createSpyObj<OnCallService>('OnCallService', [
       'list',
       'listForStaff',
@@ -55,6 +56,12 @@ describe('OnCallComponent', () => {
     auth.getHospitalId.and.returnValue('h-1');
 
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    roleCtx = roleContextStub({
+      superAdmin: false,
+      hospitalId: 'h-1',
+      roles: activeRoles,
+      activeRole,
+    });
 
     TestBed.configureTestingModule({
       imports: [OnCallComponent, TranslateModule.forRoot()],
@@ -66,10 +73,7 @@ describe('OnCallComponent', () => {
         { provide: StaffService, useValue: staffService },
         { provide: AuthService, useValue: auth },
         { provide: ToastService, useValue: toast },
-        {
-          provide: RoleContextService,
-          useValue: roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles: activeRoles }),
-        },
+        { provide: RoleContextService, useValue: roleCtx },
       ],
     });
 
@@ -101,6 +105,59 @@ describe('OnCallComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="oncall-edit-oc-1"]')).not.toBeNull();
   });
 
+  it('labels each staff option with the translated job title', () => {
+    // `{{ s.name }}{{ s.jobTitle ? ' — ' + s.jobTitle : '' }}` put the JobTitle
+    // token in the picker verbatim: "Dr. Awa Traoré — MIDWIFE".
+    setup(['ROLE_HOSPITAL_ADMIN'], []);
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', { PORTAL: { ENUM: { JOB_TITLE: { MIDWIFE: 'Sage-femme' } } } });
+    translate.use('fr');
+    (TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>).list.and.returnValue(
+      of([{ id: 's-1', name: 'Dr. Awa Traoré', jobTitle: 'MIDWIFE' } as StaffResponse]),
+    );
+
+    component.openCreate();
+    fixture.detectChanges();
+
+    const options = Array.from(
+      fixture.nativeElement.querySelectorAll('#oncall-staff option') as NodeListOf<HTMLElement>,
+    ).map((o) => (o.textContent ?? '').trim());
+    expect(options).toContain('Dr. Awa Traoré — Sage-femme');
+    expect(options.join(' ')).not.toContain('MIDWIFE');
+  });
+
+  it('offers only staff the server will roster (D242)', () => {
+    setup(['ROLE_HOSPITAL_ADMIN'], []);
+    (TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>).list.and.returnValue(
+      of([
+        { id: 's-1', name: 'Awa', jobTitle: 'NURSE', active: true } as StaffResponse,
+        { id: 's-2', name: 'Kofi', jobTitle: 'RECEPTIONIST', active: true } as StaffResponse,
+        { id: 's-3', name: 'Ali', jobTitle: 'DOCTOR', active: false } as StaffResponse,
+        { id: 's-4', name: 'Sali', active: true } as StaffResponse,
+      ]),
+    );
+    component.openCreate();
+    expect(component.staffOptions().map((s) => s.id)).toEqual(['s-1']);
+  });
+
+  it('gates on the role picked at login, and re-renders when it changes', () => {
+    // A hospital admin who is also a doctor and signed in as the doctor must
+    // not see the admin's write controls: only the picked role counts. The
+    // stub is signal-backed, so moving the role after the first render must
+    // move the computed gate and the template with it — a plain-value stub
+    // would leave canManage() cached on its first read.
+    setup(['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR'], [entry({})], 'ROLE_DOCTOR');
+    expect(fixture.nativeElement.querySelector('[data-testid="oncall-add"]')).toBeNull();
+
+    roleCtx.set({ activeRole: 'ROLE_HOSPITAL_ADMIN' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="oncall-add"]')).not.toBeNull();
+
+    roleCtx.set({ activeRole: 'ROLE_DOCTOR' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="oncall-add"]')).toBeNull();
+  });
+
   it('refuses a shift that ends before it starts, before any request is made', () => {
     setup(['ROLE_HOSPITAL_ADMIN'], []);
     component.form = {
@@ -114,6 +171,26 @@ describe('OnCallComponent', () => {
     component.submit();
 
     expect(toast.error).toHaveBeenCalled();
+    expect(onCallService.create).not.toHaveBeenCalled();
+  });
+
+  it('QA D1306: a reversed shift marks the end field, not only a toast', () => {
+    setup(['ROLE_HOSPITAL_ADMIN'], []);
+    component.openCreate();
+    fixture.detectChanges();
+    component.form = {
+      staffId: 's-1',
+      departmentId: '',
+      startLocal: '2026-08-22T20:00',
+      endLocal: '2026-08-22T08:00',
+      notes: '',
+    };
+
+    component.submit();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('#oncall-end')?.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector('#oncall-start')?.hasAttribute('aria-invalid')).toBeFalse();
     expect(onCallService.create).not.toHaveBeenCalled();
   });
 

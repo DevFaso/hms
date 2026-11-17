@@ -102,21 +102,24 @@
           </div>
         </div>
 
-        <!-- Quick Stats (desktop) -->
-        <div class="header-stats">
-          <div class="stat-item">
-            <span class="stat-value">{{ allRoles().length }}</span>
-            <span class="stat-label">{{ 'PROFILE.ROLES' | translate }}</span>
+        <!-- Quick Stats (desktop). QA D844: staff counters only — a patient
+             has no assignments, and the bare security % meant nothing to them. -->
+        @if (!isPatientOnly()) {
+          <div class="header-stats">
+            <div class="stat-item">
+              <span class="stat-value">{{ allRoles().length }}</span>
+              <span class="stat-label">{{ 'PROFILE.ROLES' | translate }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ assignments().length }}</span>
+              <span class="stat-label">{{ 'PROFILE.ASSIGNMENTS' | translate }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ securityScore() | measure: '%' }}</span>
+              <span class="stat-label">{{ 'PROFILE.SECURITY' | translate }}</span>
+            </div>
           </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ assignments().length }}</span>
-            <span class="stat-label">{{ 'PROFILE.ASSIGNMENTS' | translate }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ securityScore() }}%</span>
-            <span class="stat-label">{{ 'PROFILE.SECURITY' | translate }}</span>
-          </div>
-        </div>
+        }
       </div>
     </div>
 
@@ -176,6 +179,10 @@
                   <span class="info-value">{{ user()!.username }}</span>
                 </div>
                 <div class="info-item">
+                  @if (nationalUniqueIdMasked(); as maskedId) {
+                    <span class="info-label">{{ 'NATIONAL_IU.LABEL' | translate }}</span>
+                    <span>{{ maskedId }}</span>
+                  }
                   <span class="info-label">{{ 'PROFILE.EMAIL' | translate }}</span>
                   <span class="info-value">{{ user()!.email }}</span>
                 </div>
@@ -185,7 +192,8 @@
                 </div>
                 <div class="info-item">
                   <span class="info-label">{{ 'PROFILE.ROLE' | translate }}</span>
-                  <span class="info-value profile-type-badge">{{ sessionProfileType() }}</span>
+                  {{ ' '
+                  }}<span class="info-value profile-type-badge">{{ sessionProfileType() }}</span>
                 </div>
                 @if (showLicenseNumber()) {
                   <div class="info-item">
@@ -312,8 +320,8 @@
                     />
                   </svg>
                   <div class="score-text">
-                    <span class="score-number">{{ securityScore() }}</span>
-                    <span class="score-percent">%</span>
+                    <!-- QA D1166 class: the percent follows the reader's typography (FR/ES "78 %"). -->
+                    <span class="score-number">{{ securityScore() | measure: '%' : 0 }}</span>
                   </div>
                 </div>
                 <div class="security-details">
@@ -374,7 +382,7 @@
               <form class="edit-form" (ngSubmit)="saveProfile()">
                 <div class="form-row">
                   <div class="form-group">
-                    <label for="editFirstName">{{ 'PROFILE.FIRST_NAME' | translate }}</label>
+                    <label for="editFirstName">{{ 'PROFILE.FIRST_NAME' | translate }} *</label>
                     <input
                       type="text"
                       id="editFirstName"
@@ -386,7 +394,7 @@
                     />
                   </div>
                   <div class="form-group">
-                    <label for="editLastName">{{ 'PROFILE.LAST_NAME' | translate }}</label>
+                    <label for="editLastName">{{ 'PROFILE.LAST_NAME' | translate }} *</label>
                     <input
                       type="text"
                       id="editLastName"
@@ -400,22 +408,34 @@
                 </div>
 
                 <div class="form-row">
-                  <div class="form-group">
-                    <label for="editEmail">{{ 'PROFILE.EMAIL_ADDRESS' | translate }}</label>
-                    <input
-                      type="email"
-                      id="editEmail"
-                      [ngModel]="editForm().email"
-                      (ngModelChange)="updateField('email', $event)"
-                      name="email"
-                      [placeholder]="'PROFILE.ENTER_EMAIL' | translate"
-                      required
-                    />
-                  </div>
+                  <!-- While a code is pending the email field is not shown: the old
+                       address next to a code form for the new one reads as a contradiction. -->
+                  @if (!pendingEmail()) {
+                    <div class="form-group">
+                      <label for="editEmail">{{ 'PROFILE.EMAIL_ADDRESS' | translate }}</label>
+                      <input
+                        type="email"
+                        id="editEmail"
+                        data-server-field="newEmail email"
+                        [ngModel]="editForm().email"
+                        (ngModelChange)="updateField('email', $event)"
+                        name="email"
+                        [placeholder]="'PROFILE.ENTER_EMAIL' | translate"
+                        [disabled]="ssoSession()"
+                        [attr.aria-describedby]="ssoSession() ? 'editEmailHint' : null"
+                      />
+                      @if (ssoSession()) {
+                        <span class="form-hint" id="editEmailHint">{{
+                          'PROFILE.EMAIL_MANAGED_BY_SSO' | translate
+                        }}</span>
+                      }
+                    </div>
+                  }
                   <div class="form-group">
                     <label for="editPhone">{{ 'PROFILE.PHONE_NUMBER' | translate }}</label>
                     <input
                       type="tel"
+                      appPhoneField
                       id="editPhone"
                       [ngModel]="editForm().phoneNumber"
                       (ngModelChange)="updateField('phoneNumber', $event)"
@@ -424,6 +444,30 @@
                     />
                   </div>
                 </div>
+
+                @if (emailChanged() && !pendingEmail()) {
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="editEmailPassword"
+                        >{{ 'PROFILE.CURRENT_PASSWORD' | translate }} *</label
+                      >
+                      <input
+                        type="password"
+                        id="editEmailPassword"
+                        data-server-field="currentPassword"
+                        autocomplete="current-password"
+                        [ngModel]="emailChangePassword()"
+                        (ngModelChange)="emailChangePassword.set($event)"
+                        name="emailChangePassword"
+                        aria-describedby="editEmailPasswordHint"
+                        required
+                      />
+                      <span class="form-hint" id="editEmailPasswordHint">{{
+                        'PROFILE.EMAIL_CHANGE_PASSWORD_HINT' | translate
+                      }}</span>
+                    </div>
+                  </div>
+                }
 
                 <div class="form-row">
                   <div class="form-group">
@@ -446,9 +490,23 @@
                     {{ 'COMMON.CANCEL' | translate }}
                   </button>
                   <button
+                    submitGuardRequired
                     type="submit"
                     class="btn btn-primary"
-                    [disabled]="!formDirty() || saving()"
+                    [disabled]="saving()"
+                    [appSubmitGuard]="
+                      blankName() ||
+                      (pendingEmail()
+                        ? ('SUBMIT_GUARD.EMAIL_PENDING' | translate)
+                        : emailClearedOnly()
+                          ? ('PROFILE.EMAIL_CANNOT_CLEAR' | translate)
+                          : !formDirty() && ('SUBMIT_GUARD.NO_CHANGES' | translate))
+                    "
+                    [submitGuardFields]="
+                      emailClearedOnly() && !blankName()
+                        ? ['editEmail']
+                        : ['editFirstName', 'editLastName']
+                    "
                   >
                     @if (saving()) {
                       <span class="material-symbols-outlined spinning">progress_activity</span>
@@ -460,6 +518,59 @@
                   </button>
                 </div>
               </form>
+
+              @if (pendingEmail(); as pending) {
+                <!-- Its own form, outside the profile form: Enter in the code box verifies
+                       the code instead of submitting the profile (which would ask for the password). -->
+                <form
+                  class="verification-form"
+                  aria-labelledby="emailCodeTitle"
+                  (ngSubmit)="confirmEmailChange()"
+                >
+                  <h4 id="emailCodeTitle">
+                    {{ 'PROFILE.EMAIL_CHANGE_PENDING_TITLE' | translate }}
+                  </h4>
+                  <p class="verification-hint">
+                    {{ 'PROFILE.ENTER_CODE_SENT_TO' | translate: { contact: pending } }}
+                  </p>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="emailChangeCode">{{
+                        'PROFILE.VERIFICATION_CODE' | translate
+                      }}</label>
+                      <input
+                        id="emailChangeCode"
+                        data-server-field="code"
+                        class="verification-input"
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                        maxlength="6"
+                        placeholder="000000"
+                        name="emailChangeCode"
+                        [ngModel]="emailCode()"
+                        (ngModelChange)="emailCode.set($event)"
+                      />
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" (click)="cancelEmailChange()">
+                      {{ 'COMMON.CANCEL' | translate }}
+                    </button>
+                    <button
+                      type="submit"
+                      class="btn btn-primary"
+                      [disabled]="confirmingEmail()"
+                      [appSubmitGuard]="
+                        emailCode().trim().length < 6 && ('SUBMIT_GUARD.CODE' | translate)
+                      "
+                      [submitGuardFields]="['emailChangeCode']"
+                    >
+                      {{ 'PROFILE.VERIFY' | translate }}
+                    </button>
+                  </div>
+                </form>
+              }
             </div>
           </div>
         </div>
@@ -481,7 +592,12 @@
                 <div class="security-action-info">
                   <p class="security-action-title">{{ 'PROFILE.CHANGE_PASSWORD' | translate }}</p>
                   <p class="security-action-desc">
-                    {{ 'PROFILE.SEND_RESET_DESC' | translate }}
+                    {{
+                      (user()?.email
+                        ? 'PROFILE.FORGOT_PASSWORD_DESC'
+                        : 'PROFILE.FORGOT_PASSWORD_DESC_SMS'
+                      ) | translate
+                    }}
                     @if (credentials()?.forcePasswordChange) {
                       <span class="force-change-badge"
                         >⚠ {{ 'PROFILE.PASSWORD_CHANGE_REQUIRED' | translate }}</span
@@ -494,6 +610,67 @@
                   {{ 'PROFILE.SEND_RESET_LINK' | translate }}
                 </button>
               </div>
+              @if (ssoSession()) {
+                <p class="form-hint">{{ 'PROFILE.PASSWORD_MANAGED_BY_SSO' | translate }}</p>
+              } @else {
+                <form class="change-password-form" (ngSubmit)="changePassword()" autocomplete="off">
+                  <p class="security-action-desc">
+                    {{ 'PROFILE.CHANGE_PASSWORD_DESC' | translate }}
+                  </p>
+                  <div class="form-group">
+                    <label for="pwdCurrent">{{ 'PROFILE.CURRENT_PASSWORD' | translate }} *</label>
+                    <input
+                      type="password"
+                      id="pwdCurrent"
+                      data-server-field="currentPassword"
+                      required
+                      name="pwdCurrent"
+                      autocomplete="current-password"
+                      class="form-control"
+                      [ngModel]="pwdCurrent()"
+                      (ngModelChange)="pwdCurrent.set($event)"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="pwdNew">{{ 'PROFILE.NEW_PASSWORD' | translate }} *</label>
+                    <input
+                      type="password"
+                      id="pwdNew"
+                      data-server-field="newPassword"
+                      required
+                      name="pwdNew"
+                      autocomplete="new-password"
+                      minlength="8"
+                      class="form-control"
+                      [ngModel]="pwdNew()"
+                      (ngModelChange)="pwdNew.set($event)"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="pwdConfirm">{{ 'PROFILE.CONFIRM_PASSWORD' | translate }} *</label>
+                    <input
+                      type="password"
+                      id="pwdConfirm"
+                      required
+                      name="pwdConfirm"
+                      autocomplete="new-password"
+                      class="form-control"
+                      [ngModel]="pwdConfirm()"
+                      (ngModelChange)="pwdConfirm.set($event)"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    [disabled]="changingPassword()"
+                    [appSubmitGuard]="!pwdCurrent() || !pwdNew() || !pwdConfirm()"
+                    [submitGuardFields]="['pwdCurrent', 'pwdNew', 'pwdConfirm']"
+                  >
+                    <span class="material-symbols-outlined">key</span>
+                    {{ 'PROFILE.SAVE_NEW_PASSWORD' | translate }}
+                  </button>
+                </form>
+              }
             </div>
           </div>
 
@@ -508,9 +685,47 @@
                 <div class="mfa-error" role="alert">{{ mfaError() }}</div>
               }
 
+              <!-- Replacing the authenticator: the step-up first -->
+              @if (mfaStep() === 'stepup') {
+                <div
+                  class="mfa-enroll-inline"
+                  data-testid="mfa-stepup"
+                  tabindex="-1"
+                  appFocusOnRender
+                >
+                  <p>{{ 'PROFILE.MFA_REPLACE_INTRO' | translate }}</p>
+                  <form (ngSubmit)="submitMfaStepUp()" class="mfa-verify-form">
+                    <label for="mfaStepUpCode"
+                      >{{ 'PROFILE.MFA_STEPUP_LABEL' | translate }} *</label
+                    >
+                    <input
+                      id="mfaStepUpCode"
+                      required
+                      type="text"
+                      [(ngModel)]="mfaStepUpCode"
+                      name="mfaStepUpCode"
+                      maxlength="8"
+                      [placeholder]="'PROFILE.MFA_STEPUP_PLACEHOLDER' | translate"
+                      class="totp-input"
+                      autocomplete="one-time-code"
+                    />
+                    <button class="btn-primary" type="submit" [disabled]="mfaLoading()">
+                      {{ 'PROFILE.MFA_REPLACE_CONTINUE' | translate }}
+                    </button>
+                    <button class="btn-secondary" type="button" (click)="cancelMfaReplacement()">
+                      {{ 'COMMON.CANCEL' | translate }}
+                    </button>
+                  </form>
+                </div>
+              }
+
               <!-- Inline enrollment: QR step -->
-              @if (mfaStep() === 'qr') {
-                <div class="mfa-enroll-inline">
+              @else if (mfaStep() === 'qr') {
+                <!-- QA D1198 (round 22): the panel that replaced the button takes the keyboard. -->
+                <div class="mfa-enroll-inline" data-testid="mfa-qr" tabindex="-1" appFocusOnRender>
+                  @if (mfaReplacing()) {
+                    <p class="hint">{{ 'PROFILE.MFA_REPLACE_PENDING' | translate }}</p>
+                  }
                   <p>{{ 'PROFILE.MFA_SCAN_QR' | translate }}</p>
                   <div class="qr-container">
                     <img
@@ -532,10 +747,19 @@
 
               <!-- Inline enrollment: Verify step -->
               @else if (mfaStep() === 'verify') {
-                <div class="mfa-enroll-inline">
-                  <p>{{ 'PROFILE.MFA_ENTER_CODE' | translate }}</p>
+                <div
+                  class="mfa-enroll-inline"
+                  data-testid="mfa-verify"
+                  tabindex="-1"
+                  appFocusOnRender
+                >
+                  <p>
+                    <label for="mfaTotpCode">{{ 'PROFILE.MFA_ENTER_CODE' | translate }} *</label>
+                  </p>
                   <form (ngSubmit)="verifyMfaCode()" class="mfa-verify-form">
                     <input
+                      id="mfaTotpCode"
+                      required
                       type="text"
                       [(ngModel)]="mfaTotpCode"
                       name="mfaTotpCode"
@@ -546,7 +770,9 @@
                       inputmode="numeric"
                     />
                     <button class="btn-primary" type="submit" [disabled]="mfaLoading()">
-                      {{ mfaLoading() ? 'Verifying…' : 'Verify' }}
+                      {{
+                        (mfaLoading() ? 'MFA.CHALLENGE_VERIFYING' : 'PROFILE.VERIFY') | translate
+                      }}
                     </button>
                   </form>
                 </div>
@@ -554,7 +780,12 @@
 
               <!-- Inline enrollment: Backup codes step -->
               @else if (mfaStep() === 'backup') {
-                <div class="mfa-enroll-inline">
+                <div
+                  class="mfa-enroll-inline"
+                  data-testid="mfa-backup"
+                  tabindex="-1"
+                  appFocusOnRender
+                >
                   <h4>{{ 'PROFILE.BACKUP_CODES' | translate }}</h4>
                   <p>{{ 'PROFILE.BACKUP_CODES_HINT' | translate }}</p>
                   <div class="backup-codes-grid">
@@ -596,12 +827,35 @@
                           }}</span>
                         }
                         @if (mfa.primaryFactor) {
-                          <span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
+                          {{ ' '
+                          }}<span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
                         }
                       </div>
                     </div>
                   }
                 </div>
+                @if (hasActiveTotp()) {
+                  <button
+                    class="btn-secondary mfa-replace-btn"
+                    data-testid="mfa-replace"
+                    (click)="startMfaReplacement()"
+                    [disabled]="mfaLoading()"
+                  >
+                    <span class="material-symbols-outlined">sync_lock</span>
+                    {{ 'PROFILE.MFA_REPLACE' | translate }}
+                  </button>
+                } @else {
+                  <!-- No active authenticator (none confirmed, or disabled): set one up. -->
+                  <button
+                    class="btn-primary mfa-setup-btn"
+                    data-testid="mfa-setup"
+                    (click)="startMfaEnrollment()"
+                    [disabled]="mfaLoading()"
+                  >
+                    <span class="material-symbols-outlined">security</span>
+                    {{ 'PROFILE.MFA_SET_UP' | translate }}
+                  </button>
+                }
               } @else {
                 <div class="empty-security-state">
                   <span class="material-symbols-outlined">phonelink_lock</span>
@@ -613,7 +867,7 @@
                     [disabled]="mfaLoading()"
                   >
                     <span class="material-symbols-outlined">security</span>
-                    {{ mfaLoading() ? 'Setting up…' : 'Set Up TOTP' }}
+                    {{ (mfaLoading() ? 'MFA.ENROLL_STARTING' : 'PROFILE.SET_UP_TOTP') | translate }}
                   </button>
                 </div>
               }
@@ -642,19 +896,35 @@
                       (ngModelChange)="newRecoveryType.set($event)"
                     >
                       <option value="EMAIL">{{ 'PROFILE.EMAIL' | translate }}</option>
-                      <option value="PHONE">{{ 'PROFILE.PHONE' | translate }}</option>
+                      @if (phoneRecoveryAvailable()) {
+                        <option value="PHONE">{{ 'PROFILE.PHONE' | translate }}</option>
+                      }
                     </select>
+                    @if (!phoneRecoveryAvailable()) {
+                      <span class="form-hint" id="recovery-phone-unavailable">{{
+                        'PROFILE.RECOVERY_PHONE_UNAVAILABLE' | translate
+                      }}</span>
+                    }
                   </div>
                   <div class="form-row">
-                    <label class="form-label" for="recovery-value">{{
-                      newRecoveryType() === 'EMAIL' ? 'Email Address' : 'Phone Number'
-                    }}</label>
+                    <label class="form-label" for="recovery-value"
+                      >{{
+                        (newRecoveryType() === 'EMAIL'
+                          ? 'PROFILE.EMAIL_ADDRESS'
+                          : 'PROFILE.PHONE_NUMBER'
+                        ) | translate
+                      }}
+                      *</label
+                    >
                     <input
+                      required
                       id="recovery-value"
                       class="form-control"
                       [type]="newRecoveryType() === 'EMAIL' ? 'email' : 'tel'"
                       [placeholder]="
-                        newRecoveryType() === 'EMAIL' ? 'recovery@example.com' : '+1234567890'
+                        newRecoveryType() === 'EMAIL'
+                          ? 'recovery@example.com'
+                          : ('PROFILE.RECOVERY_PHONE_EXAMPLE' | translate)
                       "
                       [ngModel]="newRecoveryValue()"
                       (ngModelChange)="newRecoveryValue.set($event)"
@@ -679,7 +949,7 @@
                       (click)="saveRecoveryContact()"
                       [disabled]="recoverySaving()"
                     >
-                      {{ recoverySaving() ? 'Saving…' : 'Save' }}
+                      {{ (recoverySaving() ? 'COMMON.SAVING' : 'COMMON.SAVE') | translate }}
                     </button>
                     <button class="btn-secondary" (click)="cancelAddRecovery()">
                       {{ 'COMMON.CANCEL' | translate }}
@@ -695,7 +965,9 @@
                           {{ rc.contactType === 'EMAIL' ? 'mail' : 'phone' }}
                         </span>
                         <div class="recovery-details">
-                          <span class="recovery-type">{{ rc.contactType }}</span>
+                          <span class="recovery-type">{{
+                            rc.contactType | enumLabel: 'recoveryContactType'
+                          }}</span>
                           <span class="recovery-value">{{ rc.contactValue }}</span>
                         </div>
                         <div class="recovery-badges">
@@ -705,10 +977,21 @@
                             <span class="badge-unverified">{{
                               'PROFILE.UNVERIFIED' | translate
                             }}</span>
-                            @if (verifyingContactId() !== rc.id) {
+                            @if (rc.contactType !== 'PHONE' && rc.contactType !== 'EMAIL') {
+                              {{ ' '
+                              }}<span class="form-hint">{{
+                                'PROFILE.RECOVERY_TYPE_UNVERIFIABLE' | translate
+                              }}</span>
+                            } @else if (rc.contactType === 'PHONE' && !phoneRecoveryAvailable()) {
+                              <!-- D2000: no SMS transport, so no code to promise; the reason is shown instead of Verify. -->
+                              {{ ' '
+                              }}<span class="form-hint" data-testid="recovery-phone-unverifiable">{{
+                                'PROFILE.RECOVERY_PHONE_UNAVAILABLE' | translate
+                              }}</span>
+                            } @else if (verifyingContactId() !== rc.id) {
                               <button
                                 class="btn-sm-primary"
-                                (click)="sendVerificationCode(rc)"
+                                (click)="confirmRecoveryContact(rc)"
                                 [disabled]="verificationSending()"
                               >
                                 {{ 'PROFILE.VERIFY' | translate }}
@@ -722,6 +1005,7 @@
                         <button
                           class="btn-icon-danger"
                           [title]="'COMMON.REMOVE' | translate"
+                          [attr.aria-label]="'COMMON.REMOVE' | translate"
                           (click)="removeRecoveryContact(rc)"
                           [disabled]="recoverySaving()"
                         >
@@ -756,9 +1040,18 @@
                             <button
                               class="btn-primary"
                               (click)="submitVerificationCode()"
-                              [disabled]="verificationSending() || verificationCode().length < 6"
+                              [disabled]="verificationSending()"
+                              [appSubmitGuard]="
+                                verificationCode().length < 6 && ('SUBMIT_GUARD.CODE' | translate)
+                              "
+                              [submitGuardFields]="['verification-code']"
                             >
-                              {{ verificationSending() ? 'Verifying…' : 'Confirm' }}
+                              {{
+                                (verificationSending()
+                                  ? 'MFA.CHALLENGE_VERIFYING'
+                                  : 'COMMON.CONFIRM'
+                                ) | translate
+                              }}
                             </button>
                             <button class="btn-secondary" (click)="cancelVerification()">
                               {{ 'COMMON.CANCEL' | translate }}
@@ -769,6 +1062,24 @@
                               [disabled]="verificationSending()"
                             >
                               {{ 'PROFILE.RESEND_CODE' | translate }}
+                            </button>
+                          </div>
+                        </div>
+                      } @else if (verifyingContactId() === rc.id && verificationError()) {
+                        <!-- D2000: the FIRST send refused (429, 503, 400): say why and offer a way on. -->
+                        <div class="verification-form" data-testid="recovery-send-refused">
+                          <div class="form-error" role="alert">{{ verificationError() }}</div>
+                          <div class="form-actions">
+                            <button
+                              class="btn-secondary"
+                              data-testid="recovery-send-retry"
+                              (click)="sendVerificationCode(rc)"
+                              [disabled]="verificationSending()"
+                            >
+                              {{ 'PROFILE.RESEND_CODE' | translate }}
+                            </button>
+                            <button class="btn-link" (click)="cancelVerification()">
+                              {{ 'COMMON.CANCEL' | translate }}
                             </button>
                           </div>
                         </div>
@@ -835,8 +1146,14 @@
                     <div>
                       <p class="health-title">{{ 'PROFILE.MFA_STATUS' | translate }}</p>
                       <p class="health-value">
-                        {{ credentials()!.mfaEnrolledCount }} enrolled,
-                        {{ credentials()!.verifiedMfaCount }} verified
+                        {{
+                          'PROFILE.MFA_COUNTS'
+                            | translate
+                              : {
+                                  enrolled: credentials()!.mfaEnrolledCount,
+                                  verified: credentials()!.verifiedMfaCount,
+                                }
+                        }}
                       </p>
                     </div>
                   </div>
@@ -853,8 +1170,14 @@
                     <div>
                       <p class="health-title">{{ 'PROFILE.RECOVERY_CONTACTS' | translate }}</p>
                       <p class="health-value">
-                        {{ credentials()!.recoveryContactCount }} configured,
-                        {{ credentials()!.verifiedRecoveryContacts }} verified
+                        {{
+                          'PROFILE.RECOVERY_COUNTS'
+                            | translate
+                              : {
+                                  configured: credentials()!.recoveryContactCount,
+                                  verified: credentials()!.verifiedRecoveryContacts,
+                                }
+                        }}
                       </p>
                     </div>
                   </div>
@@ -921,7 +1244,9 @@
                             formatTimestamp(event.eventTimestamp)
                           }}</span>
                         </div>
-                        <p class="timeline-desc">{{ event.eventDescription }}</p>
+                        <p class="timeline-desc" [title]="event.eventDescription || ''">
+                          {{ describeActivity(event) }}
+                        </p>
                         <div class="timeline-meta">
                           @if (event.ipAddress) {
                             <span class="meta-tag">

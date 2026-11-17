@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.security.EncryptedStringConverter;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.TenantEntityListener;
@@ -22,7 +23,6 @@ import jakarta.persistence.Transient;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -31,6 +31,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -39,13 +40,15 @@ import java.util.Set;
 import java.util.UUID;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(
     name = "patients",
     schema = "clinical",
     indexes = {
         @Index(name = "idx_patient_email", columnList = "email"),
         @Index(name = "idx_patient_phone_primary", columnList = "phone_number_primary"),
-        @Index(name = "idx_patient_user", columnList = "user_id")
+        @Index(name = "idx_patient_user", columnList = "user_id"),
+        @Index(name = "idx_patient_national_unique_id_hash", columnList = "national_unique_id_hash")
     }
 )
 @Getter @Setter
@@ -55,9 +58,19 @@ import java.util.UUID;
 @EntityListeners(TenantEntityListener.class)
 @ToString(exclude = {
     "user", "hospitalRegistrations", "appointments", "encounters",
-    "billingInvoices", "patientInsurances", "labOrders", "allergyEntries"
+    "billingInvoices", "patientInsurances", "labOrders", "allergyEntries",
+    "nationalUniqueId", "nationalUniqueIdHash"
 })
 public class Patient extends BaseEntity implements TenantScoped {
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "national_unique_id", columnDefinition = "TEXT")
+    private String nationalUniqueId;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "national_unique_id_hash", length = 64)
+    private String nationalUniqueIdHash;
 
     @NotBlank @Size(max = 100)
     @Column(name = "first_name", nullable = false, length = 100)
@@ -71,7 +84,8 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Column(name = "middle_name", length = 100)
     private String middleName;
 
-    @NotNull @Past
+    /** QA D1592: today is a possible birth date - a baby a delivery registers is born today. */
+    @NotNull @jakarta.validation.constraints.PastOrPresent
     @Column(name = "date_of_birth", nullable = false)
     private LocalDate dateOfBirth;
 
@@ -117,7 +131,9 @@ public class Patient extends BaseEntity implements TenantScoped {
     private String ethnicity;
 
     @NotBlank @Size(max = 100)
-    @Column(name = "phone_number_primary", length = 100, nullable = false, unique = true)
+    // Not unique (QA D926): a child carries the mother's number. The database
+    // never had the constraint (V1); only the H2 test schema did.
+    @Column(name = "phone_number_primary", length = 100, nullable = false)
     private String phoneNumberPrimary;
 
     @Size(max = 100)
@@ -125,7 +141,7 @@ public class Patient extends BaseEntity implements TenantScoped {
     private String phoneNumberSecondary;
 
     // Nullable since V107: phone-first patients have no email address.
-    @Email @Size(max = 150)
+    @Email(message = "{validation.email.invalid}") @Size(max = 150)
     @Column(name = "email", length = 150, unique = true)
     private String email;
 
@@ -259,8 +275,13 @@ public class Patient extends BaseEntity implements TenantScoped {
         foreignKey = @ForeignKey(name = "fk_patient_user"))
     private User user;
 
+    /**
+     * Batch-loaded: a FHIR Patient search maps a page of up to 50 patients,
+     * and each walks this collection (its MRN identifier).
+     */
     @Builder.Default
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     private Set<PatientHospitalRegistration> hospitalRegistrations = new HashSet<>();
 
     @Builder.Default
@@ -368,8 +389,8 @@ public class Patient extends BaseEntity implements TenantScoped {
         if (organizationId == null && effectiveContext.getActiveOrganizationId() != null) {
             organizationId = effectiveContext.getActiveOrganizationId();
         }
-        if (hospitalId == null && effectiveContext.getActiveHospitalId() != null) {
-            hospitalId = effectiveContext.getActiveHospitalId();
+        if (hospitalId == null && ActingScopeResolver.pinnedHospitalIdOf(effectiveContext) != null) {
+            hospitalId = ActingScopeResolver.pinnedHospitalIdOf(effectiveContext);
         }
         if (departmentId == null && !effectiveContext.getPermittedDepartmentIds().isEmpty()) {
             departmentId = effectiveContext.getPermittedDepartmentIds().iterator().next();

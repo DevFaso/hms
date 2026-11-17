@@ -29,6 +29,11 @@ public class DischargeSummaryResponseDTO {
     private String patientMrn;
 
     private UUID encounterId;
+    /**
+     * Provisional platform rule: a note of the visit still waits for its author's signature, so the patient's
+     * summary is shown "not finalised" until every note is signed.
+     */
+    private boolean pendingSignature;
     private String encounterType;
 
     private UUID hospitalId;
@@ -78,6 +83,8 @@ public class DischargeSummaryResponseDTO {
     private LocalDateTime providerSignatureDateTime;
 
     private Boolean isFinalized;
+    /** Review of #971 (D930): whether the signed-in user may update or delete this draft; the portal shows the buttons the server accepts. */
+    private Boolean editableByCaller;
     
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime finalizedAt;

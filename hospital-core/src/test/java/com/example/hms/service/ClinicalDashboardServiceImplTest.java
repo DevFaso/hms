@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
@@ -61,6 +62,11 @@ class ClinicalDashboardServiceImplTest {
     @Mock private DigitalSignatureRepository digitalSignatureRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private OnCallScheduleRepository onCallScheduleRepository;
+
+    /** Fixed instant for the on-call lookup; the other reads still use the system clock. */
+    private static final java.time.Instant FIXED_INSTANT = java.time.Instant.parse("2026-03-01T22:00:00Z");
+    @Spy
+    private java.time.Clock clock = java.time.Clock.fixed(FIXED_INSTANT, java.time.ZoneOffset.UTC);
 
     @InjectMocks
     private ClinicalDashboardServiceImpl service;
@@ -295,8 +301,9 @@ class ClinicalDashboardServiceImplTest {
         Patient patient = mock(Patient.class);
         UUID patientId = UUID.randomUUID();
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Smith");
+        lenient().when(patient.getFullName()).thenReturn("Alice Smith"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Smith");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 1, 1));
         when(patient.getGender()).thenReturn("F");
 
@@ -384,7 +391,9 @@ class ClinicalDashboardServiceImplTest {
         java.time.OffsetDateTime end = java.time.OffsetDateTime.now().plusHours(7);
         when(schedule.getStartTime()).thenReturn(start);
         when(schedule.getEndTime()).thenReturn(end);
-        when(onCallScheduleRepository.findActiveByStaffIdAt(eq(staffId), any(java.time.OffsetDateTime.class)))
+        // The lookup instant is the injected clock's now, not the system's.
+        when(onCallScheduleRepository.findActiveByStaffIdAt(staffId,
+                java.time.OffsetDateTime.ofInstant(FIXED_INSTANT, java.time.ZoneOffset.UTC)))
                 .thenReturn(List.of(schedule));
 
         OnCallStatusDTO status = service.getOnCallStatus(userId);
@@ -532,8 +541,9 @@ class ClinicalDashboardServiceImplTest {
         Patient patient = mock(Patient.class);
         UUID patientId = UUID.randomUUID();
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Bob");
-        when(patient.getLastName()).thenReturn("Jones");
+        lenient().when(patient.getFullName()).thenReturn("Bob Jones"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Bob");
+        lenient().when(patient.getLastName()).thenReturn("Jones");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1980, 5, 20));
         when(patient.getGender()).thenReturn("M");
         when(patient.getPhoneNumberPrimary()).thenReturn("555-4321");
@@ -566,8 +576,9 @@ class ClinicalDashboardServiceImplTest {
         Patient p = mock(Patient.class);
         UUID pid = UUID.randomUUID();
         when(p.getId()).thenReturn(pid);
-        when(p.getFirstName()).thenReturn("Alice");
-        when(p.getLastName()).thenReturn("Smith");
+        lenient().when(p.getFullName()).thenReturn("Alice Smith"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Alice");
+        lenient().when(p.getLastName()).thenReturn("Smith");
 
         List<Encounter> encounters = new java.util.ArrayList<>();
         for (int i = 0; i < 8; i++) {
@@ -608,8 +619,9 @@ class ClinicalDashboardServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Eve");
-        when(patient.getLastName()).thenReturn("Brown");
+        lenient().when(patient.getFullName()).thenReturn("Eve Brown"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Eve");
+        lenient().when(patient.getLastName()).thenReturn("Brown");
 
         Encounter encounter = mock(Encounter.class);
         when(encounter.getPatient()).thenReturn(patient);

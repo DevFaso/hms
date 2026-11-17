@@ -20,8 +20,6 @@ import com.example.hms.repository.PatientUploadedDocumentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.model.Hospital;
-import com.example.hms.model.Role;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.service.impl.PatientDocumentServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,9 +53,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class PatientDocumentServiceImplTest {
 
@@ -70,6 +71,8 @@ class PatientDocumentServiceImplTest {
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
     @Mock private Authentication auth;
 
     @InjectMocks
@@ -148,6 +151,41 @@ class PatientDocumentServiceImplTest {
             verify(documentRepository).save(captor.capture());
             assertThat(captor.getValue().getDocumentType()).isEqualTo(PatientDocumentType.LAB_RESULT);
             assertThat(captor.getValue().getNotes()).isEqualTo("External lab result");
+        }
+
+        @Test
+        @DisplayName("QA D433: refuses a collection date in the future with a 400, before storing")
+        void refusesFutureCollectionDate() throws IOException {
+            MockMultipartFile file = new MockMultipartFile("file", "a.pdf", "application/pdf", new byte[] {1});
+            PatientDocumentRequestDTO request = PatientDocumentRequestDTO.builder()
+                    .documentType(PatientDocumentType.LAB_RESULT)
+                    .collectionDate(java.time.LocalDate.now().plusDays(30))
+                    .build();
+            when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.uploadDocument(auth, file, request))
+                    .isInstanceOf(IllegalArgumentException.class);
+            verify(fileUploadService, never()).uploadPatientDocument(any(), any());
+            verify(documentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("refuses a note longer than the 2048-character column with a 400, before storing")
+        void refusesOverLongNotes() throws IOException {
+            MockMultipartFile file = new MockMultipartFile("file", "a.pdf", "application/pdf", new byte[] {1});
+            PatientDocumentRequestDTO request = PatientDocumentRequestDTO.builder()
+                    .documentType(PatientDocumentType.OTHER)
+                    .notes("x".repeat(PatientDocumentRequestDTO.NOTES_MAX_LENGTH + 1))
+                    .build();
+            when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.uploadDocument(auth, file, request))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("2048");
+            verify(fileUploadService, never()).uploadPatientDocument(any(), any());
+            verify(documentRepository, never()).save(any());
         }
 
         @Test
@@ -272,6 +310,37 @@ class PatientDocumentServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D961: a patient cannot upload a file as a doctor-issued certificate")
+        void qaD961_aPatientCannotUploadACertificate() {
+            com.example.hms.payload.dto.portal.PatientDocumentRequestDTO request =
+                new com.example.hms.payload.dto.portal.PatientDocumentRequestDTO();
+            request.setDocumentType(PatientDocumentType.MEDICAL_CERTIFICATE);
+            org.mockito.Mockito.lenient().when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(new com.example.hms.model.User()));
+            org.springframework.mock.web.MockMultipartFile file =
+                    new org.springframework.mock.web.MockMultipartFile("file", "c.pdf", "application/pdf", new byte[]{1});
+            assertThatThrownBy(() -> service.uploadDocument(auth, file, request))
+                    .isInstanceOf(IllegalArgumentException.class);
+            verify(documentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D961: a certificate the doctor issued cannot be deleted by the patient")
+        void qaD961_aDoctorIssuedCertificateStays() {
+            UUID docId = UUID.randomUUID();
+            PatientUploadedDocument doc = PatientUploadedDocument.builder()
+                    .documentType(PatientDocumentType.MEDICAL_CERTIFICATE).build();
+            doc.setId(docId);
+            when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(doc));
+
+            assertThatThrownBy(() -> service.deleteDocument(auth, docId))
+                    .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThat(doc.getDeletedAt()).isNull();
+        }
+
+        @Test
         @DisplayName("throws ResourceNotFoundException when document not found")
         void throwsWhenNotFound() {
             UUID docId = UUID.randomUUID();
@@ -347,14 +416,112 @@ class PatientDocumentServiceImplTest {
             // The outer setUp stubs the patient-side caller; staff reads never
             // touch it, and MockitoExtension is strict about unused stubs.
             org.mockito.Mockito.reset(authUtils);
-            SecurityContextHolder.getContext().setAuthentication(
-                    new UsernamePasswordAuthenticationToken("dr.who", "n/a", List.of()));
+            as("ROLE_DOCTOR");
             lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(staffId));
         }
 
         @AfterEach
         void clearCaller() {
             SecurityContextHolder.clearContext();
+        }
+
+        private void as(String role) {
+            SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                    "someone", "n/a", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))));
+        }
+
+        private PatientUploadedDocument docOfType(PatientDocumentType type) {
+            PatientUploadedDocument doc = PatientUploadedDocument.builder().patient(patient)
+                    .documentType(type).filePath("/uploads/patient-documents/y.pdf").mimeType("application/pdf")
+                    .displayName("card.pdf").build();
+            doc.setId(docId);
+            return doc;
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(strings = {"ROLE_RECEPTIONIST"})
+        @DisplayName("QA D1599: the front desk opens and downloads an insurance document, audited")
+        void frontDeskOpensInsurance(String role) {
+            as(role);
+            registered();
+            PatientUploadedDocument card = docOfType(PatientDocumentType.INSURANCE_DOCUMENT);
+            Pageable pageable = PageRequest.of(0, 20);
+            when(documentRepository.findForStaffByType(patientId, hospitalId,
+                    PatientDocumentType.INSURANCE_DOCUMENT, pageable)).thenReturn(new PageImpl<>(List.of(card)));
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(card));
+            when(documentMapper.toDto(card)).thenReturn(new PatientDocumentResponseDTO());
+            when(fileUploadService.resolveStoredFile("/uploads/patient-documents/y.pdf", "patient-documents"))
+                    .thenReturn(java.nio.file.Path.of("y.pdf"));
+
+            assertThat(service.listForPatient(hospitalId, patientId, null, pageable).getContent()).hasSize(1);
+            assertThat(service.getForPatient(hospitalId, patientId, docId)).isNotNull();
+            assertThat(service.downloadForPatient(hospitalId, patientId, docId).displayName()).isEqualTo("card.pdf");
+            verify(auditEventLogService).logEvent(any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = PatientDocumentType.class,
+                names = "INSURANCE_DOCUMENT", mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE)
+        @DisplayName("QA D1599 guard: for the front desk every type except insurance is neither listed nor readable")
+        void frontDeskReachesInsuranceOnly(PatientDocumentType type) {
+            as("ROLE_RECEPTIONIST");
+            registered();
+            Pageable pageable = PageRequest.of(0, 20);
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(docOfType(type)));
+
+            assertThat(service.listForPatient(hospitalId, patientId, type, pageable).getContent()).isEmpty();
+            assertThatThrownBy(() -> service.getForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.downloadForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(documentRepository, never()).findForStaff(any(), any(), any());
+            verify(fileUploadService, never()).resolveStoredFile(any(), any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("QA D1599: the patient's free-text note is blanked for the desk and kept for the clinician")
+        void notesAreBlankedForTheDeskOnly() {
+            registered();
+            PatientUploadedDocument card = docOfType(PatientDocumentType.INSURANCE_DOCUMENT);
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(card));
+            when(documentMapper.toDto(card)).thenAnswer(inv -> {
+                PatientDocumentResponseDTO dto = new PatientDocumentResponseDTO();
+                dto.setNotes("sees an oncologist");
+                return dto;
+            });
+            as("ROLE_RECEPTIONIST");
+            assertThat(service.getForPatient(hospitalId, patientId, docId).getNotes()).isNull();
+            as("ROLE_DOCTOR");
+            assertThat(service.getForPatient(hospitalId, patientId, docId).getNotes()).isEqualTo("sees an oncologist");
+        }
+
+        @Test
+        @DisplayName("QA D1599: an unfiltered front-desk list never uses the all-types query")
+        void frontDeskUnfilteredListIsInsuranceOnly() {
+            as("ROLE_RECEPTIONIST");
+            registered();
+            Pageable pageable = PageRequest.of(0, 20);
+            when(documentRepository.findForStaffByType(patientId, hospitalId,
+                    PatientDocumentType.INSURANCE_DOCUMENT, pageable)).thenReturn(new PageImpl<>(List.of()));
+            service.listForPatient(hospitalId, patientId, null, pageable);
+            verify(documentRepository, never()).findForStaff(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1599: another hospital's reception gets 404 for the same patient")
+        void otherHospitalsFrontDeskIsNotFound() {
+            as("ROLE_RECEPTIONIST");
+            when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
+                    .thenReturn(Optional.empty());
+            Pageable pageable = PageRequest.of(0, 20);
+            assertThatThrownBy(() -> service.listForPatient(hospitalId, patientId, null, pageable))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.downloadForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
 
         private PatientHospitalRegistration registered() {
@@ -378,7 +545,7 @@ class PatientDocumentServiceImplTest {
                     .hasMessageContaining("active hospital is required");
             assertThatThrownBy(() -> service.downloadForPatient(null, patientId, docId))
                     .isInstanceOf(BusinessException.class);
-            verify(documentRepository, never()).findByPatient_IdAndDeletedAtIsNull(any(), any());
+            verify(documentRepository, never()).findForStaff(any(), any(), any());
         }
 
         @Test
@@ -398,6 +565,85 @@ class PatientDocumentServiceImplTest {
             verify(auditEventLogService, never()).logEvent(any());
         }
 
+        private void notRegisteredHere(com.example.hms.service.recordaccess.RecordAccessDecision decision) {
+            when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
+                    .thenReturn(Optional.empty());
+            when(recordAccessPolicy.decide(staffId, patientId, hospitalId)).thenReturn(decision);
+        }
+
+        @Test
+        @DisplayName("D504: a live break-the-glass session at B opens an opted-out patient's documents registered only at A, and records the disclosure")
+        void breakGlassOpensDocuments() {
+            UUID sessionId = UUID.randomUUID();
+            notRegisteredHere(com.example.hms.service.recordaccess.RecordAccessDecision.permitted(
+                    patientId, hospitalId, staffId,
+                    new com.example.hms.service.recordaccess.TreatmentRelationship(
+                            com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, sessionId,
+                            hospitalId, patientId, null, null, true),
+                    com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            Hospital b = new Hospital();
+            b.setId(hospitalId);
+            b.setName("Hospital B");
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(b));
+            Pageable pageable = PageRequest.of(0, 20);
+            PatientUploadedDocument doc = PatientUploadedDocument.builder().patient(patient).build();
+            when(documentRepository.findForStaff(patientId, hospitalId, pageable))
+                    .thenReturn(new PageImpl<>(List.of(doc)));
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(doc));
+            when(documentMapper.toDto(doc)).thenReturn(new PatientDocumentResponseDTO());
+
+            assertThat(service.listForPatient(hospitalId, patientId, null, pageable).getContent()).hasSize(1);
+            assertThat(service.getForPatient(hospitalId, patientId, docId)).isNotNull();
+
+            ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> rows =
+                    ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService, times(2)).logEvent(rows.capture());
+            assertThat(rows.getAllValues()).allSatisfy(row -> {
+                assertThat(row.getEventDescription()).contains(sessionId.toString());
+                assertThat(row.getPatientId()).isEqualTo(patientId);
+                assertThat(row.getHospitalName()).isEqualTo("Hospital B");
+            });
+        }
+
+        @Test
+        @DisplayName("D504: an opt-out without a session stays a 404 that confirms nothing, and a restricted chart is the loud 403")
+        void refusalsAreExplicit() {
+            notRegisteredHere(com.example.hms.service.recordaccess.RecordAccessDecision.refused(
+                    patientId, hospitalId, staffId,
+                    com.example.hms.enums.RecordAccessDenialReason.PATIENT_OPTED_OUT,
+                    com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            Pageable pageable = PageRequest.of(0, 20);
+            assertThatThrownBy(() -> service.listForPatient(hospitalId, patientId, null, pageable))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            when(recordAccessPolicy.decide(staffId, patientId, hospitalId)).thenReturn(
+                    com.example.hms.service.recordaccess.RecordAccessDecision.refused(
+                            patientId, hospitalId, staffId,
+                            com.example.hms.enums.RecordAccessDenialReason.CHART_RESTRICTED,
+                            com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            assertThatThrownBy(() -> service.getForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(com.example.hms.exception.ChartRestrictedException.class);
+            verify(documentRepository, never()).findForStaff(any(), any(), any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("QA D961: another hospital's certificate reads as missing here")
+        void qaD961_anotherHospitalsCertificateIsNotReadHere() {
+            registered();
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            PatientUploadedDocument doc = PatientUploadedDocument.builder().patient(patient)
+                    .documentType(PatientDocumentType.MEDICAL_CERTIFICATE).issuingHospital(other).build();
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(doc));
+            assertThatThrownBy(() -> service.getForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.downloadForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
         @Test
         @DisplayName("lists live documents for a registered patient, optionally by type")
         void listsForRegisteredPatient() {
@@ -405,10 +651,10 @@ class PatientDocumentServiceImplTest {
             Pageable pageable = PageRequest.of(0, 20);
             PatientUploadedDocument doc = PatientUploadedDocument.builder().patient(patient).build();
             PatientDocumentResponseDTO dto = new PatientDocumentResponseDTO();
-            when(documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable))
+            when(documentRepository.findForStaff(patientId, hospitalId, pageable))
                     .thenReturn(new PageImpl<>(List.of(doc)));
-            when(documentRepository.findByPatient_IdAndDocumentTypeAndDeletedAtIsNull(
-                    patientId, PatientDocumentType.REFERRAL_LETTER, pageable))
+            when(documentRepository.findForStaffByType(
+                    patientId, hospitalId, PatientDocumentType.REFERRAL_LETTER, pageable))
                     .thenReturn(new PageImpl<>(List.of(doc, doc)));
             when(documentMapper.toDto(doc)).thenReturn(dto);
 
@@ -419,15 +665,12 @@ class PatientDocumentServiceImplTest {
 
         @Test
         @DisplayName("download streams the stored file and writes a DATA_ACCESS row naming the document, not the file name")
-        void downloadStreamsAndAudits() {
+        void downloadStreamsAndAuditsActingRole() {
             registered();
-            Role nurse = new Role();
-            nurse.setName("ROLE_NURSE");
-            UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
-            assignment.setId(UUID.randomUUID());
-            assignment.setRole(nurse);
-            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(staffId, hospitalId))
-                    .thenReturn(Optional.of(assignment));
+            var authorities = com.example.hms.security.RoleExpansion.expand(List.of("ROLE_SUPER_ADMIN")).stream()
+                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList();
+            SecurityContextHolder.getContext().setAuthentication(
+                    new UsernamePasswordAuthenticationToken("dr.who", "n/a", authorities));
             PatientUploadedDocument doc = PatientUploadedDocument.builder()
                     .patient(patient)
                     .documentType(PatientDocumentType.LAB_RESULT)
@@ -460,8 +703,10 @@ class PatientDocumentServiceImplTest {
             assertThat(row.getEntityType()).isEqualTo("PATIENT_UPLOADED_DOCUMENT");
             // Structured anchors, so per-hospital audit queries find the row.
             assertThat(row.getHospitalName()).isEqualTo("Hospital A");
-            assertThat(row.getAssignmentId()).isEqualTo(assignment.getId());
-            assertThat(row.getRoleName()).isEqualTo("ROLE_NURSE");
+            assertThat(row.getAssignmentId()).isNull();
+            assertThat(row.getHospitalId()).isEqualTo(hospitalId);
+            verifyNoInteractions(assignmentRepository);
+            assertThat(row.getRoleName()).isEqualTo("SUPER_ADMIN");
             // The patient-chosen file name can itself be PHI; the row must not carry it.
             assertThat(row.getEventDescription()).contains(docId.toString()).contains("LAB_RESULT")
                     .doesNotContain("hiv-results");
@@ -471,8 +716,6 @@ class PatientDocumentServiceImplTest {
         @DisplayName("a super-admin scoped by header has no assignment at the hospital — the row still carries the hospital")
         void downloadBySuperAdminAuditsHospitalWithoutAssignment() {
             registered();
-            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(staffId, hospitalId))
-                    .thenReturn(Optional.empty());
             PatientUploadedDocument doc = PatientUploadedDocument.builder()
                     .patient(patient).documentType(PatientDocumentType.OTHER).filePath("/uploads/patient-documents/z.pdf")
                     .build();

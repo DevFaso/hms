@@ -1,14 +1,24 @@
+import { LabValuePipe } from '../../shared/pipes/lab-value.pipe';
 import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 import { PatientSnapshot } from '../../services/dashboard.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
-  imports: [RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [
+    LabValuePipe,
+    LabCorrectionBadgeComponent,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './patient-snapshot-drawer.html',
   styleUrl: './patient-snapshot-drawer.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -16,7 +26,24 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 export class PatientSnapshotDrawerComponent {
   snapshot = input<PatientSnapshot | null>(null);
   isOpen = input(false);
+  /** A snapshot read is in flight: the drawer opens on a spinner, not on nothing. */
+  loading = input(false);
+  /**
+   * Why there is no snapshot to draw.
+   *
+   * `GET /me/patients/{id}/snapshot` is hospital-scoped and refuses with a
+   * 404 when no scope resolves. The host used to close the drawer on any
+   * failure, so a refusal looked like a dead button; and rendering it as an
+   * empty drawer would be the same authorization-failure-as-no-data the house
+   * rules out. Three sentences, because there are three remedies: NO_SCOPE is
+   * "pick a hospital", NOT_HERE (a 404 on a scoped read) is "this patient is
+   * not reachable here", and only FAILED is worth trying again — so only
+   * FAILED draws a Retry.
+   */
+  loadError = input<'NO_SCOPE' | 'NOT_HERE' | 'FAILED' | null>(null);
   closed = output<void>();
+  /** The Retry in the failure state; the host re-reads the same patient. */
+  retryRequested = output<void>();
 
   // Section collapse states
   allergiesOpen = signal(true);
@@ -30,6 +57,10 @@ export class PatientSnapshotDrawerComponent {
 
   close(): void {
     this.closed.emit();
+  }
+
+  retry(): void {
+    this.retryRequested.emit();
   }
 
   toggle(

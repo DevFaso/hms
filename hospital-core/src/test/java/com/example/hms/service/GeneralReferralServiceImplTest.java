@@ -35,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -48,6 +49,7 @@ class GeneralReferralServiceImplTest {
     @Mock private GeneralReferralRepository referralRepository;
     @Mock private com.example.hms.repository.AppointmentRepository appointmentRepository;
     @Mock private PatientRepository patientRepository;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
@@ -56,6 +58,10 @@ class GeneralReferralServiceImplTest {
     @Mock private com.example.hms.repository.ReferralEventRepository eventRepository;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
 
     @InjectMocks
     private GeneralReferralServiceImpl service;
@@ -75,6 +81,9 @@ class GeneralReferralServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
+        org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
         patient = new Patient();
         patient.setId(patientId);
         patient.setFirstName("Jane");
@@ -86,13 +95,25 @@ class GeneralReferralServiceImplTest {
 
         referringProvider = new Staff();
         referringProvider.setId(referringProviderId);
+        // QA D205: the referrer is the signed-in clinician, at the sending hospital.
+        com.example.hms.model.User caller = new com.example.hms.model.User();
+        caller.setId(UUID.randomUUID());
+        referringProvider.setUser(caller);
+        referringProvider.setHospital(hospital);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(caller.getId());
 
         receivingProvider = new Staff();
         receivingProvider.setId(receivingProviderId);
+        receivingProvider.setHospital(hospital);
+        // QA D273: the receiver is a physician, which RoleValidator answers from the user.
+        com.example.hms.model.User receiver = new com.example.hms.model.User();
+        receiver.setId(UUID.randomUUID());
+        receivingProvider.setUser(receiver);
 
         department = new Department();
         department.setId(departmentId);
         department.setName("Cardiology");
+        department.setHospital(hospital);
     }
 
     private GeneralReferralRequestDTO buildRequest() {
@@ -133,7 +154,7 @@ class GeneralReferralServiceImplTest {
             GeneralReferralRequestDTO request = buildRequest();
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> {
                 GeneralReferral r = inv.getArgument(0);
@@ -156,7 +177,7 @@ class GeneralReferralServiceImplTest {
             request.setTargetDepartmentId(departmentId);
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(staffRepository.findById(receivingProviderId)).thenReturn(Optional.of(receivingProvider));
             when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
@@ -179,7 +200,7 @@ class GeneralReferralServiceImplTest {
             request.setUrgency(ReferralUrgency.EMERGENCY);
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> {
                 GeneralReferral r = inv.getArgument(0);
@@ -199,7 +220,7 @@ class GeneralReferralServiceImplTest {
             request.setUrgency(ReferralUrgency.URGENT);
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> {
                 GeneralReferral r = inv.getArgument(0);
@@ -219,7 +240,7 @@ class GeneralReferralServiceImplTest {
             request.setUrgency(ReferralUrgency.PRIORITY);
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> {
                 GeneralReferral r = inv.getArgument(0);
@@ -249,7 +270,7 @@ class GeneralReferralServiceImplTest {
             request.setReceivingProviderId(receivingProviderId);
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(staffRepository.findById(receivingProviderId)).thenReturn(Optional.empty());
 
@@ -265,7 +286,7 @@ class GeneralReferralServiceImplTest {
             request.setDiagnoses(null);
 
             when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> {
                 GeneralReferral r = inv.getArgument(0);
@@ -315,6 +336,34 @@ class GeneralReferralServiceImplTest {
         assertThat(result.getStatus()).isEqualTo(ReferralStatus.SUBMITTED);
     }
 
+    @Test
+    @DisplayName("QA D412: a nurse cannot submit a doctor's draft referral")
+    void submitReferralByAnotherClinicianIsRefused() {
+        GeneralReferral referral = buildReferral();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.submitReferral(referralId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(referral.getStatus()).isEqualTo(ReferralStatus.DRAFT);
+        verify(referralRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D430: the patient portal never lists a draft referral")
+    void portalPatientDoesNotSeeDrafts() {
+        GeneralReferral draft = buildReferral();
+        GeneralReferral sent = buildReferral();
+        sent.setId(UUID.randomUUID());
+        sent.setStatus(ReferralStatus.SUBMITTED);
+        UUID portalPatientId = draft.getPatient().getId();
+        when(referralRepository.findByPatientIdOrderByCreatedAtDesc(portalPatientId)).thenReturn(List.of(draft, sent));
+
+        List<GeneralReferralResponseDTO> visible = service.getReferralsForPortalPatient(portalPatientId);
+
+        assertThat(visible).extracting(GeneralReferralResponseDTO::getStatus).containsExactly(ReferralStatus.SUBMITTED);
+    }
+
     // ── acknowledgeReferral ─────────────────────────────────────────────────
 
     @Test
@@ -325,10 +374,79 @@ class GeneralReferralServiceImplTest {
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         when(staffRepository.findById(receivingProviderId)).thenReturn(Optional.of(receivingProvider));
         when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> inv.getArgument(0));
+        // QA D955: the receiving physician acknowledges, not the referrer.
+        when(roleValidator.getCurrentUserId()).thenReturn(receivingProvider.getUser().getId());
 
         GeneralReferralResponseDTO result = service.acknowledgeReferral(referralId, "Acknowledged", receivingProviderId);
 
         assertThat(result.getStatus()).isEqualTo(ReferralStatus.ACKNOWLEDGED);
+    }
+
+    @Test
+    @DisplayName("QA D955: the referrer cannot acknowledge her own internal referral as its receiver")
+    void qaD955_theReferrerCannotBeTheReceiver() {
+        GeneralReferral referral = buildReferral();
+        referral.setStatus(ReferralStatus.SUBMITTED);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+
+        assertThatThrownBy(() -> service.acknowledgeReferral(referralId, "self", referringProviderId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(referralRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D955: a referral cannot be created with its referrer as receiver")
+    void qaD955_theReferrerCannotBeTheReceiverAtCreation() {
+        GeneralReferralRequestDTO dto = buildRequest();
+        dto.setReceivingProviderId(referringProviderId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
+
+        assertThatThrownBy(() -> service.createReferral(dto))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(referralRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D955: a colleague cannot name the referrer as the receiver either")
+    void qaD955_theReferrerCannotBeNamedTheReceiver() {
+        GeneralReferral referral = buildReferral();
+        referral.setStatus(ReferralStatus.SUBMITTED);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.getCurrentUserId()).thenReturn(receivingProvider.getUser().getId());
+        when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
+
+        assertThatThrownBy(() -> service.acknowledgeReferral(referralId, "colleague", referringProviderId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"start", "complete", "reject", "schedule"})
+    @DisplayName("QA D955: every receiving-side step is refused to the clinician who sent the referral")
+    void qaD955_noReceivingSideStepForTheReferrer(String step) {
+        GeneralReferral referral = buildReferral();
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+
+        org.assertj.core.api.ThrowableAssert.ThrowingCallable call = switch (step) {
+            case "start" -> () -> service.startReferral(referralId);
+            case "complete" -> () -> service.completeReferral(referralId, "s", "f");
+            case "reject" -> () -> {
+                com.example.hms.payload.dto.referral.RejectReferralRequestDTO r =
+                    new com.example.hms.payload.dto.referral.RejectReferralRequestDTO();
+                r.setReason("no");
+                service.rejectReferral(referralId, r);
+            };
+            default -> () -> {
+                com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO r =
+                    new com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO();
+                r.setAppointmentTime(java.time.LocalDateTime.now().plusDays(1));
+                service.scheduleReferral(referralId, r);
+            };
+        };
+        assertThatThrownBy(call).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(referralRepository, never()).save(any());
     }
 
     // ── completeReferral ────────────────────────────────────────────────────
@@ -340,6 +458,7 @@ class GeneralReferralServiceImplTest {
         referral.setStatus(ReferralStatus.ACKNOWLEDGED);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(roleValidator.getCurrentUserId()).thenReturn(receivingProvider.getUser().getId());
 
         GeneralReferralResponseDTO result = service.completeReferral(referralId, "Summary text", "Follow-up plan");
 
@@ -358,6 +477,78 @@ class GeneralReferralServiceImplTest {
         service.cancelReferral(referralId, "Patient declined");
 
         verify(referralRepository).save(any(GeneralReferral.class));
+    }
+
+    /** QA D509: DOCTOR2_A sends POST /referrals/{id}/cancel on DOCTOR_A's referral. */
+    @Test
+    void d509_anotherDoctorAtTheSendingHospitalCannotCancel() {
+        GeneralReferral referral = buildReferral();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReferral(referralId, "QA"))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(referralRepository, never()).save(any(GeneralReferral.class));
+    }
+
+    /** QA D510: DOCTOR_B at the receiving hospital cancels hospital A's submitted referral. */
+    @Test
+    void d510_receivingHospitalCannotCancel() {
+        Hospital receiving = new Hospital();
+        receiving.setId(UUID.randomUUID());
+        GeneralReferral referral = buildReferral();
+        referral.setReceivingHospital(receiving);
+        referral.submit();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(receiving.getId());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReferral(referralId, "QA"))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(referralRepository, never()).save(any(GeneralReferral.class));
+    }
+
+    /** D509/D510 path re-verified: the referrer at the sending hospital still cancels. */
+    @Test
+    void d510_referrerAtTheSendingHospitalCancels() {
+        Hospital receiving = new Hospital();
+        receiving.setId(UUID.randomUUID());
+        GeneralReferral referral = buildReferral();
+        referral.setReceivingHospital(receiving);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.cancelReferral(referralId, "QA");
+
+        assertThat(referral.getStatus()).isEqualTo(ReferralStatus.CANCELLED);
+    }
+
+    /** QA D509: a draft cancelled before it was sent never reaches the receiving hospital. */
+    @Test
+    void d509_cancelledDraftIsInvisibleToTheReceivingHospital() {
+        Hospital receiving = new Hospital();
+        receiving.setId(UUID.randomUUID());
+        GeneralReferral cancelledDraft = buildReferral();
+        cancelledDraft.setReceivingHospital(receiving);
+        cancelledDraft.cancel("QA");
+        GeneralReferral sentThenCancelled = buildReferral();
+        sentThenCancelled.setId(UUID.randomUUID());
+        sentThenCancelled.setReceivingHospital(receiving);
+        sentThenCancelled.submit();
+        sentThenCancelled.cancel("QA");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(receiving.getId());
+        when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(receiving.getId())).thenReturn(List.of());
+        when(referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(receiving.getId()))
+            .thenReturn(List.of(cancelledDraft, sentThenCancelled));
+
+        assertThat(service.getAllReferrals(null))
+            .extracting(GeneralReferralResponseDTO::getId)
+            .containsExactly(sentThenCancelled.getId());
+
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(cancelledDraft));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getReferral(referralId))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     // ── list methods ────────────────────────────────────────────────────────
@@ -383,6 +574,9 @@ class GeneralReferralServiceImplTest {
         GeneralReferral foreign = buildReferral();
         foreign.setId(UUID.randomUUID());
         foreign.setHospital(other);
+        // QA D623: a foreign row is listed once it was sent; its draft is not.
+        foreign.setStatus(ReferralStatus.SUBMITTED);
+        foreign.setSubmittedAt(java.time.LocalDateTime.now());
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
                 .thenReturn(Set.of(hospitalId, otherHospitalId));

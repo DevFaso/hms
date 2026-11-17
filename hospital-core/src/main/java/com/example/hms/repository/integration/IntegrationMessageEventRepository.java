@@ -4,12 +4,17 @@ import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.model.integration.IntegrationMessageEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -62,9 +67,17 @@ public interface IntegrationMessageEventRepository
      * are still counted as unresolved — the recorder always generates
      * one for new messages, so the only way to land here is via
      * direct DB inserts.
+     *
+     * <p>A row whose content the retention sweep erased (V177,
+     * {@code payloadPurgedAt} set) is not counted: it cannot be replayed,
+     * so nothing an operator does could ever clear it, and a reject under a
+     * random correlation id (an unknown sender) would otherwise sit on the
+     * badge for ever. The row itself stays listed, shown as "content
+     * purged".
      */
     @Query("SELECT COUNT(m) FROM IntegrationMessageEvent m "
         + "WHERE m.status = com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
+        + "AND m.payloadPurgedAt IS NULL "
         + "AND NOT EXISTS ("
         + "  SELECT 1 FROM IntegrationMessageEvent later "
         + "  WHERE later.correlationId IS NOT NULL "
@@ -99,4 +112,100 @@ public interface IntegrationMessageEventRepository
     Optional<IntegrationMessageEvent>
         findFirstByCorrelationIdAndStatusAndReceivedAtAfterOrderByReceivedAtDesc(
             String correlationId, IntegrationMessageStatus status, LocalDateTime after);
+
+    /**
+     * The row, locked ({@code SELECT ... FOR UPDATE}) for the rest of the
+     * caller's transaction.
+     *
+     * <p>Used by {@code IntegrationMessageRecorder.recordReplay}: the replay
+     * copies the row's content into a new row, and the retention sweep's
+     * {@link #purgePayloads} UPDATE must not erase that content between the
+     * replay's purge check and its copy. Holding the row lock makes the
+     * check and the copy one step: a sweep that got there first is seen
+     * (the row reads as purged and the replay is refused), and a sweep that
+     * comes after waits for the replay to commit.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM IntegrationMessageEvent m WHERE m.id = :id")
+    Optional<IntegrationMessageEvent> findByIdForUpdate(@Param("id") UUID id);
+
+    /**
+     * Ids of rows whose message content is due for erasure, oldest first: a
+     * body still held, never purged, and past a cutoff by the rule for its
+     * status.
+     *
+     * <ul>
+     *   <li>Anything but {@code FAILED}: received before {@code cutoff}.</li>
+     *   <li>A <em>resolved</em> {@code FAILED} row: resolved before
+     *   {@code cutoff}. Resolved means what {@link #countUnresolvedDeadLetters}
+     *   means - a later row shares its correlation id - so the clock starts
+     *   at the first superseding attempt, not at receipt.</li>
+     *   <li>Every {@code FAILED} row, resolved or not: received before
+     *   {@code unresolvedCutoff} - an absolute ceiling. Without it a dead
+     *   letter that is never resolved (a one-off failure, a reject from a
+     *   sender that was never allowlisted, which gets a random correlation id
+     *   and so can never be superseded, a legacy row with none) would hold
+     *   its raw message for ever - and so would a row superseded by a newer
+     *   {@code FAILED} row that keeps absorbing retries, because each fold
+     *   refreshes that row's {@code lastAttemptedAt} and the resolution
+     *   above never falls behind the cutoff. A resolved row may go earlier
+     *   under the resolution rule; nothing stays past the ceiling.
+     *   {@code received_at} rather than first sight, because a recurring
+     *   failure is folded into its row and refreshes it: a problem still
+     *   happening keeps its current evidence.</li>
+     * </ul>
+     *
+     * <p>{@code unresolvedCutoff} is never later than {@code cutoff} (the
+     * scheduler refuses a ceiling shorter than the window). The partial index
+     * on rows holding a body (V177) serves the scan; the correlation index
+     * (V89) serves the {@code EXISTS}.
+     */
+    @Query("SELECT m.id FROM IntegrationMessageEvent m "
+        + "WHERE m.payload IS NOT NULL AND m.payloadPurgedAt IS NULL "
+        + "AND m.receivedAt < :cutoff "
+        + "AND (m.status <> com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
+        + "  OR m.receivedAt < :unresolvedCutoff "
+        + "  OR EXISTS ("
+        + "    SELECT 1 FROM IntegrationMessageEvent later "
+        + "    WHERE later.correlationId IS NOT NULL "
+        + "    AND later.correlationId = m.correlationId "
+        + "    AND later.lastAttemptedAt > m.lastAttemptedAt "
+        + "    AND later.lastAttemptedAt < :cutoff"
+        + "  )"
+        + ") "
+        + "ORDER BY m.receivedAt ASC")
+    List<UUID> findPayloadPurgeCandidateIds(
+        @Param("cutoff") LocalDateTime cutoff,
+        @Param("unresolvedCutoff") LocalDateTime unresolvedCutoff,
+        Pageable pageable);
+
+    /**
+     * Erase the content of the given rows and stamp when. Re-checks the whole
+     * eligibility rule of {@link #findPayloadPurgeCandidateIds} rather than
+     * trusting the ids, so a row that changed between the read and this write
+     * is left alone, and a second instance or a rerun purging the same ids
+     * updates nothing: the statement is idempotent. Returns the rows actually
+     * purged.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE IntegrationMessageEvent m "
+        + "SET m.payload = NULL, m.payloadPurgedAt = :purgedAt "
+        + "WHERE m.id IN :ids "
+        + "AND m.payload IS NOT NULL AND m.payloadPurgedAt IS NULL "
+        + "AND m.receivedAt < :cutoff "
+        + "AND (m.status <> com.example.hms.enums.integration.IntegrationMessageStatus.FAILED "
+        + "  OR m.receivedAt < :unresolvedCutoff "
+        + "  OR EXISTS ("
+        + "    SELECT 1 FROM IntegrationMessageEvent later "
+        + "    WHERE later.correlationId IS NOT NULL "
+        + "    AND later.correlationId = m.correlationId "
+        + "    AND later.lastAttemptedAt > m.lastAttemptedAt "
+        + "    AND later.lastAttemptedAt < :cutoff"
+        + "  )"
+        + ")")
+    int purgePayloads(
+        @Param("ids") Collection<UUID> ids,
+        @Param("cutoff") LocalDateTime cutoff,
+        @Param("unresolvedCutoff") LocalDateTime unresolvedCutoff,
+        @Param("purgedAt") LocalDateTime purgedAt);
 }

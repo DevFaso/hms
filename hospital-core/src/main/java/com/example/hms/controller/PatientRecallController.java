@@ -1,10 +1,10 @@
 package com.example.hms.controller;
 
+import java.util.Optional;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.RecallStatus;
 import com.example.hms.payload.dto.scheduling.RecallRequestDTO;
 import com.example.hms.payload.dto.scheduling.RecallResponseDTO;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.scheduling.PatientRecallService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -77,8 +77,13 @@ public class PatientRecallController {
 
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel a recall created in error or no longer wanted")
-    public ResponseEntity<RecallResponseDTO> cancel(@PathVariable UUID id) {
-        return ResponseEntity.ok(recallService.cancelRecall(id, resolveHospitalId()));
+    public ResponseEntity<RecallResponseDTO> cancel(
+            @PathVariable UUID id,
+            // QA D1157: the reason is required by the service; an empty body is refused like a blank one.
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody(required = false)
+            com.example.hms.payload.dto.scheduling.CloseReasonRequestDTO body) {
+        return ResponseEntity.ok(recallService.cancelRecall(id, resolveHospitalId(),
+            body == null ? null : body.getReason()));
     }
 
     @PostMapping("/{id}/link-appointment")
@@ -90,8 +95,7 @@ public class PatientRecallController {
     }
 
     private UUID resolveHospitalId() {
-        return HospitalContextHolder.getContext()
-                .map(HospitalContext::getActiveHospitalId)
+        return Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())
                 .orElse(null);
     }
 }

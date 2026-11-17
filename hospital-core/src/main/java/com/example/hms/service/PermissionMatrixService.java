@@ -17,6 +17,9 @@ public interface PermissionMatrixService {
 
     PermissionMatrixSnapshotResponseDTO getLatestSnapshot(PermissionMatrixEnvironment environment, Locale locale);
 
+    /** The latest snapshot, empty when the environment has none yet (D248). */
+    java.util.Optional<PermissionMatrixSnapshotResponseDTO> findLatestSnapshot(PermissionMatrixEnvironment environment, Locale locale);
+
     List<PermissionMatrixSnapshotResponseDTO> listSnapshots(PermissionMatrixEnvironment environment, Locale locale);
 
     PermissionMatrixSnapshotResponseDTO getSnapshot(UUID snapshotId, Locale locale);

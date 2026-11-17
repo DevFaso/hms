@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.controller.support.RecordsWithheldHeaders;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.service.PatientLabResultService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +35,7 @@ public class PatientLabResultController {
 
     private final PatientLabResultService patientLabResultService;
     private final ControllerAuthUtils authUtils;
+    private final RecordsWithheldHeaders recordsWithheld;
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_LAB_SCIENTIST','ROLE_SUPER_ADMIN','ROLE_MIDWIFE','ROLE_PHARMACIST')")
@@ -61,7 +63,18 @@ public class PatientLabResultController {
 
         log.info("GET /api/patients/{}/lab-results - hospital: {}", patientId, resolvedHospitalId);
         List<PatientLabResultResponseDTO> results = patientLabResultService
-            .getLabResultsForPatient(patientId, resolvedHospitalId, safeLimit);
-        return ResponseEntity.ok(results);
+            .getLabResultsForPatient(patientId, resolvedHospitalId, safeLimit, isLaboratoryStaff(auth));
+        // QA D504: a list narrowed by the patient's opt-out says so.
+        return ResponseEntity.ok().headers(recordsWithheld.forRead(auth, patientId, resolvedHospitalId)).body(results);
+    }
+
+    /** QA D160: only the laboratory sees a value before it is released. */
+    static final java.util.Set<String> LAB_AUTHORITIES = java.util.Set.of(
+        "ROLE_LAB_TECHNICIAN", "ROLE_LAB_SCIENTIST", "ROLE_LAB_MANAGER",
+        "ROLE_LAB_DIRECTOR", "ROLE_QUALITY_MANAGER");
+
+    static boolean isLaboratoryStaff(Authentication auth) {
+        return auth != null && auth.getAuthorities() != null && auth.getAuthorities().stream()
+            .anyMatch(a -> LAB_AUTHORITIES.contains(a.getAuthority()));
     }
 }

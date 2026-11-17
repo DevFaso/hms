@@ -1,31 +1,61 @@
+import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
+  ElementRef,
+  computed,
   inject,
   OnDestroy,
   OnInit,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
 
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserService, UserSummary, AdminRegisterRequest } from '../services/user.service';
+import { grantableRoles } from '../core/grantable-roles';
 import { RoleService, RoleResponse } from '../services/role.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import {
+  HospitalService,
+  HospitalResponse,
+  isOpenForAssignment,
+} from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
-import { deliveryWarningKeys } from '../shared/delivery-warnings';
+import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+
+const PATIENT_ROLE_CODES = new Set(['ROLE_PATIENT', 'PATIENT']);
+
+/** Local (70202020) or international (+226 70 20 20 20 / 00226...) - the server normalises to E.164. */
+const PHONE_PATTERN = /^\+?[\d\s.()-]{8,20}$/;
+
+/** QA D1306 (round 28): the fields the create/edit form may refuse, so a fixed one loses its mark. */
+const USER_FORM_IDS = ['firstName', 'lastName', 'username', 'email', 'phoneNumber', 'user-roles'];
 
 const MEDICAL_ROLE_CODES = new Set([
   'ROLE_DOCTOR',
   'ROLE_NURSE',
   'ROLE_LAB_SCIENTIST',
   'ROLE_PHARMACIST',
+]);
+
+/** Roles whose holders have a medical specialty (QA D195): not nurses, pharmacists or lab staff. */
+const SPECIALTY_ROLE_CODES = new Set([
+  'ROLE_DOCTOR',
+  'ROLE_PHYSICIAN',
+  'ROLE_SURGEON',
+  'ROLE_RADIOLOGIST',
 ]);
 
 const JOB_TITLES = [
@@ -43,7 +73,7 @@ const JOB_TITLES = [
   'QUALITY_MANAGER',
   'RECEPTIONIST',
   'SURGEON',
-  'HOSPITAL_ADMINISTRATOR',
+  // QA D541: HOSPITAL_ADMINISTRATOR (legacy) is offered once, as HOSPITAL_ADMIN.
   'LABORATORY_SCIENTIST',
   'RADIOLOGIST',
   'ANESTHESIOLOGIST',
@@ -82,17 +112,26 @@ const SPECIALIZATIONS = [
 @Component({
   selector: 'app-user-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    DialogFocusDirective,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+    EnumLabelPipe,
+  ],
   templateUrl: './user-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './user-list.scss',
 })
 export class UserListComponent implements OnInit, OnDestroy {
   private readonly userService = inject(UserService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly roleService = inject(RoleService);
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly impersonation = inject(ImpersonationService);
   private readonly router = inject(Router);
   private readonly translate = inject(TranslateService);
@@ -108,6 +147,16 @@ export class UserListComponent implements OnInit, OnDestroy {
   /* Filter state */
   roleFilter = '';
   statusFilter = '';
+
+  /**
+   * QA D919: the deleted view and the restore are the super-admin's (the
+   * server answers anyone else an empty worklist, and 404 on a deleted
+   * account), so nobody else is offered the "Deleted" filter or told an
+   * account can be restored from it.
+   */
+  canSeeDeleted(): boolean {
+    return this.roleContext.isSuperAdmin();
+  }
   showFilters = signal(false);
 
   currentPage = signal(0);
@@ -138,6 +187,17 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // Lookup data for dropdowns
   availableRoles = signal<RoleResponse[]>([]);
+
+  /**
+   * The roles the create modal offers (QA D189). Only a super-admin grants an
+   * admin role (the server refuses anyone else with a 403), and a patient is
+   * registered from the patient form, not here, so a hospital admin is
+   * offered staff roles only.
+   */
+  // QA D189/D626: the shared grant rule (no patient role, no admin role below super-admin).
+  readonly grantableRoles = computed(() =>
+    grantableRoles(this.availableRoles(), this.roleContext.isSuperAdmin()),
+  );
   availableHospitals = signal<{ id: string; name: string }[]>([]);
 
   // Form fields
@@ -149,9 +209,27 @@ export class UserListComponent implements OnInit, OnDestroy {
   readonly employmentTypes = EMPLOYMENT_TYPES;
   readonly specializations = SPECIALIZATIONS;
 
-  /** True when any selected role is a medical role requiring a license number */
-  get licenseRequired(): boolean {
+  /** One-time credentials the server generated and could not deliver; shown once. */
+  issuedCredentials = signal<{ username: string; password: string } | null>(null);
+
+  /**
+   * True when a selected role is a regulated profession: the licence field is
+   * shown. It is ALWAYS optional - clinicians are credentialed on diplomas.
+   */
+  get licenseApplicable(): boolean {
     return this.selectedRoles.some((r) => MEDICAL_ROLE_CODES.has(r));
+  }
+
+  /** True when a selected role is a physician's: only then is a medical specialization asked. */
+  get specializationApplicable(): boolean {
+    return this.selectedRoles.some((r) => SPECIALTY_ROLE_CODES.has(r));
+  }
+
+  /** E-mail is optional only for a patient-only registration (phone-first). */
+  get emailRequired(): boolean {
+    return (
+      this.selectedRoles.length === 0 || this.selectedRoles.some((r) => !PATIENT_ROLE_CODES.has(r))
+    );
   }
 
   ngOnInit(): void {
@@ -180,15 +258,15 @@ export class UserListComponent implements OnInit, OnDestroy {
     // The Deleted view itself pages SERVER-side (onlyDeleted): filtering a
     // mixed 20-row page client-side could show "no matches" while the ghost
     // sat on a later page - the invisible-ghost bug wearing a new hat.
-    const deletedView = this.statusFilter === 'deleted';
+    const deletedView = this.statusFilter === 'deleted' && this.canSeeDeleted();
     const request$ = hasServerFilter
       ? this.userService.search(page, 20, {
           ...(this.roleFilter ? { role: this.roleFilter } : {}),
           ...(term ? { name: term } : {}),
-          includeDeleted: true,
+          includeDeleted: this.canSeeDeleted(),
           ...(deletedView ? { onlyDeleted: true } : {}),
         })
-      : this.userService.list(page, 20, true, deletedView);
+      : this.userService.list(page, 20, this.canSeeDeleted(), deletedView);
 
     request$.subscribe({
       next: (res) => {
@@ -221,8 +299,11 @@ export class UserListComponent implements OnInit, OnDestroy {
     // ── TENANT ISOLATION: only SUPER_ADMIN loads full hospital list ──
     if (this.roleContext.isSuperAdmin()) {
       this.hospitalService.list().subscribe({
+        // QA D818: a new user's role is never granted at an archived hospital.
         next: (hospitals: HospitalResponse[]) =>
-          this.availableHospitals.set(hospitals.map((h) => ({ id: h.id, name: h.name }))),
+          this.availableHospitals.set(
+            hospitals.filter(isOpenForAssignment).map((h) => ({ id: h.id, name: h.name })),
+          ),
         error: () => {
           /* silent */
         },
@@ -305,13 +386,25 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   openCreate(): void {
     this.createForm = this.freshForm();
+    // A hospital admin onboards into their own hospital: freshForm() has no
+    // hospitalId, so re-apply the locked hospital or the request goes out
+    // without one (D201).
+    if (!this.roleContext.isSuperAdmin()) {
+      const own = this.availableHospitals();
+      if (own.length === 1) this.createForm.hospitalId = own[0].id;
+    }
     this.selectedRoles = [];
     this.editing.set(null);
     this.fieldErrors.set({});
     this.showCreate.set(true);
   }
 
+  /** Every role of the account being edited, shown read-only (QA D765). */
+  readonly editRoles = signal<string[]>([]);
+
   openEdit(user: UserSummary): void {
+    // A deleted account is restored first; the server refuses the edit (D126).
+    if (user.deleted) return;
     this.editing.set(user);
     // Pre-populate with summary data; phoneNumber comes from full detail fetch.
     this.createForm = {
@@ -324,6 +417,11 @@ export class UserListComponent implements OnInit, OnDestroy {
       roleNames: user.roleName ? [user.roleName] : [],
     };
     this.selectedRoles = user.roleName ? [user.roleName] : [];
+    // QA D765: the summary carries the primary role only. Show every role the
+    // account holds, read-only: roles are granted per hospital from the role
+    // assignments page, and PUT /users/{id} never changes them.
+    this.editRoles.set(user.roleName ? [user.roleName] : []);
+    this.editStaffHospitalName.set(null);
     this.fieldErrors.set({});
     this.showCreate.set(true);
 
@@ -334,8 +432,30 @@ export class UserListComponent implements OnInit, OnDestroy {
         if (detail.phoneNumber) {
           this.createForm.phoneNumber = detail.phoneNumber;
         }
+        const codes = roleCodesOf(detail.roles);
+        if (codes.length > 0) {
+          this.editRoles.set(codes);
+          this.selectedRoles = codes;
+        }
+        // QA D838: the staff profile's hospital, job title and employment
+        // type (and specialization, licence) are shown as registered, so an
+        // admin editing only the phone does not read them as lost. They are
+        // read-only here: PUT /users does not change them.
+        this.createForm.hospitalId = detail.staffHospitalId ?? '';
+        this.createForm.jobTitle = detail.jobTitle ?? '';
+        this.createForm.employmentType = detail.employmentType ?? '';
+        this.createForm.specialization = detail.specialization ?? undefined;
+        this.createForm.licenseNumber = detail.licenseNumber ?? undefined;
+        this.editStaffHospitalName.set(detail.staffHospitalName ?? null);
       },
     });
+  }
+
+  /** QA D838: the edited account's staff hospital, shown read-only. */
+  readonly editStaffHospitalName = signal<string | null>(null);
+
+  dismissCredentials(): void {
+    this.issuedCredentials.set(null);
   }
 
   closeCreate(): void {
@@ -353,29 +473,56 @@ export class UserListComponent implements OnInit, OnDestroy {
       this.selectedRoles = this.selectedRoles.filter((r) => r !== roleCode);
     }
     // Clear licenseNumber when no medical role selected
-    if (!this.licenseRequired) {
+    if (!this.licenseApplicable) {
       this.createForm.licenseNumber = undefined;
     }
+    if (!this.specializationApplicable) {
+      this.createForm.specialization = undefined;
+    }
+  }
+
+  /**
+   * The first rule the create/edit form breaks: its message key and the
+   * blank fields to mark. Username and password are never asked on create:
+   * the server generates one-time credentials. Edits keep the username field.
+   */
+  private createRefusal(isEdit: boolean): { key: string; ids: string[] } | null {
+    const f = this.createForm;
+    const blank = [
+      f.firstName ? null : 'firstName',
+      f.lastName ? null : 'lastName',
+      isEdit && !f.username ? 'username' : null,
+      this.emailRequired && !f.email?.trim() ? 'email' : null,
+      !isEdit && !f.phoneNumber?.trim() ? 'phoneNumber' : null,
+    ].filter((id): id is string => id !== null);
+    if (blank.length > 0) return { key: 'USERS.TOAST.REQUIRED_FIELDS', ids: blank };
+    if (!isEdit && this.selectedRoles.length === 0) {
+      return { key: 'USERS.TOAST.ROLE_REQUIRED', ids: ['user-roles'] };
+    }
+    return null;
   }
 
   submitCreate(): void {
     const isEdit = !!this.editing();
-    if (
-      !this.createForm.username ||
-      !this.createForm.email ||
-      (!isEdit && !this.createForm.password) ||
-      !this.createForm.firstName ||
-      !this.createForm.lastName
-    ) {
-      this.toast.error(this.translate.instant('USERS.TOAST.REQUIRED_FIELDS'));
+    const root = this.host.nativeElement;
+    const refusal = this.createRefusal(isEdit);
+    if (refusal) {
+      // QA D1306 (round 28): the blank fields are marked, not only a toast.
+      const message = this.translate.instant(refusal.key);
+      refuseFields(root, refusal.ids, USER_FORM_IDS, message);
+      this.toast.error(message);
       return;
     }
-    if (this.selectedRoles.length === 0) {
-      this.toast.error(this.translate.instant('USERS.TOAST.ROLE_REQUIRED'));
-      return;
-    }
-    if (this.licenseRequired && !this.createForm.licenseNumber?.trim()) {
-      this.toast.error(this.translate.instant('USERS.TOAST.LICENSE_REQUIRED'));
+    refuseFields(root, [], USER_FORM_IDS, '');
+    const phone = this.createForm.phoneNumber?.trim();
+    if (phone && !PHONE_PATTERN.test(phone)) {
+      this.fieldErrors.update((prev) => ({
+        ...prev,
+        phoneNumber: this.translate.instant('USERS.PHONE_INVALID'),
+      }));
+      // QA D1306 (round 28): focus the phone field the template marks, not only a toast.
+      focusFirstInvalid(root, ['phoneNumber']);
+      this.toast.error(this.translate.instant('USERS.PHONE_INVALID'));
       return;
     }
 
@@ -397,6 +544,22 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (!payload.departmentId) delete payload.departmentId;
     if (!payload.password?.trim()) delete payload.password;
     if (!payload.phoneNumber?.trim()) delete payload.phoneNumber;
+    if (!payload.email?.trim()) delete payload.email;
+    // QA D765: an edit never sends roles; the server refuses a role change here.
+    if (existing) delete payload.roleNames;
+    // QA D838: nor the staff profile fields it shows read-only.
+    if (existing) {
+      delete payload.hospitalId;
+      delete payload.jobTitle;
+      delete payload.employmentType;
+      delete payload.specialization;
+      delete payload.licenseNumber;
+      delete payload.departmentId;
+    }
+    if (!existing) {
+      delete payload.username;
+      delete payload.password;
+    }
 
     const op = existing
       ? this.userService.update(existing.id, payload)
@@ -413,6 +576,17 @@ export class UserListComponent implements OnInit, OnDestroy {
         if (!existing) {
           for (const key of deliveryWarningKeys(saved.activationDelivery)) {
             this.toast.warning(this.translate.instant(key));
+          }
+          // QA D522: say so when the activation went out by e-mail, so a failed
+          // SMS next to it does not read as "activation by SMS only".
+          if (hasActivationSent(saved.activationDelivery, 'EMAIL')) {
+            this.toast.info(this.translate.instant('DELIVERY.ACTIVATION_EMAIL_QUEUED'));
+          }
+          if (saved.temporaryUsername && saved.temporaryPassword) {
+            this.issuedCredentials.set({
+              username: saved.temporaryUsername,
+              password: saved.temporaryPassword,
+            });
           }
         }
         this.showCreate.set(false);
@@ -432,6 +606,7 @@ export class UserListComponent implements OnInit, OnDestroy {
             ...prev,
             [body.field]: body.message ?? 'Already in use',
           }));
+          focusFirstInvalid(root, [body.field]);
           this.toast.error(body.message ?? this.translate.instant('USERS.TOAST.CONFLICT'));
           return;
         }
@@ -439,6 +614,8 @@ export class UserListComponent implements OnInit, OnDestroy {
         // 400 with fieldErrors map (from @Valid / Bean Validation)
         if (status === 400 && body?.fieldErrors) {
           this.fieldErrors.set(body.fieldErrors as Record<string, string>);
+          // QA D1306 (round 28): focus the first field the server refused (the template marks it).
+          focusFirstInvalid(root, Object.keys(body.fieldErrors));
           this.toast.error(this.translate.instant('USERS.TOAST.VALIDATION_ERRORS'));
           return;
         }
@@ -513,6 +690,21 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // ── MVP-4: support impersonation ────────────────────────────────────
   /** True when the current user is a super admin and the row is impersonable. */
+  /** QA D902: the signed-in account is never offered its own delete (the server refuses it). */
+  isSelf(user: UserSummary): boolean {
+    const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
+    return !!me && user.id === me;
+  }
+
+  /**
+   * QA D914: an account a hospital admin may not administer (it is also
+   * managed at another hospital, or holds an admin role) offers no edit or
+   * delete; saving it answered "user not found".
+   */
+  isManageable(user: UserSummary): boolean {
+    return user.manageable !== false;
+  }
+
   canImpersonate(user: UserSummary): boolean {
     if (!this.roleContext.isSuperAdmin()) return false;
     if (user.deleted || !user.active) return false;
@@ -540,7 +732,15 @@ export class UserListComponent implements OnInit, OnDestroy {
     const target = this.impersonateTarget();
     const reason = this.impersonateReason.trim();
     if (!target || reason.length < 5) {
-      this.impersonateError.set(this.translate.instant('USERS.TOAST.IMPERSONATE_REASON_TOO_SHORT'));
+      // QA D1281 class: the short reason is marked where it is typed.
+      const message = this.translate.instant('USERS.TOAST.IMPERSONATE_REASON_TOO_SHORT');
+      refuseFields(
+        this.host.nativeElement,
+        ['impersonate-reason'],
+        ['impersonate-reason'],
+        message,
+      );
+      this.impersonateError.set(message);
       return;
     }
     this.impersonating.set(true);
@@ -559,7 +759,9 @@ export class UserListComponent implements OnInit, OnDestroy {
         error: (err) => {
           this.impersonating.set(false);
           this.impersonateError.set(
-            err?.error?.message ?? this.translate.instant('USERS.TOAST.IMPERSONATE_FAILED'),
+            err instanceof HttpErrorResponse && isStepUpRefusal(err)
+              ? this.translate.instant(stepUpRefusalKey(err))
+              : (err?.error?.message ?? this.translate.instant('USERS.TOAST.IMPERSONATE_FAILED')),
           );
         },
       });
@@ -569,13 +771,6 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (page >= 0 && page < this.totalPages()) {
       this.loadUsers(page);
     }
-  }
-
-  formatEnumLabel(value: string): string {
-    return value
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
   }
 
   private freshForm(): AdminRegisterRequest {
@@ -589,4 +784,21 @@ export class UserListComponent implements OnInit, OnDestroy {
       roleNames: [],
     };
   }
+}
+
+/**
+ * The role codes of a user detail. The API sends role summaries
+ * ({ code, name }); older callers typed them as plain strings.
+ */
+export function roleCodesOf(roles: unknown): string[] {
+  if (!Array.isArray(roles)) return [];
+  const codes: string[] = [];
+  for (const r of roles) {
+    const code =
+      typeof r === 'string'
+        ? r
+        : ((r as { code?: string; name?: string })?.code ?? (r as { name?: string })?.name);
+    if (code && !codes.includes(code)) codes.push(code);
+  }
+  return codes;
 }

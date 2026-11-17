@@ -1,3 +1,4 @@
+@use '../shared/styles/pharmacy-workspace' as pharmacy;
 @use '../shared/styles/page-common';
 
 .header-actions {
@@ -236,4 +237,49 @@ tr.expiring-soon td {
 .btn-sm {
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
+}
+
+.pharmacy-empty-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #5b6472);
+}
+
+.price-input {
+  width: 6.5rem;
+  padding: 4px 6px;
+}
+
+.price-cell {
+  white-space: nowrap;
+}
+
+.price-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.price-edit {
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+@include pharmacy.workspace;
+
+.pharmacy-workspace {
+  .alert-detail.reorder {
+    color: #075e53;
+  }
+  .expiry-badge {
+    color: #075e53;
+    background: #e2f5ec;
+  }
+  .expiry-badge.urgent {
+    color: #85450b;
+    background: #fff4d6;
+  }
+  .expiry-badge.expired {
+    color: #a61f32;
+    background: #ffedf0;
+  }
 }

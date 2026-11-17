@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.support.EducationProgressRows;
 import com.example.hms.enums.EducationCategory;
 import com.example.hms.enums.EducationComprehensionStatus;
 import com.example.hms.enums.EducationResourceType;
@@ -32,6 +33,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.VisitEducationDocumentationRepository;
+import com.example.hms.service.EducationProgressWrites;
 import com.example.hms.service.PatientEducationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -47,24 +50,24 @@ import java.util.UUID;
 @Slf4j
 @Transactional
 public class PatientEducationServiceImpl implements PatientEducationService {
+    private static final String EDUCATION_DOCUMENTATION_NOT_FOUND_KEY = "education.documentation.notFound";
+    private static final String EDUCATION_PROGRESS_NOT_FOUND_KEY = "education.progress.notFound";
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
+    private static final String EDUCATION_RESOURCE_NOT_FOUND_KEY = "education.resource.notFound";
+    private static final String PATIENT_NOT_FOUND_KEY = "patient.notFound";
+    private static final String EDUCATION_QUESTION_NOT_FOUND_KEY = "education.question.notFound";
 
-    private static final String RESOURCE_NOT_FOUND = "Education resource not found with id: ";
-    private static final String PATIENT_NOT_FOUND = "Patient not found with id: ";
-    private static final String HOSPITAL_NOT_FOUND = "Hospital not found with id: ";
-    private static final String STAFF_NOT_FOUND = "Staff not found with id: ";
-    private static final String ENCOUNTER_NOT_FOUND = "Encounter not found with id: ";
-    private static final String PROGRESS_NOT_FOUND = "Progress record not found with id: ";
-    private static final String QUESTION_NOT_FOUND = "Question not found with id: ";
-    private static final String DOCUMENTATION_NOT_FOUND = "Visit documentation not found with id: ";
 
     private final EducationResourceRepository resourceRepository;
     private final PatientEducationProgressRepository progressRepository;
     private final VisitEducationDocumentationRepository documentationRepository;
     private final PatientEducationQuestionRepository questionRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
     private final EncounterRepository encounterRepository;
+    private final EducationProgressWrites progressWrites;
 
     private final EducationResourceMapper resourceMapper;
     private final PatientEducationProgressMapper progressMapper;
@@ -77,10 +80,12 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public EducationResourceResponseDTO createResource(EducationResourceRequestDTO requestDTO, UUID hospitalId) {
         log.info("Creating education resource for hospital: {}", hospitalId);
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND + hospitalId));
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
-        EducationResource resource = resourceMapper.toEntity(requestDTO);
+        // The mapper returns null for a null DTO; fail loudly instead of an NPE below.
+        EducationResource resource = Objects.requireNonNull(resourceMapper.toEntity(requestDTO),
+            "education resource request is required");
         resource.setHospitalId(hospital.getId());
         if (resource.getOrganizationId() == null && hospital.getOrganization() != null) {
             resource.setOrganizationId(hospital.getOrganization().getId());
@@ -102,7 +107,9 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         log.info("Updating education resource: {}", id);
 
         EducationResource resource = resourceRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(RESOURCE_NOT_FOUND + id));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_RESOURCE_NOT_FOUND_KEY, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(resource.getHospitalId(), EDUCATION_RESOURCE_NOT_FOUND_KEY, id);
 
         resourceMapper.updateEntityFromDTO(requestDTO, resource);
         resource.setUpdatedAt(LocalDateTime.now());
@@ -117,7 +124,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Transactional(readOnly = true)
     public EducationResourceResponseDTO getResourceById(UUID id) {
         EducationResource resource = resourceRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(RESOURCE_NOT_FOUND + id));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_RESOURCE_NOT_FOUND_KEY, id));
         return resourceMapper.toResponseDTO(resource);
     }
 
@@ -187,7 +194,9 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         log.info("Deleting education resource: {}", id);
 
         EducationResource resource = resourceRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(RESOURCE_NOT_FOUND + id));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_RESOURCE_NOT_FOUND_KEY, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(resource.getHospitalId(), EDUCATION_RESOURCE_NOT_FOUND_KEY, id);
 
         resource.setIsActive(false);
         resource.setUpdatedAt(LocalDateTime.now());
@@ -199,7 +208,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Override
     public void incrementResourceViewCount(UUID resourceId) {
         EducationResource resource = resourceRepository.findById(resourceId)
-            .orElseThrow(() -> new ResourceNotFoundException(RESOURCE_NOT_FOUND + resourceId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_RESOURCE_NOT_FOUND_KEY, resourceId));
 
         resource.setViewCount(resource.getViewCount() + 1);
         resource.setUpdatedAt(LocalDateTime.now());
@@ -214,31 +223,21 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         log.info("Tracking progress for patient: {} on resource: {}", patientId, requestDTO.getResourceId());
 
         patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
 
         EducationResource resource = resourceRepository.findById(requestDTO.getResourceId())
-            .orElseThrow(() -> new ResourceNotFoundException(RESOURCE_NOT_FOUND + requestDTO.getResourceId()));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_RESOURCE_NOT_FOUND_KEY, requestDTO.getResourceId()));
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND + hospitalId));
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        // findById admits a patient registered at ANY of the caller's hospitals (QA D401):
+        // the progress row is written at this hospital, so the patient must be registered here.
+        patientRegistrationGuard.requireRegisteredAt(patientId, hospital.getId());
 
-        PatientEducationProgress progress = progressRepository
-            .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, requestDTO.getResourceId())
-            .orElseGet(() -> {
-                PatientEducationProgress newProgress = new PatientEducationProgress();
-                newProgress.setPatientId(patientId);
-                newProgress.setResourceId(resource.getId());
-                newProgress.setHospitalId(hospital.getId());
-                newProgress.setStartedAt(LocalDateTime.now());
-                newProgress.setAccessCount(0);
-                newProgress.setTimeSpentSeconds(0L);
-                newProgress.setComprehensionStatus(
-                    requestDTO.getComprehensionStatus() != null
-                        ? requestDTO.getComprehensionStatus()
-                        : EducationComprehensionStatus.NOT_STARTED
-                );
-                return newProgress;
-            });
+        PatientEducationProgress progress = progressRowFor(patientId, resource.getId(), hospital.getId(),
+            requestDTO.getComprehensionStatus() != null
+                ? requestDTO.getComprehensionStatus()
+                : EducationComprehensionStatus.NOT_STARTED);
 
         progress.setPatientId(patientId);
         progress.setResourceId(resource.getId());
@@ -266,12 +265,35 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         return progressMapper.toResponseDTO(savedProgress);
     }
 
+    /**
+     * The (patient, resource) progress row, created when there is none, in
+     * this request's transaction (it exists only if the request commits).
+     * Since V176 there is at most one
+     * ({@code uk_patient_education_progress_patient_resource}): when two first
+     * requests race, the loser's insert is a no-op (EducationProgressWrites)
+     * and this request updates the winner's row instead of answering 500.
+     */
+    private PatientEducationProgress progressRowFor(UUID patientId, UUID resourceId, UUID hospitalId,
+                                                    EducationComprehensionStatus initialStatus) {
+        List<PatientEducationProgress> rows = progressRepository.findByPatientIdAndResourceId(patientId, resourceId);
+        if (rows.isEmpty()) {
+            if (!progressWrites.insertIfAbsent(patientId, resourceId, hospitalId, initialStatus)) {
+                log.debug("education progress row for resource {} was created by a concurrent request", resourceId);
+            }
+            rows = progressRepository.findByPatientIdAndResourceId(patientId, resourceId);
+        }
+        return EducationProgressRows.canonical(rows)
+            .orElseThrow(() -> new IllegalStateException("education progress row missing after insert"));
+    }
+
     @Override
     public PatientEducationProgressResponseDTO updateProgress(UUID progressId, PatientEducationProgressRequestDTO requestDTO) {
         log.info("Updating progress: {}", progressId);
 
         PatientEducationProgress progress = progressRepository.findById(progressId)
-            .orElseThrow(() -> new ResourceNotFoundException(PROGRESS_NOT_FOUND + progressId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_PROGRESS_NOT_FOUND_KEY, progressId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(progress.getHospitalId(), EDUCATION_PROGRESS_NOT_FOUND_KEY, progressId);
 
         progressMapper.updateEntityFromDTO(requestDTO, progress);
         progress.setLastAccessedAt(LocalDateTime.now());
@@ -298,7 +320,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Transactional(readOnly = true)
     public PatientEducationProgressResponseDTO getProgressById(UUID progressId) {
         PatientEducationProgress progress = progressRepository.findById(progressId)
-            .orElseThrow(() -> new ResourceNotFoundException(PROGRESS_NOT_FOUND + progressId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_PROGRESS_NOT_FOUND_KEY, progressId));
         return progressMapper.toResponseDTO(progress);
     }
 
@@ -342,7 +364,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         Double avgRating = progressRepository.calculateAverageRating(resourceId);
         if (avgRating != null) {
             EducationResource resource = resourceRepository.findById(resourceId)
-                .orElseThrow(() -> new ResourceNotFoundException(RESOURCE_NOT_FOUND + resourceId));
+                .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_RESOURCE_NOT_FOUND_KEY, resourceId));
             resource.setAverageRating(avgRating);
             resource.setUpdatedAt(LocalDateTime.now());
             resourceRepository.save(resource);
@@ -357,18 +379,25 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         log.info("Documenting visit education for encounter: {}", requestDTO.getEncounterId());
 
         staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND + staffId));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
 
         patientRepository.findById(requestDTO.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND + requestDTO.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, requestDTO.getPatientId()));
 
-        encounterRepository.findById(requestDTO.getEncounterId())
-            .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND + requestDTO.getEncounterId()));
+        Encounter encounter = encounterRepository.findById(requestDTO.getEncounterId())
+            .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId()));
+        // QA r5 tenancy sweep: the documented encounter is one of this hospital's.
+        if (encounter.getHospital() == null || !encounter.getHospital().getId().equals(hospitalId)) {
+            throw new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId());
+        }
 
-        hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND + hospitalId));
+        hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(requestDTO.getPatientId(), hospitalId);
 
-        VisitEducationDocumentation documentation = documentationMapper.toEntity(requestDTO);
+        VisitEducationDocumentation documentation = Objects.requireNonNull(
+            documentationMapper.toEntity(requestDTO), "visit education request is required");
         documentation.setStaffId(staffId);
         documentation.setPatientId(requestDTO.getPatientId());
         documentation.setEncounterId(requestDTO.getEncounterId());
@@ -386,7 +415,9 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         log.info("Updating visit education documentation: {}", documentationId);
 
         VisitEducationDocumentation documentation = documentationRepository.findById(documentationId)
-            .orElseThrow(() -> new ResourceNotFoundException(DOCUMENTATION_NOT_FOUND + documentationId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_DOCUMENTATION_NOT_FOUND_KEY, documentationId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(documentation.getHospitalId(), EDUCATION_DOCUMENTATION_NOT_FOUND_KEY, documentationId);
 
         documentationMapper.updateEntityFromDTO(requestDTO, documentation);
 
@@ -398,7 +429,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Transactional(readOnly = true)
     public VisitEducationDocumentationResponseDTO getVisitDocumentationById(UUID documentationId) {
         VisitEducationDocumentation documentation = documentationRepository.findById(documentationId)
-            .orElseThrow(() -> new ResourceNotFoundException(DOCUMENTATION_NOT_FOUND + documentationId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_DOCUMENTATION_NOT_FOUND_KEY, documentationId));
         return documentationMapper.toResponseDTO(documentation);
     }
 
@@ -433,10 +464,11 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         log.info("Submitting question from patient: {}", patientId);
 
         patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
 
-        hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND + hospitalId));
+        hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        patientRegistrationGuard.requireRegisteredAt(patientId, hospitalId);
 
         PatientEducationQuestion question = questionMapper.toEntity(requestDTO);
         if (question == null) {
@@ -450,7 +482,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         if (requestDTO.getResourceId() != null) {
             EducationResource resource = resourceRepository.findById(requestDTO.getResourceId())
-                .orElseThrow(() -> new ResourceNotFoundException(RESOURCE_NOT_FOUND + requestDTO.getResourceId()));
+                .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_RESOURCE_NOT_FOUND_KEY, requestDTO.getResourceId()));
             question.setResourceId(resource.getId());
         }
 
@@ -468,10 +500,12 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         log.info("Answering question: {} by staff: {}", questionId, staffId);
 
         PatientEducationQuestion question = questionRepository.findById(questionId)
-            .orElseThrow(() -> new ResourceNotFoundException(QUESTION_NOT_FOUND + questionId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_QUESTION_NOT_FOUND_KEY, questionId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(question.getHospitalId(), EDUCATION_QUESTION_NOT_FOUND_KEY, questionId);
 
         staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND + staffId));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
 
         question.setAnswer(answerText);
         question.setAnsweredByStaffId(staffId);
@@ -490,7 +524,9 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         log.info("Updating question: {}", questionId);
 
         PatientEducationQuestion question = questionRepository.findById(questionId)
-            .orElseThrow(() -> new ResourceNotFoundException(QUESTION_NOT_FOUND + questionId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_QUESTION_NOT_FOUND_KEY, questionId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(question.getHospitalId(), EDUCATION_QUESTION_NOT_FOUND_KEY, questionId);
 
         questionMapper.updateEntityFromDTO(requestDTO, question);
         question.setUpdatedAt(LocalDateTime.now());
@@ -503,7 +539,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Transactional(readOnly = true)
     public PatientEducationQuestionResponseDTO getQuestionById(UUID questionId) {
         PatientEducationQuestion question = questionRepository.findById(questionId)
-            .orElseThrow(() -> new ResourceNotFoundException(QUESTION_NOT_FOUND + questionId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_QUESTION_NOT_FOUND_KEY, questionId));
         return questionMapper.toResponseDTO(question);
     }
 

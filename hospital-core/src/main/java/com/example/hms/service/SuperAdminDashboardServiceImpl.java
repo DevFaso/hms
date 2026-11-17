@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.mapper.LabOrderMapper;
 import com.example.hms.mapper.PrescriptionMapper;
@@ -135,8 +136,9 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         long activeUsers = userRepository.countByIsActiveTrueAndIsDeletedFalse();
         long inactiveUsers = Math.max(totalUsers - activeUsers, 0);
 
-        long totalHospitals = hospitalRepository.count();
-        long activeHospitals = hospitalRepository.countByActiveTrue();
+        // Clinical hospitals: a pharmacy or laboratory is not counted as one (AC-11).
+        long totalHospitals = hospitalRepository.countHospitals();
+        long activeHospitals = hospitalRepository.countActiveHospitals();
         long inactiveHospitals = Math.max(totalHospitals - activeHospitals, 0);
 
         long totalOrganizations = organizationRepository.count();
@@ -166,19 +168,18 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // develop-deployment review surfaced. "All hospitals" view
         // (no chip / no header) falls back to the system-wide count().
         //
-        // We trust ONLY the JWT-claim signal (ctx.isSuperAdmin()), NOT
-        // the authority predicate — see the ConsultationServiceImpl
-        // global-view carve-out for the same security trade-off.
+        // ctx.isSuperAdmin() is the VERIFIED signal (a live SUPER_ADMIN
+        // assignment), never the authority predicate; the chip scope is the
+        // hospital the one resolver pinned the request to.
         // Lab test definitions are reference data (catalog), not
         // tenant-scoped, so its count is always system-wide.
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-        UUID chipScope = (ctx.isSuperAdmin() && ctx.isHeaderOverridden())
-            ? ctx.getActiveHospitalId()
-            : null;
+        UUID chipScope = ctx.isSuperAdmin() ? ActingScopeResolver.pinnedHospitalIdOrNull() : null;
 
+        // QA D791: visits, not the encounters prescriptions anchor themselves on.
         long totalEncounters = (chipScope != null)
-            ? encounterRepository.countByHospital_Id(chipScope)
-            : encounterRepository.count();
+            ? encounterRepository.countVisitsByHospitalId(chipScope)
+            : encounterRepository.countVisits();
         long totalConsultations = (chipScope != null)
             ? consultationRepository.countByHospital_Id(chipScope)
             : consultationRepository.count();

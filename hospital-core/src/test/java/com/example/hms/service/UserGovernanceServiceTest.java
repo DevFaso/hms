@@ -112,6 +112,28 @@ class UserGovernanceServiceTest {
     }
 
     @Test
+    void forcePasswordResetToleratesOmittedTargetLists() {
+        // D32: a body with only usernames left userIds/emails null -> NPE -> 500.
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        user.setEmail("reset@example.com");
+        user.setUsername("resetuser");
+        when(userRepository.findByUsernameInIgnoreCase(any())).thenReturn(List.of(user));
+        when(userRepository.save(any(User.class))).thenReturn(user);
+
+        SuperAdminUserForcePasswordResetRequestDTO request = new SuperAdminUserForcePasswordResetRequestDTO();
+        request.setUserIds(null);
+        request.setEmails(null);
+        request.setUsernames(List.of("resetuser"));
+        request.setSendEmail(false);
+
+        SuperAdminUserForcePasswordResetResponseDTO response = service.forcePasswordReset(request);
+
+        assertThat(response.getSucceeded()).isEqualTo(1);
+        assertThat(response.getResults()).hasSize(1);
+    }
+
+    @Test
     void forcePasswordResetHandlesUsersFromIdsAndEmails() {
         UUID userId = UUID.randomUUID();
         User user = new User();
@@ -176,5 +198,71 @@ class UserGovernanceServiceTest {
         assertThat(rotation.get(1).getStatus()).isEqualTo(PasswordRotationStatus.WARNING);
         assertThat(rotation.get(1).getDaysUntilDue()).isGreaterThanOrEqualTo(0);
         verify(userRepository).findByIsDeletedFalse();
+    }
+
+    @Test
+    void importUsersRejectsBlankCsv() {
+        SuperAdminUserBulkImportRequestDTO request = SuperAdminUserBulkImportRequestDTO.builder()
+            .csvContent("   ")
+            .build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.importUsers(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("users.csv.blank");
+    }
+
+    @Test
+    void importUsersReportsEachRowFailureWithItsMessageKey() {
+        String csv = """
+            username,email,firstName,lastName,phoneNumber,roles,hospitalId
+            carol,,Carol,Doe,3333,DOCTOR,
+            dave,dave@example.com,Dave,Roe,4444,;,
+            erin,erin@example.com,Erin,Poe,5555,DOCTOR,not-a-uuid""";
+
+        SuperAdminUserBulkImportRequestDTO request = SuperAdminUserBulkImportRequestDTO.builder()
+            .csvContent(csv)
+            .build();
+
+        SuperAdminUserBulkImportResponseDTO response = service.importUsers(request);
+
+        assertThat(response.getImported()).isZero();
+        assertThat(response.getFailed()).isEqualTo(3);
+        assertThat(response.getResults()).hasSize(3).noneMatch(result -> result.isSuccess());
+        assertThat(response.getResults()).extracting(result -> result.getMessage())
+            .containsExactly("users.csv.rowMissingFields", "users.csv.rowNoRoles", "users.csv.invalidUuid");
+    }
+
+    // QA D626 (verification): governance onboarding creates accounts only, so a
+    // PATIENT role here would leave an account without a patient record.
+    @Test
+    void createUserRefusesThePatientRole() {
+        for (String role : new String[] {"PATIENT", "ROLE_PATIENT", "role_patient"}) {
+            AdminSignupRequest request = AdminSignupRequest.builder()
+                .username("pat").email("pat@example.com").password("Secret123!")
+                .firstName("Pat").lastName("Ient").phoneNumber("1234567890")
+                .roleNames(new java.util.HashSet<>(Set.of(role, "NURSE")))
+                .build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.createUser(request))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessage("users.roles.patientFromPatientForm");
+        }
+        org.mockito.Mockito.verifyNoInteractions(userService);
+    }
+
+    @Test
+    void importUsersRefusesAPatientRow() {
+        String csv = """
+            username,email,firstName,lastName,phoneNumber,roles
+            pat,pat@example.com,Pat,Ient,6666,PATIENT
+            pat2,pat2@example.com,Pat,Two,7777,ROLE_PATIENT;NURSE""";
+
+        SuperAdminUserBulkImportResponseDTO response = service.importUsers(
+            SuperAdminUserBulkImportRequestDTO.builder().csvContent(csv).build());
+
+        assertThat(response.getImported()).isZero();
+        assertThat(response.getFailed()).isEqualTo(2);
+        assertThat(response.getResults()).extracting(result -> result.getMessage())
+            .containsExactly("users.roles.patientFromPatientForm", "users.roles.patientFromPatientForm");
+        org.mockito.Mockito.verifyNoInteractions(userService);
     }
 }

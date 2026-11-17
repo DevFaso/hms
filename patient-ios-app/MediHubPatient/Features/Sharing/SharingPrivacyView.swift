@@ -318,7 +318,11 @@ enum DisclosureFormat {
         let key = "disclosures_role_" + token.lowercased()
         let translated = key.localized
         if translated != key { return translated }
-        return token.replacingOccurrences(of: "_", with: " ").capitalized
+        // A role this build has no label for. Humanising the token gave
+        // English ("Lab Technician") to a French or Spanish patient on the
+        // screen that tells them who opened their record; a generic label
+        // in their language says as much without leaking the raw code.
+        return "disclosures_role_fallback".localized
     }
 
     private static func parse(_ iso: String) -> Date? {

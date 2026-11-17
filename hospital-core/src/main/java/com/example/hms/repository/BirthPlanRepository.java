@@ -29,24 +29,21 @@ public interface BirthPlanRepository extends JpaRepository<BirthPlan, UUID> {
     /**
      * Find all birth plans for a specific patient by patient ID.
      */
-    @Query("SELECT bp FROM BirthPlan bp WHERE bp.patient.id = :patientId ORDER BY bp.createdAt DESC")
+    @Query("SELECT bp FROM BirthPlan bp WHERE bp.patient.id = :patientId AND bp.withdrawnAt IS NULL ORDER BY bp.createdAt DESC")
     List<BirthPlan> findByPatientIdOrderByCreatedAtDesc(@Param("patientId") UUID patientId);
 
     /**
-     * Find the most recent (active) birth plan for a patient.
+     * The most recent active (not withdrawn) birth plan for a patient, across every hospital.
+     * Spring Data's {@code findFirst} applies the limit; the former {@code @Query} returned an
+     * {@code Optional} over every active plan and threw once a patient had two (QA D1850 class).
      */
-    @Query("""
-        SELECT bp FROM BirthPlan bp 
-        WHERE bp.patient.id = :patientId 
-        ORDER BY bp.createdAt DESC
-        """)
-    Optional<BirthPlan> findActiveBirthPlanByPatientId(@Param("patientId") UUID patientId);
+    Optional<BirthPlan> findFirstByPatient_IdAndWithdrawnAtIsNullOrderByCreatedAtDesc(UUID patientId);
 
     /** E9 #59d — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
-    List<BirthPlan> findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+    List<BirthPlan> findByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
 
-    /** E9 #59d — the most recent plan across the readable hospitals; the sibling of {@link #findActiveBirthPlanByPatientId}. */
-    Optional<BirthPlan> findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
+    /** E9 #59d — the most recent plan across the readable hospitals; the sibling of {@link #findFirstByPatient_IdAndWithdrawnAtIsNullOrderByCreatedAtDesc}. */
+    Optional<BirthPlan> findFirstByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc(UUID patientId, java.util.Collection<UUID> hospitalIds);
 
     /**
      * Find birth plans by hospital.
@@ -56,7 +53,7 @@ public interface BirthPlanRepository extends JpaRepository<BirthPlan, UUID> {
     /**
      * Find birth plans by hospital ID.
      */
-    @Query("SELECT bp FROM BirthPlan bp WHERE bp.hospital.id = :hospitalId ORDER BY bp.createdAt DESC")
+    @Query("SELECT bp FROM BirthPlan bp WHERE bp.hospital.id = :hospitalId AND bp.withdrawnAt IS NULL ORDER BY bp.createdAt DESC")
     Page<BirthPlan> findByHospitalIdOrderByCreatedAtDesc(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     /**
@@ -69,6 +66,7 @@ public interface BirthPlanRepository extends JpaRepository<BirthPlan, UUID> {
           AND (:providerReviewed IS NULL OR bp.providerReviewed = :providerReviewed)
           AND (CAST(:dueDateFrom AS LocalDate) IS NULL OR bp.expectedDueDate >= :dueDateFrom)
           AND (CAST(:dueDateTo AS LocalDate) IS NULL OR bp.expectedDueDate <= :dueDateTo)
+          AND bp.withdrawnAt IS NULL
         ORDER BY bp.createdAt DESC
         """)
     Page<BirthPlan> searchBirthPlans(
@@ -88,6 +86,7 @@ public interface BirthPlanRepository extends JpaRepository<BirthPlan, UUID> {
         WHERE bp.hospital.id = :hospitalId
           AND bp.providerReviewRequired = true
           AND (bp.providerReviewed IS NULL OR bp.providerReviewed = false)
+          AND bp.withdrawnAt IS NULL
         ORDER BY bp.createdAt DESC
         """)
     Page<BirthPlan> findPendingReviewByHospital(@Param("hospitalId") UUID hospitalId, Pageable pageable);
@@ -105,6 +104,7 @@ public interface BirthPlanRepository extends JpaRepository<BirthPlan, UUID> {
         WHERE bp.hospital.id = :hospitalId
           AND bp.providerReviewRequired = true
           AND (bp.providerReviewed IS NULL OR bp.providerReviewed = false)
+          AND bp.withdrawnAt IS NULL
         """)
     long countPendingReviewByHospital(@Param("hospitalId") UUID hospitalId);
 }

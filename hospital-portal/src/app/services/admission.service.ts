@@ -22,12 +22,16 @@ export type AdmissionStatus =
   | 'DISCHARGED'
   | 'CANCELLED'
   | 'TRANSFERRED'
-  | 'DECEASED';
+  | 'DECEASED'
+  /** QA D1516: closed by a death later entered in error; neither a death nor a discharge. */
+  | 'CLOSED_IN_ERROR';
 
 export interface AdmissionResponse {
   id: string;
   patientId: string;
   patientName: string;
+  /** This hospital's MRN for the patient (AdmissionMapper resolves it per hospital). */
+  patientMrn?: string | null;
   hospitalId: string;
   hospitalName: string;
   departmentId: string;
@@ -38,6 +42,10 @@ export interface AdmissionResponse {
    *  admission's hospital. Populated by the backend mapper; null when no
    *  open encounter exists. Used by the CPOE order-set picker. */
   currentEncounterId?: string | null;
+  /** The stay's own INPATIENT encounter, open or closed (D135). */
+  encounterId?: string | null;
+  /** QA D219: the stay's encounter code, which billing links an invoice by. */
+  encounterCode?: string | null;
   attendingPhysicianId: string;
   attendingPhysicianName: string;
   roomBed: string;
@@ -80,6 +88,21 @@ export interface AdmissionRequest {
   customOrders?: Record<string, unknown>[];
 }
 
+/**
+ * QA D1672: what the admission update takes (AdmissionUpdateRequestDTO). The
+ * server refuses any other property by name: the patient, hospital, type, time
+ * and admitting clinician record the admission and are read-only once admitted.
+ */
+export interface AdmissionUpdateRequest {
+  departmentId?: string;
+  roomBed?: string;
+  acuityLevel?: AcuityLevel;
+  expectedDischargeDateTime?: string;
+  admissionNotes?: string;
+  chiefComplaint?: string;
+  attendingPhysicianId?: string;
+}
+
 export interface DischargeApprovalResponse {
   id: string;
   status: string;
@@ -113,12 +136,13 @@ export class AdmissionService {
     return this.http.get<AdmissionResponse>(`${this.baseUrl}/${id}`);
   }
 
-  update(id: string, req: Partial<AdmissionRequest>): Observable<AdmissionResponse> {
+  update(id: string, req: AdmissionUpdateRequest): Observable<AdmissionResponse> {
     return this.http.put<AdmissionResponse>(`${this.baseUrl}/${id}`, req);
   }
 
-  delete(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  /** QA D1381 (round 32): a stay is cancelled with its reason (sent in the body, never the URL). */
+  delete(id: string, reason: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`, { body: { reason } });
   }
 
   discharge(id: string, data: Record<string, unknown>): Observable<AdmissionResponse> {
@@ -135,16 +159,18 @@ export class AdmissionService {
     return this.http.post<AdmissionResponse>(`${this.baseUrl}/${id}/assign-bed`, { bedId });
   }
 
-  unassignBed(id: string): Observable<AdmissionResponse> {
-    return this.http.delete<AdmissionResponse>(`${this.baseUrl}/${id}/bed`);
+  /** QA D1100: freeing an inpatient's bed states why (required, audited by the server). */
+  unassignBed(id: string, reason: string): Observable<AdmissionResponse> {
+    return this.http.delete<AdmissionResponse>(`${this.baseUrl}/${id}/bed`, { body: { reason } });
   }
 
   getByPatient(patientId: string): Observable<AdmissionResponse[]> {
     return this.http.get<AdmissionResponse[]>(`${this.baseUrl}/patient/${patientId}`);
   }
 
-  getCurrentByPatient(patientId: string): Observable<AdmissionResponse> {
-    return this.http.get<AdmissionResponse>(`${this.baseUrl}/patient/${patientId}/current`);
+  /** QA D1082 class: null (204 No Content) when the patient has no open stay. */
+  getCurrentByPatient(patientId: string): Observable<AdmissionResponse | null> {
+    return this.http.get<AdmissionResponse | null>(`${this.baseUrl}/patient/${patientId}/current`);
   }
 
   getByHospital(

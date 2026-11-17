@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.documents
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -110,12 +111,12 @@ class DocumentsViewModel @Inject constructor(
                 if (resp.isSuccessful) {
                     _documents.value = resp.body()?.data?.content ?: emptyList()
                 } else if (quiet) {
-                    _outcome.value = Outcome(R.string.documents_refresh_failed, "HTTP ${resp.code()}")
+                    _outcome.value = Outcome(R.string.documents_refresh_failed, FailureText.http(resp.code()))
                 } else {
-                    _loadError.value = "HTTP ${resp.code()}"
+                    _loadError.value = FailureText.http(resp.code())
                 }
             } catch (e: Exception) {
-                val detail = e.message ?: e.javaClass.simpleName
+                val detail = FailureText.of(e)
                 if (quiet) _outcome.value = Outcome(R.string.documents_refresh_failed, detail)
                 else _loadError.value = detail
             } finally {
@@ -218,11 +219,11 @@ class DocumentsViewModel @Inject constructor(
                         _uploadError.value = Outcome(R.string.document_too_large, MAX_UPLOAD_MB.toString())
                     else -> _uploadError.value = Outcome(
                         R.string.document_upload_failed,
-                        serverMessage(resp.errorBody()?.string()) ?: "HTTP ${resp.code()}"
+                        serverMessage(resp.errorBody()?.string()) ?: FailureText.http(resp.code())
                     )
                 }
             } catch (e: Exception) {
-                _uploadError.value = Outcome(R.string.document_upload_failed, e.message)
+                _uploadError.value = Outcome(R.string.document_upload_failed, FailureText.of(e))
             } finally {
                 _uploading.value = false
             }
@@ -300,11 +301,11 @@ class DocumentsViewModel @Inject constructor(
                 } else {
                     _outcome.value = Outcome(
                         R.string.document_delete_failed,
-                        serverMessage(resp.errorBody()?.string()) ?: "HTTP ${resp.code()}"
+                        serverMessage(resp.errorBody()?.string()) ?: FailureText.http(resp.code())
                     )
                 }
             } catch (e: Exception) {
-                _outcome.value = Outcome(R.string.document_delete_failed, e.message)
+                _outcome.value = Outcome(R.string.document_delete_failed, FailureText.of(e))
             } finally {
                 _deleting.value = null
             }
@@ -391,7 +392,7 @@ class DocumentsViewModel @Inject constructor(
                 val body = resp.body()
                 if (!resp.isSuccessful || body == null) {
                     resp.errorBody()?.close() // a @Streaming error body still holds the connection
-                    _events.tryEmit(DocumentEvent.Failed("HTTP ${resp.code()}"))
+                    _events.tryEmit(DocumentEvent.Failed(FailureText.http(resp.code())))
                     return@launch
                 }
                 val mime = viewerMimeType(body.contentType(), doc.name)
@@ -407,7 +408,7 @@ class DocumentsViewModel @Inject constructor(
                 val uri = FileProvider.getUriForFile(appContext, appContext.packageName + ".fileprovider", file)
                 _events.tryEmit(DocumentEvent.Ready(uri, mime))
             } catch (e: Exception) {
-                _events.tryEmit(DocumentEvent.Failed(e.message))
+                _events.tryEmit(DocumentEvent.Failed(FailureText.of(e)))
             } finally {
                 _opening.value = null
             }

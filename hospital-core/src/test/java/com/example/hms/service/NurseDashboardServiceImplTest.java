@@ -40,6 +40,12 @@ class NurseDashboardServiceImplTest {
     @Mock
     private PatientVitalSignService patientVitalSignService;
 
+    @Mock
+    private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
+
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+
     @InjectMocks
     private NurseDashboardServiceImpl nurseDashboardService;
 
@@ -49,6 +55,40 @@ class NurseDashboardServiceImplTest {
     @BeforeEach
     void setUp() {
         // @InjectMocks handles instantiation but we keep the method for clarity/future config.
+    }
+
+    private com.example.hms.payload.dto.nurse.NursePatientNameRow nameRow(String first, String middle, String last,
+                                                                            String registrationName, java.time.LocalDate date, UUID readyBy) {
+        return new com.example.hms.payload.dto.nurse.NursePatientNameRow(UUID.randomUUID(), first, middle, last, registrationName, date, readyBy);
+    }
+
+    @Test
+    void d1314_namesFollowTheFullReadsOrderAndAssignmentAndReadNothingElse() {
+        java.time.LocalDate today = java.time.LocalDate.of(2026, 11, 7);
+        var oldest = nameRow("Awa", null, "Kone", null, today.minusDays(9), null);
+        var newest = nameRow("Pelagie", "Wend", "Kiemde", null, today, nurseUserId);
+        var undated = nameRow("Issa", " ", "Sawadogo", null, null, null);
+        var someoneElses = nameRow("Hors", null, "Liste", null, today, UUID.randomUUID());
+        when(registrationRepository.findActiveNamesForHospital(hospitalId))
+            .thenReturn(java.util.List.of(oldest, undated, newest, someoneElses));
+
+        var names = nurseDashboardService.getPatientNamesForNurse(nurseUserId, hospitalId);
+
+        org.assertj.core.api.Assertions.assertThat(names).extracting("displayName")
+            .containsExactly("Pelagie Wend Kiemde", "Awa Kone", "Issa Sawadogo");
+        org.assertj.core.api.Assertions.assertThat(names.get(0).getId()).isEqualTo(newest.patientId());
+        org.mockito.Mockito.verifyNoInteractions(patientVitalSignService, patientAllergyRepository, recordAccessPolicy);
+        org.mockito.Mockito.verify(registrationRepository, org.mockito.Mockito.never()).findActiveForHospitalWithPatient(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void d1314_noNurseIsEveryRegistrationAndABlankNameFallsBackToTheRegistrationsCopy() {
+        var blank = nameRow(" ", null, " ", "Copie Inscription", null, UUID.randomUUID());
+        when(registrationRepository.findActiveNamesForHospital(hospitalId)).thenReturn(java.util.List.of(blank));
+
+        var names = nurseDashboardService.getPatientNamesForNurse(null, hospitalId);
+
+        org.assertj.core.api.Assertions.assertThat(names).extracting("displayName").containsExactly("Copie Inscription");
     }
 
     @Test
@@ -66,6 +106,7 @@ class NurseDashboardServiceImplTest {
         registration.setMrn("MRN-42");
 
         PatientResponseDTO baseDto = PatientResponseDTO.builder()
+            .allergies("Peanuts")
             .patientName("Fallback Name")
             .build();
 
@@ -88,7 +129,10 @@ class NurseDashboardServiceImplTest {
         assertEquals(1, result.size());
         PatientResponseDTO dto = result.get(0);
 
-        assertEquals("Jane A. Doe", dto.getDisplayName());
+        // Changed in round 17 (QA D1036): the live name on the patient record
+        // wins over the registration's copy, which is taken once at
+        // registration and went stale when the name was corrected.
+        assertEquals("Jane Doe", dto.getDisplayName());
         assertEquals("B-12", dto.getRoom());
         assertEquals("B-12", dto.getBed());
         assertEquals("MRN-42", dto.getMrn());
@@ -103,6 +147,56 @@ class NurseDashboardServiceImplTest {
         assertFalse(dto.getFlags().isEmpty());
         assertTrue(dto.getFlags().contains("Ready for discharge"));
         assertTrue(dto.getFlags().contains("Allergies noted"));
+    }
+
+    @Test
+    void d504_withoutBreakGlassTheRowSaysItsAllergySummaryIsNarrowed() {
+        Patient patient = buildPatient("p@example.com", "555-3333", "Awa", "Sana", "awa");
+        Hospital hospital = buildHospital("General Hospital", "GH-100");
+        PatientHospitalRegistration registration = buildRegistration(patient, hospital);
+        registration.setReadyByStaffId(nurseUserId);
+        PatientResponseDTO baseDto = PatientResponseDTO.builder().allergies("Peanuts, Penicillin").build();
+        when(registrationRepository.findActiveForHospitalWithPatient(hospitalId)).thenReturn(List.of(registration));
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(baseDto);
+        when(patientVitalSignService.getLatestSnapshot(patient.getId(), hospitalId)).thenReturn(Optional.empty());
+        when(patientAllergyRepository.hasActiveSharingOptOut(patient.getId())).thenReturn(true);
+        com.example.hms.model.PatientAllergy local = com.example.hms.model.PatientAllergy.builder()
+            .allergenDisplay("Peanuts").active(true).build();
+        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)).thenReturn(List.of(local));
+
+        List<PatientResponseDTO> result = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
+
+        assertEquals("Peanuts", result.get(0).getAllergies());
+        assertTrue(result.get(0).isAllergiesWithheld());
+    }
+
+    @Test
+    void d504_breakGlassKeepsTheWholeAllergySummaryDespiteTheOptOut() {
+        UUID nurseB = UUID.randomUUID();
+        Patient patient = buildPatient("p@example.com", "555-3333", "Awa", "Sana", "awa");
+        Hospital hospital = buildHospital("General Hospital", "GH-100");
+        PatientHospitalRegistration registration = buildRegistration(patient, hospital);
+        registration.setReadyByStaffId(nurseUserId);
+        PatientResponseDTO baseDto = PatientResponseDTO.builder().allergies("Peanuts, Penicillin").build();
+        when(registrationRepository.findActiveForHospitalWithPatient(hospitalId)).thenReturn(List.of(registration));
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(baseDto);
+        when(patientVitalSignService.getLatestSnapshot(patient.getId(), hospitalId)).thenReturn(Optional.empty());
+        when(patientAllergyRepository.hasActiveSharingOptOut(patient.getId())).thenReturn(true);
+        when(recordAccessPolicy.decide(nurseB, patient.getId(), hospitalId)).thenReturn(
+            com.example.hms.service.recordaccess.RecordAccessDecision.permitted(patient.getId(), hospitalId, nurseB,
+                new com.example.hms.service.recordaccess.TreatmentRelationship(
+                    com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, UUID.randomUUID(), hospitalId,
+                    patient.getId(), null, null, true),
+                com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(nurseB).build());
+        try {
+            List<PatientResponseDTO> result = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
+            assertEquals("Peanuts, Penicillin", result.get(0).getAllergies());
+            assertFalse(result.get(0).isAllergiesWithheld());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 
     @Test

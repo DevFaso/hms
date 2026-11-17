@@ -3,9 +3,13 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.HospitalLifecycleState;
+import com.example.hms.enums.ProviderVerificationStatus;
 import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.repository.provider.ProviderVerificationRepository;
+import com.example.hms.service.provider.ProviderOnboardingService;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.model.Hospital;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.superadmin.HospitalLifecycleResponseDTO;
@@ -23,6 +27,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
@@ -72,6 +77,12 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     private final AuditEventLogService auditEventLogService;
     private final HospitalLifecycleStatusService lifecycleStatusService;
     private final MfaService mfaService;
+    /** Same tenant-lifecycle clock as {@code OrganizationLifecycleServiceImpl} (TimeConfig). */
+    private final Clock clock;
+    /** A provider facility comes back ACTIVE only on a VERIFIED verification (provider plan AC-4). */
+    private final ProviderVerificationRepository providerVerificationRepository;
+    /** Resolves the actor ids on the panel to names (D246). */
+    private final com.example.hms.repository.UserRepository userRepository;
 
     @Value("${hms.hospital-lifecycle.require-mfa:true}")
     private boolean requireMfa;
@@ -87,16 +98,17 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO suspend(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
-        Hospital hospital = loadOrThrow(hospitalId);
-        requireTransition(hospital, SUSPENDABLE, ACTION_SUSPEND);
+        // QA round 29: the body before the state, so a missing reason is always named.
         String reason = requireReason(request, ACTION_SUSPEND);
+        Hospital hospital = lockOrThrow(hospitalId);
+        requireTransition(hospital, SUSPENDABLE, ACTION_SUSPEND);
         requireStepUp(ACTION_SUSPEND, mfaToken);
 
         hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
         // Mirror onto legacy `active` so default-visibility queries hide
         // suspended hospitals immediately, not only via JWT login block.
         hospital.setActive(false);
-        hospital.setSuspendedAt(Instant.now());
+        hospital.setSuspendedAt(Instant.now(clock));
         hospital.setSuspendedBy(currentActorId());
         hospital.setSuspensionReason(reason);
         hospitalRepository.save(hospital);
@@ -108,16 +120,45 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO restore(UUID hospitalId, TenantLifecycleActionRequestDTO request) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        // Locked, like every provider transition: a restore racing a revoke
+        // must see the verification the revoke committed.
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, RESTORABLE, ACTION_RESTORE);
+        boolean awaitsVerification = awaitsVerification(hospital);
+        if (!isRestorable(hospital, awaitsVerification)) {
+            throw new ConflictException(MessageUtil.resolveOrRaw("provider.not-verified"));
+        }
 
         HospitalLifecycleState previous = hospital.getLifecycleState();
-        hospital.setLifecycleState(HospitalLifecycleState.ACTIVE);
-        hospital.setActive(true);
+        // An unverified provider comes back to SUSPENDED, never ACTIVE: VERIFY
+        // is the only way a provider becomes ACTIVE (provider plan AC-4 / T22).
+        HospitalLifecycleState target = awaitsVerification
+            ? HospitalLifecycleState.SUSPENDED
+            : HospitalLifecycleState.ACTIVE;
+        hospital.setLifecycleState(target);
+        if (target == HospitalLifecycleState.ACTIVE) {
+            hospital.setActive(true);
+            // Back in service: the suspension/archive block described the
+            // state just left, and the panel kept showing it (D246). The
+            // audit trail keeps the history.
+            hospital.setSuspendedAt(null);
+            hospital.setSuspendedBy(null);
+            hospital.setSuspensionReason(null);
+            hospital.setArchivedAt(null);
+            hospital.setArchivedBy(null);
+            hospital.setArchiveReason(null);
+        } else {
+            // An unverified provider comes back to where onboarding left it:
+            // SUSPENDED and inactive, waiting for VERIFY.
+            hospital.setActive(false);
+            hospital.setSuspendedAt(Instant.now(clock));
+            hospital.setSuspendedBy(currentActorId());
+            hospital.setSuspensionReason(ProviderOnboardingService.PENDING_VERIFICATION_REASON);
+        }
         hospitalRepository.save(hospital);
         invalidateStatusCache();
 
-        String description = "Hospital restored from " + previous
+        String description = "Hospital restored from " + previous + " to " + target
             + (request != null && request.getReason() != null ? ": " + request.getReason() : "");
         recordAudit(hospital, AuditEventType.HOSPITAL_RESTORED, description);
         return toResponse(hospital);
@@ -125,14 +166,15 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO archive(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
-        Hospital hospital = loadOrThrow(hospitalId);
-        requireTransition(hospital, ARCHIVABLE, ACTION_ARCHIVE);
+        // QA round 29: the body before the state, so a missing reason is always named.
         String reason = requireReason(request, ACTION_ARCHIVE);
+        Hospital hospital = lockOrThrow(hospitalId);
+        requireTransition(hospital, ARCHIVABLE, ACTION_ARCHIVE);
         requireStepUp(ACTION_ARCHIVE, mfaToken);
 
         hospital.setLifecycleState(HospitalLifecycleState.ARCHIVED);
         hospital.setActive(false);
-        hospital.setArchivedAt(Instant.now());
+        hospital.setArchivedAt(Instant.now(clock));
         hospital.setArchivedBy(currentActorId());
         hospital.setArchiveReason(reason);
         hospitalRepository.save(hospital);
@@ -144,18 +186,21 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO schedulePurge(UUID hospitalId, TenantLifecycleActionRequestDTO request, String mfaToken) {
-        Hospital hospital = loadOrThrow(hospitalId);
-        requireTransition(hospital, PURGE_SCHEDULABLE, ACTION_SCHEDULE_PURGE);
+        // QA round 29: the body before the state, so a missing reason is always named.
         String reason = requireReason(request, ACTION_SCHEDULE_PURGE);
-        requireStepUp(ACTION_SCHEDULE_PURGE, mfaToken);
+        Hospital hospital = lockOrThrow(hospitalId);
+        requireTransition(hospital, PURGE_SCHEDULABLE, ACTION_SCHEDULE_PURGE);
 
         Instant scheduledFor = request.getPurgeScheduledFor() != null
             ? request.getPurgeScheduledFor()
-            : Instant.now().plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
+            : Instant.now(clock).plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
 
-        if (scheduledFor.isBefore(Instant.now())) {
-            throw new BusinessRuleException("Purge cannot be scheduled in the past.");
+        if (scheduledFor.isBefore(Instant.now(clock))) {
+            throw BusinessRuleException.ofKey("hospital.lifecycle.purgeInPast");
         }
+        // Checked before the step-up, which would otherwise spend a backup code
+        // on a request that cannot run.
+        requireStepUp(ACTION_SCHEDULE_PURGE, mfaToken);
 
         hospital.setLifecycleState(HospitalLifecycleState.PENDING_PURGE);
         hospital.setPurgeScheduledFor(scheduledFor);
@@ -171,7 +216,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     @Override
     public HospitalLifecycleResponseDTO cancelPurge(UUID hospitalId, TenantLifecycleActionRequestDTO request) {
-        Hospital hospital = loadOrThrow(hospitalId);
+        Hospital hospital = lockOrThrow(hospitalId);
         requireTransition(hospital, PURGE_CANCELLABLE, ACTION_CANCEL_PURGE);
 
         hospital.setLifecycleState(HospitalLifecycleState.ARCHIVED);
@@ -189,23 +234,70 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     // ── helpers ────────────────────────────────────────────────────────
 
+    /**
+     * The facility row for a lifecycle transition, locked (PESSIMISTIC_WRITE)
+     * before it is read. Hospital has no version column, so an unlocked
+     * transition racing a provider VERIFY would write its stale copy (old
+     * name, address, licence) over the verified one. Every lifecycle
+     * transition and every provider onboarding transition takes this one
+     * lock, the facility row, and nothing else.
+     */
+    private Hospital lockOrThrow(UUID hospitalId) {
+        return hospitalRepository.findByIdForUpdate(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+    }
+
     private Hospital loadOrThrow(UUID hospitalId) {
         return hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
     }
 
+    /**
+     * Is this facility a provider whose current verification is not VERIFIED
+     * (submitted, rejected, revoked, or none)? A hospital never is.
+     */
+    private boolean awaitsVerification(Hospital hospital) {
+        if (!hospital.isProvider()) {
+            return false;
+        }
+        return providerVerificationRepository
+            .findFirstByHospital_IdOrderByCreatedAtDescIdDesc(hospital.getId())
+            .map(v -> v.getStatus() != ProviderVerificationStatus.VERIFIED)
+            .orElse(true);
+    }
+
+    /**
+     * The one rule for "may this be restored", read by {@link #restore} and by
+     * the snapshot's {@code canRestore}, so the button and the endpoint never
+     * disagree: a SUSPENDED or ARCHIVED facility, except an unverified provider
+     * that is already SUSPENDED (there is nothing to restore it to; VERIFY is
+     * the way on). An unverified provider that is ARCHIVED may be restored, and
+     * lands on SUSPENDED.
+     */
+    private boolean isRestorable(Hospital hospital, boolean awaitsVerification) {
+        HospitalLifecycleState state = hospital.getLifecycleState();
+        return RESTORABLE.contains(state)
+            && !(awaitsVerification && state == HospitalLifecycleState.SUSPENDED);
+    }
+
     private void requireTransition(Hospital hospital, Set<HospitalLifecycleState> allowed, String action) {
         if (!allowed.contains(hospital.getLifecycleState())) {
-            throw new BusinessRuleException(
-                "Cannot " + action + " hospital in state " + hospital.getLifecycleState()
-                    + " (allowed: " + allowed + ")");
+            throw new BusinessRuleException(com.example.hms.utility.MessageUtil.resolveOrRaw("hospital.lifecycle.notAllowed",
+                actionLabel(action), String.valueOf(hospital.getLifecycleState()), String.valueOf(allowed)));
         }
+    }
+
+    /** QA D317: the action named in a refusal, in the caller's language (e.g. "schedule purge"). */
+    private static String actionLabel(String action) {
+        return com.example.hms.utility.MessageUtil.resolveOrRaw(
+            "hospital.lifecycle.action." + action.replace(' ', '-'));
     }
 
     private String requireReason(TenantLifecycleActionRequestDTO request, String action) {
         String reason = request != null ? request.getReason() : null;
         if (reason == null || reason.trim().isEmpty()) {
-            throw new BusinessRuleException("A reason is required to " + action + " a hospital.");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "hospital.lifecycle.reasonRequired",
+                actionLabel(action));
         }
         return reason.trim();
     }
@@ -215,25 +307,12 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
             return;
         }
         UUID actorId = currentActorId();
-        if (actorId == null) {
-            throw new UnauthorizedException("mfa_required: cannot resolve actor for " + action);
-        }
-        boolean enrolled;
-        try {
-            enrolled = mfaService.isMfaEnabled(actorId);
-        } catch (RuntimeException ex) {
-            log.warn("[HOSPITAL-LIFECYCLE] MFA enrollment lookup failed for actor {}: {}",
-                actorId, ex.getMessage());
-            throw new UnauthorizedException("mfa_required: enrollment lookup unavailable");
-        }
-        if (enrolled) {
-            if (mfaToken == null || mfaToken.isBlank() || !mfaService.verifyCode(actorId, mfaToken)) {
-                throw new UnauthorizedException("mfa_required: invalid or missing X-Mfa-Token for " + action);
-            }
+        // The shared step-up (MfaService#requireStepUp): a current TOTP code or an
+        // unused backup code. A refusal answers 403 with a reason code and is
+        // audited there; only the non-strict bypass of an unenrolled actor
+        // comes back here, to be audited below.
+        if (mfaService.requireStepUp(actorId, mfaToken, "hospital " + action, requireMfaStrict)) {
             return;
-        }
-        if (requireMfaStrict) {
-            throw new UnauthorizedException("mfa_required: actor must enrol MFA before performing " + action);
         }
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -299,19 +378,35 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
             .lifecycleState(state)
             .suspendedAt(hospital.getSuspendedAt())
             .suspendedBy(hospital.getSuspendedBy())
+            .suspendedByName(actorName(hospital.getSuspendedBy()))
             .suspensionReason(hospital.getSuspensionReason())
             .archivedAt(hospital.getArchivedAt())
             .archivedBy(hospital.getArchivedBy())
+            .archivedByName(actorName(hospital.getArchivedBy()))
             .archiveReason(hospital.getArchiveReason())
             .purgeScheduledFor(hospital.getPurgeScheduledFor())
             .purgeScheduledBy(hospital.getPurgeScheduledBy())
             .purgeReason(hospital.getPurgeReason())
             .purgedAt(hospital.getPurgedAt())
             .canSuspend(SUSPENDABLE.contains(state))
-            .canRestore(RESTORABLE.contains(state))
+            .canRestore(isRestorable(hospital, awaitsVerification(hospital)))
             .canArchive(ARCHIVABLE.contains(state))
             .canSchedulePurge(PURGE_SCHEDULABLE.contains(state))
             .canCancelPurge(PURGE_CANCELLABLE.contains(state))
             .build();
+    }
+
+    /** The actor's display name, or {@code null} when unknown (the panel then shows nothing). */
+    private String actorName(UUID actorId) {
+        if (actorId == null) {
+            return null;
+        }
+        return userRepository.findById(actorId)
+            .map(u -> {
+                String full = ((u.getFirstName() == null ? "" : u.getFirstName()) + " "
+                    + (u.getLastName() == null ? "" : u.getLastName())).trim();
+                return full.isEmpty() ? u.getUsername() : full;
+            })
+            .orElse(null);
     }
 }

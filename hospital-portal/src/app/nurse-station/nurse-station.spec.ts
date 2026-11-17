@@ -1,10 +1,18 @@
+import { RoleContextService } from '../core/role-context.service';
+import { formatDate } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, Subject, Subscription } from 'rxjs';
-import { NurseStationComponent } from './nurse-station';
-import { NurseTaskService, NurseFlowBoard, NurseHandoff } from '../services/nurse-task.service';
-import { PatientResponse } from '../services/patient.service';
+import { of, Subject, Subscription, throwError } from 'rxjs';
+import { localInputToUtcIso, NurseStationComponent } from './nurse-station';
+import { installFocusRescue, uninstallFocusRescue } from '../shared/a11y/focus-rescue';
+import {
+  NurseTaskService,
+  NurseFlowBoard,
+  NurseHandoff,
+  NurseMedicationTask,
+} from '../services/nurse-task.service';
+import { PatientResponse, PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { EncounterService } from '../services/encounter.service';
 import { AuthService } from '../auth/auth.service';
@@ -12,6 +20,8 @@ import {
   PatientTrackerWsService,
   PatientTrackerEvent,
 } from '../services/patient-tracker-ws.service';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
+import { fieldControlFor } from '../shared/forms/server-field-errors';
 
 describe('NurseStationComponent — two-tier polling', () => {
   let component: NurseStationComponent;
@@ -37,12 +47,24 @@ describe('NurseStationComponent — two-tier polling', () => {
       'getHandoffs',
       'createHandoff',
       'completeHandoff',
+      'getHandoffRecipients',
       'getAnnouncements',
       'getWorkboard',
       'getPatientFlow',
       'getPendingAdmissions',
+      'captureVitals',
+      'administerMedication',
+      'getAdministrationWitnessCandidates',
+      'createCareNote',
     ]);
-    toastSpy = jasmine.createSpyObj('ToastService', ['info', 'success', 'error', 'warn']);
+    toastSpy = jasmine.createSpyObj('ToastService', [
+      'info',
+      'success',
+      'error',
+      'warn',
+      'warning',
+      'push',
+    ]);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     encounterSpy = jasmine.createSpyObj('EncounterService', ['list']);
     encounterSpy.list.and.returnValue(
@@ -51,7 +73,11 @@ describe('NurseStationComponent — two-tier polling', () => {
 
     // All service methods return empty observables by default
     nurseServiceSpy.getVitalsDue.and.returnValue(of([]));
+    nurseServiceSpy.getHandoffRecipients.and.returnValue(
+      of([{ userId: 'u-2', displayName: 'Awa Sanou' }]),
+    );
     nurseServiceSpy.getMedicationMAR.and.returnValue(of([]));
+    nurseServiceSpy.getAdministrationWitnessCandidates.and.returnValue(of([]));
     nurseServiceSpy.getDashboardSummary.and.returnValue(of(null as any));
     nurseServiceSpy.getNursingTasks.and.returnValue(of([]));
     nurseServiceSpy.getNurseInbox.and.returnValue(of([]));
@@ -62,8 +88,9 @@ describe('NurseStationComponent — two-tier polling', () => {
     nurseServiceSpy.getPatientFlow.and.returnValue(of(null as any));
     nurseServiceSpy.getPendingAdmissions.and.returnValue(of([]));
 
-    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId']);
+    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId', 'hasAnyRole']);
     authSpy.getHospitalId.and.returnValue('h1');
+    authSpy.hasAnyRole.and.returnValue(false);
     wsEvents$ = new Subject<PatientTrackerEvent>();
     trackerWsSpy = jasmine.createSpyObj('PatientTrackerWsService', [
       'connect',
@@ -82,6 +109,10 @@ describe('NurseStationComponent — two-tier polling', () => {
         { provide: Router, useValue: routerSpy },
         { provide: EncounterService, useValue: encounterSpy },
         { provide: AuthService, useValue: authSpy },
+        {
+          provide: RoleContextService,
+          useValue: { effectiveHospitalIdForRequest: () => authSpy.getHospitalId() },
+        },
         { provide: PatientTrackerWsService, useValue: trackerWsSpy },
       ],
     }).compileComponents();
@@ -95,6 +126,95 @@ describe('NurseStationComponent — two-tier polling', () => {
     component.ngOnDestroy();
   });
 
+  it('searches loaded tasks and overdue flags without changing source counts or doses', () => {
+    fixture.detectChanges();
+    component.vitals.set([
+      {
+        id: 'v1',
+        patientId: 'p1',
+        patientName: 'Cdx One',
+        type: 'FULL',
+        dueTime: '2026-11-07T08:00:00Z',
+        overdue: true,
+      },
+      {
+        id: 'v2',
+        patientId: 'p2',
+        patientName: 'Cdx Two',
+        type: 'FULL',
+        dueTime: '2026-11-07T09:00:00Z',
+        overdue: false,
+      },
+    ]);
+    const calls = nurseServiceSpy.getVitalsDue.calls.count();
+    component.searchTerm.set('two');
+    component.overdueOnly.set(true);
+    expect(component.visibleVitals()).toEqual([]);
+    expect(component.vitals().length).toBe(2);
+    component.clearTaskFilters();
+    expect(component.visibleVitals().length).toBe(2);
+    expect(nurseServiceSpy.getVitalsDue.calls.count()).toBe(calls);
+  });
+  it('honours the selected hospital for live updates', () => {
+    spyOn(TestBed.inject(RoleContextService), 'effectiveHospitalIdForRequest').and.returnValue(
+      'h2',
+    );
+    fixture.detectChanges();
+    expect(trackerWsSpy.connect).toHaveBeenCalledWith('h2');
+  });
+  it('uses the server overdue total when the MAR fails, and shows unavailable without a summary', () => {
+    nurseServiceSpy.getMedicationMAR.and.returnValue(throwError(() => new Error('offline')));
+    nurseServiceSpy.getDashboardSummary.and.returnValue(
+      of({
+        assignedPatients: 1,
+        vitalsDue: 0,
+        medicationsDue: 2,
+        medicationsOverdue: 3,
+        ordersPending: 0,
+        handoffsPending: 0,
+        announcements: 0,
+      }),
+    );
+    fixture.detectChanges();
+    const overdueValue = () =>
+      fixture.nativeElement.querySelectorAll('.summary-card .card-value')[3].textContent.trim();
+    expect(component.medicationsFailed()).toBeTrue();
+    expect(overdueValue()).toBe('3');
+    component.searchTerm.set('missing');
+    fixture.detectChanges();
+    expect(overdueValue()).toBe('3');
+    nurseServiceSpy.getDashboardSummary.and.returnValue(throwError(() => new Error('offline')));
+    component.refresh();
+    fixture.detectChanges();
+    expect(overdueValue()).toBe('—');
+  });
+  it('keeps the latest assignee response and distinguishes a failed vital list from an empty one', () => {
+    const old = new Subject<import('../services/nurse-task.service').NurseVitalTask[]>();
+    nurseServiceSpy.getVitalsDue.and.returnValue(old);
+    fixture.detectChanges();
+    nurseServiceSpy.getVitalsDue.and.returnValue(
+      of([
+        {
+          id: 'current',
+          patientId: 'p',
+          patientName: 'Cdx Current',
+          type: 'FULL',
+          dueTime: '2026-11-07T08:00:00Z',
+          overdue: false,
+        },
+      ]),
+    );
+    component.setFilter('all');
+    old.next([]);
+    old.complete();
+    expect(component.vitals()[0].id).toBe('current');
+    nurseServiceSpy.getVitalsDue.and.returnValue(throwError(() => new Error('offline')));
+    component.refresh();
+    fixture.detectChanges();
+    expect(component.vitalsFailed()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.empty-state')).toBeNull();
+  });
   it('should create', () => {
     expect(component).toBeTruthy();
   });
@@ -275,7 +395,471 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(component.lastRefreshed()).toBeTruthy();
   });
 
+  /* ── QA D408: triage entry for outpatients on the workboard ─── */
+
+  describe('awaiting triage (D408)', () => {
+    const arrived = {
+      id: 'e1',
+      patientName: 'Out Patient',
+      status: 'ARRIVED',
+      encounterType: 'OUTPATIENT',
+      encounterDate: '2026-10-20T08:00:00',
+    } as never;
+    const stay = { id: 'e2', status: 'ARRIVED', encounterType: 'INPATIENT' } as never;
+
+    beforeEach(() => {
+      encounterSpy.list.and.callFake(((f: { status?: string }) =>
+        of(f?.status === 'ARRIVED' ? [arrived, stay] : [])) as never);
+    });
+
+    it('a nurse sees ARRIVED/TRIAGE outpatients and opens the triage form on one', () => {
+      authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
+      component.loadFlow$().subscribe();
+      // #948 review: "today" starts at the reader's local midnight, sent on
+      // the server's UTC clock (encounterDate is compared on it), not as the
+      // local wall clock.
+      const d = new Date();
+      const localMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const fromDate = localMidnight.toISOString().slice(0, 19);
+      const sent = encounterSpy.list.calls.mostRecent().args[0] as { fromDate: string };
+      expect(new Date(`${sent.fromDate}Z`).getTime())
+        .withContext('fromDate is local midnight read as UTC')
+        .toBe(localMidnight.getTime());
+      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'ARRIVED', fromDate }); // QA D1347: list() reads every page
+      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'TRIAGE', fromDate });
+      expect(component.awaitingTriage().map((e) => e.id)).toEqual(['e1']);
+
+      component.activeSection.set('workboard');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      const btn = fixture.nativeElement.querySelector(
+        '[data-testid="awaiting-triage-open"]',
+      ) as HTMLButtonElement;
+      expect(btn).withContext('triage action on the nurse-station workboard').toBeTruthy();
+      btn.click();
+      fixture.detectChanges();
+      expect(component.triageEncounter()?.id).toBe('e1');
+      expect(fixture.nativeElement.querySelector('app-triage-form')).toBeTruthy();
+    });
+
+    // QA D777/D784 re-test: Salif's card read 15:33 in both Ouagadougou and
+    // New York for an arrival stamped 2026-10-24T15:33:17 (UTC, no zone).
+    // On a workstation outside UTC this fails without `serverTime`; the
+    // zone-independent check is scripts/lib/server-time.test.mjs.
+    it('shows the triage card arrival time in the reader zone (D777/D784)', () => {
+      const salif = {
+        id: 'e9',
+        patientName: 'Salif K',
+        status: 'ARRIVED',
+        encounterType: 'OUTPATIENT',
+        encounterDate: '2026-10-24T15:33:17.25607', // the raw value of GET /encounters (t7.js)
+      } as never;
+      encounterSpy.list.and.callFake(((f: { status?: string }) =>
+        of(f?.status === 'ARRIVED' ? [salif] : [])) as never);
+      authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
+      component.loadFlow$().subscribe();
+      component.activeSection.set('workboard');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+
+      const card = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="awaiting-triage"] .workboard-card-meta',
+      );
+      expect(card?.textContent?.replace(/\s+/g, ' ')).toContain(
+        formatDate('2026-10-24T15:33:17Z', 'shortTime', 'en-US').replace(/\s+/g, ' '),
+      );
+    });
+
+    it('QA D769: the awaiting-triage queue shows on the default tab under "Mes patients"', () => {
+      authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
+      component.loadFlow$().subscribe();
+      expect(component.filterMode()).toBe('me');
+      expect(component.activeSection()).toBe('vitals');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('[data-testid="awaiting-triage-open"]'))
+        .withContext('a patient just checked in, on the default view')
+        .toBeTruthy();
+    });
+
+    it('QA D954: the nurse closes an unseen visit from the triage card', () => {
+      authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
+      component.loadFlow$().subscribe();
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      const btn = fixture.nativeElement.querySelector(
+        '[data-testid="awaiting-triage-lwbs"]',
+      ) as HTMLButtonElement;
+      expect(btn).withContext('LWBS action on the triage card').toBeTruthy();
+      btn.click();
+      fixture.detectChanges();
+      expect(component.closeUnseenEncounter()?.id).toBe('e1');
+      expect(fixture.nativeElement.querySelector('app-close-unseen-dialog')).toBeTruthy();
+      component.onUnseenVisitClosed();
+      expect(component.closeUnseenEncounter()).toBeNull();
+    });
+
+    it('a non-nurse gets no triage list and no encounter query', () => {
+      component.loadFlow$().subscribe();
+      expect(encounterSpy.list).not.toHaveBeenCalled();
+      expect(component.awaitingTriage()).toEqual([]);
+    });
+  });
+
   /* ── P0 #1: real SBAR handoffs ─────────────────────────────── */
+
+  describe('QA D1402: a tile says what it counts', () => {
+    const rows = [
+      { id: 'a', status: 'DUE', asNeeded: false },
+      { id: 'b', status: 'OVERDUE', asNeeded: false },
+      { id: 'c', status: 'UPCOMING', asNeeded: false },
+      { id: 'd', status: 'DUE', asNeeded: true },
+    ] as unknown as NurseMedicationTask[];
+
+    function hint(): string {
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      return el.querySelector('[data-testid="meds-as-needed-hint"]')?.textContent?.trim() ?? '';
+    }
+
+    it('reads the server when it answered, and adds the as-needed rows apart', () => {
+      fixture.detectChanges();
+      component.medications.set(rows);
+      component.summary.set({
+        assignedPatients: 1,
+        vitalsDue: 0,
+        medicationsDue: 9,
+        medicationsOverdue: 2,
+        medicationsAsNeeded: 12,
+        ordersPending: 0,
+        handoffsPending: 0,
+        announcements: 0,
+      });
+      component['pendingLoads'].set(0);
+      expect(component.medsDueCount()).toBe(9);
+      expect(component.medsOverdueCount()).toBe(2);
+      expect(component.medsAsNeededCount()).toBe(12);
+      expect(hint()).toContain('NURSE.MEDICATIONS_AS_NEEDED_HINT');
+    });
+
+    it('with no summary it counts the same thing in the rows on hand', () => {
+      component.medications.set(rows);
+      component.summary.set(null);
+      expect(component.medsDueCount()).toBe(1);
+      expect(component.medsOverdueCount()).toBe(1);
+      expect(component.medsAsNeededCount()).toBe(1);
+    });
+
+    it('says nothing when no order is as needed', () => {
+      fixture.detectChanges();
+      component.medications.set([]);
+      component.summary.set(null);
+      component['pendingLoads'].set(0);
+      expect(hint()).toBe('');
+    });
+  });
+
+  describe('MAR rows (QA D929, D949, D950, D922, D993)', () => {
+    // No patientId: the name renders as text, not a router link (the spec has no router).
+    const rows = [
+      {
+        id: 'm1',
+        patientName: 'Awa',
+        medication: 'Aspirine',
+        dose: '250 mg',
+        route: 'ORAL',
+        dueTime: '2030-01-02T23:04:00',
+        status: 'UPCOMING',
+        lastOutcome: 'HELD',
+      },
+      {
+        id: 'm2',
+        patientName: 'Awa',
+        medication: 'Morphine',
+        dose: '2 mg',
+        route: 'INTRAVENOUS',
+        dueTime: '2030-01-01T10:00:00',
+        status: 'COMPLETED',
+        lastOutcome: 'REFUSED',
+        controlledSubstance: true,
+      },
+      {
+        id: 'm3',
+        patientName: 'Awa',
+        medication: 'Paracétamol',
+        dose: '1 g',
+        route: 'PO',
+        dueTime: '2030-01-01T10:00:00',
+        status: 'DUE',
+        // QA D1225: the last dose was given early, with its reason.
+        lastOutcome: 'GIVEN',
+        lastGivenEarly: true,
+        lastReason: 'Douleur intense, avis du médecin',
+        doseHistory: [
+          {
+            id: 'd1',
+            status: 'GIVEN',
+            recordedAt: '2030-01-01T09:00:00',
+            reason: 'Douleur intense, avis du médecin',
+            givenEarly: true,
+            overrideReason: 'Bracelet illisible',
+          },
+          { id: 'd0', status: 'HELD', reason: 'Patient au bloc', givenEarly: false },
+        ],
+      },
+    ];
+
+    function render(): HTMLElement {
+      nurseServiceSpy.getMedicationMAR.and.returnValue(
+        of(rows as unknown as NurseMedicationTask[]),
+      );
+      component.refresh();
+      component.activeSection.set('medications');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('only a dose that can be recorded now offers Give, Hold and Refuse', () => {
+      const el = render();
+      const actionCells = Array.from(el.querySelectorAll('tr.data-row td.action-cell'));
+      expect(actionCells.map((td) => !!td.querySelector('.action-give'))).toEqual([
+        false,
+        false,
+        true,
+      ]);
+      expect(actionCells[1].textContent).toContain('NURSE.COURSE_ENDED');
+      expect(actionCells[1].textContent).not.toContain('NURSE.DONE');
+    });
+
+    it('a held or refused last dose is shown as such, never as given', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-last-outcome-m1"]')?.textContent).toContain(
+        'NURSE.LAST_DOSE',
+      );
+      expect(component.canRecordDose(rows[0] as never)).toBeFalse();
+      expect(component.canRecordDose(rows[2] as never)).toBeTrue();
+    });
+
+    it('QA D1225: the row shows the early-dose reason and the dose history with every reason', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-last-early-m3"]')?.textContent).toContain(
+        'MAR_HISTORY.EARLY',
+      );
+      expect(el.querySelector('[data-testid="med-last-reason-m3"]')?.textContent).toContain(
+        'Douleur intense, avis du médecin',
+      );
+      const history = el.querySelector('[data-testid="mar-dose-history"]');
+      expect(history).not.toBeNull();
+      expect(el.querySelector('[data-testid="mar-dose-override-d1"]')?.textContent).toContain(
+        'Bracelet illisible',
+      );
+      expect(el.querySelector('[data-testid="mar-dose-reason-d0"]')?.textContent).toContain(
+        'Patient au bloc',
+      );
+      expect(el.querySelector('[data-testid="mar-dose-early-d0"]')).toBeNull();
+      // A row with no closed dose carries no history and no reason.
+      expect(el.querySelector('[data-testid="med-last-reason-m1"]')).toBeNull();
+    });
+
+    it('the route reads as its translated label, whatever way it was stored', () => {
+      const el = render();
+      const text = el.textContent ?? '';
+      expect(text).toContain('PRESCRIPTIONS.ROUTES.IV');
+      expect(text).toContain('PRESCRIPTIONS.ROUTES.PO');
+      expect(text).not.toContain('INTRAVENOUS');
+    });
+
+    it('QA round 30: an as-needed order shows its rule and interval under the drug, as the server wrote it', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-prn-m3"]')).toBeNull();
+      const label = 'Si besoin : au moins 4 h entre deux doses';
+      const prn = rows.map((r) =>
+        r.id === 'm3' ? { ...r, asNeeded: true, prnMinIntervalHours: 4, prnLabel: label } : r,
+      );
+      nurseServiceSpy.getMedicationMAR.and.returnValue(of(prn as unknown as NurseMedicationTask[]));
+      component.refresh();
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      expect(el.querySelector('[data-testid="med-prn-m3"]')?.textContent?.trim()).toBe(label);
+    });
+
+    it('QA D1237: a frequency the MAR cannot read is marked on its row, with a label', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-frequency-unread-m3"]')).toBeNull();
+      const flagged = rows.map((r) => (r.id === 'm3' ? { ...r, frequencyUnread: true } : r));
+      nurseServiceSpy.getMedicationMAR.and.returnValue(
+        of(flagged as unknown as NurseMedicationTask[]),
+      );
+      component.refresh();
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      const badge = el.querySelector('[data-testid="med-frequency-unread-m3"]');
+      expect(badge?.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe(
+        'EMAR.FREQUENCY_UNREAD_CHIP',
+      );
+      expect(badge?.querySelector('.sr-only')?.textContent?.trim()).toBe(
+        'EMAR.FREQUENCY_UNREAD_LABEL',
+      );
+    });
+
+    // QA D1254 (round 26, regression of D1236): a dose inside its slot window
+    // but before the minimum interval is DUE and flagged earlyDose. The row
+    // keeps Give, Hold and Refuse, says it is early, and Give leads to the
+    // early-dose reason dialog when the server asks why (D1210).
+    it('QA D1254: an early dose keeps Give, is marked early, and its refusal opens the early-dose dialog', () => {
+      const early = rows.map((r) => (r.id === 'm3' ? { ...r, earlyDose: true } : r));
+      nurseServiceSpy.getMedicationMAR.and.returnValue(
+        of(early as unknown as NurseMedicationTask[]),
+      );
+      component.refresh();
+      component.activeSection.set('medications');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const row = el.querySelector('[data-testid="med-early-dose-m3"]')!.closest('tr')!;
+      expect(row.querySelector('.action-give')).withContext('Give is offered').not.toBeNull();
+      expect(row.querySelector('.action-hold')).not.toBeNull();
+      expect(row.querySelector('.action-refuse')).not.toBeNull();
+      expect(
+        el.querySelector('[data-testid="med-early-dose-m3"] .sr-only')?.textContent?.trim(),
+      ).toBe('EMAR.EARLY_DOSE.CHIP_LABEL');
+      expect(el.querySelector('[data-testid="med-early-dose-m1"]')).toBeNull();
+
+      const why = 'Dose trop rapprochée : prochaine au plus tôt à 08:33 (toutes les 1 h).';
+      nurseServiceSpy.administerMedication.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: { message: why, field: 'earlyDoseReason', fieldErrors: { earlyDoseReason: why } },
+        })),
+      );
+      (row.querySelector('.action-give') as HTMLButtonElement).click();
+      component.reasonText.set('Pas de scanner au chevet');
+      component.confirmHoldRefuse();
+      expect(component.earlyDose()?.why).toBe(why);
+      expect(component.earlyDoseKeys().title).toBe('EMAR.EARLY_DOSE.TITLE');
+    });
+
+    // QA D1283 (round 27; the D1004 / D1260 sibling): after a dose is recorded
+    // the table reloads under the loading flag, so the row's Give button left
+    // with it and focus fell to APP-NURSE-STATION. The focus rescue now waits
+    // on a stand-in that is never the page host and gives focus back to the
+    // row's Give when the list is back.
+    it('QA D1283: after a dose is recorded (held) focus returns to the row, never the page host', async () => {
+      installFocusRescue(document);
+      try {
+        const settle = async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        };
+        const el = render();
+        // Hold goes through the same prompt and the same sendAdministration as
+        // Give; the Give prompt holds an eMAR link this test bed has no router for.
+        const holdOf = (drug: string) =>
+          [...el.querySelectorAll<HTMLTableRowElement>('tr.data-row')]
+            .find((r) => r.cells[1]?.textContent?.includes(drug))
+            ?.querySelector<HTMLButtonElement>('.action-hold') ?? null;
+        const hold = holdOf('Paracétamol')!;
+        hold.focus();
+        hold.click();
+        fixture.detectChanges();
+        await settle();
+        const reload = new Subject<NurseMedicationTask[]>();
+        nurseServiceSpy.getMedicationMAR.and.returnValue(reload.asObservable());
+        nurseServiceSpy.administerMedication.and.returnValue(of({} as any));
+        expect(el.querySelector('#mar-reason-input'))
+          .withContext('the prompt is open')
+          .not.toBeNull();
+        component.reasonText.set('Patient au bloc');
+        component.confirmHoldRefuse();
+        fixture.detectChanges();
+        await settle();
+        expect(component.loading()).withContext('the table reloads').toBeTrue();
+        expect(document.activeElement).not.toBe(el);
+        expect(document.activeElement).not.toBe(document.body);
+        reload.next(rows as unknown as NurseMedicationTask[]);
+        reload.complete();
+        component['pendingLoads'].set(0);
+        fixture.detectChanges();
+        await settle();
+        expect(document.activeElement).toBe(holdOf('Paracétamol'));
+      } finally {
+        uninstallFocusRescue();
+      }
+    });
+
+    /** CR-03: the documented exposure after a dose given from this table: a warning, and the dose stands. */
+    it('warns on the exposure the answer carries', () => {
+      nurseServiceSpy.administerMedication.and.returnValue(
+        of({
+          cdsAdvisories: [
+            { summary: '3500 mg enregistrés', indicator: 'warning', source: { label: 'x' } },
+          ],
+        } as any),
+      );
+      component.reasonPrompt.set({ taskId: 'm3', action: 'HELD' });
+      component.reasonText.set('Patient au bloc');
+      component.confirmHoldRefuse();
+      expect(toastSpy.warning).toHaveBeenCalledOnceWith('3500 mg enregistrés');
+      expect(toastSpy.success).toHaveBeenCalled();
+    });
+
+    // QA D1265 (round 26): an unreadable frequency is refused on the same
+    // field, but not for being early: its dialog has its own title.
+    it('QA D1265: the refusal of an unreadable frequency opens a dialog titled for it', () => {
+      const unread = rows.map((r) => (r.id === 'm3' ? { ...r, frequencyUnread: true } : r));
+      component.medications.set(unread as unknown as NurseMedicationTask[]);
+      // The first render starts the polling, which reads the list again.
+      nurseServiceSpy.getMedicationMAR.and.returnValue(
+        of(unread as unknown as NurseMedicationTask[]),
+      );
+      const why = 'La fréquence « quand il veut » ne peut pas être lue comme un horaire.';
+      nurseServiceSpy.administerMedication.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: { message: why, field: 'earlyDoseReason', fieldErrors: { earlyDoseReason: why } },
+        })),
+      );
+      component.administerMedication('m3');
+      component.reasonText.set('Pas de scanner au chevet');
+      component.confirmHoldRefuse();
+      expect(component.earlyDoseKeys()).toEqual({
+        title: 'EMAR.FREQUENCY_UNREAD_DIALOG.TITLE',
+        label: 'EMAR.FREQUENCY_UNREAD_DIALOG.REASON_LABEL',
+        confirm: 'EMAR.FREQUENCY_UNREAD_DIALOG.CONFIRM',
+      });
+      // The Give prompt underneath holds a chart link this test bed has no router for.
+      component.reasonPrompt.set(null);
+      fixture.detectChanges();
+      const title = (fixture.nativeElement as HTMLElement)
+        .querySelector('app-reason-dialog h2')
+        ?.textContent?.trim();
+      expect(title).toBe('EMAR.FREQUENCY_UNREAD_DIALOG.TITLE');
+    });
+
+    it('a controlled substance is marked on its row', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-controlled-m2"]')).toBeTruthy();
+      expect(el.querySelector('[data-testid="med-controlled-m3"]')).toBeNull();
+    });
+
+    it('a dose due on another day shows its date', () => {
+      expect(component.isDueToday('2030-01-02T23:04:00')).toBeFalse();
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const todayUtc = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:00`;
+      expect(component.isDueToday(todayUtc)).toBeTrue();
+    });
+
+    it('the hold/refuse reason box has a label', () => {
+      component.promptHoldRefuse('m3', 'HELD');
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const box = el.querySelector('#mar-reason-input');
+      expect(box).toBeTruthy();
+      expect(el.querySelector('label[for="mar-reason-input"]')).toBeTruthy();
+    });
+  });
 
   it('submitCreateHandoff requires patient and direction before posting', () => {
     component.openHandoffCreate();
@@ -284,12 +868,22 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(nurseServiceSpy.createHandoff).not.toHaveBeenCalled();
   });
 
+  it('submitCreateHandoff refuses an empty Situation (QA D331)', () => {
+    component.openHandoffCreate();
+    component.onHandoffPatientChange({ id: 'p1' } as PatientResponse);
+    component.updateHandoffField('direction', 'SHIFT_CHANGE');
+    component.updateHandoffField('situation', '   ');
+    component.submitCreateHandoff();
+    expect(toastSpy.error).toHaveBeenCalledWith('NURSE.TOAST.HANDOFF_SITUATION_REQUIRED');
+    expect(nurseServiceSpy.createHandoff).not.toHaveBeenCalled();
+  });
+
   it('submitCreateHandoff posts the SBAR form, toasts, and closes the dialog', () => {
     const created: NurseHandoff = {
       id: 'h9',
       patientId: 'p1',
       patientName: 'Bea Ward',
-      direction: 'Shift change',
+      direction: 'SHIFT_CHANGE',
       updatedAt: '2026-08-20T10:00:00',
       note: 'Stable.',
       background: null,
@@ -302,19 +896,98 @@ describe('NurseStationComponent — two-tier polling', () => {
 
     component.openHandoffCreate();
     component.onHandoffPatientChange({ id: 'p1' } as PatientResponse);
-    component.updateHandoffField('direction', 'Shift change');
+    component.updateHandoffField('direction', 'SHIFT_CHANGE');
     component.updateHandoffField('situation', 'Stable.');
+    component.updateHandoffField('recipientUserId', 'u-2');
     component.submitCreateHandoff();
 
     expect(nurseServiceSpy.createHandoff).toHaveBeenCalledWith(
       jasmine.objectContaining({
         patientId: 'p1',
-        direction: 'Shift change',
+        direction: 'SHIFT_CHANGE',
         situation: 'Stable.',
+        recipientUserId: 'u-2',
       }),
     );
     expect(toastSpy.success).toHaveBeenCalled();
     expect(component.handoffCreateOpen()).toBeFalse();
+  });
+
+  // QA D1352 (round 30, flagged by fix/r30-portal-forms): the server refuses
+  // a handoff recipient on recipientUserId; the shared mapper marks the select.
+  it('QA D1352: a refusal on recipientUserId reaches the recipient select', () => {
+    component.openHandoffCreate();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(fieldControlFor(host, 'recipientUserId')?.id).toBe('ho-recipient');
+  });
+
+  it('QA D776: a handoff with no recipient is not posted', () => {
+    component.openHandoffCreate();
+    expect(component.handoffRecipients().map((r) => r.userId)).toEqual(['u-2']);
+    component.onHandoffPatientChange({ id: 'p1' } as PatientResponse);
+    component.updateHandoffField('direction', 'SHIFT_CHANGE');
+    component.updateHandoffField('situation', 'Stable.');
+    component.submitCreateHandoff();
+    expect(toastSpy.error).toHaveBeenCalledWith('NURSE.TOAST.HANDOFF_RECIPIENT_REQUIRED');
+    expect(nurseServiceSpy.createHandoff).not.toHaveBeenCalled();
+  });
+
+  it('QA D776: Complete is offered only on a handoff the server says the viewer may complete', () => {
+    const base = {
+      patientId: 'p1',
+      patientName: 'Bea Ward',
+      direction: 'SHIFT_CHANGE',
+      updatedAt: '2026-10-24T10:00:00',
+      note: 'Stable.',
+      background: null,
+      assessment: null,
+      recommendation: null,
+      status: 'PENDING',
+      createdByName: 'Nina Nurse',
+    };
+    expect(
+      component.canCompleteHandoff({
+        ...base,
+        id: 'mine-to-give',
+        completableByMe: false,
+      } as NurseHandoff),
+    ).toBeFalse();
+    expect(component.canCompleteHandoff({ ...base, id: 'legacy' } as NurseHandoff)).toBeFalse();
+    expect(
+      component.canCompleteHandoff({ ...base, id: 'to-me', completableByMe: true } as NurseHandoff),
+    ).toBeTrue();
+  });
+
+  it('QA D1075: the handoff card shows when it was reported, not when it was completed', () => {
+    const h = {
+      id: 'h1',
+      patientId: 'p1',
+      patientName: 'Bea Ward',
+      direction: 'SHIFT_CHANGE',
+      createdAt: '2026-10-30T13:33:43',
+      updatedAt: '2026-10-30T13:34:02',
+      completedAt: '2026-10-30T13:34:02',
+      note: 'Stable.',
+      background: null,
+      assessment: null,
+      recommendation: null,
+      status: 'COMPLETED',
+      createdByName: 'Nina Nurse',
+    } as NurseHandoff;
+    expect(component.handoffReportedAt(h)).toBe('2026-10-30T13:33:43');
+    // A server that predates createdAt still shows a time.
+    expect(component.handoffReportedAt({ ...h, createdAt: undefined })).toBe('2026-10-30T13:34:02');
+  });
+
+  it('QA D1077: the ward vitals offer head circumference only on the growth age rule', () => {
+    const lookup = spyOn(TestBed.inject(PatientService), 'getById');
+    lookup.and.returnValue(of({ id: 'p65', dateOfBirth: '1961-05-01' } as PatientResponse));
+    component.recordVitals('p65', 'Daouda Traoré');
+    expect(component.showHeadCircumference()).withContext('65 years old').toBeFalse();
+    lookup.and.returnValue(of({ id: 'p1', dateOfBirth: '2025-03-01' } as PatientResponse));
+    component.recordVitals('p1', 'Bébé');
+    expect(component.showHeadCircumference()).withContext('infant').toBeTrue();
   });
 
   it('completeHandoff calls the service and refreshes', () => {
@@ -430,5 +1103,544 @@ describe('NurseStationComponent — two-tier polling', () => {
     // this spec sets the signal directly, so that string is not in its
     // universe and the check could never fail. NurseTaskServiceImplTest
     // pins the wire value instead.
+  });
+
+  describe('QA D1330 (round 29): an empty vitals save is refused inline, not by a toast alone', () => {
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('the press marks Température with the "at least one reading" reason and sends nothing', () => {
+      document.body.appendChild(fixture.nativeElement);
+      component.recordVitals('p1', 'Awa');
+      fixture.detectChanges();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="vitals-save"]',
+        alsoMarked: ['vf-temp'],
+        sent: nurseServiceSpy.captureVitals,
+      });
+      expect(marked).toEqual(['vf-temp']);
+      // Round 29 merge: the save has no submit guard any more (#1031's D1342 rule);
+      // submitVitals itself puts the reason under Température.
+      const temp = (fixture.nativeElement as HTMLElement).querySelector('#vf-temp');
+      const reasonId = temp?.getAttribute('aria-describedby') ?? '';
+      const reason = (fixture.nativeElement as HTMLElement).querySelector(`#${reasonId}`);
+      expect(reason?.textContent).toContain('NURSE.TOAST.VITALS_REQUIRED');
+      expect(toastSpy.error).not.toHaveBeenCalled();
+    });
+
+    it('one reading is enough: the guard lets the save through (negative control)', () => {
+      nurseServiceSpy.captureVitals.and.returnValue(of({}));
+      component.recordVitals('p1', 'Awa');
+      component.updateVitalsField('heartRateBpm', '80');
+      fixture.detectChanges();
+      expect(component.vitalsBlockReason()).toBeFalse();
+      expect(component.vitalsGuardFieldIds()).toEqual([]);
+      component.submitVitals();
+      expect(nurseServiceSpy.captureVitals).toHaveBeenCalled();
+    });
+
+    it('a method call that bypasses the button is refused the same way', () => {
+      component.recordVitals('p1', 'Awa');
+      fixture.detectChanges();
+      component.submitVitals();
+      expect(nurseServiceSpy.captureVitals).not.toHaveBeenCalled();
+      expect(
+        (fixture.nativeElement as HTMLElement)
+          .querySelector('#vf-temp')
+          ?.getAttribute('aria-invalid'),
+      ).toBe('true');
+    });
+  });
+
+  it('refuses an impossible vital reading before it reaches the server (QA D29)', () => {
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('temperatureCelsius', '45');
+    component.updateVitalsField('heartRateBpm', '80');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('VITAL_LIMITS.TEMPERATURE');
+  });
+
+  it('QA D1306 class: every implausible vital is marked at once, each with its own bounds', () => {
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('temperatureCelsius', '45');
+    component.updateVitalsField('heartRateBpm', '400');
+    component.updateVitalsField('spo2Percent', '97');
+    fixture.detectChanges();
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).not.toHaveBeenCalled();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('#vf-temp')?.getAttribute('aria-invalid')).toBe('true');
+    expect(root.querySelector('#vf-hr')?.getAttribute('aria-invalid')).toBe('true');
+    expect(root.querySelector('#vf-spo2')?.getAttribute('aria-invalid')).toBeNull();
+    expect(root.querySelector('#vf-temp-invalid-msg')?.textContent).toBe(
+      'VITAL_LIMITS.TEMPERATURE',
+    );
+    expect(root.querySelector('#vf-hr-invalid-msg')?.textContent).toBe('VITAL_LIMITS.HEART_RATE');
+    // Fixed and sent again: the marks go.
+    nurseServiceSpy.captureVitals.and.returnValue(of({}));
+    component.updateVitalsField('temperatureCelsius', '37');
+    component.updateVitalsField('heartRateBpm', '80');
+    component.submitVitals();
+    expect(root.querySelector('[aria-invalid="true"]')).toBeNull();
+  });
+
+  it('QA D1564: a newborn set is saved and the newborn warning from the server is shown', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(
+      of({
+        clinicallySignificant: true,
+        newbornAlerts: [
+          {
+            code: 'newborn-heart-rate',
+            severity: 'URGENT',
+            type: 'CARDIOVASCULAR',
+            message: 'Recheck now.',
+          },
+        ],
+      }),
+    );
+    component.recordVitals('p1', 'Bebe');
+    component.updateVitalsField('heartRateBpm', '80');
+    component.submitVitals();
+    expect(toastSpy.success).toHaveBeenCalled();
+    expect(toastSpy.push).toHaveBeenCalledWith(
+      'warning',
+      jasmine.stringMatching(/NEWBORN_WARNING_URGENT.*Recheck now\./),
+      jasmine.any(Number),
+    );
+  });
+
+  it('r54: sends the ticked organ-damage signs and shows the adult warning from the server', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(
+      of({
+        clinicallySignificant: true,
+        hypertensionAlerts: [
+          {
+            code: 'adult-severe-hypertension',
+            severity: 'URGENT',
+            type: 'HYPERTENSION',
+            message: 'Urgent medical review required.',
+          },
+        ],
+      }),
+    );
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsOrganDamage(['CHEST_PAIN']);
+    expect(component.vitalsHasReading())
+      .withContext('a ticked sign alone is not a reading')
+      .toBeFalse();
+    component.updateVitalsField('systolicBpMmHg', '190');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals.calls.mostRecent().args[1].organDamageSymptoms).toEqual([
+      'CHEST_PAIN',
+    ]);
+    expect(toastSpy.push).toHaveBeenCalledWith(
+      'error',
+      jasmine.stringMatching(/ADULT_HTN_URGENT.*Urgent medical review required\./),
+      jasmine.any(Number),
+    );
+  });
+
+  it('r54: no ticked sign is sent as nothing', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(of({}));
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsOrganDamage(['DYSPNEA']);
+    component.updateVitalsOrganDamage([]);
+    component.updateVitalsField('systolicBpMmHg', '120');
+    component.submitVitals();
+    expect(
+      nurseServiceSpy.captureVitals.calls.mostRecent().args[1].organDamageSymptoms,
+    ).toBeUndefined();
+  });
+
+  it('a set with no newborn warning shows none', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(of({ newbornAlerts: [] }));
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('heartRateBpm', '80');
+    component.submitVitals();
+    expect(toastSpy.push).not.toHaveBeenCalled();
+  });
+
+  it('sends plausible vitals and shows the server field message on a 400', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { fieldErrors: { spo2Percent: 'SpO2 out of range' } },
+      })),
+    );
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('spo2Percent', '97');
+    component.submitVitals();
+    // QA D1043: the unticked oxygen box is sent as false.
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', {
+      spo2Percent: 97,
+      onOxygen: false,
+    });
+    expect(toastSpy.error).toHaveBeenCalledWith('SpO2 out of range');
+  });
+
+  it('QA D1043: an untouched oxygen box alone is not a vitals set; with readings it is sent as false', () => {
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsOnOxygen(false);
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).not.toHaveBeenCalled();
+  });
+
+  it('QA D1045: the ward pain score is sent with the vitals', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(of({}));
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('painScale', '6');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', {
+      painScale: 6,
+      onOxygen: false,
+    });
+  });
+
+  it('QA D1039: the triage card reads the arrival time, never the visit day midnight', () => {
+    expect(
+      component.waitStart({
+        arrivalTimestamp: '2026-10-29T08:10:00',
+        encounterDate: '2026-10-29T00:00:00',
+      }),
+    ).toBe('2026-10-29T08:10:00');
+    expect(
+      component.waitStart({
+        encounterDate: '2026-10-29T00:00:00',
+        createdAt: '2026-10-29T07:55:00',
+      }),
+    ).toBe('2026-10-29T07:55:00');
+    expect(
+      component.waitStart({
+        encounterDate: '2026-10-20T09:00:00',
+        createdAt: '2026-10-29T07:55:00',
+      }),
+    ).toBe('2026-10-20T09:00:00');
+  });
+
+  it('QA D530: glucose is typed in mmol/L like the lab and sent in mg/dL', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(of({}));
+    component.recordVitals('p1', 'Awa');
+    component.updateGlucoseMmol('5.6');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', {
+      bloodGlucoseMgDl: 101,
+      onOxygen: false,
+    });
+  });
+
+  it('QA D530: the vitals modal names the patient, never the English word Patient', () => {
+    component.recordVitals('p1', 'Awa Kabore');
+    expect(component.vitalsCaptureFor()?.patientName).toBe('Awa Kabore');
+    component.recordVitals('p2');
+    expect(component.vitalsCaptureFor()?.patientName).not.toBe('Patient');
+    expect(component.vitalsCaptureFor()?.patientName).toBe('NURSE.THIS_PATIENT');
+  });
+
+  it('picks the task patient by name instead of a raw UUID (QA D45)', () => {
+    component.openTaskCreate();
+    expect(component.taskForm().patientId).toBeUndefined();
+    component.onTaskPatientChange({
+      id: 'pat-7',
+      firstName: 'Awa',
+      lastName: 'K',
+    } as PatientResponse);
+    expect(component.taskPatient()?.id).toBe('pat-7');
+    expect(component.taskForm().patientId).toBe('pat-7');
+    component.onTaskPatientChange(null);
+    expect(component.taskForm().patientId).toBeUndefined();
+    component.closeTaskCreate();
+    expect(component.taskPatient()).toBeNull();
+  });
+
+  describe('QA round 2 (D78, D130)', () => {
+    it('D78: Give asks for an override reason and sends it as overrideReason', () => {
+      nurseServiceSpy.administerMedication.and.returnValue(of({} as any));
+      component.administerMedication('rx-1');
+      expect(nurseServiceSpy.administerMedication).not.toHaveBeenCalled();
+      expect(component.reasonPrompt()).toEqual({ taskId: 'rx-1', action: 'GIVEN' });
+
+      component.reasonText.set('Scanner broken on ward');
+      component.confirmHoldRefuse();
+
+      expect(nurseServiceSpy.administerMedication).toHaveBeenCalledWith('rx-1', {
+        status: 'GIVEN',
+        overrideReason: 'Scanner broken on ward',
+      });
+      expect(component.reasonPrompt()).toBeNull();
+    });
+
+    it('D922: Give of a controlled drug from the station asks for a witness and sends it', () => {
+      nurseServiceSpy.administerMedication.and.returnValue(of({} as any));
+      component.medications.set([
+        { id: 'rx-mor', medication: 'Morphine', controlledSubstance: true } as any,
+      ]);
+      component.administerMedication('rx-mor');
+      component.reasonText.set('Pas de scanner au chevet');
+      expect(component.promptNeedsWitness()).toBeTrue();
+      component.confirmHoldRefuse();
+      expect(nurseServiceSpy.administerMedication).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('NURSE.WITNESS.REQUIRED');
+
+      component.witnessUserId.set('u-witness');
+      component.confirmHoldRefuse();
+      expect(nurseServiceSpy.administerMedication).toHaveBeenCalledWith('rx-mor', {
+        status: 'GIVEN',
+        overrideReason: 'Pas de scanner au chevet',
+        witnessUserId: 'u-witness',
+      });
+    });
+
+    it("D78: a refusal shows the server's localised reason, not the generic toast", () => {
+      nurseServiceSpy.administerMedication.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: { message: 'Cette dose a déjà été enregistrée.' },
+        })),
+      );
+      component.promptHoldRefuse('rx-1', 'HELD');
+      component.reasonText.set('NPO');
+      component.confirmHoldRefuse();
+      expect(toastSpy.error).toHaveBeenCalledWith('Cette dose a déjà été enregistrée.');
+    });
+
+    // QA D1210 (round 23, portal half): a dose given before the minimum gap
+    // since the last one is refused on earlyDoseReason (nurse.mar.doseTooSoon).
+    // The station's Give prompt stays open and the reason dialog opens over it
+    // (an appModalDialog modal under the shared reason dialog written as a
+    // sibling: the shape overlay-stack.spec.ts clicks with the mouse); the
+    // dose is re-sent with the reason, the witness and override kept.
+    it('D1210: a dose refused as too soon asks why, keeps the Give prompt, and is re-sent with the reason', () => {
+      const why = 'Dose trop rapprochée : prochaine au plus tôt à 13:00 (toutes les 4 h).';
+      nurseServiceSpy.administerMedication.and.returnValues(
+        throwError(() => ({
+          status: 400,
+          error: { message: why, field: 'earlyDoseReason', fieldErrors: { earlyDoseReason: why } },
+        })),
+        of({} as any),
+      );
+      component.medications.set([
+        { id: 'rx-mor', medication: 'Morphine', controlledSubstance: true } as any,
+      ]);
+      component.administerMedication('rx-mor');
+      component.reasonText.set('Pas de scanner au chevet');
+      component.witnessUserId.set('u-witness');
+      component.confirmHoldRefuse();
+
+      expect(component.reasonPrompt()).withContext('the Give prompt stays open').not.toBeNull();
+      expect(component.earlyDose()?.why).toBe(why);
+      expect(toastSpy.error).not.toHaveBeenCalled();
+
+      component.confirmEarlyDose('Douleur non contrôlée, avis du médecin');
+      expect(nurseServiceSpy.administerMedication.calls.mostRecent().args).toEqual([
+        'rx-mor',
+        {
+          status: 'GIVEN',
+          overrideReason: 'Pas de scanner au chevet',
+          witnessUserId: 'u-witness',
+          earlyDoseReason: 'Douleur non contrôlée, avis du médecin',
+        },
+      ]);
+      expect(component.reasonPrompt()).toBeNull();
+      expect(component.earlyDose()).toBeNull();
+    });
+
+    it('D1210: any other refusal of the dose keeps its toast, no early-dose dialog', () => {
+      nurseServiceSpy.administerMedication.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'Témoin requis.' } })),
+      );
+      component.administerMedication('rx-1');
+      component.reasonText.set('Pas de scanner');
+      component.confirmHoldRefuse();
+      expect(component.earlyDose()).toBeNull();
+      expect(toastSpy.error).toHaveBeenCalledWith('Témoin requis.');
+    });
+
+    it("D799: Give from the medications table shows the dose's cross-reactivity advisory first", () => {
+      const card = {
+        summary: 'Possible cross-reactivity: Ceftriaxone and the documented allergy to Penicillin',
+        indicator: 'warning' as const,
+        source: { label: 'HMS allergy check' },
+      };
+      component.medications.set([
+        { id: 'rx-cef', medication: 'Ceftriaxone', cdsAdvisories: [card] } as any,
+        { id: 'rx-para', medication: 'Paracetamol', cdsAdvisories: [] } as any,
+      ]);
+      component.administerMedication('rx-cef');
+      expect(component.promptAdvisories()).toEqual([card]);
+      component.administerMedication('rx-para');
+      expect(component.promptAdvisories()).toEqual([]);
+      // A hold is not a dose given: no advisory in that prompt.
+      component.promptHoldRefuse('rx-cef', 'HELD');
+      expect(component.promptAdvisories()).toEqual([]);
+    });
+
+    /** QA D1584 / D1585: the allergy stop's review state in its three forms, as the server reads it. */
+    const stopCard = {
+      summary:
+        'Allergy alert: Amoxicillin is ordered and the patient has a documented allergy to Penicillin',
+      indicator: 'critical' as const,
+      source: { label: 'HMS allergy check' },
+    };
+    const reviewStates = {
+      AWAITING_REVIEW: { state: 'AWAITING_REVIEW' as const },
+      CONTINUE: {
+        state: 'CONTINUE' as const,
+        reviewedByName: 'Aminata Ouedraogo',
+        reviewedAt: '2026-11-10T09:30:00',
+        plan: 'Surveillance 30 min après chaque dose, adrénaline au chevet',
+        rationale: 'Éruption cutanée ancienne',
+      },
+      STOP: {
+        state: 'STOP' as const,
+        reviewedByName: 'Aminata Ouedraogo',
+        reviewedAt: '2026-11-10T09:30:00',
+      },
+    };
+    function expectReviewState(container: Element | null, state: keyof typeof reviewStates): void {
+      const box = container?.querySelector('[data-testid="allergy-review-state"]');
+      expect(box?.classList).toContain(
+        `allergy-review-state--${({ AWAITING_REVIEW: 'awaiting', CONTINUE: 'continue', STOP: 'stop' } as const)[state]}`,
+      );
+      const title =
+        box?.querySelector('[data-testid="allergy-review-state-title"]')?.textContent ?? '';
+      const plan = box?.querySelector('[data-testid="allergy-review-state-plan"]');
+      const by = box?.querySelector('[data-testid="allergy-review-state-by"]');
+      if (state === 'AWAITING_REVIEW') {
+        expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_AWAITING');
+        expect(by).toBeNull();
+        expect(plan).toBeNull();
+      } else if (state === 'CONTINUE') {
+        expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_CONTINUE');
+        expect(by).not.toBeNull();
+        expect(plan?.textContent).toContain('adrénaline au chevet');
+        expect(box?.textContent).toContain('Éruption cutanée ancienne');
+      } else {
+        expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_STOP');
+        expect(by).not.toBeNull();
+        expect(plan).toBeNull();
+      }
+    }
+
+    for (const state of ['AWAITING_REVIEW', 'CONTINUE', 'STOP'] as const) {
+      it(`QA D1584: the MAR row and the Give prompt show the review state (${state})`, () => {
+        const rows = [
+          {
+            id: 'rx-amox',
+            medication: 'Amoxicillin',
+            dose: '500 mg',
+            route: 'PO',
+            status: 'DUE',
+            dueTime: '2026-11-10T10:00:00',
+            cdsAdvisories: [stopCard],
+            allergyReview: reviewStates[state],
+          },
+        ] as any;
+        nurseServiceSpy.getMedicationMAR.and.returnValue(of(rows));
+        component.refresh();
+        component.activeSection.set('medications');
+        component['pendingLoads'].set(0);
+        fixture.detectChanges();
+        const row = fixture.nativeElement.querySelector('[data-testid="med-advisory-rx-amox"]')
+          ?.parentElement as Element | null;
+        expectReviewState(row, state);
+
+        component.administerMedication('rx-amox');
+        expect(component.promptAllergyReview()).toEqual(reviewStates[state]);
+        component.promptHoldRefuse('rx-amox', 'HELD');
+        expect(component.promptAllergyReview()).toBeNull();
+      });
+    }
+
+    it('D130: Escape closes the nurse task modal', () => {
+      component.taskCreateOpen.set(true);
+      component.onEscapeKey();
+      expect(component.taskCreateOpen()).toBeFalse();
+    });
+
+    it('D130: Escape closes the care note modal', () => {
+      component.careNoteFor.set({ patientId: 'p1', patientName: 'A' });
+      component.onEscapeKey();
+      expect(component.careNoteFor()).toBeNull();
+    });
+  });
+
+  // QA D622: the admission time is stored as UTC wall clock; the pending
+  // admissions row must show that instant in the user's zone.
+  it('shows the admission time in the user zone (D622)', () => {
+    nurseServiceSpy.getPendingAdmissions.and.returnValue(
+      of([
+        {
+          admissionId: 'a1',
+          patientName: 'Awa Traore',
+          status: 'PENDING',
+          admissionDateTime: '2026-10-23T02:30:00',
+        } as any,
+      ]),
+    );
+    fixture.detectChanges();
+    component.activeSection.set('admissions');
+    fixture.detectChanges();
+    const expected = formatDate(new Date(Date.UTC(2026, 9, 23, 2, 30)), 'short', 'en-US');
+    const cells = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('td')).map(
+      (td) => td.textContent?.trim(),
+    );
+    expect(cells).toContain(expected);
+  });
+
+  // QA D1189 (round 22): an empty care note was refused by the server and the
+  // nurse read only "Échec de l'enregistrement de la note de soins".
+  describe('QA D1189: the care note says why it is refused', () => {
+    function openNote(): HTMLElement {
+      component.openCareNote('p1', 'Adjaratou Sankara');
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('an empty note (or a title alone) is refused at the narrative, with the server’s reason, and nothing is sent', () => {
+      const host = openNote();
+      component.updateCareNoteField('title', 'Surveillance');
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="care-note-save"]')!.click();
+      fixture.detectChanges();
+      expect(nurseServiceSpy.createCareNote).not.toHaveBeenCalled();
+      expect(host.querySelector('#cn-narrative')?.getAttribute('aria-invalid')).toBe('true');
+      expect(host.querySelector('[data-testid="submit-guard-reason"]')?.textContent?.trim()).toBe(
+        'NURSE.CARE_NOTE_EMPTY',
+      );
+    });
+
+    it('a refusal the server sends anyway is shown as sent, not as a generic toast', () => {
+      const host = openNote();
+      component.updateCareNoteField('dataPart', 'TA 12/8, apyrétique');
+      fixture.detectChanges();
+      nurseServiceSpy.createCareNote.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: { message: 'Rédigez la note : une note de soins vide n’est pas enregistrée.' },
+        })),
+      );
+      host.querySelector<HTMLButtonElement>('[data-testid="care-note-save"]')!.click();
+      fixture.detectChanges();
+      expect(nurseServiceSpy.createCareNote).toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith(
+        'Rédigez la note : une note de soins vide n’est pas enregistrée.',
+      );
+      expect(toastSpy.error).not.toHaveBeenCalledWith('NURSE.TOAST.NOTE_FAILED');
+    });
+  });
+});
+
+describe('localInputToUtcIso (QA D777)', () => {
+  it('sends the nurse-picked local wall time as a UTC instant, not as a zone-less UTC guess', () => {
+    const picked = '2026-10-24T14:00';
+    const sent = localInputToUtcIso(picked);
+    expect(sent).toBe(new Date(2026, 9, 24, 14, 0).toISOString());
+    expect(sent?.endsWith('Z')).toBeTrue();
+  });
+
+  it('sends nothing for an empty or unreadable value', () => {
+    expect(localInputToUtcIso('')).toBeUndefined();
+    expect(localInputToUtcIso(undefined)).toBeUndefined();
+    expect(localInputToUtcIso('not a date')).toBeUndefined();
   });
 });

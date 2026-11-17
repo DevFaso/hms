@@ -246,6 +246,25 @@ public class BirthPlan extends BaseEntity {
     @Column(name = "review_timestamp")
     private LocalDateTime reviewTimestamp;
 
+    /** QA D1241 (round 25): the user who wrote the plan (null on plans written before V259). */
+    @Column(name = "created_by_user_id")
+    private java.util.UUID createdByUserId;
+
+    /** QA D1241: a reviewed plan is never hard-deleted; it is withdrawn with a reason, kept and audited. */
+    @Column(name = "withdrawn_at")
+    private LocalDateTime withdrawnAt;
+
+    @Column(name = "withdrawn_by_user_id")
+    private java.util.UUID withdrawnByUserId;
+
+    @Column(name = "withdrawal_reason", length = 500)
+    private String withdrawalReason;
+
+    /** QA D1241: withdrawn plans are kept for the record but are no longer the patient's plan. */
+    public boolean isWithdrawn() {
+        return withdrawnAt != null;
+    }
+
     // boolean-style getters used by tests
     public boolean isProviderReviewRequired() {
         return Boolean.TRUE.equals(this.providerReviewRequired);

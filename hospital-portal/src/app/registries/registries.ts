@@ -26,12 +26,12 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { RoleContextService } from '../core/role-context.service';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { ActivatedRoute } from '@angular/router';
-import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { joinReasons, missingRequiredMessage } from '../shared/required-fields';
 type StatusFilter = 'ACTIVE' | ProgramEnrollmentStatus;
 
 interface RegistryLoad {
@@ -59,12 +59,13 @@ interface RegistryLoad {
   selector: 'app-registries',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
     PatientPickerComponent,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
+    ModalDialogDirective,
   ],
   templateUrl: './registries.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -73,8 +74,6 @@ interface RegistryLoad {
 export class RegistriesComponent implements OnInit, OnDestroy {
   private readonly registryService = inject(ProgramRegistryService);
   private readonly roleCtx = inject(RoleContextService);
-  private readonly route = inject(ActivatedRoute);
-  private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -102,13 +101,23 @@ export class RegistriesComponent implements OnInit, OnDestroy {
   loadFailed = signal(false);
   actingOnId = signal<string | null>(null);
 
+  readonly patientSearch = signal('');
+  readonly visibleRows = computed(() => {
+    const term = this.patientSearch().trim().toLocaleLowerCase();
+    return this.rows().filter(
+      (row) =>
+        !term ||
+        [row.patientName, row.mrn, row.phoneNumber].some((value) =>
+          value?.toLocaleLowerCase().includes(term),
+        ),
+    );
+  });
+
   overdueCount = computed(() => this.rows().filter((r) => r.overdueDays > 0).length);
   truncated = computed(() => this.totalRows() > this.rows().length);
 
   /** Hospital scope for the picker — the super-admin-aware one, not the primary. */
   readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
-  /** See RoleContextService.hasHospitalScope: the cohort and the enrol button wait for a pinned hospital. */
-  readonly scopeReady = this.roleCtx.hasHospitalScope;
 
   private readonly load$ = new Subject<{ program: CareProgram; status: StatusFilter }>();
   private loadSub?: Subscription;
@@ -132,27 +141,12 @@ export class RegistriesComponent implements OnInit, OnDestroy {
   private dialogOpener: HTMLElement | null = null;
 
   ngOnInit(): void {
-    // Read ?hospitalId= before the first load: the chip does the same in its
-    // own ngOnInit, which runs after ours, and the interceptor must see the
-    // right scope on the initial fetch (the pattern every chip host uses).
-    this.scopeUrl.applyUrlScopeSync(this.route);
     this.loadSub = this.load$
       .pipe(
         // switchMap: only the LATEST selection may update the view. Without
         // it, a slow HIV response finishing after a quick TB one would
         // display HIV rows under the TB tab.
         switchMap(({ program, status }) => {
-          if (!this.scopeReady()) {
-            // Push even when unscoped: the emission cancels an in-flight
-            // response for the previously pinned hospital.
-            return of({
-              rows: [],
-              totalRows: 0,
-              rowsFailed: false,
-              counts: {},
-              countsFailed: false,
-            });
-          }
           this.loading.set(true);
           this.loadFailed.set(false);
           const page = this.registryService
@@ -208,10 +202,6 @@ export class RegistriesComponent implements OnInit, OnDestroy {
     this.load$.next({ program: this.activeProgram(), status: this.statusFilter() });
   }
 
-  onScopeChange(): void {
-    this.load();
-  }
-
   countFor(status: ProgramEnrollmentStatus): number {
     return this.counts()[status] ?? 0;
   }
@@ -243,7 +233,19 @@ export class RegistriesComponent implements OnInit, OnDestroy {
     const patient = this.selectedPatient();
     const cadence = this.cadenceDays();
     if (!patient || !cadence || cadence < 1 || cadence > 365) {
-      this.toast.error(this.translate.instant('REGISTRIES.ENROLL_FIELDS_REQUIRED'));
+      // QA D1358: name the blank fields, not a fixed list. A cadence that is
+      // given but outside 1–365 keeps its range sentence.
+      const outOfRange = cadence != null && (cadence < 1 || cadence > 365);
+      const range = this.translate.instant('REGISTRIES.ENROLL_FIELDS_REQUIRED');
+      this.toast.error(
+        joinReasons([
+          missingRequiredMessage(this.translate, [
+            { labelKey: 'REGISTRIES.PATIENT', value: patient },
+            { labelKey: 'REGISTRIES.CADENCE', value: cadence },
+          ]),
+          outOfRange ? range : null,
+        ]) ?? range,
+      );
       return;
     }
     if (this.saving()) return;

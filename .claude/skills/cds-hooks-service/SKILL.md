@@ -21,6 +21,28 @@ Every service implements `CdsHookService` with two methods:
 
 Register the service as a `@Component`; it gets picked up automatically.
 
+## Invocation authorization (who, and about whom)
+
+`CdsHooksController.invoke` is the ONLY gate — the services resolve
+`context.patientId` unscoped (`findByIdUnscoped`, `findByPatient_Id`), so a
+service must never be reachable any other way:
+
+- `@PreAuthorize(CdsAcknowledgementController.CLINICIAN_ROLES)` — the roles
+  that may dismiss a card are the roles that receive one.
+- `PatientChartAccess.require(patientId, resolvedHospital)` runs before
+  `evaluate`; unknown, foreign, restricted and scope-unresolved patients all
+  answer `200 {"cards":[]}` so none of them is distinguishable.
+- Portal mirror: `CDS_CLINICIAN_ROLES` + `canInvokeCds` in
+  `hospital-portal/src/app/patients/patient-chart/chart-access.ts` gate both
+  the `<app-bpa-panel>` host on the patient page and the panel's own call
+  (the patient page is open to reception, admins, lab and consulting roles).
+  `error.interceptor.ts` treats a 403 on `POST /cds-services/{id}` as silent,
+  so a drift degrades the panel instead of redirecting the chart to /error/403.
+  Change the backend list and this one together.
+- A new service inherits both. Do not add a second patient lookup that
+  bypasses them. `CdsHooksInvokeSecurityIT.SERVICES` lists every service id —
+  add a new one there.
+
 ## Indicator semantics
 
 - `INFO` — informational (problem list, allergy summary on chart-open).

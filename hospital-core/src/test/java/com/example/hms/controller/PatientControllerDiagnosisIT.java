@@ -43,6 +43,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -88,6 +89,9 @@ class PatientControllerDiagnosisIT extends BaseIT {
 
 	/** Problems this class created, so the teardown removes exactly those. */
 	private final List<java.util.UUID> createdProblemIds = new ArrayList<>();
+
+	@Autowired
+	private ApplicationContext applicationContext;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -138,17 +142,7 @@ class PatientControllerDiagnosisIT extends BaseIT {
 	void setUp() {
 		// Hospital-scoped writes are audited with the actor's assignment id
 		// (fk_audit_assignment): clear the audit rows before the rows they point at.
-		auditEventLogRepository.deleteAllInBatch();
-		patientProblemHistoryRepository.deleteAll();
-		patientProblemRepository.deleteAll();
-		registrationRepository.deleteAll();
-		patientRepository.deleteAll();
-		staffRepository.deleteAll();
-		assignmentRepository.deleteAll();
-		userRepository.deleteAll();
-		roleRepository.deleteAll();
-		hospitalRepository.deleteAll();
-		organizationRepository.deleteAll();
+		SharedClinicalRowsCleanup.deleteAll(applicationContext);
 
 		organization = organizationRepository.save(Organization.builder()
 			.name("Test Health Network")
@@ -351,11 +345,15 @@ class PatientControllerDiagnosisIT extends BaseIT {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(objectMapper.writeValueAsBytes(request))
 			.accept(MediaType.APPLICATION_JSON)
+			.header("Accept-Language", "en")
 			.with(doctorAuthentication()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.message").value("Diagnosis removed successfully."));
+			// QA D1249 (round 25): the confirmation is keyed and follows the reader's language.
+			.andExpect(jsonPath("$.message").value("Diagnosis removed."));
 
 		PatientProblem deleted = patientProblemRepository.findById(problem.getId()).orElseThrow();
+		// QA D1240 (round 25): the removal marks the row entered in error (V259 column on PostgreSQL).
+		org.assertj.core.api.Assertions.assertThat(deleted.isEnteredInError()).isTrue();
 		assertThat(deleted.getStatus()).isEqualTo(ProblemStatus.INACTIVE);
 		assertThat(deleted.getStatusChangeReason()).isEqualTo(DELETE_REASON);
 
@@ -384,6 +382,11 @@ class PatientControllerDiagnosisIT extends BaseIT {
 		patientProblemRepository.deleteAllById(createdProblemIds);
 		createdProblemIds.clear();
 		auditEventLogRepository.deleteAllInBatch();
+		// Then the doctor's staff row, assignment, user, patient and hospital
+		// this class seeded, in FK order: a class that runs next in the same
+		// context and deletes assignments table-wide (SuperAdminContinuityIT)
+		// otherwise trips on fk_staff_assignment (round-20 merge, #996).
+		SharedClinicalRowsCleanup.deleteAll(applicationContext);
 	}
 
 	private Role ensureDoctorRole() {

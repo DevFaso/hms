@@ -1,5 +1,6 @@
 package com.example.hms.service.integration;
 
+import com.example.hms.utility.Hl7FieldBounds;
 import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
@@ -12,6 +13,7 @@ import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
+import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.platform.AdtIntakeProviderConfig;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
@@ -43,9 +45,13 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -60,6 +66,9 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     @Mock private DepartmentRepository departmentRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
+    @Mock private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AdmissionStayEncounterService>
+        stayEncounters;
 
     @Spy private AdtVisitSyncProperties properties = new AdtVisitSyncProperties();
 
@@ -78,6 +87,11 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
 
         // Flag ON unless a specific test flips it off.
         properties.setEnabled(true);
+
+        // QA D852: the configured provider is a physician at the receiving
+        // hospital unless a test says otherwise.
+        lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            any(), eq(hospital.getId()), anySet())).thenReturn(true);
     }
 
     private ParsedAdtMessage adt(String trigger, String visit) {
@@ -114,6 +128,162 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         verify(encounterRepository, never())
             .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospital_Id(
                 any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("SKIPPED, not truncated, when PV1-19 is wider than external_visit_number")
+    void skippedWhenVisitNumberIsOverWidth() {
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V".repeat(Hl7FieldBounds.VISIT_NUMBER_MAX + 1)),
+            patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.SKIPPED_OVER_WIDTH);
+        verifyNoInteractions(admissionRepository, encounterRepository, auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("An over-width PV1-3 does not stop an A03 discharge - only A02 reads PV1-3")
+    void anOverWidthLocationDoesNotSkipADischarge() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A03", "V-1", "W".repeat(Hl7FieldBounds.ASSIGNED_LOCATION_MAX + 1), null,
+                LocalDateTime.of(2026, 5, 19, 10, 0)),
+            patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_DISCHARGED);
+    }
+
+    @Test
+    @DisplayName("A02 with an over-width point of care is an unresolvable destination: reconciled, audited without the value")
+    void anOverWidthTransferDestinationIsAuditedAsOverWidth() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        Department existing = department(UUID.randomUUID(), hospital);
+        row.setDepartment(existing);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A02", "V-1", "W".repeat(Hl7FieldBounds.ASSIGNED_LOCATION_MAX + 1) + "^ROOM-1", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_TRANSFERRED);
+        verifyNoInteractions(departmentRepository);
+        ArgumentCaptor<Admission> saved = ArgumentCaptor.forClass(Admission.class);
+        verify(admissionRepository).save(saved.capture());
+        assertThat(saved.getValue().getDepartment()).isSameAs(existing);
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription())
+            .contains("destination=(over " + Hl7FieldBounds.ASSIGNED_LOCATION_MAX + " characters)")
+            .doesNotContain("WWWW");
+    }
+
+    @Test
+    @DisplayName("A02: a sender cannot write the over-width marker itself - its destination is always quoted")
+    void theOverWidthMarkerCannotBeForged() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        String marker = "(over " + Hl7FieldBounds.ASSIGNED_LOCATION_MAX + " characters)";
+
+        service.projectVisit(adt("A02", "V-1", marker + "^ROOM-1", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription())
+            .contains("destination=\"" + marker + "\"")
+            .doesNotContain("destination=" + marker);
+    }
+
+    @Test
+    @DisplayName("A02 with no PV1-3 records our absent marker, unquoted")
+    void aMissingDestinationIsOurMarker() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        service.projectVisit(adt("A02", "V-1", "", null, null), patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription()).contains(" destination=(none) ");
+    }
+
+    @Test
+    @DisplayName("The A03 audit description quotes MSH-10, the visit and the sender pair, escaping line breaks and ANSI")
+    void theDischargeAuditQuotesTheSendersText() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        String esc = String.valueOf((char) 0x1B);
+        String rlo = String.valueOf((char) 0x202E);
+        String forged = "M1\nADT^A03 discharge — visit=V-9 msgCtrlId=" + esc + "[2J";
+
+        service.projectVisit(adt("A03", "V\"-1", "WARD-A", null, LocalDateTime.of(2026, 5, 19, 10, 0)),
+            patient, hospital, "REG", "HO" + rlo + "SP1", forged);
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription())
+            .startsWith("ADT^A03 discharge — visit=\"V\\\"-1\" sender=\"REG\"/\"HO\\u202eSP1\" hospital=")
+            .endsWith(" msgCtrlId=\"M1\\u000aADT^A03 discharge — visit=V-9 msgCtrlId=\\u001b[2J\"")
+            .doesNotContain("\n").doesNotContain(esc).doesNotContain(rlo);
+    }
+
+    @Test
+    @DisplayName("The stored MSH-10 is the ORU key's form: spaces stripped, a control character kept")
+    void theStoredControlIdKeepsAControlCharacter() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        String bel = String.valueOf((char) 7);
+
+        service.projectVisit(adt("A08", "V-1"), patient, hospital, "REG", "HOSP1", "  M1" + bel + "  ");
+
+        assertThat(row.getExternalMessageControlId()).isEqualTo("M1" + bel);
+    }
+
+    @Test
+    @DisplayName("A visit number at the column width, padded, is still reconciled - bounded as matched")
+    void aVisitNumberAtTheWidthIsReconciledTrimmed() {
+        String visit = "V".repeat(Hl7FieldBounds.VISIT_NUMBER_MAX);
+        String longLocation = "WARD-A^ROOM-12^BED-3^" + "D".repeat(300);
+
+        service.projectVisit(adt("A08", visit + "   ", longLocation, null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-1");
+
+        verify(admissionRepository)
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                eq("REG"), eq("HOSP1"), eq(visit), eq(hospital.getId()));
     }
 
     @Test
@@ -349,6 +519,30 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D304: an A01 for a patient already in an open stay does not open a second one")
+    void autoCreateSkippedWhenPatientAlreadyAdmitted() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+        AdtIntakeProviderConfig config = intakeConfig();
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
+            .thenReturn(Optional.of(staff(config.getAdmittingProviderId())));
+        when(departmentRepository.findById(config.getDepartmentId()))
+            .thenReturn(Optional.of(department(config.getDepartmentId())));
+        when(admissionRepository.existsOpenAdmissionForPatient(patient.getId())).thenReturn(true);
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V-AC-9"), patient, hospital, "REG", "HOSP1", "MSG-AC-9");
+
+        assertThat(result).isNotEqualTo(VisitProjectionResult.ADMISSION_AUTOCREATED);
+        verify(admissionRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
     @DisplayName("Auto-create rejected when configured provider belongs to a different hospital (PR #358 Copilot High)")
     void autoCreateRejectedOnWrongTenantProvider() {
         properties.getAutoCreate().setEnabled(true);
@@ -373,6 +567,33 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         verifyNoInteractions(auditEventLogService);
     }
 
+    @Test
+    @DisplayName("QA D852: a config naming a non-physician (saved before the rule) admits nobody")
+    void autoCreateRejectedWhenProviderIsNotAPhysician() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        Staff hospitalAdmin = staff(config.getAdmittingProviderId());
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
+            .thenReturn(Optional.of(hospitalAdmin));
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            hospitalAdmin.getUser().getId(), hospital.getId(),
+            com.example.hms.service.platform.AdtIntakeProviderConfigService.ADMITTING_ROLE_CODES))
+            .thenReturn(false);
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V-AC-NP"), patient, hospital, "REG", "HOSP1", "MSG-AC-NP");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verify(admissionRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
     // ── Row-24 A04 follow-on: Encounter auto-create ─────────────────────
 
     @Test
@@ -386,7 +607,7 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         Staff provider = staff(config.getAdmittingProviderId());
         Department department = department(config.getDepartmentId());
         UserRoleHospitalAssignment assignment =
-            assignment(config.getDefaultAssignmentId(), hospital);
+            assignment(config.getDefaultAssignmentId(), hospital, provider.getUser(), "ROLE_DOCTOR");
 
         when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.of(config));
@@ -469,7 +690,48 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         // 3% duplication cap on new code. The load-bearing assertions —
         // assignment lookup not performed, no Encounter saved, no audit —
         // still hold.
-        verifyNoInteractions(assignmentRepository);
+        // (The physician check of QA D852 reads assignments by role; the A04
+        // default-assignment lookup is what must not run.)
+        verify(assignmentRepository, never()).findById(any());
+        verify(encounterRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("QA D852/D872: an A04 is not recorded as Dr B under Dr A's, a receptionist's or an inactive assignment")
+    void a04RejectedWhenAssignmentIsNotTheProvidersPhysicianRole() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        config.setDefaultAssignmentId(UUID.randomUUID());
+        Staff provider = staff(config.getAdmittingProviderId());
+        Department department = department(config.getDepartmentId());
+        User drA = new User();
+        drA.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment inactiveOwn =
+            assignment(config.getDefaultAssignmentId(), hospital, provider.getUser(), "ROLE_DOCTOR");
+        inactiveOwn.setActive(false);
+
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
+            .thenReturn(Optional.of(provider));
+        when(departmentRepository.findById(config.getDepartmentId()))
+            .thenReturn(Optional.of(department));
+        when(assignmentRepository.findById(config.getDefaultAssignmentId())).thenReturn(
+            Optional.of(assignment(config.getDefaultAssignmentId(), hospital, drA, "ROLE_DOCTOR")),
+            Optional.of(assignment(config.getDefaultAssignmentId(), hospital, provider.getUser(), "ROLE_RECEPTIONIST")),
+            Optional.of(inactiveOwn));
+
+        for (int i = 0; i < 3; i++) {
+            VisitProjectionResult result = service.projectVisit(
+                adt("A04", "V-A04-PAIR-" + i), patient, hospital, "REG", "HOSP1", "MSG-A04-PAIR-" + i);
+            assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        }
+        verify(assignmentRepository, times(3)).findById(config.getDefaultAssignmentId());
         verify(encounterRepository, never()).save(any());
         verifyNoInteractions(auditEventLogService);
     }
@@ -570,6 +832,49 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         verify(auditEventLogService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.ADMISSION_DISCHARGED);
         assertThat(audit.getValue().getEntityType()).isEqualTo("ADMISSION");
+    }
+
+    @Test
+    @DisplayName("QA D515: an A03 discharge frees the bed and cancels the stay's pending transfer")
+    void d515_anA03DischargeCancelsThePendingTransfer() {
+        com.example.hms.repository.TransferOrderRepository transfers =
+            mock(com.example.hms.repository.TransferOrderRepository.class);
+        com.example.hms.service.BedAssignmentService realBeds = new com.example.hms.service.BedAssignmentService(
+            mock(com.example.hms.repository.BedRepository.class), admissionRepository, transfers);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "bedAssignmentService", realBeds);
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        com.example.hms.model.TransferOrder pending = new com.example.hms.model.TransferOrder();
+        pending.setStatus(com.example.hms.enums.TransferOrderStatus.REQUESTED);
+        when(transfers.findPendingForAdmission(row.getId())).thenReturn(Optional.of(pending));
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        service.projectVisit(adt("A03", "V-D515", "WARD-A", null, LocalDateTime.of(2026, 5, 17, 14, 30)),
+            patient, hospital, "REG", "HOSP1", "MSG-D515");
+
+        assertThat(pending.getStatus()).isEqualTo(com.example.hms.enums.TransferOrderStatus.CANCELLED);
+        verify(transfers).save(pending);
+    }
+
+    @Test
+    @DisplayName("QA D515: a re-sent A03 for a stay already discharged releases nothing again")
+    void d515_aResentA03ReleasesNothing() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.DISCHARGED);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        service.projectVisit(adt("A03", "V-D515B", "WARD-A", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-D515B");
+
+        verifyNoInteractions(bedAssignmentService);
     }
 
     @Test
@@ -675,6 +980,67 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
             ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.ADMISSION_TRANSFERRED);
+    }
+
+    @Test
+    @DisplayName("QA D804: an A02 transfer moves the stay's open encounter to the destination department")
+    void d804_anA02TransferMovesTheStayEncounter() {
+        Department admitting = department(UUID.randomUUID(), hospital);
+        Department destination = department(UUID.randomUUID(), hospital);
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        row.setDepartment(admitting);
+        row.setHospital(hospital);
+        // The stay encounter a ward order opened, still in the admitting department.
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(row.getId());
+        stay.setDepartment(admitting);
+        stay.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        when(departmentRepository
+            .findByHospitalIdAndCodeIgnoreCase(hospital.getId(), "WARD-B"))
+            .thenReturn(Optional.of(destination));
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(row.getId()))
+            .thenReturn(Optional.of(stay));
+        // The real stay service: only its encounter repository is reached here.
+        com.example.hms.service.AdmissionStayEncounterService stayService =
+            new com.example.hms.service.AdmissionStayEncounterService(
+                encounterRepository, null, null, null, null, null, null, null, null);
+        when(stayEncounters.getIfAvailable()).thenReturn(stayService);
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A02", "V-A02", "WARD-B^ROOM-3^BED-1", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A02");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_TRANSFERRED);
+        ArgumentCaptor<Encounter> savedEncounter = ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(savedEncounter.capture());
+        assertThat(savedEncounter.getValue()).isSameAs(stay);
+        assertThat(stay.getDepartment()).isSameAs(destination);
+    }
+
+    @Test
+    @DisplayName("QA D804: an unresolvable A02 destination leaves the stay encounter where it is")
+    void d804_anUnresolvedA02DoesNotTouchTheStayEncounter() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        service.projectVisit(adt("A02", "V-A02", "", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A02");
+
+        verifyNoInteractions(stayEncounters);
+        verify(encounterRepository, never()).save(any());
     }
 
     @Test
@@ -814,6 +1180,9 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         Staff s = new Staff();
         s.setId(id);
         s.setHospital(hospital);
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        s.setUser(user);
         return s;
     }
 
@@ -832,6 +1201,16 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
         a.setId(id);
         a.setHospital(h);
+        return a;
+    }
+
+    private UserRoleHospitalAssignment assignment(UUID id, Hospital h, User user, String roleCode) {
+        UserRoleHospitalAssignment a = assignment(id, h);
+        a.setUser(user);
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(roleCode);
+        role.setName(roleCode);
+        a.setRole(role);
         return a;
     }
 

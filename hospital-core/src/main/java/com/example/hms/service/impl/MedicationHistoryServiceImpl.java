@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PharmacyFillMapper;
 import com.example.hms.model.Hospital;
@@ -19,6 +20,7 @@ import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.PharmacyFillRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.service.MedicationHistoryService;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,6 +44,11 @@ import com.example.hms.security.context.HospitalContextHolder;
 @RequiredArgsConstructor
 @Slf4j
 public class MedicationHistoryServiceImpl implements MedicationHistoryService {
+    /** QA D401: a patient write lands only at a hospital the patient is registered at. */
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    private static final String PHARMACY_FILL_NOT_FOUND_KEY = "pharmacyFill.notFound";
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String NON_DIGIT_REGEX = "\\D";
 
 
@@ -68,23 +75,26 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
 
         // Validate patient and hospital exist
         patientChartAccess.require(patientId, hospitalId);
-        hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
+        hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         // E9 #59c — the timeline follows the patient: prescriptions and fills
         // across the readable hospitals, each entry carrying its hospital, and
         // the reach of the whole timeline accounted once below.
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        List<Prescription> prescriptions = fetchPrescriptions(patientId, readable, startDate, endDate);
+        // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+        // QA D1537: a draft thrown away before anyone signed it is no course the patient took.
+        List<Prescription> prescriptions = com.example.hms.service.support.PrescriptionIssuance.withoutDiscardedProposals(
+            NeverSentRule.prescriptionsReadableHere(fetchPrescriptions(patientId, readable, startDate, endDate), hospitalId));
         List<PharmacyFill> pharmacyFills = fetchPharmacyFills(patientId, readable, startDate, endDate);
 
         log.debug("Found {} prescriptions and {} pharmacy fills", prescriptions.size(), pharmacyFills.size());
 
         // Convert to timeline entries
         List<MedicationTimelineEntryDTO> timeline = new ArrayList<>();
-        timeline.addAll(convertPrescriptionsToTimelineEntries(prescriptions));
-        timeline.addAll(convertFillsToTimelineEntries(pharmacyFills));
+        timeline.addAll(convertPrescriptionsToTimelineEntries(prescriptions, locale));
+        timeline.addAll(convertFillsToTimelineEntries(pharmacyFills, locale));
 
         // Sort by start date
         timeline.sort((e1, e2) -> {
@@ -123,7 +133,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         boolean polypharmacy = concurrent >= 5;
 
         // Build warnings
-        List<String> warnings = buildWarnings(withInteractions, withOverlaps, polypharmacy, concurrent);
+        List<String> warnings = buildWarnings(withInteractions, withOverlaps, polypharmacy, concurrent, locale);
 
         log.info("Timeline generated: {} total meds, {} active, {} interactions, {} overlaps",
             total, active, withInteractions, withOverlaps);
@@ -150,14 +160,18 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         // Validate required entities
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, request.getHospitalId()));
+        // QA r5 tenancy sweep: the fill is recorded at the caller's acting hospital.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND_KEY, request.getHospitalId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         // Optional prescription link
         Prescription prescription = null;
         if (request.getPrescriptionId() != null) {
             prescription = prescriptionRepository.findById(request.getPrescriptionId())
-                .orElse(null); // Don't fail if prescription not found, just leave unlinked
+                .filter(rx -> rx.getHospital() != null && rx.getHospital().getId().equals(hospital.getId()))
+                .orElse(null); // Unknown or another hospital's prescription: leave unlinked
         }
 
         // Convert and save
@@ -173,7 +187,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
     @Transactional(readOnly = true)
     public PharmacyFillResponseDTO getPharmacyFillById(UUID fillId, Locale locale) {
         PharmacyFill fill = pharmacyFillRepository.findById(fillId)
-            .orElseThrow(() -> new ResourceNotFoundException("Pharmacy fill not found with ID: " + fillId));
+            .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_FILL_NOT_FOUND_KEY, fillId));
         return pharmacyFillMapper.toResponseDTO(fill);
     }
 
@@ -198,7 +212,8 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         log.info("Updating pharmacy fill: {}", fillId);
 
         PharmacyFill fill = pharmacyFillRepository.findById(fillId)
-            .orElseThrow(() -> new ResourceNotFoundException("Pharmacy fill not found with ID: " + fillId));
+            .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_FILL_NOT_FOUND_KEY, fillId));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(fill.getHospital(), PHARMACY_FILL_NOT_FOUND_KEY, fillId);
 
         pharmacyFillMapper.updateEntity(fill, request);
         PharmacyFill updated = pharmacyFillRepository.save(fill);
@@ -213,11 +228,12 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
     public void deletePharmacyFill(UUID fillId, Locale locale) {
         log.info("Deleting pharmacy fill: {}", fillId);
 
-        if (!pharmacyFillRepository.existsById(fillId)) {
-            throw new ResourceNotFoundException("Pharmacy fill not found with ID: " + fillId);
-        }
+        PharmacyFill fill = pharmacyFillRepository.findById(fillId)
+            .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_FILL_NOT_FOUND_KEY, fillId));
+        // QA r5 tenancy sweep: a delete loads under the tenant guard first.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(fill.getHospital(), PHARMACY_FILL_NOT_FOUND_KEY, fillId);
 
-        pharmacyFillRepository.deleteById(fillId);
+        pharmacyFillRepository.delete(fill);
         log.info("Pharmacy fill deleted: {}", fillId);
     }
 
@@ -252,13 +268,29 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         return endDate == null || !date.isAfter(endDate);
     }
 
-    private List<MedicationTimelineEntryDTO> convertPrescriptionsToTimelineEntries(List<Prescription> prescriptions) {
+    private List<MedicationTimelineEntryDTO> convertPrescriptionsToTimelineEntries(List<Prescription> prescriptions, Locale locale) {
         return prescriptions.stream()
-            .map(this::prescriptionToTimelineEntry)
+            .map(rx -> prescriptionToTimelineEntry(rx, locale))
             .toList();
     }
 
-    private MedicationTimelineEntryDTO prescriptionToTimelineEntry(Prescription rx) {
+
+    /**
+     * QA D678: prescriber tick OR hospital catalog item controlled. Optional so
+     * a hand-built instance in unit tests still works (then the tick alone).
+     */
+    private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setControlledResolver(com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver) {
+        this.controlledResolver = controlledResolver;
+    }
+
+    private boolean controlled(com.example.hms.model.Prescription p) {
+        return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
+    }
+
+    private MedicationTimelineEntryDTO prescriptionToTimelineEntry(Prescription rx, Locale locale) {
         LocalDate startDate = rx.getCreatedAt() != null ? rx.getCreatedAt().toLocalDate() : null;
         LocalDate endDate = calculateEndDate(startDate, rx.getDuration());
 
@@ -278,35 +310,36 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .route(rx.getRoute())
             .quantityDispensed(rx.getQuantity())
             .quantityUnit(rx.getQuantityUnit())
-            .source("Internal Prescription")
+            .source(MessageUtil.resolve(locale, "medication.timeline.source.prescription"))
             .prescriberName(rx.getStaff() != null ? rx.getStaff().getFullName() : null)
             .pharmacyName(rx.getPharmacyName())
             .status(rx.getStatus() != null ? rx.getStatus().name() : null)
-            .controlledSubstance(rx.isControlledSubstance())
+            .controlledSubstance(controlled(rx))
             .hasOverlap(false)
             .overlappingWith(new ArrayList<>())
             .hasInteraction(false)
             .interactingWith(new ArrayList<>())
             .prescriptionId(rx.getId())
+            .signedAt(rx.getSignedAt())
             .documentedAt(rx.getCreatedAt())
             .hospitalId(CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital()))
             .hospitalName(rx.getHospital() != null ? rx.getHospital().getName() : null)
             .build();
     }
 
-    private List<MedicationTimelineEntryDTO> convertFillsToTimelineEntries(List<PharmacyFill> fills) {
+    private List<MedicationTimelineEntryDTO> convertFillsToTimelineEntries(List<PharmacyFill> fills, Locale locale) {
         return fills.stream()
-            .map(this::fillToTimelineEntry)
+            .map(fill -> fillToTimelineEntry(fill, locale))
             .toList();
     }
 
-    private MedicationTimelineEntryDTO fillToTimelineEntry(PharmacyFill fill) {
+    private MedicationTimelineEntryDTO fillToTimelineEntry(PharmacyFill fill, Locale locale) {
         LocalDate endDate = null;
         if (fill.getFillDate() != null && fill.getDaysSupply() != null) {
             endDate = fill.getFillDate().plusDays(fill.getDaysSupply());
         }
 
-        String source = "Pharmacy Fill";
+        String source = MessageUtil.resolve(locale, "medication.timeline.source.fill");
         if (fill.getSourceSystem() != null) {
             source = fill.getSourceSystem();
         }
@@ -321,7 +354,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .startDate(fill.getFillDate())
             .endDate(endDate)
             .daysSupply(fill.getDaysSupply())
-            .duration(fill.getDaysSupply() != null ? fill.getDaysSupply() + " days" : null)
+            .duration(fill.getDaysSupply() != null ? MessageUtil.resolve(locale, "medication.timeline.duration.days", fill.getDaysSupply()) : null)
             .dosage(fill.getStrength())
             .frequency(null) // Extracted from directions if needed
             .route(null) // Not in PharmacyFill
@@ -477,8 +510,9 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .drug2Code(interaction.getDrug2Code())
             .drug2Name(interaction.getDrug2Name())
             .severity(interaction.getSeverity())
-            .description(interaction.getDescription())
-            .recommendation(interaction.getRecommendation())
+            // QA D887: read-only display, so the reader's language.
+            .description(com.example.hms.service.support.DrugInteractionText.description(interaction))
+            .recommendation(com.example.hms.service.support.DrugInteractionText.recommendation(interaction))
             .mechanism(interaction.getMechanism())
             .clinicalEffects(interaction.getClinicalEffects())
             .requiresAvoidance(interaction.isRequiresAvoidance())
@@ -534,19 +568,19 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         return !endDate.isBefore(date);
     }
 
-    private List<String> buildWarnings(int interactions, int overlaps, boolean polypharmacy, int concurrent) {
+    private List<String> buildWarnings(int interactions, int overlaps, boolean polypharmacy, int concurrent, Locale locale) {
         List<String> warnings = new ArrayList<>();
         
         if (interactions > 0) {
-            warnings.add("Patient has " + interactions + " drug-drug interaction" + (interactions > 1 ? "s" : "") + " detected");
+            warnings.add(MessageUtil.resolve(locale, "medication.timeline.warning.interactions", interactions));
         }
         
         if (overlaps > 0) {
-            warnings.add(overlaps + " medication" + (overlaps > 1 ? "s have" : " has") + " overlapping therapy");
+            warnings.add(MessageUtil.resolve(locale, "medication.timeline.warning.overlaps", overlaps));
         }
         
         if (polypharmacy) {
-            warnings.add("Polypharmacy detected: Patient is taking " + concurrent + " concurrent medications");
+            warnings.add(MessageUtil.resolve(locale, "medication.timeline.warning.polypharmacy", concurrent));
         }
         
         return warnings;

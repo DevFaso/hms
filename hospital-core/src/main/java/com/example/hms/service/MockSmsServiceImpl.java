@@ -1,27 +1,34 @@
 package com.example.hms.service;
 
-import com.example.hms.service.SmsService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.Locale;
-
+/**
+ * The {@link SmsService} of a deployment with no SMS provider configured. It
+ * sends nothing, and says so: {@link #deliversRealSms()} stays false, so a
+ * caller can refuse or fall back instead of telling a user a text is on its way.
+ *
+ * <p>D2000 class: it used to log "Mock SMS sent to &lt;full number&gt;: &lt;body&gt;",
+ * which put phone numbers, verification codes and patient text in the log
+ * and read like a delivery. It now logs a masked number and the body length only.
+ */
 @Service
 @Slf4j
 public class MockSmsServiceImpl implements SmsService {
 
     @Override
     public void send(String phoneNumber, String message) {
-        // Simulate SMS sending (or later replace with Twilio, etc.)
-        log.info("📲 Mock SMS sent to {}: {}", phoneNumber, message);
+        log.info("SMS NOT sent (no SMS provider configured) to {} ({} characters)",
+            maskPhone(phoneNumber), message == null ? 0 : message.length());
     }
 
-    @Override
-    public void sendUsernameReminderSms(String phoneNumber, String username, Locale locale) {
-        // Simulate sending a username reminder SMS
-        String message = String.format("Hello! Your username is: %s", username);
-        send(phoneNumber, message);
-        log.info("📲 Mock SMS sent to {} for username reminder in locale {}", phoneNumber, locale);
-
+    /** Display-safe form for logs: a leading '+' and the last two digits. */
+    static String maskPhone(String phone) {
+        if (phone == null || phone.length() <= 4) {
+            return "••••";
+        }
+        boolean plus = phone.startsWith("+");
+        return (plus ? "+" : "") + "•".repeat(phone.length() - 2 - (plus ? 1 : 0))
+            + phone.substring(phone.length() - 2);
     }
 }

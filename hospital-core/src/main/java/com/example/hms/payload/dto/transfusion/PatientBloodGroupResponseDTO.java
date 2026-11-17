@@ -33,5 +33,7 @@ public class PatientBloodGroupResponseDTO {
     /** Whether the SCREEN is still usable for a crossmatch. ABO/Rh never expires. */
     private Boolean screenCurrent;
     private String notes;
+    /** Why this result disagrees with the one before it (QA CX-011). */
+    private String correctionReason;
     private LocalDateTime createdAt;
 }

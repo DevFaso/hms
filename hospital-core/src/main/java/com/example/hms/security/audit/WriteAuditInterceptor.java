@@ -1,12 +1,13 @@
 package com.example.hms.security.audit;
 
+import com.example.hms.security.ReadsOnly;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -15,12 +16,13 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.Locale;
 import java.util.Map;
@@ -54,10 +56,11 @@ import java.util.UUID;
  * pattern. No request body, no query string: both can carry PHI and neither
  * is needed to know that the write happened.
  *
- * <p>POST is not always a write in this API — {@code /search},
- * {@code /filter}, {@code /candidates} and a few more are reads that carry
- * a body. Those route tails are recognised and skipped; anything else that
- * reads under POST opts out per method with a reason.
+ * <p>POST is not always a write in this API: a read that carries a body declares
+ * {@link ReadsOnly} on its handler, the one source {@code ReadOnlyModeFilter} also
+ * reads, and is not recorded. A route's name proves nothing either way
+ * ({@code /maternal-history/{id}/calculate-risk} writes, {@code /signatures/verify}
+ * reads). {@code ReadOnlyPostGuardTest} runs every POST through this interceptor.
  *
  * <p>What it does not do: replace the specific events services already emit
  * (PATIENT_UPDATE, PRESCRIPTION_CREATED, …). Those handlers opt out so an
@@ -72,16 +75,10 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
     private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
     /** Route roots that carry no entity meaning of their own. */
     private static final Set<String> NAMESPACE_SEGMENTS = Set.of("api", "super-admin", "admin", "me", "public");
-    /**
-     * Last literal segment of a POST route that is a read with a request
-     * body, not a write. Kept short and literal on purpose; a read under any
-     * other name opts out with {@code @WriteAudited(skip = true, reason = …)}.
-     */
-    static final Set<String> READ_ONLY_POST_TAILS = Set.of(
-        "search", "filter", "candidates", "check", "calculate-risk", "lookup", "query", "preview", "validate");
     private static final String PATIENT_ID_VAR = "patientId";
+    static final String RESOURCE_ID_ATTRIBUTE = WriteAuditInterceptor.class.getName() + ".resourceId";
+    static final String PATIENT_ID_ATTRIBUTE = WriteAuditInterceptor.class.getName() + ".patientId";
     private static final String ID_VAR = "id";
-    private static final String ROLE_PREFIX = "ROLE_";
 
     private final ObjectProvider<AuditEventLogService> auditServiceProvider;
     private final ObjectProvider<ControllerAuthUtils> authUtilsProvider;
@@ -114,6 +111,14 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         }
     }
 
+    private static AuditEventType firstNonNull(AuditEventType stated, AuditEventType implied) {
+        return stated != null ? stated : implied;
+    }
+
+    private static UUID firstNonNull(UUID stated, UUID implied) {
+        return stated != null ? stated : implied;
+    }
+
     private void recordIfSuccessfulWrite(HttpServletRequest request, HttpServletResponse response,
                                          Object handler, Exception ex) {
         if (ex != null || !isSuccessfulWrite(request, response)) {
@@ -122,14 +127,14 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         if (!(handler instanceof HandlerMethod handlerMethod)) {
             return;
         }
+        if (handlerMethod.hasMethodAnnotation(ReadsOnly.class)) {
+            return;
+        }
         WriteAudited annotation = resolveAnnotation(handlerMethod);
         if (annotation != null && annotation.skip()) {
             return;
         }
         String pattern = matchedPattern(request);
-        if (isReadOnlyPost(request.getMethod(), pattern)) {
-            return;
-        }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         UUID actorId = resolveActorId(auth);
         if (auth == null || actorId == null) {
@@ -143,11 +148,22 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         }
         Map<String, String> pathVariables = uriTemplateVariables(request);
         UUID resourceId = resolveResourceId(pathVariables, annotation);
+        if (resourceId == null) {
+            resourceId = attributeUuid(request, RESOURCE_ID_ATTRIBUTE);
+        }
         UUID patientId = resolvePatientId(request, pathVariables, annotation);
-        UserRoleHospitalAssignment assignment = resolveAssignment(actorId);
+        // QA D429: what the handler stated about the write wins over what the route implies.
+        WriteAuditDetail.Detail detail = WriteAuditDetail.of(request);
+        AuditEventType eventType = eventTypeFor(request.getMethod(), annotation);
+        if (detail != null) {
+            eventType = firstNonNull(detail.eventType(), eventType);
+            resourceId = firstNonNull(detail.resourceId(), resourceId);
+            patientId = firstNonNull(detail.patientId(), patientId);
+        }
+        UserRoleHospitalAssignment assignment = resolveAssignment(actorId, auth);
 
         auditService.logEvent(AuditEventRequestDTO.builder()
-            .eventType(eventTypeFor(request.getMethod()))
+            .eventType(eventType)
             .status(AuditStatus.SUCCESS)
             .entityType(entityTypeFor(pattern, annotation))
             .resourceId(resourceId != null ? resourceId.toString() : null)
@@ -170,21 +186,6 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         }
         int status = response.getStatus();
         return status >= 200 && status < 300;
-    }
-
-    /** A POST whose route ends in a read verb ({@code /search}, {@code /filter}, …) reads; it is not recorded. */
-    static boolean isReadOnlyPost(String method, String pattern) {
-        if (!"POST".equalsIgnoreCase(method)) {
-            return false;
-        }
-        String[] segments = pattern.split("/");
-        for (int i = segments.length - 1; i >= 0; i--) {
-            if (segments[i].isBlank() || segments[i].startsWith("{")) {
-                continue;
-            }
-            return READ_ONLY_POST_TAILS.contains(segments[i]);
-        }
-        return false;
     }
 
     /** Method-level annotation wins over the class-level one. */
@@ -211,23 +212,48 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * The actor's active assignment at the hospital this request is scoped to
-     * (X-Hospital-Id, or the JWT's primary hospital as the filter resolved
-     * it). Null for a super-admin in global view or an actor with no
-     * assignment there — the row is then global, which is the truth.
+     * The actor's active assignment at the hospital this request is pinned
+     * to (the one resolver's answer: the hospital named, else the only one
+     * held). Null for a super-admin in global view or an actor with no
+     * hospital — the row is then global, which is the truth.
      *
      * <p>This runs in {@code afterCompletion}, with no persistence context:
      * only the assignment's own columns and its EAGER role may be read here.
      * The LAZY hospital is a dead proxy; the audit service derives the hospital
      * name from {@code assignmentId} under its own transaction.</p>
      */
-    private UserRoleHospitalAssignment resolveAssignment(UUID actorId) {
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+    private UserRoleHospitalAssignment resolveAssignment(UUID actorId, Authentication auth) {
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         UserRoleHospitalAssignmentRepository repository = assignmentRepositoryProvider.getIfAvailable();
-        if (hospitalId == null || repository == null) {
-            return null;
+        // QA D1632: the assignment of the role the token acts under, not the first active one.
+        return ActingAssignments.resolve(repository, actorId, hospitalId, auth).orElse(null);
+    }
+
+    static AuditEventType eventTypeFor(String method, WriteAudited annotation) {
+        if (annotation != null && annotation.eventType().length > 0) {
+            return annotation.eventType()[0];
         }
-        return repository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId).orElse(null);
+        return eventTypeFor(method);
+    }
+
+    /**
+     * QA D429: a create has no {@code {id}} or {@code {patientId}} in its
+     * route, so its row named neither the record nor the patient. The
+     * handler calls this with what it just created; the row then carries
+     * both. Ids only. Outside a request (a direct call in a unit test, a
+     * job) there is nothing to annotate and it does nothing.
+     */
+    public static void describeWrite(String resourceId, String patientId) {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return;
+        }
+        if (resourceId != null) {
+            attributes.setAttribute(RESOURCE_ID_ATTRIBUTE, resourceId, RequestAttributes.SCOPE_REQUEST);
+        }
+        if (patientId != null) {
+            attributes.setAttribute(PATIENT_ID_ATTRIBUTE, patientId, RequestAttributes.SCOPE_REQUEST);
+        }
     }
 
     static AuditEventType eventTypeFor(String method) {
@@ -289,7 +315,13 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         String name = annotation != null && !annotation.patientIdVar().isBlank()
             ? annotation.patientIdVar() : PATIENT_ID_VAR;
         String fromPath = pathVariables.get(name);
-        return parseUuid(fromPath != null ? fromPath : request.getParameter(name));
+        UUID declared = parseUuid(fromPath != null ? fromPath : request.getParameter(name));
+        return declared != null ? declared : attributeUuid(request, PATIENT_ID_ATTRIBUTE);
+    }
+
+    private static UUID attributeUuid(HttpServletRequest request, String name) {
+        Object value = request.getAttribute(name);
+        return value != null ? parseUuid(value.toString()) : null;
     }
 
     private static String matchedPattern(HttpServletRequest request) {
@@ -316,26 +348,13 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
 
     /**
      * The assignment's role at this hospital in the same bare form as
-     * {@link #primaryRole} and the read-side interceptor ({@code DOCTOR}, not
+     * the read-side interceptor ({@code DOCTOR}, not
      * {@code ROLE_DOCTOR}), so one actor's rows group under one role name.
      */
     private static String roleNameOf(UserRoleHospitalAssignment assignment, Authentication auth) {
-        if (assignment == null || assignment.getRole() == null || assignment.getRole().getName() == null) {
-            return primaryRole(auth);
-        }
-        String name = assignment.getRole().getName();
-        return name.startsWith(ROLE_PREFIX) ? name.substring(ROLE_PREFIX.length()) : name;
-    }
-
-    private static String primaryRole(Authentication auth) {
-        if (auth.getAuthorities() == null) {
-            return null;
-        }
-        return auth.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .filter(a -> a.startsWith(ROLE_PREFIX))
-            .map(a -> a.substring(ROLE_PREFIX.length()))
-            .findFirst()
-            .orElse(null);
+        // The role CODE, not its display name: names are mixed ("HOSPITAL_ADMIN",
+        // "ROLE_SUPER_ADMIN", ...) and the read side files the code (QA D187).
+        // QA D1632: the role the token acts under wins over the row's.
+        return ActingAssignments.roleName(assignment, ActingAssignments.actingRoles(auth));
     }
 }

@@ -39,6 +39,8 @@ public class PatientProblemResponseDTO {
     private String notes;
     private String supportingEvidence;
     private String statusChangeReason;
+    /** QA D1240 (round 25): removed from the chart as entered in error (kept in the staff history). */
+    private boolean enteredInError;
     private Boolean chronic;
     private List<String> diagnosisCodes;
 }

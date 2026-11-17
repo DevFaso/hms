@@ -9,6 +9,8 @@ import {
 } from '../services/notification.service';
 import { ToastService } from '../core/toast.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 const NOTIFICATION_TYPES = [
   'APPOINTMENT_REMINDER',
   'LAB_RESULT',
@@ -32,7 +34,7 @@ interface PrefRow {
 @Component({
   selector: 'app-notification-settings',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule],
+  imports: [SubmitGuardDirective, FormsModule, RouterLink, TranslateModule],
   template: `
     <div class="settings-page">
       <div class="settings-header">
@@ -72,6 +74,9 @@ interface PrefRow {
                     <label class="toggle">
                       <input
                         type="checkbox"
+                        [attr.aria-label]="
+                          (row.labelKey | translate) + ' — ' + (channelLabelKey(ch) | translate)
+                        "
                         [(ngModel)]="row.channels[ch]"
                         (ngModelChange)="dirty.set(true)"
                       />
@@ -85,7 +90,12 @@ interface PrefRow {
         </table>
 
         <div class="settings-actions">
-          <button class="btn-primary" (click)="save()" [disabled]="saving() || !dirty()">
+          <button
+            class="btn-primary"
+            (click)="save()"
+            [disabled]="saving()"
+            [appSubmitGuard]="!dirty() && ('SUBMIT_GUARD.NO_CHANGES' | translate)"
+          >
             {{
               saving()
                 ? ('NOTIFICATIONS.SAVING' | translate)
@@ -296,9 +306,11 @@ export class NotificationSettingsComponent implements OnInit {
         this.dirty.set(false);
         this.toast.success(this.translate.instant('NOTIFICATIONS.PREFERENCES_SAVED'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.saving.set(false);
-        this.toast.error(this.translate.instant('NOTIFICATIONS.PREFERENCES_SAVE_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NOTIFICATIONS.PREFERENCES_SAVE_FAILED'),
+        );
       },
     });
   }

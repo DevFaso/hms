@@ -1,26 +1,45 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
+import { VisitSummaryDialogComponent } from './visit-summary-dialog/visit-summary-dialog.component';
+import {
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  viewChild,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { refusalReason } from '../shared/refusal-reason';
 import {
   EncounterService,
   EncounterRequest,
   EncounterResponse,
+  isClosedEncounterStatus,
   EncounterType,
-  EncounterNoteResponse,
-  EncounterNoteHistoryResponse,
   EncounterStatus,
+  EncounterNoteResponse,
   AfterVisitSummary,
   EncounterNoteRequest,
 } from '../services/encounter.service';
+import { NoteHistoryView, noteEntrySections, toNoteHistoryView } from './note-history-view';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
+import { NursingNotesPanelComponent } from './nursing-notes-panel/nursing-notes-panel.component';
+import { NursingNoteService } from '../services/nursing-note.service';
+import { MedicalCertificateDialogComponent } from './medical-certificate-dialog/medical-certificate-dialog.component';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -28,18 +47,47 @@ import { EncounterNoteFormComponent } from './encounter-note-form/encounter-note
 import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/eligibility-check-dialog.component';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
+import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
+import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverInstant, serverLocalDate, toServerDateTime } from '../shared/date-utils';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import {
+  isNeverSeenVisit,
+  mayEndExamination,
+  mayStartVisit,
+  StartActor,
+} from '../core/encounter-start';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    DateTimePipe,
+    ListEscapeDirective,
+    SubmitGuardDirective,
+    PersonNamePipe,
+    ModalDialogDirective,
+    PatientSublinePipe,
+    ServerTimePipe,
+    VisitSummaryDialogComponent,
     CommonModule,
     FormsModule,
     TranslateModule,
     EncounterNoteFormComponent,
     EligibilityCheckDialogComponent,
+    CloseUnseenDialogComponent,
     HospitalScopeChipComponent,
     EnumLabelPipe,
+    CheckoutDialogComponent,
+    NursingNotesPanelComponent,
+    MedicalCertificateDialogComponent,
   ],
   templateUrl: './encounters.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -66,6 +114,53 @@ export class EncountersComponent implements OnInit {
    */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;
+
+  /**
+   * QA D427: the actions the API admits, so a reader (a pharmacist or another
+   * consulting clinician) is not offered a button that ends in a 403. POST
+   * /encounters admits the clinical roles and reception; PUT the clinical
+   * roles; DELETE is the super-admin's.
+   */
+  protected readonly canCreateEncounter = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterCreate')),
+  );
+  protected readonly canEditEncounter = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterUpdate')),
+  );
+  protected readonly canDeleteEncounter = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterDelete')),
+  );
+  /**
+   * QA D954: a visit nobody has seen (EncounterClosureRules.NEVER_SEEN) is
+   * closed as "left without being seen" from its detail too, by the roles the
+   * endpoint admits (the reception's close-unseen dialog, reused).
+   */
+  protected readonly canCloseUnseen = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterCloseUnseen')),
+  );
+  readonly closeUnseenEncounter = signal<EncounterResponse | null>(null);
+
+  isNeverSeen(status: string | null | undefined): boolean {
+    // QA D1108: the one never-seen rule (core/encounter-start), the server's own.
+    return isNeverSeenVisit(status);
+  }
+
+  /**
+   * QA D1024: the LWBS dialog opened from the visit's detail rendered under the
+   * drawer (whose focus trap also kept the keyboard out of it), so it could
+   * not be submitted. The drawer is closed first; the dialog is then the only
+   * modal on the page.
+   */
+  openCloseUnseenFromDetail(enc: EncounterResponse): void {
+    this.closeDetail();
+    this.closeUnseenEncounter.set(enc);
+  }
+
+  onUnseenVisitClosed(): void {
+    this.closeUnseenEncounter.set(null);
+    this.closeDetail();
+    this.loadEncounters();
+  }
   /** Non-null when the user is locked to a single hospital (all non-admin staff) */
   lockedHospitalId: string | null = null;
   /** Human-readable name of the locked hospital */
@@ -76,7 +171,15 @@ export class EncountersComponent implements OnInit {
   loading = signal(true);
   searchTerm = '';
   activeTab = signal<'all' | 'open' | 'completed'>('all');
-  readonly statuses: EncounterStatus[] = [
+  readonly selectedStatus = signal<EncounterStatus | ''>('');
+  readonly typeFilter = signal<EncounterType | ''>('');
+  readonly departmentFilter = signal('');
+  readonly sortOrder = signal<'newest' | 'oldest' | 'patient'>('newest');
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(10);
+  readonly loadError = signal(false);
+  private listRequest = 0;
+  readonly statusOptions: EncounterStatus[] = [
     'SCHEDULED',
     'ARRIVED',
     'TRIAGE',
@@ -86,35 +189,157 @@ export class EncountersComponent implements OnInit {
     'READY_FOR_DISCHARGE',
     'COMPLETED',
     'CANCELLED',
+    'LEFT_WITHOUT_BEING_SEEN',
   ];
-  statusFilter = signal<EncounterStatus | 'ALL'>('ALL');
+  readonly overviewMetrics: {
+    status: EncounterStatus;
+    label: string;
+    icon: string;
+    tone: string;
+  }[] = [
+    { status: 'SCHEDULED', label: 'ENCOUNTERS.SCHEDULED', icon: 'calendar_today', tone: 'open' },
+    { status: 'ARRIVED', label: 'ENCOUNTERS.ARRIVED', icon: 'how_to_reg', tone: 'progress' },
+    { status: 'TRIAGE', label: 'ENCOUNTERS.TRIAGE', icon: 'monitor_heart', tone: 'progress' },
+    {
+      status: 'WAITING_FOR_PHYSICIAN',
+      label: 'ENCOUNTERS.WAITING_FOR_MD',
+      icon: 'person_search',
+      tone: 'warning',
+    },
+    { status: 'IN_PROGRESS', label: 'ENCOUNTERS.IN_PROGRESS', icon: 'stethoscope', tone: 'open' },
+    { status: 'COMPLETED', label: 'ENCOUNTERS.COMPLETED', icon: 'task_alt', tone: 'completed' },
+  ];
+  readonly departmentOptions = computed(() =>
+    [
+      ...new Set(
+        this.encounters()
+          .map((e) => e.departmentName)
+          .filter((name): name is string => !!name),
+      ),
+    ].sort(),
+  );
+  readonly summaryMetrics = computed(() =>
+    this.overviewMetrics.map((metric) => ({ ...metric, count: this.countByStatus(metric.status) })),
+  );
+  readonly totalPages = computed(() =>
+    Math.max(1, Math.ceil(this.filtered().length / this.pageSize())),
+  );
+  readonly currentPage = computed(() => Math.min(this.pageIndex(), this.totalPages() - 1));
+  readonly pagedEncounters = computed(() =>
+    this.filtered().slice(
+      this.currentPage() * this.pageSize(),
+      (this.currentPage() + 1) * this.pageSize(),
+    ),
+  );
+  readonly resultStart = computed(() =>
+    this.filtered().length ? this.currentPage() * this.pageSize() + 1 : 0,
+  );
+  readonly resultEnd = computed(() =>
+    Math.min((this.currentPage() + 1) * this.pageSize(), this.filtered().length),
+  );
+
+  setStatusFilter(status: EncounterStatus | ''): void {
+    this.activeTab.set('all');
+    this.selectedStatus.set(status);
+    this.applyFilter();
+  }
+
+  toggleMetric(status: EncounterStatus): void {
+    this.setStatusFilter(this.selectedStatus() === status ? '' : status);
+  }
+
+  resetFilters(): void {
+    this.searchTerm = '';
+    this.activeTab.set('all');
+    this.selectedStatus.set('');
+    this.typeFilter.set('');
+    this.departmentFilter.set('');
+    this.sortOrder.set('newest');
+    this.applyFilter();
+  }
+
+  setPage(index: number): void {
+    this.pageIndex.set(Math.max(0, Math.min(index, this.totalPages() - 1)));
+  }
+
   selectedEncounter = signal<EncounterResponse | null>(null);
   showNoteForm = signal(false);
   savingNote = signal(false);
   showEligibilityDialog = signal(false);
 
   /* Note history + addendums */
-  noteHistory = signal<EncounterNoteHistoryResponse[]>([]);
+  noteHistory = signal<NoteHistoryView[]>([]);
   noteHistoryLoading = signal(false);
 
   /* Note sign/co-sign ceremony (P3 #20). State comes from the encounter's
      note payload and is replaced by each ceremony response. */
   noteState = signal<EncounterNoteResponse | null>(null);
+  /**
+   * QA D831: an inpatient stay keeps one note entry per progress note and
+   * author. A second doctor's entry no longer replaces the first doctor's
+   * unsigned draft; the earlier entries are listed here, each signable by
+   * its own author.
+   */
+  noteEntries = signal<EncounterNoteResponse[]>([]);
+  readonly earlierNoteEntries = computed(() => {
+    const currentId = this.noteState()?.id;
+    return this.noteEntries().filter((entry) => entry.id !== currentId);
+  });
+  /**
+   * #965 review: each entry's text is shown above its sign/co-sign button, so
+   * a clinician never signs or attests an entry they were not shown.
+   */
+  readonly earlierNoteEntryViews = computed(() =>
+    this.earlierNoteEntries().map((entry) => ({ entry, sections: noteEntrySections(entry) })),
+  );
+  readonly currentNoteSections = computed(() => noteEntrySections(this.noteState()));
+  signingEntryId = signal<string | null>(null);
+  cosigningEntryId = signal<string | null>(null);
   signingNote = signal(false);
   cosigningNote = signal(false);
   addendumContent = '';
   showAddendumForm = signal(false);
   addendumSaving = signal(false);
+  /** QA D1131: Escape was pressed over typed addendum text; the form asks before discarding it. */
+  readonly addendumDiscardAsk = signal(false);
+  private readonly hostEl = inject(ElementRef);
+  /**
+   * QA D831 (#965 review): the entry the open addendum form corrects. On a
+   * stay an earlier entry is signed and locked, so an addendum is its only
+   * correction route; it must be filed under that entry, never the latest.
+   */
+  addendumTargetId = signal<string | null>(null);
+  /** The addendum form is open under one of the stay's earlier entries, not the current one. */
+  readonly addendumOnEarlierEntry = computed(() => {
+    const target = this.addendumTargetId();
+    return (
+      this.showAddendumForm() &&
+      target !== null &&
+      this.earlierNoteEntries().some((entry) => entry.id === target)
+    );
+  });
 
   /* Status transitions + AVS */
   transitioning = signal(false);
   avs = signal<AfterVisitSummary | null>(null);
   avsLoading = signal(false);
+  private readonly avsTrigger = viewChild<ElementRef<HTMLButtonElement>>('avsTrigger');
+  private readonly viewInjector = inject(Injector);
 
   // Dropdowns
   hospitals = signal<HospitalResponse[]>([]);
   staffMembers = signal<{ id: string; name: string }[]>([]);
   private allStaff: StaffResponse[] = [];
+  /**
+   * QA D918: the clinicians offered are those of the form's hospital. The list
+   * was loaded once for the home hospital, so a super-admin scoped to B was
+   * offered A's clinicians and the server refused the visit. A newer hospital
+   * cancels the load of an older one.
+   */
+  private readonly staffHospital$ = new Subject<string>();
+  /** The hospital the staff list was last requested for. */
+  private staffHospitalId: string | null = null;
+
   departments = signal<DepartmentOption[]>([]);
   departmentsLoading = signal(false);
   /**
@@ -137,6 +362,12 @@ export class EncountersComponent implements OnInit {
   editing = signal(false);
   saving = signal(false);
   editingId = '';
+  /**
+   * The edited encounter's stored date and time, sent back unchanged when the
+   * day is not changed, so saving a note edit does not move the visit to
+   * midnight.
+   */
+  private editingOriginalDate = '';
   form: EncounterRequest = this.emptyForm();
   encounterTypes: EncounterType[] = [
     'OUTPATIENT',
@@ -173,11 +404,22 @@ export class EncountersComponent implements OnInit {
 
     this.loadEncounters();
 
+    // D96: /encounters/:id (the worklist "start" and deep links) opens that
+    // encounter's detail instead of falling through to the wildcard route.
+    const deepLinkId = this.route.snapshot?.paramMap?.get('id');
+    if (deepLinkId) {
+      this.encounterService.getById(deepLinkId).subscribe({
+        next: (enc) => this.selectEncounter(enc),
+        error: () => this.toast.error(this.translate.instant('ENCOUNTERS.NOT_FOUND')),
+      });
+    }
+
     // Determine role-based hospital access. We intentionally consult
     // `auth.hasAnyRole` here (and not the `roleContext.isSuperAdmin()`
     // signal) because this branch existed before the cross-tenant
     // refactor and changing its source would alter the dropdown logic
     // below — kept as-is to avoid scope creep.
+    // rbac-inline-ok: a scope question (which hospitals to list), not a write button.
     const isSuperAdminUser = this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
     const permitted = this.roleContext.permittedHospitalIds;
 
@@ -204,14 +446,27 @@ export class EncountersComponent implements OnInit {
       }
     }
 
-    // ── TENANT ISOLATION: scope staff list to active hospital ──
-    const hid = this.roleContext.activeHospitalId;
-    this.staffService.list(hid ?? undefined).subscribe({
-      next: (list) => {
-        this.allStaff = list;
-        this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email })));
-      },
-    });
+    // ── TENANT ISOLATION: scope staff list to the form's hospital ──
+    this.staffHospital$
+      .pipe(
+        distinctUntilChanged(),
+        switchMap((hid) =>
+          this.staffService.list(hid).pipe(catchError(() => of([] as StaffResponse[]))),
+        ),
+      )
+      .subscribe((list) => {
+        this.allStaff = list ?? [];
+        this.staffMembers.set(
+          this.allStaff
+            .filter(isClinicalProvider)
+            .map((s) => ({ id: s.id, name: s.name || s.email })),
+        );
+      });
+    this.loadStaffFor(
+      this.lockedHospitalId ??
+        this.roleContext.effectiveHospitalIdForRequest() ??
+        this.roleContext.activeHospitalId,
+    );
     this.initPatientSearch();
   }
 
@@ -220,17 +475,16 @@ export class EncountersComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          // ── TENANT ISOLATION: always scope patient search to active hospital ──
-          const hid = this.roleContext.activeHospitalId ?? undefined;
-          return this.patientService.list(hid, q);
+          // ── TENANT ISOLATION: always scope patient search to the form's hospital ──
+          return this.patientService.list(this.patientSearchHospitalId(), q);
         }),
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -260,6 +514,15 @@ export class EncountersComponent implements OnInit {
     this.patientQuery.set('');
   }
 
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the form's hospital, else the request scope, which for
+   * a super-admin is the hospital the scope chip picked, not their home one.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
+  }
+
   patientInitials(p: PatientResponse): string {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
   }
@@ -268,7 +531,19 @@ export class EncountersComponent implements OnInit {
   onHospitalChange(hospitalId: string): void {
     this.form.hospitalId = hospitalId;
     this.form.departmentId = undefined;
+    // QA D918: a clinician of the previous hospital is refused at this one.
+    this.form.staffId = '';
     this.loadDepartmentsFor(hospitalId);
+    this.loadStaffFor(hospitalId);
+  }
+
+  /** QA D918: (re)load the clinicians of `hospitalId`; a no-op when unchanged. */
+  loadStaffFor(hospitalId: string | null | undefined): void {
+    if (!hospitalId || hospitalId === this.staffHospitalId) return;
+    this.staffHospitalId = hospitalId;
+    // The previous hospital's clinicians must not be pickable while this loads.
+    this.staffMembers.set([]);
+    this.staffHospital$.next(hospitalId);
   }
 
   /**
@@ -309,10 +584,14 @@ export class EncountersComponent implements OnInit {
   // ── CRUD ──
   openCreate(): void {
     this.form = this.emptyForm();
-    // ── TENANT ISOLATION: pre-fill hospitalId from active context ──
-    this.form.hospitalId = this.roleContext.activeHospitalId ?? '';
+    // ── TENANT ISOLATION: pre-fill hospitalId from the request scope ──
+    // QA D912 (#967 review): for a super-admin that is the scope chip's
+    // hospital, not their home one, so the visit and the patient search (and
+    // the MRN on the chip) start at the hospital they are working in.
+    this.form.hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? '';
     this.editing.set(false);
     this.editingId = '';
+    this.editingOriginalDate = '';
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.departments.set([]);
@@ -321,21 +600,34 @@ export class EncountersComponent implements OnInit {
     if (this.lockedHospitalId) {
       this.form.hospitalId = this.lockedHospitalId;
       this.loadDepartmentsFor(this.lockedHospitalId);
+    } else if (this.form.hospitalId) {
+      // A prefilled hospital never fires the select's (change): load its
+      // departments here, or the required list is empty (#967 review, round 2),
+      // and its clinicians (QA D918).
+      this.loadDepartmentsFor(this.form.hospitalId);
+      this.loadStaffFor(this.form.hospitalId);
     }
 
     this.showModal.set(true);
   }
 
+  /** QA D1428 class: a closed visit's record is protected: no edit or delete, as the server refuses both. */
+  isClosedVisit(enc: EncounterResponse): boolean {
+    return isClosedEncounterStatus(enc.status);
+  }
+
   openEdit(enc: EncounterResponse): void {
     this.editing.set(true);
     this.editingId = enc.id;
+    this.editingOriginalDate = enc.encounterDate ?? '';
     this.form = {
       patientId: enc.patientId,
       staffId: enc.staffId,
       hospitalId: enc.hospitalId,
       departmentId: enc.departmentId || undefined,
       encounterType: enc.encounterType,
-      encounterDate: enc.encounterDate?.split('T')[0] || '',
+      // #948 review: the reader's day, not the UTC day of the stored time.
+      encounterDate: serverLocalDate(enc.encounterDate),
       notes: enc.notes || undefined,
     };
     // Pre-fill patient picker display with existing data
@@ -343,9 +635,12 @@ export class EncountersComponent implements OnInit {
       id: enc.patientId,
       firstName: enc.patientName?.split(' ')[0] ?? '',
       lastName: enc.patientName?.split(' ').slice(1).join(' ') ?? '',
-      email: '',
+      // QA D912: the row has no MRN; its contact details keep the chip's fallback.
+      email: enc.patientEmail,
+      phoneNumberPrimary: enc.patientPhoneNumber,
     } as PatientResponse);
     this.loadDepartmentsFor(enc.hospitalId ?? '');
+    this.loadStaffFor(enc.hospitalId);
     this.showModal.set(true);
   }
 
@@ -353,11 +648,34 @@ export class EncountersComponent implements OnInit {
     this.showModal.set(false);
   }
 
+  /**
+   * #948 review: the date picker gives the reader's calendar day, and the API
+   * stores encounter times on its UTC clock (the list reads them back through
+   * `serverTime`). Sent as `<day>T00:00:00`, a 24 October visit created in
+   * New York was stored as UTC midnight and listed as 23 October, 8:00 PM.
+   * Local midnight of the day is converted to UTC; an edit that keeps the day
+   * sends the stored time back as it was.
+   */
+  private encounterDatePayload(): string {
+    const day = this.form.encounterDate;
+    if (!day) {
+      return '';
+    }
+    if (
+      this.editing() &&
+      this.editingOriginalDate &&
+      serverLocalDate(this.editingOriginalDate) === day
+    ) {
+      return this.editingOriginalDate;
+    }
+    return toServerDateTime(`${day}T00:00`);
+  }
+
   submitForm(): void {
     this.saving.set(true);
     const payload = {
       ...this.form,
-      encounterDate: this.form.encounterDate ? this.form.encounterDate + 'T00:00:00' : '',
+      encounterDate: this.encounterDatePayload(),
     };
     const op = this.editing()
       ? this.encounterService.update(this.editingId, payload)
@@ -373,8 +691,10 @@ export class EncountersComponent implements OnInit {
         this.loadEncounters();
         this.saving.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.SAVE_FAILED'));
+      error: (err) => {
+        // QA D918: the server says why (e.g. a clinician of another hospital),
+        // in the reader's language; the generic text is for anything else.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ENCOUNTERS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -399,8 +719,8 @@ export class EncountersComponent implements OnInit {
         this.loadEncounters();
         this.deleting.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ENCOUNTERS.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -412,11 +732,15 @@ export class EncountersComponent implements OnInit {
    * itself; we just re-fetch under the new scope.
    */
   onScopeChange(_hospitalId: string | null): void {
+    this.closeDetail();
+    this.departmentFilter.set('');
     this.loadEncounters();
   }
 
   loadEncounters(): void {
+    const request = ++this.listRequest;
     this.loading.set(true);
+    this.loadError.set(false);
     // ── Tenant isolation ──────────────────────────────────────────
     // Use the cross-tenant aware hospital id: null for super-admin in
     // global view, the selected hospital for scoped super-admin, the
@@ -426,12 +750,17 @@ export class EncountersComponent implements OnInit {
     const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
     this.encounterService.list(hospitalId ? { hospitalId } : undefined).subscribe({
       next: (data) => {
+        if (request !== this.listRequest) return;
         const list = Array.isArray(data) ? data : [];
         this.encounters.set(list);
         this.applyFilter();
         this.loading.set(false);
       },
       error: () => {
+        if (request !== this.listRequest) return;
+        this.encounters.set([]);
+        this.filtered.set([]);
+        this.loadError.set(true);
         this.toast.error(this.translate.instant('ENCOUNTERS.LOAD_FAILED'));
         this.loading.set(false);
       },
@@ -440,89 +769,8 @@ export class EncountersComponent implements OnInit {
 
   setTab(tab: 'all' | 'open' | 'completed'): void {
     this.activeTab.set(tab);
-    this.statusFilter.set(tab === 'completed' ? 'COMPLETED' : 'ALL');
+    this.selectedStatus.set('');
     this.applyFilter();
-  }
-
-  changeStatusFilter(status: EncounterStatus | 'ALL' | 'ACTIVE_GROUP'): void {
-    if (status === 'ACTIVE_GROUP') this.setTab('open');
-    else this.setStatus(status);
-  }
-
-  setStatus(status: EncounterStatus | 'ALL'): void {
-    this.statusFilter.set(status);
-    this.activeTab.set(
-      status === 'COMPLETED'
-        ? 'completed'
-        : status !== 'ALL' && status !== 'CANCELLED'
-          ? 'open'
-          : 'all',
-    );
-    this.applyFilter();
-  }
-
-  resetFilters(): void {
-    this.searchTerm = '';
-    this.setTab('all');
-  }
-
-  noteSections(note: Partial<EncounterNoteResponse>): { label: string; content: string }[] {
-    const fields: [keyof EncounterNoteResponse, string][] = [
-      ['chiefComplaint', 'ENCOUNTERS.CHIEF_COMPLAINT'],
-      ['historyOfPresentIllness', 'ENCOUNTERS.NOTE_FORM_HPI'],
-      ['reviewOfSystems', 'ENCOUNTERS.NOTE_FORM_ROS'],
-      ['physicalExam', 'ENCOUNTERS.NOTE_FORM_EXAM'],
-      ['diagnosticResults', 'ENCOUNTERS.NOTE_FORM_DIAG'],
-      ['subjective', 'ENCOUNTERS.NOTE_FORM_SOAP_S'],
-      ['objective', 'ENCOUNTERS.NOTE_FORM_SOAP_O'],
-      ['assessment', 'ENCOUNTERS.NOTE_FORM_SOAP_A'],
-      ['plan', 'ENCOUNTERS.NOTE_FORM_SOAP_P'],
-      ['implementation', 'ENCOUNTERS.NOTE_FORM_SOAP_I'],
-      ['evaluation', 'ENCOUNTERS.NOTE_FORM_SOAP_E'],
-      ['patientInstructions', 'ENCOUNTERS.NOTE_FORM_PATIENT_INSTRUCTIONS'],
-      ['summary', 'ENCOUNTERS.NOTES'],
-    ];
-    const sections = fields.flatMap(([field, label]) => {
-      const content = note[field];
-      return typeof content === 'string' && content.trim() ? [{ label, content }] : [];
-    });
-    return sections.length
-      ? sections
-      : note.content
-        ? [{ label: 'ENCOUNTERS.NOTES', content: note.content }]
-        : [];
-  }
-
-  historyAction(note: EncounterNoteHistoryResponse): string {
-    const known = ['NOTE_CREATED', 'NOTE_UPDATED', 'NOTE_ADDENDUM', 'NOTE_SIGNED', 'NOTE_COSIGNED'];
-    return known.includes(note.changeType ?? '')
-      ? 'ENCOUNTERS.HISTORY_' + note.changeType
-      : 'ENCOUNTERS.NOTE_HISTORY';
-  }
-
-  historyAuthor(note: EncounterNoteHistoryResponse): string {
-    if (note.authorName) return note.authorName;
-    try {
-      const metadata = JSON.parse(note.metadataSnapshot ?? '{}');
-      return typeof metadata?.authorName === 'string' ? metadata.authorName : '';
-    } catch {
-      return '';
-    }
-  }
-
-  historySections(note: EncounterNoteHistoryResponse): { label: string; content: string }[] {
-    if (note.contentSnapshot) {
-      try {
-        const snapshot: unknown = JSON.parse(note.contentSnapshot);
-        if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)) {
-          return this.noteSections(snapshot as Partial<EncounterNoteResponse>);
-        }
-      } catch {
-        /* Older snapshots can contain plain text. */
-      }
-      return [{ label: 'ENCOUNTERS.NOTES', content: note.contentSnapshot }];
-    }
-    return note.content ? [{ label: 'ENCOUNTERS.NOTES', content: note.content }] : [];
   }
 
   applyFilter(): void {
@@ -542,27 +790,43 @@ export class EncountersComponent implements OnInit {
     } else if (tab === 'completed') {
       list = list.filter((e) => e.status === 'COMPLETED');
     }
-    if (this.statusFilter() !== 'ALL') list = list.filter((e) => e.status === this.statusFilter());
+    if (this.selectedStatus()) list = list.filter((e) => e.status === this.selectedStatus());
+    if (this.typeFilter()) list = list.filter((e) => e.encounterType === this.typeFilter());
+    if (this.departmentFilter())
+      list = list.filter((e) => e.departmentName === this.departmentFilter());
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
         (e) =>
-          (e.patientName ?? '').toLowerCase().includes(term) ||
-          (e.staffName ?? '').toLowerCase().includes(term) ||
+          textMatches(e.patientName, term) ||
+          textMatches(e.staffName, term) ||
           (e.departmentName ?? '').toLowerCase().includes(term) ||
-          (e.notes ?? '').toLowerCase().includes(term),
+          (e.notes ?? '').toLowerCase().includes(term) ||
+          (e.hospitalName ?? '').toLowerCase().includes(term) ||
+          (e.code ?? '').toLowerCase().includes(term),
       );
     }
+    const timestamp = (enc: EncounterResponse): number => {
+      const time = enc.encounterDate ? serverInstant(enc.encounterDate).getTime() : 0;
+      return Number.isFinite(time) ? time : 0;
+    };
+    list = [...list].sort((a, b) =>
+      this.sortOrder() === 'patient'
+        ? (a.patientName ?? '').localeCompare(b.patientName ?? '')
+        : (timestamp(a) - timestamp(b)) * (this.sortOrder() === 'oldest' ? 1 : -1),
+    );
     this.filtered.set(list);
+    this.pageIndex.set(0);
   }
 
   selectEncounter(enc: EncounterResponse): void {
     this.selectedEncounter.set(enc);
-    this.noteHistory.set([]);
     this.showNoteForm.set(false);
     this.showAddendumForm.set(false);
+    this.addendumTargetId.set(null);
     this.addendumContent = '';
     this.noteState.set(enc.note ?? null);
+    this.noteEntries.set(enc.noteEntries ?? []);
     this.loadNoteHistory(enc.id);
   }
 
@@ -582,6 +846,7 @@ export class EncountersComponent implements OnInit {
         this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SAVED'));
         this.savingNote.set(false);
         this.showNoteForm.set(false);
+        this.keepEarlierEntry(this.noteState(), note ?? null);
         this.noteState.set(note ?? null);
         this.loadNoteHistory(enc.id);
       },
@@ -589,7 +854,7 @@ export class EncountersComponent implements OnInit {
         // Surface the backend refusal verbatim (house rule) — a signed-note
         // lock or client-asserted-signature refusal must reach the clinician.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SAVE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_SAVE_FAILED'),
         );
         this.savingNote.set(false);
       },
@@ -598,43 +863,156 @@ export class EncountersComponent implements OnInit {
 
   /* ── Note sign/co-sign ceremony (P3 #20) ── */
 
-  /** No client-side role gate, matching the prescriptions pattern: whoever
-   *  passes the route guard sees the button; the backend arbitrates
+  /** QA D961: the certificate dialog. */
+  readonly showCertificateDialog = signal(false);
+
+  /**
+   * QA D961: a doctor issues a certificate from a visit the patient was seen
+   * in (the server refuses a visit closed unseen, cancelled or not started).
+   */
+  canIssueCertificate(enc: EncounterResponse): boolean {
+    const unseen = [
+      'SCHEDULED',
+      'ARRIVED',
+      'TRIAGE',
+      'WAITING_FOR_PHYSICIAN',
+      'CANCELLED',
+      'LEFT_WITHOUT_BEING_SEEN',
+    ];
+    return (
+      this.auth.hasAnyRole(actionRoles('encounterMedicalCertificate')) &&
+      !!enc.status &&
+      !unseen.includes(enc.status)
+    );
+  }
+
+  /** QA D927: only the roles `GET /nurse/notes` admits load the panel (a refused read would leave the page). */
+  get canReadNursingNotes(): boolean {
+    return this.auth.hasAnyRole(NursingNoteService.READER_ROLES);
+  }
+
+  /**
+   * QA D995: only the note's author signs it and only another clinician
+   * co-signs it (the server refuses the rest), so the buttons are offered
+   * accordingly instead of leading to a refusal. A note with no recorded
+   * author keeps both, and the server decides.
+   */
+  isNoteAuthor(note: EncounterNoteResponse | null): boolean {
+    const me = this.auth.getUserId();
+    return !note?.authorUserId || (!!me && note.authorUserId === me);
+  }
+
+  isOtherClinicianNote(note: EncounterNoteResponse | null): boolean {
+    const me = this.auth.getUserId();
+    return !note?.authorUserId || !me || note.authorUserId !== me;
+  }
+
+  /** Matching the prescriptions pattern, the backend arbitrates; whoever
+   *  is offered the button (see isNoteAuthor) has it checked again there
    *  (author-only for sign, non-author DOCTOR at the hospital for co-sign)
    *  and its refusal is surfaced verbatim. */
   signNote(): void {
     const enc = this.selectedEncounter();
-    if (!enc || this.signingNote()) return;
+    const current = this.noteState();
+    if (!enc || !current?.id || this.signingNote()) return;
     this.signingNote.set(true);
-    this.encounterService.signNote(enc.id).subscribe({
+    // #965 review: the entry on screen, by id — without it the server picked
+    // the caller's own unsigned entry, a text that was not displayed.
+    this.encounterService.signNote(enc.id, current.id).subscribe({
       next: (note) => {
         this.signingNote.set(false);
         this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SIGN_SUCCESS'));
+        this.replaceEntry(note ?? null);
         this.noteState.set(note ?? null);
       },
       error: (err) => {
         this.signingNote.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
         );
       },
     });
   }
 
+  /** QA D831: signs one earlier entry of the stay, by its id (the server checks the author). */
+  signNoteEntry(entry: EncounterNoteResponse): void {
+    const enc = this.selectedEncounter();
+    if (!enc || this.signingEntryId()) return;
+    this.signingEntryId.set(entry.id);
+    this.encounterService.signNote(enc.id, entry.id).subscribe({
+      next: (signed) => {
+        this.signingEntryId.set(null);
+        this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SIGN_SUCCESS'));
+        this.replaceEntry(signed ?? null);
+        this.loadNoteHistory(enc.id);
+      },
+      error: (err) => {
+        this.signingEntryId.set(null);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
+        );
+      },
+    });
+  }
+
+  /** #965 review: co-signs one earlier entry of the stay, by its id (the server checks who may). */
+  cosignNoteEntry(entry: EncounterNoteResponse): void {
+    const enc = this.selectedEncounter();
+    if (!enc || this.cosigningEntryId()) return;
+    this.cosigningEntryId.set(entry.id);
+    this.encounterService.cosignNote(enc.id, entry.id).subscribe({
+      next: (cosigned) => {
+        this.cosigningEntryId.set(null);
+        this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_COSIGN_SUCCESS'));
+        this.replaceEntry(cosigned ?? null);
+        this.loadNoteHistory(enc.id);
+      },
+      error: (err) => {
+        this.cosigningEntryId.set(null);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
+        );
+      },
+    });
+  }
+
+  /** Puts a ceremony response in place of the entry it answers, in the list of the stay's entries. */
+  private replaceEntry(updated: EncounterNoteResponse | null): void {
+    if (!updated?.id) return;
+    this.noteEntries.update((list) => list.map((e) => (e.id === updated.id ? updated : e)));
+  }
+
+  /**
+   * QA D831: when a save on a stay starts a new entry, the entry shown until
+   * now stays in the list of the stay's entries instead of disappearing.
+   */
+  private keepEarlierEntry(
+    previous: EncounterNoteResponse | null,
+    saved: EncounterNoteResponse | null,
+  ): void {
+    if (!previous?.id || !saved?.id || previous.id === saved.id) return;
+    this.noteEntries.update((list) => {
+      const others = list.filter((e) => e.id !== previous.id && e.id !== saved.id);
+      return [...others, previous, saved];
+    });
+  }
+
   cosignNote(): void {
     const enc = this.selectedEncounter();
-    if (!enc || this.cosigningNote()) return;
+    const current = this.noteState();
+    if (!enc || !current?.id || this.cosigningNote()) return;
     this.cosigningNote.set(true);
-    this.encounterService.cosignNote(enc.id).subscribe({
+    this.encounterService.cosignNote(enc.id, current.id).subscribe({
       next: (note) => {
         this.cosigningNote.set(false);
         this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_COSIGN_SUCCESS'));
+        this.replaceEntry(note ?? null);
         this.noteState.set(note ?? null);
       },
       error: (err) => {
         this.cosigningNote.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
         );
       },
     });
@@ -656,34 +1034,90 @@ export class EncountersComponent implements OnInit {
     this.noteHistoryLoading.set(true);
     this.encounterService.getNoteHistory(encounterId).subscribe({
       next: (history) => {
-        if (this.selectedEncounter()?.id !== encounterId) return;
-        this.noteHistory.set(history ?? []);
+        this.noteHistory.set((history ?? []).map(toNoteHistoryView));
         this.noteHistoryLoading.set(false);
       },
       error: () => {
-        if (this.selectedEncounter()?.id !== encounterId) return;
         this.noteHistory.set([]);
         this.noteHistoryLoading.set(false);
       },
     });
   }
 
+  /** Opens the addendum form for one entry: an earlier entry of the stay, or the current one. */
+  openAddendumForm(entryId: string | null | undefined): void {
+    this.addendumTargetId.set(entryId ?? null);
+    this.addendumContent = '';
+    this.addendumDiscardAsk.set(false);
+    this.showAddendumForm.set(true);
+    // QA D1131: the keyboard lands in the box, not on the page body.
+    this.focusSoon('[data-testid="addendum-content"]');
+  }
+
+  /**
+   * Closes the addendum form. `returnFocus` (Cancel, Escape, discard) gives
+   * the keyboard back to the "Add an addendum" button it was opened from.
+   */
+  closeAddendumForm(returnFocus = false): void {
+    const opener = this.addendumOnEarlierEntry() ? this.addendumTargetId() : 'current';
+    this.showAddendumForm.set(false);
+    this.addendumTargetId.set(null);
+    this.addendumContent = '';
+    this.addendumDiscardAsk.set(false);
+    if (returnFocus && opener) {
+      this.focusSoon(`[data-addendum-for="${CSS.escape(opener)}"]`);
+    }
+  }
+
+  /**
+   * QA D1131: Escape inside the addendum is the addendum's own — it never
+   * reaches the visit panel (which closed and lost the text). An empty
+   * addendum closes; typed text asks first; Escape on that question goes back
+   * to the text.
+   */
+  onAddendumEscape(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.addendumDiscardAsk()) {
+      this.keepAddendum();
+    } else if (this.addendumContent.trim()) {
+      this.addendumDiscardAsk.set(true);
+      this.focusSoon('[data-testid="addendum-keep"]');
+    } else {
+      this.closeAddendumForm(true);
+    }
+  }
+
+  /** Back to the typed addendum, text intact. */
+  keepAddendum(): void {
+    this.addendumDiscardAsk.set(false);
+    this.focusSoon('[data-testid="addendum-content"]');
+  }
+
+  /** Focuses `selector` inside this page once the view has rendered it. */
+  private focusSoon(selector: string): void {
+    focusWhenRendered(this.hostEl.nativeElement as HTMLElement, selector);
+  }
+
   addAddendum(): void {
     const enc = this.selectedEncounter();
-    if (!enc || !this.noteState() || !this.addendumContent.trim() || this.addendumSaving()) return;
+    if (!enc || !this.addendumContent.trim()) return;
+    // QA D831: the entry the form was opened for; the current entry when none was named.
+    const noteId = this.addendumTargetId() ?? this.noteState()?.id ?? undefined;
     this.addendumSaving.set(true);
     this.encounterService
-      .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true })
+      .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true }, noteId)
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('ENCOUNTERS.ADDENDUM_RECORDED'));
-          this.addendumContent = '';
-          this.showAddendumForm.set(false);
+          this.closeAddendumForm();
           this.addendumSaving.set(false);
           this.loadNoteHistory(enc.id);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('ENCOUNTERS.ADDENDUM_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('ENCOUNTERS.ADDENDUM_FAILED'),
+          );
           this.addendumSaving.set(false);
         },
       });
@@ -691,12 +1125,105 @@ export class EncountersComponent implements OnInit {
 
   /* ── Status transitions ── */
 
-  canCompleteExamination(enc: EncounterResponse): boolean {
-    return enc.status === 'IN_PROGRESS';
+  /** D96: a doctor picks up a patient who is waiting for one. */
+  canStartEncounter(enc: EncounterResponse): boolean {
+    if (
+      enc.status !== 'WAITING_FOR_PHYSICIAN' ||
+      !this.auth.hasAnyRole(actionRoles('encounterStart'))
+    ) {
+      return false;
+    }
+    // QA D1085: per visit, the server's rule (core/encounter-start).
+    return mayStartVisit(this.visitActor(), this.assignedUserOf(enc));
   }
 
+  /**
+   * The assigned clinician, named by user when the server sends it, else by
+   * the staff record the session carries (QA D1085).
+   */
+  private assignedUserOf(enc: EncounterResponse): string | null {
+    const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
+    if (enc.staffUserId !== undefined) return enc.staffUserId;
+    if (!enc.staffId) return null;
+    return enc.staffId === myStaffId ? this.auth.getUserId() : `staff:${enc.staffId}`;
+  }
+
+  private visitActor(): StartActor {
+    return {
+      superAdmin: this.roleContext.isSuperAdmin(),
+      // rbac-inline-ok: mirrors EncounterController#startEncounter's midwifeOnly test (ROLE_DOCTOR held or not).
+      doctor: this.auth.hasAnyRole(['ROLE_DOCTOR']),
+      // rbac-inline-ok: mirrors EncounterController#startEncounter (a midwife leads her own visits).
+      midwife: this.auth.hasAnyRole(['ROLE_MIDWIFE']),
+      userId: this.auth.getUserId(),
+    };
+  }
+
+  /** D96: a visit ready for discharge can be checked out from here too. */
+  canCheckOut(enc: EncounterResponse): boolean {
+    return enc.status === 'READY_FOR_DISCHARGE';
+  }
+
+  readonly checkoutEncounter = signal<EncounterResponse | null>(null);
+
+  startEncounter(enc: EncounterResponse): void {
+    this.transitioning.set(true);
+    this.encounterService.startEncounter(enc.id).subscribe({
+      next: (updated) => {
+        this.toast.success(this.translate.instant('ENCOUNTERS.STARTED'));
+        this.transitioning.set(false);
+        this.selectedEncounter.set(updated);
+        this.loadEncounters();
+      },
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'),
+        );
+        this.transitioning.set(false);
+      },
+    });
+  }
+
+  openCheckout(enc: EncounterResponse): void {
+    this.checkoutEncounter.set(enc);
+  }
+
+  onCheckoutDismissed(): void {
+    this.checkoutEncounter.set(null);
+  }
+
+  onCheckoutCompleted(): void {
+    const enc = this.checkoutEncounter();
+    this.checkoutEncounter.set(null);
+    this.loadEncounters();
+    if (enc) {
+      this.encounterService.getById(enc.id).subscribe({
+        next: (updated) => this.selectedEncounter.set(updated),
+      });
+    }
+  }
+
+  canCompleteExamination(enc: EncounterResponse): boolean {
+    // QA D1099: the examining clinician ends the examination (the server refuses anyone else).
+    return (
+      enc.status === 'IN_PROGRESS' && mayEndExamination(this.visitActor(), this.assignedUserOf(enc))
+    );
+  }
+
+  /**
+   * QA D788: from IN_PROGRESS this ends the consultation, so the API admits it
+   * for the doctor, nurse or midwife only; the desk keeps AWAITING_RESULTS.
+   */
   canMarkReadyForDischarge(enc: EncounterResponse): boolean {
-    return enc.status === 'IN_PROGRESS' || enc.status === 'AWAITING_RESULTS';
+    if (enc.status === 'AWAITING_RESULTS') {
+      return true;
+    }
+    return (
+      enc.status === 'IN_PROGRESS' &&
+      this.auth.hasAnyRole([...SERVICE_RULE_ROLES.readyForDischargeFromInProgress]) &&
+      // QA D1099: from IN_PROGRESS it ends the examination, the examining clinician's step.
+      mayEndExamination(this.visitActor(), this.assignedUserOf(enc))
+    );
   }
 
   completeExamination(enc: EncounterResponse): void {
@@ -708,8 +1235,10 @@ export class EncountersComponent implements OnInit {
         this.selectedEncounter.set(updated);
         this.loadEncounters();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.EXAM_COMPLETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.EXAM_COMPLETE_FAILED'),
+        );
         this.transitioning.set(false);
       },
     });
@@ -724,8 +1253,10 @@ export class EncountersComponent implements OnInit {
         this.selectedEncounter.set(updated);
         this.loadEncounters();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'),
+        );
         this.transitioning.set(false);
       },
     });
@@ -749,6 +1280,10 @@ export class EncountersComponent implements OnInit {
 
   closeAvs(): void {
     this.avs.set(null);
+    // Loading disables the opener before CDK can capture it; restore after the dialog is removed.
+    afterNextRender(() => this.avsTrigger()?.nativeElement.focus(), {
+      injector: this.viewInjector,
+    });
   }
 
   getStatusClass(status: string): string {
@@ -769,6 +1304,7 @@ export class EncountersComponent implements OnInit {
       case 'COMPLETED':
         return 'status-completed';
       case 'CANCELLED':
+      case 'LEFT_WITHOUT_BEING_SEEN':
         return 'status-cancelled';
       default:
         return '';

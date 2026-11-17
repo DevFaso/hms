@@ -61,6 +61,8 @@ class StaffServiceImplTest {
     @Mock private UserRepository userRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private RoleRepository roleRepository;
+    @Mock private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
+    @Mock private UserRoleHospitalAssignmentService assignmentService;
 
     @InjectMocks
     private StaffServiceImpl staffService;
@@ -73,8 +75,31 @@ class StaffServiceImplTest {
     private Locale locale;
     private StaffResponseDTO staffDto;
 
+    /**
+     * Refusals now carry their key and resolve it through MessageUtil (#1096): route
+     * MessageUtil to this test's message source, and give the JVM's back afterwards.
+     */
+    private Object previousMessageUtilSource;
+
+    private void routeMessageUtilToTheMock() {
+        previousMessageUtilSource = org.springframework.test.util.ReflectionTestUtils.getField(
+            com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(messageSource);
+        // A real source never answers null: an unstubbed key reads as itself.
+        org.mockito.Mockito.lenient().when(messageSource.getMessage(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(java.util.Locale.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private void restoreMessageUtil() {
+        com.example.hms.utility.MessageUtil.setMessageSource(
+            (org.springframework.context.MessageSource) previousMessageUtilSource);
+    }
+
     @BeforeEach
     void setUp() {
+        routeMessageUtilToTheMock();
         staffId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         locale = Locale.ENGLISH;
@@ -102,10 +127,12 @@ class StaffServiceImplTest {
         // Set up super admin context so hospital scoping does not block
         HospitalContext ctx = HospitalContext.builder().superAdmin(true).build();
         HospitalContextHolder.setContext(ctx);
+        org.mockito.Mockito.lenient().when(actingScopeResolver.isVerifiedSuperAdmin()).thenReturn(true);
     }
 
     @AfterEach
     void tearDown() {
+        restoreMessageUtil();
         HospitalContextHolder.clear();
     }
 
@@ -123,7 +150,6 @@ class StaffServiceImplTest {
     @Test
     void getStaffById_throwsWhenNotFound() {
         when(staffRepository.findById(staffId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.getStaffById(staffId, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -161,7 +187,7 @@ class StaffServiceImplTest {
 
     @Test
     void getAnyLicenseByUserId_returnsLicense() {
-        when(staffRepository.findAnyLicenseByUserId(user.getId())).thenReturn(Optional.of("LIC-001"));
+        when(staffRepository.findByUserId(user.getId())).thenReturn(List.of(staff));
 
         Optional<String> result = staffService.getAnyLicenseByUserId(user.getId());
 
@@ -228,12 +254,47 @@ class StaffServiceImplTest {
 
     @Test
     void getFirstStaffByUserIdOrderByCreatedAtAsc_returnsFirst() {
-        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
+        when(staffRepository.findByUserId(user.getId())).thenReturn(List.of(staff));
         when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
         Optional<StaffResponseDTO> result = staffService.getFirstStaffByUserIdOrderByCreatedAtAsc(user.getId(), locale);
 
         assertThat(result).isPresent();
+    }
+
+    /** QA D506: hospital admin A asks GET /staff/users/{doctorB}/first and must not get B's row. */
+    @Test
+    void d506_firstStaffAndLicenceSkipAnotherHospitalsRow() {
+        Hospital hospitalA = new Hospital();
+        hospitalA.setId(UUID.randomUUID());
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .permittedHospitalIds(java.util.Set.of(hospitalA.getId())).build());
+        when(staffRepository.findByUserId(user.getId())).thenReturn(List.of(staff)); // staff is at hospitalId (B)
+
+        assertThat(staffService.getFirstStaffByUserIdOrderByCreatedAtAsc(user.getId(), locale)).isEmpty();
+        assertThat(staffService.getAnyLicenseByUserId(user.getId())).isEmpty();
+    }
+
+    /** D506 path re-verified: the admin's own hospital's row is still returned, the oldest visible first. */
+    @Test
+    void d506_firstStaffReturnsTheOldestVisibleRow() {
+        Staff atA = new Staff();
+        atA.setId(UUID.randomUUID());
+        atA.setUser(user);
+        Hospital hospitalA = new Hospital();
+        hospitalA.setId(UUID.randomUUID());
+        atA.setHospital(hospitalA);
+        atA.setCreatedAt(java.time.LocalDateTime.now().minusDays(1));
+        staff.setCreatedAt(java.time.LocalDateTime.now().minusDays(30)); // older, but at B
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .permittedHospitalIds(java.util.Set.of(hospitalA.getId())).build());
+        when(staffRepository.findByUserId(user.getId())).thenReturn(List.of(staff, atA));
+        StaffResponseDTO dtoA = new StaffResponseDTO();
+        dtoA.setId(atA.getId().toString());
+        when(staffMapper.toStaffDTO(atA)).thenReturn(dtoA);
+
+        assertThat(staffService.getFirstStaffByUserIdOrderByCreatedAtAsc(user.getId(), locale))
+            .map(StaffResponseDTO::getId).contains(atA.getId().toString());
     }
 
     @Test
@@ -251,10 +312,10 @@ class StaffServiceImplTest {
     void deleteStaff_throwsWhenIsHead() {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.existsByHeadOfDepartmentId(staffId)).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Is head");
 
         assertThatThrownBy(() -> staffService.deleteStaff(staffId, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.delete.isHead"));
     }
 
     @Test
@@ -286,38 +347,41 @@ class StaffServiceImplTest {
 
     @Test
     void createStaff_throwsWhenEmailBlank() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = new StaffRequestDTO();
         dto.setUserEmail("");
         dto.setHospitalName("H");
-        dto.setJobTitle("Doctor");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        dto.setJobTitle("DOCTOR");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
     void createStaff_throwsWhenHospitalNameBlank() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = new StaffRequestDTO();
         dto.setUserEmail("user@test.com");
         dto.setHospitalName("");
-        dto.setJobTitle("Doctor");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        dto.setJobTitle("DOCTOR");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
     void createStaff_throwsWhenJobTitleBlank() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = new StaffRequestDTO();
         dto.setUserEmail("user@test.com");
         dto.setHospitalName("Hospital");
         dto.setJobTitle("");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
@@ -327,6 +391,19 @@ class StaffServiceImplTest {
         Staff result = staffService.getStaffEntityById(staffId, locale);
 
         assertThat(result).isEqualTo(staff);
+    }
+
+    @Test
+    void aPhoneOnlyAccountIsResolvedByItsUsername() {
+        // QA D122: an account registered by phone has no e-mail; the staff form
+        // now sends its username, which must resolve to the account.
+        when(userRepository.findByEmail("phone.user")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("phone.user")).thenReturn(Optional.of(user));
+
+        Object resolved = org.springframework.test.util.ReflectionTestUtils
+            .invokeMethod(staffService, "resolveStaffUser", " phone.user ");
+
+        assertThat(resolved).isSameAs(user);
     }
 
     @Test
@@ -349,7 +426,6 @@ class StaffServiceImplTest {
     @Test
     void updateStaffDepartment_staffNotFound_throws() {
         when(userRepository.findByEmail("unknown@test.com")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.updateStaffDepartment("unknown@test.com", "Cardiology", "Test Hospital", locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -360,7 +436,6 @@ class StaffServiceImplTest {
         when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
         when(hospitalRepository.findByName("Unknown Hospital")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.updateStaffDepartment("doctor@test.com", "Cardiology", "Unknown Hospital", locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -372,7 +447,6 @@ class StaffServiceImplTest {
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
         when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
         when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospitalId, "Unknown")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.updateStaffDepartment("doctor@test.com", "Unknown", "Test Hospital", locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -392,10 +466,10 @@ class StaffServiceImplTest {
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
         when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
         when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospitalId, "Cardiology")).thenReturn(Optional.of(dept));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Wrong hospital");
 
         assertThatThrownBy(() -> staffService.updateStaffDepartment("doctor@test.com", "Cardiology", "Test Hospital", locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.department.wrongHospital"));
     }
 
     @Test
@@ -435,7 +509,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .licenseNumber("NEW-LIC-001")
             .roleName("ROLE_DOCTOR")
             .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
@@ -474,7 +548,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .departmentName("Cardiology")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_DOCTOR")
@@ -509,14 +583,30 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("unknown@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .build();
 
         when(userRepository.findByEmail("unknown@test.com")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateStaff_unknownAccount_triesUsernameThenThrows() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail(" phone-user ")
+            .hospitalName("Test Hospital")
+            .jobTitle("DOCTOR")
+            .build();
+
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(userRepository.findByEmail("phone-user")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("phone-user")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, locale))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(userRepository).findByUsername("phone-user");
     }
 
     @Test
@@ -524,12 +614,11 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Unknown")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .build();
 
         when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
         when(hospitalRepository.findByName("Unknown")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -540,7 +629,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .licenseNumber("LIC-EXISTING")
             .roleName("ROLE_DOCTOR")
             .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
@@ -559,39 +648,24 @@ class StaffServiceImplTest {
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
         when(staffRepository.existsByLicenseNumber("LIC-EXISTING")).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Duplicate");
+        // QA round 29 (stub removed, assertion changed): a field refusal on licenseNumber.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("licenseNumber"));
     }
 
-    @Test
-    void createStaff_nullLicense_throws() {
-        StaffRequestDTO dto = StaffRequestDTO.builder()
-            .userEmail("doctor@test.com")
-            .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
-            .licenseNumber(null)
-            .roleName("ROLE_DOCTOR")
-            .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
-            .build();
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"NURSE,", "DOCTOR,", "RADIOLOGIST,", "NURSE,' '", "DOCTOR,''"})
+    void createStaff_noLicence_isAccepted_forEveryClinicalRole(String title, String licence) {
+        StaffRequestDTO dto = validFor("ROLE_" + title, title).licenseNumber(licence).build();
+        UserRoleHospitalAssignment assignment = stubRoleAssignment("ROLE_" + title);
+        when(staffMapper.toStaff(eq(dto), eq(user), eq(hospital), any(), eq(assignment))).thenReturn(staff);
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
-        Role role = new Role();
-        role.setId(UUID.randomUUID());
-        role.setCode("ROLE_DOCTOR");
-        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
-            .user(user).hospital(hospital).role(role).build();
-        assignment.setId(UUID.randomUUID());
-
-        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
-        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
-        when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
-        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
-            .thenReturn(Optional.of(assignment));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
-
-        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+        assertThat(staffService.createStaff(dto, locale)).isNotNull();
+        verify(staffRepository, never()).existsByLicenseNumber(any());
     }
 
     @Test
@@ -605,7 +679,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .departmentName("Cardiology")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_DOCTOR")
@@ -615,18 +689,19 @@ class StaffServiceImplTest {
         when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
         when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
         when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), "Cardiology")).thenReturn(Optional.of(dept));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Wrong hospital");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.department.wrongHospital"));
     }
 
     @Test
     void createStaff_nurseRole_validatesEmploymentType() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Nurse")
+            .jobTitle("NURSE")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_NURSE")
             .employmentType(null)
@@ -644,19 +719,18 @@ class StaffServiceImplTest {
         when(roleRepository.findByCode("ROLE_NURSE")).thenReturn(Optional.of(role));
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
-        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
     void createStaff_doctorRole_validatesSpecialization() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_DOCTOR")
             .specialization(null)
@@ -674,19 +748,18 @@ class StaffServiceImplTest {
         when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
-        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
     void createStaff_radiologistRole_validatesFields() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Radiologist")
+            .jobTitle("RADIOLOGIST")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_RADIOLOGIST")
             .startDate(null)
@@ -704,11 +777,9 @@ class StaffServiceImplTest {
         when(roleRepository.findByCode("ROLE_RADIOLOGIST")).thenReturn(Optional.of(role));
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
-        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
@@ -716,7 +787,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Nurse")
+            .jobTitle("NURSE")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_NURSE")
             .employmentType(com.example.hms.enums.EmploymentType.FULL_TIME)
@@ -737,10 +808,13 @@ class StaffServiceImplTest {
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
         when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Invalid");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                // QA D1536: refused on the end date, by its key (no message source lookup).
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                    assertThat(ex.getField()).isEqualTo("endDate");
+                    assertThat(ex.getMessageKey()).isEqualTo("staff.endDate.beforeStart");
+                });
     }
 
     @Test
@@ -752,7 +826,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .departmentName("Cardiology")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_DOCTOR")
@@ -788,18 +862,20 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Doctor")
+            .jobTitle("DOCTOR")
             .licenseNumber("LIC-NEW")
             .roleName(null)
             .build();
 
         UserRoleHospitalAssignment activeAssignment = new UserRoleHospitalAssignment();
         activeAssignment.setId(UUID.randomUUID());
+        activeAssignment.setHospital(hospital);
+        activeAssignment.setActive(true);
 
         when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
         when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospitalId))
-            .thenReturn(Optional.of(activeAssignment));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId()))
+            .thenReturn(List.of(activeAssignment));
         when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
         when(staffMapper.toStaff(dto, user, hospital, null, activeAssignment)).thenReturn(staff);
         when(staffRepository.save(staff)).thenReturn(staff);
@@ -878,7 +954,7 @@ class StaffServiceImplTest {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Radiologist")
+            .jobTitle("RADIOLOGIST")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_RADIOLOGIST")
             .specialization(com.example.hms.enums.Specialization.RADIOLOGY)
@@ -899,18 +975,22 @@ class StaffServiceImplTest {
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
         when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Invalid");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                // QA D1536: refused on the end date, by its key (no message source lookup).
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                    assertThat(ex.getField()).isEqualTo("endDate");
+                    assertThat(ex.getMessageKey()).isEqualTo("staff.endDate.beforeStart");
+                });
     }
 
     @Test
     void radiologist_noSpecialization_throws() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
-            .jobTitle("Radiologist")
+            .jobTitle("RADIOLOGIST")
             .licenseNumber("LIC-NEW")
             .roleName("ROLE_RADIOLOGIST")
             .specialization(null)
@@ -929,11 +1009,240 @@ class StaffServiceImplTest {
         when(roleRepository.findByCode("ROLE_RADIOLOGIST")).thenReturn(Optional.of(role));
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
-        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+    }
+
+    // ── QA D1536 (round 40): a valid role-specific save never looks a message up ──
+
+    private UserRoleHospitalAssignment stubRoleAssignment(String roleCode) {
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode(roleCode);
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(roleRepository.findByCode(roleCode)).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        return assignment;
+    }
+
+    private static StaffRequestDTO.StaffRequestDTOBuilder validFor(String roleCode, String jobTitle) {
+        return StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle(jobTitle)
+            .licenseNumber("LIC-001")
+            .roleName(roleCode)
+            .employmentType(com.example.hms.enums.EmploymentType.FULL_TIME)
+            .startDate(java.time.LocalDate.now())
+            .specialization(com.example.hms.enums.Specialization.RADIOLOGY);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"ROLE_NURSE,NURSE", "ROLE_RADIOLOGIST,RADIOLOGIST", "ROLE_DOCTOR,DOCTOR"})
+    void updateStaff_validRoleFields_neverResolvesAMessage(String roleCode, String jobTitle) {
+        // The round-30 refactor resolved the refusal text before checking the value, and the
+        // nurse and radiologist keys were in no bundle: NoSuchMessageException, a 500, on
+        // every valid save. No interaction with the message source proves no lookup is made.
+        StaffRequestDTO dto = validFor(roleCode, jobTitle).build();
+        UserRoleHospitalAssignment assignment = stubRoleAssignment(roleCode);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        StaffResponseDTO result = staffService.updateStaff(staffId, dto, Locale.FRENCH);
+
+        assertThat(result).isNotNull();
+        verify(staffMapper).updateStaffFromDto(dto, staff, user, hospital, null, assignment);
+        org.mockito.Mockito.verifyNoInteractions(messageSource);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"ROLE_NURSE,NURSE", "ROLE_RADIOLOGIST,RADIOLOGIST", "ROLE_DOCTOR,DOCTOR"})
+    void createStaff_validRoleFields_neverResolvesAMessage(String roleCode, String jobTitle) {
+        StaffRequestDTO dto = validFor(roleCode, jobTitle).licenseNumber("LIC-NEW").build();
+        UserRoleHospitalAssignment assignment = stubRoleAssignment(roleCode);
+        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+        when(staffMapper.toStaff(dto, user, hospital, null, assignment)).thenReturn(staff);
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        assertThat(staffService.createStaff(dto, Locale.FRENCH)).isNotNull();
+        org.mockito.Mockito.verifyNoInteractions(messageSource);
+    }
+
+    @Test
+    void nurse_missingEmploymentTypeAndStartDate_namesBothFieldsByKey() {
+        StaffRequestDTO dto = validFor("ROLE_NURSE", "NURSE").employmentType(null).startDate(null).build();
+        stubRoleAssignment("ROLE_NURSE");
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex ->
+                assertThat(ex.getFieldErrors())
+                    .containsEntry("employmentType", "staff.nurse.employmentTypeRequired")
+                    .containsEntry("startDate", "staff.nurse.startDateRequired")
+                    .hasSize(2));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"DOCTOR", "RADIOLOGIST", "NURSE"})
+    void updateStaff_aRecordThatAlreadyHadTheTitleIsEditedWithoutALicence_QAr41(String title) {
+        // admin-register makes clinicians without a licence or specialization; an edit that keeps the
+        // title must not demand them.
+        staff.setLicenseNumber(null);
+        staff.setJobTitle(com.example.hms.enums.JobTitle.valueOf(title));
+        StaffRequestDTO dto = validFor("ROLE_" + title, title).licenseNumber(null).specialization(null).build();
+        stubRoleAssignment("ROLE_" + title);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        assertThat(staffService.updateStaff(staffId, dto, locale)).isNotNull();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {" "})
+    void updateStaff_legacyMissingLicenceDoesNotRunABlankDuplicateQuery(String licence) {
+        staff.setLicenseNumber(null);
+        staff.setJobTitle(com.example.hms.enums.JobTitle.NURSE);
+        StaffRequestDTO dto = validFor("ROLE_NURSE", "NURSE").licenseNumber(licence).build();
+        stubRoleAssignment("ROLE_NURSE");
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        assertThat(staffService.updateStaff(staffId, dto, locale)).isNotNull();
+        verify(staffRepository, never()).existsByLicenseNumber(any());
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> clearedLicensedTitles() {
+        return StaffServiceImpl.CLINICAL_JOB_TITLES.stream().flatMap(title ->
+            java.util.Arrays.asList(null, "", " ").stream().map(licence ->
+                org.junit.jupiter.params.provider.Arguments.of(title, licence)));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("clearedLicensedTitles")
+    void updateStaff_existingLicenceMayBeClearedForAnyLicensedTitle(String title, String licence) {
+        staff.setJobTitle(com.example.hms.enums.JobTitle.valueOf(title));
+        staff.setLicenseNumber("LIC-001");
+        StaffRequestDTO dto = validFor("ROLE_NURSE", title).licenseNumber(licence).build();
+        stubRoleAssignment("ROLE_NURSE");
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        assertThat(staffService.updateStaff(staffId, dto, locale)).isNotNull();
+        verify(staffRepository, never()).existsByLicenseNumber(any());
+    }
+
+    @Test
+    void updateStaff_aDuplicateNonBlankLicenceIsStillRefused() {
+        staff.setLicenseNumber("LIC-001");
+        StaffRequestDTO dto = validFor("ROLE_NURSE", "NURSE").licenseNumber("LIC-TAKEN").build();
+        stubRoleAssignment("ROLE_NURSE");
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staffRepository.existsByLicenseNumber("LIC-TAKEN")).thenReturn(true);
+
+        assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, locale))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("licenseNumber"));
+        verify(staffRepository, never()).save(any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "NURSE,false", "NURSE,true", "RADIOLOGIST,false", "RADIOLOGIST,true", "DOCTOR,false", "DOCTOR,true"
+    })
+    void resolvedAssignmentRequiresFieldsWhenRoleIsOmitted(String title, boolean update) {
+        StaffRequestDTO dto = validFor(null, title).employmentType(null).startDate(null).specialization(null).build();
+        UserRoleHospitalAssignment assignment = stubRoleAssignment("ROLE_" + title);
+        // This path resolves the assignment directly rather than looking up a role claim.
+        org.mockito.Mockito.reset(roleRepository, assignmentRepository);
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId())).thenReturn(List.of(assignment));
+        if (update) {
+            when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        }
+
+        assertThatThrownBy(() -> {
+            if (update) {
+                staffService.updateStaff(staffId, dto, locale);
+            } else {
+                staffService.createStaff(dto, locale);
+            }
+        }).isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+            String[] fields = switch (title) {
+                case "NURSE" -> new String[] {"employmentType", "startDate"};
+                case "RADIOLOGIST" -> new String[] {"specialization", "startDate"};
+                default -> new String[] {"specialization"};
+            };
+            assertThat(ex.getFieldErrors()).containsOnlyKeys(fields);
+        });
+        verify(staffRepository, never()).save(any());
+    }
+
+    @Test
+    void radiologist_everyMissingValueIsNamedInOneRefusal_D1355() {
+        // #1096 review: one press names every missing value (the licence is never one of them).
+        StaffRequestDTO dto = validFor("ROLE_RADIOLOGIST", "RADIOLOGIST").licenseNumber(null).startDate(null)
+            .specialization(null).build();
+        stubRoleAssignment("ROLE_RADIOLOGIST");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex ->
+                assertThat(ex.getFieldErrors()).containsOnlyKeys("startDate", "specialization"));
+    }
+
+    @Test
+    void doctor_blankLicenceIsIgnoredAndOnlySpecializationIsNamed() {
+        StaffRequestDTO dto = validFor("ROLE_DOCTOR", "DOCTOR").licenseNumber(" ").specialization(null).build();
+        stubRoleAssignment("ROLE_DOCTOR");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex ->
+                assertThat(ex.getFieldErrors()).containsOnlyKeys("specialization"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"Brain surgeon", "NURSE PRACTITIONER", "chief"})
+    void aJobTitleTheFormDoesNotOfferIsRefusedOnItsField(String jobTitle) {
+        // #1096 review: JobTitle.valueOf in the mapper answered with Java's own English text and no field.
+        StaffRequestDTO dto = validFor("ROLE_NURSE", jobTitle).build();
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("jobTitle");
+                assertThat(ex.getMessageKey()).isEqualTo("staff.jobTitle.invalid");
+            });
+    }
+
+    @Test
+    void aJobTitleInAnyCaseIsTheTitle() {
+        assertThat(com.example.hms.mapper.StaffMapper.jobTitle(" nurse "))
+            .isEqualTo(com.example.hms.enums.JobTitle.NURSE);
+        assertThat(com.example.hms.mapper.StaffMapper.jobTitle("Radiologist"))
+            .isEqualTo(com.example.hms.enums.JobTitle.RADIOLOGIST);
+        assertThat(com.example.hms.mapper.StaffMapper.jobTitle("unknown")).isNull();
+    }
+
+    @Test
+    void radiologist_missingStartDate_isRefusedWithItsKey() {
+        StaffRequestDTO dto = validFor("ROLE_RADIOLOGIST", "RADIOLOGIST").startDate(null).build();
+        stubRoleAssignment("ROLE_RADIOLOGIST");
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("startDate");
+                assertThat(ex.getMessageKey()).isEqualTo("staff.radiologist.startDateRequired");
+            });
     }
 
     // ── MVP 3: Lab Staff Management Tests ──────────────────────
@@ -1028,6 +1337,7 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_DOCTOR", locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.lab.role.invalid"))
                 .hasMessageContaining("roleCode must be one of");
     }
 
@@ -1038,13 +1348,13 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_DIRECTOR", locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.lab.role.invalid"))
                 .hasMessageContaining("roleCode must be one of");
     }
 
     @Test
     void updateStaffLabRole_staffNotFound_throws() {
         when(staffRepository.findById(staffId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -1067,6 +1377,7 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.lab.role.nonLabStaff"))
                 .hasMessageContaining("non-lab staff");
     }
 
@@ -1087,6 +1398,7 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
                 .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("staff.lab.role.directorProtected"))
                 .hasMessageContaining("Lab Director");
     }
 
@@ -1103,10 +1415,191 @@ class StaffServiceImplTest {
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(roleRepository.findByCode("ROLE_LAB_SCIENTIST")).thenReturn(Optional.empty());
-        when(messageSource.getMessage(eq("staff.lab.role.notFound"), any(), any(Locale.class)))
-                .thenReturn("Role not found: ROLE_LAB_SCIENTIST");
+        assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "staff.lab.role.notFound");
+    }
+
+    /** A lab technician at {@code hospital}, the staff member whose lab role is changed. */
+    private UserRoleHospitalAssignment labTechnicianAssignment() {
+        Role currentRole = new Role();
+        currentRole.setId(UUID.randomUUID());
+        currentRole.setCode("ROLE_LAB_TECHNICIAN");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(currentRole).build();
+        assignment.setId(UUID.randomUUID());
+        staff.setAssignment(assignment);
+        return assignment;
+    }
+
+    @Test
+    void updateStaffLabRole_labDirectorElsewhere_withAnyAssignmentHere_isRefused() {
+        // QA D846: lab director at A, doctor at B. B is in the caller's scope
+        // (any assignment there counts) and ROLE_LAB_DIRECTOR is a global
+        // authority, but neither makes them a lab director AT B.
+        UUID callerId = UUID.randomUUID();
+        HospitalContextHolder.clear();
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(false)
+            .principalUserId(callerId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .build());
+        when(actingScopeResolver.isVerifiedSuperAdmin()).thenReturn(false);
+        labTechnicianAssignment();
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(callerId), eq(hospitalId), any()))
+            .thenReturn(false);
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
-                .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateStaffLabRole_labDirectorAtTheStaffHospital_changesRole() {
+        UUID callerId = UUID.randomUUID();
+        HospitalContextHolder.clear();
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(false)
+            .principalUserId(callerId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .build());
+        when(actingScopeResolver.isVerifiedSuperAdmin()).thenReturn(false);
+        UserRoleHospitalAssignment assignment = labTechnicianAssignment();
+        Role newRole = new Role();
+        newRole.setId(UUID.randomUUID());
+        newRole.setCode("ROLE_LAB_SCIENTIST");
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(callerId), eq(hospitalId), any()))
+            .thenReturn(true);
+        when(roleRepository.findByCode("ROLE_LAB_SCIENTIST")).thenReturn(Optional.of(newRole));
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale);
+
+        verify(assignmentRepository).save(assignment);
+        verify(assignmentRepository).existsActiveByUserAndHospitalAndAnyRoleCode(eq(callerId), eq(hospitalId),
+            org.mockito.ArgumentMatchers.argThat(codes -> codes.contains("ROLE_LAB_DIRECTOR")
+                && codes.contains("ROLE_HOSPITAL_ADMIN") && !codes.contains("ROLE_DOCTOR")));
+    }
+
+    // QA D907: the dialog promises the person loses access; the staff row
+    // alone used to change and their role at the hospital stayed on.
+
+    @Test
+    void deleteStaff_switchesOffTheAccessItStoodForAtItsHospital() {
+        UserRoleHospitalAssignment linked = new UserRoleHospitalAssignment();
+        linked.setId(UUID.randomUUID());
+        staff.setAssignment(linked);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(departmentRepository.existsByHeadOfDepartmentId(staffId)).thenReturn(false);
+
+        staffService.deleteStaff(staffId, locale);
+
+        verify(assignmentService).retireStaffAccessAtHospital(user.getId(), hospitalId, linked.getId());
+        assertThat(staff.isActive()).isFalse();
+        verify(staffRepository).save(staff);
+    }
+
+    @Test
+    void deleteStaff_aRecordSwitchedOffBeforeTheFixStillHasItsAccessCut() {
+        staff.setActive(false);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(departmentRepository.existsByHeadOfDepartmentId(staffId)).thenReturn(false);
+
+        staffService.deleteStaff(staffId, locale);
+
+        verify(assignmentService).retireStaffAccessAtHospital(user.getId(), hospitalId, null);
+    }
+
+    @Test
+    void deleteStaff_aRefusedAccessCutLeavesTheRecordAsItWas() {
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(departmentRepository.existsByHeadOfDepartmentId(staffId)).thenReturn(false);
+        when(assignmentService.retireStaffAccessAtHospital(any(), any(), any()))
+            .thenThrow(new com.example.hms.exception.ConflictException("own"));
+
+        assertThatThrownBy(() -> staffService.deleteStaff(staffId, locale))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(staff.isActive()).isTrue();
+        verify(staffRepository, never()).save(any());
+    }
+
+    @Test
+    void updateStaff_anEditNeverSwitchesTheRecordBackOnWhileItsAccessIsOff() {
+        UserRoleHospitalAssignment retired = new UserRoleHospitalAssignment();
+        retired.setId(UUID.randomUUID());
+        retired.setHospital(hospital);
+        retired.setActive(false);
+        staff.setActive(false);
+        staff.setAssignment(retired);
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("NURSE")
+            .licenseNumber("LIC-001")
+            .build();
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        // Only a patient row is on here: it is no staff access.
+        UserRoleHospitalAssignment patientRow = new UserRoleHospitalAssignment();
+        patientRow.setHospital(hospital);
+        patientRow.setActive(true);
+        Role patient = new Role();
+        patient.setCode("ROLE_PATIENT");
+        patientRow.setRole(patient);
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId())).thenReturn(List.of(patientRow));
+        // What the lookup this replaced answered: the patient row.
+        org.mockito.Mockito.lenient()
+            .when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospitalId))
+            .thenReturn(Optional.of(patientRow));
+        // The mapper applies the request's default active=true, as the real one does.
+        org.mockito.Mockito.doAnswer(inv -> {
+            Staff target = inv.getArgument(1);
+            target.setAssignment(inv.getArgument(5));
+            target.setActive(true);
+            return null;
+        }).when(staffMapper).updateStaffFromDto(any(), any(), any(), any(), any(), any());
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        staffService.updateStaff(staffId, dto, locale);
+
+        assertThat(staff.getAssignment()).as("never relinked to the patient row").isSameAs(retired);
+        assertThat(staff.isActive()).isFalse();
+    }
+
+    @Test
+    void updateStaff_switchingTheRecordOffCutsItsAccessToo() {
+        // #968 review: PUT {active:false} reached the D907 state DELETE no longer does.
+        UserRoleHospitalAssignment linked = new UserRoleHospitalAssignment();
+        linked.setId(UUID.randomUUID());
+        linked.setHospital(hospital);
+        linked.setActive(true);
+        staff.setAssignment(linked);
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("NURSE")
+            .licenseNumber("LIC-001")
+            .active(false)
+            .build();
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId())).thenReturn(List.of(linked));
+        org.mockito.Mockito.doAnswer(inv -> {
+            Staff target = inv.getArgument(1);
+            target.setAssignment(inv.getArgument(5));
+            target.setActive(((StaffRequestDTO) inv.getArgument(0)).isActive());
+            return null;
+        }).when(staffMapper).updateStaffFromDto(any(), any(), any(), any(), any(), any());
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        staffService.updateStaff(staffId, dto, locale);
+
+        verify(assignmentService).retireStaffAccessAtHospital(user.getId(), hospitalId, linked.getId());
     }
 }

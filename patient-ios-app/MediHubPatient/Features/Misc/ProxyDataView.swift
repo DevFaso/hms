@@ -112,7 +112,7 @@ struct ProxyDataView: View {
                             Text(hospital).font(.caption).foregroundColor(.secondary)
                         }
                         if let status = appt.status {
-                            StatusBadge(text: status.capitalized, color: status.uppercased() == "CANCELLED" ? "red" : "blue")
+                            StatusBadge(text: EnumLabel.text(.appointmentStatus, status), color: status.uppercased() == "CANCELLED" ? "red" : "blue")
                         }
                     }
                     .padding(.vertical, 4)

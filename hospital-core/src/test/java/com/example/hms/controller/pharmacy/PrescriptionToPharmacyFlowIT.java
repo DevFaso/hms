@@ -20,6 +20,7 @@ import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
+import com.example.hms.model.prescription.PrescriptionTransmission;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -74,6 +75,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -83,6 +85,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -249,6 +252,64 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
         mockMvc.perform(apiGet(WORK_QUEUE).with(pharmacist(pharmacistA, hospitalA)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(WORK_QUEUE_IDS, not(hasItem(rxId.toString()))));
+    }
+
+    @Test
+    @DisplayName("QA D752: a legacy prescription with no stored quantity stays dispensable until its derived cap (9) is reached")
+    void d752_legacyPartialDispenseKeepsTheRestOfTheDerivedCap() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        // A legacy row: no stored quantity, regimen 1 tablet three times a day for 3 days = 9.
+        transactionTemplate.executeWithoutResult(tx -> {
+            Prescription rx = prescriptionRepository.findById(rxId).orElseThrow();
+            rx.setQuantity(null);
+            rx.setDosage("1 tablet");
+            rx.setFrequency("TID");
+            rx.setDuration("3 days");
+        });
+
+        for (int[] step : new int[][] {{4, 0}, {4, 0}, {1, 1}}) {
+            mockMvc.perform(apiPost(DISPENSE)
+                            .with(pharmacist(pharmacistA, hospitalA))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(dispenseBody(rxId, dispensaryA, pharmacistA, step[0], null)))
+                    .andExpect(status().isCreated());
+            assertThat(statusOf(rxId)).isEqualTo(step[1] == 1
+                    ? PrescriptionStatus.DISPENSED : PrescriptionStatus.PARTIALLY_FILLED);
+        }
+
+        // Anything beyond the derived cap is refused.
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dispenseBody(rxId, dispensaryA, pharmacistA, 1, null)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("QA D512: POST /pharmacy/dispense with no pharmacist verification is refused, and it can still be done after")
+    void d512_aFillWithoutVerificationIsRefused() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        tools.jackson.databind.node.ObjectNode unverified = (tools.jackson.databind.node.ObjectNode)
+                tools.jackson.databind.json.JsonMapper.builder().build()
+                        .readTree(dispenseBody(rxId, dispensaryA, pharmacistA, 10, null));
+        unverified.remove("verifiedBy");
+
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(unverified.toString()))
+                .andExpect(status().isBadRequest());
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SIGNED);
+        assertThat(dispenseRepository.findByPrescriptionId(rxId, org.springframework.data.domain.Pageable.unpaged()))
+                .isEmpty();
+
+        // The refused fill left the order verifiable and fillable.
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dispenseBody(rxId, dispensaryA, pharmacistA, 10, null)))
+                .andExpect(status().isCreated());
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.DISPENSED);
     }
 
     @Test
@@ -483,6 +544,67 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                 .isEqualTo(RoutingDecisionStatus.PENDING);
         // ...and must not have been told to drop it (the notification is AFTER_COMMIT).
         verify(smsService, never()).send(eq(PARTNER_A_PHONE), contains("autre pharmacie"));
+        // The failed attempt itself is on file, committed with the error.
+        assertThat(transmissionsOf(rxId))
+                .extracting(PrescriptionTransmission::getStatus)
+                .containsExactly("FAILED");
+    }
+
+    @Test
+    @DisplayName("a refused SMS is recorded (FAILED row, TRANSMISSION_FAILED, on the work queue) and can be sent again")
+    void failedDispatchIsRecordedAndRetried() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        doThrow(new IllegalStateException("gateway refused " + COMMUNITY_A_PHONE))
+                .when(smsService).send(eq(COMMUNITY_A_PHONE), anyString());
+
+        mockMvc.perform(apiPost(API + "/prescriptions/{id}/dispatch-sms", rxId)
+                        .with(doctor(doctorA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("pharmacyId", communityA.getId()))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", not(containsString(COMMUNITY_A_PHONE))))
+                .andExpect(jsonPath("$.message", not(containsString("gateway"))))
+                // The bundle sentence, not the raw key.
+                .andExpect(jsonPath("$.message", not(containsString("prescription.dispatch"))))
+                .andExpect(jsonPath("$.message", containsString("SMS")));
+
+        // Committed although the caller got an error.
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.TRANSMISSION_FAILED);
+        List<PrescriptionTransmission> attempts = transmissionsOf(rxId);
+        assertThat(attempts).singleElement().satisfies(t -> {
+            assertThat(t.getStatus()).isEqualTo("FAILED");
+            assertThat(t.getStatusReason()).doesNotContain(COMMUNITY_A_PHONE).doesNotContain("gateway");
+        });
+        assertThat(routingDecisionRepository.findByPrescriptionId(rxId))
+                .extracting(PrescriptionRoutingDecision::getStatus)
+                .containsExactly(RoutingDecisionStatus.CANCELLED);
+        // The 400 escapes the write-audit interceptor; the service audits the
+        // committed change itself, with its actor and without the number.
+        assertThat(auditEventLogRepository.findAll())
+                .filteredOn(row -> rxId.toString().equals(row.getResourceId())
+                        && row.getEventType() == AuditEventType.PRESCRIPTION_SENT_TO_PARTNER)
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getStatus()).isEqualTo(com.example.hms.enums.AuditStatus.FAILURE);
+                    assertThat(row.getUser()).isNotNull();
+                    assertThat(row.getUser().getId()).isEqualTo(doctorA.getId());
+                    assertThat(row.getEventDescription()).doesNotContain(COMMUNITY_A_PHONE).doesNotContain("gateway");
+                });
+
+        // Visible where the pharmacist works, flagged for attention.
+        mockMvc.perform(apiGet(WORK_QUEUE).with(pharmacist(pharmacistA, hospitalA)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(WORK_QUEUE_IDS, hasItem(rxId.toString())))
+                .andExpect(jsonPath("$.data.content[?(@.id == '" + rxId + "')].attentionReason",
+                        hasItem("TRANSMISSION_FAILED")));
+
+        // The provider is back: sending again is the retry.
+        reset(smsService);
+        dispatchSms(rxId, communityA);
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SENT_TO_PARTNER);
+        assertThat(transmissionsOf(rxId))
+                .extracting(PrescriptionTransmission::getStatus)
+                .containsExactlyInAnyOrder("FAILED", "SENT");
     }
 
     // ───────────────────────── leg 4: tenancy ─────────────────────────
@@ -575,7 +697,9 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                                 "medicationName", MEDICATION,
                                 "dosage", "500",
                                 "frequency", "BID",
-                                "duration", "5 days"))))
+                                "duration", "5 days",
+                                "quantity", 10,
+                                "quantityUnit", "tablet"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("DRAFT"))
                 .andReturn().getResponse().getContentAsString();
@@ -597,7 +721,7 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
             }
         });
 
-        // The request DTO carries no quantity; the dispense arithmetic needs one.
+        // QA D706: the quantity now comes from the request; the rest is set here.
         transactionTemplate.executeWithoutResult(tx -> {
             Prescription rx = prescriptionRepository.findById(rxId).orElseThrow();
             rx.setQuantity(BigDecimal.TEN);
@@ -644,6 +768,8 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
         body.put("patientId", patient.getId());
         body.put("pharmacyId", pharmacy.getId());
         body.put("dispensedBy", dispensedBy.getId());
+        // QA D512: the dispensing pharmacist attests the verification.
+        body.put("verifiedBy", dispensedBy.getId());
         body.put("medicationName", MEDICATION);
         body.put("quantityRequested", quantity);
         body.put("quantityDispensed", quantity);
@@ -684,6 +810,12 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder apiPost(
             String path, Object... vars) {
         return post(path, vars).contextPath(API);
+    }
+
+    private List<PrescriptionTransmission> transmissionsOf(UUID rxId) {
+        return transactionTemplate.execute(tx -> transmissionRepository.findAll().stream()
+                .filter(t -> t.getPrescription() != null && rxId.equals(t.getPrescription().getId()))
+                .toList());
     }
 
     private PrescriptionStatus statusOf(UUID rxId) {
@@ -843,4 +975,103 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     private String nextId() {
         return String.format("%05d", sequence.incrementAndGet());
     }
+    // ───────────────────────── QA round 16 replays ─────────────────────────
+
+    @Autowired private com.example.hms.repository.MedicationCatalogItemRepository catalogItemRepository;
+
+    private com.example.hms.model.medication.MedicationCatalogItem seedCatalogItem(String name, boolean controlled) {
+        com.example.hms.model.medication.MedicationCatalogItem item = catalogItemRepository.save(
+                com.example.hms.model.medication.MedicationCatalogItem.builder()
+                        .nameFr(name)
+                        .genericName(name.toLowerCase(java.util.Locale.ROOT))
+                        .controlled(controlled)
+                        .active(true)
+                        .hospital(hospitalA)
+                        .build());
+        cleanup.push(() -> catalogItemRepository.deleteById(item.getId()));
+        return item;
+    }
+
+    private UUID createdId(String body) throws Exception {
+        UUID rxId = UUID.fromString(objectMapper.readTree(body).get("id").asString());
+        cleanup.push(() -> {
+            Prescription rx = prescriptionRepository.findById(rxId).orElse(null);
+            if (rx != null) {
+                UUID encounterId = rx.getEncounter() != null ? rx.getEncounter().getId() : null;
+                prescriptionRepository.deleteById(rxId);
+                if (encounterId != null) {
+                    encounterRepository.deleteById(encounterId);
+                }
+            }
+        });
+        return rxId;
+    }
+
+    @Test
+    @DisplayName("QA D922 replay (u18.js): a typed \"Morphine\" takes the hospital catalogue's controlled flag")
+    void d922_aTypedControlledDrugIsControlled() throws Exception {
+        com.example.hms.model.medication.MedicationCatalogItem morphine = seedCatalogItem("Morphine", true);
+
+        String created = mockMvc.perform(apiPost(API + "/prescriptions")
+                        .with(doctor(doctorA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "patientId", patient.getId(),
+                                "medicationName", "Morphine",
+                                "dosage", "2 mg",
+                                "frequency", "Toutes les 4 heures",
+                                "route", "INTRAVENOUS",
+                                "quantity", 6,
+                                "quantityUnit", "ampoule"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.controlledSubstance").value(true))
+                .andExpect(jsonPath("$.requiresPharmacistVerification").value(true))
+                .andExpect(jsonPath("$.medicationCatalogItemId").value(morphine.getId().toString()))
+                .andReturn().getResponse().getContentAsString();
+        UUID rxId = createdId(created);
+
+        assertThat(prescriptionRepository.findById(rxId).orElseThrow().getMedicationCatalogItemId())
+                .isEqualTo(morphine.getId());
+    }
+
+    @Test
+    @DisplayName("QA D970 replay (u19.js): editing a prescription raises no duplicate warning against itself")
+    void d970_anEditIsNotADuplicateOfItself() throws Exception {
+        String created = mockMvc.perform(apiPost(API + "/prescriptions")
+                        .with(doctor(doctorA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "patientId", patient.getId(),
+                                "medicationName", "Sulfadoxine-pyriméthamine",
+                                "dosage", "3 comprimés",
+                                "frequency", "dose unique",
+                                "quantity", 3))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID rxId = createdId(created);
+
+        String edited = mockMvc.perform(apiPut(API + "/prescriptions/{id}", rxId)
+                        .with(doctor(doctorA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "patientId", patient.getId(),
+                                "medicationName", "Sulfadoxine-pyriméthamine",
+                                "dosage", "3 comprimés",
+                                "frequency", "dose unique",
+                                "quantity", 3,
+                                "notes", "à prendre au centre"))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        tools.jackson.databind.JsonNode advisories = objectMapper.readTree(edited).path("cdsAdvisories");
+        for (tools.jackson.databind.JsonNode card : advisories) {
+            assertThat(card.path("summary").asString()).doesNotContainIgnoringCase("duplicate");
+            assertThat(card.path("summary").asString()).doesNotContainIgnoringCase("doublon");
+        }
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder apiPut(
+            String path, Object... vars) {
+        return org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path, vars).contextPath(API);
+    }
+
 }

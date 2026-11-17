@@ -27,6 +27,10 @@ public class DrugInteractionMapper {
             .severity(entity.getSeverity())
             .description(entity.getDescription())
             .recommendation(entity.getRecommendation())
+            // QA D887: what the table shows, in the reader's language; the
+            // two fields above stay the stored text the edit form writes back.
+            .displayDescription(com.example.hms.service.support.DrugInteractionText.description(entity))
+            .displayRecommendation(com.example.hms.service.support.DrugInteractionText.recommendation(entity))
             .mechanism(entity.getMechanism())
             .clinicalEffects(entity.getClinicalEffects())
             .requiresAvoidance(entity.isRequiresAvoidance())

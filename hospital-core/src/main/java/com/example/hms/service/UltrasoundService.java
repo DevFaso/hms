@@ -29,16 +29,6 @@ public interface UltrasoundService {
      */
     UltrasoundReportResponseDTO markPatientNotified(UUID reportId);
 
-    /**
-     * Get a pre-filled report template for nuchal translucency scan (11-13 weeks).
-     */
-    UltrasoundReportRequestDTO getNuchalTranslucencyTemplate();
-
-    /**
-     * Get a pre-filled report template for anatomy scan (18-22 weeks).
-     */
-    UltrasoundReportRequestDTO getAnatomyScanTemplate();
-
     UltrasoundOrderResponseDTO createOrder(UltrasoundOrderRequestDTO request, UUID orderedByUserId);
 
     UltrasoundOrderResponseDTO updateOrder(UUID orderId, UltrasoundOrderRequestDTO request);

@@ -64,11 +64,4 @@ describe('UltrasoundService', () => {
     expect(req.request.body).toBeNull();
     req.flush({ id: 'r1', reportReviewedByProvider: true });
   });
-
-  it('GETs a report template', () => {
-    service.template('nuchal-translucency').subscribe((t) => expect(t.scanDate).toBeDefined());
-    httpMock
-      .expectOne('/ultrasound/templates/nuchal-translucency')
-      .flush({ scanDate: '2026-08-19', findingCategory: 'NORMAL' });
-  });
 });

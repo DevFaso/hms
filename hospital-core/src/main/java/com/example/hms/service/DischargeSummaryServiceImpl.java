@@ -45,8 +45,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 
@@ -58,7 +56,11 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 @Service
 @RequiredArgsConstructor
 public class DischargeSummaryServiceImpl implements DischargeSummaryService {
-    private static final String DISCHARGE_SUMMARY_TYPE = "DischargeSummary";
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_ENCOUNTER_ID = "encounterId";
+
+    private static final String DISCHARGE_SUMMARY_NOT_FOUND_KEY = "dischargeSummary.notFound";
+
 
 
     private final DischargeSummaryRepository dischargeSummaryRepository;
@@ -72,6 +74,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     private final PrescriptionRepository prescriptionRepository;
     private final RoleValidator roleValidator;
     private final RecordAccessPolicy recordAccessPolicy;
+    private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     private final CrossHospitalReachRecorder reachRecorder;
 
     /**
@@ -81,6 +84,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
      * through {@link #incrementCounter} which is null-safe.
      */
     private final MeterRegistry meterRegistry;
+    private final org.springframework.context.MessageSource messageSource;
+    private final com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
 
     // ── Metric names ─────────────────────────────────────────────────────────
     static final String METRIC_AVS_FETCH_TOTAL = "hms.avs.portal.fetch";
@@ -98,29 +103,50 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         // Check if discharge summary already exists for this encounter
         if (dischargeSummaryRepository.existsByEncounter_Id(request.getEncounterId())) {
-            throw new BusinessException("Discharge summary already exists for this encounter");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "dischargeSummary.alreadyExists");
         }
 
         // Fetch required entities
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient", "id", request.getPatientId().toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Encounter encounter = encounterRepository.findById(request.getEncounterId())
-            .orElseThrow(() -> new ResourceNotFoundException("Encounter", "id", request.getEncounterId().toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital", "id", request.getHospitalId().toString()));
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        // QA r5 tenancy sweep: the summary is written at the caller's hospital, on that
+        // hospital's encounter of this patient; every id in the body is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", request.getHospitalId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), "encounter.notfound", request.getEncounterId());
+        if (encounter.getPatient() == null || !encounter.getPatient().getId().equals(patient.getId())) {
+            throw new ResourceNotFoundException("encounter.notfound", request.getEncounterId());
+        }
+
+        // QA D1070: a summary is written for a visit someone has seen. A visit
+        // still waiting for its physician (or one that ended unseen) has no
+        // course, diagnosis or disposition to summarise yet.
+        if (encounter.getStatus() != null && NOT_SEEN.contains(encounter.getStatus())) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "dischargeSummary.encounter.notSeen");
+        }
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
-            .orElseThrow(() -> new ResourceNotFoundException("Staff", "id", request.getDischargingProviderId().toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getDischargingProviderId()));
+        requireTreatingClinician(encounter, dischargingProvider);
+        // QA D503 class: the discharging provider is the one who will sign. A
+        // doctor names themself; only a verified super-admin may file it for a
+        // provider of the same hospital.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+            dischargingProvider.getHospital(), "staff.notFound", request.getDischargingProviderId());
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(dischargingProvider);
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("Assignment", "id", request.getAssignmentId().toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", request.getAssignmentId()));
 
         DischargeApproval approvalRecord = null;
         if (request.getApprovalRecordId() != null) {
             approvalRecord = dischargeApprovalRepository.findById(request.getApprovalRecordId())
-                .orElseThrow(() -> new ResourceNotFoundException("DischargeApproval", "id", request.getApprovalRecordId().toString()));
+                .orElseThrow(() -> new ResourceNotFoundException("dischargeApproval.notFound", request.getApprovalRecordId()));
         }
 
         // Build discharge summary entity
@@ -162,7 +188,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary saved = dischargeSummaryRepository.save(dischargeSummary);
         log.info("Discharge summary created successfully with ID: {}", saved.getId());
 
-        return dischargeSummaryMapper.toResponseDTO(saved);
+        return toDto(saved);
     }
 
     private void addMedications(DischargeSummary summary, DischargeSummaryRequestDTO request) {
@@ -192,14 +218,16 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Updating discharge summary: {}", summaryId);
 
         DischargeSummary existing = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(existing, summaryId);
+        requireAuthor(existing);
 
         // Cannot update finalized summaries
         if (Boolean.TRUE.equals(existing.getIsFinalized())) {
-            throw new BusinessException("Cannot update a finalized discharge summary");
+            throw new BusinessException("dischargeSummary.finalized.noUpdate");
         }
+        takeOverFromNonPhysician(existing);
 
         // Update fields
         existing.setDischargeDate(request.getDischargeDate());
@@ -248,7 +276,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary updated = dischargeSummaryRepository.save(existing);
         log.info("Discharge summary updated successfully: {}", summaryId);
 
-        return dischargeSummaryMapper.toResponseDTO(updated);
+        return toDto(updated);
     }
 
     @Override
@@ -257,18 +285,24 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Finalizing discharge summary: {}", summaryId);
 
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(dischargeSummary, summaryId);
 
-        // Verify provider is authorized
-        if (!dischargeSummary.getDischargingProvider().getId().equals(providerId)) {
-            throw new BusinessException("Only the discharging provider can finalize the summary");
+        // QA D503: the signer is the signed-in user, never the providerId on the
+        // request. Only the discharging provider finalizes, in their own name;
+        // a providerId naming anyone else is refused rather than ignored.
+        // QA D1112: a colleague's summary is refused with the authorship rule, not "act in your own name".
+        com.example.hms.security.CallerIdentity.requireAuthor(dischargeSummary.getDischargingProvider(),
+            "dischargeSummary.finalize.authorOnly");
+        if (providerId != null && !dischargeSummary.getDischargingProvider().getId().equals(providerId)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("identity.notCaller"));
         }
 
         // Check if already finalized
         if (Boolean.TRUE.equals(dischargeSummary.getIsFinalized())) {
-            throw new BusinessException("Discharge summary is already finalized");
+            throw new BusinessException("dischargeSummary.alreadyFinalized");
         }
 
         // Finalize
@@ -277,29 +311,29 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary finalized = dischargeSummaryRepository.save(dischargeSummary);
         log.info("Discharge summary finalized successfully: {}", summaryId);
 
-        return dischargeSummaryMapper.toResponseDTO(finalized);
+        return toDto(finalized);
     }
 
     @Override
     @Transactional(readOnly = true)
     public DischargeSummaryResponseDTO getDischargeSummaryById(UUID summaryId, Locale locale) {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(dischargeSummary, summaryId);
 
-        return dischargeSummaryMapper.toResponseDTO(dischargeSummary);
+        return toDto(dischargeSummary);
     }
 
     @Override
     @Transactional(readOnly = true)
     public DischargeSummaryResponseDTO getDischargeSummaryByEncounter(UUID encounterId, Locale locale) {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findByEncounter_Id(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "encounter", encounterId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException("dischargeSummary.notFoundForEncounter", encounterId));
 
         enforceHospitalScope(dischargeSummary, dischargeSummary.getId());
 
-        return dischargeSummaryMapper.toResponseDTO(dischargeSummary);
+        return toDto(dischargeSummary);
     }
 
     @Override
@@ -319,9 +353,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         } else {
             summaries = dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId);
         }
-        return summaries.stream()
-            .map(dischargeSummaryMapper::toResponseDTO)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -335,9 +367,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findByHospitalAndDateRange(effectiveHospitalId, startDate, endDate);
-        return summaries.stream()
-            .map(dischargeSummaryMapper::toResponseDTO)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -346,9 +376,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findUnfinalizedByHospital(effectiveHospitalId);
-        return summaries.stream()
-            .map(dischargeSummaryMapper::toResponseDTO)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -357,9 +385,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findWithPendingTestResults(effectiveHospitalId);
-        return summaries.stream()
-            .map(dischargeSummaryMapper::toResponseDTO)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -372,9 +398,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         } else {
             summaries = dischargeSummaryRepository.findByDischargingProvider_IdOrderByDischargeDateDesc(providerId);
         }
-        return summaries.stream()
-            .map(dischargeSummaryMapper::toResponseDTO)
-            .toList();
+        return toDtos(summaries);
     }
 
     @Override
@@ -383,24 +407,145 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Deleting discharge summary: {}", summaryId);
 
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(dischargeSummary, summaryId);
+        requireAuthor(dischargeSummary);
 
         // Cannot delete finalized summaries
         if (Boolean.TRUE.equals(dischargeSummary.getIsFinalized())) {
-            throw new BusinessException("Cannot delete a finalized discharge summary");
+            throw new BusinessException("dischargeSummary.finalized.noDelete");
         }
 
         dischargeSummaryRepository.delete(dischargeSummary);
         log.info("Discharge summary deleted successfully: {}", summaryId);
     }
 
+    /**
+     * QA D930: a draft summary belongs to its discharging provider. Another
+     * doctor at the same hospital may read it but not rewrite or delete it;
+     * only the author (or a verified super-admin in global view) may. Same
+     * rule as finalize (QA D503), applied to the other two writes.
+     */
+    private void requireAuthor(DischargeSummary summary) {
+        // Review of #971: the draft is its discharging provider's (checkout
+        // names the doctor who closed the visit). Only a summary held by no one,
+        // or by a non-physician (the nurse or midwife who opened the visit),
+        // falls back to a physician who wrote a note on the visit; a draft
+        // held by another doctor never opens to a colleague.
+        UUID hospitalId = summary.getHospital() != null ? summary.getHospital().getId() : null;
+        if (com.example.hms.security.CallerIdentity.isCaller(summary.getDischargingProvider())
+                || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
+                || (!isPhysicianProvider(summary)
+                    && isPhysician(roleValidator.getCurrentUserId(), hospitalId)
+                    && TreatingClinician.isCaller(summary.getEncounter(), encounterNoteRepository))) {
+            return;
+        }
+        // QA D1112: the authorship rule, not "act in your own name".
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("dischargeSummary.authorOnly"));
+    }
+
+    /**
+     * Whether the summary belongs to a physician. A draft held by nobody, or
+     * by the nurse or midwife who opened the visit (QA D930 review), is the
+     * treating doctor's to finish; one held by a doctor is that doctor's alone.
+     */
+    private boolean isPhysicianProvider(DischargeSummary summary) {
+        Staff provider = summary.getDischargingProvider();
+        if (provider == null || provider.getUser() == null) {
+            return false;
+        }
+        return isPhysician(provider.getUser().getId(),
+            summary.getHospital() != null ? summary.getHospital().getId() : null);
+    }
+
+    /**
+     * Review of #971 (D930): the treating physician who edits a draft held by
+     * no one or by a non-physician (the nurse who opened the visit) becomes its
+     * discharging provider, so she can finalize what she wrote; finalize stays
+     * the discharging provider's. A super-admin's edit moves nothing.
+     */
+    private void takeOverFromNonPhysician(DischargeSummary summary) {
+        if (com.example.hms.security.CallerIdentity.isCaller(summary.getDischargingProvider())
+                || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
+                || isPhysicianProvider(summary) || summary.getHospital() == null) {
+            return;
+        }
+        UUID callerId = roleValidator.getCurrentUserId();
+        UUID hospitalId = summary.getHospital().getId();
+        if (!isPhysician(callerId, hospitalId)) {
+            return;
+        }
+        staffRepository.findByUserIdAndHospitalId(callerId, hospitalId).ifPresent(staff -> {
+            summary.setDischargingProvider(staff);
+            // Her staff record's own assignment, never a nurse one she also holds;
+            // with none on the record, the summary keeps its assignment.
+            if (staff.getAssignment() != null) {
+                summary.setAssignment(staff.getAssignment());
+            }
+        });
+    }
+
+    /** A doctor, physician or surgeon at the hospital: the same three roles {@code EncounterServiceImpl} counts as a doctor. */
+    private boolean isPhysician(UUID userId, UUID hospitalId) {
+        return userId != null && hospitalId != null && (roleValidator.isDoctor(userId, hospitalId)
+            || roleValidator.isPhysician(userId, hospitalId) || roleValidator.isSurgeon(userId, hospitalId));
+    }
+
+    /**
+     * Whether the signed-in user may update or delete the summary (the rule of
+     * {@link #requireAuthor}), so the portal shows the buttons the server
+     * accepts (review of #971).
+     */
+    private boolean editableByCaller(DischargeSummary summary) {
+        if (Boolean.TRUE.equals(summary.getIsFinalized())) {
+            return false;
+        }
+        try {
+            requireAuthor(summary);
+            return true;
+        } catch (com.example.hms.exception.ClientSafeAccessDeniedException refused) {
+            return false;
+        }
+    }
+
+    private DischargeSummaryResponseDTO toDto(DischargeSummary summary) {
+        return toDto(summary, encountersAwaitingSignature(List.of(summary)));
+    }
+
+    /** QA D1711: a list answers its notes awaiting a signature in one read, as the portal list does. */
+    private List<DischargeSummaryResponseDTO> toDtos(List<DischargeSummary> summaries) {
+        java.util.Set<UUID> pendingSignature = encountersAwaitingSignature(summaries);
+        return summaries.stream()
+            .map(summary -> toDto(summary, pendingSignature))
+            .toList();
+    }
+
+    /**
+     * QA D1711 (round 46): every staff summary answers {@code pendingSignature} with the patient list's own
+     * computation (a note of the visit still waits for its author's signature); it was false on every staff
+     * path, so an API client read an unsigned visit as finalised.
+     */
+    private DischargeSummaryResponseDTO toDto(DischargeSummary summary, java.util.Set<UUID> pendingSignature) {
+        DischargeSummaryResponseDTO dto = dischargeSummaryMapper.toResponseDTO(summary);
+        if (dto != null) {
+            dto.setEditableByCaller(editableByCaller(summary));
+            dto.setPendingSignature(awaitsSignature(summary, pendingSignature));
+        }
+        return dto;
+    }
+
+    private static boolean awaitsSignature(DischargeSummary summary, java.util.Set<UUID> pendingSignature) {
+        return summary.getEncounter() != null && summary.getEncounter().getId() != null
+            && pendingSignature.contains(summary.getEncounter().getId());
+    }
+
     private void enforceHospitalScope(DischargeSummary summary, UUID summaryId) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && summary.getHospital() != null
                 && !activeHospitalId.equals(summary.getHospital().getId())) {
-            throw new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString());
+            throw new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId);
         }
     }
 
@@ -425,10 +570,27 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         int enriched = enrichSparseExistingSummaries(patientId);
 
         // 3. Return all discharge summaries for this patient
+        // QA D151: a summary backfilled for a prescription's anchor
+        // consultation before this filter existed is not shown either.
+        // QA D1070: a draft written during a visit still waiting or in progress
+        // is not the patient's yet; the summary is published when its visit is
+        // completed (checkout), or, with no visit, once finalised.
         List<DischargeSummary> rows = dischargeSummaryRepository
-                .findByPatient_IdOrderByDischargeDateDesc(patientId);
+                .findByPatient_IdOrderByDischargeDateDesc(patientId).stream()
+                .filter(r -> !isPrescriptionAnchor(r.getEncounter()))
+                .filter(DischargeSummaryServiceImpl::publishedToPatient)
+                .toList();
+        // Provisional platform rule: a visit with a note still waiting for its author's
+        // signature is shown "not finalised" to the patient. One read for the whole list.
+        java.util.Set<UUID> pendingSignature = encountersAwaitingSignature(rows);
         List<DischargeSummaryResponseDTO> result = rows.stream()
-                .map(dischargeSummaryMapper::toResponseDTO)
+                .map(row -> {
+                    DischargeSummaryResponseDTO dto = dischargeSummaryMapper.toResponseDTO(row);
+                    if (dto != null) {
+                        dto.setPendingSignature(awaitsSignature(row, pendingSignature));
+                    }
+                    return dto;
+                })
                 .toList();
 
         long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
@@ -486,10 +648,10 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     }
 
     private void incrementCounter(String name, String outcome) {
-        incrementCounter(name, outcome, 1);
+        incrementCounter(name, outcome, 1.0);
     }
 
-    private void incrementCounter(String name, String outcome, long amount) {
+    private void incrementCounter(String name, String outcome, double amount) {
         if (meterRegistry == null) return; // unit-test path
         try {
             Counter.builder(name)
@@ -518,6 +680,11 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Backfilling {} missing discharge summaries for patient {}", orphans.size(), patientId);
         int created = 0;
         for (Encounter enc : orphans) {
+            // QA D151: the completed consultation a stand-alone prescription
+            // creates is bookkeeping, not a visit; it gets no after-visit summary.
+            if (isPrescriptionAnchor(enc)) {
+                continue;
+            }
             try {
                 DischargeSummary summary = new DischargeSummary();
                 summary.setEncounter(enc);
@@ -535,7 +702,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 // Build diagnosis text from JSON array stored on encounter
                 String diagText = buildDiagnosisTextFromEncounter(enc);
                 summary.setDischargeDiagnosis(diagText);
-                summary.setFollowUpInstructions(enc.getFollowUpInstructions());
+                summary.setFollowUpInstructions(com.example.hms.mapper.CheckOutMapper.followUpWithSignedNote(
+                        enc.getFollowUpInstructions(), enc.getLatestSignedEncounterNote()));
 
                 // Encounter notes → hospitalCourse (visit summary)
                 if (enc.getNotes() != null && !enc.getNotes().isBlank()) {
@@ -580,9 +748,12 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 .findByPatient_IdOrderByDischargeDateDesc(patientId);
         int enriched = 0;
         for (DischargeSummary summary : summaries) {
-            boolean changed = false;
             Encounter enc = summary.getEncounter();
-            if (enc == null) continue;
+            // QA D151: a prescription anchor is never shown, so never enriched.
+            if (enc == null || isPrescriptionAnchor(enc)) continue;
+            // QA D1428 class: a finalized summary is signed; a read never adds to it.
+            if (Boolean.TRUE.equals(summary.getIsFinalized())) continue;
+            boolean changed = false;
 
             // Enrich hospitalCourse from encounter notes if missing.
             //
@@ -598,6 +769,16 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                     summary.setHospitalCourse(enc.getNotes());
                     changed = true;
                 }
+            }
+
+            // QA D744: a summary written before the checkout path carried the
+            // signed note (encounter 81b42d8d in the round-10 re-test) gains
+            // the note's instructions and plan; the join adds only what is missing.
+            String followUp = com.example.hms.mapper.CheckOutMapper.followUpWithSignedNote(
+                    summary.getFollowUpInstructions(), enc.getLatestSignedEncounterNote());
+            if (followUp != null && !followUp.equals(summary.getFollowUpInstructions())) {
+                summary.setFollowUpInstructions(followUp);
+                changed = true;
             }
 
             // Enrich medications from prescriptions if missing
@@ -626,11 +807,17 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
      */
     private void populateMedicationsFromPrescriptions(DischargeSummary summary, Encounter enc) {
         try {
-            Pageable page = PageRequest.of(0, 100);
             List<Prescription> prescriptions = prescriptionRepository
-                    .findByEncounter_Id(enc.getId(), page)
+                    .findByEncounter_Id(enc.getId(), PrescriptionRepository.EVERY_ORDER_OF_THE_VISIT)
                     .getContent();
             for (Prescription rx : prescriptions) {
+                // QA D152: a DRAFT or unsigned order was never given to the
+                // patient, and a withdrawn one is not continued at discharge.
+                if (rx.getStatus() == com.example.hms.enums.PrescriptionStatus.DRAFT
+                        || rx.getStatus() == com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE
+                        || (rx.getStatus() != null && rx.getStatus().isWithdrawn())) {
+                    continue;
+                }
                 MedicationReconciliationEntry entry = MedicationReconciliationEntry.builder()
                         .medicationName(rx.getMedicationName())
                         .dosage(rx.getDosage())
@@ -652,13 +839,98 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     private String buildDiagnosisTextFromEncounter(Encounter encounter) {
         String raw = encounter.getDischargeDiagnoses();
         if (raw == null || raw.isBlank()) {
-            return "Discharge diagnosis not specified at checkout.";
+            return diagnosisNotSpecified(encounter);
         }
         // Strip JSON array brackets and quotes: ["A","B"] → A; B
         String stripped = raw.replaceAll("[\\[\\]\"]", "").trim();
         if (stripped.isEmpty()) {
-            return "Discharge diagnosis not specified at checkout.";
+            return diagnosisNotSpecified(encounter);
         }
         return stripped.replace(",", ";");
+    }
+
+    /**
+     * QA D151: the placeholder is read by the patient, so it is written in the
+     * patient's language, not as a hard-coded English sentence.
+     */
+    private String diagnosisNotSpecified(Encounter encounter) {
+        java.util.Locale locale = patientLocaleResolver.resolve(encounter.getPatient(),
+                com.example.hms.service.i18n.NotificationLocales.PATIENT_FALLBACK);
+        return messageSource.getMessage("dischargeSummary.diagnosis.notSpecified", null,
+                "Discharge diagnosis not specified at checkout.", locale);
+    }
+
+    static boolean isPrescriptionAnchor(Encounter encounter) {
+        return encounter != null && Encounter.PRESCRIPTION_ANCHOR_NOTE.equals(encounter.getNotes());
+    }
+
+    /** QA D1070: visits nobody has seen yet, or that ended unseen. */
+    private static final java.util.Set<com.example.hms.enums.EncounterStatus> NOT_SEEN = java.util.EnumSet.of(
+        com.example.hms.enums.EncounterStatus.SCHEDULED, com.example.hms.enums.EncounterStatus.ARRIVED,
+        com.example.hms.enums.EncounterStatus.TRIAGE, com.example.hms.enums.EncounterStatus.WAITING_FOR_PHYSICIAN,
+        com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
+
+    /** Stays and operations are discharged by the ward's physicians, not only the one the encounter names. */
+    private static final java.util.Set<com.example.hms.enums.EncounterType> TEAM_DISCHARGED = java.util.EnumSet.of(
+        com.example.hms.enums.EncounterType.INPATIENT, com.example.hms.enums.EncounterType.SURGERY,
+        // The emergency department hands patients over at shift change: the receiving doctor discharges.
+        com.example.hms.enums.EncounterType.EMERGENCY);
+
+    /**
+     * QA D1070: an outpatient visit's after-visit summary is signed by the
+     * physician the visit is assigned to - the summary and the visit name the
+     * same clinician. An inpatient stay or an operation is discharged by the
+     * ward's physicians (attending, covering), as in real hospitals.
+     */
+    private void requireTreatingClinician(Encounter encounter, Staff dischargingProvider) {
+        if (encounter.getEncounterType() != null && TEAM_DISCHARGED.contains(encounter.getEncounterType())) {
+            return;
+        }
+        Staff treating = encounter.getStaff();
+        if (treating == null || treating.getId() == null || dischargingProvider == null
+                || treating.getId().equals(dischargingProvider.getId())
+                // One physician may hold two staff records at a hospital (two departments): the same person.
+                || (treating.getUser() != null && dischargingProvider.getUser() != null
+                    && treating.getUser().getId() != null
+                    && treating.getUser().getId().equals(dischargingProvider.getUser().getId()))) {
+            return;
+        }
+        // A visit opened by a nurse (the walk-in desk) names the nurse: the
+        // doctor who then sees the patient writes the summary (QA D930). Only a
+        // visit assigned to another physician is that physician's to sum up.
+        UUID hospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
+        if (treating.getUser() != null && isPhysician(treating.getUser().getId(), hospitalId)) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "dischargeSummary.encounter.notTreatingClinician");
+        }
+    }
+
+    /** The visits of {@code rows} with a note still waiting for its author's signature. */
+    private java.util.Set<UUID> encountersAwaitingSignature(List<DischargeSummary> rows) {
+        java.util.Set<UUID> ids = rows.stream()
+                .map(DischargeSummary::getEncounter)
+                .filter(java.util.Objects::nonNull)
+                .map(Encounter::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (ids.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return encounterNoteRepository.findByEncounter_IdIn(ids).stream()
+                .filter(com.example.hms.model.encounter.EncounterNote::awaitsSignature)
+                .map(note -> note.getEncounter().getId())
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    /**
+     * QA D1070: what the patient portal publishes - a completed visit's summary, or a finalised one with no visit.
+     * A completed visit's summary is shown even when not finalised: the checkout backfill writes those rows
+     * unfinalised (backfillMissingDischargeSummaries), and they are the after-visit summary patients read.
+     */
+    static boolean publishedToPatient(DischargeSummary summary) {
+        Encounter visit = summary.getEncounter();
+        if (visit == null) {
+            return Boolean.TRUE.equals(summary.getIsFinalized());
+        }
+        return visit.getStatus() == com.example.hms.enums.EncounterStatus.COMPLETED;
     }
 }

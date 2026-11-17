@@ -57,6 +57,14 @@ public class DrugInteractionDTO {
     @NotBlank(message = "{drugInteraction.recommendation.required}")
     private String recommendation;
 
+    /** QA D887: {@link #description} in the reader's language when it is the seeded text. Read-only. */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private String displayDescription;
+
+    /** QA D887: {@link #recommendation} in the reader's language when it is the seeded text. Read-only. */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private String displayRecommendation;
+
     @Size(max = 500)
     private String mechanism;
 

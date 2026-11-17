@@ -16,7 +16,6 @@ import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -49,8 +48,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     @Override
     public LabInstrumentResponseDTO getById(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INSTRUMENT_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
         requireHospitalScope(instrument.getHospital().getId(), locale);
         return mapper.toDto(instrument);
     }
@@ -61,15 +59,13 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         requireHospitalScope(hospitalId, locale);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("hospital.notfound", new Object[]{hospitalId}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
 
         if (instrumentRepository.existsByHospitalIdAndSerialNumber(hospitalId, dto.getSerialNumber())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("instrument.duplicate.serial", new Object[]{dto.getSerialNumber()}, locale));
+            throw BusinessRuleException.ofKey("instrument.duplicate.serial", dto.getSerialNumber());
         }
 
-        Department department = resolveDepartment(dto.getDepartmentId(), locale);
+        Department department = resolveDepartment(dto.getDepartmentId());
         LabInstrument instrument = mapper.toEntity(dto, hospital, department);
         instrument = instrumentRepository.save(instrument);
         return mapper.toDto(instrument);
@@ -79,8 +75,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     @Transactional
     public LabInstrumentResponseDTO update(UUID id, LabInstrumentRequestDTO dto, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INSTRUMENT_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
         requireHospitalScope(instrument.getHospital().getId(), locale);
 
         // Check serial number uniqueness if changed
@@ -88,11 +83,10 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
                 && !dto.getSerialNumber().equals(instrument.getSerialNumber())
                 && instrumentRepository.existsByHospitalIdAndSerialNumber(
                     instrument.getHospital().getId(), dto.getSerialNumber())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("instrument.duplicate.serial", new Object[]{dto.getSerialNumber()}, locale));
+            throw BusinessRuleException.ofKey("instrument.duplicate.serial", dto.getSerialNumber());
         }
 
-        Department department = resolveDepartment(dto.getDepartmentId(), locale);
+        Department department = resolveDepartment(dto.getDepartmentId());
         mapper.updateEntity(instrument, dto, department);
         instrument = instrumentRepository.save(instrument);
         return mapper.toDto(instrument);
@@ -102,8 +96,7 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
     @Transactional
     public void deactivate(UUID id, Locale locale) {
         LabInstrument instrument = instrumentRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INSTRUMENT_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INSTRUMENT_NOT_FOUND_KEY, id));
         requireHospitalScope(instrument.getHospital().getId(), locale);
         instrument.setActive(false);
         instrumentRepository.save(instrument);
@@ -111,11 +104,13 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
 
     // ── helpers ───────────────────────────────────────────────────
 
-    private Department resolveDepartment(String departmentId, Locale locale) {
+    private Department resolveDepartment(String departmentId) {
         if (departmentId == null || departmentId.isBlank()) return null;
-        return departmentRepository.findById(UUID.fromString(departmentId))
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("department.notfound", new Object[]{departmentId}, locale)));
+        Department department = departmentRepository.findById(UUID.fromString(departmentId))
+            .orElseThrow(() -> new ResourceNotFoundException("department.notfound", departmentId));
+        // QA r5 tenancy sweep: another hospital's row answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notfound", departmentId);
+        return department;
     }
 
     private boolean hasHospitalAccess(UUID hospitalId) {
@@ -132,7 +127,4 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
         }
     }
 
-    private String getLocalizedMessage(String key, Object[] args, Locale locale) {
-        return messageSource.getMessage(key, args, key, locale != null ? locale : LocaleContextHolder.getLocale());
-    }
 }

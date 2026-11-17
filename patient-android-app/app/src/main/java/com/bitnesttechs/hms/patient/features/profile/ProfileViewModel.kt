@@ -1,5 +1,8 @@
 package com.bitnesttechs.hms.patient.features.profile
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
+import com.bitnesttechs.hms.patient.core.network.AppText
+import com.bitnesttechs.hms.patient.R
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -8,6 +11,7 @@ import com.bitnesttechs.hms.patient.core.auth.AuthRepository
 import com.bitnesttechs.hms.patient.core.models.PatientProfileDto
 import com.bitnesttechs.hms.patient.core.models.PatientProfileUpdateDto
 import com.bitnesttechs.hms.patient.core.network.ApiService
+import com.bitnesttechs.hms.patient.core.push.PushRegistrar
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +24,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val api: ApiService,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val pushRegistrar: PushRegistrar
 ) : ViewModel() {
 
     private val _profile = MutableStateFlow<PatientProfileDto?>(null)
@@ -37,6 +42,9 @@ class ProfileViewModel @Inject constructor(
 
     private val _profileImageUrl = MutableStateFlow<String?>(null)
     val profileImageUrl: StateFlow<String?> = _profileImageUrl
+
+    /** Only a password (HMS) session can change its password here; SSO passwords live in Keycloak. */
+    val canChangePassword: Boolean get() = !authRepository.isSsoSession
 
     init { load() }
 
@@ -62,14 +70,14 @@ class ProfileViewModel @Inject constructor(
             try {
                 val resp = api.updateProfile(update)
                 if (resp.isSuccessful) {
-                    _saveResult.value = "Profile updated successfully"
+                    _saveResult.value = AppText.get(R.string.profile_updated)
                     // Re-fetch the full profile to ensure all fields are in sync
                     load()
                 } else {
-                    _saveResult.value = "Update failed: ${resp.code()}"
+                    _saveResult.value = AppText.get(R.string.profile_update_failed, FailureText.http(resp.code()))
                 }
             } catch (e: Exception) {
-                _saveResult.value = "Error: ${e.message}"
+                _saveResult.value = AppText.get(R.string.profile_update_failed, FailureText.of(e))
             }
         }
     }
@@ -90,21 +98,28 @@ class ProfileViewModel @Inject constructor(
                 if (resp.isSuccessful) {
                     val imageUrl = resp.body()?.imageUrl
                     _profileImageUrl.value = imageUrl
-                    _saveResult.value = "Profile photo updated"
+                    _saveResult.value = AppText.get(R.string.profile_photo_updated)
                 } else {
-                    _saveResult.value = "Photo upload failed: ${resp.code()}"
+                    _saveResult.value = AppText.get(R.string.profile_photo_failed, FailureText.http(resp.code()))
                 }
             } catch (e: Exception) {
-                _saveResult.value = "Error: ${e.message}"
+                _saveResult.value = AppText.get(R.string.profile_photo_failed, FailureText.of(e))
             }
         }
     }
 
     fun clearSaveResult() { _saveResult.value = null }
 
+    /** The backend composes notifications in the registered locale, so a language change re-registers. */
+    fun onLanguageChanged() = pushRegistrar.registerAsync()
+
+    /** Set with [loggedOut] for an SSO session: the Keycloak end-session page to open first. */
+    private val _keycloakEndSession = MutableStateFlow<android.content.Intent?>(null)
+    val keycloakEndSession: StateFlow<android.content.Intent?> = _keycloakEndSession
+
     fun logout() {
         viewModelScope.launch {
-            authRepository.logout()
+            _keycloakEndSession.value = authRepository.logout().keycloakEndSession
             _loggedOut.value = true
         }
     }

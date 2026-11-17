@@ -18,8 +18,7 @@ data class InvoiceDto(
 ) {
     val isPaid: Boolean get() = status.uppercase() == "PAID"
     val isCancelled: Boolean get() = status.uppercase() == "CANCELLED"
-    val statusDisplay: String get() = status.replace("_", " ").lowercase()
-        .replaceFirstChar { it.uppercase() }
+    val statusEnum: InvoiceStatus get() = InvoiceStatus.fromWire(status)
 }
 
 /** Mirrors PatientPaymentRequestDTO: the same body the web portal sends. */
@@ -40,6 +39,9 @@ data class InvoiceItemDto(
     @Json(name = "totalPrice") val totalPrice: Double = 0.0
 )
 
+/** QA D404: what the patient has paid at the pharmacy, voided payments left out. */
+fun List<PharmacyPaymentDto>.paidTotal(): Double = filter { it.countsTowardPaid }.sumOf { it.amount }
+
 @JsonClass(generateAdapter = true)
 data class PharmacyPaymentDto(
     @Json(name = "id") val id: String = "",
@@ -53,8 +55,12 @@ data class PharmacyPaymentDto(
     @Json(name = "receivedBy") val receivedBy: String? = null,
     @Json(name = "notes") val notes: String? = null,
     @Json(name = "createdAt") val createdAt: String = "",
-    @Json(name = "updatedAt") val updatedAt: String? = null
+    @Json(name = "updatedAt") val updatedAt: String? = null,
+    @Json(name = "status") val status: String? = null
 ) {
+    /** QA D404: a payment voided with its cancelled dispense is not money paid. */
+    val countsTowardPaid: Boolean get() = !"VOIDED".equals(status, ignoreCase = true)
+
     val methodDisplay: String get() = paymentMethod.replace("_", " ").lowercase()
         .replaceFirstChar { it.uppercase() }
 }

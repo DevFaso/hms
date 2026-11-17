@@ -20,7 +20,7 @@ struct ProxyDetailView: View {
                     } else {
                         detailRow(label: "Name", value: proxy.grantorName)
                     }
-                    detailRow(label: "Relationship", value: proxy.relationship?.replacingOccurrences(of: "_", with: " ").capitalized)
+                    detailRow(label: "Relationship", value: EnumLabel.label(.relationship, proxy.relationship, rawFallback: true))
                 }
 
                 // ── Permissions ──
@@ -168,13 +168,13 @@ struct ProxyDetailView: View {
                 .font(.title2).bold()
 
             if let relationship = proxy.relationship {
-                Text(relationship.replacingOccurrences(of: "_", with: " ").capitalized)
+                Text(EnumLabel.text(.relationship, relationship, rawFallback: true))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
             StatusBadge(
-                text: proxy.status?.capitalized ?? "Active",
+                text: EnumLabel.text(.proxyStatus, proxy.status ?? "ACTIVE"),
                 color: proxy.status?.uppercased() == "ACTIVE" ? "green" : "gray"
             )
         }
@@ -254,7 +254,7 @@ struct ProxyDetailView: View {
     }
 
     private func permissionTitle(_ perm: String) -> String {
-        perm.replacingOccurrences(of: "_", with: " ").capitalized
+        EnumLabel.text(.proxyPermission, perm)
     }
 
     private func permissionDescription(_ perm: String) -> String {

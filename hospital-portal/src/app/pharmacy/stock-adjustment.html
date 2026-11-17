@@ -1,19 +1,30 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">swap_vert</span
+        ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+      </p>
       <h1 class="page-title">{{ 'PHARMACY.STOCK_ADJUSTMENT_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.STOCK_ADJUSTMENT_SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
-      <select
-        class="pharmacy-select"
-        [(ngModel)]="selectedPharmacyId"
-        (ngModelChange)="onPharmacyChange()"
-      >
-        @for (p of pharmacies(); track p.id) {
-          <option [value]="p.id">{{ p.name }}</option>
-        }
-      </select>
+      @if (pharmaciesLoaded() && pharmacies().length === 0) {
+        <p class="pharmacy-empty-hint" role="status" data-testid="no-pharmacy-hint">
+          {{ 'PHARMACY.NO_PHARMACY_HINT' | translate }}
+        </p>
+      } @else {
+        <select
+          class="pharmacy-select"
+          [attr.aria-label]="'PHARMACY.SELECT_PHARMACY' | translate"
+          [(ngModel)]="selectedPharmacyId"
+          (ngModelChange)="onPharmacyChange()"
+        >
+          @for (p of pharmacies(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
+      }
       <button class="btn-primary" (click)="openForm()">
         <span class="material-symbols-outlined">swap_vert</span>
         {{ 'PHARMACY.NEW_TRANSACTION' | translate }}
@@ -41,18 +52,26 @@
               required
             >
               <option value="">{{ 'PHARMACY.SELECT_TYPE_OPTION' | translate }}</option>
-              @for (t of transactionTypes; track t) {
-                <option [value]="t">{{ t }}</option>
+              @for (t of formTransactionTypes; track t) {
+                <option [value]="t">{{ t | enumLabel: 'stockTransactionType' }}</option>
               }
             </select>
           </div>
           <div class="field">
             <label for="txItem">{{ 'PHARMACY.INVENTORY_ITEM' | translate }} *</label>
-            <select id="txItem" [(ngModel)]="form.inventoryItemId" name="inventoryItemId" required>
+            <select
+              id="txItem"
+              [ngModel]="form.inventoryItemId"
+              (ngModelChange)="onItemChange($event)"
+              name="inventoryItemId"
+              required
+            >
               <option value="">{{ 'PHARMACY.SELECT_ITEM_OPTION' | translate }}</option>
               @for (item of inventoryItems(); track item.id) {
                 <option [value]="item.id">
-                  {{ getItemName(item) }} (Qty: {{ item.quantityOnHand }})
+                  {{ getItemName(item) }} ({{
+                    'PHARMACY.QTY_ON_HAND' | translate: { qty: item.quantityOnHand }
+                  }})
                 </option>
               }
             </select>
@@ -66,11 +85,88 @@
               type="number"
               [(ngModel)]="form.quantity"
               name="quantity"
-              min="1"
+              [attr.min]="isAdjustment() ? null : 1"
               required
             />
+            @if (writeOffReason()) {
+              <small class="field-hint" data-testid="write-off-hint">{{
+                'PHARMACY.WRITE_OFF_SIGN_HINT' | translate
+              }}</small>
+            } @else if (isAdjustment()) {
+              <small class="field-hint">{{ 'PHARMACY.ADJUSTMENT_SIGN_HINT' | translate }}</small>
+            }
           </div>
         </div>
+
+        <!-- QA D157: a controlled substance moves only in front of a witness -->
+        @if (needsWitness()) {
+          <div class="form-row">
+            <div class="field">
+              <label for="txWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+              <select id="txWitness" [(ngModel)]="form.witnessedBy" name="witnessedBy" required>
+                <option [ngValue]="undefined">
+                  {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+                </option>
+                @for (w of witnessCandidates(); track w.userId) {
+                  <option [ngValue]="w.userId">{{ w.displayName }}</option>
+                }
+              </select>
+              @if (witnessCandidates().length === 0) {
+                <small class="field-hint">{{ 'PHARMACY.NO_WITNESS_HINT' | translate }}</small>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- D82: a lot-tracked item moves through one of its lots -->
+        @if (!isReceipt() && txType() && itemLots().length > 0) {
+          <div class="form-row">
+            <div class="field">
+              <label for="txLot">{{ 'PHARMACY.STOCK_LOT' | translate }} *</label>
+              <select
+                id="txLot"
+                [(ngModel)]="form.stockLotId"
+                name="stockLotId"
+                (ngModelChange)="onLotChange()"
+                required
+              >
+                <option [ngValue]="undefined">
+                  {{ 'PHARMACY.SELECT_LOT_OPTION' | translate }}
+                </option>
+                @for (lot of itemLots(); track lot.id) {
+                  <option [ngValue]="lot.id">
+                    {{ lot.lotNumber }} ({{ lot.remainingQuantity }},
+                    {{ lot.expiryDate | serverTime | date: 'mediumDate' }})
+                  </option>
+                }
+              </select>
+            </div>
+            <!-- QA D964: a transfer sends first expired, first out, or says why not -->
+            @if (earlierTransferLot(); as earlier) {
+              <div class="field" data-testid="transfer-fefo-warning">
+                <label for="trFefo">{{ 'PHARMACY.FEFO_REASON' | translate }} *</label>
+                {{ ' '
+                }}<small class="field-hint" role="alert">{{
+                  'PHARMACY.FEFO_WARNING'
+                    | translate
+                      : {
+                          lot: earlier.lotNumber,
+                          date: (earlier.expiryDate | serverTime | date: 'mediumDate'),
+                          left: earlier.remainingQuantity,
+                        }
+                }}</small>
+                <input
+                  id="trFefo"
+                  type="text"
+                  maxlength="300"
+                  [(ngModel)]="fefoReason"
+                  name="fefoReason"
+                  required
+                />
+              </div>
+            }
+          </div>
+        }
 
         <!-- RECEIPT-specific fields -->
         @if (isReceipt()) {
@@ -106,12 +202,13 @@
               />
             </div>
             <div class="field">
-              <label for="rxExpiry">{{ 'PHARMACY.EXPIRY_DATE' | translate }}</label>
+              <label for="rxExpiry">{{ 'PHARMACY.EXPIRY_DATE' | translate }} *</label>
               <input
                 id="rxExpiry"
                 type="date"
                 [(ngModel)]="receiptExpiryDate"
                 name="receiptExpiryDate"
+                required
               />
             </div>
             <div class="field">
@@ -141,7 +238,7 @@
               >
                 <option value="">{{ 'PHARMACY.SELECT_REASON_OPTION' | translate }}</option>
                 @for (code of adjustmentReasonCodes; track code) {
-                  <option [value]="code">{{ code }}</option>
+                  <option [value]="code">{{ 'PHARMACY.ADJ_REASON_' + code | translate }}</option>
                 }
               </select>
             </div>
@@ -178,17 +275,52 @@
           </div>
         }
 
-        <!-- RETURN-specific fields -->
+        <!-- RETURN-specific fields. QA D932: the return is booked against its
+             dispense, so the stock goes back on the lot the fill came from. -->
         @if (isReturn()) {
           <div class="form-row">
             <div class="field">
-              <label for="retRef">{{ 'PHARMACY.RETURN_REFERENCE' | translate }} *</label>
+              <label for="retDispense">{{ 'PHARMACY.RETURN_DISPENSE' | translate }}</label>
+              <select
+                id="retDispense"
+                data-testid="return-dispense"
+                [(ngModel)]="returnDispenseId"
+                name="returnDispenseId"
+              >
+                <option value="">{{ 'PHARMACY.RETURN_NO_DISPENSE_OPTION' | translate }}</option>
+                @for (d of returnableDispenses(); track d.dispenseId) {
+                  <option [value]="d.dispenseId">
+                    {{ d.dispensedAt | serverTime | date: 'short' }} · {{ d.patientName || '—' }} ·
+                    {{
+                      'PHARMACY.RETURNABLE_OF'
+                        | translate: { left: d.returnableQuantity, given: d.quantityDispensed }
+                    }}
+                  </option>
+                }
+              </select>
+              @if (returnableLoading()) {
+                <small class="field-hint">{{ 'COMMON.LOADING' | translate }}</small>
+              } @else if (
+                form.inventoryItemId &&
+                (itemLots().length === 0 || form.stockLotId) &&
+                returnableDispenses().length === 0
+              ) {
+                <small class="field-hint" data-testid="return-no-dispense">{{
+                  'PHARMACY.RETURN_NO_DISPENSE_HINT' | translate
+                }}</small>
+              }
+            </div>
+            <div class="field">
+              <label for="retRef"
+                >{{ 'PHARMACY.RETURN_REFERENCE' | translate
+                }}{{ returnDispenseId ? '' : ' *' }}</label
+              >
               <input
                 id="retRef"
                 type="text"
                 [(ngModel)]="returnReference"
                 name="returnReference"
-                required
+                [required]="!returnDispenseId"
               />
             </div>
           </div>
@@ -205,7 +337,14 @@
           <button type="button" class="btn-secondary" (click)="closeForm()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="submit" class="btn-primary" [disabled]="saving() || !txType()">
+          <button
+            submitGuardRequired
+            type="submit"
+            class="btn-primary"
+            [disabled]="saving()"
+            [appSubmitGuard]="!txType()"
+            [submitGuardFields]="['txType']"
+          >
             <span class="material-symbols-outlined">check</span>
             {{
               saving() ? ('COMMON.SAVING' | translate) : ('PHARMACY.RECORD_TRANSACTION' | translate)
@@ -216,13 +355,22 @@
     </div>
   }
 
+  <div class="workspace-strip">
+    <p>
+      <strong>{{ txLoading() ? '—' : transactions().length }}</strong
+      ><span>{{ 'PHARMACY_WORKSPACE.LOADED_MOVEMENTS' | translate }}</span>
+    </p>
+    <p>{{ 'PHARMACY_WORKSPACE.STOCK_HINT' | translate }}</p>
+  </div>
   <!-- Filter -->
   <div class="filter-bar">
-    <label for="txFilterType">{{ 'PHARMACY.FILTER_BY_TYPE' | translate }}:</label>
+    <label for="txFilterType"
+      >{{ 'PHARMACY.FILTER_BY_TYPE' | translate }}{{ 'COMMON.COLON' | translate }}</label
+    >
     <select id="txFilterType" [(ngModel)]="filterType" (ngModelChange)="onFilterChange()">
       <option value="">{{ 'COMMON.ALL' | translate }}</option>
       @for (t of transactionTypes; track t) {
-        <option [value]="t">{{ t }}</option>
+        <option [value]="t">{{ t | enumLabel: 'stockTransactionType' }}</option>
       }
     </select>
   </div>
@@ -234,7 +382,12 @@
       <p>{{ 'COMMON.LOADING' | translate }}</p>
     </div>
   } @else if (transactions().length > 0) {
-    <div class="table-wrapper">
+    <div
+      class="table-wrapper"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'PHARMACY.STOCK_ADJUSTMENT_TITLE' | translate"
+    >
       <table class="data-table">
         <thead>
           <tr>
@@ -251,30 +404,31 @@
             <tr>
               <td>
                 <span class="tx-type" [class]="getTypeClass(tx.transactionType)">
-                  {{ tx.transactionType }}
+                  {{ tx.transactionType | enumLabel: 'stockTransactionType' }}
                 </span>
               </td>
               <td>
                 <span class="tx-qty" [class]="getTypeClass(tx.transactionType)">
-                  {{
-                    ['RECEIVE', 'ADJUSTMENT_IN', 'RETURN', 'TRANSFER_IN'].includes(
-                      tx.transactionType
-                    )
-                      ? '+'
-                      : '-'
-                  }}{{ tx.quantity }}
+                  {{ signedQuantity(tx) }}
                 </span>
               </td>
               <td>
-                @if (tx.stockLotId) {
-                  <span class="code-chip">{{ tx.stockLotId }}</span>
+                @if (tx.stockLotNumber || tx.lotNumber) {
+                  <span class="code-chip">{{ tx.stockLotNumber ?? tx.lotNumber }}</span>
                 } @else {
                   —
                 }
               </td>
-              <td class="reason-cell">{{ tx.reason ?? '—' }}</td>
-              <td>{{ tx.createdAt | date: 'medium' }}</td>
-              <td>{{ tx.performedBy ?? '—' }}</td>
+              <td class="reason-cell" [title]="reasonLabel(tx)">{{ reasonLabel(tx) }}</td>
+              <td>{{ tx.createdAt | serverTime | dateTime }}</td>
+              <td>
+                {{ tx.performedByName | dash }}
+                @if (tx.witnessedByName) {
+                  <small class="witness-note">{{
+                    'PHARMACY.WITNESSED_BY' | translate: { name: tx.witnessedByName }
+                  }}</small>
+                }
+              </td>
             </tr>
           }
         </tbody>

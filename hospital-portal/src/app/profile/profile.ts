@@ -1,17 +1,24 @@
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
+  ElementRef,
   inject,
   OnInit,
   signal,
   computed,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
 import { FormsModule } from '@angular/forms';
+import { finalize } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
-import { MfaService, MfaEnrollmentResponse } from '../auth/mfa.service';
+import { MFA_STEP_UP_MESSAGES, MfaService, MfaEnrollmentResponse } from '../auth/mfa.service';
+import { OidcAuthService } from '../auth/oidc-auth.service';
+import { AuditDescriptionService } from '../audit-logs/audit-description.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -27,12 +34,33 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { serverInstant } from '../shared/date-utils';
+import { PatientPortalService } from '../services/patient-portal.service';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
+
+/** QA D1306 (round 28): the fields each profile refusal marks. */
+const MFA_STEPUP_IDS = ['mfaStepUpCode'];
+const MFA_TOTP_IDS = ['mfaTotpCode'];
+const EMAIL_PASSWORD_IDS = ['editEmailPassword'];
+const PASSWORD_FIELD_IDS = ['pwdNew', 'pwdConfirm'];
 
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    FocusOnRenderDirective,
+    MeasurePipe,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RoleLabelPipe,
+  ],
   templateUrl: './profile.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './profile.scss',
@@ -45,6 +73,12 @@ export class ProfileComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly oidcAuth = inject(OidcAuthService);
+  private readonly auditDescriptions = inject(AuditDescriptionService);
+  private readonly patientPortal = inject(PatientPortalService);
+  readonly nationalUniqueIdMasked = signal<string | null>(null);
 
   private static readonly VALID_TABS: readonly ProfileTab[] = [
     'overview',
@@ -68,6 +102,68 @@ export class ProfileComponent implements OnInit {
   /* ── Edit form model ── */
   editForm = signal<ProfileUpdateRequest>({});
   formDirty = signal(false);
+  /** The current password, asked for only when the email is being changed. */
+  emailChangePassword = signal('');
+
+  /** Self-service password change fields (security tab). */
+  pwdCurrent = signal('');
+  pwdNew = signal('');
+  pwdConfirm = signal('');
+  changingPassword = signal(false);
+
+  /**
+   * A single sign-on session: Keycloak owns the email on that path and the
+   * server refuses to change it, so the page does not offer to.
+   */
+  ssoSession = computed(() => this.oidcAuth.authenticated());
+
+  /**
+   * True when the form asks for a different email. A blank field is "no
+   * change", never a change to ''; letter case alone is no change either,
+   * since the server stores addresses in lower case.
+   */
+  emailChanged = computed(() => {
+    const u = this.user();
+    const typed = (this.editForm().email ?? '').trim().toLowerCase();
+    return !!u && !this.ssoSession() && typed !== '' && typed !== (u.email ?? '').toLowerCase();
+  });
+
+  /**
+   * QA D1228 (round 24): the reader emptied the e-mail field of an account
+   * that has one. An account keeps its address (a blank field is "no
+   * change"), so the save said nothing and did nothing; the form now refuses
+   * on the field and says why.
+   */
+  emailCleared = computed(() => {
+    const u = this.user();
+    return (
+      !!u &&
+      !this.ssoSession() &&
+      !this.pendingEmail() &&
+      !!(u.email ?? '').trim() &&
+      (this.editForm().email ?? '').trim() === ''
+    );
+  });
+
+  /** QA D1228: the names or the phone differ from the account's. */
+  detailsChanged = computed(() => {
+    const u = this.user();
+    const data = this.editForm();
+    return (
+      !!u &&
+      ((data.firstName ?? '') !== (u.firstName ?? '') ||
+        (data.lastName ?? '') !== (u.lastName ?? '') ||
+        (data.phoneNumber ?? '') !== (u.phoneNumber ?? ''))
+    );
+  });
+
+  /** QA D1228: the only edit is an emptied e-mail: nothing can be saved. */
+  emailClearedOnly = computed(() => this.emailCleared() && !this.detailsChanged());
+
+  /** The address waiting for its code, once the server has sent one. */
+  pendingEmail = signal<string | null>(null);
+  emailCode = signal('');
+  confirmingEmail = signal(false);
 
   /* ── Computed ── */
   userInitials = computed(() => {
@@ -113,6 +209,16 @@ export class ProfileComponent implements OnInit {
   isSuperAdmin = computed(() => this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']));
 
   /**
+   * QA D844: a patient-only session (every role is ROLE_PATIENT). The header's
+   * roles / assignments / security % counters are staff ideas and are hidden
+   * for it; every staff role, listed in isStaffOrAdmin or not, keeps them.
+   */
+  isPatientOnly = computed(() => {
+    const roles = this.auth.getRoles();
+    return roles.length > 0 && roles.every((r) => r === 'ROLE_PATIENT');
+  });
+
+  /**
    * The profile-type label to display — derived from the JWT session roles,
    * never from the raw `profileType` DB field returned by the API.
    * A Super Admin who also happens to have a patient record should see
@@ -147,7 +253,7 @@ export class ProfileComponent implements OnInit {
   memberSince(): string {
     const u = this.user();
     if (!u?.createdAt) return '';
-    return new Date(u.createdAt).toLocaleDateString(this.dateLocale(), {
+    return serverInstant(u.createdAt).toLocaleDateString(this.dateLocale(), {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -157,7 +263,7 @@ export class ProfileComponent implements OnInit {
   lastLogin(): string {
     const u = this.user();
     if (!u?.lastLoginAt) return this.translate.instant('PROFILE.NEVER');
-    return new Date(u.lastLoginAt).toLocaleString(this.dateLocale(), {
+    return serverInstant(u.lastLoginAt).toLocaleString(this.dateLocale(), {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -194,7 +300,7 @@ export class ProfileComponent implements OnInit {
   accountAge(): string {
     const u = this.user();
     if (!u?.createdAt) return '';
-    const created = new Date(u.createdAt);
+    const created = serverInstant(u.createdAt);
     const now = new Date();
     const diffMs = now.getTime() - created.getTime();
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -217,24 +323,80 @@ export class ProfileComponent implements OnInit {
   }
 
   /* ── Inline MFA Enrollment ── */
-  mfaStep = signal<'idle' | 'qr' | 'verify' | 'backup'>('idle');
+  mfaStep = signal<'idle' | 'stepup' | 'qr' | 'verify' | 'backup'>('idle');
   mfaLoading = signal(false);
   mfaError = signal('');
   mfaEnrollment = signal<MfaEnrollmentResponse | null>(null);
   mfaTotpCode = '';
+  /** Replacing the authenticator: a current code from it, or an unused backup code. */
+  mfaStepUpCode = '';
+  /** The flow in progress replaces an active authenticator, which works until it is confirmed. */
+  mfaReplacing = signal(false);
+
+  /**
+   * An authenticator app the server counts as active: it can be replaced
+   * (with the step-up), not set up again. The server decides; the portal does
+   * not re-derive the rule from the other fields.
+   */
+  hasActiveTotp(): boolean {
+    return (this.credentials()?.mfaEnrollments ?? []).some(
+      (m) => m.method === 'TOTP' && m.active === true,
+    );
+  }
+
+  startMfaReplacement(): void {
+    this.mfaStepUpCode = '';
+    this.mfaError.set('');
+    this.mfaReplacing.set(true);
+    this.mfaStep.set('stepup');
+  }
+
+  submitMfaStepUp(): void {
+    const code = this.mfaStepUpCode.trim();
+    if (!code) {
+      // QA D1306 (round 28): the code box is marked, not only the banner.
+      const message = this.translate.instant('PROFILE.MFA_STEPUP_REQUIRED');
+      refuseFields(this.host.nativeElement, MFA_STEPUP_IDS, MFA_STEPUP_IDS, message);
+      this.mfaError.set(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], MFA_STEPUP_IDS, '');
+    this.requestEnrollment(code);
+  }
+
+  cancelMfaReplacement(): void {
+    this.finishMfaEnrollment();
+  }
 
   startMfaEnrollment(): void {
+    this.mfaReplacing.set(false);
+    this.requestEnrollment();
+  }
+
+  private requestEnrollment(stepUpCode?: string): void {
     this.mfaLoading.set(true);
     this.mfaError.set('');
-    this.mfaService.enroll().subscribe({
+    this.mfaService.enroll(stepUpCode).subscribe({
       next: (res) => {
+        this.mfaStepUpCode = '';
         this.mfaEnrollment.set(res);
         this.mfaStep.set('qr');
         this.mfaLoading.set(false);
       },
       error: (err) => {
+        const code = err?.error?.code as string | undefined;
+        const refusal = MFA_STEP_UP_MESSAGES[code as string];
+        // The page thought there was no active authenticator (stale data:
+        // one was confirmed in another tab), but the server asks for the
+        // step-up: show the code field instead of a dead "Set up" button.
+        if (code === 'mfa.stepup.required' && this.mfaStep() !== 'stepup') {
+          this.mfaReplacing.set(true);
+          this.mfaStep.set('stepup');
+        }
         this.mfaError.set(
-          err?.error?.message ?? this.translate.instant('PROFILE.MFA_ENROLL_FAILED'),
+          refusal
+            ? this.translate.instant(refusal)
+            : (refusalReason(err) ?? this.translate.instant('PROFILE.MFA_ENROLL_FAILED')),
         );
         this.mfaLoading.set(false);
       },
@@ -243,9 +405,13 @@ export class ProfileComponent implements OnInit {
 
   verifyMfaCode(): void {
     if (!this.mfaTotpCode || this.mfaTotpCode.length < 6) {
-      this.mfaError.set(this.translate.instant('PROFILE.MFA_CODE_LENGTH'));
+      // QA D1306 (round 28): the code box is marked, not only the banner.
+      const message = this.translate.instant('PROFILE.MFA_CODE_LENGTH');
+      refuseFields(this.host.nativeElement, MFA_TOTP_IDS, MFA_TOTP_IDS, message);
+      this.mfaError.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], MFA_TOTP_IDS, '');
     this.mfaLoading.set(true);
     this.mfaError.set('');
     this.mfaService.verifyEnrollment(this.mfaTotpCode).subscribe({
@@ -260,7 +426,7 @@ export class ProfileComponent implements OnInit {
       },
       error: (err) => {
         this.mfaError.set(
-          err?.error?.message ?? this.translate.instant('PROFILE.MFA_CODE_REJECTED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.MFA_CODE_REJECTED'),
         );
         this.mfaLoading.set(false);
       },
@@ -271,6 +437,8 @@ export class ProfileComponent implements OnInit {
     this.mfaStep.set('idle');
     this.mfaEnrollment.set(null);
     this.mfaTotpCode = '';
+    this.mfaStepUpCode = '';
+    this.mfaReplacing.set(false);
     this.mfaError.set('');
   }
 
@@ -290,12 +458,42 @@ export class ProfileComponent implements OnInit {
   recoverySaving = signal(false);
   recoveryError = signal('');
 
+  /**
+   * D2000: the server can text a PHONE recovery contact its code only when an
+   * SMS transport is configured (the signal the desk's "verify phone" uses).
+   * Without it the phone option is not offered: a code that never leaves the
+   * server must not be promised.
+   */
+  phoneRecoveryAvailable = computed(() => this.credentials()?.phoneRecoveryAvailable === true);
+
   /* ── Recovery Contact Verification ── */
   verifyingContactId = signal<string | null>(null);
   verificationCode = signal('');
   verificationSending = signal(false);
   verificationError = signal('');
   verificationCodeSent = signal(false);
+  private confirmedRecoveryContact: { id: string; value: string } | null = null;
+
+  async confirmRecoveryContact(contact: RecoveryContact): Promise<void> {
+    if (!contact.id || this.verificationSending()) return;
+    const id = contact.id;
+    const value = contact.contactValue;
+    const confirmed = await this.confirm.ask({
+      titleKey: 'PROFILE.RECOVERY_CONFIRM_TITLE',
+      messageKey: 'PROFILE.RECOVERY_CONFIRM_ADDRESS',
+      params: { contact: value },
+      confirmKey: 'PROFILE.RECOVERY_SEND_CODE',
+    });
+    if (
+      !confirmed ||
+      !this.credentials()?.recoveryContacts.some(
+        (current) => current.id === id && current.contactValue === value,
+      )
+    )
+      return;
+    this.confirmedRecoveryContact = { id, value };
+    this.sendVerificationCode(contact);
+  }
 
   openAddRecovery(): void {
     this.showAddRecovery.set(true);
@@ -313,9 +511,23 @@ export class ProfileComponent implements OnInit {
   saveRecoveryContact(): void {
     const value = this.newRecoveryValue().trim();
     if (!value) {
-      this.recoveryError.set(this.translate.instant('PROFILE.RECOVERY_VALUE_REQUIRED'));
+      // QA D1303 (D1306 class): the value box is marked and focused, not
+      // only the message above it.
+      const message = this.translate.instant('PROFILE.RECOVERY_VALUE_REQUIRED');
+      refuseFields(this.host.nativeElement, ['recovery-value'], ['recovery-value'], message);
+      this.recoveryError.set(message);
       return;
     }
+    // D2000 (owner request): a recovery contact is a second way in, so it
+    // cannot be the email or phone the user already signs in with. The
+    // server refuses it too; saying so here keeps the typed value in place.
+    if (this.isSignInIdentifier(this.newRecoveryType(), value)) {
+      const message = this.translate.instant('PROFILE.RECOVERY_SAME_AS_SIGN_IN');
+      refuseFields(this.host.nativeElement, ['recovery-value'], ['recovery-value'], message);
+      this.recoveryError.set(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], ['recovery-value'], '');
     this.recoverySaving.set(true);
     this.recoveryError.set('');
 
@@ -346,13 +558,39 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.recoverySaving.set(false);
         this.recoveryError.set(
-          err?.error?.message ?? this.translate.instant('PROFILE.RECOVERY_SAVE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.RECOVERY_SAVE_FAILED'),
         );
       },
     });
   }
 
-  removeRecoveryContact(contact: RecoveryContact): void {
+  /**
+   * Same rule as the server: an email equal ignoring case and spaces; a
+   * phone with the same last eight digits (the subscriber number, whatever
+   * country code or leading zero was typed).
+   */
+  private isSignInIdentifier(type: 'EMAIL' | 'PHONE', value: string): boolean {
+    const u = this.user();
+    if (!u) return false;
+    if (type === 'EMAIL') {
+      const own = (u.email ?? '').trim().toLowerCase();
+      return own !== '' && own === value.trim().toLowerCase();
+    }
+    const tail = (raw: string | undefined | null): string => {
+      const digits = (raw ?? '').replace(/\D/g, '');
+      return digits.length >= 8 ? digits.slice(-8) : '';
+    };
+    const own = tail(u.phoneNumber);
+    return own !== '' && own === tail(value);
+  }
+
+  /** QA D1430 sibling: the gate now sees this write; a recovery contact is not removed on one click. */
+  async removeRecoveryContact(contact: RecoveryContact): Promise<void> {
+    const confirmed = await this.confirm.ask({
+      titleKey: 'PROFILE.RECOVERY_REMOVE_CONFIRM',
+      confirmKey: 'COMMON.REMOVE',
+    });
+    if (!confirmed) return;
     this.recoverySaving.set(true);
     const remaining = (this.credentials()?.recoveryContacts ?? [])
       .filter((rc) => rc.id !== contact.id)
@@ -373,24 +611,32 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.recoverySaving.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PROFILE.RECOVERY_REMOVE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.RECOVERY_REMOVE_FAILED'),
         );
       },
     });
   }
 
   sendVerificationCode(contact: RecoveryContact): void {
-    if (!contact.id) return;
+    if (!contact.id || this.verificationSending()) return;
+    if (
+      this.confirmedRecoveryContact?.id !== contact.id ||
+      this.confirmedRecoveryContact?.value !== contact.contactValue
+    )
+      return;
+    if (this.verifyingContactId() !== contact.id) {
+      this.verificationCode.set('');
+      this.verificationCodeSent.set(false);
+    }
     this.verifyingContactId.set(contact.id);
-    this.verificationCode.set('');
     this.verificationError.set('');
     this.verificationSending.set(true);
-    this.verificationCodeSent.set(false);
 
-    this.profileService.sendRecoveryVerificationCode(contact.id).subscribe({
+    this.profileService.sendRecoveryVerificationCode(contact.id, contact.contactValue).subscribe({
       next: () => {
         this.verificationSending.set(false);
         this.verificationCodeSent.set(true);
+        this.verificationCode.set('');
         this.toast.success(
           this.translate.instant('PROFILE.VERIFICATION_CODE_SENT', {
             contact: contact.contactValue,
@@ -400,7 +646,7 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.verificationSending.set(false);
         this.verificationError.set(
-          err?.error?.message ?? this.translate.instant('PROFILE.VERIFICATION_SEND_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.VERIFICATION_SEND_FAILED'),
         );
       },
     });
@@ -427,13 +673,14 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.verificationSending.set(false);
         this.verificationError.set(
-          err?.error?.message ?? this.translate.instant('PROFILE.VERIFICATION_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.VERIFICATION_FAILED'),
         );
       },
     });
   }
 
   cancelVerification(): void {
+    this.confirmedRecoveryContact = null;
     this.verifyingContactId.set(null);
     this.verificationCode.set('');
     this.verificationError.set('');
@@ -478,6 +725,14 @@ export class ProfileComponent implements OnInit {
     this.profileService.getUserProfile(userId).subscribe({
       next: (profile) => {
         this.user.set(profile);
+        this.nationalUniqueIdMasked.set(null);
+        if (this.isPatientOnly()) {
+          this.patientPortal.getMyProfile().subscribe({
+            next: (patient) =>
+              this.nationalUniqueIdMasked.set(patient.nationalUniqueIdMasked ?? null),
+            error: () => this.nationalUniqueIdMasked.set(null),
+          });
+        }
         this.resetEditForm(profile);
 
         // Sync stored profile ID if stale
@@ -549,6 +804,7 @@ export class ProfileComponent implements OnInit {
       phoneNumber: profile.phoneNumber ?? '',
       username: profile.username ?? '',
     });
+    this.emailChangePassword.set('');
     this.formDirty.set(false);
   }
 
@@ -567,36 +823,289 @@ export class ProfileComponent implements OnInit {
     this.activeTab.set('overview');
   }
 
+  /**
+   * Saves the profile. Names and phone go through the profile PUT, with the
+   * email the account has now (the PUT refuses an email change). A changed
+   * email is then REQUESTED through its own endpoint, with the current
+   * password: the server sends a code to the new address, and the email only
+   * changes when {@link confirmEmailChange} sends that code back.
+   *
+   * Each step reports its own outcome: a saved name is not reported as a
+   * failure because the email step was refused, and a sent code is not
+   * reported as a changed email.
+   */
+  /**
+   * QA D1170: a blank first or last name. The server skipped it and answered
+   * "Profile updated" while keeping the old name; the form now names the field.
+   */
+  blankName(): boolean {
+    const data = this.editForm();
+    return !(data.firstName ?? '').trim() || !(data.lastName ?? '').trim();
+  }
+
   saveProfile(): void {
     const u = this.user();
-    if (!u || this.saving()) return;
+    if (!u || this.saving() || this.blankName() || this.emailClearedOnly()) return;
+    if (this.emailCleared()) {
+      // QA D1228: the rest is saved; the reader is told the address stays.
+      this.toast.info(this.translate.instant('PROFILE.EMAIL_CANNOT_CLEAR'));
+    }
+
+    const data = this.editForm();
+    const emailChanged = this.emailChanged();
+    // Captured now: saving the names resets the form, which clears the
+    // password field before the email step would read it.
+    const password = this.emailChangePassword();
+    const newEmail = (data.email ?? '').trim();
+    if (emailChanged && !password) {
+      // QA D1306 (round 28): the password box is marked, not only a toast.
+      const message = this.translate.instant('PROFILE.EMAIL_CHANGE_PASSWORD_REQUIRED');
+      refuseFields(this.host.nativeElement, EMAIL_PASSWORD_IDS, EMAIL_PASSWORD_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], EMAIL_PASSWORD_IDS, '');
+    const phoneChanged = (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
 
     this.saving.set(true);
-    const data = this.editForm();
+    // QA D939: an account with no phone cannot be put back (a blank phone is not
+    // written), so there the record takes the phone first and the account follows.
+    if (
+      phoneChanged &&
+      this.isPatientOnly() &&
+      !(u.phoneNumber ?? '').trim() &&
+      (data.phoneNumber ?? '').trim()
+    ) {
+      // The record's phone is read first, so a refused account save can give it back.
+      this.patientPortal.getMyProfile().subscribe({
+        next: (record) =>
+          this.saveRecordThenAccount(
+            u,
+            data,
+            emailChanged,
+            newEmail,
+            password,
+            record?.phoneNumberPrimary,
+          ),
+        error: () => this.saveRecordThenAccount(u, data, emailChanged, newEmail, password),
+      });
+      return;
+    }
+    this.saveAccount(u, data, emailChanged, newEmail, password, phoneChanged);
+  }
 
-    this.profileService.updateProfile(u.id, data).subscribe({
-      next: (updated) => {
-        this.user.set(updated);
-        this.resetEditForm(updated);
+  /**
+   * QA D939, an account with no phone: the record takes the phone, then the
+   * account; if the account refuses it (another account's phone), the record
+   * gets its previous phone back, so the two never differ.
+   */
+  private saveRecordThenAccount(
+    u: UserProfile,
+    data: ProfileUpdateRequest,
+    emailChanged: boolean,
+    newEmail: string,
+    password: string,
+    recordPhoneBefore?: string | null,
+  ): void {
+    const previous = (recordPhoneBefore ?? '').trim();
+    this.patientPortal.updateMyProfile({ phoneNumberPrimary: data.phoneNumber!.trim() }).subscribe({
+      next: () =>
+        this.saveAccount(u, data, emailChanged, newEmail, password, false, () => {
+          if (previous) {
+            this.patientPortal.updateMyProfile({ phoneNumberPrimary: previous }).subscribe({
+              error: (err: unknown) =>
+                this.toast.error(
+                  refusalReason(err) ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
+                ),
+            });
+          }
+        }),
+      error: (err) => {
         this.saving.set(false);
-        this.toast.success(this.translate.instant('PROFILE.UPDATED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
+        );
+      },
+    });
+  }
 
-        // Update stored login profile
-        const stored = this.auth.getUserProfile();
-        if (stored) {
-          stored.firstName = updated.firstName;
-          stored.lastName = updated.lastName;
-          stored.email = updated.email;
-          stored.phoneNumber = updated.phoneNumber;
-          stored.profileImageUrl = updated.profileImageUrl;
-          this.auth.setUserProfile(stored);
+  /** The account part of {@link saveProfile}: names and phone, then the e-mail step. */
+  private saveAccount(
+    u: UserProfile,
+    data: ProfileUpdateRequest,
+    emailChanged: boolean,
+    newEmail: string,
+    password: string,
+    phoneChanged = false,
+    undoRecordPhone?: () => void,
+  ): void {
+    const detailsChanged =
+      (data.firstName ?? '') !== (u.firstName ?? '') ||
+      (data.lastName ?? '') !== (u.lastName ?? '') ||
+      (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
+    if (detailsChanged) {
+      this.profileService.updateProfile(u.id, { ...data, email: u.email }).subscribe({
+        next: (updated) => {
+          // QA D939: a patient's phone also lives on the record the hospital
+          // calls. The record follows the account; if it refuses (another
+          // patient's phone) the account phone is put back, so the two never differ.
+          if (phoneChanged && this.isPatientOnly() && (updated.phoneNumber ?? '').trim()) {
+            this.syncRecordPhone(u, updated, emailChanged, newEmail, password);
+            return;
+          }
+          // (An account with no phone before took the record first, in saveProfile.)
+          this.applySavedProfile(updated);
+          this.toast.success(this.translate.instant('PROFILE.UPDATED'));
+          if (emailChanged) {
+            this.requestEmailChange(newEmail, password);
+          } else {
+            this.saving.set(false);
+          }
+        },
+        error: (err) => {
+          undoRecordPhone?.();
+          this.saving.set(false);
+          this.toast.error(refusalReason(err) ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
+        },
+      });
+    } else if (emailChanged) {
+      this.requestEmailChange(newEmail, password);
+    } else {
+      // QA D1228: a save that changes nothing says so, never nothing at all.
+      this.saving.set(false);
+      this.toast.info(this.translate.instant('SUBMIT_GUARD.NO_CHANGES'));
+    }
+  }
+
+  /** QA D939: the record takes the account's new phone, or the account gets its old one back. */
+  private syncRecordPhone(
+    before: UserProfile,
+    updated: UserProfile,
+    emailChanged: boolean,
+    newEmail: string,
+    password: string,
+  ): void {
+    this.patientPortal
+      .updateMyProfile({ phoneNumberPrimary: updated.phoneNumber!.trim() })
+      .subscribe({
+        next: () => {
+          this.applySavedProfile(updated);
+          this.toast.success(this.translate.instant('PROFILE.UPDATED'));
+          if (emailChanged) {
+            this.requestEmailChange(newEmail, password);
+          } else {
+            this.saving.set(false);
+          }
+        },
+        error: (err) => {
+          const refusal =
+            refusalReason(err) ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED');
+          this.profileService
+            .updateProfile(before.id, {
+              firstName: updated.firstName,
+              lastName: updated.lastName,
+              phoneNumber: before.phoneNumber,
+              email: before.email,
+            })
+            .subscribe({
+              next: (restored) => {
+                this.applySavedProfile(restored);
+                this.saving.set(false);
+                this.toast.error(refusal);
+              },
+              error: (err: unknown) => {
+                this.applySavedProfile(updated);
+                this.saving.set(false);
+                this.toast.error(
+                  refusalReason(err) ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
+                );
+              },
+            });
+        },
+      });
+  }
+
+  /** Step 1 of an email change: the server sends a code to the new address. */
+  private requestEmailChange(newEmail: string, password: string): void {
+    this.profileService.changeOwnEmail(password, newEmail).subscribe({
+      next: (res) => {
+        this.saving.set(false);
+        this.emailChangePassword.set('');
+        this.emailCode.set('');
+        this.pendingEmail.set(newEmail);
+        // QUEUED is the normal answer: the code mail goes out from the
+        // server's mail outbox a few seconds later.
+        const sent = (res?.delivery ?? []).some(
+          (d) => d.outcome === 'QUEUED' || d.outcome === 'SENT',
+        );
+        if (sent) {
+          this.toast.info(this.translate.instant('PROFILE.EMAIL_CODE_SENT', { email: newEmail }));
+        } else {
+          this.toast.warning(this.translate.instant('PROFILE.VERIFICATION_SEND_FAILED'));
         }
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
       },
     });
+  }
+
+  /** Step 2: the code from the new address. Only now does the email change. */
+  confirmEmailChange(): void {
+    const u = this.user();
+    const newEmail = this.pendingEmail();
+    const code = this.emailCode().trim();
+    if (!u || !newEmail || !code || this.confirmingEmail()) return;
+
+    this.confirmingEmail.set(true);
+    this.profileService.confirmOwnEmailChange(code).subscribe({
+      next: () => {
+        this.confirmingEmail.set(false);
+        this.pendingEmail.set(null);
+        this.emailCode.set('');
+        const applied = newEmail.toLowerCase();
+        this.applySavedProfile({ ...u, email: applied });
+        this.toast.success(this.translate.instant('PROFILE.EMAIL_CHANGED'));
+      },
+      error: (err) => {
+        this.confirmingEmail.set(false);
+        // 410: nothing is waiting any more (expired, or cancelled by too many
+        // wrong codes). Drop the code form; a new request starts over.
+        if (err?.status === 410) {
+          this.pendingEmail.set(null);
+          this.emailCode.set('');
+          const current = this.user();
+          if (current) this.resetEditForm(current);
+        }
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PROFILE.VERIFICATION_FAILED'),
+        );
+      },
+    });
+  }
+
+  /** Drop the pending change on this page; the server's code expires on its own. */
+  cancelEmailChange(): void {
+    this.pendingEmail.set(null);
+    this.emailCode.set('');
+    const u = this.user();
+    if (u) this.resetEditForm(u);
+  }
+
+  /** Show a profile the server now holds, and keep the stored login profile in step. */
+  private applySavedProfile(updated: UserProfile): void {
+    this.user.set(updated);
+    this.resetEditForm(updated);
+    const stored = this.auth.getUserProfile();
+    if (stored) {
+      stored.firstName = updated.firstName;
+      stored.lastName = updated.lastName;
+      stored.email = updated.email;
+      stored.phoneNumber = updated.phoneNumber;
+      stored.profileImageUrl = updated.profileImageUrl;
+      this.auth.setUserProfile(stored);
+    }
   }
 
   /* ── Avatar ── */
@@ -635,7 +1144,7 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.uploadingAvatar.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PROFILE.PHOTO_UPLOAD_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.PHOTO_UPLOAD_FAILED'),
         );
       },
     });
@@ -660,23 +1169,98 @@ export class ProfileComponent implements OnInit {
         }
         this.toast.success(this.translate.instant('PROFILE.PHOTO_REMOVED'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.uploadingAvatar.set(false);
-        this.toast.error(this.translate.instant('PROFILE.PHOTO_REMOVE_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PROFILE.PHOTO_REMOVE_FAILED'),
+        );
       },
     });
   }
 
   /* ── Security Actions ── */
+  /**
+   * Self-service password change (D38): an administrator-set password forces a
+   * change, and the profile is where the holder makes it outside first login.
+   */
+  changePassword(): void {
+    const current = this.pwdCurrent();
+    const next = this.pwdNew();
+    if (next.length < 8) {
+      // QA D1281 class: the short password is marked where it is typed.
+      const message = this.translate.instant('PROFILE.PASSWORD_TOO_SHORT');
+      refuseFields(this.host.nativeElement, ['pwdNew'], PASSWORD_FIELD_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+    // QA D1306 (round 28): a mismatch marks the confirmation, a reuse the new password.
+    if (next !== this.pwdConfirm()) {
+      const message = this.translate.instant('PROFILE.PASSWORD_MISMATCH');
+      refuseFields(this.host.nativeElement, ['pwdConfirm'], PASSWORD_FIELD_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+    if (next === current) {
+      const message = this.translate.instant('PROFILE.PASSWORD_SAME_AS_CURRENT');
+      refuseFields(this.host.nativeElement, ['pwdNew'], PASSWORD_FIELD_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], PASSWORD_FIELD_IDS, '');
+    this.changingPassword.set(true);
+    this.profileService
+      .changePassword(current, next)
+      .pipe(finalize(() => this.changingPassword.set(false)))
+      .subscribe({
+        next: () => {
+          this.pwdCurrent.set('');
+          this.pwdNew.set('');
+          this.pwdConfirm.set('');
+          this.credentials.update((c) => (c ? { ...c, forcePasswordChange: false } : c));
+          this.toast.success(this.translate.instant('PROFILE.PASSWORD_CHANGED'));
+          // QA D114: the server now refuses every token issued before the change,
+          // this session's included, so sign in again with the new password.
+          this.auth.logout();
+          void this.router.navigateByUrl('/login');
+        },
+        error: (err: { status?: number }) => {
+          // D2001: a locked account (too many wrong passwords) — the server's
+          // message is the sign-in's, already in the user's language.
+          const locked = err?.status === 423 ? refusalReason(err) : null;
+          if (locked !== null) {
+            refuseFields(this.host.nativeElement, ['pwdCurrent'], ['pwdCurrent'], locked);
+            this.toast.error(locked);
+            return;
+          }
+          let key = 'PROFILE.PASSWORD_CHANGE_FAILED';
+          if (err?.status === 401) {
+            key = 'PROFILE.PASSWORD_CURRENT_WRONG';
+          } else if (err?.status === 400) {
+            key = 'PROFILE.PASSWORD_CHANGE_REFUSED';
+          }
+          this.toast.error(this.translate.instant(key));
+        },
+      });
+  }
+
   requestPasswordReset(): void {
     const u = this.user();
-    if (!u?.email) {
+    // QA D256: a phone-only account gets its link by SMS, not "no email on file".
+    const request = u?.email
+      ? this.profileService.requestPasswordReset(u.email)
+      : u?.phoneNumber
+        ? this.profileService.requestPasswordResetByPhone(u.phoneNumber)
+        : null;
+    if (!request) {
       this.toast.error(this.translate.instant('PROFILE.NO_EMAIL_ON_FILE'));
       return;
     }
-    this.profileService.requestPasswordReset(u.email).subscribe({
+    request.subscribe({
       next: () => this.toast.success(this.translate.instant('PROFILE.RESET_LINK_SENT')),
-      error: () => this.toast.error(this.translate.instant('PROFILE.RESET_REQUEST_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PROFILE.RESET_REQUEST_FAILED'),
+        ),
     });
   }
 
@@ -697,6 +1281,11 @@ export class ProfileComponent implements OnInit {
       roleName: stored.roleName,
       staffId: stored.staffId,
     };
+  }
+
+  /** QA D894: the activity's description in the reader's language, as on the audit log. */
+  describeActivity(event: AuditEvent): string {
+    return this.auditDescriptions.describe(event);
   }
 
   getActivityIcon(eventType: string): string {
@@ -736,7 +1325,7 @@ export class ProfileComponent implements OnInit {
    */
   formatTimestamp(ts: string): string {
     if (!ts) return '';
-    const date = new Date(ts);
+    const date = serverInstant(ts); // #948 review: eventTimestamp is UTC, zone-less
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMin = Math.floor(diffMs / 60000);

@@ -57,4 +57,8 @@ public class UserSummaryDTO {
 
     @Schema(description = "Count of active roles across all hospitals")
     private Integer roleCount;
+
+    @Schema(description = "QA D914: whether the caller may edit, delete or restore this account "
+        + "(a hospital admin may not when it is also managed elsewhere or holds an admin role)")
+    private Boolean manageable;
 }

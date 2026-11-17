@@ -26,4 +26,7 @@ public interface MllpAllowedSenderRepository extends JpaRepository<MllpAllowedSe
     List<MllpAllowedSender> findAllByOrderBySendingFacilityAscSendingApplicationAsc();
 
     List<MllpAllowedSender> findAllByHospital_IdOrderBySendingFacilityAsc(UUID hospitalId);
+
+    /** QA CX-005: a sender pair already allow-listed (the unique constraint is on these two). */
+    boolean existsBySendingApplicationAndSendingFacility(String sendingApplication, String sendingFacility);
 }

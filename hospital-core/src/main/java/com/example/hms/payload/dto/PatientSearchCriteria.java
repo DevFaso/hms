@@ -23,4 +23,10 @@ public class PatientSearchCriteria {
     private String email;
     private UUID hospitalId;
     private Boolean active;
+    /**
+     * Match active and inactive records alike (overrides {@link #active}). The
+     * clinical pickers set it: an admitted patient whose record is switched off
+     * still needs a task, a handoff or a discharge summary (QA D80).
+     */
+    private boolean includeInactive;
 }

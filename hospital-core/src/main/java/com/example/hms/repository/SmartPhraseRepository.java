@@ -46,7 +46,7 @@ public interface SmartPhraseRepository extends JpaRepository<SmartPhrase, UUID> 
      */
     @Query("""
         SELECT sp FROM SmartPhrase sp
-         WHERE sp.trigger LIKE CONCAT(:prefix, '%')
+         WHERE sp.trigger LIKE CONCAT(CAST(:prefix AS string), '%')
            AND (sp.scope = com.example.hms.enums.SmartPhraseScope.GLOBAL
              OR (sp.scope = com.example.hms.enums.SmartPhraseScope.HOSPITAL
                  AND sp.hospital.id = :hospitalId)

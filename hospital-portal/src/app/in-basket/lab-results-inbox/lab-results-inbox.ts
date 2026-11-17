@@ -2,17 +2,27 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
-  OnInit,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 
+import { RoleContextService } from '../../core/role-context.service';
 import { DashboardService, DoctorResultQueueItem } from '../../services/dashboard.service';
+import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { LabValuePipe } from '../../lab/shared/lab-value.pipe';
+
+/** QA D731: the server sends resultedAt as a zone-less UTC wall time. */
+const SERVER_TIME = new ServerTimePipe();
 
 /** One severity bucket of the review queue, as the template renders it. */
 interface LabResultGroup {
@@ -25,12 +35,21 @@ interface LabResultGroup {
 /**
  * How many rows the category draws.
  *
- * `getResultReviewQueue` has no date window, no hospital filter and no
- * reviewed state, so it returns every released result this physician has ever
- * ordered. Drawn whole, a worklist becomes an un-paginated table that only
- * grows and a header count that reads as "items needing attention". The cap
- * is applied AFTER the severity split, so a critical row is never the one
- * dropped, and what was cut is stated on screen.
+ * `getResultReviewQueue` IS hospital-filtered now — `ResultReviewServiceImpl`
+ * reads `findByOrderingStaff_IdAndHospital_Id` against the scope the caller
+ * is acting in, and refuses with a 404 when none resolves. It still has no
+ * date window and no reviewed state, so within that one hospital it returns
+ * every released result this physician has ever ordered there and nothing
+ * ever leaves it: the list only grows, which is the whole reason for a cap.
+ * Scoping makes it grow more slowly at a multi-hospital clinician; it does
+ * not bound it, and a single busy hospital is exactly where the queue is
+ * longest. So the cap stays at 50, and the justification is the unbounded
+ * growth, not the missing hospital filter.
+ *
+ * Drawn whole, a worklist becomes an un-paginated table that only grows and a
+ * header count that reads as "items needing attention". The cap is applied
+ * AFTER the severity split, so a critical row is never the one dropped, and
+ * what was cut is stated on screen.
  */
 const MAX_VISIBLE_RESULTS = 50;
 
@@ -60,18 +79,52 @@ const KNOWN_FLAGS: string[] = ['CRITICAL', ...ABNORMAL_FLAGS, 'NORMAL'];
  *
  * Read-only by design: the queue carries no "reviewed" state, so there is no
  * action here that would take a row off it (see the PR body).
+ *
+ * SCOPE-DEPENDENT. The endpoint filters by the hospital the caller is acting
+ * in and answers 404 when none resolves, so this category reads once per
+ * scope and not once per mount: a switch from A to B that left A's released
+ * results on screen under B's label is a worklist lying about whose results
+ * these are, and with no scope at all the category declines to read and points
+ * at the chip rather than drawing an error card over an empty table.
  */
+/**
+ * QA D240: a word answer with no number in it ("Positif", "Négatif"). A value
+ * with digits ("<0.5", "9.2 g/dL") is numeric, just not graded.
+ */
+function isQualitativeValue(value: string | null | undefined): boolean {
+  const v = (value ?? '').trim();
+  return v !== '' && !/\d/.test(v);
+}
+
 @Component({
   selector: 'app-lab-results-inbox',
   standalone: true,
-  imports: [RouterLink, TranslateModule],
+  imports: [
+    LabCorrectionBadgeComponent,
+    RouterLink,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+    LabValuePipe,
+  ],
   templateUrl: './lab-results-inbox.html',
   styleUrl: './lab-results-inbox.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class LabResultsInboxComponent implements OnInit {
+export class LabResultsInboxComponent {
   private readonly dashboardService = inject(DashboardService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly destroyRef = inject(DestroyRef);
+
+  /** Which read of the queue is the current one; see load(). */
+  private queueRequest = 0;
+
+  /**
+   * False for a super-admin in global view, and for any account whose
+   * hospital has not resolved. The endpoint refuses that caller, so the
+   * category refuses to ask.
+   */
+  readonly hasHospitalScope = this.roleContext.hasHospitalScope;
 
   /** Exposed for the "showing N of M" line. */
   readonly maxVisible = MAX_VISIBLE_RESULTS;
@@ -165,22 +218,72 @@ export class LabResultsInboxComponent implements OnInit {
     this.visibleGroups().reduce((total, group) => total + group.items.length, 0),
   );
 
-  ngOnInit(): void {
-    this.load();
+  constructor() {
+    // The load is driven by the SCOPE, not by the mount: the same idiom
+    // `break-glass-review` uses, because the same thing is true of both
+    // reads. The effect covers the first render too — there is no ngOnInit
+    // beside it, which is what keeps a scope change from firing two reads.
+    //
+    // The rows are dropped BEFORE the new read is issued, not when it lands.
+    // Holding them until the answer arrives is what every other read on this
+    // component does deliberately (a failed refresh must not take a
+    // clinician's rows away), and it is exactly wrong here: those rows belong
+    // to the hospital that was just left, and a slow read — or one that fails
+    // — would leave the other tenant's released results on screen under this
+    // hospital's heading.
+    effect(() => {
+      const scoped = this.roleContext.effectiveHospitalIdForRequest() != null;
+      this.results.set([]);
+      this.loadError.set(false);
+      if (!scoped) {
+        // Invalidate any read still in flight, so a response issued under the
+        // previous scope cannot write its rows in after the switch.
+        this.queueRequest++;
+        this.loading.set(false);
+        return;
+      }
+      // `untracked`: only the SCOPE may re-run this. Without it every signal
+      // the read touches becomes a dependency of the effect, and a read that
+      // also writes one of them re-enters and re-issues the request.
+      untracked(() => this.load());
+    });
   }
 
   load(): void {
+    // No scope, no read. The template renders the scope hint in place of the
+    // whole category in that state, so neither the ↻ nor either Retry is on
+    // screen — but the guard belongs here, so declining is a property of the
+    // component and not of one template: the endpoint answers 404, and a 404
+    // drawn as "the queue could not be loaded" sends a clinician looking for
+    // an outage.
+    if (!this.hasHospitalScope()) return;
+    // Only the latest read may write, and that is the ONLY thing standing
+    // between overlapping reads and a wrong screen: the ↻ is disabled while a
+    // read is in flight, but both Retry controls are deliberately left
+    // clickable, because disabling every control in this state would leave no
+    // way out of a request that never settles (there is no timeout
+    // interceptor). A slow failure landing after a fast success drew the
+    // stale banner over current rows; a slow success landing last overwrote
+    // newer ones. Same guard the chart's two lab reads and the dashboard's
+    // copy of this queue carry.
+    const request = ++this.queueRequest;
+    const isCurrent = (): boolean => request === this.queueRequest;
     this.loading.set(true);
-    this.loadError.set(false);
+    // `loadError` is NOT cleared here. Clearing on start blanked the stale
+    // notice for the whole request window, so a Retry that failed seconds
+    // later showed held rows as current in between. Only a response clears it.
     this.dashboardService
       .getResultReviewQueue()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (items) => {
+          if (!isCurrent()) return;
           this.results.set(items ?? []);
+          this.loadError.set(false);
           this.loading.set(false);
         },
         error: () => {
+          if (!isCurrent()) return;
           this.loadError.set(true);
           this.loading.set(false);
         },
@@ -198,6 +301,9 @@ export class LabResultsInboxComponent implements OnInit {
     if (item.abnormalFlag === 'CRITICAL') return 'inBasket.labCritical';
     if (ABNORMAL_FLAGS.includes(item.abnormalFlag)) return 'inBasket.labAbnormal';
     if (item.abnormalFlag === 'NORMAL') return 'inBasket.labNormal';
+    // QA D240: an ungraded non-numeric answer ("Positif") is qualitative,
+    // not "not evaluated".
+    if (isQualitativeValue(item.resultValue)) return 'inBasket.labQualitative';
     // Never "Normal" by default — the same rule the chart's labStatusKey
     // follows. An unrecognised grade says so.
     return 'inBasket.labUnknown';
@@ -215,11 +321,13 @@ export class LabResultsInboxComponent implements OnInit {
 
   formatDate(iso: string | null | undefined): string {
     if (!iso) return LabResultsInboxComponent.NO_VALUE;
-    const parsed = new Date(iso);
+    // QA D731: read the zone-less UTC time as UTC, exactly as the in-basket
+    // panel below does; read as local, the same result showed 4 h apart.
+    const parsed = new Date(SERVER_TIME.transform(iso));
     // A blank cell reads as a rendering fault; missing data reads as missing.
     if (Number.isNaN(parsed.getTime())) return LabResultsInboxComponent.NO_VALUE;
     // The queue has no date window and no reviewed state, so it carries every
-    // result this physician ever ordered. Without the year, a critical result
+    // result this physician ever ordered at this hospital. Without the year, a critical result
     // from two years ago sits at the top of the worklist — severity sorts
     // first — reading exactly like one released this morning.
     const showYear = parsed.getFullYear() !== new Date().getFullYear();

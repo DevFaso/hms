@@ -211,7 +211,7 @@ La vérification est rejouée au moment de l'administration pour que le contrôl
 
 | Environnement | URL | Rôle |
 |---|---|---|
-| **Dev** | `api.dev.e-keneya.com` | Déploiement continu depuis la branche `develop` ; tests d'ingénierie et validation pré-production |
+| **Dev** | `dev.e-keneya.com/api` (même origine que le portail de dev) | Déploiement continu depuis la branche `develop` ; tests d'ingénierie et validation pré-production |
 | **Production** | `api.e-keneya.com` | Usage clinique en réel |
 
 Les deux environnements sont fronts par Railway, utilisent PostgreSQL 16 managé, et appliquent les migrations Liquibase au démarrage. Chacun a sa propre configuration de point d'accès DHIS2 (la production pointe sur l'instance nationale en réel ; dev pointe sur un sandbox).

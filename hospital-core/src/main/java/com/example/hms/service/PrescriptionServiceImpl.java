@@ -10,7 +10,9 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PrescriptionMapper;
+import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
@@ -46,6 +48,7 @@ import java.util.UUID;
 import java.util.Locale;
 import java.util.Optional;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 
@@ -58,12 +61,41 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "prescription not found" appears 5x in this file.
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+    /** QA D1432: the statuses in which medicine has left the counter under this order. */
+    private static final java.util.Set<PrescriptionStatus> DISPENSED_FROM = java.util.EnumSet.of(
+        PrescriptionStatus.DISPENSED, PrescriptionStatus.PARTNER_DISPENSED, PrescriptionStatus.PARTIALLY_FILLED);
+    /** QA D1368 (round 31): the request property a missing withdrawal reason is named by. */
+    private static final String FIELD_WITHDRAWAL_REASON = "withdrawalReason";
+    /**
+     * QA D1354 class (round 31, KNOWN GAP of round 30 closed: this branch owns the
+     * file): a refusal of the order's status or visit names the request field.
+     */
+    private static final String FIELD_STATUS = "status";
+    private static final String FIELD_ENCOUNTER_ID = "encounterId";
+    private static final String CROSS_HOSPITAL_READ = "Cross-hospital prescription read on the treatment relationship";
+    private static final String NOT_ON_STAY_CARE_TEAM =
+        "The prescriber does not work at the hospital of this patient's stay.";
+
 
     /** Matches the digest LabOrderServiceImpl already computes for lab orders. */
     private static final String SIGNATURE_ALGORITHM = "SHA-256";
+    /** Audit details carry a digest of a free-text reason, never the reason itself. */
+    private static final String REASON_DIGEST_PREFIX = "{\"reasonSha256\":\"";
+    private static final String AUDIT_ENTITY_PRESCRIPTION = "Prescription";
+    /**
+     * Policy 3 (2026-11-09, provisional): the allergy card a refused signature answers with carries
+     * the signature's token behind this prefix, so the dialog can tell an allergy acknowledgement from
+     * a dose exception. The signature accepts the token with or without it.
+     */
+    static final String ALLERGY_KEY_PREFIX = "allergy:";
+    /** The request field a missing or stale allergy acknowledgement is reported on. */
+    static final String FIELD_ALLERGY_OVERRIDE_REASON = "allergyOverrideReason";
 
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D1432: whether medicine has left the counter under an order. */
+    private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientAllergyRepository patientAllergyRepository;
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
@@ -72,9 +104,27 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final AuthService authService; // exposes UUID getCurrentUserId()
     private final UserRoleHospitalAssignmentRepository urhaRepository;
     private final CdsRuleEngine cdsRuleEngine;
+    private static final String SIGNATURE_REASON_SEPARATOR = " | ";
+    private static final String URGENT_REVIEW_REFERENCE_TYPE = "PRESCRIPTION_URGENT_DOSE_EXCEPTION";
+    private static final String URGENT_REVIEW_TITLE_KEY = "prescription.urgentException.inBasketTitle";
+    private static final String URGENT_REVIEW_BODY_KEY = "prescription.urgentException.inBasketBody";
+    /** Who is asked first: the pharmacy, else a physician. */
+    private static final java.util.Set<String> URGENT_REVIEW_PHARMACY_ROLES = java.util.Set.of(
+        com.example.hms.config.SecurityConstants.ROLE_PHARMACIST,
+        com.example.hms.config.SecurityConstants.ROLE_PHARMACY_VERIFIER);
+    /** The same roles as {@code RoleValidator.isSigningPhysician}, who may record the review. */
+    private static final java.util.Set<String> URGENT_REVIEW_PHYSICIAN_ROLES = java.util.Set.of(
+        com.example.hms.config.SecurityConstants.ROLE_DOCTOR, "ROLE_PHYSICIAN",
+        com.example.hms.config.SecurityConstants.ROLE_SURGEON);
+    private static final String URGENT_REVIEW_NOBODY_BODY_KEY = "prescription.urgentException.noSecondPerson.inBasketBody";
+
+    /** {@code Prescription.overrideReason}'s {@code @Size}. */
+    private static final int OVERRIDE_REASON_MAX = 1024;
     private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
     private final com.example.hms.service.pharmacy.PharmacistVerificationService pharmacistVerificationService;
     private final RecordAccessPolicy recordAccessPolicy;
+    /** Who is a patient on the read, and whether the prescription is theirs; see {@link #readableAsItsPatient}. */
+    private final PatientSubjectReadGuard subjectReadGuard;
     /**
      * From config/TimeConfig, as {@code PrescriptionClarificationService}
      * takes it: the two halves of a clarification are stamped by the same
@@ -84,16 +134,66 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private final java.time.Clock clock;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders;
+    /** G15: withdrawal and edit void an open preparation (rule 8). */
+    private final com.example.hms.service.pharmacy.PreparedFillVoider preparedFills;
+    /** G13: a withdrawal or an edit ends the work-queue claim, as a plain release. */
+    private final com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaims;
+    /** G15 AC-12: readiness on the patient-portal prescriptions read. */
+    private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
+    /** D83: an allergy override is audited (who, when, which reason digest). */
+    private final AuditEventLogService auditEventLogService;
+    /** D414: an inpatient whose stay has no encounter yet gets it opened, never a phantom consultation. */
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
+    private final com.example.hms.service.AdmissionStayEncounterService stayEncounters;
+    /** D654: a catalog pick carries its code into the order. */
+    private final com.example.hms.repository.MedicationCatalogItemRepository medicationCatalogItemRepository;
+    /** Round 18: the catalogue flag makes an order controlled, whatever the tick (D922). */
+    private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+    /** Round 18: the prescriber's step-up re-authentication at a controlled signature. */
+    private final PrescriberReauthenticationService prescriberReauthentication;
+
+    /**
+     * Round 19 (QA D1096): the reviewer written on a paediatric dose review.
+     * Setter-injected so the hand-built service in older tests still builds.
+     */
+    private com.example.hms.repository.UserRepository doseReviewUsers;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setDoseReviewUsers(com.example.hms.repository.UserRepository doseReviewUsers) {
+        this.doseReviewUsers = doseReviewUsers;
+    }
+
+    /** Policy 4: the conflict a prescriber reviews (CurrentAllergyRecheck); absent in unit tests built by hand. */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAllergyRecheck(com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck) {
+        this.allergyRecheck = allergyRecheck;
+    }
+
+    /** CR-01: the after-the-fact review item of an urgent exception; absent in unit tests built by hand. */
+    private com.example.hms.service.InBasketService urgentReviewBasket;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setUrgentReviewBasket(com.example.hms.service.InBasketService urgentReviewBasket) {
+        this.urgentReviewBasket = urgentReviewBasket;
+    }
 
     @Override
     @Transactional
     public PrescriptionResponseDTO createPrescription(PrescriptionRequestDTO request, Locale locale) {
         rejectClientAssertedWorkflowStatus(request);
         UUID currentUserId = authService.getCurrentUserId();
+        // QA D85: the new order belongs to the hospital the caller acts in. It
+        // used to land at the home hospital of the caller's FIRST staff row, so
+        // a doctor working in two hospitals wrote prescriptions the acting
+        // hospital's chart and record PDF never showed.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
         Patient patient = resolvePatient(request, locale);
 
-    Staff staff = resolveStaffContext(request, currentUserId);
-    Encounter encounter = resolveEncounterContext(request, patient, staff);
+        Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId, null);
 
         ensureContextConsistency(patient, staff, encounter);
 
@@ -101,25 +201,58 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (hospitalId == null) {
             throw new BusinessException("prescription.hospital.context.missing");
         }
+        if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
+            throw new ResourceNotFoundException("encounter.notfound", encounter.getId());
+        }
+        // QA D401: the order is written into the chart at hospitalId, so the
+        // patient must be registered there. Thrown inside the transaction, it
+        // also rolls back an encounter resolveEncounterContext auto-created.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");
         }
+        requirePrescribingRole(staff, hospitalId);
 
         UserRoleHospitalAssignment prescriberAssignment =
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
 
-        // DECISION SUPPORT: Check allergies before prescribing
-        checkAllergyConflicts(patient, hospitalId, request.getMedicationName(), request.getForceOverride());
+        com.example.hms.model.medication.MedicationCatalogItem catalogItem =
+            applyCatalogPick(request, hospitalId, false);
+        // QA D1223: the typed name and the item behind the order name one drug.
+        refuseNameItemMismatch(request.getMedicationName(), catalogItem);
+
+        // DECISION SUPPORT: Check allergies before prescribing. QA D1149: after
+        // the catalogue pick, so the item's ATC class is known to the check.
+        String allergyOverride = checkAllergyConflicts(patient, request, catalogItem, hospitalId);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
-        List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
+        List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
+            runCdsRuleEngine(patient, hospitalId, request, catalogItem, null));
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
+        // QA round 30: an as-needed order names its minimum interval, and QA
+        // D1419 any other goes through the wording rule (order sets reach
+        // here without the request constraints).
+        com.example.hms.service.impl.PrnMinInterval.applyTo(entity, Boolean.TRUE.equals(request.getFrequencyConfirmed()));
+        requirePrescribedQuantityForControlled(entity, catalogItem);
+        recordAllergyOverride(entity, allergyOverride);
+        String cdsOverride = cdsOverrideReason(request, advisories);
+        recordCdsOverride(entity, cdsOverride);
+        // QA D1096: a dose the check could not judge waits for a recorded review.
+        entity.setPediatricDoseReviewRequired(requiresDoseReview(advisories));
         controlledSubstanceGuard.requireSafeguardsFor(entity, entity.getStatus());
 
         Prescription saved = prescriptionRepository.save(entity);
+        if (allergyOverride != null) {
+            auditAllergyOverrideAfterCommit(saved, currentUserId, allergyOverride, "Allergy override recorded at creation");
+        }
+        if (cdsOverride != null) {
+            auditCdsOverrideAfterCommit(saved, currentUserId, cdsOverride, advisories,
+                "Critical decision-support alert overridden at creation");
+        }
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;
@@ -128,6 +261,143 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale) {
+        if (subjectReadGuard.isPatientOnly(PrescriptionReaderRoles.CLINICAL_READER_ROLES)) {
+            // A patient principal is bounded by ownership, not by a hospital,
+            // as the encounter reads are: their own prescriptions follow them
+            // across tenants, so no scope is resolved and a patient whose
+            // hospital cannot be resolved still reads their own.
+            Prescription prescription = findPrescriptionOrNotFound(id);
+            if (!readableAsItsPatient(prescription)) {
+                throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+            }
+            return prescriptionMapper.toResponseDTO(prescription).withoutClarificationExchange();
+        }
+        // Scope first, before the row is read: a caller refused for having no
+        // hospital must get the same answer whether or not the id is real.
+        UUID hospitalId = resolvePrescriptionReadScope();
+        Prescription prescription = findPrescriptionOrNotFound(id);
+        if (hospitalId == null || isAtHospital(prescription, hospitalId)) {
+            // Staff access: the clinical copy, clarification exchange included.
+            return prescriptionMapper.toResponseDTO(prescription);
+        }
+        if (readableAcrossHospitals(prescription, hospitalId)) {
+            // QA D652: the by-id read answers as the by-patient list does (the
+            // rule D508 gave imaging): another hospital's prescription the list
+            // shows is readable here; one it never sent is not, in either.
+            return prescriptionMapper.toResponseDTO(prescription);
+        }
+        if (prescription.getHospital() != null && subjectReadGuard.ownsAsItsPatient(prescription.getPatient())) {
+            // Staff who are also patients: the fallback #754 gave the
+            // encounter reads. A nurse at hospital A who was a patient at
+            // hospital B is a clinical reader, so she is held to A, which
+            // refused her her OWN prescription from B on an endpoint that
+            // admits ROLE_PATIENT. Owning it opens it wherever she works, but
+            // only with the patient grant: a staff account linked to a patient
+            // row whose ROLE_PATIENT was never granted, or was revoked, must
+            // not read that row across hospitals through its clinical role.
+            //
+            // She is here as its PATIENT, not as B's staff, so she gets the
+            // patient copy: hospital B's pharmacist-to-prescriber exchange is
+            // not hers to read. The controller strips it only for patient-only
+            // callers, which she is not, so the service strips it here.
+            //
+            // The super-admin exception ReaderRolePredicates.holdsPatientRole
+            // documents, weighed for this caller: an expanded super-admin
+            // holds ROLE_PATIENT, and gains through this only prescriptions
+            // their OWN account owns at a hospital other than the one they
+            // pinned, as a patient copy; an unverified one never gets here
+            // (resolvePrescriptionReadScope). resolve-clarification also reads
+            // through here and is ROLE_DOCTOR-only; for it the fallback can
+            // only turn a 404 on the read-back of the doctor's own
+            // prescription into its patient copy.
+            return prescriptionMapper.toResponseDTO(prescription).withoutClarificationExchange();
+        }
+        throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+    }
+
+    /** Statuses of a prescription never sent: its writing hospital's work in progress (QA D101, D652). */
+    static final List<PrescriptionStatus> NEVER_SENT = NeverSentRule.NEVER_SENT_PRESCRIPTION;
+
+    static boolean wasSent(Prescription prescription) {
+        return NeverSentRule.sent(prescription);
+    }
+
+    /**
+     * QA D652 - a foreign prescription is readable by id exactly when the
+     * by-patient list would show it: its hospital is in the readable set for
+     * this caller and patient, and it was sent ({@link NeverSentRule}).
+     * Accounted as a cross-hospital read, as the list accounts it.
+     */
+    private boolean readableAcrossHospitals(Prescription prescription, UUID hospitalId) {
+        UUID rowHospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        if (rowHospitalId == null || patientId == null
+                || !NeverSentRule.readableHere(rowHospitalId, hospitalId, wasSent(prescription))) {
+            return false;
+        }
+        UUID requesterUserId = authService.getCurrentUserId();
+        if (!recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId).contains(rowHospitalId)) {
+            return false;
+        }
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(List.of(rowHospitalId), hospitalId),
+            CROSS_HOSPITAL_READ);
+        return true;
+    }
+
+    private Prescription findPrescriptionOrNotFound(UUID id) {
+        return prescriptionRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+    }
+
+    /**
+     * The hospital a staff by-id read is bounded by, or {@code null} for a
+     * verified super-admin in global view: the rule #746 gave the encounter
+     * reads. Not consulted for a patient-only caller, who is bounded by
+     * ownership instead.
+     *
+     * <p>{@code requireActiveHospitalId()} returns {@code null} on two roads.
+     * Step 1 is {@code HospitalContext.isSuperAdmin()}, which is what
+     * {@code isSuperAdminFromJwtClaim()} reads. Step 4 is the safety net that
+     * fires when that flag is FALSE yet the authorities collection says
+     * super-admin, the road {@code RoleValidator}'s own javadoc warns an
+     * impersonation context could take. {@link #findWithinHospitalScope} treats
+     * any {@code null} as unscoped, so step 4 read every tenant's
+     * prescriptions. Here a {@code null} is unscoped only when the verified
+     * flag agrees; otherwise the caller is refused before the lookup, with the
+     * answer any caller who has no hospital gets.
+     *
+     * <p>{@link #getPrescriptionAfterWrite} keeps {@link #findWithinHospitalScope}
+     * unchanged: its contract is pinned by
+     * {@code PrescriptionAfterWriteCallerGuardTest}.
+     */
+    private UUID resolvePrescriptionReadScope() {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
+        }
+        return hospitalId;
+    }
+
+    /**
+     * Is this prescription at {@code hospitalId}? A prescription with no
+     * hospital is at none: see {@link #readableAsItsPatient} for the one rule
+     * such a row follows.
+     */
+    private static boolean isAtHospital(Prescription prescription, UUID hospitalId) {
+        return prescription.getHospital() != null
+            && hospitalId.equals(prescription.getHospital().getId());
+    }
+
+    @Override
+    @Transactional
+    public PrescriptionResponseDTO getPrescriptionAfterWrite(UUID id, Locale locale) {
+        // No ownership guard: the caller has just been authorised for, and has
+        // committed, a write on this prescription. See the interface javadoc.
+        return prescriptionMapper.toResponseDTO(findWithinHospitalScope(id));
+    }
+
+    private Prescription findWithinHospitalScope(UUID id) {
         Prescription prescription = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
@@ -139,8 +409,72 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // Return 404 (not 403) to avoid info leakage
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
+        return prescription;
+    }
 
-        return prescriptionMapper.toResponseDTO(prescription);
+    /**
+     * May the caller read this prescription as its patient? The one test both
+     * patient roads apply: a patient-only principal, and a staff member who
+     * holds {@code ROLE_PATIENT} reading outside her hospital.
+     *
+     * <p>A patient may read their own prescription and no one else's. The
+     * hospital scope was once the only check on a patient; it bounded the leak
+     * to the hospital their assignment resolved to, but within it any
+     * prescription id returned somebody else's medication, dose, frequency,
+     * duration and instructions.
+     *
+     * <p><b>A prescription with no hospital is read as its patient by no
+     * one.</b> A row we cannot place is exactly the one not to hand out, and
+     * that holds on both patient roads as it does on the staff road
+     * ({@link #isAtHospital}). Only a verified super-admin in global view,
+     * who reads every row, is unaffected. {@code Prescription.hospital} is
+     * {@code nullable = false}, so no stored row reaches the branch; it is there
+     * so an unsaved entity or a future nullable column cannot become readable
+     * by ownership alone.
+     *
+     * <p>A {@code false} is answered 404, not 403, with the same message as a
+     * prescription that does not exist: the answer must not tell a patient
+     * that an id is real — including when the principal itself cannot be
+     * resolved to a patient row, and without a data defect turning the
+     * refusal into a stack trace. The subject comes from the authenticated
+     * principal ({@code user id → Patient}), never from anything in the
+     * request — the rule {@code PatientPortalServiceImpl.resolvePatientId}
+     * already follows for every {@code /me/patient/*} read, through the same
+     * resolver.
+     *
+     * <p>Who counts as patient-only is {@link PrescriptionReaderRoles}, which
+     * mirrors the endpoint's own annotation and records what that costs on the
+     * OIDC path. The write endpoints that admit roles this read does not go
+     * through {@link #getPrescriptionAfterWrite} instead.
+     */
+    private boolean readableAsItsPatient(Prescription prescription) {
+        return prescription.getHospital() != null && subjectReadGuard.callerOwns(prescription.getPatient());
+    }
+
+    /** The prescription to sign: in the caller's hospital and never signed before. */
+    private Prescription loadSignable(UUID id) {
+        Prescription prescription = prescriptionRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+
+        // Same 404-not-403 idiom as getPrescriptionById: a prescription at
+        // another hospital must not be distinguishable from one that does not
+        // exist.
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null
+                && prescription.getHospital() != null
+                && !prescription.getHospital().getId().equals(hospitalId)) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
+
+        // Re-signing is refused rather than made idempotent. A second signature
+        // over altered content would silently replace the first, destroying the
+        // only record of what was originally authorised. Checked before the
+        // identity test so that "this is already signed" is the answer even when
+        // the caller is not the prescriber.
+        if (prescription.getSignatureValue() != null) {
+            throw new BusinessException("prescription.sign.alreadySigned");
+        }
+        return prescription;
     }
 
     /**
@@ -163,41 +497,81 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * visible, not a refusal.
      */
     @Override
-    @Transactional
-    public PrescriptionResponseDTO signPrescription(UUID id, Locale locale) {
-        Prescription prescription = prescriptionRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+    // QA D1142: the review requirement found at the signature is kept when the
+    // signature is refused for it (see PediatricDoseReviewRequiredException).
+    @Transactional(dontRollbackOn = com.example.hms.exception.PediatricDoseReviewRequiredException.class)
+    public PrescriptionResponseDTO signPrescription(UUID id,
+                                                    com.example.hms.payload.dto.SignPrescriptionRequestDTO reauthentication,
+                                                    Locale locale) {
+        Prescription prescription = loadSignable(id);
 
-        // Same 404-not-403 idiom as getPrescriptionById: a prescription at
-        // another hospital must not be distinguishable from one that does not
-        // exist.
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null
-                && prescription.getHospital() != null
-                && !prescription.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
-        }
-
-        // Re-signing is refused rather than made idempotent. A second signature
-        // over altered content would silently replace the first, destroying the
-        // only record of what was originally authorised. Checked before the
-        // identity test so that "this is already signed" is the answer even when
-        // the caller is not the prescriber.
-        if (prescription.getSignatureValue() != null) {
-            throw new BusinessException(
-                "This prescription has already been signed. A signature cannot be reissued; "
-                    + "cancel it and write a new prescription instead.");
-        }
-
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT
                 && status != PrescriptionStatus.PENDING_SIGNATURE) {
-            throw new BusinessException(
-                "Only a prescription in DRAFT or PENDING_SIGNATURE can be signed; this one is "
-                    + status + ".");
+            throw new BusinessException("prescription.sign.wrongStatus", status.localizedLabel());
         }
 
         Staff signer = resolveSigningPrescriber(prescription);
+        // Review of #975 (D934): a doctor may now sign a nurse's or a
+        // midwife's draft, so the clinician who co-signed it must not also be
+        // the one who signs it - two signatures, one judgment.
+        if (sameClinician(prescription.getCosignedBy(), signer)) {
+            throw new BusinessException("prescription.sign.ownCosign");
+        }
+
+        // QA D1223 (round 24): an order whose typed name names another drug
+        // than its catalogue item (saved before the rule, or by a stale edit)
+        // is never signed: every check below would judge the item, not the
+        // drug written on the order.
+        refuseNameItemMismatch(prescription.getMedicationName(), linkedOrCodedItem(prescription));
+        // Round 18: a controlled drug (the prescriber's tick OR the catalogue's
+        // flag, D922) is signed only after the prescriber re-authenticates on
+        // this very call (EPCS-style step-up). The proof is written on the
+        // order as its two-factor verification, for this signature only; the
+        // tick-keyed safeguard below then has the step it waited for.
+        // Review of round 18: a draft saved before its catalogue item had an
+        // absolute daily maximum (or with an override) is checked again at
+        // the signature; a hard stop is never signed. Before the
+        // re-authentication, so no code is spent on a refusal.
+        List<CdsCard> signingCards = refuseHardStopAtSigning(prescription);
+        // A contraindication is signed only with a reason given now. Recorded below, once every check has passed.
+        String contraindicationReason = requireReasonAtSigning(prescription, signingCards, reauthentication, signer);
+        // CR-02: read now: the order's version moves when this signature is written.
+        String exceptionToken = heldForException(signingCards) ? doseExceptionToken(prescription, signer, signingCards) : null;
+        Long versionSigned = prescription.getVersion();
+        // Round 19 (QA D1096): a dose the check could not judge is signed
+        // only once a pharmacist or another physician recorded the review.
+        // Before the re-authentication, so no code is spent on a refusal.
+        String urgentReason = requirePediatricDoseReviewAtSigning(prescription, signingCards, signer, reauthentication);
+        String urgentToken = urgentReason == null ? null : doseExceptionToken(prescription, signer, signingCards);
+        // A child's dose above the limit: the prescriber's own decision signs it, with nobody else needed. Marked urgent, the review follows.
+        boolean urgentAboveLimit = contraindicationReason != null && reauthentication != null
+            && prescription.getPediatricDoseReviewedAt() == null
+            && Boolean.TRUE.equals(reauthentication.getUrgentDoseException()) && signingCards.stream()
+                .anyMatch(c -> c.exceptionKey() != null && c.exceptionKey().startsWith("paedAbove:"));
+        // QA D1183 (round 23): Septrin and Totapen were SIGNED for allergic
+        // patients. The allergy stop is re-run on the order being signed, so
+        // an order saved before the rule knew its drug, or before the safety
+        // net existed, is never signed without the acknowledgement on record.
+        // Policy 3 (2026-11-09, provisional): the acknowledgement is the
+        // signer's, given at this signature for the allergy the warning names;
+        // one recorded at creation or edit no longer passes it.
+        // Before the re-authentication, so no code is spent on a refusal.
+        AllergyAcknowledgement allergyAcknowledgement =
+            requireAllergyAcknowledgedAtSigning(prescription, reauthentication, signer, signingCards);
+
+        if (controlledResolver.isControlled(prescription)) {
+            controlledSubstanceGuard.requireCosignedFor(prescription, PrescriptionStatus.SIGNED);
+            UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+            PrescriberReauthenticationService.Verified verified =
+                prescriberReauthentication.requireForControlledSigning(signerUserId, prescription.getId(),
+                    reauthentication == null ? null : reauthentication.getPassword(),
+                    reauthentication == null ? null : reauthentication.getMfaCode());
+            prescription.setTwoFactorVerifiedAt(verified.at());
+            prescription.setTwoFactorMethod(verified.method());
+        }
 
         // Checked against the status we are about to move to, not the one the
         // row still holds — a controlled substance must not become signable
@@ -213,7 +587,875 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             computeSignatureDigest(canonicalSignaturePayload(prescription, signer, signedAt)));
 
         logger.info("Prescription {} signed by staff {}", prescription.getId(), signer.getId());
-        return prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+        appendSignatureReason(prescription, contraindicationReason);
+        appendSignatureReason(prescription, urgentReason);
+        if (allergyAcknowledgement != null) {
+            recordSigningAllergyReview(prescription, signer, allergyAcknowledgement);
+        }
+        if (urgentReason != null || urgentAboveLimit) {
+            prescription.setPediatricDoseReviewRequired(true);
+            prescription.setPediatricDoseUrgentExceptionAt(signedAt);
+        }
+        PrescriptionResponseDTO signed = prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+        if (allergyAcknowledgement != null) {
+            // The warning, the reason, the signer and the time together: this row (actor, its own time,
+            // the allergy the warning named, the reason's digest) beside the order's signer, time and reason.
+            auditAllergyOverrideAfterCommit(prescription, signer.getUser() != null ? signer.getUser().getId() : null,
+                allergyAcknowledgement.reason(), "Allergy override recorded at signature",
+                allergyAcknowledgement.auditDetails(versionSigned, signedAt));
+        }
+        if (contraindicationReason != null) {
+            UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+            if (exceptionToken != null) {
+                auditDoseExceptionAfterCommit(prescription, signerUserId, contraindicationReason, signingCards,
+                    exceptionToken, versionSigned, urgentAboveLimit
+                        ? "Urgent paediatric dose exception recorded at signature" : "Dose exception recorded at signature");
+            } else {
+                auditCdsOverrideAfterCommit(prescription, signerUserId, contraindicationReason, signingCards,
+                    "Critical decision-support alert overridden at signature");
+            }
+        }
+        if (urgentReason != null) {
+            UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+            auditDoseExceptionAfterCommit(prescription, signerUserId, urgentReason, signingCards, urgentToken,
+                versionSigned, "Urgent paediatric dose exception recorded at signature");
+        }
+        if (urgentReason != null || urgentAboveLimit) {
+            fileUrgentReviewAfterCommit(prescription, signer);
+        }
+        // QA D793: the signature is the last look before the pharmacy and the
+        // ward act on the order, so the cross-reactivity advisory is repeated
+        // here (it never blocks the signature). QA D1523: with the cards this
+        // signature computed and passed (a duplicate or an interaction with
+        // another order, drafts included), so a warning is never dropped here.
+        List<CdsCard> advisories = withCrossReactivityAdvisory(prescription.getPatient(),
+            prescription.getMedicationName(), signingCards);
+        if (!advisories.isEmpty()) {
+            signed.setCdsAdvisories(advisories);
+        }
+        return signed;
+    }
+
+    /**
+     * A card that asks for it ({@code CdsCard.reasonAtSignature}, the paracetamol contraindication)
+     * is signed only with a reason given now, in the field the signature dialog already sends. A
+     * reason already on the order does not pass it: nothing says which card it answered, and it may
+     * predate the condition. The other critical cards are passed at creation and are not read here.
+     * A pending allergy stop is shown with it, since one reason answers both.
+     *
+     * <p>CR-02 (proposed policy, provisional, awaiting the named clinical approver): an adult
+     * paracetamol finding outside the limits uses this same mechanism, with one thing more: its card
+     * carries a key, and the reason counts only with the token this method handed back for those
+     * findings, that version of the order and this signer. It is made here, in the signature itself,
+     * so only someone who may sign can make it, and nothing made earlier survives an edit: a reason
+     * typed by anyone at creation or edit, and a pharmacist's review, pass nothing.
+     *
+     * @return the reason, not yet recorded; {@code null} when no card asks for one
+     */
+    private String requireReasonAtSigning(Prescription prescription, List<CdsCard> cards,
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO request, Staff signer) {
+        List<CdsCard> held = cards.stream().filter(CdsCard::needsReasonAtSignature).toList();
+        if (held.isEmpty()) {
+            return null;
+        }
+        boolean tied = heldForException(cards);
+        String token = tied ? doseExceptionToken(prescription, signer, cards) : null;
+        String reason = request == null || request.getAllergyOverrideReason() == null
+            ? "" : request.getAllergyOverrideReason().trim();
+        boolean stale = tied && !reason.isEmpty() && !tokenMatches(request, token);
+        if (reason.isEmpty() || stale) {
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw(signatureRefusalKey(tied, stale), held.get(0).summary()),
+                refusedAtSignature(prescription, held, token, signer, cards));
+        }
+        return reason;
+    }
+
+    /** Whether the signature sent back this token, on a dose card or (prefixed) on the allergy card. */
+    private static boolean tokenMatches(com.example.hms.payload.dto.SignPrescriptionRequestDTO request, String token) {
+        String given = request == null ? null : request.getDoseExceptionToken();
+        return given != null && token != null && (given.equals(token) || given.equals(ALLERGY_KEY_PREFIX + token));
+    }
+
+    private static String signatureRefusalKey(boolean tied, boolean stale) {
+        if (stale) {
+            return "prescription.cds.exceptionStale";
+        }
+        return tied ? "prescription.cds.exceptionRequired" : "prescription.cds.criticalOverrideRequired";
+    }
+
+    /**
+     * The cards a refused signature answers with, each tied one carrying the token, and the allergy
+     * stop carrying it too (Policy 3): one reason and one token answer the whole signature.
+     */
+    private List<CdsCard> refusedAtSignature(Prescription prescription, List<CdsCard> held, String token,
+                                             Staff signer, List<CdsCard> cards) {
+        List<CdsCard> refused = new java.util.ArrayList<>(token == null ? held.subList(0, 1)
+            : held.stream().map(c -> c.exceptionKey() == null ? c : c.withExceptionKey(token)).toList());
+        allergyStopAtSigning(prescription).ifPresent(stop -> refused.add(stop.card().withExceptionKey(
+            ALLERGY_KEY_PREFIX + (token != null ? token : doseExceptionToken(prescription, signer, cards)))));
+        return refused;
+    }
+
+    /** CR-02: whether a card of this order is signed only with the prescriber's explicit exception. */
+    private static boolean heldForException(List<CdsCard> cards) {
+        return cards.stream().anyMatch(c -> c.needsReasonAtSignature() && c.exceptionKey() != null);
+    }
+
+    /**
+     * Policy 4 (review of #1110, P1): the whole allergy conflict as it stands now (every active allergy,
+     * not only the most severe one the card names, and what the order asks for), or "none".
+     */
+    private String allergyReviewTokenNow(Prescription prescription) {
+        return allergyConflictNow(prescription).map(com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict::reviewToken).orElse("none");
+    }
+
+    private Optional<com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict> allergyConflictNow(Prescription prescription) {
+        com.example.hms.service.allergy.CurrentAllergyRecheck recheck = allergyRecheck;
+        return recheck == null ? Optional.empty() : recheck.currentConflict(prescription);
+    }
+
+    /**
+     * CR-02: what an exception answers (this order at this version, these findings, this signer). The token
+     * is bound to a conflict read once: the acknowledgement answers exactly that conflict, so an
+     * allergy added before a retry (even a less severe one) voids it and the card is shown again.
+     */
+    private String doseExceptionToken(Prescription prescription, Staff signer, List<CdsCard> cards,
+                                      String allergyReviewToken) {
+        String findings = cards.stream().filter(c -> c.needsReasonAtSignature() || (c.requiresReview() && c.exceptionKey() != null))
+            .map(c -> java.util.Objects.toString(c.exceptionKey(), "contraindication"))
+            .sorted().collect(java.util.stream.Collectors.joining(";"));
+        UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+        // One reason answers an allergy stop too. Policy 3: the token names the allergy the warning
+        // names, so an acknowledgement answers that allergy only; another one since voids it and is shown.
+        String allergyStop = allergyStopAtSigning(prescription).map(AllergyStop::key).orElse("none");
+        return computeSignatureDigest(prescription.getId() + "|" + prescription.getVersion() + "|" + signerUserId + "|" + allergyStop + "|" + findings
+            + "|" + allergyReviewToken);
+    }
+
+    /** CR-02: what an exception answers: this order at this version, these findings, this signer, the conflict now. */
+    private String doseExceptionToken(Prescription prescription, Staff signer, List<CdsCard> cards) {
+        return doseExceptionToken(prescription, signer, cards, allergyReviewTokenNow(prescription));
+    }
+
+    /** CR-02, after commit: ids, digests and counts only, as the CDS override's audit (the row is not encrypted). */
+    private void auditDoseExceptionAfterCommit(Prescription prescription, UUID actorId, String reason,
+                                               List<CdsCard> cards, String token, Long version, String description) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
+        // The kind of each finding (single, daily, interval, route...), never its dose.
+        String findings = cards.stream().map(CdsCard::exceptionKey).filter(java.util.Objects::nonNull)
+            .map(key -> key.split(":", 2)[0]).sorted().collect(java.util.stream.Collectors.joining(","));
+        String details = REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\",\"exceptionToken\":\"" + token
+            + "\",\"orderVersion\":" + version + ",\"findings\":\"" + findings + "\"}";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_CDS_OVERRIDDEN)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .eventDescription(description)
+                    .details(details)
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Dose exception audit not written for prescription {}: {}", prescriptionId, ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /** The reason beside any already on the order, within the column's limit; the audit row holds its digest. */
+    private static void appendSignatureReason(Prescription prescription, String reason) {
+        if (reason == null) {
+            return;
+        }
+        String held = prescription.getOverrideReason();
+        if (held == null || held.isBlank()) {
+            prescription.setOverrideReason(reason);
+        } else if (!held.contains(reason)) {
+            // The reason given now is what this signature rests on: when both do not fit, the older one is cut.
+            int room = OVERRIDE_REASON_MAX - reason.length() - SIGNATURE_REASON_SEPARATOR.length();
+            prescription.setOverrideReason(room > 0
+                ? held.substring(0, Math.min(room, held.length())) + SIGNATURE_REASON_SEPARATOR + reason
+                : reason);
+        }
+    }
+
+    /**
+     * QA D1183 (round 23), Policy 3 (2026-11-09, provisional): the allergy stop at the signature. An
+     * order the stop applies to is signed only when the signer, at this signature, acknowledges the
+     * allergy the warning names and gives the clinical reason in {@code allergyOverrideReason}. An
+     * acknowledgement recorded at creation or edit does not pass it (QA rounds 38-40 signed such an
+     * order with no reason): it may be someone else's, and nothing ties it to this signature.
+     *
+     * <p>The acknowledgement is bound to that allergy by the CR-02 token: the refusal hands it back
+     * on the allergy card, and it names this order at this version, this signer, the findings and
+     * the allergy ({@link AllergyStop#key}). A reason without it, or with one made for another
+     * allergy or another version, is refused with the current card. The reason is recorded on the
+     * order with the signature and audited with the allergy's id. A hard stop is refused before this
+     * ({@link #refuseHardStopAtSigning}): no reason passes it.
+     *
+     * @return what was acknowledged, or {@code null} when no allergy stop applies
+     */
+    private AllergyAcknowledgement requireAllergyAcknowledgedAtSigning(Prescription prescription,
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO request, Staff signer, List<CdsCard> cards) {
+        // Review of #1110 (P1): the whole conflict is read ONCE, before the acknowledgement is checked,
+        // and bound into its token: the review recorded at the signature is exactly that conflict.
+        Optional<com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict> reviewed = allergyConflictNow(prescription);
+        Optional<AllergyStop> stop = allergyStopAtSigning(prescription);
+        if (stop.isEmpty()) {
+            return null;
+        }
+        String token = doseExceptionToken(prescription, signer, cards,
+            reviewed.map(com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict::reviewToken).orElse("none"));
+        CdsCard card = stop.get().card().withExceptionKey(ALLERGY_KEY_PREFIX + token);
+        String allergen = com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(stop.get().allergy());
+        String reason = request == null || request.getAllergyOverrideReason() == null
+            ? "" : request.getAllergyOverrideReason().trim();
+        if (reason.isEmpty()) {
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.signatureReasonRequired",
+                    card.summary(), allergen),
+                List.of(card), FIELD_ALLERGY_OVERRIDE_REASON);
+        }
+        if (!tokenMatches(request, token)) {
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.acknowledgementStale", allergen),
+                List.of(card), FIELD_ALLERGY_OVERRIDE_REASON);
+        }
+        appendSignatureReason(prescription, reason);
+        prescription.setAllergiesReviewed(true);
+        return new AllergyAcknowledgement(reason, stop.get(), token, reviewed.orElse(null));
+    }
+
+    /**
+     * The allergy stop this order meets at its signature, acknowledged earlier or not (Policy 3):
+     * the same rule as at creation and edit, read again on the saved order.
+     */
+    private Optional<AllergyStop> allergyStopAtSigning(Prescription prescription) {
+        if (prescription.getPatient() == null || prescription.getPatient().getId() == null) {
+            return Optional.empty();
+        }
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        return allergyStop(prescription.getMedicationName(),
+            allergyItems(prescription.getMedicationName(), savedOrderItem(prescription), hospitalId),
+            patientAllergyRepository.findByPatient_Id(prescription.getPatient().getId()));
+    }
+
+    /**
+     * An allergy stop: its card and the allergy it names. {@code kind} says which rule raised it (a
+     * documented allergy covers the drug, or the drug could not be checked against a class allergy).
+     */
+    private record AllergyStop(CdsCard card, PatientAllergy allergy, String kind) {
+        /**
+         * What an acknowledgement answers: the rule, the allergy, and the allergy's warning state as
+         * the prescriber read it. Review of #1104 (P1): an edit of the same allergy row (MILD to
+         * LIFE_THREATENING, another allergen or reaction) changes neither its id nor the order's
+         * version, so every field the warning rests on is part of the key, with the row's last
+         * update. Never the card's random uuid: a retry of the same warning must keep its token.
+         */
+        String key() {
+            Object allergyIdentity = allergy.getId() != null ? allergy.getId()
+                : com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(allergy);
+            return String.join("|", kind, String.valueOf(allergyIdentity),
+                String.valueOf(allergy.getSeverity()), String.valueOf(allergy.getAllergenCode()),
+                String.valueOf(allergy.getAllergenDisplay()), String.valueOf(allergy.getCategory()),
+                String.valueOf(allergy.getReaction()), String.valueOf(allergy.getReactionNotes()),
+                String.valueOf(allergy.getVerificationStatus()), String.valueOf(allergy.isActive()),
+                String.valueOf(allergy.getUpdatedAt()));
+        }
+    }
+
+    /**
+     * Policy 4: the signer acknowledged the allergy with a rationale at this very signature, so the
+     * conflict as it stands now is a prescriber-reviewed CONTINUE (the plan is the signed order itself).
+     * A later change of the allergy or the order voids it at the gates, as any review.
+     */
+    private void recordSigningAllergyReview(Prescription prescription, Staff signer, AllergyAcknowledgement acknowledgement) {
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict seen = acknowledgement.reviewedConflict();
+        if (seen == null || signer == null || signer.getUser() == null) {
+            return;
+        }
+        // Review of #1110 (P1): only the conflict the signer acknowledged. One that changed since (an
+        // allergy recorded during the re-authentication) gets no review: the gates hold it for one.
+        if (!seen.reviewToken().equals(allergyReviewTokenNow(prescription))) {
+            return;
+        }
+        recordAllergyReview(prescription, com.example.hms.enums.AllergyReviewDecision.CONTINUE, null,
+            acknowledgement.reason(), seen, signer.getUser(), "Allergy conflict reviewed at signature");
+    }
+
+    /** Policy 3: the signer's acknowledgement of one allergy stop, with the token that bound it. */
+    private record AllergyAcknowledgement(String reason, AllergyStop stop, String token,
+                                          com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict reviewedConflict) {
+        /**
+         * The audit details: the warning (its rule and the allergy's id), the reason's digest, the token,
+         * the version signed and the signature's time. Ids and digests only: the row is not encrypted.
+         */
+        String auditDetails(Long version, LocalDateTime signedAt) {
+            UUID allergyId = stop.allergy().getId();
+            return REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\",\"warning\":\"" + stop.kind()
+                + "\",\"allergyId\":" + (allergyId == null ? "null" : "\"" + allergyId + "\"")
+                + ",\"exceptionToken\":\"" + token + "\",\"orderVersion\":" + version
+                + ",\"signedAt\":\"" + signedAt + "\"}";
+        }
+    }
+
+    /**
+     * Review of round 18: the CDS hard stop (absolute daily maximum) re-run on
+     * the order being signed. Returns the cards, so the signature also reads
+     * the review requirement from them (QA D1096).
+     */
+    private List<CdsCard> refuseHardStopAtSigning(Prescription prescription) {
+        List<CdsCard> cards = evaluateSavedOrder(prescription);
+        for (CdsCard card : cards) {
+            if (card.blocksOverride()) {
+                throw new CdsCriticalBlockException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.hardStop", card.summary()),
+                    cards);
+            }
+        }
+        return cards;
+    }
+
+    /** The decision-support cards for an order already saved, against the catalogue item behind it. */
+    private List<CdsCard> evaluateSavedOrder(Prescription prescription) {
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        com.example.hms.model.medication.MedicationCatalogItem item = savedOrderItem(prescription);
+        List<CdsCard> cards = cdsRuleEngine.evaluateProposedPrescription(prescription.getPatient(), hospitalId,
+            new com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder(prescription.getMedicationName(),
+                prescription.getMedicationCode(), prescription.getDosage(), prescription.getFrequency(), item,
+                prescription.getId(),
+                com.example.hms.service.impl.PrnMinInterval.highestDosesPerDay(
+                    com.example.hms.service.impl.PrnMinInterval.isAsNeeded(prescription),
+                    prescription.getPrnMinIntervalHours()),
+                prescription.getRoute(), item == null ? null : item.getForm()));
+        return cards == null ? List.of() : cards;
+    }
+
+    /**
+     * QA D1183 (round 23): the catalogue items the allergy check reads the
+     * drug through - the picked item, else every active item the typed name
+     * names in this hospital's catalogue AND the national list (V95), so a
+     * drug the pharmacy knows by its generic name is resolved to its INN and
+     * only a name nobody recorded reaches the safety net.
+     */
+    private List<com.example.hms.model.medication.MedicationCatalogItem> allergyItems(
+            String medicationName, com.example.hms.model.medication.MedicationCatalogItem picked, UUID hospitalId) {
+        // QA D1223 (round 24): the picked item AND every item the typed name
+        // names - never the picked item alone. An item the name does not name
+        // is checked but does not resolve the name (AllergyDrugIdentity), so a
+        // mismatched or stale id cannot hide the drug that was typed.
+        List<com.example.hms.model.medication.MedicationCatalogItem> items = new java.util.ArrayList<>();
+        if (picked != null) {
+            items.add(picked);
+        }
+        if (medicationCatalogItemRepository == null || hospitalId == null
+                || medicationName == null || medicationName.isBlank()) {
+            return items;
+        }
+        org.springframework.data.domain.Page<com.example.hms.model.medication.MedicationCatalogItem> page =
+            medicationCatalogItemRepository.findActivePage(hospitalId, org.springframework.data.domain.Pageable.unpaged());
+        if (page == null) {
+            return items;
+        }
+        page.getContent().stream()
+            .filter(item -> picked == null || !sameCatalogItem(picked, item))
+            .filter(item -> com.example.hms.service.pharmacy.DispenseVerificationService
+                .namesCatalogItem(medicationName, item))
+            .forEach(items::add);
+        return items;
+    }
+
+    private static boolean sameCatalogItem(com.example.hms.model.medication.MedicationCatalogItem a,
+                                           com.example.hms.model.medication.MedicationCatalogItem b) {
+        return a == b || (a.getId() != null && a.getId().equals(b.getId()));
+    }
+
+    /**
+     * QA D1223: the catalogue item a saved order carries - by its link, else
+     * by its code at the order's hospital - for the name-item agreement check
+     * at signature. {@code null} when it carries neither.
+     */
+    private com.example.hms.model.medication.MedicationCatalogItem linkedOrCodedItem(Prescription prescription) {
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        if (medicationCatalogItemRepository == null || hospitalId == null) {
+            return null;
+        }
+        if (prescription.getMedicationCatalogItemId() != null) {
+            return medicationCatalogItemRepository
+                .findByIdAndHospital_Id(prescription.getMedicationCatalogItemId(), hospitalId).orElse(null);
+        }
+        String code = prescription.getMedicationCode();
+        return code == null || code.isBlank() ? null
+            : medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, code.trim()).orElse(null);
+    }
+
+    /** The catalogue item behind a saved order: its link, else the strictest item its name names. */
+    private com.example.hms.model.medication.MedicationCatalogItem savedOrderItem(Prescription prescription) {
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        if (medicationCatalogItemRepository == null || hospitalId == null) {
+            return null;
+        }
+        if (prescription.getMedicationCatalogItemId() != null) {
+            return medicationCatalogItemRepository
+                .findByIdAndHospital_Id(prescription.getMedicationCatalogItemId(), hospitalId).orElse(null);
+        }
+        // Review round 3: an order left unlinked (its typed name matched
+        // several uncontrolled items) is checked as creation checks it,
+        // against the strictest of the items its name names.
+        List<com.example.hms.model.medication.MedicationCatalogItem> named =
+            catalogItemsNamed(prescription.getMedicationName(), hospitalId);
+        return named.isEmpty() ? null : strictestPediatricCeiling(named);
+    }
+
+    /* -- Paediatric manual dose review (round 19, QA D1096) ------------- */
+
+    /** Whether a card asks for a recorded pharmacist or physician review of the dose. */
+    static boolean requiresDoseReview(List<CdsCard> cards) {
+        return cards != null && cards.stream().anyMatch(CdsCard::requiresReview);
+    }
+
+    /**
+     * An edit re-reads the requirement from the edited order's cards and, like
+     * a pharmacist verification (Tier 2 item 33), voids a recorded review: it
+     * vouched for a dose that is no longer the one ordered.
+     */
+    private void applyDoseReviewOnUpdate(Prescription existing, List<CdsCard> advisories, boolean orderChanged) {
+        // CR-01: an edit that leaves what is ordered as it was leaves the review an urgent exception owes.
+        if (existing.getPediatricDoseUrgentExceptionAt() != null) {
+            if (!orderChanged) {
+                return;
+            }
+            closeUrgentReviewItems(existing);
+        }
+        existing.setPediatricDoseReviewRequired(requiresDoseReview(advisories));
+        existing.setPediatricDoseReviewedAt(null);
+        existing.setPediatricDoseReviewedBy(null);
+        existing.setPediatricDoseReviewReason(null);
+        existing.setPediatricDoseUrgentExceptionAt(null);
+    }
+
+    /**
+     * The real stop the "manual review" card used to only announce (QA
+     * D1096): the order is not signed until a pharmacist or a physician other
+     * than the prescriber recorded the review, and the signer is not the
+     * reviewer (two judgments, as for the co-signature). The cards re-run at
+     * the signature also set the requirement on an order saved before it
+     * existed, or before its item had a manual-review age.
+     *
+     * @return the prescriber's reason when this is signed as an urgent exception, not yet recorded; else {@code null}
+     */
+    private String requirePediatricDoseReviewAtSigning(Prescription prescription, List<CdsCard> cards,
+                                                       Staff signer,
+                                                       com.example.hms.payload.dto.SignPrescriptionRequestDTO request) {
+        if (requiresDoseReview(cards)) {
+            prescription.setPediatricDoseReviewRequired(true);
+        }
+        if (!prescription.isPediatricDoseReviewRequired()) {
+            return null;
+        }
+        if (prescription.getPediatricDoseReviewedAt() == null) {
+            if (request != null && Boolean.TRUE.equals(request.getUrgentDoseException()) && urgentExceptionAdmitted(cards)) {
+                return requireUrgentReason(prescription, cards, signer, request);
+            }
+            // Committed, not rolled back: the flag set above must outlive the refusal (QA D1142).
+            throw new com.example.hms.exception.PediatricDoseReviewRequiredException();
+        }
+        com.example.hms.model.User reviewer = prescription.getPediatricDoseReviewedBy();
+        UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+        if (reviewer != null && reviewer.getId() != null && reviewer.getId().equals(signerUserId)) {
+            throw new BusinessException("prescription.pediatricReview.reviewerCannotSign");
+        }
+        return null;
+    }
+
+    /**
+     * CR-01 (PROVISIONAL, for the neonatal/paediatric lead and the pharmacist): every card asking for
+     * the review is one the check could not assess. A review by age (under three months, or the item's
+     * own age) or for a child outside every weight band carries no key, and keeps needing the second
+     * person; so does a flag on the order that no card explains now.
+     */
+    private static boolean urgentExceptionAdmitted(List<CdsCard> cards) {
+        List<CdsCard> review = cards.stream().filter(CdsCard::requiresReview).toList();
+        return !review.isEmpty() && review.stream().allMatch(c -> c.exceptionKey() != null);
+    }
+
+    /** The CR-02 mechanism for the urgent case: a reason given now, with the token of these findings, this version, this signer. */
+    private String requireUrgentReason(Prescription prescription, List<CdsCard> cards, Staff signer,
+                                       com.example.hms.payload.dto.SignPrescriptionRequestDTO request) {
+        String token = doseExceptionToken(prescription, signer, cards);
+        String reason = request.getAllergyOverrideReason() == null ? "" : request.getAllergyOverrideReason().trim();
+        boolean stale = !reason.isEmpty() && !tokenMatches(request, token);
+        if (reason.isEmpty() || stale) {
+            List<CdsCard> review = cards.stream().filter(CdsCard::requiresReview).toList();
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw(signatureRefusalKey(true, stale), review.get(0).summary()),
+                refusedAtSignature(prescription, review, token, signer, cards));
+        }
+        return reason;
+    }
+
+    /**
+     * CR-01: an urgent item for whoever can record the review after the fact: the hospital's pharmacists,
+     * else its other physicians. When there is nobody, the signer is told so in the item, and the review
+     * stays open: the signer cannot record it ({@link #requireDoseReviewer}). Someone who joins later is
+     * not told (tasklist.md). After the commit, as a filed item must never undo a signature, and one
+     * recipient's failure must not cost the others theirs; ids and names read before it.
+     */
+    private void fileUrgentReviewAfterCommit(Prescription prescription, Staff signer) {
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        UUID prescriptionId = prescription.getId();
+        UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        String patientName = prescription.getPatient() != null ? prescription.getPatient().getFullName() : null;
+        UUID encounterId = prescription.getEncounter() != null ? prescription.getEncounter().getId() : null;
+        String medication = prescription.getMedicationName();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            if (urgentReviewBasket == null || hospitalId == null) {
+                return;
+            }
+            List<UUID> reviewers;
+            try {
+                reviewers = urgentReviewers(hospitalId, signerUserId);
+            } catch (RuntimeException ex) {
+                logger.error("Urgent dose reviewers not read for prescription {}: {}", prescriptionId,
+                    ex.getClass().getSimpleName(), ex);
+                reviewers = List.of();
+            }
+            boolean nobodyElse = reviewers.isEmpty();
+            Object[] titleArgs = {medication};
+            Object[] bodyArgs = {medication, patientName};
+            for (UUID recipient : nobodyElse && signerUserId != null ? List.of(signerUserId) : reviewers) {
+                com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item =
+                    new com.example.hms.payload.dto.clinical.CreateInBasketItemRequest();
+                item.setRecipientUserId(recipient);
+                item.setHospitalId(hospitalId);
+                item.setItemType(com.example.hms.enums.InBasketItemType.TASK);
+                item.setPriority(com.example.hms.enums.InBasketPriority.URGENT);
+                item.setReferenceId(prescriptionId);
+                item.setReferenceType(URGENT_REVIEW_REFERENCE_TYPE);
+                item.setEncounterId(encounterId);
+                item.setPatientId(patientId);
+                item.setPatientName(patientName);
+                item.setTitleKey(URGENT_REVIEW_TITLE_KEY);
+                if (nobodyElse) {
+                    item.setBodyKey(URGENT_REVIEW_NOBODY_BODY_KEY);
+                } else {
+                    item.setBodyKey(URGENT_REVIEW_BODY_KEY);
+                }
+                item.setTitleArgs(titleArgs);
+                item.setBodyArgs(bodyArgs);
+                try {
+                    item.setTitle(com.example.hms.utility.MessageUtil.resolve(
+                        com.example.hms.service.i18n.NotificationLocales.STAFF, URGENT_REVIEW_TITLE_KEY, titleArgs));
+                    item.setBody(com.example.hms.utility.MessageUtil.resolve(
+                        com.example.hms.service.i18n.NotificationLocales.STAFF, item.getBodyKey(), bodyArgs));
+                    urgentReviewBasket.createItemInNewTransaction(item);
+                } catch (RuntimeException ex) {
+                    logger.error("Urgent dose review item not filed for prescription {}: {}", prescriptionId,
+                        ex.getClass().getSimpleName(), ex);
+                }
+            }
+        });
+    }
+
+    /** The items nobody needs any more: the review is recorded, the order is withdrawn or changed. */
+    private void closeUrgentReviewItems(Prescription prescription) {
+        if (urgentReviewBasket != null && prescription.getPediatricDoseUrgentExceptionAt() != null) {
+            urgentReviewBasket.removeOpenItemsForReference(prescription.getId(), URGENT_REVIEW_REFERENCE_TYPE);
+        }
+    }
+
+    /** Pharmacists first, else physicians; never the signer, who cannot record it. Empty when nobody else can. */
+    private List<UUID> urgentReviewers(UUID hospitalId, UUID signerUserId) {
+        for (java.util.Set<String> roles : List.of(URGENT_REVIEW_PHARMACY_ROLES, URGENT_REVIEW_PHYSICIAN_ROLES)) {
+            List<UUID> found = urhaRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, roles).stream()
+                .map(com.example.hms.model.User::getId)
+                .filter(id -> !id.equals(signerUserId))
+                .distinct().toList();
+            if (!found.isEmpty()) {
+                return found;
+            }
+        }
+        return List.of();
+    }
+
+    @Override
+    @Transactional
+    public PrescriptionResponseDTO recordPediatricDoseReview(UUID id, String reason, Locale locale) {
+        // QA round 29 sweep: the mandatory reason is read first and named, so an
+        // empty body is refused by field whatever the order's state.
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "prescription.pediatricReview.reasonRequired");
+        }
+        if (trimmed.length() > 1000) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "prescription.pediatricReview.reasonTooLong", 1000);
+        }
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        Prescription prescription = lockForUpdateInActingHospital(id, actingHospitalId);
+        UUID callerId = roleValidator.getCurrentUserId();
+        requireDoseReviewer(prescription, callerId);
+
+        PrescriptionStatus status = prescription.getStatus();
+        if (status != null && status.isWithdrawn()) {
+            throw new BusinessException("prescription.pediatricReview.wrongStatus", status.localizedLabel());
+        }
+        if (!prescription.isPediatricDoseReviewRequired() && !requiresDoseReview(evaluateSavedOrder(prescription))) {
+            throw new BusinessException("prescription.pediatricReview.notRequired");
+        }
+        if (prescription.getPediatricDoseReviewedAt() != null) {
+            throw new BusinessException("prescription.pediatricReview.alreadyReviewed");
+        }
+        com.example.hms.model.User reviewer = doseReviewUsers == null ? null
+            : doseReviewUsers.findById(callerId).orElse(null);
+        if (reviewer == null) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.pediatricReview.forbidden"));
+        }
+        prescription.setPediatricDoseReviewRequired(true);
+        prescription.setPediatricDoseReviewedAt(LocalDateTime.now(clock));
+        prescription.setPediatricDoseReviewedBy(reviewer);
+        prescription.setPediatricDoseReviewReason(trimmed);
+        Prescription saved = prescriptionRepository.save(prescription);
+        closeUrgentReviewItems(saved);
+        auditDoseReviewAfterCommit(saved, callerId, trimmed);
+        return prescriptionMapper.toResponseDTO(saved);
+    }
+
+    /* ── Policy 4: the prescriber's review of an allergy conflict ─────────── */
+
+    /** The allergy conflict an order meets now and the review on record, for the reviewer. */
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public com.example.hms.payload.dto.prescription.AllergyConflictDTO getAllergyConflict(UUID id) {
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        Prescription prescription = prescriptionRepository.findById(id)
+            .filter(rx -> rx.getHospital() != null && rx.getHospital().getId().equals(actingHospitalId))
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        requireAllergyReviewer(prescription, roleValidator.getCurrentUserId());
+        return allergyConflictOf(prescription);
+    }
+
+    /**
+     * Policy 4 (user recommendation 2026-11-10, pending clinical approval): an authorized prescriber of
+     * the order's hospital reviews the allergy conflict a signed order meets. The decision (CONTINUE with
+     * a plan, or STOP), the rationale, the reviewer, the time and the conflict reviewed are recorded on
+     * the order and audited; the gates honour it while the conflict stays the one reviewed.
+     */
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.prescription.AllergyConflictDTO reviewAllergyConflict(UUID id,
+            com.example.hms.payload.dto.prescription.AllergyConflictReviewRequestDTO request) {
+        com.example.hms.enums.AllergyReviewDecision decision = request != null ? request.getDecision() : null;
+        String rationale = trimmedOrEmpty(request != null ? request.getRationale() : null);
+        String plan = trimmedOrEmpty(request != null ? request.getPlan() : null);
+        requireReviewFields(decision, rationale, plan);
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        Prescription prescription = lockForUpdateInActingHospital(id, actingHospitalId);
+        UUID callerId = roleValidator.getCurrentUserId();
+        requireAllergyReviewer(prescription, callerId);
+        PrescriptionStatus status = prescription.getStatus();
+        if (status == null || status == PrescriptionStatus.DRAFT || status == PrescriptionStatus.PENDING_SIGNATURE
+                || status.isWithdrawn()) {
+            throw new BusinessException("allergy.review.wrongStatus",
+                status != null ? status.localizedLabel() : "");
+        }
+        java.util.Optional<com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict> conflict =
+            allergyRecheck == null ? java.util.Optional.empty() : allergyRecheck.currentConflict(prescription);
+        if (conflict.isEmpty()) {
+            throw new BusinessException("allergy.review.noConflict");
+        }
+        String token = conflict.get().reviewToken();
+        if (!token.equals(com.example.hms.service.allergy.CurrentAllergyRecheck.stripPrefix(request.getAllergyToken()))) {
+            // The allergy or the order changed since the prescriber read it: show the current conflict.
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("allergy.review.stale",
+                    conflict.get().stop().allergen()),
+                List.of(conflict.get().stop().card()), "allergyToken");
+        }
+        com.example.hms.model.User reviewer = doseReviewUsers == null ? null
+            : doseReviewUsers.findById(callerId).orElse(null);
+        if (reviewer == null) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("allergy.review.forbidden"));
+        }
+        recordAllergyReview(prescription, decision, decision == com.example.hms.enums.AllergyReviewDecision.CONTINUE ? plan : null,
+            rationale, conflict.get(), reviewer, "Allergy conflict reviewed by the prescriber");
+        Prescription saved = prescriptionRepository.save(prescription);
+        return allergyConflictOf(saved);
+    }
+
+    private static String trimmedOrEmpty(String text) {
+        return text == null ? "" : text.trim();
+    }
+
+    /** The review's own fields, by name: a decision, a rationale, a plan to continue, within the column. */
+    private static void requireReviewFields(com.example.hms.enums.AllergyReviewDecision decision, String rationale, String plan) {
+        if (decision == null) {
+            throw new com.example.hms.exception.FieldBusinessException("decision", "allergy.review.decisionRequired");
+        }
+        if (rationale.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("rationale", "allergy.review.rationaleRequired");
+        }
+        if (decision == com.example.hms.enums.AllergyReviewDecision.CONTINUE && plan.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("plan", "allergy.review.planRequired");
+        }
+        if (rationale.length() > 1000) {
+            throw new com.example.hms.exception.FieldBusinessException("rationale", "allergy.review.tooLong", 1000);
+        }
+        if (plan.length() > 1000) {
+            throw new com.example.hms.exception.FieldBusinessException("plan", "allergy.review.tooLong", 1000);
+        }
+    }
+
+    /**
+     * Writes a review on the order, clears its notices (the record is the order and the audit, so a later
+     * conflict is told again) and audits it after commit: ids and digests only, the row is not encrypted.
+     */
+    private void recordAllergyReview(Prescription prescription, com.example.hms.enums.AllergyReviewDecision decision,
+                                     String plan, String rationale,
+                                     com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict conflict,
+                                     com.example.hms.model.User reviewer, String description) {
+        String token = conflict.reviewToken();
+        UUID allergyId = conflict.stop().allergy().getId();
+        LocalDateTime at = LocalDateTime.now(clock);
+        prescription.setAllergyReviewDecision(decision);
+        prescription.setAllergyReviewPlan(plan);
+        prescription.setAllergyReviewRationale(rationale);
+        prescription.setAllergyReviewToken(token);
+        prescription.setAllergyReviewedAt(at);
+        prescription.setAllergyReviewedBy(reviewer);
+        if (urgentReviewBasket != null && prescription.getId() != null) {
+            urgentReviewBasket.removeAllItemsForReference(prescription.getId(),
+                com.example.hms.service.allergy.CurrentAllergyRecheck.NOTICE_REFERENCE_TYPE);
+        }
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        UUID actorId = reviewer != null ? reviewer.getId() : null;
+        String details = "{\"decision\":\"" + decision.name() + "\",\"reviewToken\":\"" + token
+            + "\",\"allergyId\":" + (allergyId == null ? "null" : "\"" + allergyId + "\"")
+            + ",\"rationaleSha256\":\"" + computeSignatureDigest(rationale)
+            + "\",\"planSha256\":" + (plan == null ? "null" : "\"" + computeSignatureDigest(plan) + "\"")
+            + ",\"reviewedAt\":\"" + at + "\"}";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_REVIEWED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .hospitalId(hospitalId)
+                    .patientId(patientId)
+                    .eventDescription(description)
+                    .details(details)
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Allergy review audit not written for prescription {}: {}", prescriptionId,
+                    ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /**
+     * Who may review an allergy conflict: the authority the signature checks (resolveSigningPrescriber),
+     * at the order's own hospital. A signing physician there, or the order's own prescriber holding the
+     * prescriber role. A nurse, a midwife or a pharmacist never by role alone.
+     */
+    private void requireAllergyReviewer(Prescription prescription, UUID callerId) {
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        Staff prescriber = prescription.getStaff();
+        boolean physician = callerId != null && hospitalId != null
+            && roleValidator.isSigningPhysician(callerId, hospitalId);
+        boolean ownOrder = callerId != null && hospitalId != null && prescriber != null && prescriber.getUser() != null
+            && callerId.equals(prescriber.getUser().getId())
+            && roleValidator.hasAnyAuthority("DOCTOR")
+            && !roleValidator.draftsForPhysicianSignature(callerId, hospitalId);
+        if (!physician && !ownOrder) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("allergy.review.forbidden"));
+        }
+    }
+
+    private com.example.hms.payload.dto.prescription.AllergyConflictDTO allergyConflictOf(Prescription prescription) {
+        java.util.Optional<com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict> conflict =
+            allergyRecheck == null ? java.util.Optional.empty() : allergyRecheck.currentConflict(prescription);
+        com.example.hms.model.User reviewer = prescription.getAllergyReviewedBy();
+        String reviewerName = reviewer == null ? null
+            : java.util.Objects.toString(com.example.hms.service.allergy.CurrentAllergyRecheck.reviewerName(reviewer), "");
+        String token = conflict.map(com.example.hms.service.allergy.CurrentAllergyRecheck.Conflict::reviewToken).orElse(null);
+        return com.example.hms.payload.dto.prescription.AllergyConflictDTO.builder()
+            .conflict(conflict.isPresent())
+            .allergen(conflict.map(c -> c.stop().allergen()).orElse(null))
+            .cards(conflict.map(c -> List.of(c.stop().card())).orElse(List.of()))
+            .reviewToken(token)
+            .decision(prescription.getAllergyReviewDecision())
+            .plan(prescription.getAllergyReviewPlan())
+            .rationale(prescription.getAllergyReviewRationale())
+            .reviewedByName(reviewerName)
+            .reviewedAt(prescription.getAllergyReviewedAt())
+            .reviewCurrent(token != null && token.equals(prescription.getAllergyReviewToken()))
+            .build();
+    }
+
+    /**
+     * A pharmacist (the roles POST /pharmacist-verify admits) or a signing
+     * physician of the order's hospital, and never the order's prescriber:
+     * the review is a second pair of eyes, as the user's specification asks
+     * ("a pharmacist or physician must review the dose").
+     */
+    private void requireDoseReviewer(Prescription prescription, UUID callerId) {
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        boolean pharmacist = roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN");
+        boolean physician = callerId != null && hospitalId != null
+            && roleValidator.isSigningPhysician(callerId, hospitalId);
+        if (callerId == null || (!pharmacist && !physician)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.pediatricReview.forbidden"));
+        }
+        Staff prescriber = prescription.getStaff();
+        if (prescriber != null && prescriber.getUser() != null && callerId.equals(prescriber.getUser().getId())) {
+            throw new BusinessException("prescription.pediatricReview.ownOrder");
+        }
+        // CR-01: the signer of an urgent exception is not its second pair of eyes, whoever drafted the order.
+        Staff signer = prescription.getSignedBy();
+        if (prescription.getPediatricDoseUrgentExceptionAt() != null && signer != null && signer.getUser() != null
+                && callerId.equals(signer.getUser().getId())) {
+            throw new BusinessException("prescription.pediatricReview.ownUrgentException");
+        }
+    }
+
+    /** After commit: ids and a digest of the reason only (the audit row is not encrypted). */
+    private void auditDoseReviewAfterCommit(Prescription prescription, UUID actorId, String reason) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
+        String details = REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\"}";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .eventDescription("Paediatric dose review recorded")
+                    .details(details)
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Dose review audit not written for prescription {}: {}", prescriptionId,
+                    ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /**
@@ -239,36 +1481,32 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
+        // Resolved BEFORE the workflow-state checks: their messages tell the
+        // caller whether an order requires a co-signature, whether it already
+        // has one and what status it is in, and someone with no prescribing
+        // assignment here has no business reading that back.
+        Staff cosigner = resolveCosignerAtHospital(prescription);
+
         if (!prescription.isRequiresCosign()) {
-            throw new BusinessException(
-                "This prescription does not declare a co-signature requirement.");
+            // QA D934: in the reader's language.
+            throw new BusinessException("prescription.cosign.notRequired");
         }
         if (prescription.getCosignedAt() != null || prescription.getCosignedBy() != null) {
-            throw new BusinessException("This prescription has already been co-signed.");
+            throw new BusinessException("prescription.cosign.alreadyCosigned");
         }
 
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT
                 && status != PrescriptionStatus.PENDING_SIGNATURE) {
-            throw new BusinessException(
-                "Only a prescription in DRAFT or PENDING_SIGNATURE can be co-signed; this one is "
-                    + status + ".");
+            throw new BusinessException("prescription.cosign.wrongStatus", status.localizedLabel());
         }
-
-        UUID currentUserId = roleValidator.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new AccessDeniedException("Unable to determine the co-signing clinician.");
-        }
-        Staff cosigner = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
-            .orElseThrow(() -> new AccessDeniedException(
-                "Only a clinician with a staff profile can co-sign a prescription."));
 
         Staff prescriber = prescription.getStaff();
         if (prescriber != null && prescriber.getId() != null
                 && prescriber.getId().equals(cosigner.getId())) {
-            throw new BusinessException(
-                "A prescription cannot be co-signed by its own prescriber; the co-signature "
-                    + "exists to put a second clinician's judgment on record.");
+            throw new BusinessException("prescription.cosign.ownPrescriber");
         }
 
         prescription.setCosignedBy(cosigner);
@@ -276,6 +1514,71 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         logger.info("Prescription {} co-signed by staff {}", prescription.getId(), cosigner.getId());
         return prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+    }
+
+    /**
+     * The co-signer, credentialed at the PRESCRIPTION's hospital.
+     *
+     * <p>The method's own contract says the co-signer "must hold a prescribing
+     * role at the prescription's hospital", but nothing checked it: the lookup
+     * was {@code findFirstByUserIdOrderByCreatedAtAsc}, "any staff profile this
+     * user has, anywhere". Holding {@code ROLE_DOCTOR} somewhere plus a staff
+     * row somewhere was enough to put a co-signature on an order at a hospital
+     * the caller has no active assignment at.
+     *
+     * <p>Where the credential lives matters here. {@code staff.user_id} is
+     * UNIQUE (entity {@code uq_staff_user}, and V8 de-duplicated and indexed
+     * it), so a clinician has exactly ONE staff row no matter how many
+     * hospitals they work at; multi-hospital membership is modelled by
+     * {@link UserRoleHospitalAssignment}. Anchoring the CREDENTIAL check on a
+     * staff row at the prescription's hospital would therefore refuse the
+     * legitimate cross-hospital co-signer — one staff row filed at hospital A,
+     * an active doctor assignment at hospital B — which is exactly the person
+     * this is meant to admit. So: the assignment answers "are you a prescriber
+     * here", the staff row is only the FK {@code cosignedBy} records.
+     *
+     * <p>The anchor is the prescription's own hospital, not the acting scope.
+     * The co-signature attests to an order that belongs to that hospital and
+     * will be filled there. With a scope active the check at the top of
+     * {@code cosignPrescription} has already proved the two are the same
+     * hospital; in the unscoped (global) view the prescription's hospital is
+     * the only defined anchor, so reading the scope would leave nothing to
+     * check.
+     *
+     * <p>Doctor/physician/surgeon, because {@code RoleExpansion} makes a
+     * physician and a surgeon a doctor before the controller's
+     * {@code hasAuthority('ROLE_DOCTOR')} runs, while the per-hospital
+     * {@code RoleValidator} checks match the stored assignment code and do not
+     * know that. Naming only DOCTOR here would refuse people the annotation
+     * admits.
+     *
+     * <p>AccessDenied rather than BusinessException: this is an authorization
+     * failure, so 403 rather than 400 — the clarification path's stance.
+     */
+    private Staff resolveCosignerAtHospital(Prescription prescription) {
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AccessDeniedException("Unable to determine the co-signing clinician.");
+        }
+        // Prescription.hospital is optional=false on a NOT NULL column, so this
+        // is never null in practice; a null would make every check below false
+        // and refuse, which is the safe direction anyway.
+        UUID rxHospitalId = prescription.getHospital() != null
+            ? prescription.getHospital().getId()
+            : null;
+        boolean prescriberHere = roleValidator.isDoctor(currentUserId, rxHospitalId)
+            || roleValidator.isPhysician(currentUserId, rxHospitalId)
+            || roleValidator.isSurgeon(currentUserId, rxHospitalId);
+        // Client-safe: cosignPrescription has already answered 404 for a
+        // prescription outside the caller's scope, and the sentence names what
+        // the caller would need, not anything about the record.
+        if (!prescriberHere) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cosign.prescriberOnly"));
+        }
+        return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
+            .orElseThrow(() -> new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cosign.staffProfileRequired")));
     }
 
     /**
@@ -299,12 +1602,57 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             : null;
 
         UUID currentUserId = roleValidator.getCurrentUserId();
-        if (currentUserId == null || prescriberUserId == null
-                || !prescriberUserId.equals(currentUserId)) {
-            throw new AccessDeniedException(
-                "Only the prescribing clinician can sign this prescription.");
+        if (currentUserId != null && prescriberUserId != null && prescriberUserId.equals(currentUserId)) {
+            return prescriber;
         }
-        return prescriber;
+        // QA D934: a nurse or a midwife may draft a prescription (D611/D677)
+        // but holds no signature, so her order could never be signed by anyone
+        // and never reached the pharmacy. A doctor of the order's hospital signs
+        // it: the drafter stays the prescriber of record, the doctor is the
+        // signer. A doctor's own draft is still signed by that doctor only.
+        UUID rxHospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        if (currentUserId != null && prescriberUserId != null && rxHospitalId != null
+                && roleValidator.draftsForPhysicianSignature(prescriberUserId, rxHospitalId)
+                && roleValidator.isSigningPhysician(currentUserId, rxHospitalId)) {
+            return staffRepository.findByUserIdAndHospitalId(currentUserId, rxHospitalId)
+                .orElseThrow(() -> new com.example.hms.exception.ClientSafeAccessDeniedException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.sign.staffProfileRequired")));
+        }
+        // Client-safe: signPrescription resolved the row in the caller's
+        // scope first; "you are not its prescriber" reveals nothing more.
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.sign.prescriberOnly"));
+    }
+
+    /**
+     * QA D930 class: who may rewrite or delete an unsigned prescription. The
+     * same people who may sign it ({@link #resolveSigningPrescriber}): its
+     * prescriber, or - for a nurse's or midwife's draft (QA D934) - a signing
+     * physician of the order's hospital, who corrects what she will sign. A
+     * verified super-admin in global view keeps the old reach. A row with no
+     * prescriber keeps the old rule (any prescriber in scope). Any other
+     * colleague gets 403; the row was already resolved in the caller's scope.
+     */
+    private void requireDraftAuthor(Prescription prescription) {
+        Staff prescriber = prescription.getStaff();
+        UUID prescriberUserId = prescriber != null && prescriber.getUser() != null
+            ? prescriber.getUser().getId()
+            : null;
+        if (prescriberUserId == null || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (prescriberUserId.equals(currentUserId)) {
+            return;
+        }
+        UUID rxHospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        if (currentUserId != null && rxHospitalId != null
+                && roleValidator.draftsForPhysicianSignature(prescriberUserId, rxHospitalId)
+                && roleValidator.isSigningPhysician(currentUserId, rxHospitalId)) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.draft.authorOnly"));
     }
 
     /**
@@ -328,7 +1676,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             String.valueOf(signedAt));
     }
 
-    private String computeSignatureDigest(String payload) {
+    private static String computeSignatureDigest(String payload) {
         try {
             MessageDigest digest = MessageDigest.getInstance(SIGNATURE_ALGORITHM);
             return HexFormat.of().formatHex(digest.digest(payload.getBytes(StandardCharsets.UTF_8)));
@@ -370,10 +1718,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private void rejectClientAssertedWorkflowStatus(PrescriptionRequestDTO request) {
         PrescriptionStatus status = request.getStatus();
         if (status != null && !CLIENT_ASSERTABLE_STATUSES.contains(status)) {
-            throw new BusinessException(
-                "The status " + status + " cannot be set directly. Signing has its own endpoint "
-                    + "(POST /prescriptions/{id}/sign); transmission and dispensing are recorded by "
-                    + "their own workflows.");
+            // QA D660: a key, so the refusal reaches the prescriber in her language.
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.status.notAssertable");
         }
     }
 
@@ -402,6 +1748,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (requested == null) {
             return;
         }
+        // QA D1537 review (round 40): a signed order is never put back to a draft or an unsigned order.
+        // It was the root of a signed, part-dispensed order later withdrawn "as a draft" and read as never
+        // issued. A withdrawn one keeps its own refusal (rejectAnyEditOfWithdrawn), and one awaiting a
+        // clarification its own (409, below: resolve-clarification is the only way back).
+        PrescriptionStatus current = existing.getStatus();
+        if (requested.isProposal() && current != null && !current.isProposal() && !current.isWithdrawn()
+                && current != PrescriptionStatus.PENDING_CLARIFICATION) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.signed.noReturnToProposal");
+        }
         if (existing.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
             rejectClientAssertedWorkflowStatus(request);
             return;
@@ -410,13 +1765,33 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             return;
         }
         if (requested == PrescriptionStatus.CANCELLED || requested == PrescriptionStatus.DISCONTINUED) {
+            // QA D1098 class (round 19): an order awaiting clarification was
+            // signed, so its withdrawal states why, as a SIGNED withdrawal
+            // does (D660); it used to go through with no reason at all.
+            String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
+            if (reason == null || reason.isEmpty()) {
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_WITHDRAWAL_REASON, "prescription.signed.withdrawalReason.required");
+            }
+            existing.setWithdrawalReason(reason);
             closeClarificationOnWithdrawal(existing);
             return;
         }
         throw new ConflictException(
-            "This prescription is awaiting the prescriber's clarification; edit it and answer with "
-                + "POST /prescriptions/{id}/resolve-clarification, or cancel it, rather than changing "
-                + "its status.");
+            com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.clarification.statusLocked"));
+    }
+
+    /**
+     * Withdrawal is final. A CANCELLED or DISCONTINUED order can move to the
+     * other withdrawn state and nowhere else: reopened (DRAFT is a status a
+     * client may assert), its partner offers would act live again — an
+     * ACCEPTED offer stays open after withdrawal so a late dispense is
+     * surfaced, and the partner holding it has been told not to dispense.
+     * A prescriber who wants the medication again writes a new prescription.
+     */
+    private static void rejectReopeningWithdrawn(PrescriptionStatus requested) {
+        if (!requested.isWithdrawn()) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.withdrawn.final");
+        }
     }
 
     /**
@@ -437,6 +1812,59 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * A withdrawn order takes its partner-pharmacy offers with it: unanswered
+     * ones are closed so the timeout sweep and a late reply cannot stamp a
+     * partner status back over it, and every partner holding one is told not
+     * to dispense (WithdrawnOrderPartnerHandler). Same transaction as the
+     * status change; the partner SMS goes out after it commits.
+     */
+    private void closePartnerOffersOnWithdrawal(Prescription prescription, PrescriptionStatus statusBefore) {
+        PrescriptionStatus now = prescription.getStatus();
+        // Only on the way INTO withdrawal: CANCELLED -> DISCONTINUED (or back)
+        // is still the same withdrawn order, and its partners were already told.
+        if (now == null || !now.isWithdrawn() || (statusBefore != null && statusBefore.isWithdrawn())) {
+            return;
+        }
+        withdrawnOrders.withdrawPartnerOffers(prescription);
+    }
+
+    /**
+     * G15 rule 8 (user decision 1): a withdrawn or changed order can never be
+     * collected, so ANY successful edit of a non-withdrawn order voids its
+     * open preparation: PRESCRIPTION_WITHDRAWN on the way into withdrawal,
+     * PRESCRIPTION_CHANGED otherwise. The stock goes back and the patient is
+     * told after commit. Runs under the row lock {@code updatePrescription}
+     * took, inside this already-authorised transaction (a global-view
+     * super-admin included), so the voider makes no scope call of its own.
+     * An order that was already withdrawn cannot hold one: its withdrawal
+     * voided it.
+     */
+    private void voidPreparedFillOnEdit(Prescription prescription, PrescriptionStatus statusBefore) {
+        if (statusBefore != null && statusBefore.isWithdrawn()) {
+            return;
+        }
+        PrescriptionStatus now = prescription.getStatus();
+        preparedFills.voidPreparedFill(prescription, now != null && now.isWithdrawn()
+            ? com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_WITHDRAWN
+            : com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_CHANGED);
+    }
+
+    /**
+     * G13: a prescriber's withdrawal (WITHDRAWN) or any other successful edit
+     * (CHANGED) ends the work-queue claim, audited as a RELEASE whoever acts:
+     * a prescriber ends the work, they do not take it over. Same transaction
+     * and row lock as the edit, so a rolled-back edit keeps the claim; the
+     * claim service makes no scope call (a global-view super-admin included).
+     */
+    private void releaseQueueClaimOnEdit(Prescription prescription, UUID actorUserId) {
+        PrescriptionStatus now = prescription.getStatus();
+        queueClaims.releaseOnExit(prescription, now != null && now.isWithdrawn()
+                ? com.example.hms.enums.QueueClaimReleaseReason.WITHDRAWN
+                : com.example.hms.enums.QueueClaimReleaseReason.CHANGED,
+            actorUserId, com.example.hms.enums.QueueClaimExitActor.OTHER);
+    }
+
+    /**
      * A declared safeguard cannot be quietly un-declared.
      *
      * <p>Making the controlled-substance flags writable (P2 #15's actual gap —
@@ -448,98 +1876,338 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private void rejectSafeguardWithdrawal(Prescription existing, PrescriptionRequestDTO request) {
         if (existing.isControlledSubstance() && Boolean.FALSE.equals(request.getControlledSubstance())) {
-            throw new BusinessException(
-                "This prescription is flagged as a controlled substance; the flag cannot be "
-                    + "removed by editing. Cancel it and write a new prescription instead.");
+            throw new com.example.hms.exception.FieldBusinessException("controlledSubstance", "prescription.controlled.flagLocked");
         }
         if (existing.isRequiresCosign() && Boolean.FALSE.equals(request.getRequiresCosign())) {
-            throw new BusinessException(
-                "This prescription declares a co-signature requirement; the requirement cannot be "
-                    + "removed by editing. Cancel it and write a new prescription instead.");
+            throw new com.example.hms.exception.FieldBusinessException("requiresCosign", "prescription.cosign.flagLocked");
         }
     }
 
     @Override
     @Transactional
-    public Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId, Pageable pageable, Locale locale) {
-        // ── Hospital scope enforcement: mandatory for non-superadmin ──
+    public Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId,
+                                              List<PrescriptionStatus> statuses,
+                                              Pageable pageable, Locale locale) {
+        // Hospital scope enforcement: mandatory for non-superadmin.
         UUID hospitalId = roleValidator.requireActiveHospitalId();
+        List<PrescriptionStatus> filter = normaliseStatusFilter(statuses);
 
+        Page<Prescription> rows;
         if (patientId != null) {
-            if (hospitalId != null) {
-                // E9 #59c — the prescription list follows the patient across
-                // the readable hospitals; every foreign row on the page is
-                // accounted. Prescriptions carry no sensitivity tag (V158).
-                UUID requesterUserId = authService.getCurrentUserId();
-                Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-                Page<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable);
-                reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
-                    CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
-                    "Cross-hospital prescription read on the treatment relationship");
-                return rows.map(prescriptionMapper::toResponseDTO);
-            }
-            return prescriptionRepository.findByPatient_Id(patientId, pageable)
-                .map(prescriptionMapper::toResponseDTO);
+            rows = patientRows(patientId, hospitalId, filter, pageable);
+        } else if (staffId != null) {
+            rows = staffRows(staffId, hospitalId, filter, pageable);
+        } else if (encounterId != null) {
+            rows = encounterRows(encounterId, hospitalId, filter, pageable);
+        } else {
+            rows = tenantRows(hospitalId, filter, pageable);
         }
-        if (staffId != null) {
-            if (hospitalId != null) {
-                return prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)
-                    .map(prescriptionMapper::toResponseDTO);
-            }
-            return prescriptionRepository.findByStaff_Id(staffId, pageable)
-                .map(prescriptionMapper::toResponseDTO);
+        return responsePage(rows);
+    }
+
+    /** QA D1314: the page's rows mapped together, so the catalogue is read once for the page. */
+    private Page<PrescriptionResponseDTO> responsePage(Page<Prescription> rows) {
+        return new org.springframework.data.domain.PageImpl<>(
+            prescriptionMapper.toResponseDTOs(rows.getContent()), rows.getPageable(), rows.getTotalElements());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Page<PrescriptionResponseDTO> search(String term, List<PrescriptionStatus> statuses,
+                                                Pageable pageable, Locale locale) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        List<PrescriptionStatus> filter = normaliseStatusFilter(statuses);
+        String pattern = com.example.hms.utility.PatientMatchKeys.nameContainsPattern(term);
+        if (pattern == null) {
+            return responsePage(tenantRows(hospitalId, filter, pageable));
         }
-        if (encounterId != null) {
-            if (hospitalId != null) {
-                return prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)
-                    .map(prescriptionMapper::toResponseDTO);
-            }
-            return prescriptionRepository.findByEncounter_Id(encounterId, pageable)
-                .map(prescriptionMapper::toResponseDTO);
+        Page<Prescription> rows;
+        if (hospitalId == null) {
+            rows = filter.isEmpty()
+                ? prescriptionRepository.searchEveryHospital(pattern, pageable)
+                : prescriptionRepository.searchEveryHospitalInStatuses(filter, pattern, pageable);
+        } else {
+            rows = filter.isEmpty()
+                ? prescriptionRepository.searchAtHospital(hospitalId, pattern, pageable)
+                : prescriptionRepository.searchAtHospitalInStatuses(hospitalId, filter, pattern, pageable);
         }
-        if (hospitalId != null) {
-            return prescriptionRepository.findByHospital_Id(hospitalId, pageable).map(prescriptionMapper::toResponseDTO);
+        return responsePage(rows);
+    }
+
+    /**
+     * Gap G12 - the {@code status} query parameter as the repository wants it.
+     *
+     * <p>EMPTY means "every status", not "no status can match":
+     * {@code ?status=} on a URL arrives here as a single-element list holding
+     * null, and silently returning an empty page for it would be the same class
+     * of lie the filter exists to remove. Duplicates collapse; order is
+     * irrelevant to an IN clause.
+     */
+    private List<PrescriptionStatus> normaliseStatusFilter(List<PrescriptionStatus> statuses) {
+        if (statuses == null) {
+            return List.of();
         }
-        return prescriptionRepository.findAll(pageable).map(prescriptionMapper::toResponseDTO);
+        return statuses.stream()
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+    }
+
+    /**
+     * E9 #59c - the prescription list follows the patient across the readable
+     * hospitals, and every foreign row on the page is accounted for.
+     * Prescriptions carry no sensitivity tag (V158).
+     */
+    private Page<Prescription> patientRows(UUID patientId, UUID hospitalId,
+                                           List<PrescriptionStatus> filter, Pageable pageable) {
+        if (hospitalId == null) {
+            return filter.isEmpty()
+                ? prescriptionRepository.findByPatient_Id(patientId, pageable)
+                : prescriptionRepository.findByPatient_IdAndStatusIn(patientId, filter, pageable);
+        }
+        UUID requesterUserId = authService.getCurrentUserId();
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
+        // QA D652: another hospital's never-sent prescription is not listed
+        // here, as its by-id read answers 404 here (NeverSentRule). QA D1537
+        // review: nor any hospital's proposal withdrawn before signing, the
+        // acting hospital's included (it was listed as CANCELLED). One query
+        // for one hospital or several: the acting hospital's rows are kept.
+        Page<Prescription> rows = filter.isEmpty()
+            ? prescriptionRepository.findSentAcrossHospitals(patientId, readable, hospitalId, NEVER_SENT, pageable)
+            : prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
+                patientId, readable, hospitalId, NEVER_SENT, filter, pageable);
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
+            CROSS_HOSPITAL_READ);
+        return rows;
+    }
+
+    private Page<Prescription> staffRows(UUID staffId, UUID hospitalId,
+                                         List<PrescriptionStatus> filter, Pageable pageable) {
+        if (hospitalId == null) {
+            return filter.isEmpty()
+                ? prescriptionRepository.findByStaff_Id(staffId, pageable)
+                : prescriptionRepository.findByStaff_IdAndStatusIn(staffId, filter, pageable);
+        }
+        return filter.isEmpty()
+            ? prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)
+            : prescriptionRepository.findByStaff_IdAndHospital_IdAndStatusIn(staffId, hospitalId, filter, pageable);
+    }
+
+    private Page<Prescription> encounterRows(UUID encounterId, UUID hospitalId,
+                                             List<PrescriptionStatus> filter, Pageable pageable) {
+        if (hospitalId == null) {
+            return filter.isEmpty()
+                ? prescriptionRepository.findByEncounter_Id(encounterId, pageable)
+                : prescriptionRepository.findByEncounter_IdAndStatusIn(encounterId, filter, pageable);
+        }
+        return filter.isEmpty()
+            ? prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)
+            : prescriptionRepository.findByEncounter_IdAndHospital_IdAndStatusIn(encounterId, hospitalId, filter, pageable);
+    }
+
+    /** No id filter: the whole tenant, or the whole platform for a super-admin in global view. */
+    private Page<Prescription> tenantRows(UUID hospitalId, List<PrescriptionStatus> filter, Pageable pageable) {
+        if (hospitalId == null) {
+            return filter.isEmpty()
+                ? prescriptionRepository.findAll(pageable)
+                : prescriptionRepository.findByStatusIn(filter, pageable);
+        }
+        return filter.isEmpty()
+            ? prescriptionRepository.findByHospital_Id(hospitalId, pageable)
+            : prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, filter, pageable);
+    }
+
+    /** The same person: the same staff row, or two staff rows of one user account. */
+    private static boolean sameClinician(Staff a, Staff b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        if (a.getId() != null && a.getId().equals(b.getId())) {
+            return true;
+        }
+        return a.getUser() != null && b.getUser() != null && a.getUser().getId() != null
+            && a.getUser().getId().equals(b.getUser().getId());
+    }
+
+    /**
+     * Review of #975: an edit that names the same drug but sends neither id
+     * nor code keeps the item the order was written from, BEFORE any
+     * resolution runs (the mapper would write the null over the link,
+     * dropping the controlled flag and the paediatric ceiling it carries).
+     * An edit of a legacy, unlinked order keeping its name is resolved
+     * leniently by {@code applyCatalogPick}: one match links it, several
+     * leave it as it was. Returns whether the edit names the same drug.
+     */
+    private static boolean keepCatalogLinkBeforeResolution(Prescription existing, PrescriptionRequestDTO request) {
+        boolean sameDrugEdit = !textDiffers(request.getMedicationName(), existing.getMedicationName());
+        if (existing.getMedicationCatalogItemId() != null && sameDrugEdit
+                && request.getMedicationCatalogItemId() == null && isBlank(request.getMedicationCode())) {
+            request.setMedicationCatalogItemId(existing.getMedicationCatalogItemId());
+        }
+        return sameDrugEdit;
+    }
+
+    /**
+     * Review of #975: a code that resolves to nothing, then several name
+     * matches, must not unlink a same-drug edit either: whatever path left
+     * the request without an id after {@code applyCatalogPick}, the order
+     * keeps the item it had.
+     */
+    private com.example.hms.model.medication.MedicationCatalogItem keepCatalogLinkAfterResolution(
+            Prescription existing, PrescriptionRequestDTO request, UUID hospitalId, boolean sameDrugEdit,
+            com.example.hms.model.medication.MedicationCatalogItem resolved) {
+        UUID linkedItemId = existing.getMedicationCatalogItemId();
+        if (linkedItemId == null || !sameDrugEdit || request.getMedicationCatalogItemId() != null) {
+            return resolved;
+        }
+        request.setMedicationCatalogItemId(linkedItemId);
+        return medicationCatalogItemRepository == null ? resolved : medicationCatalogItemRepository
+            .findByIdAndHospital_Id(linkedItemId, hospitalId)
+            .orElse(resolved);
+    }
+
+    /**
+     * QA D706: a controlled substance states how much may be handed over,
+     * on every path that creates one (the form, order sets), because
+     * the pharmacy caps the dispense at it and refuses one without it.
+     * QA D922 (user decision 2026-10-28, supersedes D654): a drug the
+     * catalogue marks controlled is controlled whatever the prescriber
+     * ticked, so the catalogue item decides too.
+     */
+    private static void requirePrescribedQuantityForControlled(
+            Prescription prescription, com.example.hms.model.medication.MedicationCatalogItem catalogItem) {
+        boolean controlled = prescription.isControlledSubstance() || catalogItem != null && catalogItem.isControlled();
+        if (controlled && prescription.getQuantity() == null) {
+            throw new com.example.hms.exception.FieldBusinessException("quantity", "prescription.quantity.requiredControlled");
+        }
+    }
+
+    /**
+     * QA D1359 (round 30): an edit of an order's content names a route the
+     * route reading knows ({@code MedicationRoute} holds a new order at the
+     * edge), or echoes the route the order already carries, so an older order
+     * whose route was stored as typed is still edited and withdrawn.
+     */
+    private static void requireKnownRouteOnEdit(Prescription existing, PrescriptionRequestDTO request) {
+        String route = request.getRoute();
+        if (route == null || route.isBlank()
+            || com.example.hms.service.emar.MedicationRoutes.canonical(route) != null
+            || com.example.hms.service.emar.MedicationRoutes.sameRoute(existing.getRoute(), route)) {
+            return;
+        }
+        throw new com.example.hms.exception.FieldBusinessException("route", "prescription.route.unknown");
     }
 
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
-        Prescription existing = prescriptionRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        // Locked (G15 rule 1): a withdrawal or an edit voids an open
+        // preparation, and a preparation never writes this row, so @Version
+        // cannot see the race; the row lock serialises the two.
+        // The hospital is in the locking query when one is pinned (#825
+        // security finding 3); a super-admin in global view has none.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        Prescription existing = lockForUpdateInActingHospital(id, actingHospitalId);
+        requireDispensedOrderKept(existing, request);
+        // QA D660: a signed order is no longer rewritten by edit.
+        if (existing.getStatus() == PrescriptionStatus.SIGNED) {
+            return withdrawSignedPrescription(existing, request);
+        }
+        // QA D1161 (round 21): withdrawing an order a signature led to (sent,
+        // partly filled, at a partner, printed, awaiting a clarification) is
+        // the withdrawal of a signed order, under the same rule: its author,
+        // or a prescriber of its hospital, with a reason, audited. It fell to
+        // the draft rule, which let only the author withdraw some of them,
+        // with no reason, while SIGNED itself let any doctor do it.
+        if (isSignedWithdrawal(existing, request)) {
+            return withdrawSignedPrescription(existing, request);
+        }
+        // QA D660 (re-test 2): a withdrawn order is read-only, every field.
+        // It used to fall through to updateEntity below, so a signed order
+        // once withdrawn had its drug and dose rewritten under the signature.
+        if (existing.getStatus() != null && existing.getStatus().isWithdrawn()) {
+            rejectAnyEditOfWithdrawn(request);
+        }
+        // QA D930 class: an unsigned prescription is its prescriber's work in
+        // progress; a colleague at the same hospital reads it but does not
+        // rewrite it. Checked after the hospital scope (404) and before the
+        // status checks (400), so a stranger learns nothing about the row.
+        requireDraftAuthor(existing);
         rejectStatusChangeOnUpdate(existing, request);
         rejectSafeguardWithdrawal(existing, request);
+        // QA D1097: the author discards an unsigned order without signing it.
+        if (isUnsignedWithdrawal(existing, request)) {
+            return withdrawUnsignedPrescription(existing, request);
+        }
 
         UUID currentUserId = authService.getCurrentUserId();
 
         Patient patient = resolvePatient(request, locale);
 
-    Staff staff = resolveStaffContext(request, currentUserId);
-    Encounter encounter = resolveEncounterContext(request, patient, staff);
+        Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId,
+            existing.getEncounter() == null ? null : existing.getEncounter().getId());
 
         ensureContextConsistency(patient, staff, encounter);
 
-        UUID hospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
-        if (hospitalId == null) {
-            throw new BusinessException("prescription.hospital.context.missing");
-        }
+        UUID hospitalId = encounterHospitalForUpdate(encounter, actingHospitalId);
+        // QA D401: the order is written into the chart at hospitalId, so the
+        // patient must be registered there. Thrown inside the transaction, it
+        // also rolls back an encounter resolveEncounterContext auto-created.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospitalId);
 
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");
         }
+        // The staff member written as prescriber must be able to prescribe,
+        // on update as on create (D28).
+        requirePrescribingRole(staff, hospitalId);
 
         UserRoleHospitalAssignment prescriberAssignment =
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
 
+        boolean sameDrugEdit = keepCatalogLinkBeforeResolution(existing, request);
+        com.example.hms.model.medication.MedicationCatalogItem catalogItem = keepCatalogLinkAfterResolution(
+            existing, request, hospitalId, sameDrugEdit, applyCatalogPick(request, hospitalId, sameDrugEdit));
+        // QA D1223: a stale catalogue id (or the order's old link) must name
+        // the drug the edit types, or the edit is refused.
+        refuseNameItemMismatch(request.getMedicationName(), catalogItem);
+
         // DECISION SUPPORT: Check allergies before updating prescription
-        checkAllergyConflicts(patient, hospitalId, request.getMedicationName(), request.getForceOverride());
+        // (QA D1149: after the catalogue pick, with the item's ATC class).
+        String allergyOverride = checkAllergyConflicts(patient, request, catalogItem, hospitalId);
 
-        // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
-        List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
+        // CDS rule engine: drug-drug, duplicate-order, pediatric-dose. QA D970:
+        // the order being edited is not a duplicate of itself.
+        List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
+            runCdsRuleEngine(patient, hospitalId, request, catalogItem, existing));
 
+        refuseHeldEditOfASignedOrder(existing, request, advisories);
+        PrescriptionStatus statusBefore = existing.getStatus();
+        String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
+        // QA D1359: an edit names a known route, or echoes the order's own.
+        requireKnownRouteOnEdit(existing, request);
+        String frequencyBefore = existing.getFrequency();
+        boolean tickedBefore = com.example.hms.service.impl.PrnMinInterval.isAsNeeded(existing);
+        List<String> orderChanges = whatIsOrderedChanges(existing, request);
+        boolean orderChanged = !orderChanges.isEmpty();
+        String signedReason = existing.getSignedAt() == null ? null : existing.getOverrideReason();
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        // QA round 30: an edit of an as-needed order keeps (or names) its
+        // minimum interval; an edit to a fixed schedule drops it. QA D1391 /
+        // D1395: the wording rule judges a frequency this edit wrote, never one
+        // the order already carried.
+        com.example.hms.service.impl.PrnMinInterval.applyToEdit(existing, frequencyBefore, tickedBefore,
+            Boolean.TRUE.equals(request.getFrequencyConfirmed()));
+        // QA D706: no quantity check on an edit - a legacy controlled row must
+        // stay withdrawable; the dispense refuses it until a quantity is set.
+        applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
+        applyCdsOverrideOnUpdate(existing, request, advisories, currentUserId);
+        settleSignatureReasonOnEdit(existing, signedReason, orderChanges, currentUserId);
+        applyDoseReviewOnUpdate(existing, advisories, orderChanged);
+        closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
         // updateEntity rewrites medicationName, dosage and frequency, and
         // there is no status guard above — so a SIGNED prescription's drug
@@ -547,11 +2215,467 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // assert a check of a drug the pharmacist never saw.
         pharmacistVerificationService.invalidateOnChange(existing);
         controlledSubstanceGuard.requireSafeguardsFor(existing, existing.getStatus());
+        voidPreparedFillOnEdit(existing, statusBefore);
+        releaseQueueClaimOnEdit(existing, currentUserId);
 
         Prescription saved = prescriptionRepository.save(existing);
+        com.example.hms.service.support.OrderReviewHoldGuard.reviewAgainAfterChange(saved.getId());
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;
+    }
+
+    /**
+     * CR-02: an order past its signature (awaiting a clarification, transmitted, partly filled) is
+     * still edited here and no second signature follows, so an edit of what it orders that lands
+     * outside the limits would reach the pharmacy and the MAR with no exception. It is refused: the
+     * prescriber writes a new order, which is signed with its own exception. An edit that leaves the
+     * drug, dose, frequency and route as they were passes, whatever the cards say.
+     */
+    private static void refuseHeldEditOfASignedOrder(Prescription existing, PrescriptionRequestDTO request,
+                                                     List<CdsCard> advisories) {
+        PrescriptionStatus status = existing.getStatus();
+        if (status == null || status == PrescriptionStatus.DRAFT || status == PrescriptionStatus.PENDING_SIGNATURE
+                || !heldForException(advisories) || !changesWhatIsOrdered(existing, request)) {
+            return;
+        }
+        String summary = advisories.stream().filter(c -> c.needsReasonAtSignature() && c.exceptionKey() != null)
+            .map(CdsCard::summary).findFirst().orElse("");
+        throw new BusinessException("prescription.cds.exceptionNewOrder", summary);
+    }
+
+    private static boolean changesWhatIsOrdered(Prescription existing, PrescriptionRequestDTO request) {
+        return !whatIsOrderedChanges(existing, request).isEmpty();
+    }
+
+    /** The names of the fields of what is ordered that this edit changes; empty when it changes none. */
+    private static List<String> whatIsOrderedChanges(Prescription existing, PrescriptionRequestDTO request) {
+        List<String> changes = new java.util.ArrayList<>();
+        if (request.getRoute() != null && (isBlank(request.getRoute())
+                ? !isBlank(existing.getRoute())
+                : !com.example.hms.service.emar.MedicationRoutes.sameRoute(existing.getRoute(), request.getRoute()))) {
+            changes.add("route");
+        }
+        if (textDiffers(request.getMedicationName(), existing.getMedicationName())) {
+            changes.add("medicationName");
+        }
+        if (textDiffers(request.getDosage(), existing.getDosage())) {
+            changes.add("dosage");
+        }
+        if (textDiffers(request.getFrequency(), existing.getFrequency())) {
+            changes.add("frequency");
+        }
+        if (request.getPrnMinIntervalHours() != null
+                && !request.getPrnMinIntervalHours().equals(existing.getPrnMinIntervalHours())) {
+            changes.add("prnMinIntervalHours");
+        }
+        if (flagDiffers(request.getAsNeeded(), existing.isAsNeeded())) {
+            changes.add("asNeeded");
+        }
+        return changes;
+    }
+
+    /**
+     * The prescription locked for an edit (G15 rule 1), in the caller's
+     * hospital. Hospital scope enforcement: the row's own hospital, as on
+     * sign/co-sign/delete, and BEFORE the status checks, which answer 400 and
+     * would otherwise tell a real id from a missing one. Authority used to be
+     * judged only at the REQUEST's encounter hospital, so another hospital's
+     * prescription could be rewritten. Kept after the scoped lock as defence
+     * in depth.
+     */
+    private Prescription lockForUpdateInActingHospital(UUID id, UUID actingHospitalId) {
+        Prescription existing = (actingHospitalId != null
+                ? prescriptionRepository.findByIdAndHospitalIdForUpdate(id, actingHospitalId)
+                : prescriptionRepository.findByIdForUpdate(id))
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        if (actingHospitalId != null
+                && (existing.getHospital() == null || !actingHospitalId.equals(existing.getHospital().getId()))) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
+        return existing;
+    }
+
+    /**
+     * The hospital of the edit's encounter. Never moved onto another
+     * hospital's encounter: the row stays where the caller acts. An encounter
+     * elsewhere answers exactly as a missing one. A super-admin in global view
+     * keeps the old behaviour.
+     */
+    private static UUID encounterHospitalForUpdate(Encounter encounter, UUID actingHospitalId) {
+        UUID hospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
+        if (hospitalId == null) {
+            throw new BusinessException("prescription.hospital.context.missing");
+        }
+        if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
+            throw new ResourceNotFoundException("encounter.notfound", encounter.getId());
+        }
+        return hospitalId;
+    }
+
+    /**
+     * Round 18: with no allergy override the override field is the CDS
+     * reason's: an edit writes its own reason, or drops a stale one that
+     * vouched for a dose no longer ordered (an allergy reason is the allergy
+     * logic's and is never overwritten). A critical override is audited.
+     */
+    private void applyCdsOverrideOnUpdate(Prescription existing, PrescriptionRequestDTO request,
+                                          List<CdsCard> advisories, UUID currentUserId) {
+        String cdsOverride = cdsOverrideReason(request, advisories);
+        if (!existing.isAllergiesReviewed()) {
+            existing.setOverrideReason(cdsOverride);
+        }
+        if (cdsOverride != null) {
+            auditCdsOverrideAfterCommit(existing, currentUserId, cdsOverride, advisories,
+                "Critical decision-support alert overridden on edit");
+        }
+    }
+
+    /**
+     * The reason given at a signature (an exception, a contraindication). An edit that leaves what is
+     * ordered as it was keeps it readable on the order, with the edit's own reason beside it when both
+     * fit; the edit's reason is audited as a digest either way. An edit that changes what is ordered
+     * ends what the reason answered, and the audit says so and names what changed, never its values.
+     */
+    private void settleSignatureReasonOnEdit(Prescription existing, String signedReason, List<String> orderChanges,
+                                             UUID actorId) {
+        if (signedReason == null || signedReason.isBlank()) {
+            return;
+        }
+        if (!orderChanges.isEmpty()) {
+            auditSignatureReasonEndedAfterCommit(existing, actorId, signedReason, orderChanges);
+            return;
+        }
+        String now = existing.getOverrideReason();
+        boolean bothFit = now != null && !now.isBlank() && !signedReason.contains(now)
+            && signedReason.length() + now.length() + SIGNATURE_REASON_SEPARATOR.length() <= OVERRIDE_REASON_MAX;
+        existing.setOverrideReason(bothFit ? signedReason + SIGNATURE_REASON_SEPARATOR + now : signedReason);
+    }
+
+    /** After commit: ids, a digest of the reason that ended and the names of the fields changed (the row is not encrypted). */
+    private void auditSignatureReasonEndedAfterCommit(Prescription prescription, UUID actorId, String reason,
+                                                      List<String> orderChanges) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
+        String details = REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\",\"changed\":\""
+            + String.join(",", orderChanges) + "\",\"urgent\":"
+            + (prescription.getPediatricDoseUrgentExceptionAt() != null) + "}";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_CDS_OVERRIDDEN)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .eventDescription("Signature exception ended: what is ordered was changed")
+                    .details(details)
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Signature exception audit not written for prescription {}: {}", prescriptionId, ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /**
+     * QA D660 (user decision): the only edit a SIGNED prescription accepts is
+     * its withdrawal, to CANCELLED or DISCONTINUED, with a reason. The signed
+     * drug, dose, route, patient, prescriber and encounter are what the
+     * signature digest covers; rewriting them under the same signature is
+     * what the edit form used to allow. The portal echoes the whole form, so
+     * a field that equals the stored value (or is absent) is not a change;
+     * any other value is refused before anything is written.
+     */
+    @Override
+    public void stopHeldOrder(UUID id, String reason) {
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        Prescription existing = lockForUpdateInActingHospital(id, actingHospitalId);
+        PrescriptionStatus statusBefore = existing.getStatus();
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(statusBefore, "prescription.withdrawn.readOnly");
+        if (statusBefore != null && statusBefore.isWithdrawn()) {
+            return;
+        }
+        UUID currentUserId = authService.getCurrentUserId();
+        UUID hospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        // The rule of withdrawing a signed order: any prescriber of its hospital, with a reason, audited. The review
+        // applies it to a draft too: the reviewer need not be its author.
+        boolean byPrescriber = requireMayWithdrawSigned(existing, currentUserId, hospitalId);
+        if (statusBefore == PrescriptionStatus.PENDING_CLARIFICATION) {
+            closeClarificationOnWithdrawal(existing);
+        }
+        existing.setStatus(hasBeenDispensedFrom(existing) ? PrescriptionStatus.DISCONTINUED : PrescriptionStatus.CANCELLED);
+        existing.setWithdrawalReason(reason);
+        closeUrgentReviewItems(existing);
+        closePartnerOffersOnWithdrawal(existing, statusBefore);
+        voidPreparedFillOnEdit(existing, statusBefore);
+        releaseQueueClaimOnEdit(existing, currentUserId);
+        Prescription saved = prescriptionRepository.save(existing);
+        auditSignedWithdrawalAfterCommit(saved, currentUserId, statusBefore, byPrescriber, reason);
+    }
+
+    private PrescriptionResponseDTO withdrawSignedPrescription(Prescription existing,
+                                                               PrescriptionRequestDTO request) {
+        PrescriptionStatus requested = request.getStatus();
+        if (requested == null || !requested.isWithdrawn() || changesSignedContent(existing, request)) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.signed.onlyWithdrawal");
+        }
+        String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
+        if (reason == null || reason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_WITHDRAWAL_REASON, "prescription.signed.withdrawalReason.required");
+        }
+        UUID currentUserId = authService.getCurrentUserId();
+        UUID hospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        boolean byPrescriber = requireMayWithdrawSigned(existing, currentUserId, hospitalId);
+        PrescriptionStatus statusBefore = existing.getStatus();
+        if (statusBefore == PrescriptionStatus.PENDING_CLARIFICATION) {
+            closeClarificationOnWithdrawal(existing);
+        }
+        existing.setStatus(requested);
+        existing.setWithdrawalReason(reason);
+        closeUrgentReviewItems(existing);
+        closePartnerOffersOnWithdrawal(existing, statusBefore);
+        voidPreparedFillOnEdit(existing, statusBefore);
+        releaseQueueClaimOnEdit(existing, currentUserId);
+        Prescription saved = prescriptionRepository.save(existing);
+        auditSignedWithdrawalAfterCommit(saved, currentUserId, statusBefore, byPrescriber, reason);
+        return prescriptionMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D1161 (round 21, user decision): a signed order is withdrawn by its
+     * prescriber, or by another prescriber of its hospital with a recorded
+     * reason, as a covering doctor stops a drug for the patient's safety. Each
+     * withdrawal is on the audit trail: who, from which status, whether it was
+     * the prescriber, and a digest of the reason (the audit row is not
+     * encrypted, the reason itself stays on the order).
+     */
+    private void auditSignedWithdrawalAfterCommit(Prescription prescription, UUID actorId,
+                                                   PrescriptionStatus statusBefore, boolean byPrescriber,
+                                                   String reason) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        String details = REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\",\"from\":\""
+            + statusBefore + "\",\"to\":\"" + prescription.getStatus() + "\",\"byPrescriber\":" + byPrescriber + "}";
+        String description = byPrescriber
+            ? "Signed prescription withdrawn by its prescriber"
+            : "Signed prescription withdrawn by another prescriber of the hospital";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_DISCONTINUED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .hospitalId(hospitalId)
+                    .patientId(patientId)
+                    .eventDescription(description)
+                    .details(details)
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Withdrawal audit not written for prescription {}: {}", prescriptionId,
+                    ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /**
+     * QA D1161: the statuses a signature led to - every status but the
+     * unsigned ones (DRAFT, PENDING_SIGNATURE) and the withdrawn ones.
+     */
+    static boolean isSignedOrder(PrescriptionStatus status) {
+        return status != null && !status.isWithdrawn()
+            && status != PrescriptionStatus.DRAFT
+            && status != PrescriptionStatus.PENDING_SIGNATURE;
+    }
+
+    /**
+     * QA D1432 (round 34): what a PUT may do to an order the pharmacy has
+     * dispensed from, in the portal's own rule (D678). The medicine has left the
+     * counter: nothing reverses the dispense, so an order set to CANCELLED said
+     * it was withdrawn while the patient had it and the dispense stayed billable.
+     *
+     * <ul>
+     *   <li>CANCELLED ("never given") is refused, whole fill or part, whatever
+     *       status the row holds now: a part fill moves on to PENDING_STOCK, a
+     *       partner or a clarification, and a refill release returns to SIGNED,
+     *       so the fills decide ({@link #hasBeenDispensedFrom}). What a
+     *       pharmacy does with a part fill is stop the balance: DISCONTINUED,
+     *       under the signed-order rule (a reason, audited). The fill and its
+     *       charge stand, and the rest is no longer dispensable. The same stop
+     *       ends a fully dispensed order's further use (D1161).</li>
+     *   <li>A wholly dispensed order takes no other write: its drug and dose
+     *       are what was handed over. A part fill's balance stays editable
+     *       (G13/G15: the edit voids a prepared fill).</li>
+     * </ul>
+     */
+    private void requireDispensedOrderKept(Prescription existing, PrescriptionRequestDTO request) {
+        if (request.getStatus() == PrescriptionStatus.CANCELLED && hasBeenDispensedFrom(existing)) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.dispensed.noCancel");
+        }
+        PrescriptionStatus current = existing.getStatus();
+        if (current != PrescriptionStatus.DISPENSED && current != PrescriptionStatus.PARTNER_DISPENSED) {
+            return;
+        }
+        boolean plainStop = request.getStatus() == PrescriptionStatus.DISCONTINUED && !changesSignedContent(existing, request);
+        if (!plainStop) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, request.getStatus() == null
+                || request.getStatus().isWithdrawn() ? "prescription.dispensed.readOnly" : "prescription.status.notAssertable");
+        }
+    }
+
+    /** QA D1432: medicine has left the counter under this order, by its status or by a fill on record. */
+    private boolean hasBeenDispensedFrom(Prescription prescription) {
+        if (prescription.getStatus() != null && DISPENSED_FROM.contains(prescription.getStatus())) {
+            return true;
+        }
+        java.math.BigDecimal filled = dispenseRepository.sumQuantityDispensedForPrescription(
+            prescription.getId(), com.example.hms.repository.pharmacy.DispenseRepository.NOT_A_FILL);
+        return filled != null && filled.signum() > 0;
+    }
+
+    /**
+     * QA D1161: a request that only withdraws an order a signature led to.
+     * An edit of a sent or partly filled order's content keeps its own rules
+     * (G13/G15: the author's edit voids a prepared fill and ends a queue claim).
+     */
+    private static boolean isSignedWithdrawal(Prescription existing, PrescriptionRequestDTO request) {
+        return isSignedOrder(existing.getStatus())
+            && request.getStatus() != null && request.getStatus().isWithdrawn()
+            && !changesSignedContent(existing, request);
+    }
+
+    /**
+     * QA D1097 (round 19): an unsigned order (DRAFT, PENDING_SIGNATURE) the
+     * form sends back with Cancelled or Discontinued and nothing else changed.
+     */
+    private static boolean isUnsignedWithdrawal(Prescription existing, PrescriptionRequestDTO request) {
+        PrescriptionStatus current = existing.getStatus();
+        boolean unsigned = current == null || current == PrescriptionStatus.DRAFT
+            || current == PrescriptionStatus.PENDING_SIGNATURE;
+        return unsigned && request.getStatus() != null && request.getStatus().isWithdrawn()
+            && !changesSignedContent(existing, request);
+    }
+
+    /**
+     * QA D1097 (round 19): the author of an unsigned order discards it, as a
+     * paper prescription never signed is torn up. Nothing was authorised, so
+     * nothing is re-checked: no decision-support re-run (a paediatric soft
+     * stop passed at creation would otherwise ask for its override again just
+     * to cancel), no allergy check and no step-up re-authentication - that is
+     * for the signature only (ControlledSubstanceGuard). The author rule
+     * ({@link #requireDraftAuthor}) has already run. A reason is kept when one
+     * is given; the PUT is audited by convention (WriteAuditInterceptor).
+     */
+    private PrescriptionResponseDTO withdrawUnsignedPrescription(Prescription existing,
+                                                                 PrescriptionRequestDTO request) {
+        UUID currentUserId = authService.getCurrentUserId();
+        PrescriptionStatus statusBefore = existing.getStatus();
+        // Only an unsigned order reaches here (isUnsignedWithdrawal); a
+        // withdrawn one is final and is never written again (QA D1066).
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(statusBefore,
+            "prescription.withdrawn.readOnly");
+        existing.setStatus(request.getStatus());
+        String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
+        if (reason != null && !reason.isEmpty()) {
+            existing.setWithdrawalReason(reason);
+        }
+        closePartnerOffersOnWithdrawal(existing, statusBefore);
+        voidPreparedFillOnEdit(existing, statusBefore);
+        releaseQueueClaimOnEdit(existing, currentUserId);
+        controlledSubstanceGuard.requireSafeguardsFor(existing, existing.getStatus());
+        return prescriptionMapper.toResponseDTO(prescriptionRepository.save(existing));
+    }
+
+    /**
+     * QA D660 (re-test 2): a CANCELLED or DISCONTINUED order is final and
+     * read-only. Asking for a non-withdrawn status keeps the "cannot be
+     * reopened" answer; any other edit, its content or its status, is refused.
+     */
+    private static void rejectAnyEditOfWithdrawn(PrescriptionRequestDTO request) {
+        PrescriptionStatus requested = request.getStatus();
+        if (requested != null && !requested.isWithdrawn()) {
+            rejectReopeningWithdrawn(requested);
+        }
+        throw new BusinessException("prescription.withdrawn.readOnly");
+    }
+
+    /**
+     * QA D670 (coordinator decision): a signed order is withdrawn by the
+     * prescriber or another doctor of the same hospital. A nurse or a midwife
+     * may write a prescription but not withdraw a signed one; the refusal is
+     * a translated 403. Admins never reach PUT /prescriptions (E9 #67,
+     * HospitalAdminOffOrdersTest), so they have no arm here.
+     */
+    private boolean requireMayWithdrawSigned(Prescription existing, UUID callerId, UUID hospitalId) {
+        if (hospitalId == null || callerId == null) {
+            throw new BusinessException("prescription.only.doctor.admin");
+        }
+        boolean isPrescriber = existing.getStaff() != null && existing.getStaff().getUser() != null
+            && callerId.equals(existing.getStaff().getUser().getId());
+        boolean allowed = isPrescriber
+            || roleValidator.isDoctor(callerId, hospitalId)
+            || roleValidator.isPhysician(callerId, hospitalId)
+            || roleValidator.isSurgeon(callerId, hospitalId);
+        if (!allowed) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.signed.withdraw.forbidden"));
+        }
+        return isPrescriber;
+    }
+
+    /** True when the request asks for anything on a signed order other than its status. */
+    private static boolean changesSignedContent(Prescription existing, PrescriptionRequestDTO request) {
+        java.util.List<Boolean> changes = java.util.List.of(
+            differs(request.getPatientId(), existing.getPatient() == null ? null : existing.getPatient().getId()),
+            request.getPatientId() == null && !isBlank(request.getPatientIdentifier()),
+            differs(request.getStaffId(), existing.getStaff() == null ? null : existing.getStaff().getId()),
+            differs(request.getEncounterId(), existing.getEncounter() == null ? null : existing.getEncounter().getId()),
+            textDiffers(request.getMedicationName(), existing.getMedicationName()),
+            !isBlank(request.getMedicationCode()) && textDiffers(request.getMedicationCode(), existing.getMedicationCode()),
+            textDiffers(request.getDosage(), existing.getDosage()),
+            textDiffers(request.getFrequency(), existing.getFrequency()),
+            // QA round 30: the as-needed interval is order content (null echoes nothing).
+            request.getPrnMinIntervalHours() != null
+                && !request.getPrnMinIntervalHours().equals(existing.getPrnMinIntervalHours()),
+            // QA D1378: the prescriber's "as needed" tick is order content too.
+            flagDiffers(request.getAsNeeded(), existing.isAsNeeded()),
+            // QA D950: "IV" echoed over a stored "INTRAVENOUS" is the same route.
+            !isBlank(request.getRoute())
+                && !com.example.hms.service.emar.MedicationRoutes.sameRoute(existing.getRoute(), request.getRoute()),
+            textDiffers(request.getDuration(), existing.getDuration()),
+            textDiffers(request.getNotes(), existing.getNotes()),
+            flagDiffers(request.getControlledSubstance(), existing.isControlledSubstance()),
+            flagDiffers(request.getRequiresCosign(), existing.isRequiresCosign()),
+            flagDiffers(request.getTakeHome(), existing.isTakeHome()),
+            Boolean.TRUE.equals(request.getForceOverride()));
+        return changes.contains(Boolean.TRUE);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static boolean flagDiffers(Boolean requested, boolean stored) {
+        return requested != null && requested != stored;
+    }
+
+    private static boolean differs(UUID requested, UUID stored) {
+        return requested != null && !requested.equals(stored);
+    }
+
+    /** Blank and absent are the same "nothing recorded" the form echoes. */
+    private static boolean textDiffers(String requested, String stored) {
+        if (requested == null) {
+            return false;
+        }
+        String r = requested.trim();
+        String st = stored == null ? "" : stored.trim();
+        return !r.equals(st);
     }
 
     @Override
@@ -567,6 +2691,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 && !prescription.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
+        // QA D1432: the order a dispense was made from outlives any delete.
+        if (hasBeenDispensedFrom(prescription)) {
+            throw new BusinessException("prescription.dispensed.readOnly");
+        }
 
         prescriptionRepository.deleteById(id);
     }
@@ -580,16 +2708,44 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // E9 #59c — see list(): the same widening, unpaged.
             UUID requesterUserId = authService.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-            List<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
+            // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+            // QA D1537 review: and less any proposal withdrawn before signing.
+            List<Prescription> rows = com.example.hms.service.support.PrescriptionIssuance.withoutDiscardedProposals(
+                NeverSentRule.prescriptionsReadableHere(
+                    prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable), hospitalId));
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(rows.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
-                "Cross-hospital prescription read on the treatment relationship");
+                CROSS_HOSPITAL_READ);
             return rows.stream()
                 .map(prescriptionMapper::toResponseDTO)
                 .toList();
         }
         return prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).stream()
             .map(prescriptionMapper::toResponseDTO)
+            .toList();
+    }
+
+    @Override
+    @Transactional
+    public java.util.List<PrescriptionResponseDTO> getPrescriptionsForPortalPatient(UUID patientId, Locale locale) {
+        // QA D101: an unsigned prescription (DRAFT, PENDING_SIGNATURE) is the prescriber's
+        // work in progress, not something issued to the patient. QA D1537: nor is a draft
+        // that was cancelled before anyone signed it (PrescriptionIssuance).
+        java.util.List<Prescription> rows = com.example.hms.service.support.PrescriptionIssuance.issuedOnly(
+            prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).getContent());
+        // G15 AC-12: a fill waiting at the counter, one query for the list.
+        java.util.Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
+            readyForCollection.openPreparations(rows);
+        return rows.stream()
+            .map(p -> {
+                PrescriptionResponseDTO dto = prescriptionMapper.toResponseDTO(p);
+                var waiting = ready.get(p.getId());
+                if (dto != null && waiting != null) {
+                    dto.setReadyForCollectionAt(waiting.readyAt());
+                    dto.setReadyForCollectionPharmacyName(waiting.pharmacyName());
+                }
+                return dto;
+            })
             .toList();
     }
 
@@ -623,7 +2779,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // ensureContextConsistency (encounter ↔ patient ↔ staff ↔ hospital).
         if (request.getPatientId() != null) {
             return patientRepository.findByIdUnscoped(request.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", request.getPatientId()));
         }
         if (StringUtils.hasText(request.getPatientIdentifier())) {
             String identifier = request.getPatientIdentifier().trim();
@@ -640,14 +2796,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             try {
                 UUID parsed = UUID.fromString(identifier);
                 return patientRepository.findByIdUnscoped(parsed)
-                    .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+                    .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", parsed));
             } catch (IllegalArgumentException ignore) {
                 // not a UUID, fall through
             }
 
-            throw new ResourceNotFoundException("patient.notfound");
+            throw new ResourceNotFoundException("patient.notFoundByIdentifier", identifier);
         }
-        throw new BusinessException("prescription.patient.required");
+        throw new com.example.hms.exception.FieldBusinessException("patientId", "prescription.patient.required");
     }
 
     private void ensureContextConsistency(Patient patient, Staff staff, Encounter encounter) {
@@ -657,8 +2813,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (encounter.getPatient() == null || !encounter.getPatient().getId().equals(patient.getId())) {
             throw new BusinessException("prescription.encounter.patient.mismatch");
         }
-        if (encounter.getStaff() == null || !encounter.getStaff().getId().equals(staff.getId())) {
-            throw new BusinessException("prescription.encounter.staff.mismatch");
+        // QA D414: an inpatient stay is led by one doctor but ordered on by
+        // several (consultants, the doctor on call). Only a visit is the
+        // prescriber's own; the prescription carries its prescriber either way,
+        // and the hospital check below still pins them to the stay's hospital.
+        if (!isPrescribersEncounter(encounter, staff)) {
+            if (encounter.getAdmissionId() == null) {
+                throw new BusinessException("prescription.encounter.staff.mismatch");
+            }
+            // The waiver covers the stay's care team only: an unrelated doctor
+            // at the same hospital may not attach an order to someone's stay.
+            requireStayCareTeam(encounter, staff);
         }
         if (staff.getHospital() == null || !staff.getHospital().getId().equals(encounter.getHospital().getId())) {
             throw new BusinessException("prescription.encounter.staff.hospital.mismatch");
@@ -671,19 +2836,56 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * 2) staff.assignment / URHA lookup for doctor role within the hospital scope
      */
     private UserRoleHospitalAssignment resolvePrescriberAssignmentOrThrow(Staff staff, Encounter encounter, UUID hospitalId) {
-        if (encounter != null && encounter.getAssignment() != null) {
+        // The encounter's assignment is the prescriber's only when the encounter
+        // is theirs: on a stay led by another doctor (D414) it is the lead's.
+        if (encounter != null && encounter.getAssignment() != null && isPrescribersEncounter(encounter, staff)) {
             return encounter.getAssignment();
         }
         return resolveAssignmentForStaff(staff, hospitalId);
     }
 
-    private Staff resolveStaffContext(PrescriptionRequestDTO request, UUID currentUserId) {
+    private static boolean isPrescribersEncounter(Encounter encounter, Staff staff) {
+        return encounter.getStaff() != null && staff != null
+            && encounter.getStaff().getId() != null && encounter.getStaff().getId().equals(staff.getId());
+    }
+
+    /**
+     * The prescriber named on the order — {@code request.staffId} when the
+     * caller picks one — must hold a prescribing role at the order's hospital.
+     * Checking only the caller let a doctor attribute a prescription to a
+     * receptionist, whose own staff assignment then became the prescriber of
+     * record (QA D28).
+     */
+    private void requirePrescribingRole(Staff staff, UUID hospitalId) {
+        UUID prescriberUserId = staff.getUser() != null ? staff.getUser().getId() : null;
+        if (prescriberUserId == null) {
+            throw new BusinessException("prescription.assignment.missing.staff.user");
+        }
+        if (!roleValidator.canCreatePrescription(prescriberUserId, hospitalId)) {
+            throw new BusinessException("prescription.prescriber.role.required");
+        }
+    }
+
+    private Staff resolveStaffContext(PrescriptionRequestDTO request, UUID currentUserId, UUID actingHospitalId) {
         if (request.getStaffId() != null) {
-            return staffRepository.findById(request.getStaffId())
-                .orElseThrow(() -> new ResourceNotFoundException("staff.notfound"));
+            Staff named = staffRepository.findById(request.getStaffId())
+                .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", request.getStaffId()));
+            // QA D84: the prescriber of record is the signed-in prescriber; an
+            // order cannot be written under a colleague's (or a nurse's) name.
+            UUID namedUserId = named.getUser() != null ? named.getUser().getId() : null;
+            if (currentUserId != null && namedUserId != null && !currentUserId.equals(namedUserId)) {
+                throw new BusinessException("prescription.prescriber.must.be.self");
+            }
+            return named;
         }
         if (currentUserId == null) {
             throw new BusinessException("prescription.staff.context.missing");
+        }
+        if (actingHospitalId != null) {
+            Optional<Staff> here = staffRepository.findByUserIdAndHospitalId(currentUserId, actingHospitalId);
+            if (here.isPresent()) {
+                return here.get();
+            }
         }
         return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
             .orElseThrow(() -> new BusinessException("prescription.staff.context.missing"));
@@ -691,26 +2893,165 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     private Encounter resolveEncounterContext(PrescriptionRequestDTO request,
                                               Patient patient,
-                                              Staff staff) {
+                                              Staff staff,
+                                              UUID actingHospitalId,
+                                              UUID keptEncounterId) {
         if (request.getEncounterId() != null) {
-            return encounterRepository.findById(request.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound"));
+            Encounter named = encounterRepository.findById(request.getEncounterId())
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
+            // QA D525 (D431): an order written into a hospital stay after the
+            // discharge closed it was accepted, and would surface as a due
+            // dose for a patient who has gone home.
+            if (isHospitalStay(named) && isClosedEncounter(named)) {
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "prescription.encounter.stayClosed");
+            }
+            // QA D739 (r10 re-test 3): the same rule for every encounter type.
+            // A finished consultation or ED visit named explicitly took the new
+            // order, which then showed in that closed visit's chart. An edit
+            // that keeps the order's own encounter is not a new attachment.
+            if (isClosedEncounter(named) && !named.getId().equals(keptEncounterId)) {
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "prescription.encounter.closed");
+            }
+            return named;
         }
 
-        UUID hospitalId = determineHospitalId(staff, patient);
+        UUID hospitalId = actingHospitalId != null ? actingHospitalId : determineHospitalId(staff, patient);
         if (hospitalId == null) {
             throw new BusinessException("prescription.hospital.context.missing");
+        }
+
+        // QA D136/D151: an order for an inpatient by the clinician leading the
+        // stay belongs to the stay (an encounter carries one prescriber). Filed
+        // there, it stops with the discharge (the MAR and the patient's list
+        // read the stay's status) and it does not mint a phantom consultation.
+        // QA D1393: never a stay whose admission has ended, whatever its encounter says.
+        List<Encounter> openStays = encounterRepository.findOpenStayEncounters(
+            patient.getId(), hospitalId, EncounterStatus.CLOSED, InpatientOrderEnd.ENDED_STAY_STATUSES);
+        Optional<Encounter> ledByPrescriber = openStays.stream()
+            .filter(open -> sameStaff(open.getStaff(), staff.getId()))
+            .findFirst();
+        if (ledByPrescriber.isPresent()) {
+            return ledByPrescriber.get();
+        }
+        // QA D414 (D41/D97 not fixed): the lookup above only finds a stay the
+        // prescriber leads, so a consultant or covering doctor prescribing for
+        // an inpatient minted a completed "consultation" that never happened.
+        // The order belongs to the patient's open stay whoever leads it; the
+        // prescription carries its own prescriber.
+        // The caller must be on that stay's care team: ensureContextConsistency
+        // refuses anyone else (verification GAP-1) for every path, this one too.
+        if (!openStays.isEmpty()) {
+            return openStays.get(0);
+        }
+        Encounter openedStay = openStayForActiveAdmission(patient.getId(), hospitalId, staff);
+        if (openedStay != null) {
+            return openedStay;
         }
 
         Optional<Encounter> existing = encounterRepository
             .findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
                 patient.getId(), staff.getId(), hospitalId);
-        if (existing.isPresent()) {
+        // QA D739: the prescriber's latest encounter may be a stay that has
+        // been discharged (an open one was taken above). An outpatient order
+        // filed there reads as a stay order: it is ended by the discharge and
+        // shows in the closed stay's chart. It gets an outpatient anchor.
+        // QA D739 (r10 re-test 2): nor is a finished outpatient visit reused:
+        // an order written after that consultation closed is not part of it,
+        // and would show in its chart and summary. Only a still-open visit of
+        // this prescriber anchors the order; otherwise it gets its own anchor.
+        if (existing.isPresent() && isReusableOutpatientAnchor(existing.get())) {
             return existing.get();
         }
-
+        // QA D739 (r10 self-review round 2): every order gets a fresh anchor.
+        // An earlier anchor is completed by design (QA D41) and may be of any
+        // age, so reusing it would file this order on an existing finished
+        // encounter, which is the defect QA reported.
         UserRoleHospitalAssignment assignment = resolveAssignmentForStaff(staff, hospitalId);
         return createEncounterSnapshot(patient, staff, assignment);
+    }
+
+    private static boolean isClosedEncounter(Encounter encounter) {
+        return encounter.getStatus() != null && encounter.getStatus().isClosed();
+    }
+
+    /**
+     * D414: an admission whose stay encounter was never opened (admitted before
+     * stays had encounters, or with no lead at the time) still makes the patient
+     * an inpatient; the order opens the stay instead of a completed consultation.
+     */
+    private Encounter openStayForActiveAdmission(UUID patientId, UUID hospitalId, Staff staff) {
+        if (admissionRepository == null || stayEncounters == null) {
+            return null;
+        }
+        Optional<com.example.hms.model.Admission> admission = admissionRepository
+            .findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
+                java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.ACTIVE,
+                    com.example.hms.enums.AdmissionStatus.ON_LEAVE,
+                    com.example.hms.enums.AdmissionStatus.AWAITING_DISCHARGE))
+            .stream()
+            .findFirst();
+        if (admission.isEmpty()) {
+            return null;
+        }
+        // Checked before the stay is opened: opening another doctor's stay is
+        // itself a write an unrelated prescriber may not cause.
+        if (!isOnAdmissionCareTeam(admission.get(), staff)) {
+            throw new AccessDeniedException(NOT_ON_STAY_CARE_TEAM);
+        }
+        return stayEncounters.openStayEncounter(admission.get());
+    }
+
+    /**
+     * QA D414 (verification GAP-1): an order on a stay led by another doctor is
+     * allowed only for its care team: the stay lead, the admission's attending
+     * or admitting physician, or a consultant recorded on the admission.
+     */
+    private void requireStayCareTeam(Encounter stay, Staff staff) {
+        if (isPrescribersEncounter(stay, staff)) {
+            return;
+        }
+        com.example.hms.model.Admission admission = admissionRepository == null || stay.getAdmissionId() == null
+            ? null : admissionRepository.findById(stay.getAdmissionId()).orElse(null);
+        if (admission == null || !isOnAdmissionCareTeam(admission, staff)) {
+            throw new AccessDeniedException(NOT_ON_STAY_CARE_TEAM);
+        }
+    }
+
+    /**
+     * QA D703: the stay is the hospital's, not the admitting doctor's. Any
+     * prescriber of the stay's hospital who treats the patient (the doctor on
+     * call at night, a colleague covering the ward) may order on it; the
+     * prescribing role itself is enforced on the endpoint. Tenant scoping is
+     * kept: a prescriber of another hospital is refused.
+     */
+    private static boolean isOnAdmissionCareTeam(com.example.hms.model.Admission admission, Staff staff) {
+        UUID staffId = staff != null ? staff.getId() : null;
+        if (staffId == null) {
+            return false;
+        }
+        if (sameStaff(admission.getAttendingPhysician(), staffId)
+            || sameStaff(admission.getAdmittingProvider(), staffId)) {
+            return true;
+        }
+        UUID stayHospital = admission.getHospital() != null ? admission.getHospital().getId() : null;
+        UUID staffHospital = staff.getHospital() != null ? staff.getHospital().getId() : null;
+        return stayHospital != null && stayHospital.equals(staffHospital);
+    }
+
+    /** An open, non-stay encounter: the only kind an unanchored order may join. */
+    private static boolean isReusableOutpatientAnchor(Encounter encounter) {
+        EncounterStatus status = encounter.getStatus();
+        return !isHospitalStay(encounter)
+            && (status == null || !status.isClosed());
+    }
+
+    /** A stay's encounter: linked to an admission, or an INPATIENT one from before V193 linked them. */
+    private static boolean isHospitalStay(Encounter encounter) {
+        return encounter.getAdmissionId() != null || encounter.getEncounterType() == EncounterType.INPATIENT;
+    }
+
+    private static boolean sameStaff(Staff member, UUID staffId) {
+        return member != null && staffId.equals(member.getId());
     }
 
     private UUID determineHospitalId(Staff staff, Patient patient) {
@@ -726,21 +3067,41 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Encounter createEncounterSnapshot(Patient patient,
                                               Staff staff,
                                               UserRoleHospitalAssignment assignment) {
-        if (staff.getHospital() == null) {
+        // Anchor at the hospital the assignment was resolved for, which is the
+        // acting hospital when one is pinned, rather than the staff home hospital.
+        Hospital hospital = assignment != null && assignment.getHospital() != null
+            ? assignment.getHospital() : staff.getHospital();
+        if (staff.getHospital() == null || hospital == null) {
             throw new BusinessException("prescription.staff.hospital.missing");
         }
+        // The anchor exists only because a prescription row needs an encounter:
+        // it is recorded as already finished, in the prescriber's department, so
+        // it never surfaces as an open visit on a worklist or tracker with no
+        // department (QA D41).
+        LocalDateTime now = LocalDateTime.now();
         Encounter encounter = Encounter.builder()
             .patient(patient)
             .staff(staff)
-            .hospital(staff.getHospital())
+            .hospital(hospital)
+            .department(departmentAtHospital(staff, hospital))
             .assignment(assignment)
             .encounterType(EncounterType.CONSULTATION)
-            .encounterDate(LocalDateTime.now())
-            .status(EncounterStatus.IN_PROGRESS)
-            .notes("Auto-generated for prescription entry")
+            .encounterDate(now)
+            .checkoutTimestamp(now)
+            .status(EncounterStatus.COMPLETED)
+            .notes(Encounter.PRESCRIPTION_ANCHOR_NOTE)
             .build();
         encounter.setCode(generateEncounterCode());
         return encounterRepository.save(encounter);
+    }
+
+    private static Department departmentAtHospital(Staff staff, Hospital hospital) {
+        Department department = staff.getDepartment();
+        if (department == null || department.getHospital() == null
+            || !department.getHospital().getId().equals(hospital.getId())) {
+            return null;
+        }
+        return department;
     }
 
     private String generateEncounterCode() {
@@ -778,58 +3139,297 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * Check patient allergies against the medication being prescribed.
-     * Logs warnings and throws BusinessException if severe allergy found without override.
+     * Check patient allergies against the medication being prescribed (QA D83).
+     * Any active documented allergy that matches the drug — by name, ignoring
+     * accents, or by drug class (a penicillin allergy covers amoxicillin) —
+     * blocks the order unless the prescriber overrides it WITH a reason. The
+     * reason is stored on the prescription so the override is on record.
+     *
+     * @return the override reason to record, or {@code null} when no allergy matched
      */
-    private void checkAllergyConflicts(Patient patient, UUID hospitalId, String medicationName, Boolean forceOverride) {
+    private String checkAllergyConflicts(Patient patient, PrescriptionRequestDTO request,
+                                         com.example.hms.model.medication.MedicationCatalogItem catalogItem,
+                                         UUID hospitalId) {
+        String medicationName = request.getMedicationName();
         if (medicationName == null || medicationName.isBlank()) {
-            return; // Cannot check without medication name
+            return null; // Cannot check without medication name
         }
+        // A hard safety stop: an allergy recorded at ANY hospital counts.
+        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patient.getId());
+        String reason = request.getOverrideReason() != null ? request.getOverrideReason().trim() : "";
+        Optional<CdsCard> block = allergyBlock(medicationName, allergyItems(medicationName, catalogItem, hospitalId),
+            allergies);
+        if (block.isEmpty()) {
+            return null;
+        }
+        logger.warn("ALLERGY ALERT: patient {} has a documented allergy the prescribed drug may meet. Override: {}",
+            patient.getId(), request.getForceOverride());
+        if (!Boolean.TRUE.equals(request.getForceOverride()) || reason.isEmpty()) {
+            // Sent as a critical CDS card so the prescribing screen shows the
+            // alert and offers the override (with its mandatory reason).
+            String message = block.get().summary();
+            throw new CdsCriticalBlockException(message, List.of(block.get()));
+        }
+        return reason;
+    }
 
-        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId);
-        String medLower = medicationName.toLowerCase();
-        
-        for (PatientAllergy allergy : allergies) {
-            if (allergy.isActive() && matchesAllergen(medLower, allergy.getAllergenDisplay())) {
-                handleAllergyConflict(patient, allergy, medicationName, forceOverride);
+    /**
+     * QA D83 / D1149 / D1183: the allergy stop for this drug, or empty.
+     * <ol>
+     *   <li>An active allergy that covers the drug - by name, by INN class
+     *       (a cited brand read as its INN), or by the catalogue item's ATC
+     *       group. QA D432: the most severe matching entry is the one cited.</li>
+     *   <li>THE SAFETY NET (round 23): the drug resolves to no active
+     *       ingredient (a free-text name no catalogue item, cited brand or INN
+     *       stem explains) while the patient has a drug-class allergy: the
+     *       check is impossible, and the prescriber must acknowledge it.</li>
+     * </ol>
+     * The same rule for the creation, the edit and the signature.
+     */
+    private Optional<CdsCard> allergyBlock(String medicationName,
+                                           List<com.example.hms.model.medication.MedicationCatalogItem> items,
+                                           List<PatientAllergy> allergies) {
+        return allergyStop(medicationName, items, allergies).map(AllergyStop::card);
+    }
+
+    /** {@link #allergyBlock} with the allergy its card names (Policy 3 binds the acknowledgement to it). */
+    private Optional<AllergyStop> allergyStop(String medicationName,
+                                              List<com.example.hms.model.medication.MedicationCatalogItem> items,
+                                              List<PatientAllergy> allergies) {
+        com.example.hms.service.allergy.AllergyDrugIdentity identity =
+            com.example.hms.service.allergy.AllergyDrugIdentity.of(medicationName, items);
+        Optional<PatientAllergy> worst = identity.matchingAllergies(allergies).stream()
+            .max(java.util.Comparator.comparingInt(PrescriptionServiceImpl::allergySeverityRank));
+        if (worst.isPresent()) {
+            return Optional.of(new AllergyStop(allergyConflictCard(worst.get(), medicationName), worst.get(), "documented"));
+        }
+        return identity.unverifiableClassAllergy(allergies)
+            .map(allergy -> new AllergyStop(com.example.hms.service.allergy.UnverifiableAllergyCard.of(medicationName,
+                com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(allergy)), allergy, "unverifiable"));
+    }
+
+    /**
+     * QA D793: the allergy check above blocks only the drug and its own class
+     * (a penicillin allergy covers amoxicillin), so ceftriaxone for a
+     * penicillin-allergic patient was signed and given with no word. A
+     * beta-lactam that may cross-react with a documented beta-lactam allergy
+     * adds a WARNING card: shown to the prescriber, never a block, never an
+     * override to record. An allergy recorded at any hospital counts, as for
+     * the block. The card goes first: it is about the patient, the rule
+     * engine's cards are about the other orders.
+     */
+    private List<CdsCard> withCrossReactivityAdvisory(Patient patient, String medicationName, List<CdsCard> advisories) {
+        if (patient == null || patient.getId() == null || medicationName == null || medicationName.isBlank()) {
+            return advisories;
+        }
+        Optional<CdsCard> card = com.example.hms.service.allergy.CrossReactivityAdvisory.card(
+            medicationName, patientAllergyRepository.findByPatient_Id(patient.getId()));
+        if (card.isEmpty()) {
+            return advisories;
+        }
+        List<CdsCard> out = new java.util.ArrayList<>();
+        out.add(card.get());
+        if (advisories != null) {
+            out.addAll(advisories);
+        }
+        return out;
+    }
+
+    /** Higher is worse; an unknown severity ranks above a mild one, below a moderate one. */
+    public static int allergySeverityRank(PatientAllergy allergy) {
+        if (allergy.getSeverity() == null) {
+            return 2;
+        }
+        return switch (allergy.getSeverity()) {
+            case LIFE_THREATENING -> 5;
+            case SEVERE -> 4;
+            case MODERATE -> 3;
+            case UNKNOWN -> 2;
+            case MILD -> 1;
+        };
+    }
+
+    private static void recordAllergyOverride(Prescription prescription, String overrideReason) {
+        if (overrideReason != null) {
+            prescription.setOverrideReason(overrideReason);
+            prescription.setAllergiesReviewed(true);
+        }
+    }
+
+    /**
+     * Round 18 (QA D935): the reason the prescriber gave for passing a
+     * critical decision-support alert (a paediatric soft stop, a major
+     * interaction), or null when no critical alert was overridden.
+     * {@link #runCdsRuleEngine} has already refused a critical alert sent
+     * without forceOverride and a reason.
+     */
+    static String cdsOverrideReason(PrescriptionRequestDTO request, List<CdsCard> advisories) {
+        if (!Boolean.TRUE.equals(request.getForceOverride()) || advisories == null
+                || advisories.stream().noneMatch(c -> c.indicator() == CdsCard.Indicator.CRITICAL)) {
+            return null;
+        }
+        String reason = request.getOverrideReason() == null ? "" : request.getOverrideReason().trim();
+        return reason.isEmpty() ? null : reason;
+    }
+
+    /** The CDS override reason is stored on the order unless an allergy override already holds the field. */
+    private static void recordCdsOverride(Prescription prescription, String reason) {
+        if (reason != null && (prescription.getOverrideReason() == null || prescription.getOverrideReason().isBlank())) {
+            prescription.setOverrideReason(reason);
+        }
+    }
+
+    /**
+     * Round 18 (QA D935): after commit, ids, a digest of the reason and how
+     * many critical alerts were passed. No drug, dose or reason text: the
+     * audit row is not encrypted.
+     */
+    private void auditCdsOverrideAfterCommit(Prescription prescription, UUID actorId, String reason,
+                                             List<CdsCard> advisories, String description) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
+        long critical = advisories.stream().filter(c -> c.indicator() == CdsCard.Indicator.CRITICAL).count();
+        String details = REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\",\"criticalAlerts\":" + critical + "}";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_CDS_OVERRIDDEN)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .eventDescription(description)
+                    .details(details)
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("CDS override audit not written for prescription {}: {}", prescriptionId, ex.getClass().getSimpleName());
             }
+        });
+    }
+
+    /**
+     * An edit either still conflicts (the new reason is recorded and audited,
+     * so a replaced reason leaves a trail) or no longer does (the stale
+     * override is cleared - it vouched for a drug that is no longer ordered -
+     * and the clearing is audited too).
+     */
+    private void applyAllergyOverrideOnUpdate(Prescription existing, String allergyOverride,
+                                              String overrideBefore, UUID actorId) {
+        if (allergyOverride != null) {
+            recordAllergyOverride(existing, allergyOverride);
+            if (!allergyOverride.equals(overrideBefore)) {
+                auditAllergyOverrideAfterCommit(existing, actorId, allergyOverride,
+                    overrideBefore != null ? "Allergy override reason replaced on edit" : "Allergy override recorded on edit");
+            }
+        } else if (overrideBefore != null || existing.isAllergiesReviewed()) {
+            existing.setOverrideReason(null);
+            existing.setAllergiesReviewed(false);
+            auditAllergyOverrideAfterCommit(existing, actorId, null,
+                "Allergy override cleared: the edited order no longer conflicts");
         }
     }
 
-    private boolean matchesAllergen(String medLower, String allergenDisplay) {
-        if (allergenDisplay == null) {
+    /**
+     * After commit, outside the clinical write. Ids and a digest of the
+     * reason only: the reason is free text and the audit row is not
+     * encrypted, so the digest proves which reason stood without copying it.
+     */
+    private void auditAllergyOverrideAfterCommit(Prescription prescription, UUID actorId,
+                                                 String reason, String description) {
+        auditAllergyOverrideAfterCommit(prescription, actorId, reason, description, null);
+    }
+
+    /** {@code signatureDetails}: the details a signature writes (Policy 3), else the reason's digest alone. */
+    private void auditAllergyOverrideAfterCommit(Prescription prescription, UUID actorId,
+                                                 String reason, String description, String signatureDetails) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
+        String details;
+        if (signatureDetails != null) {
+            details = signatureDetails;
+        } else {
+            details = reason == null ? "{\"overrideCleared\":true}"
+                : REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\"}";
+        }
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .eventDescription(description)
+                    .details(details)
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Allergy override audit not written for prescription {}: {}", prescriptionId, ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /**
+     * QA D1183 (round 22): what the allergy check reads for the ordered drug -
+     * the typed name, the catalogue item's generic and brand names (the
+     * repository's own synonym data: a "Bactrim" item records its generic),
+     * and the generic names of a standard brand ({@code DrugClassAllergy}).
+     */
+    static String drugTextForAllergyCheck(String medicationName,
+                                          com.example.hms.model.medication.MedicationCatalogItem catalogItem) {
+        return com.example.hms.service.allergy.AllergyDrugIdentity.of(medicationName,
+            catalogItem == null ? List.of() : List.of(catalogItem)).text();
+    }
+
+    /** Lower-case, accent-free form: "Pénicilline V" and "penicillin" must meet. */
+    static String normalizeDrugText(String value) {
+        if (value == null) {
+            return "";
+        }
+        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT)
+            .trim();
+    }
+
+    static boolean matchesAllergen(String med, String allergenDisplay) {
+        return matchesAllergen(med, allergenDisplay, null);
+    }
+
+    /**
+     * The drug's name meets the allergy's, or the allergy names the drug's
+     * class (QA D1149: {@link com.example.hms.service.allergy.DrugClassAllergy},
+     * penicillins and sulfonamides, the catalogue item's ATC code included).
+     */
+    static boolean matchesAllergen(String med, String allergenDisplay, String atcCode) {
+        String allergen = normalizeDrugText(allergenDisplay);
+        if (allergen.isEmpty() || med.isEmpty()) {
             return false;
         }
-        String allergenLower = allergenDisplay.toLowerCase();
-        return allergenLower.contains(medLower) || medLower.contains(allergenLower);
+        // QA D1183: a brand is read with its generic names on both rules.
+        String expanded = com.example.hms.service.allergy.DrugClassAllergy.withGenericNames(med);
+        if (allergen.contains(med) || expanded.contains(allergen)) {
+            return true;
+        }
+        return com.example.hms.service.allergy.DrugClassAllergy.covers(allergen, expanded, atcCode);
     }
 
-    private void handleAllergyConflict(Patient patient, PatientAllergy allergy, String medicationName, Boolean forceOverride) {
+    private static CdsCard allergyConflictCard(PatientAllergy allergy, String medicationName) {
         String severityStr = allergy.getSeverity() != null ? allergy.getSeverity().name() : "UNKNOWN";
-        String reaction = allergy.getReaction() != null ? allergy.getReaction() : "unspecified reaction";
-
-        logger.warn("ALLERGY ALERT: Patient {} has documented allergy to '{}' (severity: {}, reaction: {}). " +
-                   "Attempted to prescribe '{}'. Override: {}",
-                   patient.getId(), sanitizeLog(allergy.getAllergenDisplay()), severityStr,
-                   sanitizeLog(reaction), sanitizeLog(medicationName), forceOverride);
-        
-        if (isSevereAllergy(allergy.getSeverity()) && !Boolean.TRUE.equals(forceOverride)) {
-            throw new BusinessException(
-                String.format("ALLERGY CONFLICT: Patient has a documented %s allergy to '%s' with reaction: %s. " +
-                            "Cannot prescribe '%s' without explicit override. Review patient allergies before proceeding.",
-                            severityStr, allergy.getAllergenDisplay(), reaction, medicationName)
-            );
-        }
-        
-        logger.info("Prescription proceeding with documented {} allergy to '{}'", severityStr, allergy.getAllergenDisplay());
-    }
-
-    private boolean isSevereAllergy(com.example.hms.enums.AllergySeverity severity) {
-        if (severity == null) {
-            return false;
-        }
-        return severity == com.example.hms.enums.AllergySeverity.SEVERE 
-            || severity == com.example.hms.enums.AllergySeverity.LIFE_THREATENING;
+        // QA D333: the severity is shown in the reader's language, never as the enum constant.
+        // QA D1134: the feminine form, it is read after "gravité" ("gravité : inconnue").
+        String severityLabel = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.severity." + severityStr);
+        String message = com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.conflict",
+            com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(allergy), severityLabel, medicationName);
+        return new CdsCard(message, null, CdsCard.Indicator.CRITICAL,
+            new com.example.hms.cdshooks.dto.CdsHookDtos.Source(
+                com.example.hms.service.allergy.CrossReactivityAdvisory.sourceLabel(), null, null),
+            null, null, null, UUID.randomUUID().toString());
     }
 
     /** Strip newline/carriage-return characters to prevent log-injection attacks (S5145). */
@@ -848,28 +3448,229 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * structured payload instead of having to parse the message text.
      */
     private List<CdsCard> runCdsRuleEngine(Patient patient, UUID hospitalId,
-                                           PrescriptionRequestDTO request) {
+                                           PrescriptionRequestDTO request,
+                                           com.example.hms.model.medication.MedicationCatalogItem catalogItem,
+                                           Prescription edited) {
         List<CdsCard> advisories = cdsRuleEngine.evaluateProposedPrescription(
             patient, hospitalId,
-            request.getMedicationName(),
-            request.getMedicationCode(),
-            request.getDosage());
-        if (advisories.isEmpty() || Boolean.TRUE.equals(request.getForceOverride())) {
+            new com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder(
+                request.getMedicationName(),
+                request.getMedicationCode(),
+                request.getDosage(),
+                request.getFrequency(),
+                catalogItem,
+                edited == null ? null : edited.getId(),
+                prnDosesPerDay(request, edited),
+                routeOrderedBy(request, edited),
+                catalogItem == null ? null : catalogItem.getForm()));
+        if (advisories.isEmpty()) {
             return advisories;
         }
+        refuseHardStop(advisories);
+        if (Boolean.TRUE.equals(request.getForceOverride())) {
+            requireOverrideReasonForCritical(request, advisories);
+            return advisories;
+        }
+        refuseUnoverriddenCritical(advisories);
+        return advisories;
+    }
+
+
+    /** CR-01: the route the saved order will state. On an edit, null in the request keeps the stored one (the mapper's rule). */
+    private static String routeOrderedBy(PrescriptionRequestDTO request, Prescription edited) {
+        return request.getRoute() == null && edited != null ? edited.getRoute() : request.getRoute();
+    }
+
+    /**
+     * QA D1397: the most doses a day the order allows from its minimum
+     * interval, so the daily limits judge an as-needed order too. On an edit,
+     * null in the request keeps the stored tick and interval (the mapper's rule).
+     */
+    private static Double prnDosesPerDay(PrescriptionRequestDTO request, Prescription edited) {
+        boolean asNeeded = request.getAsNeeded() != null
+            ? request.getAsNeeded() : com.example.hms.service.impl.PrnMinInterval.isAsNeeded(edited);
+        Integer hours = request.getPrnMinIntervalHours();
+        if (hours == null && edited != null) {
+            hours = edited.getPrnMinIntervalHours();
+        }
+        return com.example.hms.service.impl.PrnMinInterval.highestDosesPerDay(asNeeded, hours);
+    }
+
+    /** Round 18 (QA D935): a hard stop (a dose above the absolute daily maximum) is refused whatever the override. */
+    private void refuseHardStop(List<CdsCard> advisories) {
+        for (CdsCard card : advisories) {
+            if (card.blocksOverride()) {
+                if (logger.isWarnEnabled()) {
+                    logger.warn("CDS hard stop refused prescription: {}", sanitizeLog(card.summary()));
+                }
+                throw new CdsCriticalBlockException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.hardStop", card.summary()),
+                    advisories);
+            }
+        }
+    }
+
+    /**
+     * Round 18 (QA D935): an override of a critical alert states its reason,
+     * which is stored on the order and audited (as the allergy override
+     * always required, QA D83).
+     */
+    private static void requireOverrideReasonForCritical(PrescriptionRequestDTO request, List<CdsCard> advisories) {
+        boolean critical = advisories.stream().anyMatch(c -> c.indicator() == CdsCard.Indicator.CRITICAL);
+        if (critical && (request.getOverrideReason() == null || request.getOverrideReason().isBlank())) {
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.overrideReasonRequired"),
+                advisories);
+        }
+    }
+
+    /** A critical advisory blocks the order until the prescriber overrides it after review. */
+    private void refuseUnoverriddenCritical(List<CdsCard> advisories) {
         for (CdsCard card : advisories) {
             if (card.indicator() == CdsCard.Indicator.CRITICAL) {
                 if (logger.isWarnEnabled()) {
                     logger.warn("CDS critical advisory blocked prescription: {}",
                         sanitizeLog(card.summary()));
                 }
+                // QA D1102: the prescriber's language, naming the box on the
+                // form and the reason it asks for, never the API field.
                 throw new CdsCriticalBlockException(
-                    "CDS ALERT: " + card.summary()
-                        + " — set forceOverride after clinical review.",
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.criticalOverrideRequired",
+                        card.summary()),
                     advisories);
             }
         }
-        return advisories;
     }
 
+    /**
+     * The catalogue item behind the order, at the order's hospital, so that
+     * the catalogue's controlled flag and paediatric ceiling apply to it.
+     *
+     * <ul>
+     *   <li>D654: a catalogue pick ({@code medicationCatalogItemId}) must be
+     *       this hospital's item; it lends its code to an order sent without
+     *       one.</li>
+     *   <li>QA D922/D935: an order sent with neither id nor code (the
+     *       prescribing form typed the name; any API client may) is resolved
+     *       by NAME among this hospital's active items, with the dispense DRUG
+     *       check's name rule. One match is the item: its id is written on the
+     *       order, so the controlled flag reaches verification, the MAR and
+     *       the patient's refill. Several matches are refused when any of them
+     *       is controlled (the prescriber must pick the exact item: guessing
+     *       would either drop the flag or tie the order to one strength) -
+     *       except on an edit of an unlinked order that keeps its name
+     *       ({@code lenientAmbiguity}), which stays as it was rather than
+     *       becoming uneditable (review of #975). Several uncontrolled
+     *       matches leave the order unlinked; the CDS check then uses the
+     *       strictest paediatric ceiling among them.</li>
+     *   <li>A code no catalogue item carries (an external RxNorm, an order
+     *       set's own code) falls through to the name: the code alone must
+     *       not let a controlled drug escape the flag.</li>
+     * </ul>
+     *
+     * @return the item the CDS rules evaluate against, or {@code null} to let
+     *         the engine resolve one from the code (or none)
+     */
+    private com.example.hms.model.medication.MedicationCatalogItem applyCatalogPick(
+            PrescriptionRequestDTO request, UUID hospitalId, boolean lenientAmbiguity) {
+        if (medicationCatalogItemRepository == null) {
+            return null;
+        }
+        UUID itemId = request.getMedicationCatalogItemId();
+        if (itemId != null) {
+            com.example.hms.model.medication.MedicationCatalogItem item = medicationCatalogItemRepository
+                .findByIdAndHospital_Id(itemId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
+            if ((request.getMedicationCode() == null || request.getMedicationCode().isBlank())
+                && item.getCode() != null && !item.getCode().isBlank()) {
+                request.setMedicationCode(item.getCode());
+            }
+            return item;
+        }
+        if (request.getMedicationCode() != null && !request.getMedicationCode().isBlank()) {
+            // Review of #975: a code names this hospital's item as well as an
+            // id does; the item is written on the order so an edit sending the
+            // code alone does not drop the link (the mapper copies the id).
+            com.example.hms.model.medication.MedicationCatalogItem coded = medicationCatalogItemRepository
+                .findByHospitalIdAndCode(hospitalId, request.getMedicationCode().trim())
+                .orElse(null);
+            if (coded != null) {
+                request.setMedicationCatalogItemId(coded.getId());
+                return coded;
+            }
+        }
+        List<com.example.hms.model.medication.MedicationCatalogItem> named =
+            catalogItemsNamed(request.getMedicationName(), hospitalId);
+        if (named.isEmpty()) {
+            return null;
+        }
+        if (named.size() == 1) {
+            request.setMedicationCatalogItemId(named.get(0).getId());
+            return named.get(0);
+        }
+        if (!lenientAmbiguity
+                && named.stream().anyMatch(com.example.hms.model.medication.MedicationCatalogItem::isControlled)) {
+            throw new BusinessException("prescription.catalog.ambiguousControlled");
+        }
+        return strictestPediatricCeiling(named);
+    }
+
+    /**
+     * QA D1223 (round 24): an order whose typed name does not name the
+     * catalogue item it carries (by id or by code) is refused, at creation,
+     * edit and signature. Every safety check read the item and never the name,
+     * so "Bristopen" sent with paracetamol's id was created and signed for a
+     * penicillin-allergic patient, as uncontrolled and with paracetamol's
+     * paediatric ceiling. The prescriber corrects the name or picks the item
+     * again; the portal clears the id whenever the name is edited.
+     */
+    private static void refuseNameItemMismatch(String medicationName,
+                                               com.example.hms.model.medication.MedicationCatalogItem item) {
+        if (com.example.hms.service.pharmacy.OrderedDrugIdentity.contradicts(medicationName, item)) {
+            throw new com.example.hms.exception.FieldBusinessException("medicationName", "prescription.catalog.nameMismatch", medicationName.trim(),
+                com.example.hms.service.pharmacy.DispenseVerificationService.describe(item));
+        }
+    }
+
+    /** QA D922: this hospital's active catalogue items the typed name names. */
+    private List<com.example.hms.model.medication.MedicationCatalogItem> catalogItemsNamed(
+            String medicationName, UUID hospitalId) {
+        if (medicationName == null || medicationName.isBlank() || hospitalId == null) {
+            return List.of();
+        }
+        return medicationCatalogItemRepository
+            .findByHospital_IdAndActiveTrue(hospitalId, org.springframework.data.domain.Pageable.unpaged())
+            .getContent().stream()
+            .filter(item -> com.example.hms.service.pharmacy.DispenseVerificationService
+                .namesCatalogItem(medicationName, item))
+            .toList();
+    }
+
+    /**
+     * QA D935: the item with the lowest paediatric ceiling on file, else the
+     * first. Review round 3: an absolute daily maximum (the hard stop) decides
+     * first, the lowest one wins; the mg/kg ceiling only when no item has one.
+     */
+    private static com.example.hms.model.medication.MedicationCatalogItem strictestPediatricCeiling(
+            List<com.example.hms.model.medication.MedicationCatalogItem> items) {
+        com.example.hms.model.medication.MedicationCatalogItem capped = null;
+        for (com.example.hms.model.medication.MedicationCatalogItem item : items) {
+            java.math.BigDecimal cap = item.getPediatricMaxDailyMg();
+            if (cap != null && (capped == null || cap.compareTo(capped.getPediatricMaxDailyMg()) < 0)) {
+                capped = item;
+            }
+        }
+        if (capped != null) {
+            return capped;
+        }
+        com.example.hms.model.medication.MedicationCatalogItem strictest = items.get(0);
+        for (com.example.hms.model.medication.MedicationCatalogItem item : items) {
+            java.math.BigDecimal ceiling = item.getPediatricMaxDoseMgPerKg();
+            java.math.BigDecimal best = strictest.getPediatricMaxDoseMgPerKg();
+            if (ceiling != null && (best == null || ceiling.compareTo(best) < 0)) {
+                strictest = item;
+            }
+        }
+        return strictest;
+    }
 }

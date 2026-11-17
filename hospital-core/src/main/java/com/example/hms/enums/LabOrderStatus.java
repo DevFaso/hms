@@ -18,6 +18,23 @@ public enum LabOrderStatus {
     /** Results released / order closed. */
     COMPLETED,
     /** Order cancelled before completion. */
-    CANCELLED
+    CANCELLED,
+    /**
+     * QA D820: the order, and every result on it, was entered in error (the
+     * wrong patient, the wrong test). Set only by {@code POST /lab-orders/{id}/void},
+     * with a stated reason, from any other state, a COMPLETED one included.
+     * Terminal: nothing moves it again. The rows are kept, never deleted, and
+     * its results no longer load anywhere ({@code LabResult}'s restriction).
+     * FHIR: ServiceRequest and DiagnosticReport {@code entered-in-error}.
+     */
+    ENTERED_IN_ERROR;
+
+    /**
+     * QA D1370 (round 31): the edge check for a request field - a status in
+     * any case, or blank (left to the field's required rule).
+     * {@code FreeTextStatusRequestFieldGuardTest} keeps it equal to {@link #values()}.
+     */
+    public static final String CODES =
+        "\\s*+(?:ORDERED|PENDING|COLLECTED|RECEIVED|IN_PROGRESS|RESULTED|VERIFIED|COMPLETED|CANCELLED|ENTERED_IN_ERROR)?\\s*+";
 }
 

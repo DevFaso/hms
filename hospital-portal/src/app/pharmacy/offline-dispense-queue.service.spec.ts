@@ -59,7 +59,7 @@ function fakeResponse(): DispenseResponse {
     prescriptionId: 'rx-1',
     patientId: 'pt-1',
     pharmacyId: 'ph-1',
-    dispensedById: 'user-1',
+    dispensedBy: 'user-1',
     medicationName: 'Amoxicilline 500 mg',
     quantityRequested: 30,
     quantityDispensed: 30,

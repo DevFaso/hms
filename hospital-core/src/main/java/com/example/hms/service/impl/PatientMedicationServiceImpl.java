@@ -1,6 +1,6 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
@@ -11,6 +11,7 @@ import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.service.support.PatientChartAccess;
+import com.example.hms.service.support.PrescriptionIssuance;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.service.PatientMedicationService;
@@ -21,15 +22,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
@@ -40,62 +38,171 @@ import com.example.hms.security.context.HospitalContextHolder;
 @Slf4j
 public class PatientMedicationServiceImpl implements PatientMedicationService {
 
-    private static final Pattern DAYS_PATTERN = Pattern.compile("(\\d{1,5})\\s?days?", Pattern.CASE_INSENSITIVE);
-    private static final Pattern WEEKS_PATTERN = Pattern.compile("(\\d{1,5})\\s?weeks?", Pattern.CASE_INSENSITIVE);
     private static final int DEFAULT_LIMIT = 50;
+    /** The key PatientChartAccess throws: a refused staff read reads as "no such patient". */
+    private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
+    static final String REFILL_BLOCKED_CONTROLLED = "CONTROLLED";
+    static final String REFILL_BLOCKED_NOT_REFILLABLE = "NOT_REFILLABLE";
 
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D719 re-test: the catalog decides "controlled" too, not the tick alone. */
+    private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
     private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
     private final RefillRequestRepository refillRequestRepository;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    /** G15 AC-12: a fill waiting at the counter, on each row. */
+    private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getMedicationsForPatient(UUID patientId, UUID hospitalId, int limit) {
+        return getMedications(patientId, hospitalId, limit, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientMedicationResponseDTO> getMedicationsForPatientPortal(UUID patientId, UUID hospitalId, int limit) {
+        return getMedications(patientId, hospitalId, limit, true);
+    }
+
+    /**
+     * QA D1399 (D1347 class): every issued prescription, in the order of the list
+     * read (active courses first, then history, each newest first, ties by id so a
+     * row is on one page only), sliced after the course status is known.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<PatientMedicationResponseDTO> getMedicationsPageForPatientPortal(
+            UUID patientId, Pageable pageable) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        List<Prescription> prescriptions = prescriptionRepository
+            .findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
+            .stream().filter(PrescriptionIssuance::wasIssued).toList();
+        List<com.example.hms.model.Admission> closedStays = closedStaysOf(patient, prescriptions);
+        List<Prescription> ordered = activeFirst(prescriptions, closedStays, Integer.MAX_VALUE);
+        int from = (int) Math.min(pageable.getOffset(), ordered.size());
+        int to = Math.min(from + pageable.getPageSize(), ordered.size());
+        return new org.springframework.data.domain.PageImpl<>(
+            toResponses(ordered.subList(from, to), closedStays), pageable, ordered.size());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countMedicationsForPatientPortal(UUID patientId) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        // QA D1537 review: counted in the database, by the rule of PrescriptionIssuance.wasIssued, with
+        // no row loaded or decrypted.
+        return prescriptionRepository.countIssuedByPatientId(patient.getId(), PrescriptionIssuance.PROPOSALS);
+    }
+
+    private List<PatientMedicationResponseDTO> getMedications(UUID patientId, UUID hospitalId, int limit,
+                                                              boolean portalView) {
         log.info("Fetching medications for patient {} in hospital {}", patientId, hospitalId);
 
-        // Was tenant-scoped findById with NO registration check: cross-hospital
-        // patients 404'd, and the prose passed as a message key rendered as
-        // "[Missing translation] ...". PatientChartAccess fixes both and adds
-        // the authorization this read never had.
-        Patient patient = patientChartAccess.require(patientId, hospitalId);
+        // Staff: the chart gate. It was tenant-scoped findById with NO
+        // registration check: cross-hospital patients 404'd, and the prose
+        // passed as a message key rendered as "[Missing translation] ...".
+        // PatientChartAccess fixes both and adds the authorization this read
+        // never had. Portal: the patient's own record, already established by
+        // the caller — the staff gate refuses a patient their own restricted
+        // chart (see PatientChartAccess.requireOwnRecord).
+        Patient patient = portalView
+            ? patientChartAccess.requireOwnRecord(patientId)
+            : patientChartAccess.require(patientId, hospitalId);
 
         List<Prescription> prescriptions;
-        if (hospitalId != null) {
-            Hospital hospital = hospitalRepository.findById(hospitalId)
+        if (portalView) {
+            // The patient's own record (or a verified proxy's view of it):
+            // every row, from every hospital, whatever hospital the portal
+            // resolved. The hospital id is NOT a scope here - scoping it made
+            // the patient a staff reader of their own chart (foreign rows
+            // dropped by consent/restriction) and logged their own read as a
+            // cross-hospital disclosure. No reach is recorded: nothing is
+            // disclosed to anyone but the owner.
+            // QA D152 (D101 on a second endpoint): the D101 fix filtered
+            // unsigned work in progress out of /me/patient/prescriptions only;
+            // /medications and the dashboard card read here and still listed a
+            // DRAFT as the patient's medication. QA D1537: nor a draft that was
+            // cancelled before anyone signed it (PrescriptionIssuance).
+            prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
+                .stream().filter(PrescriptionIssuance::wasIssued).toList();
+        } else if (hospitalId != null) {
+            Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
             // E9 #59c — medications follow the patient across the readable
             // hospitals; every foreign row surfaced is accounted.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
-            prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable);
+            // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+            // QA D1537: a live draft stays (on hold); a discarded one is not a stopped course.
+            prescriptions = PrescriptionIssuance.withoutDiscardedProposals(NeverSentRule.prescriptionsReadableHere(
+                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable), hospital.getId()));
             reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(prescriptions.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospital.getId()),
                 "Cross-hospital medication read on the treatment relationship");
         } else {
-            // Fallback: patient-only query (no hospital scope) — common for patient portal
-            prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent();
+            // A staff read with no hospital scope used to fall through to the
+            // patient-only query below: every hospital's prescriptions, with
+            // RecordAccessPolicy never consulted and no disclosure row (there
+            // is no acting hospital to name one against). require() already
+            // refuses a null scope for anyone but a super-admin, so what
+            // reached here was a super-admin in global view. Refused, as the
+            // lab-result read is (#735): pick a hospital and the read is
+            // scoped, readable-checked and disclosed. The same key require()
+            // throws, so the refusal reads as "no such patient".
+            log.warn("Staff medication read refused: no hospital scope resolved for patient {}", patient.getId());
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patient.getId());
         }
 
-        int limitToApply = limit > 0 ? limit : DEFAULT_LIMIT;
+        // QA D136: the same stay-end rule as the MAR, so an order a
+        // non-attending clinician wrote during the stay ends with it too.
+        List<com.example.hms.model.Admission> closedStays = closedStaysOf(patient, prescriptions);
+        List<Prescription> visible = activeFirst(prescriptions, closedStays, limit > 0 ? limit : DEFAULT_LIMIT);
+        return toResponses(visible, closedStays);
+    }
 
-        Comparator<Prescription> byCreatedAt = Comparator.comparing(
-            Prescription::getCreatedAt,
-            Comparator.nullsLast(Comparator.naturalOrder())
-        );
+    private List<com.example.hms.model.Admission> closedStaysOf(Patient patient, List<Prescription> prescriptions) {
+        return prescriptions.isEmpty() ? List.of()
+            : admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patient.getId()).stream()
+                .filter(a -> a.getActualDischargeDateTime() != null)
+                .toList();
+    }
 
-        List<Prescription> visible = prescriptions.stream()
-            .sorted(byCreatedAt.reversed())
-            .limit(limitToApply)
-            .toList();
-
+    private List<PatientMedicationResponseDTO> toResponses(List<Prescription> visible,
+                                                           List<com.example.hms.model.Admission> closedStays) {
         Map<UUID, RefillRequest> latestRefills = latestRefillsFor(visible);
+        Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
+            readyForCollection.openPreparations(visible);
 
         return visible.stream()
-            .map(p -> toResponse(p, latestRefills.get(p.getId())))
+            .map(p -> withReadiness(toResponse(p, latestRefills.get(p.getId()), closedStays), ready.get(p.getId())))
             .toList();
+    }
+
+    /**
+     * QA D1346 (round 30): the list was every issued prescription, newest
+     * first, cut at {@code limit} (20 from the portal) BEFORE the course status
+     * was known - a patient with twenty cancelled orders saw none of their
+     * three running medicines, and the dashboard card read the same list. Every
+     * ACTIVE course is returned, newest first, whatever the limit; the limit
+     * bounds only the history (completed, discontinued, on hold) that follows,
+     * so no number of past orders can push a running medicine out.
+     */
+    public static List<Prescription> activeFirst(List<Prescription> prescriptions,
+                                          List<com.example.hms.model.Admission> closedStays, int historyLimit) {
+        Comparator<Prescription> newestFirst = Comparator.comparing(
+            Prescription::getCreatedAt, Comparator.nullsLast(Comparator.<java.time.LocalDateTime>naturalOrder())
+        ).reversed().thenComparing(Prescription::getId, Comparator.nullsLast(Comparator.<UUID>naturalOrder()));
+        Map<Boolean, List<Prescription>> byActive = prescriptions.stream()
+            .sorted(newestFirst)
+            .collect(java.util.stream.Collectors.partitioningBy(
+                p -> com.example.hms.service.MedicationCourseStatus.isActive(p, closedStays)));
+        List<Prescription> out = new java.util.ArrayList<>(byActive.get(true));
+        byActive.get(false).stream().limit(historyLimit).forEach(out::add);
+        return out;
     }
 
     /**
@@ -117,11 +224,14 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         return latest;
     }
 
-    private PatientMedicationResponseDTO toResponse(Prescription prescription, RefillRequest latestRefill) {
-        LocalDate startDate = Optional.ofNullable(prescription.getCreatedAt())
-            .map(LocalDateTime::toLocalDate)
-            .orElse(null);
-        LocalDate endDate = resolveEndDate(startDate, prescription.getDuration());
+    private PatientMedicationResponseDTO toResponse(Prescription prescription, RefillRequest latestRefill,
+                                                    List<com.example.hms.model.Admission> closedStays) {
+        LocalDate startDate = com.example.hms.service.MedicationCourseStatus.startDate(prescription);
+        LocalDate endDate = com.example.hms.service.MedicationCourseStatus.endDate(prescription);
+        String status = com.example.hms.service.MedicationCourseStatus.of(prescription, closedStays);
+        // QA D813: the same gate the portal's refill request applies, in the same order, so the
+        // row and the server's refusal name the same reason.
+        String refillBlockedReason = refillBlockedReason(prescription);
 
         return PatientMedicationResponseDTO.builder()
             .id(prescription.getId())
@@ -129,16 +239,19 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .dosage(prescription.getDosage())
             .frequency(prescription.getFrequency())
             .route(prescription.getRoute())
-            .status(resolveStatus(prescription.getStatus(), endDate))
+            .status(status)
             .startDate(startDate)
             .endDate(endDate)
             .prescribedBy(Optional.ofNullable(prescription.getStaff()).map(Staff::getFullName).orElse(null))
             .indication(prescription.getNotes())
             .instructions(prescription.getInstructions())
+            .asNeeded(PrnMinInterval.isAsNeeded(prescription))
+            .prnMinIntervalHours(prescription.getPrnMinIntervalHours())
             .refillsAllowed(prescription.getRefillsAllowed())
             .refillsRemaining(prescription.getRefillsRemaining())
             .refillsUsed(prescription.getRefillsUsed())
-            .refillable(prescription.getStatus() == null || prescription.getStatus().isRefillable())
+            .refillable(refillBlockedReason == null)
+            .refillBlockedReason(refillBlockedReason)
             .refillRequestStatus(latestRefill != null && latestRefill.getStatus() != null
                 ? latestRefill.getStatus().name() : null)
             .refillRequestUpdatedAt(latestRefill != null ? latestRefill.getUpdatedAt() : null)
@@ -147,6 +260,24 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .hospitalId(CrossHospitalReachRecorder.hospitalIdOf(prescription.getHospital()))
             .hospitalName(prescription.getHospital() != null ? prescription.getHospital().getName() : null)
             .build();
+    }
+
+    /** CONTROLLED wins over NOT_REFILLABLE: a controlled medicine is refused even with renewals left. */
+    private String refillBlockedReason(Prescription prescription) {
+        boolean allowsRefill = prescription.allowsRefill();
+        if (controlledResolver.isControlled(prescription)) {
+            return REFILL_BLOCKED_CONTROLLED;
+        }
+        return allowsRefill ? null : REFILL_BLOCKED_NOT_REFILLABLE;
+    }
+
+    private static PatientMedicationResponseDTO withReadiness(
+            PatientMedicationResponseDTO dto, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness ready) {
+        if (ready != null) {
+            dto.setReadyForCollectionAt(ready.readyAt());
+            dto.setReadyForCollectionPharmacyName(ready.pharmacyName());
+        }
+        return dto;
     }
 
     /**
@@ -168,47 +299,4 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         return prescription.getMedicationName();
     }
 
-    private LocalDate resolveEndDate(LocalDate startDate, String duration) {
-        if (startDate == null || duration == null || duration.isBlank()) {
-            return null;
-        }
-
-        Matcher daysMatcher = DAYS_PATTERN.matcher(duration);
-        if (daysMatcher.find()) {
-            int days = parseInt(daysMatcher.group(1));
-            if (days > 0) {
-                return startDate.plusDays(days);
-            }
-        }
-
-        Matcher weeksMatcher = WEEKS_PATTERN.matcher(duration);
-        if (weeksMatcher.find()) {
-            int weeks = parseInt(weeksMatcher.group(1));
-            if (weeks > 0) {
-                return startDate.plusWeeks(weeks);
-            }
-        }
-
-        return null;
-    }
-
-    private int parseInt(String raw) {
-        try {
-            return Integer.parseInt(raw);
-        } catch (NumberFormatException ex) {
-            return 0;
-        }
-    }
-
-    private String resolveStatus(PrescriptionStatus status, LocalDate endDate) {
-        if (status == null) {
-            return endDate != null && endDate.isBefore(LocalDate.now()) ? "COMPLETED" : "ACTIVE";
-        }
-
-        return switch (status) {
-            case DISCONTINUED, CANCELLED -> "DISCONTINUED";
-            case DRAFT, PENDING_SIGNATURE, TRANSMISSION_FAILED -> "ON_HOLD";
-            default -> endDate != null && endDate.isBefore(LocalDate.now()) ? "COMPLETED" : "ACTIVE";
-        };
-    }
 }

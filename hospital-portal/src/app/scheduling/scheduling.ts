@@ -1,7 +1,14 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { debounceTime, distinctUntilChanged, Subject, switchMap, of } from 'rxjs';
+import { debounceTime, Subject, switchMap, of } from 'rxjs';
 import {
   StaffSchedulingService,
   StaffShiftResponse,
@@ -18,17 +25,42 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
-import { currentLocale } from '../shared/i18n/app-locale';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { currentLocale, formatClockTime } from '../shared/i18n/app-locale';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { refusedFieldReasons } from '../shared/refusal-reason';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 @Component({
   selector: 'app-scheduling',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    ListEscapeDirective,
+    SubmitGuardDirective,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RoleLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './scheduling.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './scheduling.scss',
 })
 export class SchedulingComponent implements OnInit {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly shiftFields: Record<string, string> = {
+    staffId: 'bulk-staffSearch',
+    hospitalId: 'bulk-hospitalId',
+    shiftDate: 'bulk-startDate',
+    startTime: 'bulk-startTime',
+    endTime: 'bulk-endTime',
+    shiftType: 'bulk-shiftType',
+    notes: 'bulk-notes',
+  };
   private readonly schedulingService = inject(StaffSchedulingService);
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
@@ -40,6 +72,14 @@ export class SchedulingComponent implements OnInit {
     'Manage Staff',
     'Manage Staff Schedules',
   );
+
+  /**
+   * QA D878: bulk planning is offered only when the server says this caller's
+   * writes succeed (an administrator of the acting hospital, or a department
+   * head). False until it answers, and on any failure: never a button whose
+   * POST is refused.
+   */
+  readonly canManageSchedules = signal(false);
 
   activeView = signal<'shifts' | 'leaves'>('shifts');
 
@@ -78,7 +118,6 @@ export class SchedulingComponent implements OnInit {
     this.staffSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           const query = q.trim().toLowerCase();
           if (!query) return of([]);
@@ -164,7 +203,7 @@ export class SchedulingComponent implements OnInit {
   openShiftModal(
     date = this.weekOffset() === 0 ? this.toISODate(new Date()) : this.getWeekRange().start,
   ): void {
-    if (!this.isSchedulingAdmin || this.bulkSubmitting()) return;
+    if (!this.canManageSchedules() || this.bulkSubmitting()) return;
     this.openBulkModal();
     this.singleShiftMode.set(true);
     this.bulk.startDate = date;
@@ -176,7 +215,7 @@ export class SchedulingComponent implements OnInit {
   }
 
   openBulkModal(): void {
-    if (!this.isSchedulingAdmin || this.bulkSubmitting()) return;
+    if (!this.canManageSchedules()) return;
     this.singleShiftMode.set(false);
     this.bulkResult.set(null);
     this.clearStaff();
@@ -227,8 +266,17 @@ export class SchedulingComponent implements OnInit {
   }
 
   submitShift(): void {
-    if (!this.isSchedulingAdmin || this.bulkSubmitting()) return;
+    if (!this.canManageSchedules() || this.bulkSubmitting()) return;
     if (!this.bulk.staffId || !this.bulk.hospitalId) {
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.bulk.staffId ? 'bulk-staffSearch' : '',
+          !this.bulk.hospitalId ? 'bulk-hospitalId' : '',
+        ].filter(Boolean),
+        Object.values(this.shiftFields),
+        this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'));
       return;
     }
@@ -238,6 +286,17 @@ export class SchedulingComponent implements OnInit {
       !this.bulk.endTime ||
       this.bulk.startTime === this.bulk.endTime
     ) {
+      const invalid = [
+        !this.bulk.startDate ? 'bulk-startDate' : '',
+        !this.bulk.startTime ? 'bulk-startTime' : '',
+        !this.bulk.endTime || this.bulk.startTime === this.bulk.endTime ? 'bulk-endTime' : '',
+      ].filter(Boolean);
+      refuseFields(
+        this.host.nativeElement,
+        invalid,
+        Object.values(this.shiftFields),
+        this.translate.instant('SCHEDULING.TOAST.SHIFT_FIELDS_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('SCHEDULING.TOAST.SHIFT_FIELDS_REQUIRED'));
       return;
     }
@@ -260,6 +319,12 @@ export class SchedulingComponent implements OnInit {
       },
       error: (err) => {
         this.bulkSubmitting.set(false);
+        const reasons = refusedFieldReasons(err, this.shiftFields);
+        refuseFields(
+          this.host.nativeElement,
+          reasons.map(([id, message]) => ({ id, message })),
+          Object.values(this.shiftFields),
+        );
         this.toast.error(
           err?.error?.message ?? this.translate.instant('SCHEDULING.TOAST.SHIFT_FAILED'),
         );
@@ -268,7 +333,7 @@ export class SchedulingComponent implements OnInit {
   }
 
   submitBulk(): void {
-    if (!this.isSchedulingAdmin || this.bulkSubmitting()) return;
+    if (!this.canManageSchedules() || this.bulkSubmitting()) return;
     if (!this.bulk.staffId || !this.bulk.hospitalId) {
       this.toast.error(this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'));
       return;
@@ -321,6 +386,10 @@ export class SchedulingComponent implements OnInit {
     this.loadShifts();
     if (this.isSchedulingAdmin) {
       this.loadLeaves();
+      this.schedulingService.capabilities().subscribe({
+        next: (caps) => this.canManageSchedules.set(caps?.canManageSchedules === true),
+        error: () => this.canManageSchedules.set(false),
+      });
     }
   }
 
@@ -369,12 +438,14 @@ export class SchedulingComponent implements OnInit {
     const { start } = this.getWeekRange();
     const monday = new Date(start + 'T00:00:00');
     const today = this.toISODate(new Date());
+    // QA D348: the locale knows its weekday abbreviations (staff-detail already did this).
+    const locale = currentLocale();
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       const date = this.toISODate(d);
       return {
-        label: d.toLocaleDateString(currentLocale(), { weekday: 'short' }),
+        label: d.toLocaleDateString(locale, { weekday: 'short' }),
         date,
         isToday: date === today,
       };
@@ -436,10 +507,7 @@ export class SchedulingComponent implements OnInit {
   // ── Formatting ──
   formatTime(time?: string): string {
     if (!time) return '—';
-    const [h, m] = time.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const hr = h % 12 || 12;
-    return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
+    return formatClockTime(time);
   }
 
   /**
@@ -468,14 +536,6 @@ export class SchedulingComponent implements OnInit {
       month: 'short',
       day: 'numeric',
     });
-  }
-
-  formatShiftType(type: string): string {
-    return type.charAt(0) + type.slice(1).toLowerCase();
-  }
-
-  formatLeaveType(type: string): string {
-    return type.charAt(0) + type.slice(1).toLowerCase();
   }
 
   shiftTypeIcon(type: string): string {

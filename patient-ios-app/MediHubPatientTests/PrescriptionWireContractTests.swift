@@ -65,7 +65,7 @@ final class PrescriptionWireContractTests: XCTestCase {
         let backend: Set<String> = [
             "DRAFT", "PENDING_SIGNATURE", "SIGNED", "TRANSMITTED", "TRANSMISSION_FAILED",
             "CANCELLED", "DISCONTINUED", "PENDING_CLARIFICATION", "DISPENSED",
-            "PARTIALLY_FILLED", "PENDING_STOCK", "REQUIRES_EXTERNAL_FILL", "SENT_TO_PARTNER",
+            "PARTIALLY_FILLED", "PENDING_STOCK", "SENT_TO_PARTNER",
             "PARTNER_ACCEPTED", "PARTNER_REJECTED", "PARTNER_DISPENSED", "PRINTED_FOR_PATIENT"
         ]
         XCTAssertEqual(Set(PrescriptionStatus.wireCases.map(\.rawValue)), backend)
@@ -76,7 +76,8 @@ final class PrescriptionWireContractTests: XCTestCase {
     func testTheEnumCoversEveryBackendMedicationStatus() {
         let backend: Set<String> = ["ACTIVE", "COMPLETED", "DISCONTINUED", "ON_HOLD"]
         XCTAssertEqual(Set(MedicationStatus.wireCases.map(\.rawValue)), backend)
-        XCTAssertEqual(MedicationStatus(wire: nil), .active)
+        XCTAssertEqual(MedicationStatus(wire: nil), .unknown)
+        XCTAssertEqual(MedicationStatus(wire: ""), .unknown)
         XCTAssertEqual(MedicationStatus(wire: "on_hold"), .onHold)
         XCTAssertEqual(MedicationStatus(wire: "SOMETHING_NEW"), .unknown)
     }

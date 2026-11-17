@@ -76,6 +76,8 @@ describe('buildUserPayload', () => {
     });
 
     assert.equal(payload.username, 'alice');
+    // The one identity link the backend reads (appUserId claim).
+    assert.deepEqual(payload.attributes.app_user_id, ['u-1']);
     assert.deepEqual(payload.attributes.hospital_id, ['h-1']);
     assert.deepEqual(payload.attributes.phone_number, ['+15551234']);
     // Format MUST match KeycloakHospitalContextResolver — see runner.ts.

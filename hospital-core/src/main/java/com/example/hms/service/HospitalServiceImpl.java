@@ -1,5 +1,11 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.FacilityType;
+import com.example.hms.enums.ProviderVerificationStatus;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.repository.provider.ProviderVerificationRepository;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.HospitalMapper;
 import com.example.hms.model.Department;
@@ -17,7 +23,6 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.utility.RoleValidator;
-import org.apache.kafka.common.errors.DuplicateResourceException;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,28 +36,37 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
 public class HospitalServiceImpl implements HospitalService {
+
+    /** The directory's message for an unknown provider type, reused for the list's super-admin filter. */
+    static final String MSG_PROVIDER_TYPE_INVALID = "provider.type.invalid";
+
+    private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
 
     private final HospitalRepository hospitalRepository;
     private final OrganizationRepository organizationRepository;
     private final HospitalMapper hospitalMapper;
     private final MessageSource messageSource;
     private final RoleValidator roleValidator;
+    private final ProviderVerificationRepository providerVerificationRepository;
 
 
     public HospitalServiceImpl(HospitalRepository hospitalRepository,
                                OrganizationRepository organizationRepository,
                                HospitalMapper hospitalMapper,
                                MessageSource messageSource,
-                               RoleValidator roleValidator) {
+                               RoleValidator roleValidator,
+                               ProviderVerificationRepository providerVerificationRepository) {
         this.hospitalRepository = hospitalRepository;
         this.organizationRepository = organizationRepository;
         this.hospitalMapper = hospitalMapper;
         this.messageSource = messageSource;
         this.roleValidator = roleValidator;
+        this.providerVerificationRepository = providerVerificationRepository;
     }
 
     @Override
@@ -61,32 +75,72 @@ public class HospitalServiceImpl implements HospitalService {
                                                      Boolean unassignedOnly,
                                                      String city,
                                                      String state,
+                                                     String facilityType,
                                                      Locale locale) {
+        FacilityType type = listFacilityType(facilityType);
+        boolean providerList = type != FacilityType.HOSPITAL;
         UUID organizationFilter = Boolean.TRUE.equals(unassignedOnly) ? null : organizationId;
         Boolean unassignedFilter = Boolean.TRUE.equals(unassignedOnly) ? Boolean.TRUE : null;
         String normalizedCity = normalizeQuery(city);
         String normalizedState = normalizeQuery(state);
 
-        List<Hospital> hospitals = hospitalRepository.findAllForFilters(organizationFilter, unassignedFilter, normalizedCity, normalizedState);
+        List<Hospital> hospitals = providerList
+            ? hospitalRepository.findAllForFiltersByFacilityType(type, organizationFilter, unassignedFilter,
+                normalizedCity, normalizedState)
+            : hospitalRepository.findAllForFilters(organizationFilter, unassignedFilter, normalizedCity, normalizedState);
         if (hospitals == null || hospitals.isEmpty()) {
             return List.of();
         }
 
-        // No hospital-scope filtering here: the hospital directory (name,
-        // address, phone) is not sensitive, and clinical staff need the full
-        // list to pick destination hospitals in referral / consultation
-        // workflows.  Access is already gated by SecurityConfig + controller
-        // @PreAuthorize.
-        return hospitals.stream()
+        // QA D36: the full record (address, phone, email, licence) is the
+        // caller's own hospitals' only; a super-admin reads every one. The
+        // destination picker of cross-hospital workflows reads the directory
+        // ({@link #getHospitalDirectory()}) instead.
+        return applyHospitalScope(hospitals).stream()
                 .filter(java.util.Objects::nonNull)
                 .map(hospitalMapper::toHospitalDTO)
+                .toList();
+    }
+
+    /**
+     * AC-11: the list is clinical unless a verified super-admin names a
+     * provider type. Who first, then what: anyone else naming any type but
+     * HOSPITAL (an unknown one included) gets the same 403, before the value
+     * is parsed and before any read; only a super-admin's unknown type is a
+     * 400 ({@code provider.type.invalid}, case-insensitive parse shared with
+     * the directory).
+     */
+    private FacilityType listFacilityType(String raw) {
+        if (raw == null || raw.isBlank() || FacilityType.HOSPITAL.name().equalsIgnoreCase(raw.trim())) {
+            return FacilityType.HOSPITAL;
+        }
+        if (!roleValidator.isSuperAdminFromJwtClaim()) {
+            throw new AccessDeniedException("Access denied");
+        }
+        try {
+            return FacilityType.fromParameter(raw);
+        } catch (IllegalArgumentException unknown) {
+            throw new BusinessException(MSG_PROVIDER_TYPE_INVALID);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.HospitalDirectoryEntryDTO> getHospitalDirectory() {
+        List<Hospital> hospitals = hospitalRepository.findAllForFilters(null, null, null, null);
+        if (hospitals == null) {
+            return List.of();
+        }
+        return hospitals.stream()
+                .filter(h -> h != null && h.isActive())
+                .map(h -> new com.example.hms.payload.dto.HospitalDirectoryEntryDTO(h.getId(), h.getName(), h.getCity()))
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public HospitalResponseDTO getHospitalById(UUID id, Locale locale) {
-        Hospital hospital = getHospitalOrThrow(id, locale);
+        Hospital hospital = getHospitalOrThrow(id);
         requireHospitalScope(hospital.getId(), locale);
         return hospitalMapper.toHospitalDTO(hospital);
     }
@@ -94,7 +148,7 @@ public class HospitalServiceImpl implements HospitalService {
     @Override
     @Transactional(readOnly = true)
     public HospitalResponseDTO getHospitalByIdUnscoped(UUID id, Locale locale) {
-        Hospital hospital = getHospitalOrThrow(id, locale);
+        Hospital hospital = getHospitalOrThrow(id);
         return hospitalMapper.toHospitalDTO(hospital);
     }
 
@@ -102,18 +156,22 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO createHospital(HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        validateAddressFields(dto, locale);
+        validateAddressFields(dto, null, locale);
+        dto.setPhoneNumber(requireFacilityPhone(dto.getPhoneNumber(), dto.getCountry()));
+        // QA D285: "Clinique  X " and "clinique x" are one hospital; the name
+        // is stored as typed, minus stray blanks, and checked the same way.
+        dto.setName(normalizeName(dto.getName()));
 
         boolean exists = hospitalRepository.existsByNameIgnoreCaseAndZipCode(dto.getName(), dto.getZipCode());
         if (exists) {
             String message = messageSource.getMessage("hospital.exists",
                     new Object[]{dto.getName()}, "Hospital already exists.", locale);
-            throw new DuplicateResourceException(message);
+            throw new ConflictException("name:" + message); // QA D167: a 409, not Kafka's exception (which answered 500)
         }
 
         Organization organization = null;
         if (dto.getOrganizationId() != null) {
-            organization = getOrganizationOrThrow(dto.getOrganizationId(), locale);
+            organization = getOrganizationOrThrow(dto.getOrganizationId());
         }
 
         Hospital hospital = hospitalMapper.toHospital(dto);
@@ -129,15 +187,62 @@ public class HospitalServiceImpl implements HospitalService {
     }
 
 
+    /**
+     * QA D833: the number to store (E.164 when it can be), or a refusal on the
+     * phone field. A blank stays as sent: {@code @NotBlank} answers for it.
+     */
+    static String requireFacilityPhone(String raw, String country) {
+        if (raw == null || raw.isBlank()) {
+            return raw;
+        }
+        String normalized = com.example.hms.utility.PhoneNumbers.normalizeFacilityPhone(raw, country);
+        if (normalized == null) {
+            throw new com.example.hms.exception.FieldBusinessException("phoneNumber", "hospital.phoneNumber.invalid");
+        }
+        return normalized;
+    }
+
+    /** Trims and collapses inner runs of blanks; null stays null. */
+    static String normalizeName(String name) {
+        return name == null ? null : name.trim().replaceAll("\\s+", " ");
+    }
+
+    private static String normalizeZip(String zip) {
+        return zip == null || zip.isBlank() ? "" : zip.trim();
+    }
+
     @Override
     @Transactional
     public HospitalResponseDTO updateHospital(UUID id, HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getHospitalOrThrow(id, locale);
-        validateAddressFields(dto, locale);
+        Hospital hospital = getClinicalHospitalOrThrow(id);
+        validateAddressFields(dto, hospital.getAddress(), locale);
+        // An unchanged number is left as stored: a value saved before the
+        // rule existed does not block an edit of another field.
+        if (dto.getPhoneNumber() != null
+                && !dto.getPhoneNumber().trim().equals(hospital.getPhoneNumber())) {
+            dto.setPhoneNumber(requireFacilityPhone(dto.getPhoneNumber(),
+                dto.getCountry() != null ? dto.getCountry() : hospital.getCountry()));
+        }
+        // The create rule holds on update too: renaming onto another
+        // hospital's name and zip code is a 409, not a silent duplicate (D223).
+        if (dto.getName() != null) {
+            dto.setName(normalizeName(dto.getName()));
+        }
+        String name = dto.getName() != null ? dto.getName() : hospital.getName();
+        String zipCode = dto.getZipCode() != null ? dto.getZipCode() : hospital.getZipCode();
+        boolean identityChanged = name != null
+            && (!name.equalsIgnoreCase(normalizeName(hospital.getName()))
+                || !Objects.equals(normalizeZip(zipCode), normalizeZip(hospital.getZipCode())));
+        // Unchanged, the only match is this hospital itself.
+        if (identityChanged && hospitalRepository.existsByNameIgnoreCaseAndZipCode(name, zipCode)) {
+            String message = messageSource.getMessage("hospital.exists",
+                    new Object[]{name}, "Hospital already exists.", locale);
+            throw new ConflictException("name:" + message);
+        }
         hospitalMapper.updateHospitalFromDto(dto, hospital);
         if (dto.getOrganizationId() != null) {
-            Organization organization = getOrganizationOrThrow(dto.getOrganizationId(), locale);
+            Organization organization = getOrganizationOrThrow(dto.getOrganizationId());
             hospital.setOrganization(organization);
         }
         Hospital updated = hospitalRepository.save(hospital);
@@ -149,10 +254,20 @@ public class HospitalServiceImpl implements HospitalService {
     public void deleteHospital(UUID id, Locale locale) {
         validateSuperAdminOrThrow(locale);
 
-        if (!hospitalRepository.existsById(id)) {
-            throw new ResourceNotFoundException(
-                    messageSource.getMessage("hospital.notFound", new Object[]{id}, "Hospital not found with id: " + id, locale)
-            );
+        // Locked before the "never verified" check: a VERIFY of this provider
+        // holds the same facility-row lock, so the two run one after the other
+        // and the check reads what the verify committed.
+        Hospital hospital = hospitalRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, id));
+        // A provider onboarded by mistake may be deleted while it has never
+        // been verified: it has never been ACTIVE, so no user has signed in
+        // there and nothing was routed to it. Its verification history goes
+        // with it (V180: ON DELETE CASCADE). Once verified (even if revoked
+        // since) it may have staff, orders and audit trail: it is retired
+        // through the lifecycle (suspend, archive, purge), not deleted (409).
+        if (hospital.isProvider() && providerVerificationRepository.existsByHospital_IdAndStatusIn(id,
+                java.util.EnumSet.of(ProviderVerificationStatus.VERIFIED, ProviderVerificationStatus.REVOKED))) {
+            throw new ConflictException(MessageUtil.resolveOrRaw("provider.delete.verified"));
         }
 
         hospitalRepository.deleteById(id);
@@ -207,10 +322,7 @@ public class HospitalServiceImpl implements HospitalService {
         List<Hospital> hospitals = hospitalRepository.findByOrganizationIdOrderByNameAsc(organizationId);
         if (hospitals.isEmpty()) {
             if (!organizationRepository.existsById(organizationId)) {
-                throw new ResourceNotFoundException(
-                        messageSource.getMessage("organization.notFound", new Object[]{organizationId},
-                                "Organization not found with id: " + organizationId, locale)
-                );
+                throw new ResourceNotFoundException("organization.notFound", organizationId);
             }
             return List.of();
         }
@@ -226,8 +338,8 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO assignHospitalToOrganization(UUID hospitalId, UUID organizationId, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getHospitalOrThrow(hospitalId, locale);
-        Organization organization = getOrganizationOrThrow(organizationId, locale);
+        Hospital hospital = getClinicalHospitalOrThrow(hospitalId);
+        Organization organization = getOrganizationOrThrow(organizationId);
         hospital.setOrganization(organization);
         Hospital saved = hospitalRepository.save(hospital);
         return hospitalMapper.toHospitalDTO(saved);
@@ -237,17 +349,27 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO unassignHospitalFromOrganization(UUID hospitalId, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getHospitalOrThrow(hospitalId, locale);
+        Hospital hospital = getClinicalHospitalOrThrow(hospitalId);
         hospital.setOrganization(null);
         Hospital saved = hospitalRepository.save(hospital);
         return hospitalMapper.toHospitalDTO(saved);
     }
 
-    private Hospital getHospitalOrThrow(UUID id, Locale locale) {
+    /**
+     * A hospital for one of the generic super-admin writes (edit, organisation
+     * link and unlink). A provider facility answers exactly as an unknown id:
+     * it is edited only through /super-admin/providers, whose rules (VERIFY is
+     * the only way to ACTIVE; never attached to a hospital organisation,
+     * provider plan AC-4 and AC-11) the generic writes would skip.
+     */
+    private Hospital getClinicalHospitalOrThrow(UUID id) {
+        return hospitalRepository.findClinicalById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, id));
+    }
+
+    private Hospital getHospitalOrThrow(UUID id) {
         return hospitalRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("hospital.notFound", new Object[]{id}, "Hospital not found with id: " + id, locale)
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, id));
     }
 
     private List<Hospital> applyHospitalScope(List<Hospital> hospitals) {
@@ -288,11 +410,9 @@ public class HospitalServiceImpl implements HospitalService {
         }
     }
 
-    private Organization getOrganizationOrThrow(UUID id, Locale locale) {
+    private Organization getOrganizationOrThrow(UUID id) {
         return organizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("organization.notFound", new Object[]{id}, "Organization not found with id: " + id, locale)
-                ));
+                .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", id));
     }
 
     private void validateSuperAdminOrThrow(Locale locale) {
@@ -304,30 +424,26 @@ public class HospitalServiceImpl implements HospitalService {
 
     /**
      * Validates country-specific address rules.
+     * QA D734/D747: the street address is required for every hospital, on
+     * create and on update (where an omitted field keeps the stored street,
+     * but an empty one is refused). It used to be optional whenever a P.O.
+     * box was given, so the form's "Adresse / Rue *" was never enforced.
      */
-    private void validateAddressFields(HospitalRequestDTO dto, Locale locale) {
+    private void validateAddressFields(HospitalRequestDTO dto, String storedAddress, Locale locale) {
+        String street = dto.getAddress() != null ? dto.getAddress() : storedAddress;
+        if (street == null || street.isBlank()) {
+            throw new IllegalArgumentException(
+                    messageSource.getMessage("hospital.address.required", null,
+                            "The street address is required.", locale));
+        }
         String country = dto.getCountry() != null ? dto.getCountry().toUpperCase() : "";
 
         if (country.equals("US") || country.equals("USA")) {
             if (dto.getState() == null || dto.getState().isBlank()) {
-                throw new IllegalArgumentException(
-                        messageSource.getMessage("hospital.state.required", null,
-                                "State is required for hospitals in the United States.", locale));
+                throw new com.example.hms.exception.FieldBusinessException("state", "hospital.state.required");
             }
             if (dto.getZipCode() == null || dto.getZipCode().isBlank()) {
-                throw new IllegalArgumentException(
-                        messageSource.getMessage("hospital.zipCode.required", null,
-                                "Zip Code is required for hospitals in the United States.", locale));
-            }
-        } else {
-            // Foreign Country Validation
-            boolean hasValidAddress = (dto.getAddress() != null && !dto.getAddress().isBlank()) ||
-                    (dto.getPoBox() != null && !dto.getPoBox().isBlank());
-
-            if (!hasValidAddress) {
-                throw new IllegalArgumentException(
-                        messageSource.getMessage("hospital.address.required", null,
-                                "Address or PO Box is required for foreign hospitals.", locale));
+                throw new com.example.hms.exception.FieldBusinessException("zipCode", "hospital.zipCode.required");
             }
         }
     }

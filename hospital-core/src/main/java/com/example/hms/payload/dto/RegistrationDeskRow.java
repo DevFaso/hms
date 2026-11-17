@@ -44,6 +44,7 @@ public record RegistrationDeskRow(
     UUID patientId,
     String patientUsername,
     String patientFirstName,
+    String patientMiddleName,
     String patientLastName,
     String patientEmail,
     String patientPhone,
@@ -63,7 +64,8 @@ public record RegistrationDeskRow(
     String currentBed,
     String attendingPhysicianName,
     String readyForDischargeNote,
-    UUID readyByStaffId
+    UUID readyByStaffId,
+    String deactivationReason
 ) {
 
     /** True when the registration's patient row could not be resolved (orphaned FK). */

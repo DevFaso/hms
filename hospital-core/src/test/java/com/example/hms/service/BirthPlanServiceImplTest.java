@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.BirthPlanMapper;
 import com.example.hms.model.BirthPlan;
@@ -38,6 +40,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -78,6 +81,13 @@ class BirthPlanServiceImplTest {
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+
+    /** Unstubbed: a null scope (global view), so the existing cases read any hospital. */
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
+
+    @org.mockito.Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     @InjectMocks
     private BirthPlanServiceImpl birthPlanService;
@@ -159,15 +169,15 @@ class BirthPlanServiceImplTest {
         responseDTO.setHospitalId(hospital.getId());
     }
 
-    private Set<UserRole> createUserRoles(String roleCode) {
-        Role role = new Role();
-        role.setCode(roleCode);
-        role.setName(roleCode.replace("ROLE_", ""));
-
-        UserRole userRole = new UserRole();
-        userRole.setRole(role);
-
-        return Set.of(userRole);
+    private Set<UserRole> createUserRoles(String... roleCodes) {
+        return java.util.Arrays.stream(roleCodes).map(roleCode -> {
+            Role role = new Role();
+            role.setCode(roleCode);
+            role.setName(roleCode.replace("ROLE_", ""));
+            UserRole userRole = new UserRole();
+            userRole.setRole(role);
+            return userRole;
+        }).collect(java.util.stream.Collectors.toSet());
     }
 
     @Test
@@ -177,7 +187,7 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(patientUser));
         when(patientRepository.findByUserId(patientUser.getId()))
             .thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospital.getId()))
+        when(hospitalRepository.findClinicalById(hospital.getId()))
             .thenReturn(Optional.of(hospital));
         when(birthPlanRepository.save(any(BirthPlan.class)))
             .thenReturn(birthPlan);
@@ -207,7 +217,7 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(doctorUser));
         when(patientRepository.findById(patient.getId()))
             .thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospital.getId()))
+        when(hospitalRepository.findClinicalById(hospital.getId()))
             .thenReturn(Optional.of(hospital));
         when(birthPlanRepository.save(any(BirthPlan.class)))
             .thenReturn(birthPlan);
@@ -220,7 +230,34 @@ class BirthPlanServiceImplTest {
         // Then
         assertNotNull(result);
         verify(patientRepository).findById(patient.getId());
-        verify(hospitalRepository).findById(hospital.getId());
+        verify(hospitalRepository).findClinicalById(hospital.getId());
+    }
+
+    @Test
+    void aStaffPlanWithNoPatientNamesTheField_beforeAnyLookup_D1258() {
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        requestDTO.setPatientId(null);
+        String username = doctorUser.getUsername();
+
+        FieldBusinessException refused = assertThrows(FieldBusinessException.class,
+            () -> birthPlanService.createBirthPlan(requestDTO, username));
+
+        assertEquals("patientId", refused.getField());
+        assertEquals("birthPlan.patient.required", refused.getMessageKey());
+        verifyNoInteractions(patientRepository, hospitalRepository, birthPlanRepository);
+    }
+
+    @Test
+    void aStaffPlanWithNoHospitalNamesTheField_beforeAnyLookup_D1258() {
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        requestDTO.setHospitalId(null);
+        String username = doctorUser.getUsername();
+
+        FieldBusinessException refused = assertThrows(FieldBusinessException.class,
+            () -> birthPlanService.createBirthPlan(requestDTO, username));
+
+        assertEquals("hospitalId", refused.getField());
+        verifyNoInteractions(patientRepository, hospitalRepository, birthPlanRepository);
     }
 
     @Test
@@ -243,8 +280,8 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(patientUser));
         when(birthPlanRepository.findById(planId))
             .thenReturn(Optional.of(birthPlan));
-        when(patientRepository.findByUserId(patientUser.getId()))
-            .thenReturn(Optional.of(patient));
+        when(patientRepository.existsByIdAndUserId(patient.getId(), patientUser.getId()))
+            .thenReturn(true);
         when(birthPlanRepository.save(any(BirthPlan.class)))
             .thenReturn(birthPlan);
         when(birthPlanMapper.toResponseDTO(any(BirthPlan.class)))
@@ -270,8 +307,8 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(patientUser));
         when(birthPlanRepository.findById(planId))
             .thenReturn(Optional.of(birthPlan));
-        when(patientRepository.findByUserId(patientUser.getId()))
-            .thenReturn(Optional.of(patient));
+        when(patientRepository.existsByIdAndUserId(patient.getId(), patientUser.getId()))
+            .thenReturn(true);
         when(birthPlanRepository.save(any(BirthPlan.class)))
             .thenReturn(birthPlan);
         when(birthPlanMapper.toResponseDTO(any(BirthPlan.class)))
@@ -298,8 +335,8 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(patientUser));
         when(birthPlanRepository.findById(birthPlan.getId()))
             .thenReturn(Optional.of(birthPlan));
-        when(patientRepository.findByUserId(patientUser.getId()))
-            .thenReturn(Optional.of(patient));
+        when(patientRepository.existsByIdAndUserId(patient.getId(), patientUser.getId()))
+            .thenReturn(true);
         when(birthPlanMapper.toResponseDTO(birthPlan))
             .thenReturn(responseDTO);
 
@@ -322,15 +359,70 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(patientUser));
         when(birthPlanRepository.findById(birthPlan.getId()))
             .thenReturn(Optional.of(birthPlan));
-        when(patientRepository.findByUserId(patientUser.getId()))
-            .thenReturn(Optional.of(patient));
 
-        // When & Then
+        // When & Then: another patient's plan answers exactly as a missing id
+        // (it was a 403 beside a 404, which told a patient which ids exist).
         UUID birthPlanId = birthPlan.getId();
         String username = patientUser.getUsername();
-        assertThrows(AccessDeniedException.class, () ->
-            birthPlanService.getBirthPlanById(birthPlanId, username)
-        );
+        ResourceNotFoundException refused = assertThrows(ResourceNotFoundException.class, () ->
+            birthPlanService.getBirthPlanById(birthPlanId, username));
+        when(birthPlanRepository.findById(birthPlanId)).thenReturn(Optional.empty());
+        ResourceNotFoundException missing = assertThrows(ResourceNotFoundException.class, () ->
+            birthPlanService.getBirthPlanById(birthPlanId, username));
+        assertEquals(missing.getMessage(), refused.getMessage());
+    }
+
+    @Test
+    void patientWritesOnAnotherPatientsPlanAnswerAsAMissingId() {
+        Patient otherPatient = new Patient();
+        otherPatient.setId(UUID.randomUUID());
+        birthPlan.setPatient(otherPatient);
+        when(userRepository.findByUsername(patientUser.getUsername())).thenReturn(Optional.of(patientUser));
+        when(birthPlanRepository.findById(birthPlan.getId())).thenReturn(Optional.of(birthPlan));
+        UUID birthPlanId = birthPlan.getId();
+        String username = patientUser.getUsername();
+
+        assertThrows(ResourceNotFoundException.class, () -> birthPlanService.updateBirthPlan(birthPlanId, requestDTO, username));
+        assertThrows(ResourceNotFoundException.class, () -> birthPlanService.deleteBirthPlan(birthPlanId, "doublon", username));
+        verify(birthPlanRepository, never()).save(any());
+        verify(birthPlanRepository, never()).delete(any());
+    }
+
+    @Test
+    void patientListsForAnotherPatientAnswerAsAnUnknownPatient_beforeAnyLookup() {
+        UUID otherPatientId = UUID.randomUUID();
+        UUID unknownPatientId = UUID.randomUUID();
+        when(userRepository.findByUsername(patientUser.getUsername())).thenReturn(Optional.of(patientUser));
+        String username = patientUser.getUsername();
+
+        for (UUID id : List.of(otherPatientId, unknownPatientId)) {
+            ResourceNotFoundException list = assertThrows(ResourceNotFoundException.class,
+                () -> birthPlanService.getBirthPlansByPatientId(id, username));
+            ResourceNotFoundException active = assertThrows(ResourceNotFoundException.class,
+                () -> birthPlanService.getActiveBirthPlan(id, username));
+            assertEquals("patient.notFound", list.getMessageKey());
+            assertEquals("patient.notFound", active.getMessageKey());
+        }
+        verify(patientRepository, never()).findById(any());
+        verify(birthPlanRepository, never()).findByPatientIdOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    void aDoctorWhoIsAlsoAPatientIsStillADoctor() {
+        // The patient role used to be asked first, so a clinician holding
+        // ROLE_PATIENT was held to her own plans and filed new ones for herself.
+        User doctorPatient = new User();
+        doctorPatient.setId(UUID.randomUUID());
+        doctorPatient.setUsername("doc.patient@test.com");
+        doctorPatient.setUserRoles(createUserRoles("ROLE_DOCTOR", "ROLE_PATIENT"));
+        when(userRepository.findByUsername(doctorPatient.getUsername())).thenReturn(Optional.of(doctorPatient));
+        when(birthPlanRepository.findById(birthPlan.getId())).thenReturn(Optional.of(birthPlan));
+        when(birthPlanMapper.toResponseDTO(birthPlan)).thenReturn(responseDTO);
+
+        assertEquals(responseDTO.getId(),
+            birthPlanService.getBirthPlanById(birthPlan.getId(), doctorPatient.getUsername()).getId());
+        verify(patientRepository, never()).existsByIdAndUserId(any(), any());
+        verify(patientRepository, never()).findByUserId(any());
     }
 
     @Test
@@ -367,8 +459,6 @@ class BirthPlanServiceImplTest {
 
         when(userRepository.findByUsername(hospitalAdmin.getUsername()))
             .thenReturn(Optional.of(hospitalAdmin));
-        when(birthPlanRepository.findById(birthPlan.getId()))
-            .thenReturn(Optional.of(birthPlan));
 
         UUID birthPlanId = birthPlan.getId();
         String username = hospitalAdmin.getUsername();
@@ -376,6 +466,8 @@ class BirthPlanServiceImplTest {
             birthPlanService.getBirthPlanById(birthPlanId, username)
         );
         verify(birthPlanMapper, never()).toResponseDTO(any());
+        // Refused before the lookup: the answer does not depend on the id.
+        verify(birthPlanRepository, never()).findById(any());
     }
 
     @Test
@@ -408,7 +500,7 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(doctorUser));
         when(patientRepository.findById(patient.getId()))
             .thenReturn(Optional.of(patient));
-        when(birthPlanRepository.findActiveBirthPlanByPatientId(patient.getId()))
+        when(birthPlanRepository.findFirstByPatient_IdAndWithdrawnAtIsNullOrderByCreatedAtDesc(patient.getId()))
             .thenReturn(Optional.of(birthPlan));
         when(birthPlanMapper.toResponseDTO(birthPlan))
             .thenReturn(responseDTO);
@@ -430,7 +522,7 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(doctorUser));
         when(patientRepository.findById(patient.getId()))
             .thenReturn(Optional.of(patient));
-        when(birthPlanRepository.findActiveBirthPlanByPatientId(patient.getId()))
+        when(birthPlanRepository.findFirstByPatient_IdAndWithdrawnAtIsNullOrderByCreatedAtDesc(patient.getId()))
             .thenReturn(Optional.empty());
 
         // When
@@ -530,8 +622,7 @@ class BirthPlanServiceImplTest {
 
         when(userRepository.findByUsername(nurseUser.getUsername()))
             .thenReturn(Optional.of(nurseUser));
-        when(birthPlanRepository.findById(birthPlan.getId()))
-            .thenReturn(Optional.of(birthPlan));
+        // Refused before the plan is looked up.
 
         // When & Then
         UUID birthPlanId = birthPlan.getId();
@@ -548,14 +639,90 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(patientUser));
         when(birthPlanRepository.findById(birthPlan.getId()))
             .thenReturn(Optional.of(birthPlan));
-        when(patientRepository.findByUserId(patientUser.getId()))
-            .thenReturn(Optional.of(patient));
+        when(patientRepository.existsByIdAndUserId(patient.getId(), patientUser.getId()))
+            .thenReturn(true);
 
         // When
-        birthPlanService.deleteBirthPlan(birthPlan.getId(), patientUser.getUsername());
+        birthPlanService.deleteBirthPlan(birthPlan.getId(), "saisi en double", patientUser.getUsername());
 
         // Then
         verify(birthPlanRepository).delete(birthPlan);
+    }
+
+    @Test
+    void aReviewedBirthPlanIsWithdrawnWithItsReasonNeverDeleted_D1241() {
+        birthPlan.setProviderReviewed(true);
+        birthPlan.setReviewTimestamp(java.time.LocalDateTime.now());
+        when(userRepository.findByUsername(patientUser.getUsername())).thenReturn(Optional.of(patientUser));
+        when(birthPlanRepository.findById(birthPlan.getId())).thenReturn(Optional.of(birthPlan));
+        when(patientRepository.existsByIdAndUserId(patient.getId(), patientUser.getId())).thenReturn(true);
+
+        birthPlanService.deleteBirthPlan(birthPlan.getId(), " plus d'actualité ", patientUser.getUsername());
+
+        verify(birthPlanRepository, never()).delete(any());
+        verify(birthPlanRepository).save(birthPlan);
+        assertTrue(birthPlan.isWithdrawn());
+        assertEquals("plus d'actualité", birthPlan.getWithdrawalReason());
+        assertEquals(patientUser.getId(), birthPlan.getWithdrawnByUserId());
+    }
+
+    @Test
+    void aPlanReviewedThenEditedIsStillWithdrawnNotDeleted_D1241() {
+        // The edit resets the signature and the reviewed flag; the review stamp stays.
+        birthPlan.setProviderReviewed(false);
+        birthPlan.setProviderSignatureDate(null);
+        birthPlan.setReviewTimestamp(java.time.LocalDateTime.now().minusDays(1));
+        when(userRepository.findByUsername(patientUser.getUsername())).thenReturn(Optional.of(patientUser));
+        when(birthPlanRepository.findById(birthPlan.getId())).thenReturn(Optional.of(birthPlan));
+        when(patientRepository.existsByIdAndUserId(patient.getId(), patientUser.getId())).thenReturn(true);
+
+        birthPlanService.deleteBirthPlan(birthPlan.getId(), "changement", patientUser.getUsername());
+
+        verify(birthPlanRepository, never()).delete(any());
+        assertTrue(birthPlan.isWithdrawn());
+    }
+
+    @Test
+    void someoneElsesUnreviewedDraftIsWithdrawnNotDeleted_D1241() {
+        birthPlan.setCreatedByUserId(UUID.randomUUID());
+        when(userRepository.findByUsername(patientUser.getUsername())).thenReturn(Optional.of(patientUser));
+        when(birthPlanRepository.findById(birthPlan.getId())).thenReturn(Optional.of(birthPlan));
+        when(patientRepository.existsByIdAndUserId(patient.getId(), patientUser.getId())).thenReturn(true);
+
+        birthPlanService.deleteBirthPlan(birthPlan.getId(), "doublon", patientUser.getUsername());
+
+        verify(birthPlanRepository, never()).delete(any());
+        assertTrue(birthPlan.isWithdrawn());
+    }
+
+    @Test
+    void aWithdrawnPlanCannotBeWithdrawnAgainAndKeepsItsFirstReason_D1241() {
+        birthPlan.setWithdrawnAt(java.time.LocalDateTime.now());
+        birthPlan.setWithdrawalReason("premier motif");
+        when(userRepository.findByUsername(patientUser.getUsername())).thenReturn(Optional.of(patientUser));
+        when(birthPlanRepository.findById(birthPlan.getId())).thenReturn(Optional.of(birthPlan));
+        when(patientRepository.existsByIdAndUserId(patient.getId(), patientUser.getId())).thenReturn(true);
+        UUID id = birthPlan.getId();
+        String username = patientUser.getUsername();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+            () -> birthPlanService.deleteBirthPlan(id, "second motif", username));
+
+        assertEquals("maternity.birthPlan.alreadyWithdrawn", ex.getMessageKey());
+        assertEquals("premier motif", birthPlan.getWithdrawalReason());
+        verify(birthPlanRepository, never()).save(any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"  "})
+    void aDeleteWithoutAReasonIsRefused_D1241(String reason) {
+        UUID id = birthPlan.getId();
+        String username = patientUser.getUsername();
+
+        assertThrows(BusinessException.class, () -> birthPlanService.deleteBirthPlan(id, reason, username));
+        verify(birthPlanRepository, never()).delete(any());
+        verify(birthPlanRepository, never()).save(any());
     }
 
     @Test
@@ -623,7 +790,7 @@ class BirthPlanServiceImplTest {
         when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
         when(recordAccessPolicy.readableHospitalIds(doctorUser.getId(), patient.getId(), hospital.getId()))
             .thenReturn(Set.of(hospital.getId(), otherHospitalId));
-        when(birthPlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patient.getId(), Set.of(hospital.getId(), otherHospitalId)))
+        when(birthPlanRepository.findByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc(patient.getId(), Set.of(hospital.getId(), otherHospitalId)))
             .thenReturn(List.of(birthPlan, foreign));
         when(birthPlanMapper.toResponseDTO(any(BirthPlan.class))).thenReturn(responseDTO);
 
@@ -656,13 +823,47 @@ class BirthPlanServiceImplTest {
         when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
         when(recordAccessPolicy.readableHospitalIds(doctorUser.getId(), patient.getId(), hospital.getId()))
             .thenReturn(Set.of(hospital.getId(), otherHospitalId));
-        when(birthPlanRepository.findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patient.getId(), Set.of(hospital.getId(), otherHospitalId)))
+        when(birthPlanRepository.findFirstByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc(patient.getId(), Set.of(hospital.getId(), otherHospitalId)))
             .thenReturn(Optional.of(foreign));
         when(birthPlanMapper.toResponseDTO(foreign)).thenReturn(responseDTO);
 
         assertThat(birthPlanService.getActiveBirthPlan(patient.getId(), doctorUser.getUsername())).isEqualTo(responseDTO);
-        verify(birthPlanRepository, never()).findActiveBirthPlanByPatientId(any());
+        verify(birthPlanRepository, never()).findFirstByPatient_IdAndWithdrawnAtIsNullOrderByCreatedAtDesc(any());
         verify(reachRecorder).recordReach(eq(patient.getId()), eq(hospital.getId()), eq(doctorUser.getId()), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void aProviderReachingAnotherHospitalsPlanIsAnsweredAsAMissingPlan() {
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        UUID planId = birthPlan.getId();
+        String username = doctorUser.getUsername();
+        when(birthPlanRepository.findById(planId)).thenReturn(Optional.empty());
+        String missing = assertThrows(ResourceNotFoundException.class,
+            () -> birthPlanService.getBirthPlanById(planId, username)).getMessage();
+
+        when(birthPlanRepository.findById(planId)).thenReturn(Optional.of(birthPlan));
+        BirthPlanProviderReviewRequestDTO review = new BirthPlanProviderReviewRequestDTO();
+        assertEquals(missing, assertThrows(ResourceNotFoundException.class,
+            () -> birthPlanService.getBirthPlanById(planId, username)).getMessage());
+        assertEquals(missing, assertThrows(ResourceNotFoundException.class,
+            () -> birthPlanService.updateBirthPlan(planId, requestDTO, username)).getMessage());
+        assertEquals(missing, assertThrows(ResourceNotFoundException.class,
+            () -> birthPlanService.deleteBirthPlan(planId, "doublon", username)).getMessage());
+        assertEquals(missing, assertThrows(ResourceNotFoundException.class,
+            () -> birthPlanService.providerReview(planId, review, username)).getMessage());
+        verify(birthPlanRepository, never()).save(any());
+        verify(birthPlanRepository, never()).delete(any());
+    }
+
+    @Test
+    void aProviderReadsAPlanAtTheHospitalTheyActAt() {
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(birthPlan.getHospital().getId());
+        when(birthPlanRepository.findById(birthPlan.getId())).thenReturn(Optional.of(birthPlan));
+        when(birthPlanMapper.toResponseDTO(birthPlan)).thenReturn(responseDTO);
+
+        assertEquals(responseDTO.getId(), birthPlanService.getBirthPlanById(birthPlan.getId(), doctorUser.getUsername()).getId());
     }
 }

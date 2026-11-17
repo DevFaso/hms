@@ -163,7 +163,7 @@ public class OrganizationSecurityServiceImpl implements OrganizationSecurityServ
             String ruleValue, Integer priority) {
         
         OrganizationSecurityPolicy securityPolicy = securityPolicyRepository.findById(securityPolicyId)
-            .orElseThrow(() -> new ResourceNotFoundException("Security policy not found: " + securityPolicyId));
+            .orElseThrow(() -> new ResourceNotFoundException("securityPolicy.notFound", securityPolicyId));
 
         Optional<OrganizationSecurityRule> existingRule = 
             securityRuleRepository.findBySecurityPolicyIdAndCode(securityPolicyId, code);
@@ -311,7 +311,9 @@ public class OrganizationSecurityServiceImpl implements OrganizationSecurityServ
 
         // Apply policies based on organization type
         switch (organizationType) {
-            case GOVERNMENT_AGENCY, RESEARCH_INSTITUTION -> applyHighSecurityPolicies(organization);
+            // Provider counters are often shared PCs (provider plan T4): high.
+            case GOVERNMENT_AGENCY, RESEARCH_INSTITUTION, PHARMACY, LABORATORY ->
+                applyHighSecurityPolicies(organization);
             case HEALTHCARE_NETWORK, HOSPITAL_CHAIN, ACADEMIC_MEDICAL_CENTER -> applyMediumSecurityPolicies(organization);
             default -> applyStandardSecurityPolicies(organization);
         }

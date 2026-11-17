@@ -28,7 +28,7 @@ import com.bitnesttechs.hms.patient.core.models.RefillDto
 import com.bitnesttechs.hms.patient.core.models.RefillStatus
 import androidx.compose.ui.res.stringResource
 import com.bitnesttechs.hms.patient.R
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.badgeFill
 import com.bitnesttechs.hms.patient.ui.theme.onBadge
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
@@ -44,7 +44,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     val openRefills by viewModel.openRefills.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Medications", "Prescriptions", "Refills")
+    val tabs = listOf(stringResource(R.string.medications), stringResource(R.string.prescriptions), stringResource(R.string.refills))
     var selectedMed by remember { mutableStateOf<MedicationDto?>(null) }
     var selectedRx by remember { mutableStateOf<PrescriptionDto?>(null) }
     var refillTarget by remember { mutableStateOf<PrescriptionDto?>(null) }
@@ -63,13 +63,13 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Medications") },
+                title = { Text(stringResource(R.string.medications)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = androidx.compose.ui.graphics.Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = androidx.compose.ui.graphics.Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary,
                     titleContentColor = androidx.compose.ui.graphics.Color.White)
             )
         }
@@ -82,11 +82,50 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 }
             }
 
-            if (isLoading) {
+            // Only when there is nothing to show yet, which is the rule the
+            // lab screen already follows. Every mutation calls awaitFreshLoad,
+            // which cancels the in-flight load and relaunches it, so with a
+            // bare `isLoading` here the patient tapped "Request refill" and
+            // watched their whole medication list disappear and come back.
+            val nothingLoadedYet =
+                medications.isEmpty() && prescriptions.isEmpty() && refills.isEmpty()
+            if (isLoading && nothingLoadedYet) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = BrandBlue)
+                    CircularProgressIndicator(color = BrandPrimary)
                 }
                 return@Column
+            }
+
+            // Above the per-tab LazyColumns, not inside them: as a list item
+            // this row scrolls away, so a patient fifty rows down would get no
+            // spinner, no message and no retry.
+            if (!nothingLoadedYet && (isLoading || loadFailed.any)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Weighted: the French string is long enough to fill the
+                    // row and collapse the button to nothing.
+                    Text(
+                        stringResource(
+                            if (isLoading) R.string.refreshing else R.string.refresh_failed
+                        ),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            color = BrandPrimary,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        TextButton(onClick = { viewModel.load() }) {
+                            Text(stringResource(R.string.retry))
+                        }
+                    }
+                }
             }
 
             when (selectedTab) {
@@ -132,6 +171,16 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                         Text(stringResource(R.string.since_with_value, it.take(10)),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    med.readyForCollectionAt?.let { readyAt ->
+                                        // G15: a fill is waiting at the pharmacy counter.
+                                        Text(
+                                            stringResource(R.string.medication_ready_for_collection,
+                                                med.readyForCollectionPharmacyName.orEmpty()) + " · " +
+                                                stringResource(R.string.medication_ready_since, readyAt.take(16).replace('T', ' ')),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                                 Icon(Icons.Default.ChevronRight, contentDescription = null,
@@ -192,7 +241,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                             color = rx.statusEnum.tone.onBadge(),
                                             fontWeight = FontWeight.Medium)
                                     }
-                                    Icon(Icons.Default.ChevronRight, contentDescription = "View details",
+                                    Icon(Icons.Default.ChevronRight, contentDescription = stringResource(R.string.view_details),
                                         modifier = Modifier.padding(start = 4.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
@@ -211,6 +260,16 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     Text(stringResource(R.string.rx_pharmacy_with_value, it),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                rx.readyForCollectionAt?.let { readyAt ->
+                                    // G15: a fill is waiting at the pharmacy counter.
+                                    Text(
+                                        stringResource(R.string.medication_ready_for_collection,
+                                            rx.readyForCollectionPharmacyName.orEmpty()) + " · " +
+                                            stringResource(R.string.medication_ready_since, readyAt.take(16).replace('T', ' ')),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold)
                                 }
                                 Spacer(Modifier.height(6.dp))
                                 // An open request is worth saying whatever the
@@ -267,7 +326,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        refill.medicationName ?: "Refill",
+                                        refill.medicationName ?: stringResource(R.string.refill),
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.weight(1f)
@@ -364,7 +423,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
 
         AlertDialog(
             onDismissRequest = { refillTarget = null },
-            title = { Text("Request Refill", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.request_refill), fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(rx.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -376,16 +435,16 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                     OutlinedTextField(
                         value = pharmacy,
                         onValueChange = { pharmacy = it },
-                        label = { Text("Preferred Pharmacy") },
-                        placeholder = { Text("e.g. CVS Main St") },
+                        label = { Text(stringResource(R.string.preferred_pharmacy)) },
+                        placeholder = { Text(stringResource(R.string.preferred_pharmacy_placeholder)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = notes,
                         onValueChange = { notes = it },
-                        label = { Text("Notes (optional)") },
-                        placeholder = { Text("Any special instructions") },
+                        label = { Text(stringResource(R.string.notes_optional)) },
+                        placeholder = { Text(stringResource(R.string.refill_notes_placeholder)) },
                         minLines = 2,
                         maxLines = 3,
                         modifier = Modifier.fillMaxWidth()
@@ -400,10 +459,10 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         notes = notes.takeIf { it.isNotBlank() }
                     )
                     refillTarget = null
-                }) { Text("Submit") }
+                }) { Text(stringResource(R.string.submit)) }
             },
             dismissButton = {
-                TextButton(onClick = { refillTarget = null }) { Text("Cancel") }
+                TextButton(onClick = { refillTarget = null }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -413,7 +472,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
 private fun MedicationDetailDialog(med: MedicationDto, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
         title = { Text(med.name, fontWeight = FontWeight.Bold) },
         text = {
             Column(
@@ -445,7 +504,7 @@ private fun MedicationDetailDialog(med: MedicationDto, onDismiss: () -> Unit) {
 
                 med.instructions?.takeIf { it.isNotBlank() }?.let {
                     HorizontalDivider()
-                    Text("Instructions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.instructions), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Text(it, style = MaterialTheme.typography.bodySmall)
                 }
             }
@@ -457,7 +516,7 @@ private fun MedicationDetailDialog(med: MedicationDto, onDismiss: () -> Unit) {
 private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
         title = { Text(rx.displayName, fontWeight = FontWeight.Bold) },
         text = {
             Column(
@@ -467,7 +526,8 @@ private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit)
                 MedDetailRow(stringResource(R.string.status), stringResource(rx.statusEnum.labelRes))
                 HorizontalDivider()
 
-                Text("Dosage & Administration", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.dosage_and_administration),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 rx.dosage?.let { MedDetailRow(stringResource(R.string.dosage), it) }
                 rx.frequency?.let { MedDetailRow(stringResource(R.string.frequency), it) }
                 rx.duration?.let { MedDetailRow(stringResource(R.string.duration), it) }
@@ -490,7 +550,7 @@ private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit)
 
                 rx.instructions?.takeIf { it.isNotBlank() }?.let {
                     HorizontalDivider()
-                    Text("Instructions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.instructions), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Text(it, style = MaterialTheme.typography.bodySmall)
                 }
             }

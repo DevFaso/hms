@@ -2,9 +2,6 @@ package com.example.hms.repository;
 
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.LabOrder;
-import jakarta.validation.constraints.NotNull;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -73,6 +70,7 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     LabOrderStatus findStatusById(@Param("id") UUID id);
     List<LabOrder> findByOrderingStaff_Id(UUID staffId);
     List<LabOrder> findByLabTestDefinition_Id(UUID labTestDefinitionId);
+    boolean existsByLabTestDefinition_Id(UUID labTestDefinitionId);
     List<LabOrder> findByStatus(LabOrderStatus status);
 
     // Hospital-scoped queries for tenant isolation
@@ -123,25 +121,47 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     List<LabOrder> findByStatusAndHospital_Id(LabOrderStatus status, UUID hospitalId);
     List<LabOrder> findByHospital_IdAndStatusIn(UUID hospitalId, java.util.Collection<LabOrderStatus> statuses);
 
-    @Query(value = """
-    SELECT * FROM lab_orders l
-    WHERE (:patientId IS NULL OR l.patient_id = CAST(:patientId AS uuid))
-      AND (CAST(:startDate AS LocalDateTime) IS NULL OR l.order_datetime >= CAST(:startDate AS timestamp))
-      AND (CAST(:endDate AS LocalDateTime) IS NULL OR l.order_datetime <= CAST(:endDate AS timestamp))
-    """,
-            countQuery = "SELECT count(*) FROM lab_orders l WHERE (:patientId IS NULL OR l.patient_id = CAST(:patientId AS uuid)) AND (CAST(:startDate AS LocalDateTime) IS NULL OR l.order_datetime >= CAST(:startDate AS timestamp)) AND (CAST(:endDate AS LocalDateTime) IS NULL OR l.order_datetime <= CAST(:endDate AS timestamp))",
-            nativeQuery = true)
-    Page<LabOrder> searchNative(
-            @Param("patientId") UUID patientId,
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate,
-            Pageable pageable
-    );
+    /**
+     * The duplicate-order check: this patient's orders AT this hospital for
+     * the same test (by definition id, or by test code so a new version of
+     * the test still matches; both sides trimmed and upper-cased, the caller
+     * passes the code normalised), in one of the given statuses, PLACED since the
+     * cutoff: the row's creation time, which the server sets, never the
+     * caller-supplied clinical {@code orderDatetime} (a backdated order is still
+     * a recent placement; Rex on #1150). Newest first. {@code excludeOrderId} keeps an order from
+     * matching itself (pass a random id when there is none).
+     */
+    @Query("""
+        SELECT o FROM LabOrder o LEFT JOIN o.labTestDefinition d
+        WHERE o.patient.id = :patientId
+          AND o.hospital.id = :hospitalId
+          AND o.status IN :statuses
+          AND o.createdAt >= :since
+          AND o.id <> :excludeOrderId
+          AND (o.labTestDefinitionId = :definitionId OR UPPER(TRIM(d.testCode)) = :testCode)
+        ORDER BY o.createdAt DESC
+    """)
+    List<LabOrder> findActiveSameTestSince(@Param("patientId") UUID patientId,
+                                           @Param("hospitalId") UUID hospitalId,
+                                           @Param("definitionId") UUID definitionId,
+                                           @Param("testCode") String testCode,
+                                           @Param("statuses") java.util.Collection<LabOrderStatus> statuses,
+                                           @Param("since") LocalDateTime since,
+                                           @Param("excludeOrderId") UUID excludeOrderId);
 
-    boolean existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(UUID id, UUID id1, @NotNull LocalDateTime orderDatetime);
+
+    /** The orders placed during one visit (its after-visit summary lists them). */
+    List<LabOrder> findByEncounter_Id(UUID encounterId);
 
     /** True when the encounter has at least one lab order whose status is NOT in the given terminal set. */
     boolean existsByEncounter_IdAndStatusNotIn(UUID encounterId, java.util.Collection<LabOrderStatus> terminalStatuses);
+
+    /** QA D972 hand-off: the ids of a visit's lab orders, for the checkout event billing consumes. */
+    @org.springframework.data.jpa.repository.Query(
+        "select o.id from LabOrder o where o.encounter.id = :encounterId and o.status not in :excluded")
+    java.util.List<UUID> findIdsByEncounterIdAndStatusNotIn(
+        @org.springframework.data.repository.query.Param("encounterId") UUID encounterId,
+        @org.springframework.data.repository.query.Param("excluded") java.util.Collection<LabOrderStatus> excluded);
 
     // Count lab orders placed by a specific ordering staff with a given status
     long countByOrderingStaff_IdAndStatus(UUID staffId, LabOrderStatus status);

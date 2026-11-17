@@ -1,5 +1,10 @@
 package com.example.hms.payload.dto;
 
+import jakarta.validation.constraints.AssertTrue;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -20,6 +25,8 @@ public class TriageSubmissionRequestDTO {
 
     // ── Vital signs ────────────────────────────────────────────
 
+    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
+    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     private Double temperatureCelsius;
 
     @Min(20) @Max(300)
@@ -51,12 +58,31 @@ public class TriageSubmissionRequestDTO {
     @Min(0) @Max(10)
     private Integer painScale;
 
+    /**
+     * r54 (provisional): the signs of acute organ damage the recorder ticked next to the blood pressure.
+     * Optional; one sign turns an adult's severe-range warning URGENT. Never required to save.
+     */
+    private java.util.List<com.example.hms.enums.OrganDamageSymptom> organDamageSymptoms;
+
+    /**
+     * QA D1031: the fundal height measured at an antenatal contact, in cm.
+     * Charted with the vitals in the clinician's language; no expected value
+     * is computed (no reference curve is held in the codebase).
+     */
+    @jakarta.validation.constraints.Positive
+    private Integer fundalHeightCm;
+
     // ── Clinical assessment ────────────────────────────────────
 
     @Size(max = 2048)
     private String chiefComplaint;
 
-    /** Emergency Severity Index: 1 (most urgent) to 5 (least urgent). */
+    /**
+     * Emergency Severity Index: 1 (most urgent) to 5 (least urgent).
+     * QA D511: mandatory — a triage with no acuity sent the patient to the
+     * doctor's queue unranked.
+     */
+    @jakarta.validation.constraints.NotNull(message = "{triage.esi.required}")
     @Min(1) @Max(5)
     private Integer esiScore;
 
@@ -70,4 +96,11 @@ public class TriageSubmissionRequestDTO {
     /** Exam room identifier, e.g. "Room 3A". */
     @Size(max = 100)
     private String roomAssignment;
+
+    @com.example.hms.validation.ReportedOn("diastolicBpMmHg")
+    @AssertTrue(message = "{vitals.bloodPressure.invalid}")
+    @JsonIgnore
+    public boolean isBloodPressureOrdered() {
+        return VitalSignLimits.bloodPressureOrdered(systolicBpMmHg, diastolicBpMmHg);
+    }
 }

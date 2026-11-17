@@ -38,6 +38,8 @@ public class BirthPlanMapper {
             .providerSignature(birthPlan.getProviderSignature())
             .providerSignatureDate(birthPlan.getProviderSignatureDate())
             .providerComments(birthPlan.getProviderComments())
+            .withdrawnAt(birthPlan.getWithdrawnAt())
+            .withdrawalReason(birthPlan.getWithdrawalReason())
             .createdAt(birthPlan.getCreatedAt())
             .updatedAt(birthPlan.getUpdatedAt())
             .build();

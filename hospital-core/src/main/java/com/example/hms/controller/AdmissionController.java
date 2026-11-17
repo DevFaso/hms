@@ -43,21 +43,28 @@ public class AdmissionController {
     private final AdmissionService admissionService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
-    @Operation(summary = "Admit a patient", description = "Create a new hospital admission for a patient")
+    // Policy 2 (2026-11-09, provisional): a midwife may admit a woman in labour only; the
+    // service refuses every other admission for her (AdmissionServiceImpl.requireMidwifeLabourAdmission).
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_MIDWIFE')")
+    @Operation(summary = "Admit a patient", description = "Create a new hospital admission for a patient. "
+        + "A physician admits any type; a midwife only a woman in labour (LABOR_DELIVERY).")
     public ResponseEntity<AdmissionResponseDTO> admitPatient(@Valid @RequestBody AdmissionRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(admissionService.admitPatient(request));
     }
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
-    @Operation(summary = "List all admissions", description = "Retrieve all admissions across all hospitals")
+    @Operation(summary = "List admissions",
+        description = "The acting hospital's admissions (every hospital's for a super-admin with none in scope), "
+            + "optionally narrowed by status, admission-time window and patient")
     public ResponseEntity<List<AdmissionResponseDTO>> listAllAdmissions(
         @RequestParam(required = false) String status,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+        // QA D800: honoured, never silently dropped.
+        @RequestParam(required = false) UUID patientId
     ) {
-        return ResponseEntity.ok(admissionService.getAllAdmissions(status, startDate, endDate));
+        return ResponseEntity.ok(admissionService.getAllAdmissions(status, startDate, endDate, patientId));
     }
 
     @GetMapping("/{admissionId}")
@@ -99,9 +106,16 @@ public class AdmissionController {
 
     @DeleteMapping("/{admissionId}/bed")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN')")
-    @Operation(summary = "Unassign the bed", description = "Detach the admission's bed and make it available again")
-    public ResponseEntity<AdmissionResponseDTO> unassignBed(@PathVariable UUID admissionId) {
-        return ResponseEntity.ok(admissionService.unassignBed(admissionId));
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "AdmissionServiceImpl.unassignBed audits the release with its reason (ADMISSION_BED_RELEASED, QA D1100)")
+    @Operation(summary = "Unassign the bed",
+        description = "Detach the admission's bed and make it available again. A reason is required (QA D1100).")
+    public ResponseEntity<AdmissionResponseDTO> unassignBed(
+        @PathVariable UUID admissionId,
+        @RequestBody(required = false) com.example.hms.payload.dto.BedReleaseRequestDTO request
+    ) {
+        String reason = request != null ? request.reason() : null;
+        return ResponseEntity.ok(admissionService.unassignBed(admissionId, reason));
     }
 
     @PostMapping("/{admissionId}/discharge")
@@ -116,9 +130,13 @@ public class AdmissionController {
 
     @DeleteMapping("/{admissionId}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
-    @Operation(summary = "Cancel admission", description = "Cancel a pending or active admission")
-    public ResponseEntity<Void> cancelAdmission(@PathVariable UUID admissionId) {
-        admissionService.cancelAdmission(admissionId);
+    @Operation(summary = "Cancel admission",
+        description = "Cancel a pending or active admission. A reason is required and kept on the admission (QA D1381).")
+    public ResponseEntity<Void> cancelAdmission(
+        @PathVariable UUID admissionId,
+        @RequestBody(required = false) com.example.hms.payload.dto.AdmissionCancelRequestDTO request
+    ) {
+        admissionService.cancelAdmission(admissionId, request != null ? request.reason() : null);
         return ResponseEntity.noContent().build();
     }
 
@@ -135,7 +153,8 @@ public class AdmissionController {
     public ResponseEntity<AdmissionResponseDTO> getCurrentAdmissionForPatient(@PathVariable UUID patientId) {
         AdmissionResponseDTO admission = admissionService.getCurrentAdmissionForPatient(patientId);
         if (admission == null) {
-            return ResponseEntity.notFound().build();
+            // QA D1082 class: no open stay is an answer (204), not a missing resource.
+            return ResponseEntity.noContent().build();
         }
         return ResponseEntity.ok(admission);
     }
@@ -184,7 +203,7 @@ public class AdmissionController {
     public ResponseEntity<Void> deactivateOrderSet(
         @PathVariable UUID orderSetId,
         @RequestParam String reason,
-        @RequestParam UUID deactivatedByStaffId
+        @RequestParam(required = false) UUID deactivatedByStaffId
     ) {
         admissionService.deactivateOrderSet(orderSetId, reason, deactivatedByStaffId);
         return ResponseEntity.noContent().build();

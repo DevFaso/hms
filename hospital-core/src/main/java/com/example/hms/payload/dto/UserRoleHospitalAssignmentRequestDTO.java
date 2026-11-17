@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
@@ -50,13 +51,14 @@ public class UserRoleHospitalAssignmentRequestDTO {
     @Schema(description = "Whether this assignment is active (default true if null)")
     private Boolean active;
 
-    @Schema(description = "User who is registering this assignment (auditing)")
+    @Schema(description = "Ignored: the registrar is always the authenticated caller", deprecated = true)
     private UUID registeredByUserId;
 
     @Schema(description = "Assignment start date (inclusive)")
     private LocalDate startDate;
 
     /** Bean Validation: exactly one of roleId or roleName must be present */
+    @com.example.hms.validation.ReportedOn("roleId")
     @AssertTrue(message = "{userRoleHospitalAssignment.role.required}")
     public boolean isExactlyOneRoleIdentifierPresent() {
         boolean hasId = roleId != null;
@@ -64,14 +66,37 @@ public class UserRoleHospitalAssignmentRequestDTO {
         return hasId ^ hasName;
     }
 
+    @com.example.hms.validation.ReportedOn("userIdentifier")
     @AssertTrue(message = "{userRoleHospitalAssignment.user.required}")
     public boolean isUserIdentifierValid() {
         return userId != null || (userIdentifier != null && !userIdentifier.isBlank());
     }
 
+    @com.example.hms.validation.ReportedOn("hospitalId")
     @AssertTrue(message = "{userRoleHospitalAssignment.hospital.required}")
     public boolean isHospitalIdentifierValid() {
     // Relaxed: allow omission entirely; service layer will enforce requirement based on role.
     return true;
     }
+
+    /**
+     * Server-side only, never bound from JSON: true when the account-creation
+     * welcome mail already carries this assignment's confirmation code, so
+     * the separate role-assignment e-mail is not sent (one mail per new user).
+     * SMS notifications are unaffected.
+     */
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean welcomeMailCarriesCode;
+
+    /**
+     * #1136 follow-up (QA r46): an account created on account creation for someone who can take no invitation -
+     * the newborn a recorded delivery registers has no phone, no e-mail and nobody to activate it. No activation
+     * message goes out and no registrar or hospital "new registration" SMS: reception finds the baby in the patient
+     * list (an in-basket item is filed only when a registration FAILS). Internal only, never read from a request
+     * body.
+     */
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean noInvitation;
 }

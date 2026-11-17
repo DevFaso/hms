@@ -18,16 +18,26 @@ public class LabSpecimenResponseDTO {
 
     private UUID id;
     private UUID labOrderId;
+    /** QA D429: the order's patient, so the write audit can name it. */
+    private UUID patientId;
     private String accessionNumber;
     private String barcodeValue;
     private String specimenType;
     private LocalDateTime collectedAt;
     private UUID collectedById;
+    /** Lab requests drawer timeline: who collected it (set on the per-order specimen list). */
+    private String collectedByName;
     private LocalDateTime receivedAt;
     private UUID receivedById;
+    /** Lab requests drawer timeline: who received it in the laboratory (per-order specimen list). */
+    private String receivedByName;
     private String currentLocation;
     private String status;
     private String notes;
+    /** QA D962: set when the specimen was rejected. */
+    private String rejectionReason;
+    private LocalDateTime rejectedAt;
+    private UUID rejectedById;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

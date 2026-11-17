@@ -83,13 +83,10 @@ public class LabResultEntryGuard {
         // permission change — and a ward that cannot tell those apart assumes
         // the system is broken.
         if (bedsideRole) {
-            throw new UnauthorizedAccessException(
-                "Only laboratory staff may enter a result for "
-                    + (test != null ? test.getName() : "this test")
-                    + ". If this test is performed at the bedside, ask an administrator "
-                    + "to mark it as point-of-care.");
+            throw new UnauthorizedAccessException("lab.result.entryLabStaffOnly",
+                test != null && test.getName() != null ? test.getName() : "-");
         }
-        throw new UnauthorizedAccessException("You may not enter laboratory results.");
+        throw new UnauthorizedAccessException("lab.result.entryForbidden");
     }
 
     private Set<String> currentAuthorities() {

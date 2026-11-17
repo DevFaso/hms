@@ -1,6 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { map, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
+
+import { allRows, PageSlice } from '../shared/all-pages';
 
 export interface StaffResponse {
   id: string;
@@ -16,6 +18,8 @@ export interface StaffResponse {
   departmentName?: string;
   departmentEmail?: string;
   departmentPhoneNumber?: string;
+  /** The staff member's role assignment at this hospital (QA D872). */
+  assignmentId?: string;
   roleCode?: string;
   roleName?: string;
   jobTitle?: string;
@@ -56,18 +60,54 @@ export interface PagedResponse<T> {
   size: number;
 }
 
+/**
+ * Role codes whose holders may write a prescription and see patients as the
+ * accountable provider. Mirrors hospital-core's RoleValidator.canCreatePrescription
+ * (doctor, physician, surgeon, nurse, midwife) — the server refuses any other
+ * prescriber, so a picker must not offer an admin or a receptionist.
+ */
+export const CLINICAL_PROVIDER_ROLE_CODES: readonly string[] = [
+  'DOCTOR',
+  'PHYSICIAN',
+  'SURGEON',
+  'NURSE',
+  'MIDWIFE',
+];
+
+/**
+ * Role codes the server accepts as admitting, attending or discharging
+ * provider: physicians only (AdmissionServiceImpl.requirePhysician, QA D84 and
+ * D176). A nurse or a midwife is refused, so a picker must not offer one.
+ */
+export const PHYSICIAN_ROLE_CODES: readonly string[] = ['DOCTOR', 'PHYSICIAN', 'SURGEON'];
+
+/** True when the staff member's assignment role is a physician's. */
+export function isPhysician(staff: Pick<StaffResponse, 'roleCode'>): boolean {
+  const code = (staff.roleCode ?? '').toUpperCase().replace(/^ROLE_/, '');
+  return PHYSICIAN_ROLE_CODES.includes(code);
+}
+
+/** True when the staff member's assignment role is a clinical provider role. */
+export function isClinicalProvider(staff: Pick<StaffResponse, 'roleCode'>): boolean {
+  const code = (staff.roleCode ?? '').toUpperCase().replace(/^ROLE_/, '');
+  return CLINICAL_PROVIDER_ROLE_CODES.includes(code);
+}
+
 @Injectable({ providedIn: 'root' })
 export class StaffService {
   private readonly http = inject(HttpClient);
 
   list(hospitalId?: string): Observable<StaffResponse[]> {
     if (hospitalId) {
-      // Use the hospital-scoped active endpoint which filters correctly
-      return this.http
-        .get<{ content: StaffResponse[] }>(`/staff/hospital/${hospitalId}/active`, {
-          params: new HttpParams().set('size', '200'),
-        })
-        .pipe(map((page) => page.content ?? []));
+      // Use the hospital-scoped active endpoint which filters correctly.
+      // QA D1347: every active staff member (all pages), not the first 200 —
+      // the pickers built on this list could not offer the 201st.
+      return allRows((page, size) =>
+        this.http.get<PageSlice<StaffResponse>>(`/staff/hospital/${hospitalId}/active`, {
+          // A total order, so no row repeats or falls between two pages.
+          params: new HttpParams().set('page', page).set('size', size).set('sort', 'id'),
+        }),
+      );
     }
     return this.http.get<StaffResponse[]>('/staff');
   }

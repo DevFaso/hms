@@ -12,6 +12,7 @@ import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { roleContextStub } from '../../testing/role-context.stub';
 import { AuthService } from '../../auth/auth.service';
+import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 
 /**
  * B6 — the chart's Labs section. Wave 1 shipped the release ceremony; until
@@ -91,6 +92,8 @@ describe('PatientChartComponent — labs section', () => {
     orders?: LabOrderResponse[];
     resultsFail?: boolean;
     ordersFail?: boolean;
+    /** QA D504 — every chart list answers with X-Records-Withheld. */
+    withheld?: boolean;
   }
 
   function setup(options: SetupOptions = {}): void {
@@ -103,13 +106,16 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    const withheld = options.withheld ?? false;
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld }),
+    );
     patientService.listLabResults.and.returnValue(
       options.resultsFail
         ? throwError(() => new Error('403'))
-        : of(options.results ?? [released()]),
+        : of({ items: options.results ?? [released()], withheld }),
     );
 
     labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
@@ -164,6 +170,46 @@ describe('PatientChartComponent — labs section', () => {
       .map((el) => el.textContent?.trim() ?? '')
       .filter((label) => label.length > 0);
   }
+
+  /* ── QA D504: an opt-out never makes a section read as the whole record ── */
+
+  function note(testId: string): Element | null {
+    return fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
+  }
+
+  it('QA D504: problems, chart updates and labs each say the list is incomplete when rows are withheld', () => {
+    setup({ withheld: true });
+
+    component.setSection('problems');
+    component.loadProblems();
+    fixture.detectChanges();
+    expect(note('problems-withheld')).not.toBeNull();
+
+    component.setSection('updates');
+    component.loadUpdates();
+    fixture.detectChanges();
+    expect(note('updates-withheld')).not.toBeNull();
+
+    openLabs();
+    expect(note('labs-withheld')).not.toBeNull();
+  });
+
+  it('QA D504: a complete list shows no withheld note', () => {
+    setup();
+
+    component.setSection('problems');
+    component.loadProblems();
+    fixture.detectChanges();
+    expect(note('problems-withheld')).toBeNull();
+
+    component.setSection('updates');
+    component.loadUpdates();
+    fixture.detectChanges();
+    expect(note('updates-withheld')).toBeNull();
+
+    openLabs();
+    expect(note('labs-withheld')).toBeNull();
+  });
 
   /* ── The gate ── */
 
@@ -229,14 +275,37 @@ describe('PatientChartComponent — labs section', () => {
   /* ── Rendering ── */
 
   it('renders a released result with its value, unit and reference range', () => {
-    setup({ roles: ['ROLE_DOCTOR'], results: [released()] });
+    // QA D1106 (round 19): in the reader's notation — "9,2" and "12 – 16 g/dL"
+    // in French (this assertion read the raw "9.2" / "12 - 16 g/dL" before).
+    const previousLang = localStorage.getItem('lang');
+    localStorage.setItem('lang', 'fr');
+    resetStoredLangForTests();
+    try {
+      setup({ roles: ['ROLE_DOCTOR'], results: [released({ referenceRange: '12 - 15.5 g/dL' })] });
+      openLabs();
+
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('9,2');
+      expect(text).toContain('g/dL');
+      expect(text).toContain('12 – 15,5 g/dL');
+      expect(text).not.toContain('9.2');
+      expect(text).toContain('CHART.LAB_STATUS_ABNORMAL_LOW');
+    } finally {
+      if (previousLang === null) localStorage.removeItem('lang');
+      else localStorage.setItem('lang', previousLang);
+      resetStoredLangForTests();
+    }
+  });
+
+  it('separates the value, its unit and the correction badge with real spaces (round 19)', () => {
+    // Angular drops whitespace-only text between elements: the cell read
+    // "9,2g/dLCorrigé" before the spaces became text.
+    setup({ roles: ['ROLE_DOCTOR'], results: [released({ corrected: true })] });
     openLabs();
 
-    const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('9.2');
-    expect(text).toContain('g/dL');
-    expect(text).toContain('12 - 16 g/dL');
-    expect(text).toContain('CHART.LAB_STATUS_ABNORMAL_LOW');
+    const cell = (fixture.nativeElement.querySelector('.lab-value') as HTMLElement).closest('td')!;
+    const text = (cell.textContent ?? '').replaceAll(/\s+/g, ' ').trim();
+    expect(text).toMatch(/^9[.,]2 g\/dL LAB_RESULTS\.CORRECTED$/);
   });
 
   it('renders an unreleased row as pending, with no value and no abnormal colouring', () => {
@@ -266,13 +335,33 @@ describe('PatientChartComponent — labs section', () => {
     );
   });
 
+  it('labels a released row no range in its unit could grade "not graded: units differ", never Normal', () => {
+    const ungraded = released({ status: 'NORMAL', referenceRange: undefined, unitMismatch: true });
+    setup({ roles: ['ROLE_DOCTOR'], results: [ungraded] });
+    openLabs();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('CHART.LAB_STATUS_NOT_GRADED_UNITS');
+    expect(text).not.toContain('CHART.LAB_STATUS_NORMAL');
+    expect(fixture.nativeElement.querySelector('.lab-ungraded')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.lab-normal')).toBeNull();
+  });
+
+  it('keeps an abnormal flag the analyser recorded on a row whose units differ', () => {
+    const flagged = released({ status: 'ABNORMAL_HIGH', unitMismatch: true });
+
+    setup({ roles: ['ROLE_DOCTOR'], results: [flagged] });
+    expect(component.labStatusKey(flagged)).toBe('CHART.LAB_STATUS_ABNORMAL_HIGH');
+    expect(component.labStatusClass(flagged)).toBe('lab-badge lab-abnormal');
+  });
+
   it('renders the order status through the labOrderStatus enum vocabulary', () => {
     setup({ roles: ['ROLE_DOCTOR'], orders: [order({ status: 'RESULTED' })] });
     openLabs();
 
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('LAB-0001');
-    expect(text).toContain('Resulted');
+    expect(text).toContain('Awaiting validation');
   });
 
   it('says the orders block is scoped to this hospital, because the results block is not', () => {
@@ -351,10 +440,12 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
     labService.listOrders.and.returnValue(of([order()]));
 
@@ -409,6 +500,143 @@ describe('PatientChartComponent — labs section', () => {
     });
   });
 
+  it('refuses to read the labs with no hospital scope, and says so', () => {
+    // Unscoped, both reads go out with no hospitalId and no X-Hospital-Id:
+    // every tenant's rows, past readableHospitalIds, with no reach row
+    // written. The section points at the chip instead.
+    const state = {
+      superAdmin: true,
+      hospitalId: null as string | null,
+      roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
+    };
+    patientService = jasmine.createSpyObj<PatientService>('PatientService', [
+      'getDoctorTimeline',
+      'listAllergies',
+      'listDiagnoses',
+      'listChartUpdates',
+      'listLabResults',
+    ]);
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
+    labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
+    labService.listOrders.and.returnValue(of([order()]));
+
+    TestBed.configureTestingModule({
+      imports: [PatientChartComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PatientService, useValue: patientService },
+        { provide: LabService, useValue: labService },
+        { provide: RoleContextService, useValue: roleContextStub(state) },
+        {
+          provide: AuthService,
+          useValue: {
+            isAuthenticated: () => true,
+            getRoles: () => state.roles,
+            getHospitalId: () => null,
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(PatientChartComponent);
+    component = fixture.componentInstance;
+    component.patientId = 'p-1';
+    fixture.detectChanges();
+
+    openLabs();
+
+    expect(component.labsScoped()).toBeFalse();
+    expect(patientService.listLabResults).not.toHaveBeenCalled();
+    expect(labService.listOrders).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('[data-testid="labs-no-hospital"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.data-table')).toBeNull();
+  });
+
+  it('reads as soon as a hospital is picked, having refused while there was none', () => {
+    // The REAL service: the recovery runs through labScopeWatcher, an effect
+    // over its signals, which the stub's plain accessors cannot drive. Without
+    // this the Labs tab could stay on the hint for ever after a pick and the
+    // suite would not notice.
+    patientService = jasmine.createSpyObj<PatientService>('PatientService', [
+      'getDoctorTimeline',
+      'listAllergies',
+      'listDiagnoses',
+      'listChartUpdates',
+      'listLabResults',
+    ]);
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
+    labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
+    labService.listOrders.and.returnValue(of([order()]));
+
+    TestBed.configureTestingModule({
+      imports: [PatientChartComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PatientService, useValue: patientService },
+        { provide: LabService, useValue: labService },
+        {
+          provide: AuthService,
+          useValue: {
+            isAuthenticated: () => true,
+            getRoles: () => ['ROLE_DOCTOR'],
+            getHospitalId: () => null,
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+      ],
+    });
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setRoles(['ROLE_DOCTOR']);
+    roleContext.activeHospitalId = null;
+
+    fixture = TestBed.createComponent(PatientChartComponent);
+    component = fixture.componentInstance;
+    component.patientId = 'p-1';
+    fixture.detectChanges();
+
+    openLabs();
+    expect(component.labsScoped()).toBeFalse();
+    expect(patientService.listLabResults).not.toHaveBeenCalled();
+    expect(labService.listOrders).not.toHaveBeenCalled();
+
+    roleContext.activeHospitalId = 'h-1';
+    fixture.detectChanges();
+
+    expect(component.labsScoped()).toBeTrue();
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
+    expect(labService.listOrders).toHaveBeenCalledTimes(1);
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
+  });
+
   /* ── Empty and error states ── */
 
   it('renders the empty state for both blocks when the patient has no labs', () => {
@@ -445,7 +673,8 @@ describe('PatientChartComponent — labs section', () => {
   it('keeps the rows on screen when a refresh over them fails', () => {
     setup({ roles: ['ROLE_DOCTOR'], results: [released()], orders: [order()] });
     openLabs();
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
 
     patientService.listLabResults.and.returnValue(throwError(() => new Error('502')));
     component.loadLabResults();
@@ -454,7 +683,8 @@ describe('PatientChartComponent — labs section', () => {
     // The rows the clinician was reading are still drawn, with the failure
     // stated above them rather than replacing them.
     expect(component.labResultsError()).toBeTrue();
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
     expect(fixture.nativeElement.querySelector('.stale-banner')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.error-state')).toBeNull();
   });
@@ -465,7 +695,7 @@ describe('PatientChartComponent — labs section', () => {
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
 
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     component.loadLabResults();
     fixture.detectChanges();
 
@@ -474,13 +704,14 @@ describe('PatientChartComponent — labs section', () => {
     // replaced by a spinner.
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
     expect(component.labResultsError()).toBeFalse();
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
   });
 
   it('re-reads BOTH blocks when Retry is pressed after the scope moved', () => {
     // Otherwise the retried block renders the new hospital's rows directly
     // above the other block's rows from the old one, under one heading.
-    const state = { superAdmin: false, hospitalId: 'h-1' as string | null, roles: ['ROLE_DOCTOR'] };
+    const scope = roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles: ['ROLE_DOCTOR'] });
     patientService = jasmine.createSpyObj<PatientService>('PatientService', [
       'getDoctorTimeline',
       'listAllergies',
@@ -488,9 +719,11 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
     patientService.listLabResults.and.returnValue(throwError(() => new Error('500')));
     labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
     labService.listOrders.and.returnValue(of([order()]));
@@ -503,13 +736,13 @@ describe('PatientChartComponent — labs section', () => {
         provideHttpClientTesting(),
         { provide: PatientService, useValue: patientService },
         { provide: LabService, useValue: labService },
-        { provide: RoleContextService, useValue: roleContextStub(state) },
+        { provide: RoleContextService, useValue: scope },
         {
           provide: AuthService,
           useValue: {
             isAuthenticated: () => true,
-            getRoles: () => state.roles,
-            getHospitalId: () => state.hospitalId,
+            getRoles: () => scope.activeRoles,
+            getHospitalId: () => scope.effectiveHospitalIdForRequest(),
           },
         },
         {
@@ -530,10 +763,12 @@ describe('PatientChartComponent — labs section', () => {
     openLabs();
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
 
-    state.hospitalId = 'h-2';
-    patientService.listLabResults.and.returnValue(of([released()]));
+    scope.set({ hospitalId: 'h-2' });
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
+    // Retry lands before change detection lets the scope watcher run: this
+    // pins Retry's own guard. (Once the watcher runs it re-reads the section
+    // for the new scope as well — that path has its own test below.)
     component.loadLabResults();
-    fixture.detectChanges();
 
     // Both blocks re-read, under the new scope.
     expect(labService.listOrders).toHaveBeenCalledTimes(2);
@@ -550,12 +785,13 @@ describe('PatientChartComponent — labs section', () => {
     openLabs();
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
 
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     component.setSection('allergies');
     openLabs();
 
     expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
   });
 
   it('keeps looking for results even when the ORDERS read failed', () => {
@@ -567,12 +803,13 @@ describe('PatientChartComponent — labs section', () => {
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
     expect(component.labOrdersError()).toBeTrue();
 
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     component.setSection('allergies');
     openLabs();
 
     expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
     // The failed block keeps its error card and is NOT retried silently.
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
     expect(fixture.nativeElement.textContent).toContain('CHART.LAB_ORDERS_LOAD_ERROR');
@@ -607,7 +844,7 @@ describe('PatientChartComponent — labs section', () => {
     // Both lab reads are scoped, so rows from the previous scope must not
     // survive the change. The key is hospitalId() — the same value the
     // results request sends — not a "have we loaded" boolean.
-    const state = { superAdmin: false, hospitalId: 'h-1' as string | null, roles: ['ROLE_DOCTOR'] };
+    const scope = roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles: ['ROLE_DOCTOR'] });
     patientService = jasmine.createSpyObj<PatientService>('PatientService', [
       'getDoctorTimeline',
       'listAllergies',
@@ -615,10 +852,12 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
     labService.listOrders.and.returnValue(of([order()]));
 
@@ -630,13 +869,13 @@ describe('PatientChartComponent — labs section', () => {
         provideHttpClientTesting(),
         { provide: PatientService, useValue: patientService },
         { provide: LabService, useValue: labService },
-        { provide: RoleContextService, useValue: roleContextStub(state) },
+        { provide: RoleContextService, useValue: scope },
         {
           provide: AuthService,
           useValue: {
             isAuthenticated: () => true,
-            getRoles: () => state.roles,
-            getHospitalId: () => state.hospitalId,
+            getRoles: () => scope.activeRoles,
+            getHospitalId: () => scope.effectiveHospitalIdForRequest(),
           },
         },
         {
@@ -657,8 +896,12 @@ describe('PatientChartComponent — labs section', () => {
     openLabs();
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
 
-    state.hospitalId = 'h-2';
+    // The chip moves while another section is on screen; change detection
+    // runs the scope watcher, which drops the cached rows without re-reading.
     component.setSection('allergies');
+    scope.set({ hospitalId: 'h-2' });
+    fixture.detectChanges();
+    expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
     openLabs();
 
     expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
@@ -666,5 +909,17 @@ describe('PatientChartComponent — labs section', () => {
       hospitalId: 'h-2',
       limit: 25,
     });
+  });
+  it('QA D1016 (round 18): the chart Labs table marks a corrected released value, and only that one', () => {
+    setup({
+      results: [released({ id: 'r-c', corrected: true }), released({ id: 'r-n', testName: 'NFS' })],
+    });
+    openLabs();
+    const rows = Array.from(
+      fixture.nativeElement.querySelectorAll('tbody tr') as NodeListOf<HTMLElement>,
+    ).filter((tr) => tr.querySelector('.lab-value'));
+    expect(rows.length).toBe(2);
+    expect(rows[0].querySelector('[data-testid="lab-correction-badge"]')).not.toBeNull();
+    expect(rows[1].querySelector('[data-testid="lab-correction-badge"]')).toBeNull();
   });
 });

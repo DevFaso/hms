@@ -1,14 +1,15 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable } from 'rxjs';
 
 /*
  * Billing invoices — /billing-invoices (+ /invoice-items). Bare DTOs and
  * Spring Pages, no wrapper. Search is POST body filters + query-string
  * paging; for non-super-admins the server overwrites any hospitalId filter
  * with the caller's active hospital. DELETE returns text/plain, not JSON.
- * Payment recording forwards only the amount — method/reference/notes are
- * discarded server-side. Email is synchronous and flips status to SENT.
+ * Payment recording sends the method and the reference (QA D146); patient
+ * declarations arrive PENDING and count only once a cashier confirms them
+ * (QA D140); a confirmed payment is reversed with a reason (QA D142). Email is synchronous and flips status to SENT.
  * (The old RECEPTIONIST-payment 403 is fixed: the POST matcher now includes
  * RECEPTIONIST and the per-endpoint @PreAuthorize stays the precise gate.)
  */
@@ -25,6 +26,7 @@ export const INVOICE_STATUSES: InvoiceStatus[] = [
 
 export interface BillingInvoiceResponse {
   id: string;
+  patientId?: string;
   patientFullName: string;
   patientName: string;
   patientEmail: string;
@@ -32,7 +34,7 @@ export interface BillingInvoiceResponse {
   hospitalName: string;
   hospitalCode: string;
   hospitalAddress: string;
-  encounterDescription: string;
+  encounterCode?: string;
   encounterType: string;
   encounterStatus: string;
   encounterDate: string;
@@ -44,12 +46,21 @@ export interface BillingInvoiceResponse {
   totalAmount: number;
   amountPaid: number;
   balanceDue: number;
+  /** QA D1466: paid above the total (a copay above the visit total), owed back to the patient. */
+  refundDue?: number;
   insuranceCoverageAmount: number;
   patientResponsibilityAmount: number;
   status: InvoiceStatus;
   notes: string;
+  /** QA D1069: why and when (server time) a cancelled invoice was cancelled. */
+  cancelReason?: string | null;
+  cancelledAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** QA D428: the visit invoice a folded check-in copay was credited to. */
+  creditedToInvoiceNumber?: string | null;
+  /** QA D936: a copay taken at check-in; credited to the visit invoice once one is issued. */
+  checkInCopay?: boolean;
 }
 
 export interface InvoiceItemResponse {
@@ -60,19 +71,127 @@ export interface InvoiceItemResponse {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  staffDisplay?: string;
 }
 
+/** Backend ItemCategory. */
+export type InvoiceItemCategory = 'SERVICE' | 'MEDICATION' | 'LAB_TEST' | 'GENERAL';
+export const INVOICE_ITEM_CATEGORIES: InvoiceItemCategory[] = [
+  'SERVICE',
+  'MEDICATION',
+  'LAB_TEST',
+  'GENERAL',
+];
+
+export interface InvoiceItemRequest {
+  billingInvoiceId: string;
+  itemDescription: string;
+  itemCategory: InvoiceItemCategory;
+  quantity: number;
+  unitPrice: number;
+}
+
+/**
+ * The server numbers the invoice (per hospital), writes it at the caller's
+ * acting hospital, and never takes the amount paid from this form: it moves
+ * only through recorded payments. With lines, the total is their sum.
+ */
 export interface BillingInvoiceRequest {
-  patientEmail: string;
-  hospitalName: string;
+  /** The picked patient (phone-only patients included). */
+  patientId: string;
   encounterReference?: string;
-  invoiceNumber: string;
   invoiceDate: string;
   dueDate: string;
+  /** The amount of an invoice with no lines; ignored once it has lines. */
   totalAmount: number;
-  amountPaid: number;
+  /** DRAFT, SENT or CANCELLED; paid statuses follow payments. */
   status: InvoiceStatus;
   notes?: string;
+  /** QA D1069: why an issued invoice is cancelled; required by the server for that move. */
+  cancelReason?: string;
+  /** Idempotency key, one per create form: a double submit is one invoice. */
+  clientRequestId?: string;
+  /**
+   * QA D529: confirms a deliberate second invoice for a visit or stay that
+   * already has one (the server answers 409 otherwise).
+   */
+  supplementary?: boolean;
+  /**
+   * QA D1467: the clerk saw the lines at 0 F CFA and issues them as they are
+   * (the server refuses on this field otherwise, naming them).
+   */
+  confirmUnpricedLines?: boolean;
+}
+
+/**
+ * Backend PaymentMethod values the staff modal offers. QA D1611 (round 44):
+ * never INSURANCE: an insurer's share is claimed from the payer, not money
+ * received, and no till creates that claim yet (the server refuses it,
+ * `billing.payment.insuranceNotAPayment`). Rows recorded before still read
+ * through `BILLING.PAYMENT_METHODS.INSURANCE`.
+ */
+export type StaffPaymentMethod =
+  'CASH' | 'MOBILE_MONEY' | 'CARD' | 'BANK_TRANSFER' | 'CHECK' | 'OTHER';
+export const STAFF_PAYMENT_METHODS: StaffPaymentMethod[] = [
+  'CASH',
+  'MOBILE_MONEY',
+  'CARD',
+  'BANK_TRANSFER',
+  'CHECK',
+  'OTHER',
+];
+
+export interface StaffPaymentRequest {
+  amount: number;
+  method: StaffPaymentMethod;
+  reference?: string;
+  notes?: string;
+}
+
+export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED';
+
+/** One ledger row of an invoice (PaymentTransactionResponseDTO). */
+export interface PaymentRow {
+  id: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  referenceNumber?: string | null;
+  notes?: string | null;
+  status: PaymentStatus;
+  reversalReason?: string | null;
+  reversedAt?: string | null;
+  createdAt?: string | null;
+}
+
+/** QA D974: how an issued invoice was lowered. */
+export type InvoiceAdjustmentType = 'DISCOUNT' | 'WAIVER' | 'CREDIT_NOTE';
+export const INVOICE_ADJUSTMENT_TYPES: InvoiceAdjustmentType[] = [
+  'DISCOUNT',
+  'WAIVER',
+  'CREDIT_NOTE',
+];
+
+export interface InvoiceAdjustmentRequest {
+  type: InvoiceAdjustmentType;
+  /** Whole francs; may be left out for a credit note (the line's remainder). */
+  amount?: number | null;
+  reason: string;
+  invoiceItemId?: string | null;
+}
+
+export interface InvoiceAdjustmentRow {
+  id: string;
+  type: InvoiceAdjustmentType;
+  amount: number;
+  reason: string;
+  invoiceItemId?: string | null;
+  invoiceItemDescription?: string | null;
+  createdAt?: string | null;
+  /** QA D1105: when the adjustment was reversed; null while it stands. */
+  reversedAt?: string | null;
+  /** QA D1105: why it was reversed (billing staff only). */
+  reversalReason?: string | null;
 }
 
 export interface InvoiceSearchFilters {
@@ -80,6 +199,41 @@ export interface InvoiceSearchFilters {
   statuses?: InvoiceStatus[];
   fromDate?: string;
   toDate?: string;
+  /** QA D203: matched server-side against the invoice number and the patient's name. */
+  query?: string;
+}
+
+/** QA D209: the billing KPIs over every invoice in scope, not one page. */
+export interface BillingSummary {
+  total: number;
+  paid: number;
+  outstanding: number;
+  overdue: number;
+  totalRevenue: number;
+  balance: number;
+}
+
+/** QA D1059: one cashier's money received on one day (BillingInvoiceService.cashClosing). */
+export interface CashClosing {
+  date: string;
+  cashierId?: string;
+  cashierName?: string | null;
+  byMethod: { source: 'BILLING' | 'PHARMACY'; method: string; count: number; amount: number }[];
+  entries: {
+    id: string;
+    source: 'BILLING' | 'PHARMACY';
+    receivedAt?: string | null;
+    document?: string | null;
+    patientName?: string | null;
+    method?: string | null;
+    reference?: string | null;
+    amount: number;
+    status: string;
+  }[];
+  receivedCount: number;
+  receivedAmount: number;
+  reversedCount: number;
+  reversedAmount: number;
 }
 
 export interface InvoicePage {
@@ -103,39 +257,28 @@ export class BillingService {
     if (filters.statuses?.length) body['statuses'] = filters.statuses;
     if (filters.fromDate) body['fromDate'] = filters.fromDate;
     if (filters.toDate) body['toDate'] = filters.toDate;
+    const query = filters.query?.trim();
+    if (query) body['query'] = query;
     return this.http.post<InvoicePage>('/billing-invoices/search', body, { params });
+  }
+
+  /** QA D1059: the KPIs over the invoices dated in the list's date filter (either bound optional). */
+  getSummary(range?: { fromDate?: string; toDate?: string }): Observable<BillingSummary> {
+    let params = new HttpParams();
+    if (range?.fromDate) params = params.set('fromDate', range.fromDate);
+    if (range?.toDate) params = params.set('toDate', range.toDate);
+    return this.http.get<BillingSummary>('/billing-invoices/summary', { params });
+  }
+
+  /** QA D1059: the signed-in cashier's daily cash closing (today when no date). */
+  getCashClosing(date?: string): Observable<CashClosing> {
+    let params = new HttpParams();
+    if (date) params = params.set('date', date);
+    return this.http.get<CashClosing>('/billing-invoices/cash-closing', { params });
   }
 
   getInvoice(id: string): Observable<BillingInvoiceResponse> {
     return this.http.get<BillingInvoiceResponse>(`/billing-invoices/${id}`);
-  }
-
-  getInvoicesByPatient(
-    patientId: string,
-    params?: { page?: number; size?: number },
-  ): Observable<BillingInvoiceResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.page !== undefined) httpParams = httpParams.set('page', String(params.page));
-    if (params?.size !== undefined) httpParams = httpParams.set('size', String(params.size));
-    return this.http
-      .get<{
-        content: BillingInvoiceResponse[];
-      }>(`/billing-invoices/patient/${patientId}`, { params: httpParams })
-      .pipe(map((res) => res?.content ?? []));
-  }
-
-  getInvoicesByHospital(
-    hospitalId: string,
-    params?: { page?: number; size?: number },
-  ): Observable<BillingInvoiceResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.page !== undefined) httpParams = httpParams.set('page', String(params.page));
-    if (params?.size !== undefined) httpParams = httpParams.set('size', String(params.size));
-    return this.http
-      .get<{
-        content: BillingInvoiceResponse[];
-      }>(`/billing-invoices/hospital/${hospitalId}`, { params: httpParams })
-      .pipe(map((res) => res?.content ?? []));
   }
 
   /** Server-side "overdue" = SENT/PARTIALLY_PAID with dueDate before the
@@ -146,12 +289,30 @@ export class BillingService {
     return this.http.get<BillingInvoiceResponse[]>('/billing-invoices/overdue', { params });
   }
 
-  getInvoicePdf(id: string): Observable<Blob> {
-    return this.http.get(`/billing-invoices/${id}/pdf`, { responseType: 'blob' });
+  /** QA D1009: the whole response, so the file keeps the name the server gives it. */
+  getInvoicePdf(id: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(`/billing-invoices/${id}/pdf`, {
+      responseType: 'blob',
+      observe: 'response',
+    });
   }
 
   getInvoiceItems(invoiceId: string): Observable<InvoiceItemResponse[]> {
     return this.http.get<InvoiceItemResponse[]>(`/invoice-items/invoice/${invoiceId}`);
+  }
+
+  createInvoiceItem(req: InvoiceItemRequest): Observable<InvoiceItemResponse> {
+    return this.http.post<InvoiceItemResponse>('/invoice-items', req);
+  }
+
+  /** The backend answers text/plain, so parse as text. */
+  /** QA D1088: a draft line is corrected in place (its price above all); it keeps its id and its links. */
+  updateInvoiceItem(id: string, req: InvoiceItemRequest): Observable<InvoiceItemResponse> {
+    return this.http.put<InvoiceItemResponse>(`/invoice-items/${id}`, req);
+  }
+
+  deleteInvoiceItem(id: string): Observable<string> {
+    return this.http.delete(`/invoice-items/${id}`, { responseType: 'text' });
   }
 
   createInvoice(req: BillingInvoiceRequest): Observable<BillingInvoiceResponse> {
@@ -168,11 +329,86 @@ export class BillingService {
     return this.http.delete(`/billing-invoices/${id}`, { responseType: 'text' });
   }
 
-  /** Backend rejects payments on DRAFT/CANCELLED/PAID invoices and amounts
-   *  above the balance due (400 with a message). Only amount is persisted. */
-  recordPayment(invoiceId: string, amount: number): Observable<BillingInvoiceResponse> {
-    return this.http.post<BillingInvoiceResponse>(`/billing-invoices/${invoiceId}/payments`, {
-      amount,
+  /** Backend rejects payments on DRAFT/CANCELLED/PAID invoices, amounts
+   *  above the balance due and fractional francs (400 with a message). */
+  recordPayment(
+    invoiceId: string,
+    payment: StaffPaymentRequest,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/payments`,
+      payment,
+    );
+  }
+
+  listPayments(invoiceId: string): Observable<PaymentRow[]> {
+    return this.http.get<PaymentRow[]>(`/billing-invoices/${invoiceId}/payments`);
+  }
+
+  confirmPayment(invoiceId: string, paymentId: string): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/payments/${paymentId}/confirm`,
+      {},
+    );
+  }
+
+  rejectPayment(
+    invoiceId: string,
+    paymentId: string,
+    reason: string,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/payments/${paymentId}/reject`,
+      { reason },
+    );
+  }
+
+  reversePayment(
+    invoiceId: string,
+    paymentId: string,
+    reason: string,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/payments/${paymentId}/reverse`,
+      { reason },
+    );
+  }
+
+  /**
+   * QA D1105: undo a mistaken discount, waiver or credit note, with a reason;
+   * the money already received (a folded check-in copay) stays recorded.
+   */
+  reverseAdjustment(
+    invoiceId: string,
+    adjustmentId: string,
+    reason: string,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/adjustments/${adjustmentId}/reverse`,
+      { reason },
+    );
+  }
+
+  /** QA D974: discount, waive or credit part of an issued invoice, with a reason. */
+  addAdjustment(
+    invoiceId: string,
+    req: InvoiceAdjustmentRequest,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/adjustments`,
+      req,
+    );
+  }
+
+  listAdjustments(invoiceId: string): Observable<InvoiceAdjustmentRow[]> {
+    return this.http.get<InvoiceAdjustmentRow[]>(`/billing-invoices/${invoiceId}/adjustments`);
+  }
+
+  /** QA D1009: each receipt has its own number ("…-R2"), carried in Content-Disposition. */
+  getReceiptPdf(invoiceId: string, paymentId: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(`/billing-invoices/${invoiceId}/payments/${paymentId}/receipt`, {
+      responseType: 'blob',
+      observe: 'response',
     });
   }
 

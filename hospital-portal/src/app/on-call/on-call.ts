@@ -1,14 +1,19 @@
 import {
   Component,
+  DestroyRef,
+  ElementRef,
   OnInit,
   computed,
   inject,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 import {
   DepartmentOption,
@@ -19,12 +24,12 @@ import {
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, finalize, takeUntil } from 'rxjs';
-import { ActivatedRoute } from '@angular/router';
-import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { finalize } from 'rxjs';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { nowLocalDatetime } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** Form model: datetime-local strings, converted to ISO with offset on submit. */
 interface OnCallFormModel {
   staffId: string;
@@ -43,32 +48,61 @@ interface OnCallFormModel {
  * HOSPITAL_ADMIN / SUPER_ADMIN only (mirroring the backend split), so the
  * write controls are gated in-component rather than at the route.
  */
+/**
+ * OnCallScheduleServiceImpl.ON_CALL_JOB_TITLES: the clinical titles the server
+ * rosters. Offering anyone else (or an inactive account) only produced a 400
+ * on save (D242).
+ */
+/** The shift dialog's inputs its submit may refuse. */
+const ON_CALL_FIELD_IDS = ['oncall-staff', 'oncall-start', 'oncall-end'];
+
+const ON_CALL_JOB_TITLES: ReadonlySet<string> = new Set([
+  'DOCTOR',
+  'PHYSICIAN',
+  'SURGEON',
+  'ANESTHESIOLOGIST',
+  'RADIOLOGIST',
+  'NURSE',
+  'NURSE_PRACTITIONER',
+  'MIDWIFE',
+  'PHARMACIST',
+  'LAB_TECHNICIAN',
+  'LAB_SCIENTIST',
+  'LABORATORY_SCIENTIST',
+  'LAB_DIRECTOR',
+  'TECHNICIAN',
+  'PHYSIOTHERAPIST',
+  'PSYCHOLOGIST',
+]);
+
+export function isRosterable(staff: StaffResponse): boolean {
+  return staff.active !== false && !!staff.jobTitle && ON_CALL_JOB_TITLES.has(staff.jobTitle);
+}
+
 @Component({
   selector: 'app-on-call',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './on-call.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './on-call.scss',
 })
 export class OnCallComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly onCallService = inject(OnCallService);
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
-  private readonly route = inject(ActivatedRoute);
-  private readonly scopeUrl = inject(HospitalScopeUrlService);
-  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
-  readonly scopeReady = this.roleContext.hasHospitalScope;
-  /** Emits on every scope change so a response for the previous hospital can never land. */
-  private readonly scopeChanged$ = new Subject<void>();
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   entries = signal<OnCallScheduleResponse[]>([]);
   loading = signal(true);
@@ -95,29 +129,10 @@ export class OnCallComponent implements OnInit {
   deleting = signal(false);
 
   ngOnInit(): void {
-    // Read ?hospitalId= before the first load: the chip does the same in its
-    // own ngOnInit, which runs after ours, and the interceptor must see the
-    // right scope on the initial fetch (the pattern every chip host uses).
-    this.scopeUrl.applyUrlScopeSync(this.route);
-    this.load();
-  }
-
-  onScopeChange(): void {
-    this.scopeChanged$.next();
-    // The form's staff and departments are cached per hospital: drop them so
-    // a super-admin pinned elsewhere is not offered the previous tenant's staff.
-    this.staffOptions.set([]);
-    this.departments.set([]);
     this.load();
   }
 
   load(): void {
-    if (!this.scopeReady()) {
-      this.entries.set([]);
-      this.error.set(null);
-      this.loading.set(false);
-      return;
-    }
     this.loading.set(true);
     this.error.set(null);
     const from = this.filterFrom
@@ -127,7 +142,7 @@ export class OnCallComponent implements OnInit {
     this.onCallService
       .list(from, to)
       .pipe(
-        takeUntil(this.scopeChanged$),
+        takeUntilDestroyed(this.destroyRef),
         finalize(() => this.loading.set(false)),
       )
       .subscribe({
@@ -170,19 +185,32 @@ export class OnCallComponent implements OnInit {
   }
 
   submit(): void {
+    // QA D1306 (round 28): each refusal marks its field, not only a toast.
+    const root = this.host.nativeElement;
     if (!this.form.staffId) {
-      this.toast.error(this.translate.instant('ON_CALL.STAFF_REQUIRED'));
+      const message = this.translate.instant('ON_CALL.STAFF_REQUIRED');
+      refuseFields(root, ['oncall-staff'], ON_CALL_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     if (!this.form.startLocal || !this.form.endLocal) {
-      this.toast.error(this.translate.instant('ON_CALL.WINDOW_REQUIRED'));
+      const message = this.translate.instant('ON_CALL.WINDOW_REQUIRED');
+      const blank = [
+        this.form.startLocal ? null : 'oncall-start',
+        this.form.endLocal ? null : 'oncall-end',
+      ].filter((id): id is string => id !== null);
+      refuseFields(root, blank, ON_CALL_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     // Strict: the backend rejects a zero-length shift too.
     if (new Date(this.form.endLocal) <= new Date(this.form.startLocal)) {
-      this.toast.error(this.translate.instant('ON_CALL.WINDOW_INVALID'));
+      const message = this.translate.instant('ON_CALL.WINDOW_INVALID');
+      refuseFields(root, ['oncall-end'], ON_CALL_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], ON_CALL_FIELD_IDS, '');
 
     const request: OnCallScheduleRequest = {
       staffId: this.form.staffId,
@@ -250,7 +278,7 @@ export class OnCallComponent implements OnInit {
       // while no hospital is in scope, so the id is never absent here.
       const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
       this.staffService.list(hospitalId ?? undefined).subscribe({
-        next: (staff) => this.staffOptions.set(staff),
+        next: (staff) => this.staffOptions.set(staff.filter(isRosterable)),
         error: () => this.toast.error(this.translate.instant('ON_CALL.STAFF_LOAD_ERROR')),
       });
     }
@@ -265,9 +293,7 @@ export class OnCallComponent implements OnInit {
 
   /** ISO (with offset) → the local "YYYY-MM-DDTHH:mm" a datetime-local input needs. */
   private toLocalInput(iso: string): string {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return nowLocalDatetime(new Date(iso));
   }
 
   private emptyForm(): OnCallFormModel {

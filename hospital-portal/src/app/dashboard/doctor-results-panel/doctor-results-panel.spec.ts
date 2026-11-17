@@ -35,6 +35,13 @@ describe('DoctorResultsPanelComponent', () => {
     fixture = TestBed.createComponent(DoctorResultsPanelComponent);
   });
 
+  it('QA D731 sibling: reads the zone-less server time as UTC', () => {
+    const component = fixture.componentInstance;
+    expect(component.formatDate('2026-10-24T04:39:00')).toBe(
+      component.formatDate('2026-10-24T04:39:00Z'),
+    );
+  });
+
   it('renders the empty state when the queue is genuinely empty', () => {
     fixture.componentRef.setInput('results', []);
     fixture.componentRef.setInput('loadError', false);
@@ -106,15 +113,31 @@ describe('DoctorResultsPanelComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
   });
 
-  it('drops the stale notice once the rows it described are gone', () => {
-    // Otherwise an emptied panel flips to a full "could not be loaded" card,
-    // telling the physician the queue failed when they just cleared it.
-    fixture.componentRef.setInput('results', []);
+  it('offers read-back, not a dismiss, on a critical row', () => {
+    // LabResultServiceImpl.acknowledgeResult refuses a critical result that
+    // was notified and not read back, and every critical result is notified
+    // at creation — so a plain ✓ there is a guaranteed 400.
+    fixture.componentRef.setInput('results', [item()]);
     fixture.componentRef.setInput('loadError', false);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelector('.rp-error')).toBeNull();
-    expect(fixture.nativeElement.querySelector('.rp-empty')).not.toBeNull();
+    const section = fixture.nativeElement.querySelector('.rp-critical');
+    expect(section).not.toBeNull();
+    expect(section.querySelector('.rp-ack-btn')).toBeNull();
+    // /lab-results, NOT /lab: the read-back ceremony lives in
+    // LabResultsComponent; /lab is the orders bench and has no such control.
+    expect(section.querySelector('a[href="/lab-results"]')).not.toBeNull();
+  });
+
+  it('disables the dismiss while its acknowledgement is in flight', () => {
+    fixture.componentRef.setInput('results', [{ ...item(), abnormalFlag: 'ABNORMAL' }]);
+    fixture.componentRef.setInput('loadError', false);
+    fixture.componentRef.setInput('acknowledging', ['r-1']);
+    fixture.detectChanges();
+
+    const button = fixture.nativeElement.querySelector('.rp-ack-btn') as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.disabled).toBeTrue();
   });
 
   it('renders the rows when there is no error', () => {
@@ -123,6 +146,45 @@ describe('DoctorResultsPanelComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.rp-error')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
+  });
+  /*
+   * ── Scope (PR #742) ──
+   * The queue is filtered to the hospital the caller is acting in and the
+   * endpoint answers 404 when none resolves, so an unscoped caller never had
+   * a queue read at all. The green "all results reviewed" card over that is a
+   * false all-clear on a worklist that exists to stop a critical result
+   * reaching nobody.
+   */
+
+  it('renders the scope hint, not "all reviewed", when no hospital is in scope', () => {
+    fixture.componentRef.setInput('results', []);
+    fixture.componentRef.setInput('loadError', false);
+    fixture.componentRef.setInput('scoped', false);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.rp-empty')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.rp-error')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('DASHBOARD.ALL_RESULTS_REVIEWED');
+  });
+
+  it('prefers the scope hint over the error card, because the read never went out', () => {
+    fixture.componentRef.setInput('results', []);
+    fixture.componentRef.setInput('loadError', true);
+    fixture.componentRef.setInput('scoped', false);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('DASHBOARD.RESULTS_LOAD_ERROR');
+  });
+
+  it('draws the rows normally once a hospital is in scope', () => {
+    fixture.componentRef.setInput('results', [item()]);
+    fixture.componentRef.setInput('scoped', true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="scope-hint"]')).toBeNull();
     expect(fixture.nativeElement.textContent).toContain('Hémoglobine');
   });
 });

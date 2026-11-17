@@ -20,6 +20,10 @@ export interface IntegrationHealthRow {
   serviceType: PlatformServiceType | null;
   provider: string | null;
   enabled: boolean;
+  /** QA D851: a connectivity probe exists, so "Test connection" can run. */
+  probeSupported: boolean;
+  /** QA D851: a re-sync exists, so "Re-sync" can run. */
+  resyncSupported: boolean;
   capabilities: string[];
   rolledUpStatus: IntegrationHealthStatus;
   organizations: IntegrationHealthOrgEntry[];
@@ -36,27 +40,23 @@ export interface IntegrationHealthSummary {
 
 /**
  * MVP-3b — result of POST /super-admin/integrations/{id}/probe.
- * Mirrors the backend `IntegrationProbeResultDTO`.
+ * Mirrors the backend `IntegrationProbeResultDTO` (QA D851: the field is
+ * `message`; the console read an `errorMessage` the server never sends).
  */
 export interface IntegrationProbeResult {
   integrationId: string;
   ok: boolean;
   latencyMs: number | null;
-  errorMessage: string | null;
-  probedAt: string;
+  message: string | null;
 }
 
 /**
- * MVP-3b — one bucketed entry from
- * GET /super-admin/integrations/{id}/history. Each row covers a fixed
- * window (default: one hour) and reports counts per status. The backend
- * orders the response oldest → newest so a sparkline can render
- * left-to-right without a client-side sort.
+ * MVP-3b — one hourly bucket from GET /super-admin/integrations/{id}/history,
+ * oldest first. Mirrors the backend `IntegrationHistoryBucketDTO` (QA D851:
+ * success and failure counts; the console read three fields it never got).
  */
 export interface IntegrationHistoryBucket {
   bucketStart: string;
-  bucketEnd: string;
-  healthyCount: number;
-  degradedCount: number;
-  failingCount: number;
+  successCount: number;
+  failureCount: number;
 }

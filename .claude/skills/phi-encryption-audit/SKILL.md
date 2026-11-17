@@ -28,6 +28,15 @@ narrative. **Today's coverage is narrow**:
   `medical_history_summary`, `care_team_notes`, `chronic_conditions`
 - `Prescription` narrative columns (sig / notes / instructions)
 - `Dispense` narrative column
+- `EmpiMergeEvent.notes` (HL7 A40 provenance carries both MRNs)
+- `IntegrationMessageEvent.payload` (raw HL7 of unparseable messages)
+
+**Adding the converter to a column that already has rows encrypts future
+writes only**: the converter returns non-`gcm1:` values verbatim, so legacy
+rows stay plaintext until rewritten. Add the column to
+`PhiTextEncryptionBackfill` (paged, idempotent, conditional UPDATE, runs at
+startup) in the same change, and first check that nothing compares the column
+in SQL/JPQL (`=`, `LIKE`, a CHECK) - ciphertext matches nothing.
 
 Plaintext today and on the P0 remediation backlog (row 38):
 **Patient names, DOB, phone, email, city/state/zip, MRN aliases,

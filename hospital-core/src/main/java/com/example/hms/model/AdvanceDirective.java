@@ -76,6 +76,10 @@ public class AdvanceDirective extends BaseEntity {
     @Column(name = "physician_name", length = 255)
     private String physicianName;
 
+    /** QA D1148 (V256): why the directive was revoked; required by the server since round 21. */
+    @Column(name = "revocation_reason", length = 500)
+    private String revocationReason;
+
     @Column(name = "document_location", length = 255)
     private String documentLocation;
 

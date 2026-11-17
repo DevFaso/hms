@@ -164,9 +164,23 @@ export interface StaffAvailabilityResponse {
   note?: string;
 }
 
+export interface SchedulingCapabilities {
+  canManageSchedules: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class StaffSchedulingService {
   private readonly http = inject(HttpClient);
+
+  /**
+   * QA D878: whether the caller's shift-planning writes for others succeed
+   * (an administrator of the acting hospital or a department head). The
+   * page offers bulk planning only then; the permission map alone let every
+   * doctor see a button whose POST answered 403.
+   */
+  capabilities(): Observable<SchedulingCapabilities> {
+    return this.http.get<SchedulingCapabilities>('/staff/scheduling/capabilities');
+  }
 
   // ── Shifts ──
   listShifts(filters?: {

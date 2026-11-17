@@ -2,8 +2,10 @@ package com.example.hms.service.integration.message;
 
 import com.example.hms.enums.integration.IntegrationMessageDirection;
 import com.example.hms.enums.integration.IntegrationMessageStatus;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.model.integration.IntegrationMessageEvent;
 import com.example.hms.repository.integration.IntegrationMessageEventRepository;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,7 +28,8 @@ import java.util.UUID;
  * caller's transaction can roll back without losing the trace, and they
  * never throw — a bug in the recorder must not fail the partner-side
  * write that triggered it. PHI in the payload is truncated at
- * {@link #MAX_PAYLOAD_CHARS}.
+ * {@link #MAX_PAYLOAD_CHARS} and encrypted at rest by the entity's
+ * {@code EncryptedStringConverter}.
  */
 @Service
 @RequiredArgsConstructor
@@ -85,7 +88,7 @@ public class IntegrationMessageRecorder {
         IntegrationMessageStatus status,
         String errorMessage
     ) {
-        return recordMessage(integrationId, organizationId, direction, messageType,
+        return persist(integrationId, organizationId, direction, messageType,
             payload, status, errorMessage, null);
     }
 
@@ -115,6 +118,33 @@ public class IntegrationMessageRecorder {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public IntegrationMessageEvent recordMessage(
+        String integrationId,
+        UUID organizationId,
+        IntegrationMessageDirection direction,
+        String messageType,
+        String payload,
+        IntegrationMessageStatus status,
+        String errorMessage,
+        String correlationId
+    ) {
+        return persist(integrationId, organizationId, direction, messageType,
+            payload, status, errorMessage, correlationId);
+    }
+
+    /**
+     * The insert itself, with no propagation of its own.
+     *
+     * <p>Extracted so that nothing in this class self-invokes an annotated
+     * method. A {@code this} call does not pass back through the proxy, so
+     * the {@code REQUIRES_NEW} on the method being called would be silently
+     * inert — harmless where it happened, but exactly the kind of thing that
+     * is true until someone moves a caller. Now the annotation lives on the
+     * public entry points, the shared body has none, and what each caller
+     * gets is decided at the entry point it came through:
+     * {@link #recordMessage} gives a new transaction,
+     * {@link #recordRecurringFailure} deliberately does not.
+     */
+    private IntegrationMessageEvent persist(
         String integrationId,
         UUID organizationId,
         IntegrationMessageDirection direction,
@@ -159,7 +189,7 @@ public class IntegrationMessageRecorder {
      * shares its id. It does nothing about what is stored: {@link
      * #recordMessage} inserts on every call, so a vendor retrying an
      * unparseable message every thirty seconds writes thousands of full
-     * copies of it a day — PID and all — into a table with no retention,
+     * copies of it a day — PID and all — into a table that keeps each body for months,
      * while the badge reads 1. A bounded badge over unbounded PHI is worse
      * than the visible version, because it says the problem is handled.
      *
@@ -185,9 +215,8 @@ public class IntegrationMessageRecorder {
      *
      * <p><b>Not transactional, deliberately — and therefore not isolated.</b>
      * Unlike {@link #recordMessage}, this gives you no {@code REQUIRES_NEW}:
-     * it reaches the insert by self-invocation, so that annotation is inert,
-     * and every repository call simply joins whatever transaction the caller
-     * has. Its caller is the MLLP dispatcher, which has none, so each call
+     * it goes straight to the unannotated {@link #persist}, so every
+     * repository call simply joins whatever transaction the caller has. Its caller is the MLLP dispatcher, which has none, so each call
      * takes its own — which is exactly what makes the lookup safe to fail.
      * Inside a {@code REQUIRES_NEW} of its own, a lookup that threw would
      * mark the transaction rollback-only and take the row and its body down
@@ -250,7 +279,7 @@ public class IntegrationMessageRecorder {
                     + "recording it as a new row", correlationId, ex);
             }
         }
-        return recordMessage(integrationId, organizationId, direction, messageType,
+        return persist(integrationId, organizationId, direction, messageType,
             payload, IntegrationMessageStatus.FAILED, errorMessage, correlationId);
     }
 
@@ -324,6 +353,11 @@ public class IntegrationMessageRecorder {
      * {@code correlationId} is preserved so an operator can read the
      * full retry history; {@code attemptCount} is incremented so a
      * UI counter reflects how many times we've tried.
+     *
+     * <p>Throws {@link ConflictException} ({@code integration.message.contentPurged})
+     * when the retention sweep has erased the row's content, checked under
+     * the row lock in this transaction; nothing is written then. Every other
+     * failure is swallowed and returns null, as before.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public IntegrationMessageEvent recordReplay(
@@ -331,9 +365,27 @@ public class IntegrationMessageRecorder {
         IntegrationMessageStatus newStatus,
         String errorMessage
     ) {
+        Optional<IntegrationMessageEvent> original;
         try {
-            return repository.findById(originalMessageId)
-                .map(original -> persistReplay(original, newStatus, errorMessage))
+            // Locked, and re-checked here rather than trusted from the
+            // caller's earlier read: the nightly retention sweep can erase
+            // the content between that check and this copy. Without the lock
+            // the replay would either copy content the sweep had just erased
+            // into a fresh row - restarting its retention clock - or write a
+            // REPLAYED row with no content at all.
+            original = repository.findByIdForUpdate(originalMessageId);
+        } catch (RuntimeException ex) {
+            log.error("[INTEGRATION-MESSAGE] Failed to record replay for {}", originalMessageId, ex);
+            return null;
+        }
+        if (original.isPresent() && original.get().getPayloadPurgedAt() != null) {
+            // The one exception this class lets out, on purpose: it is the
+            // caller's 409, not a recording failure to swallow.
+            throw new ConflictException(MessageUtil.resolve("integration.message.contentPurged"));
+        }
+        try {
+            return original
+                .map(row -> persistReplay(row, newStatus, errorMessage))
                 .orElse(null);
         } catch (RuntimeException ex) {
             log.error("[INTEGRATION-MESSAGE] Failed to record replay for {}", originalMessageId, ex);

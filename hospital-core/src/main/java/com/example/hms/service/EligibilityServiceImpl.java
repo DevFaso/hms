@@ -60,6 +60,7 @@ public class EligibilityServiceImpl implements EligibilityService {
     private final List<EligibilityProvider> providers;
     private final Clock clock;
     private final IntegrationHealthRecorder healthRecorder;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     public EligibilityServiceImpl(EligibilityCheckRepository checkRepository,
                                   PatientRepository patientRepository,
@@ -69,7 +70,8 @@ public class EligibilityServiceImpl implements EligibilityService {
                                   AuditEventLogService auditService,
                                   List<EligibilityProvider> providers,
                                   Clock clock,
-                                  IntegrationHealthRecorder healthRecorder) {
+                                  IntegrationHealthRecorder healthRecorder,
+                                  com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard) {
         this.checkRepository = checkRepository;
         this.patientRepository = patientRepository;
         this.hospitalRepository = hospitalRepository;
@@ -79,36 +81,38 @@ public class EligibilityServiceImpl implements EligibilityService {
         this.providers = providers;
         this.clock = clock;
         this.healthRecorder = healthRecorder;
+        this.patientRegistrationGuard = patientRegistrationGuard;
     }
 
     @Override
     @Transactional
     public EligibilityResponseDTO submit(EligibilityCheckRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("EligibilityCheckRequest is required");
+            throw new BusinessException("eligibility.request.required");
         }
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Patient not found: " + request.getPatientId()));
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        // QA D401: the check is recorded at the caller's acting hospital (the
+        // body's id is a claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", request.getHospitalId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         PatientInsurance insurance = null;
         if (request.getPatientInsuranceId() != null) {
+            // QA D1651 class: another hospital's coverage answers as a missing row.
             insurance = patientInsuranceRepository.findById(request.getPatientInsuranceId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                    "PatientInsurance not found: " + request.getPatientInsuranceId()));
+                .filter(row -> row.isVisibleAt(hospital.getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("patientinsurance.notfound", request.getPatientInsuranceId()));
             if (insurance.getPatient() != null
                 && !insurance.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException(
-                    "PatientInsurance does not belong to the requested patient");
+                throw new com.example.hms.exception.FieldBusinessException("patientId", "eligibility.insurance.otherPatient");
             }
         }
         EligibilityProvider provider = providers.stream()
             .filter(p -> p.supports(request.getScheme()))
             .findFirst()
-            .orElseThrow(() -> new BusinessException(
-                "No eligibility provider configured for scheme " + request.getScheme()));
+            .orElseThrow(() -> new BusinessException("eligibility.provider.none", request.getScheme()));
 
         LocalDateTime requestedAt = LocalDateTime.now(clock);
         User caller = currentUserOrNull();
@@ -188,8 +192,7 @@ public class EligibilityServiceImpl implements EligibilityService {
     public EligibilityResponseDTO get(UUID checkId) {
         return checkRepository.findById(checkId)
             .map(this::toDto)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "EligibilityCheck not found: " + checkId));
+            .orElseThrow(() -> new ResourceNotFoundException("eligibilityCheck.notFound", checkId));
     }
 
     @Override

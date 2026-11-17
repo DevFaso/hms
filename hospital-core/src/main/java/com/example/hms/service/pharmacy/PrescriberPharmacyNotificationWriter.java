@@ -1,5 +1,7 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
@@ -11,10 +13,8 @@ import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.service.NotificationService;
-import com.example.hms.service.i18n.NotificationLocales;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,14 +40,15 @@ public class PrescriberPharmacyNotificationWriter {
 
     private static final String KEY_PREFIX = "prescription.pharmacy.event.";
 
-    /** {@code security.notifications.message} is VARCHAR(255); a longer body fails the INSERT. */
-    static final int MAX_MESSAGE_LENGTH = 255;
+    /** The timeout has no status of its own (the row is PARTNER_REJECTED), so its key is named here. */
+    static final String PARTNER_TIMED_OUT_KEY = KEY_PREFIX + "PARTNER_TIMED_OUT";
+    /** A partner's dispense of an order the prescriber had withdrawn; the row stays withdrawn. */
+    static final String PARTNER_DISPENSED_WITHDRAWN_KEY = KEY_PREFIX + "PARTNER_DISPENSED_WITHDRAWN";
     private static final String PATIENT_FALLBACK_KEY = "prescription.pharmacy.patientFallback";
 
     private final PrescriptionRepository prescriptionRepository;
     private final PrescriptionRoutingDecisionRepository routingDecisionRepository;
     private final NotificationService notificationService;
-    private final MessageSource messageSource;
 
     /**
      * @return true when a notification was written, false when the
@@ -55,6 +56,34 @@ public class PrescriberPharmacyNotificationWriter {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean write(UUID prescriptionId, PrescriptionStatus event) {
+        return writeMessage(prescriptionId, KEY_PREFIX + event.name(), event);
+    }
+
+    /**
+     * The partner never answered and the offer was withdrawn after the
+     * timeout. The row is PARTNER_REJECTED like a refusal, and names the
+     * partner the same way, but the message says what happened.
+     *
+     * @return as {@link #write}
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean writePartnerTimedOut(UUID prescriptionId) {
+        return writeMessage(prescriptionId, PARTNER_TIMED_OUT_KEY, PrescriptionStatus.PARTNER_REJECTED);
+    }
+
+    /**
+     * The partner confirmed a dispense of an order the prescriber had already
+     * withdrawn. The prescription keeps its withdrawn status; the message
+     * names the partner and asks the prescriber to check with the patient.
+     *
+     * @return as {@link #write}
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean writePartnerDispensedAfterWithdrawal(UUID prescriptionId) {
+        return writeMessage(prescriptionId, PARTNER_DISPENSED_WITHDRAWN_KEY, PrescriptionStatus.PARTNER_DISPENSED);
+    }
+
+    private boolean writeMessage(UUID prescriptionId, String key, PrescriptionStatus event) {
         Prescription prescription = prescriptionRepository.findById(prescriptionId).orElse(null);
         if (prescription == null) {
             log.warn("Prescriber notification skipped: prescription {} not found", prescriptionId);
@@ -66,8 +95,9 @@ public class PrescriberPharmacyNotificationWriter {
                     prescriptionId);
             return false;
         }
-        notificationService.createNotification(
-                capped(message(prescription, event)), username, NOTIFICATION_TYPE);
+        NotificationText text = message(prescription, key, event);
+        // The service caps the stored French text to the column.
+        notificationService.createNotification(text.key(), text.args(), username, NOTIFICATION_TYPE);
         return true;
     }
 
@@ -78,36 +108,26 @@ public class PrescriberPharmacyNotificationWriter {
     }
 
     /**
-     * Rendered in {@link NotificationLocales#STAFF}: the row is persisted once
-     * and read later by the prescriber, not by whoever triggered it.
+     * Rendered in the prescriber's language when they read it (QA D665): the
+     * row is persisted once and read later, not by whoever triggered it.
      *
      * <p>The clarification body names the medication only. The pharmacist's
      * question is clinical narrative, stored encrypted on the prescription
      * where the prescriber reads it; the notification row is plaintext and
      * 255 characters wide, so it must not carry the question (or the patient).
      */
-    private String message(Prescription prescription, PrescriptionStatus event) {
+    private NotificationText message(Prescription prescription, String key, PrescriptionStatus event) {
         String medication = prescription.getMedicationName() != null
                 ? prescription.getMedicationName() : "";
         if (event == PrescriptionStatus.PENDING_CLARIFICATION) {
-            return messageSource.getMessage(KEY_PREFIX + event.name(),
-                    new Object[]{medication}, NotificationLocales.STAFF);
+            return NotificationText.of(key, medication);
         }
-        String patient = patientName(prescription.getPatient());
-        String third = switch (event) {
+        Object patient = patientName(prescription.getPatient());
+        Object third = switch (event) {
             case PARTNER_ACCEPTED, PARTNER_REJECTED, PARTNER_DISPENSED -> partnerName(prescription);
             default -> "";
         };
-        return messageSource.getMessage(KEY_PREFIX + event.name(),
-                new Object[]{medication, patient, third}, NotificationLocales.STAFF);
-    }
-
-    /** A body the column can hold: an overlong medication name is cut, never a failed INSERT. */
-    static String capped(String message) {
-        if (message == null || message.length() <= MAX_MESSAGE_LENGTH) {
-            return message;
-        }
-        return message.substring(0, MAX_MESSAGE_LENGTH - 1) + "\u2026";
+        return NotificationText.of(key, medication, patient, third);
     }
 
     /**
@@ -120,7 +140,7 @@ public class PrescriberPharmacyNotificationWriter {
      * refused. The routing decisions are the durable record of that, so fall
      * back to the newest one that carries a target pharmacy.
      */
-    private String partnerName(Prescription prescription) {
+    private Object partnerName(Prescription prescription) {
         String name = prescription.getPharmacyName();
         if (name != null && !name.isBlank()) {
             return name;
@@ -129,8 +149,7 @@ public class PrescriberPharmacyNotificationWriter {
         if (fromDecision != null) {
             return fromDecision;
         }
-        return messageSource.getMessage("prescription.pharmacy.partnerFallback", null,
-                NotificationLocales.STAFF);
+        return NotificationLocalizer.key("prescription.pharmacy.partnerFallback");
     }
 
     private String latestPartnerPharmacyName(Prescription prescription) {
@@ -147,15 +166,15 @@ public class PrescriberPharmacyNotificationWriter {
         return null;
     }
 
-    private String patientName(Patient patient) {
+    private Object patientName(Patient patient) {
         if (patient == null) {
-            return messageSource.getMessage(PATIENT_FALLBACK_KEY, null, NotificationLocales.STAFF);
+            return NotificationLocalizer.key(PATIENT_FALLBACK_KEY);
         }
         String first = patient.getFirstName() != null ? patient.getFirstName().trim() : "";
         String last = patient.getLastName() != null ? patient.getLastName().trim() : "";
         String full = (first + " " + last).trim();
         return full.isEmpty()
-                ? messageSource.getMessage(PATIENT_FALLBACK_KEY, null, NotificationLocales.STAFF)
+                ? NotificationLocalizer.key(PATIENT_FALLBACK_KEY)
                 : full;
     }
 }

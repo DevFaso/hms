@@ -28,7 +28,11 @@ import java.util.UUID;
 @Slf4j
 @Transactional
 public class SocialHistoryServiceImpl implements SocialHistoryService {
-    private static final String SOCIAL_HISTORY_NOT_FOUND_PREFIX = "Social history not found with id: ";
+    /** QA D401: a patient write lands only at a hospital the patient is registered at. */
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    private static final String SOCIAL_HISTORY_NOT_FOUND_KEY = "socialHistory.notFound";
+
 
 
     private final SocialHistoryRepository socialHistoryRepository;
@@ -39,6 +43,10 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
     private final StaffRepository staffRepository;
     private final SocialHistoryMapper socialHistoryMapper;
 
+    /** The fields of a version that are not answers: who, where, when, and the version flags. */
+    static final java.util.Set<String> SOCIAL_HISTORY_METADATA = java.util.Set.of(
+        "patientId", "hospitalId", "recordedByStaffId", "recordedDate", "versionNumber", "active");
+
     @Override
     public SocialHistoryResponseDTO createSocialHistory(SocialHistoryRequestDTO requestDTO) {
         log.info("Creating social history for patient: {}", requestDTO.getPatientId());
@@ -46,14 +54,18 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         Patient patient = patientRepository.findById(requestDTO.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", requestDTO.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(requestDTO.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(requestDTO.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
+        // QA r5 tenancy sweep: the row is written at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", requestDTO.getHospitalId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+        // QA D1148 (round 21): a new version says something; an empty one was
+        // stored and superseded the patient's real history.
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(requestDTO, SOCIAL_HISTORY_METADATA,
+            "additionalNotes", "socialHistory.contentRequired");
 
-        Staff recordedBy = null;
-        if (requestDTO.getRecordedByStaffId() != null) {
-            recordedBy = staffRepository.findById(requestDTO.getRecordedByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getRecordedByStaffId()));
-        }
+        // QA D503 class: the recorder is the caller, not a colleague named in the body.
+        Staff recordedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getRecordedByStaffId(), hospital.getId());
 
         // If this is a new active record, deactivate previous ones
         if (requestDTO.getActive() == null || Boolean.TRUE.equals(requestDTO.getActive())) {
@@ -83,7 +95,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         log.debug("Fetching social history with id: {}", id);
         
         PatientSocialHistory socialHistory = socialHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_KEY, id));
 
         return socialHistoryMapper.toResponseDTO(socialHistory);
     }
@@ -133,14 +145,18 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         log.info("Updating social history with id: {}", id);
 
         PatientSocialHistory existingHistory = socialHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingHistory.getHospital(), SOCIAL_HISTORY_NOT_FOUND_KEY, id);
+        // QA D1148: an edit leaves something in the version.
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(requestDTO, SOCIAL_HISTORY_METADATA,
+            "additionalNotes", "socialHistory.contentRequired");
 
         // Update staff if changed
         if (requestDTO.getRecordedByStaffId() != null && 
             (existingHistory.getRecordedBy() == null || 
              !existingHistory.getRecordedBy().getId().equals(requestDTO.getRecordedByStaffId()))) {
-            Staff recordedBy = staffRepository.findById(requestDTO.getRecordedByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getRecordedByStaffId()));
+            Staff recordedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getRecordedByStaffId(),
+                    com.example.hms.security.CallerIdentity.hospitalIdOf(existingHistory.getHospital()));
             existingHistory.setRecordedBy(recordedBy);
         }
 
@@ -156,8 +172,13 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         log.info("Deleting social history with id: {}", id);
 
         PatientSocialHistory socialHistory = socialHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(socialHistory.getHospital(), SOCIAL_HISTORY_NOT_FOUND_KEY, id);
 
+        // QA D1242 class (round 25): a removed entry stays removed; a repeat is refused.
+        if (Boolean.FALSE.equals(socialHistory.getActive())) {
+            throw new com.example.hms.exception.BusinessException("medicalHistory.r25.alreadyRemoved");
+        }
         socialHistory.setActive(false);
         socialHistoryRepository.save(socialHistory);
 

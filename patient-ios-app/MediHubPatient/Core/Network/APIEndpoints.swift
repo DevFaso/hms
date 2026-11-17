@@ -12,9 +12,33 @@ enum APIEndpoints {
     static let tokenRefresh = "/auth/token/refresh"
     static let verifyPassword = "/auth/verify-password"
     static let register = "/auth/register"
-    static let requestPasswordReset = "/auth/password/request-reset"
-    static let resetPassword = "/auth/password/reset-password"
+    /// The session's own view of who is signed in, for BOTH login paths: the
+    /// Keycloak `sub` is not the HMS `users.id` that chat and the device-only
+    /// notes are keyed by, so an SSO session resolves it here.
+    static let sessionBootstrap = "/auth/session/bootstrap"
+    /// `{email}` -> 204 whatever the address, so the answer never says
+    /// whether an account exists.
+    static let requestPasswordReset = "/auth/password/request"
+    /// `{token, newPassword}` -> 204; also 204 for a bad token (see
+    /// PasswordResetController), so the app cannot tell the two apart either.
+    static let confirmPasswordReset = "/auth/password/confirm"
+    /// `?email=` -> 200 with a neutral message.
     static let resendVerification = "/auth/resend-verification"
+    /// `?email=&token=` from the activation link -> 200 when the account is
+    /// now active, 400 when the link is invalid or expired.
+    static let verifyEmail = "/auth/verify-email"
+    /// `{mfaToken, code}` -> the same body as a successful `/auth/login`.
+    static let mfaVerify = "/auth/mfa/verify"
+    /// Authenticated; `{currentPassword, newPassword}`.
+    static let changePassword = "/auth/me/change-password"
+
+    // MARK: Push devices
+
+    /// PUT `{token, platform, locale, appVersion}` / DELETE -> 204. The
+    /// installation id is per app install, not per user.
+    static func pushDevice(installationId: String) -> String {
+        "/me/push-devices/\(installationId)"
+    }
 
     // MARK: Patient Portal — /me/patient/*
 
@@ -94,6 +118,15 @@ enum APIEndpoints {
         "/chat/history/\(userId)/\(otherUserId)?page=0&size=100"
     }
     static let chatSend = "/chat/send"
+    /// PUT -> 204. `senderId` is the OTHER party, `recipientId` the patient:
+    /// it marks what they sent us as read, which is what the unread badge counts.
+    static func chatMarkRead(senderId: String, recipientId: String) -> String {
+        "/chat/mark-read/\(senderId)/\(recipientId)"
+    }
+    /// Authenticated, participant-checked bytes of one attachment.
+    static func chatAttachmentDownload(id: String) -> String {
+        "/chat/attachments/\(id)/download"
+    }
 
     // MARK: Billing actions
 

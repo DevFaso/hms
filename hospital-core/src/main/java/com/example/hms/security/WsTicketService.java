@@ -76,11 +76,20 @@ public class WsTicketService {
         }
         TicketEntry entry = tickets.get(ticket);
         if (entry == null) {
+            // DEBUG, deliberately, and not WARN however tempting. redeem() is reached from
+            // JwtAuthenticationFilter BEFORE authentication, for any request to /api/ws-chat
+            // carrying a ?ticket= — so at WARN any unauthenticated caller could drive
+            // unbounded warning volume, and an ordinary TTL lapse followed by a SockJS retry
+            // would do it by accident. See the comment on the expiry branch for the other half.
             log.debug("[WS-TICKET] Unknown ticket");
             return null;
         }
         if (System.currentTimeMillis() > entry.expiresAt()) {
             tickets.remove(ticket, entry);
+            // DEBUG for the volume reason above, and for a second one: this line carries a
+            // username. Prod runs these loggers at INFO, so promoting it would put a username
+            // into a third-party log store for the first time, on a recurring event — the exact
+            // thing the dev log-level change was partly meant to stop.
             log.debug("[WS-TICKET] Expired ticket for user='{}'", entry.username());
             return null;
         }

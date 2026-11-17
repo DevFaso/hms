@@ -52,8 +52,9 @@ class PatientLanguageTest {
     @Test
     @DisplayName("only the languages with bundles claim to have one")
     void bundleFlagMatchesTheBundlesOnDisk() {
-        // messages_fr / _en / _es are the only bundles in the repo. If someone
-        // adds messages_mos.properties they must flip this flag too, and this
+        // _fr / _en / _es are the only locales the area bundles carry
+        // (i18n/messages-<area>_fr.properties, see MessageBundles). If someone
+        // adds a _mos set they must flip this flag too, and this
         // test is where that is stated.
         assertThat(PatientLanguage.FRENCH.hasMessageBundle()).isTrue();
         assertThat(PatientLanguage.ENGLISH.hasMessageBundle()).isTrue();

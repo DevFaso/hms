@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.core.auth
 
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.LoginRequest
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import io.mockk.coEvery
@@ -27,7 +28,7 @@ class AuthRepositoryTest {
 
     private val tokenStorage = mockk<TokenStorage>(relaxed = true)
     private val api = mockk<ApiService>()
-    private val repo = AuthRepository(api, tokenStorage)
+    private val repo = AuthRepository(api, tokenStorage, mockk(relaxed = true), mockk(relaxed = true), kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined), com.bitnesttechs.hms.patient.core.network.SessionCookieJar())
 
     private val legacyDisabledMessage =
         "Legacy username/password login is disabled. Sign in via Single Sign-On."
@@ -42,7 +43,9 @@ class AuthRepositoryTest {
         val result = repo.login("any.user", "any.password", saveCredentials = false)
 
         assertTrue("expected Error, got $result", result is AuthResult.Error)
-        assertEquals(legacyDisabledMessage, (result as AuthResult.Error).message)
+        result as AuthResult.Error
+        assertEquals(R.string.login_error_sso_required, result.messageRes)
+        assertEquals(legacyDisabledMessage, result.detail)
     }
 
     @Test
@@ -55,13 +58,9 @@ class AuthRepositoryTest {
         val result = repo.login("any.user", "any.password", saveCredentials = false)
 
         assertTrue(result is AuthResult.Error)
-        val message = (result as AuthResult.Error).message
         // The user must still be steered toward SSO, not shown a generic "try again".
-        assertTrue(
-            "expected SSO-pointing fallback, got: $message",
-            message.contains("SSO", ignoreCase = true) ||
-                    message.contains("Single sign-on", ignoreCase = true)
-        )
+        assertEquals(R.string.login_error_sso_required, (result as AuthResult.Error).messageRes)
+        assertNull(result.detail)
     }
 
     @Test
@@ -74,7 +73,7 @@ class AuthRepositoryTest {
         val result = repo.login("any.user", "any.password", saveCredentials = false)
 
         assertTrue(result is AuthResult.Error)
-        assertEquals("Invalid username or password", (result as AuthResult.Error).message)
+        assertEquals(R.string.login_error_invalid_credentials, (result as AuthResult.Error).messageRes)
     }
 
     @Test

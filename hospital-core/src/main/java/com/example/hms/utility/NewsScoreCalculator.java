@@ -50,6 +50,28 @@ public final class NewsScoreCalculator {
     private NewsScoreCalculator() {
     }
 
+    /** NEWS2 is validated for adults only (RCP 2017: not for under-16s). */
+    public static final int MIN_AGE_YEARS = 16;
+
+    /**
+     * QA D518: whether NEWS2 may be applied to this bundle's patient. The
+     * adult thresholds fired "high risk" on a healthy 5-year-old (a normal
+     * child heart rate and respiratory rate score 3 on the adult table). A
+     * patient with no recorded birth date keeps the adult score, as before.
+     */
+    public static boolean applies(PatientVitalSign vital) {
+        return vital == null || appliesTo(vital.getPatient());
+    }
+
+    /** The same rule for a patient (the CDS context carries the patient, not the bundle's). */
+    public static boolean appliesTo(com.example.hms.model.Patient patient) {
+        if (patient == null || patient.getDateOfBirth() == null) {
+            return true;
+        }
+        return java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now(java.time.ZoneId.systemDefault())).getYears()
+            >= MIN_AGE_YEARS;
+    }
+
     public static NewsScoreResult score(PatientVitalSign vital) {
         List<String> missing = new ArrayList<>();
         int total = 0;

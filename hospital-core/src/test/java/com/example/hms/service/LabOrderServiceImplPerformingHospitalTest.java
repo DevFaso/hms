@@ -28,6 +28,7 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.service.lab.LabOrderRoutingNotifier;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
@@ -63,6 +64,7 @@ import static org.mockito.Mockito.when;
  * laboratory, and the 404-not-403 scope predicate that admits the ordering
  * hospital and the performing hospital while a third hospital sees nothing.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabOrderServiceImplPerformingHospitalTest {
 
@@ -79,8 +81,12 @@ class LabOrderServiceImplPerformingHospitalTest {
     @Mock private RecordAccessPolicy recordAccessPolicy;
     @Mock private CrossHospitalReachRecorder reachRecorder;
     @Mock private LabOrderRoutingNotifier routingNotifier;
+    @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
     @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
     @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
+    @Mock private com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
+
+    @Mock private com.example.hms.service.lab.LabOrderDuplicateCheck labOrderDuplicateCheck;
 
     @InjectMocks
     private LabOrderServiceImpl service;
@@ -97,6 +103,10 @@ class LabOrderServiceImplPerformingHospitalTest {
 
     @BeforeEach
     void setUp() {
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        lenient().when(hospitalRepository.findClinicalById(any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(ClinicalHospitals::isClinical));
         ordering = hospital("Ordering Hospital", "ORD");
         performing = hospital("Central Laboratory", "LAB");
         third = hospital("Unrelated Clinic", "THR");
@@ -126,6 +136,7 @@ class LabOrderServiceImplPerformingHospitalTest {
         definition.setId(UUID.randomUUID());
         definition.setName("CBC");
         definition.setTestCode("CBC");
+        definition.setApprovalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE);
 
         order = LabOrder.builder()
             .patient(patient)
@@ -227,6 +238,38 @@ class LabOrderServiceImplPerformingHospitalTest {
         when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
 
         assertThat(service.getLabOrderById(order.getId(), Locale.ENGLISH)).isSameAs(mapped);
+    }
+
+    /** Lab requests drawer: "R35 — Polyurie", from the patient's diagnosis at the ordering hospital. */
+    @Test
+    void getLabOrderByIdLabelsTheDiagnosisCodeFromThePatientsDiagnosis() {
+        order.setPrimaryDiagnosisCode("R35");
+        com.example.hms.model.PatientDiagnosis diagnosis = new com.example.hms.model.PatientDiagnosis();
+        diagnosis.setDescription(" Polyurie ");
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        LabOrderResponseDTO dto = LabOrderResponseDTO.builder().id("d").build();
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(dto);
+        when(patientDiagnosisRepository
+            .findFirstByPatient_IdAndHospital_IdAndIcdCodeIgnoreCaseOrderByDiagnosedAtDesc(
+                patient.getId(), ordering.getId(), "R35"))
+            .thenReturn(Optional.of(diagnosis));
+
+        assertThat(service.getLabOrderById(order.getId(), Locale.ENGLISH).getPrimaryDiagnosisLabel())
+            .isEqualTo("Polyurie");
+    }
+
+    /** The laboratory an order was sent to reads the code, never the ordering hospital's chart. */
+    @Test
+    void getLabOrderByIdNeverReadsTheOrderingChartForThePerformingHospital() {
+        order.setPrimaryDiagnosisCode("R35");
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        LabOrderResponseDTO dto = LabOrderResponseDTO.builder().id("d").build();
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(dto);
+
+        assertThat(service.getLabOrderById(order.getId(), Locale.ENGLISH).getPrimaryDiagnosisLabel()).isNull();
+        verifyNoInteractions(patientDiagnosisRepository);
     }
 
     @Test
@@ -437,14 +480,88 @@ class LabOrderServiceImplPerformingHospitalTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
         when(roleValidator.getCurrentUserId()).thenReturn(labUserId);
         when(roleValidator.isLabManager(labUserId, ordering.getId())).thenReturn(false);
-        when(roleValidator.isHospitalAdmin(labUserId, ordering.getId())).thenReturn(false);
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
 
         UUID id = order.getId();
-        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, "x", Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("cancel");
         verify(roleValidator, never()).isLabManager(labUserId, performing.getId());
+    }
+
+    @Test
+    void labDirectorCancelsAnOrphanedOrder() {
+        // QA D666: LAB-000010 lost its definition and sat in ORDERED; the lab
+        // director at the ordering hospital was refused the cancel.
+        order.setStatus(LabOrderStatus.ORDERED);
+        order.setLabTestDefinition(null);
+        UUID directorId = UUID.randomUUID();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(directorId);
+        when(roleValidator.isLabDirector(directorId, ordering.getId())).thenReturn(true);
+        when(labOrderRepository.save(order)).thenReturn(order);
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        service.transitionLabOrderStatus(order.getId(), LabOrderStatus.CANCELLED, "Definition withdrawn",
+            Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
+        assertThat(order.getCancellationReason()).isEqualTo("Definition withdrawn");
+    }
+
+    @Test
+    void hospitalAdminDoesNotCancelALabOrder() {
+        // QA D666 decision (E9 #67): HOSPITAL_ADMIN is off clinical orders, in the service as in the controller.
+        order.setStatus(LabOrderStatus.ORDERED);
+        UUID adminId = UUID.randomUUID();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(adminId);
+        org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdmin(adminId, ordering.getId())).thenReturn(true);
+
+        UUID id = order.getId();
+        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, "x", Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("cancel");
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);
+    }
+
+    /** QA D1098 (round 19, order class): a resulted lab order is voided as entered in error, never cancelled. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = LabOrderStatus.class, names = {"RESULTED", "VERIFIED", "COMPLETED"})
+    void aResultedOrderIsNotCancelled_D1098(LabOrderStatus resulted) {
+        order.setStatus(resulted);
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+
+        UUID id = order.getId();
+        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, "Wrong patient",
+                Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.resultedLocked");
+        assertThat(order.getStatus()).isEqualTo(resulted);
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"   "})
+    void cancelWithoutAReasonIsRefused(String reason) {
+        // QA D673: LAB_DIRECTOR_A cancelled with {status:'CANCELLED'} and no reason, and got 200.
+        order.setStatus(LabOrderStatus.ORDERED);
+        UUID directorId = UUID.randomUUID();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(directorId);
+        when(roleValidator.isLabDirector(directorId, ordering.getId())).thenReturn(true);
+
+        UUID id = order.getId();
+        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, reason, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(e.getMessage()).containsIgnoringCase("reason"));
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);
+        verify(labOrderRepository, never()).save(any());
     }
 
     @Test
@@ -526,6 +643,104 @@ class LabOrderServiceImplPerformingHospitalTest {
             .containsExactly(mapped);
     }
 
+    /**
+     * A patient-filtered search with no acting hospital used to drop the
+     * hospital predicate entirely and return every tenant's orders for that
+     * patient, unaccounted — recordPerformedHereReach returns early on a null
+     * acting hospital, and there is no acting hospital for a RECORD_SHARE row
+     * to name. It refuses instead, with the same patient.notFound key the
+     * results half of the chart's Labs tab throws.
+     */
+    @Test
+    void patientSearchWithNoActiveHospitalRefusesInsteadOfReadingEveryTenant() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        PageRequest page = PageRequest.of(0, 20);
+        LabOrder foreign = LabOrder.builder().hospital(third).patient(patient).build();
+        foreign.setId(UUID.randomUUID());
+        // Stubbed so the test would SEE the leak if the unscoped search ran again.
+        lenient().when(labOrderRepository.search(null, patient.getId(), null, null, page))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(foreign)));
+
+        // The key, not the resolved message: getMessage() is already resolved,
+        // so only getMessageKey() pins that the refusal is indistinguishable
+        // from "no such patient" and stays a resolvable key.
+        assertThatThrownBy(() -> service.searchLabOrders(patient.getId(), null, null, page, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("patient.notFound");
+
+        verify(labOrderRepository, never()).search(any(), any(), any(), any(), any());
+        verifyNoInteractions(reachRecorder);
+    }
+
+    /**
+     * The platform worklist is NOT refused. Three lab screens page through
+     * {@code GET /lab-orders} with no patientId, and a super-admin seeing it
+     * whole is this service's documented behaviour; only the one shape that is
+     * a patient's record rather than a worklist is refused.
+     */
+    @Test
+    void patientlessSearchWithNoActiveHospitalStillListsThePlatformWorklist() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        PageRequest page = PageRequest.of(0, 20);
+        when(labOrderRepository.search(null, null, null, null, page))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(order)));
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        assertThat(service.searchLabOrders(null, null, null, page, Locale.ENGLISH).getContent())
+            .containsExactly(mapped);
+    }
+
+    /** A scoped patient search is untouched: the predicate carries the hospital. */
+    @Test
+    void patientSearchWithAnActiveHospitalStaysScoped() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        PageRequest page = PageRequest.of(0, 20);
+        when(labOrderRepository.search(performing.getId(), patient.getId(), null, null, page))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(order)));
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        assertThat(service.searchLabOrders(patient.getId(), null, null, page, Locale.ENGLISH).getContent())
+            .containsExactly(mapped);
+    }
+
+    /**
+     * A staff id looks single-tenant — a Staff row is pinned to one hospital by
+     * {@code uq_staff_user_hospital} — but {@code buildLabOrder} never binds
+     * {@code orderingStaff.hospital} to the order's hospital, so one staff id
+     * can own orders at several. Unscoped, this unioned them with no acting
+     * hospital to account the disclosure against.
+     */
+    @Test
+    void byStaffWithNoActiveHospitalRefusesInsteadOfReadingEveryTenant() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        UUID staffId = UUID.randomUUID();
+        LabOrder foreign = LabOrder.builder().hospital(third).patient(patient).build();
+        foreign.setId(UUID.randomUUID());
+        // Stubbed so the test would SEE the leak if the fallback ever ran again.
+        lenient().when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(foreign));
+
+        assertThatThrownBy(() -> service.getLabOrdersByStaffId(staffId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("staff.notfound");
+
+        verify(labOrderRepository, never()).findByOrderingStaff_Id(any());
+        verifyNoInteractions(reachRecorder);
+    }
+
+    /** A scoped staff read is untouched: the predicate still carries the hospital. */
+    @Test
+    void byStaffWithAnActiveHospitalStaysScoped() {
+        UUID staffId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, performing.getId()))
+            .thenReturn(List.of(order));
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        assertThat(service.getLabOrdersByStaffId(staffId, Locale.ENGLISH)).containsExactly(mapped);
+    }
+
     @Test
     void byStatusReadsOrdersHandledByTheActiveHospital() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
@@ -547,6 +762,32 @@ class LabOrderServiceImplPerformingHospitalTest {
         assertThat(service.getLabOrdersByLabTestDefinitionId(definition.getId(), Locale.ENGLISH))
             .containsExactly(mapped);
         verify(labOrderMapper, never()).toLabOrderResponseDTO(foreign);
+    }
+
+    /**
+     * {@code getLabOrdersByPatientId} carried the identical hole — with no
+     * acting hospital it fell through to every tenant's orders for the
+     * patient, and the reachRecorder call sits inside the scoped branch, so
+     * none of it was accounted. It is unconditionally patient-filtered, so
+     * there is no worklist reading to preserve and the guard is just the null
+     * scope. Nothing calls it today; it is guarded so that whoever wires it up
+     * does not ship the hole back.
+     */
+    @Test
+    void byPatientWithNoActiveHospitalRefusesInsteadOfReadingEveryTenant() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        LabOrder foreign = LabOrder.builder().hospital(third).patient(patient).build();
+        foreign.setId(UUID.randomUUID());
+        // Stubbed so the test would SEE the leak if the fallback ever ran again.
+        lenient().when(labOrderRepository.findByPatient_Id(patient.getId())).thenReturn(List.of(foreign));
+
+        assertThatThrownBy(() -> service.getLabOrdersByPatientId(patient.getId(), Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("patient.notFound");
+
+        verify(labOrderRepository, never()).findByPatient_Id(any());
+        verifyNoInteractions(reachRecorder);
     }
 
     @Test
@@ -595,19 +836,59 @@ class LabOrderServiceImplPerformingHospitalTest {
         assertThat(service.listPerformingLabs()).hasSize(2);
     }
 
+    @Test
+    void aPharmacyIsNeverOfferedAsAPerformingLaboratory() {
+        Hospital pharmacy = hospital("Pharmacie du Marche", "PHA");
+        pharmacy.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        Hospital laboratory = hospital("Private Laboratory", "PLB");
+        laboratory.setFacilityType(com.example.hms.enums.FacilityType.LABORATORY);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(hospitalRepository.findByActiveTrueAndLifecycleStateOrderByNameAsc(HospitalLifecycleState.ACTIVE))
+            .thenReturn(List.of(performing, pharmacy, laboratory));
+
+        assertThat(service.listPerformingLabs()).extracting(PerformingLabOptionDTO::getId)
+            .containsExactly(performing.getId(), laboratory.getId());
+    }
+
+    @Test
+    void createLabOrderRefusesAPharmacyAsThePerformingLaboratory() {
+        mockOrderLookups();
+        performing.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        when(hospitalRepository.findById(performing.getId())).thenReturn(Optional.of(performing));
+
+        LabOrderRequestDTO request = request().performingHospitalId(performing.getId()).build();
+        assertThatThrownBy(() -> service.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void createLabOrderAcceptsALaboratoryFacility() {
+        mockOrderLookups();
+        performing.setFacilityType(com.example.hms.enums.FacilityType.LABORATORY);
+        when(hospitalRepository.findById(performing.getId())).thenReturn(Optional.of(performing));
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(mapped);
+
+        service.createLabOrder(request().performingHospitalId(performing.getId()).build(), Locale.ENGLISH);
+
+        verify(labOrderRepository).save(any(LabOrder.class));
+    }
+
     // ── fixtures ──────────────────────────────────────────────────────────
 
     private void mockOrderLookups() {
         when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
-        when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        // Lenient: an update that keeps the ordering clinician never looks the row up.
+        lenient().when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        lenient().when(authUtils.resolveUserId(any())).thenReturn(Optional.of(staff.getUser().getId()));
         when(hospitalRepository.findById(ordering.getId())).thenReturn(Optional.of(ordering));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patient.getId(), ordering.getId()))
             .thenReturn(true);
         when(roleValidator.canOrderLabTests(staff.getUser().getId(), ordering.getId())).thenReturn(true);
         when(labTestDefinitionRepository.findById(definition.getId())).thenReturn(Optional.of(definition));
-        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
-        lenient().when(labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(
-            eq(patient.getId()), eq(definition.getId()), any(LocalDateTime.class))).thenReturn(false);
+        // Lenient: an edit that keeps the ordering clinician and the assignment never looks it up.
+        lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
     }
 
     private LabOrderRequestDTO.LabOrderRequestDTOBuilder request() {

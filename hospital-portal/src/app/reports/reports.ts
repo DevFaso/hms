@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -10,6 +17,27 @@ import {
   ReportsService,
 } from './reports.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { refusalReason } from '../shared/refusal-reason';
+import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+/**
+ * QA D855: the address shape the server accepts (EmailAddresses.isDeliverable),
+ * so a typo is caught on the field before the round trip.
+ */
+const DELIVERABLE_EMAIL = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+/** Create-form controls in reading order, including server-validated selects. */
+const REPORT_FIELD_IDS = ['rep-name', 'rep-type', 'rep-period', 'rep-recipients'] as const;
+const SERVER_REPORT_FIELDS = [
+  ['name', 'rep-name'],
+  ['reportType', 'rep-type'],
+  ['period', 'rep-period'],
+] as const;
 
 /**
  * Scheduled reports (P3 #25a): the admin page for aggregate-only CSV
@@ -20,7 +48,14 @@ import { ToastService } from '../core/toast.service';
 @Component({
   selector: 'app-reports',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    ModalDialogDirective,
+  ],
   templateUrl: './reports.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './reports.scss',
@@ -29,6 +64,8 @@ export class ReportsComponent implements OnInit {
   private readonly reportsService = inject(ReportsService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── List state ─────────────── */
   definitions = signal<ReportDefinitionResponse[]>([]);
@@ -47,6 +84,8 @@ export class ReportsComponent implements OnInit {
   reportType = signal<ReportType>('ENCOUNTER_ACTIVITY');
   period = signal<ReportPeriod>('MONTHLY');
   recipients = signal('');
+  /** QA D855: why the recipients were refused, shown under the field. */
+  recipientsError = signal<string | null>(null);
 
   readonly reportTypes: ReportType[] = [
     'ENCOUNTER_ACTIVITY',
@@ -78,14 +117,43 @@ export class ReportsComponent implements OnInit {
     this.reportType.set('ENCOUNTER_ACTIVITY');
     this.period.set('MONTHLY');
     this.recipients.set('');
+    this.recipientsError.set(null);
     this.showCreate.set(true);
   }
 
   submitCreate(): void {
+    const root = this.host.nativeElement;
     if (!this.name().trim() || !this.recipients().trim()) {
-      this.toast.error(this.translate.instant('REPORTS.FIELDS_REQUIRED'));
+      // QA D1306 (round 28): the blank fields are marked, not only a toast.
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'COMMON.NAME', value: this.name() },
+          { labelKey: 'REPORTS.RECIPIENTS', value: this.recipients() },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      const blank = [
+        this.name().trim() ? null : 'rep-name',
+        this.recipients().trim() ? null : 'rep-recipients',
+      ].filter((id): id is string => id !== null);
+      refuseFields(root, blank, REPORT_FIELD_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
+      this.toast.error(message);
       return;
     }
+    // The address check below is marked by the template's own binding.
+    refuseFields(root, [], REPORT_FIELD_IDS, '');
+    const invalid = this.recipients()
+      .split(',')
+      .map((a) => a.trim())
+      .find((a) => a !== '' && !DELIVERABLE_EMAIL.test(a));
+    if (invalid !== undefined) {
+      this.recipientsError.set(
+        this.translate.instant('REPORTS.RECIPIENT_INVALID', { address: invalid }),
+      );
+      // QA D1306 (round 28): focus the field the template marks, not only the message.
+      focusFirstInvalid(root, ['rep-recipients']);
+      return;
+    }
+    this.recipientsError.set(null);
     if (this.saving()) return;
     this.saving.set(true);
     this.reportsService
@@ -103,7 +171,42 @@ export class ReportsComponent implements OnInit {
           this.load();
         },
         error: (err) => {
-          this.toast.error(err?.error?.message ?? this.translate.instant('REPORTS.CREATE_FAILED'));
+          const fieldErrors = err?.error?.fieldErrors;
+          const refused = SERVER_REPORT_FIELDS.flatMap(([field, id]) => {
+            const message = fieldErrors?.[field];
+            return typeof message === 'string' && message.trim() ? [{ id, message }] : [];
+          });
+          refuseFields(
+            root,
+            refused,
+            SERVER_REPORT_FIELDS.map(([, id]) => id),
+          );
+          const recipientsReason = fieldErrors?.recipients;
+          const hasRecipientsReason =
+            typeof recipientsReason === 'string' && recipientsReason.trim() !== '';
+          if (hasRecipientsReason) {
+            this.recipientsError.set(recipientsReason);
+          }
+          const handled = new Set<string>([
+            'recipients',
+            ...SERVER_REPORT_FIELDS.map(([field]) => field),
+          ]);
+          const unhandled = Object.entries(fieldErrors ?? {})
+            .filter(([field]) => !handled.has(field))
+            .map(([, reason]) => reason)
+            .filter(
+              (reason): reason is string => typeof reason === 'string' && reason.trim() !== '',
+            );
+          if (unhandled.length > 0 || (refused.length === 0 && !hasRecipientsReason)) {
+            this.toast.error(
+              unhandled.length > 0
+                ? unhandled.join('. ')
+                : (refusalReason(err) ?? this.translate.instant('REPORTS.CREATE_FAILED')),
+            );
+          }
+          const invalidIds: string[] = refused.map(({ id }) => id);
+          if (hasRecipientsReason) invalidIds.push('rep-recipients');
+          focusFirstInvalid(root, invalidIds);
           this.saving.set(false);
         },
       });
@@ -149,8 +252,17 @@ export class ReportsComponent implements OnInit {
     });
   }
 
-  toggleActive(definition: ReportDefinitionResponse): void {
+  async toggleActive(definition: ReportDefinitionResponse): Promise<void> {
     if (this.actingOnId()) return;
+    // QA CX-010: one click stopped a scheduled report; turning it back on asks nothing.
+    if (definition.active) {
+      const confirmed = await this.confirm.ask({
+        titleKey: 'REPORTS.DEACTIVATE_CONFIRM',
+        params: { name: definition.name },
+        confirmKey: 'COMMON.CONFIRM',
+      });
+      if (!confirmed) return;
+    }
     this.actingOnId.set(definition.id);
     const call = definition.active
       ? this.reportsService.deactivate(definition.id)

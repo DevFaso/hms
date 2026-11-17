@@ -36,6 +36,7 @@ import com.example.hms.model.Role;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.service.StaffAvailabilityService;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
@@ -68,7 +69,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 
 import java.time.LocalDate;
@@ -81,11 +81,14 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.doThrow;
 import org.mockito.Spy;
 import org.springframework.context.MessageSource;
@@ -99,6 +102,10 @@ import com.example.hms.i18n.TestMessageSources;
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings({"java:S100", "java:S1192"})
 class PatientPortalServiceImplPhase2Test {
+
+    /** QA D978: a patient books in the future only, so the fixture dates move with the clock. */
+    private static final LocalDate RESCHEDULE_DATE = LocalDate.now().plusDays(20);
+    private static final LocalDate BOOKING_DATE = LocalDate.now().plusDays(30);
 
     @Mock private PatientRepository patientRepository;
     @Mock private ControllerAuthUtils authUtils;
@@ -124,11 +131,12 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private StaffRepository staffRepository;
+    @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private StaffAvailabilityService staffAvailabilityService;
     @Mock private com.example.hms.repository.PatientProxyRepository patientProxyRepository;
     @Mock private com.example.hms.repository.UserRepository userRepository;
-    @Mock private com.example.hms.service.NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private com.example.hms.service.EmailService emailService;
     @Mock private com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
     @Mock private com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
@@ -138,6 +146,12 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private com.example.hms.mapper.QuestionnaireMapper questionnaireMapper;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
 
     @InjectMocks
     private PatientPortalServiceImpl service;
@@ -151,6 +165,14 @@ class PatientPortalServiceImplPhase2Test {
 
     @BeforeEach
     void setUp() {
+        // The refusals below assert the key: another class may have left a bundle in the static holder.
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
+        com.example.hms.testsupport.SlotPolicyStubs.publishedSlots(slotPolicy);
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        lenient().when(hospitalRepository.findClinicalById(any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(ClinicalHospitals::isClinical));
         userId = UUID.randomUUID();
         patientId = UUID.randomUUID();
 
@@ -215,7 +237,9 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result).isNotNull();
             assertThat(result.getId()).isEqualTo(apptId);
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
-            assertThat(appointment.getNotes()).contains("Patient cancelled: Schedule conflict");
+            // QA D1196: the reason is data in its own column, not English in the notes.
+            assertThat(appointment.getStatusReason()).isEqualTo("Schedule conflict");
+            assertThat(appointment.getNotes()).isNull();
             verify(appointmentRepository).save(appointment);
             // The appointment owns its slot (P3 #22): a portal cancel frees
             // the time just like a desk cancel.
@@ -302,9 +326,13 @@ class PatientPortalServiceImplPhase2Test {
             CancelAppointmentRequestDTO dto = CancelAppointmentRequestDTO.builder()
                     .appointmentId(apptId).build();
 
-            assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
-                    .isInstanceOf(AccessDeniedException.class)
-                    .hasMessageContaining("does not belong to you");
+            // Another patient's appointment answers exactly as a missing one.
+            String refused = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH)).getMessage();
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.empty());
+            String missing = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH)).getMessage();
+            assertThat(refused).isEqualTo(missing);
         }
 
         @Test
@@ -321,7 +349,49 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already cancelled");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.alreadyCancelled");
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = AppointmentStatus.class,
+                names = {"CHECKED_IN", "IN_PROGRESS", "NO_SHOW", "FAILED"})
+        @DisplayName("QA D717: an arrived or closed-out appointment cannot be cancelled from the portal")
+        void arrivedAppointment_cannotBeCancelled(AppointmentStatus status) {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, status);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            CancelAppointmentRequestDTO dto = CancelAppointmentRequestDTO.builder()
+                    .appointmentId(apptId).reason("Changement").build();
+
+            assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.FRENCH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.patient.notChangeable");
+            assertThat(appointment.getStatus()).isEqualTo(status);
+            verify(appointmentRepository, never()).save(any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = AppointmentStatus.class,
+                names = {"CHECKED_IN", "IN_PROGRESS", "NO_SHOW", "FAILED"})
+        @DisplayName("QA D717 sibling: an arrived appointment cannot be rescheduled from the portal")
+        void arrivedAppointment_cannotBeRescheduled(AppointmentStatus status) {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, status);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0))
+                    .newEndTime(LocalTime.of(14, 30))
+                    .build();
+
+            assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.FRENCH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.patient.notChangeable");
+            assertThat(appointment.getStatus()).isEqualTo(status);
+            verify(appointmentRepository, never()).save(any());
         }
 
         @Test
@@ -338,7 +408,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Cannot cancel a completed");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.cancel.completed");
         }
 
         @Test
@@ -361,7 +431,9 @@ class PatientPortalServiceImplPhase2Test {
 
             service.cancelMyAppointment(auth, dto, Locale.ENGLISH);
 
-            assertThat(appointment.getNotes()).isEqualTo("Doctor note | Patient cancelled: Emergency");
+            // QA D1196: the staff notes are left as they were; the reason is its own field.
+            assertThat(appointment.getNotes()).isEqualTo("Doctor note");
+            assertThat(appointment.getStatusReason()).isEqualTo("Emergency");
         }
     }
 
@@ -372,6 +444,28 @@ class PatientPortalServiceImplPhase2Test {
     @Nested
     @DisplayName("rescheduleMyAppointment")
     class RescheduleMyAppointment {
+
+        @Test
+        @DisplayName("QA D1495: refused once the desk deactivated the registration, as a new booking is")
+        void aDeactivatedRegistrationIsRefused() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            appointment.setHospital(hospital);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(registrationRepository.existsByPatientIdAndHospitalIdAndActiveFalse(patientId, hospital.getId()))
+                    .thenReturn(true);
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId).newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0)).newEndTime(LocalTime.of(14, 30)).build();
+
+            assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                            e -> assertThat(e.getField()).isEqualTo("hospitalId"));
+            verify(appointmentRepository, org.mockito.Mockito.never()).save(any());
+        }
 
         @Test
         @DisplayName("a hospital-backed portal reschedule announces APPOINTMENT_RESCHEDULED to item 45's outbox")
@@ -390,7 +484,7 @@ class PatientPortalServiceImplPhase2Test {
 
             service.rescheduleMyAppointment(auth, RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build(), Locale.ENGLISH);
@@ -406,6 +500,9 @@ class PatientPortalServiceImplPhase2Test {
             stubPatientResolution();
             UUID apptId = UUID.randomUUID();
             Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            // A legacy payload key describes the original slot, not the moved visit.
+            appointment.setBookingRequestKey("legacy-original-slot");
+            appointment.setBookingRequestFingerprint("legacy-original-payload");
 
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
             when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -415,7 +512,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .reason("Need afternoon slot")
@@ -424,12 +521,39 @@ class PatientPortalServiceImplPhase2Test {
             AppointmentResponseDTO result = service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH);
 
             assertThat(result).isNotNull();
-            assertThat(appointment.getAppointmentDate()).isEqualTo(LocalDate.of(2026, 5, 20));
+            assertThat(appointment.getAppointmentDate()).isEqualTo(RESCHEDULE_DATE);
             assertThat(appointment.getStartTime()).isEqualTo(LocalTime.of(14, 0));
+            assertThat(appointment.getBookingRequestKey()).isNull();
+            assertThat(appointment.getBookingRequestFingerprint()).isNull();
             assertThat(appointment.getEndTime()).isEqualTo(LocalTime.of(14, 30));
-            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
-            assertThat(appointment.getNotes()).contains("Patient rescheduled: Need afternoon slot");
+            // QA D977: a moved appointment is booked at its new time, as the desk lands it.
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+            // QA D1196: the reason for the move is data, never "Patient rescheduled: ..." in the notes.
+            assertThat(appointment.getStatusReason()).isEqualTo("Need afternoon slot");
+            assertThat(java.util.Objects.toString(appointment.getNotes(), "")).doesNotContain("Need afternoon slot");
             verify(appointmentRepository).save(appointment);
+        }
+
+        @Test
+        @DisplayName("review round 13: a tentative (PENDING) booking moved by the patient stays tentative")
+        void reschedule_pendingStaysPending() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.PENDING);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(apptId).build());
+
+            service.rescheduleMyAppointment(auth, RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0))
+                    .newEndTime(LocalTime.of(14, 30))
+                    .build(), Locale.ENGLISH);
+
+            assertThat(appointment.getAppointmentDate()).isEqualTo(RESCHEDULE_DATE);
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.PENDING);
         }
 
         @Test
@@ -441,7 +565,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -465,13 +589,17 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
 
-            assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
-                    .isInstanceOf(AccessDeniedException.class);
+            String refused = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH)).getMessage();
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.empty());
+            String missing = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH)).getMessage();
+            assertThat(refused).isEqualTo(missing);
         }
 
         @Test
@@ -485,14 +613,14 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
 
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Cannot reschedule a completed");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.reschedule.completed");
         }
 
         @Test
@@ -506,37 +634,120 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
 
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Cannot reschedule a cancelled");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.reschedule.cancelled");
         }
 
         @Test
-        @DisplayName("should throw when end time is not after start time")
-        void endBeforeStart_throws() {
+        @DisplayName("QA D1060: the patient's end time is ignored, the slot rules set the length")
+        void reschedule_theSlotRulesSetTheLength() {
+            // Was "should throw when end time is not after start time": the end
+            // is no longer the patient's to send (the dialog saved 08:20-09:20).
             stubPatientResolution();
             UUID apptId = UUID.randomUUID();
             Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
-
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(apptId).build());
+            // QA D1093: the length is the published slot's own (a 20-minute slot).
+            when(slotPolicy.requirePublishedFreeSlot(any(), any(), any(), any()))
+                    .thenReturn(com.example.hms.model.scheduling.AppointmentSlot.builder()
+                            .startAt(java.time.LocalDateTime.of(RESCHEDULE_DATE, LocalTime.of(14, 0)))
+                            .endAt(java.time.LocalDateTime.of(RESCHEDULE_DATE, LocalTime.of(14, 20)))
+                            .build());
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
-                    .newStartTime(LocalTime.of(14, 30))
-                    .newEndTime(LocalTime.of(14, 0))
+                    .newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0))
+                    .newEndTime(LocalTime.of(20, 0))
                     .build();
 
+            service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH);
+
+            assertThat(appointment.getStartTime()).isEqualTo(LocalTime.of(14, 0));
+            assertThat(appointment.getEndTime()).isEqualTo(LocalTime.of(14, 20));
+        }
+
+        @Test
+        @DisplayName("QA D1093: a reschedule to a time that is not a published, free slot is refused")
+        void d1093_rescheduleOffGridIsRefused() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(slotPolicy.requirePublishedFreeSlot(any(), any(), any(), any()))
+                    .thenThrow(new BusinessException("portal.booking.notAPublishedSlot"));
+
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId).newDate(RESCHEDULE_DATE).newStartTime(LocalTime.of(15, 0)).build();
+
+            assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+            verify(appointmentRepository, never()).save(any());
+            verify(slotInventoryService, never()).releaseForAppointment(any());
+        }
+
+        @Test
+        @DisplayName("QA D1093: a reschedule frees the old slot and takes the new one")
+        void d1093_rescheduleMovesTheSlot() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            appointment.setHospital(hospital);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(apptId).build());
+            com.example.hms.model.scheduling.AppointmentSlot newSlot = com.example.hms.model.scheduling.AppointmentSlot
+                    .builder().startAt(java.time.LocalDateTime.of(RESCHEDULE_DATE, LocalTime.of(14, 0)))
+                    .endAt(java.time.LocalDateTime.of(RESCHEDULE_DATE, LocalTime.of(14, 20))).build();
+            when(slotPolicy.requirePublishedFreeSlot(any(), eq(java.time.LocalDateTime.of(RESCHEDULE_DATE,
+                    LocalTime.of(14, 0))), eq(hospital.getId()), eq(null))).thenReturn(newSlot);
+
+            service.rescheduleMyAppointment(auth, RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId).newDate(RESCHEDULE_DATE).newStartTime(LocalTime.of(14, 0)).build(),
+                    Locale.ENGLISH);
+
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(slotInventoryService, slotPolicy);
+            order.verify(slotInventoryService).releaseForAppointment(apptId);
+            order.verify(slotPolicy).takeSlot(newSlot, appointment);
+            assertThat(appointment.getEndTime()).isEqualTo(LocalTime.of(14, 20));
+        }
+
+        @Test
+        @DisplayName("QA D1063: a reschedule onto a slot held for a waitlist offer is refused")
+        void reschedule_ontoAHeldSlotIsRefused() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            doThrow(new BusinessException("slot.heldForOffer"))
+                    .when(slotPolicy).requireNoLiveHold(any(), any(), any());
+
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0))
+                    .build();
+
+            com.example.hms.model.Staff clinician = new com.example.hms.model.Staff();
+            clinician.setId(UUID.randomUUID());
+            appointment.setStaff(clinician);
+            when(staffAvailabilityService.isStaffAvailable(eq(clinician.getId()), any())).thenReturn(true);
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("End time must be after start time");
-
-            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+                    .hasFieldOrPropertyWithValue("messageKey", "slot.heldForOffer");
+            verify(appointmentRepository, never()).save(any());
         }
     }
 
@@ -700,7 +911,7 @@ class PatientPortalServiceImplPhase2Test {
             assertThatThrownBy(() -> service.requestMedicationRefill(auth,
                     MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already have a refill request");
+                    .matches(e -> "patient.refill.alreadyPending".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
 
             // There was no guard at all before: a double tap fired a second
             // care-team email and a second row in every prescriber's inbox.
@@ -724,7 +935,7 @@ class PatientPortalServiceImplPhase2Test {
             assertThatThrownBy(() -> service.requestMedicationRefill(auth,
                     MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("on hold");
+                    .matches(e -> "patient.refill.onHold".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
         }
 
         @Test
@@ -742,8 +953,84 @@ class PatientPortalServiceImplPhase2Test {
             assertThatThrownBy(() -> service.requestMedicationRefill(auth,
                     MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("no longer be refilled");
+                    .matches(e -> "patient.refill.notRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
             verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D719: requestMedicationRefill — refuses a completed controlled substance")
+        void requestRefill_refusesControlledSubstance() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            prescription.setControlledSubstance(true);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            // The real resolver answers true for the prescriber's tick.
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            // QA D813: named as a controlled medicine, not as "no renewals left".
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.controlled".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D719 re-test: requestMedicationRefill — refuses catalog-controlled morphine whose tick is false")
+        void requestRefill_refusesCatalogControlledSubstance() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            prescription.setControlledSubstance(false);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.controlled".equals(((BusinessException) e).getMessageKey()));
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D813: catalog-controlled morphine with renewals left on paper is refused as controlled")
+        void requestRefill_controlledWithRenewalsLeftSaysControlled() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            prescription.setControlledSubstance(false);
+            prescription.setRefillsAllowed(3);
+            prescription.setRefillsRemaining(3);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.controlled".equals(((BusinessException) e).getMessageKey()));
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D743: a duplicate refill request is refused with a localised key")
+        void requestRefill_duplicateIsLocalised() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            RefillRequest open = RefillRequest.builder().status(RefillStatus.REQUESTED).build();
+            when(refillRequestRepository.findFirstByPrescription_IdAndPatient_IdAndStatusInOrderByCreatedAtDesc(
+                    any(), any(), any())).thenReturn(Optional.of(open));
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.alreadyPending".equals(((BusinessException) e).getMessageKey()));
         }
 
         @Test
@@ -830,8 +1117,8 @@ class PatientPortalServiceImplPhase2Test {
             MedicationRefillResponseDTO result = service.requestMedicationRefill(auth, dto);
 
             assertThat(result).isNotNull();
-            verify(notificationService).createNotification(any(), eq("doctor.one"), eq("MEDICATION_REFILL"));
-            verify(notificationService).createNotification(any(), eq("nurse.one"), eq("MEDICATION_REFILL"));
+            verify(notificationService).created(any(), eq("doctor.one"), eq("MEDICATION_REFILL"));
+            verify(notificationService).created(any(), eq("nurse.one"), eq("MEDICATION_REFILL"));
             verify(emailService).sendHtml(eq(List.of("doctor.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
             verify(emailService).sendHtml(eq(List.of("nurse.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
         }
@@ -868,7 +1155,7 @@ class PatientPortalServiceImplPhase2Test {
             when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospital.getId(), department.getId()))
                     .thenReturn(List.of(doctor));
             doThrow(new RuntimeException("notification down"))
-                    .when(notificationService).createNotification(any(), any(), eq("MEDICATION_REFILL"));
+                    .when(notificationService).created(any(), any(), eq("MEDICATION_REFILL"));
             doThrow(new RuntimeException("smtp down"))
                     .when(emailService).sendHtml(any(), any(), any(), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
             when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {
@@ -904,7 +1191,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.requestMedicationRefill(auth, dto))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Prescription not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "prescription.notFound");
         }
 
         @Test
@@ -921,9 +1208,12 @@ class PatientPortalServiceImplPhase2Test {
             MedicationRefillRequestDTO dto = MedicationRefillRequestDTO.builder()
                     .prescriptionId(rxId).build();
 
-            assertThatThrownBy(() -> service.requestMedicationRefill(auth, dto))
-                    .isInstanceOf(AccessDeniedException.class)
-                    .hasMessageContaining("do not have access to this prescription");
+            String refused = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.requestMedicationRefill(auth, dto)).getMessage();
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.empty());
+            String missing = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.requestMedicationRefill(auth, dto)).getMessage();
+            assertThat(refused).isEqualTo(missing);
         }
 
         @Test
@@ -985,8 +1275,13 @@ class PatientPortalServiceImplPhase2Test {
 
             when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(refill));
 
-            assertThatThrownBy(() -> service.cancelMyRefill(auth, refillId))
-                    .isInstanceOf(AccessDeniedException.class);
+            String refused = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.cancelMyRefill(auth, refillId)).getMessage();
+            when(refillRequestRepository.findById(refillId)).thenReturn(Optional.empty());
+            String missing = catchThrowableOfType(ResourceNotFoundException.class,
+                    () -> service.cancelMyRefill(auth, refillId)).getMessage();
+            assertThat(refused).isEqualTo(missing);
+            assertThat(refill.getStatus()).isEqualTo(RefillStatus.REQUESTED);
         }
 
         @Test
@@ -1001,7 +1296,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyRefill(auth, refillId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Only pending refill requests can be cancelled");
+                    .hasMessageContaining("patient.refill.cancel.notPending");
         }
 
         @Test
@@ -1016,7 +1311,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyRefill(auth, refillId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Only pending refill requests");
+                    .hasMessageContaining("patient.refill.cancel.notPending");
         }
     }
 
@@ -1087,10 +1382,7 @@ class PatientPortalServiceImplPhase2Test {
                     .current(false)
                     .build();
 
-            when(primaryCareService.getCurrentPrimaryCare(patientId))
-                    .thenReturn(Optional.of(currentPcp));
-            when(primaryCareService.getPrimaryCareHistory(patientId))
-                    .thenReturn(List.of(currentPcp, pastPcp));
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of(currentPcp, pastPcp));
 
             CareTeamDTO result = service.getMyCareTeam(auth);
 
@@ -1102,18 +1394,148 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
+        @DisplayName("D115 — the clinicians of open visits are on the care team, once each, newest visit first")
+        void getCareTeam_openVisitClinicians() {
+            stubPatientResolution();
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of());
+
+            com.example.hms.model.User doctorUser = new com.example.hms.model.User();
+            doctorUser.setId(UUID.randomUUID());
+            doctorUser.setFirstName("Awa");
+            doctorUser.setLastName("Kaboré");
+            doctorUser.addRole(role("ROLE_DOCTOR"));
+            com.example.hms.model.Staff doctor = new com.example.hms.model.Staff();
+            doctor.setUser(doctorUser);
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(UUID.randomUUID());
+            hospital.setName("CHU Nord");
+            com.example.hms.model.Encounter newer = new com.example.hms.model.Encounter();
+            newer.setStaff(doctor);
+            newer.setHospital(hospital);
+            com.example.hms.model.Encounter older = new com.example.hms.model.Encounter();
+            older.setStaff(doctor);
+            older.setHospital(hospital);
+            when(encounterRepository.findOpenWithClinicianByPatientId(org.mockito.ArgumentMatchers.eq(patientId),
+                    org.mockito.ArgumentMatchers.argThat(closed ->
+                            closed.contains(com.example.hms.enums.EncounterStatus.COMPLETED)
+                                    && closed.contains(com.example.hms.enums.EncounterStatus.CANCELLED))))
+                    .thenReturn(List.of(newer, older));
+
+            CareTeamDTO result = service.getMyCareTeam(auth);
+
+            assertThat(result.getVisitClinicians()).singleElement().satisfies(entry -> {
+                assertThat(entry.getUserId()).isEqualTo(doctorUser.getId());
+                assertThat(entry.getDisplayName()).isEqualTo("Awa Kaboré");
+                assertThat(entry.getHospitalName()).isEqualTo("CHU Nord");
+            });
+        }
+
+        @Test
+        @DisplayName("D115 — a deactivated account or a non-clinical role never reaches the care team (the send would be refused)")
+        void getCareTeam_skipsUnreachableClinicians() {
+            stubPatientResolution();
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of());
+
+            com.example.hms.model.User inactive = visitUser("ROLE_DOCTOR");
+            inactive.setActive(false);
+            com.example.hms.model.User receptionist = visitUser("ROLE_RECEPTIONIST");
+            com.example.hms.model.User nurse = visitUser("NURSE");
+            when(encounterRepository.findOpenWithClinicianByPatientId(org.mockito.ArgumentMatchers.eq(patientId),
+                    org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(List.of(visit(inactive), visit(receptionist), visit(nurse)));
+
+            CareTeamDTO result = service.getMyCareTeam(auth);
+
+            assertThat(result.getVisitClinicians()).singleElement()
+                    .satisfies(entry -> assertThat(entry.getUserId()).isEqualTo(nurse.getId()));
+        }
+
+        private com.example.hms.model.Role role(String name) {
+            com.example.hms.model.Role role = new com.example.hms.model.Role();
+            role.setId(UUID.randomUUID());
+            role.setName(name);
+            return role;
+        }
+
+        private com.example.hms.model.User visitUser(String roleName) {
+            com.example.hms.model.User visitor = new com.example.hms.model.User();
+            visitor.setId(UUID.randomUUID());
+            visitor.addRole(role(roleName));
+            return visitor;
+        }
+
+        private com.example.hms.model.Encounter visit(com.example.hms.model.User user) {
+            com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+            staff.setUser(user);
+            com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+            encounter.setStaff(staff);
+            return encounter;
+        }
+
+        @Test
         @DisplayName("should return null primaryCare when no current PCP exists")
         void getCareTeam_noCurrentPcp() {
             stubPatientResolution();
-            when(primaryCareService.getCurrentPrimaryCare(patientId))
-                    .thenReturn(Optional.empty());
-            when(primaryCareService.getPrimaryCareHistory(patientId))
-                    .thenReturn(List.of());
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of());
 
             CareTeamDTO result = service.getMyCareTeam(auth);
 
             assertThat(result.getPrimaryCare()).isNull();
             assertThat(result.getPrimaryCareHistory()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("QA D1850 — a doctor at each of two hospitals: both are current, one entry per hospital, labelled")
+        void getCareTeam_twoHospitals() {
+            stubPatientResolution();
+            UUID hospitalA = UUID.randomUUID();
+            UUID hospitalB = UUID.randomUUID();
+            com.example.hms.model.Hospital a = new com.example.hms.model.Hospital();
+            a.setId(hospitalA);
+            a.setName("CHU Yalgado");
+            com.example.hms.model.Hospital b = new com.example.hms.model.Hospital();
+            b.setId(hospitalB);
+            b.setName("CMA Pissy");
+            PatientPrimaryCareResponseDTO atB = PatientPrimaryCareResponseDTO.builder()
+                    .id(UUID.randomUUID()).hospitalId(hospitalB).doctorDisplay("Dr. B")
+                    .startDate(LocalDate.of(2026, 11, 14)).current(true).build();
+            PatientPrimaryCareResponseDTO atA = PatientPrimaryCareResponseDTO.builder()
+                    .id(UUID.randomUUID()).hospitalId(hospitalA).doctorDisplay("Dr. A")
+                    .startDate(LocalDate.of(2026, 11, 1)).current(true).build();
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of(atB, atA));
+            when(hospitalRepository.findAllById(java.util.Set.of(hospitalA, hospitalB))).thenReturn(List.of(a, b));
+
+            CareTeamDTO result = service.getMyCareTeam(auth);
+
+            assertThat(result.getPrimaryCares())
+                    .extracting(CareTeamDTO.PrimaryCareEntry::getDoctorDisplay, CareTeamDTO.PrimaryCareEntry::getHospitalName)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("Dr. B", "CMA Pissy"),
+                            org.assertj.core.groups.Tuple.tuple("Dr. A", "CHU Yalgado"));
+            // The single field older apps read is the newest of them.
+            assertThat(result.getPrimaryCare().getDoctorDisplay()).isEqualTo("Dr. B");
+        }
+
+        @Test
+        @DisplayName("names the hospital of each entry, with one lookup")
+        void getCareTeam_namesTheHospitals() {
+            stubPatientResolution();
+            UUID hospitalA = UUID.randomUUID();
+            com.example.hms.model.Hospital a = new com.example.hms.model.Hospital();
+            a.setId(hospitalA);
+            a.setName("CHU Yalgado");
+            PatientPrimaryCareResponseDTO currentPcp = PatientPrimaryCareResponseDTO.builder()
+                    .id(UUID.randomUUID()).hospitalId(hospitalA).doctorDisplay("Dr. Smith").current(true).build();
+            PatientPrimaryCareResponseDTO noHospital = PatientPrimaryCareResponseDTO.builder()
+                    .id(UUID.randomUUID()).doctorDisplay("Dr. Jones").current(false).build();
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of(currentPcp, noHospital));
+            when(hospitalRepository.findAllById(java.util.Set.of(hospitalA))).thenReturn(List.of(a));
+
+            CareTeamDTO result = service.getMyCareTeam(auth);
+
+            assertThat(result.getPrimaryCare().getHospitalName()).isEqualTo("CHU Yalgado");
+            assertThat(result.getPrimaryCareHistory().get(0).getHospitalName()).isEqualTo("CHU Yalgado");
+            assertThat(result.getPrimaryCareHistory().get(1).getHospitalName()).isNull();
+            verify(hospitalRepository, times(1)).findAllById(any());
         }
     }
 
@@ -1145,7 +1567,7 @@ class PatientPortalServiceImplPhase2Test {
                     .build();
 
             Pageable pageable = PageRequest.of(0, 20);
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(new PageImpl<>(List.of(expected), pageable, 1));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);
@@ -1167,12 +1589,12 @@ class PatientPortalServiceImplPhase2Test {
             // emergency override and every disclosure to an insurer.
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 20);
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(Page.empty(pageable));
 
             service.getMyAccessLog(auth, pageable);
 
-            verify(disclosureAccountingService).getEntries(patientId, null, null, pageable);
+            verify(disclosureAccountingService).getEntriesAsPatientSees(patientId, null, null, pageable);
             // No "never called the old query" assertion here: the service no
             // longer holds an AuditEventLogService at all, so the compiler
             // enforces that far harder than a mock verification could.
@@ -1183,7 +1605,7 @@ class PatientPortalServiceImplPhase2Test {
         void getAccessLog_empty() {
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 20);
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(Page.empty(pageable));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);
@@ -1203,14 +1625,14 @@ class PatientPortalServiceImplPhase2Test {
             LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
             DisclosureAccountingDTO expected =
                     DisclosureAccountingDTO.builder().totalEvents(4).build();
-            when(disclosureAccountingService.getAccounting(patientId, from, to, pageable))
+            when(disclosureAccountingService.getAccountingAsPatientSees(patientId, from, to, pageable))
                     .thenReturn(expected);
 
             DisclosureAccountingDTO result =
                     service.getMyDisclosureAccounting(auth, from, to, pageable);
 
             assertThat(result).isSameAs(expected);
-            verify(disclosureAccountingService).getAccounting(patientId, from, to, pageable);
+            verify(disclosureAccountingService).getAccountingAsPatientSees(patientId, from, to, pageable);
         }
     }
 
@@ -1232,7 +1654,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Unable to resolve user");
+                    .hasMessageContaining("patient.refill.decision.userUnresolved");
         }
 
         @Test
@@ -1246,7 +1668,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("No patient record linked");
+                    .hasFieldOrPropertyWithValue("messageKey", "patient.portal.noRecord");
         }
     }
 
@@ -1314,6 +1736,58 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
+        void retryOfAnyClinicianBookingReturnsOriginalWithoutSelectingAnotherClinician() {
+            stubSchedulingBasics();
+            var dto = PortalBookAppointmentRequestDTO.builder().hospitalId(hospitalId)
+                .departmentId(departmentId).date(BOOKING_DATE).startTime(LocalTime.of(10, 0))
+                .bookingRequestId(UUID.randomUUID()).build();
+            var identity = com.example.hms.service.support.AppointmentBookingIdentity.portal(userId, patientId, dto);
+            Appointment existing = new Appointment();
+            existing.setStatus(AppointmentStatus.SCHEDULED);
+            existing.setPatient(patient);
+            existing.setHospital(hospital);
+            identity.stamp(existing);
+            when(appointmentRepository.findAllByBookingRequestKey(identity.key())).thenReturn(List.of(existing));
+            AppointmentResponseDTO expected = new AppointmentResponseDTO();
+            when(appointmentMapper.toAppointmentResponseDTO(existing)).thenReturn(expected);
+
+            assertThat(service.scheduleMyAppointment(auth, dto, Locale.FRENCH)).isSameAs(expected);
+
+            verify(staffRepository, never()).findActiveProvidersByHospitalAndDepartment(any(), any());
+            verify(appointmentRepository, never()).save(any());
+            verify(slotPolicy, never()).takeSlot(any(), any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+        void changedPayloadOrTransferredPatientIsRefusedBeforeProviderSelection(boolean transferred) {
+            stubSchedulingBasics();
+            var dto = PortalBookAppointmentRequestDTO.builder().hospitalId(hospitalId)
+                .departmentId(departmentId).date(BOOKING_DATE).startTime(LocalTime.of(10, 0))
+                .bookingRequestId(UUID.randomUUID()).build();
+            var identity = com.example.hms.service.support.AppointmentBookingIdentity.portal(userId, patientId, dto);
+            Appointment existing = new Appointment();
+            existing.setPatient(patient);
+            existing.setHospital(hospital);
+            existing.setStatus(AppointmentStatus.SCHEDULED);
+            identity.stamp(existing);
+            when(appointmentRepository.findAllByBookingRequestKey(identity.key())).thenReturn(List.of(existing));
+            if (transferred) {
+                Patient other = new Patient();
+                other.setId(UUID.randomUUID());
+                existing.setPatient(other);
+            } else {
+                dto.setNotes("A changed booking payload");
+            }
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.FRENCH))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            verify(staffRepository, never()).findActiveProvidersByHospitalAndDepartment(any(), any());
+            verify(staffRepository, never()).findLockedById(any());
+            verify(appointmentRepository, never()).save(any());
+            verify(slotPolicy, never()).takeSlot(any(), any());
+        }
+
+        @Test
         @DisplayName("should schedule appointment with explicit staff pick")
         void scheduleWithExplicitStaff_success() {
             stubSchedulingBasics();
@@ -1321,7 +1795,7 @@ class PatientPortalServiceImplPhase2Test {
             when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
             when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
                     .thenReturn(List.of());
-            when(assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId))
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
                     .thenReturn(Optional.of(assignment));
             when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
                 Appointment a = inv.getArgument(0);
@@ -1336,7 +1810,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .reason("Annual checkup")
                     .notes("First visit")
@@ -1359,10 +1833,17 @@ class PatientPortalServiceImplPhase2Test {
             stubSchedulingBasics();
             when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId))
                     .thenReturn(List.of(staff));
+            // QA D1093: "any clinician" is the one whose published slot starts then.
+            when(slotPolicy.offerableAt(departmentId, java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0))))
+                    .thenReturn(List.of(com.example.hms.model.scheduling.AppointmentSlot.builder()
+                            .staff(staff)
+                            .startAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0)))
+                            .endAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 30)))
+                            .build()));
             when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
             when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
                     .thenReturn(List.of());
-            when(assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId))
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
                     .thenReturn(Optional.of(assignment));
             when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
                 Appointment a = inv.getArgument(0);
@@ -1376,7 +1857,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(null)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1387,14 +1868,14 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("should default endTime to startTime + 30 min when omitted")
+        @DisplayName("should default endTime to the slot rules' 30-minute fallback when no template covers it")
         void scheduleDefaultEndTime() {
             stubSchedulingBasics();
             when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
             when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
             when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
                     .thenReturn(List.of());
-            when(assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId))
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
                     .thenReturn(Optional.of(assignment));
             when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
             when(appointmentMapper.toAppointmentResponseDTO(any()))
@@ -1404,7 +1885,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(14, 0))
                     .endTime(null) // should default to 14:30
                     .build();
@@ -1428,13 +1909,14 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("not registered");
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                            .containsAnyOf("portal.booking.notRegistered", "not registered"));
         }
 
         @Test
@@ -1449,13 +1931,14 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Department does not belong");
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                            .containsAnyOf("portal.booking.departmentOtherHospital", "does not belong"));
         }
 
         @Test
@@ -1472,13 +1955,14 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Provider does not belong");
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                            .containsAnyOf("portal.booking.providerOtherHospital", "does not work"));
         }
 
         @Test
@@ -1492,13 +1976,14 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("not available");
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                            .containsAnyOf("portal.booking.providerUnavailable", "not available"));
         }
 
         @Test
@@ -1510,7 +1995,7 @@ class PatientPortalServiceImplPhase2Test {
 
             // Create existing appointment at 10:00-10:30 that overlaps the request
             Appointment existing = new Appointment();
-            existing.setAppointmentDate(LocalDate.of(2026, 6, 15));
+            existing.setAppointmentDate(BOOKING_DATE);
             existing.setStartTime(LocalTime.of(10, 0));
             existing.setEndTime(LocalTime.of(10, 30));
             when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
@@ -1520,13 +2005,116 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 15))
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already has an appointment");
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                            .containsAnyOf("portal.booking.providerBusy", "already has an appointment"));
+        }
+
+        @Test
+        @DisplayName("QA D1093: a time that is not a published, free slot is refused and nothing is booked")
+        void d1093_anOffGridTimeIsRefused() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(slotPolicy.requirePublishedFreeSlot(eq(staffId), any(), eq(hospitalId), eq(departmentId)))
+                    .thenThrow(new BusinessException("portal.booking.notAPublishedSlot"));
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId).departmentId(departmentId).staffId(staffId)
+                    .date(BOOKING_DATE).startTime(LocalTime.of(10, 10)).build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+            verify(appointmentRepository, never()).save(any());
+            verify(slotPolicy, never()).takeSlot(any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1093: the self-booking takes its slot, so nobody else is offered it")
+        void d1093_theBookingTakesItsSlot() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any())).thenReturn(List.of());
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
+                    .thenReturn(Optional.of(assignment));
+            com.example.hms.model.scheduling.AppointmentSlot slot = com.example.hms.model.scheduling.AppointmentSlot
+                    .builder().startAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 20)))
+                    .endAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 40))).build();
+            when(slotPolicy.requirePublishedFreeSlot(staffId,
+                    java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 20)), hospitalId, departmentId))
+                    .thenReturn(slot);
+            when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any())).thenReturn(AppointmentResponseDTO.builder().build());
+
+            service.scheduleMyAppointment(auth, PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId).departmentId(departmentId).staffId(staffId)
+                    .date(BOOKING_DATE).startTime(LocalTime.of(10, 20)).build(), Locale.ENGLISH);
+
+            ArgumentCaptor<Appointment> saved = ArgumentCaptor.forClass(Appointment.class);
+            verify(appointmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getEndTime()).isEqualTo(LocalTime.of(10, 40));
+            verify(slotPolicy).takeSlot(slot, saved.getValue());
+        }
+
+        @Test
+        @DisplayName("QA D1093: any clinician with no published slot at that time is refused")
+        void d1093_anyClinicianWithoutASlotIsRefused() {
+            stubSchedulingBasics();
+            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId))
+                    .thenReturn(List.of(staff));
+            when(slotPolicy.offerableAt(eq(departmentId), any())).thenReturn(List.of());
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId).departmentId(departmentId)
+                    .date(BOOKING_DATE).startTime(LocalTime.of(15, 0)).build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+            verify(appointmentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D1093: the slots offered are the published, free ones of the day inside the patient day")
+        void d1093_openSlotsAreThePublishedFreeOnes() {
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+                    .thenReturn(Optional.of(new PatientHospitalRegistration()));
+            when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
+            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId))
+                    .thenReturn(List.of(staff));
+            java.util.function.BiFunction<Integer, Integer, com.example.hms.model.scheduling.AppointmentSlot> at =
+                    (h, m) -> {
+                        com.example.hms.model.scheduling.AppointmentSlot s = com.example.hms.model.scheduling
+                                .AppointmentSlot.builder().staff(staff).slotDate(BOOKING_DATE)
+                                .startAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(h, m)))
+                                .endAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(h, m)).plusMinutes(20))
+                                .build();
+                        s.setId(UUID.randomUUID());
+                        return s;
+                    };
+            com.example.hms.model.scheduling.AppointmentSlot early = at.apply(6, 0);    // before the patient day
+            com.example.hms.model.scheduling.AppointmentSlot free = at.apply(10, 0);
+            com.example.hms.model.scheduling.AppointmentSlot bookedOver = at.apply(10, 20);
+            when(slotPolicy.openOn(eq(hospitalId), eq(departmentId), eq(null), eq(BOOKING_DATE), any()))
+                    .thenReturn(List.of(early, free, bookedOver));
+            Appointment desk = new Appointment();
+            desk.setAppointmentDate(BOOKING_DATE);
+            desk.setStartTime(LocalTime.of(10, 20));
+            desk.setEndTime(LocalTime.of(10, 40));
+            desk.setStatus(AppointmentStatus.SCHEDULED);
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, BOOKING_DATE)).thenReturn(List.of(desk));
+
+            List<java.util.Map<String, Object>> slots =
+                    service.getOpenSlots(auth, hospitalId, departmentId, null, BOOKING_DATE);
+
+            assertThat(slots).extracting(m -> m.get("slotId")).containsExactly(free.getId());
+            assertThat(slots.get(0)).containsEntry("startTime", LocalTime.of(10, 0))
+                    .containsEntry("endTime", LocalTime.of(10, 20));
         }
 
         @Test
@@ -1540,33 +2128,72 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(null)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("No providers available");
+                    .isInstanceOf(BusinessException.class);
         }
 
         @Test
-        @DisplayName("should throw when end time is not after start time")
-        void endTimeNotAfterStart_throws() {
+        @DisplayName("QA D1060: a self-booking of a whole day takes one slot; the patient's end time is ignored")
+        void aWholeDayRequestTakesTheSlotLength() {
+            // Was "should throw when end time is not after start time": the API
+            // accepted 07:00-19:00 for one patient; the end is no longer theirs.
             stubSchedulingBasics();
             when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any())).thenReturn(List.of());
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
+                    .thenReturn(Optional.of(assignment));
+            when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any())).thenReturn(AppointmentResponseDTO.builder().build());
+            // QA D1093: the length is the published slot's own (a 20-minute slot).
+            when(slotPolicy.requirePublishedFreeSlot(staffId,
+                    java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0)), hospitalId, departmentId))
+                    .thenReturn(com.example.hms.model.scheduling.AppointmentSlot.builder()
+                            .startAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0)))
+                            .endAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 20)))
+                            .build());
 
             PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
-                    .endTime(LocalTime.of(10, 0)) // same as start — invalid
+                    .endTime(LocalTime.of(19, 0))
+                    .build();
+
+            service.scheduleMyAppointment(auth, dto, Locale.ENGLISH);
+
+            ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+            verify(appointmentRepository).save(captor.capture());
+            assertThat(captor.getValue().getEndTime()).isEqualTo(LocalTime.of(10, 20));
+        }
+
+        @Test
+        @DisplayName("QA D1063: a self-booking over a slot held for a waitlist offer is refused")
+        void aHeldSlotIsNotSelfBooked() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            doThrow(new BusinessException("slot.heldForOffer"))
+                    .when(slotPolicy).requireNoLiveHold(eq(staffId), any(), any());
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(BOOKING_DATE)
+                    .startTime(LocalTime.of(8, 0))
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("end time must be after start time");
+                    .hasFieldOrPropertyWithValue("messageKey", "slot.heldForOffer");
+            verify(appointmentRepository, never()).save(any());
         }
     }
 
@@ -1621,6 +2248,19 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
+        @DisplayName("QA D128: departments of a hospital the patient is not registered at are not listed")
+        void getDepartments_refusesAnUnregisteredHospital() {
+            UUID hospId = UUID.randomUUID();
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.empty());
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getDepartmentsForHospital(auth, hospId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            org.mockito.Mockito.verifyNoInteractions(departmentRepository);
+        }
+
+        @Test
         @DisplayName("getDepartmentsForHospital — should map department fields correctly")
         void getDepartments_mapsDepartmentFields() {
             UUID hospId = UUID.randomUUID();
@@ -1632,10 +2272,15 @@ class PatientPortalServiceImplPhase2Test {
             d2.setId(UUID.randomUUID());
             d2.setName("Radiology");
 
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
             when(departmentRepository.findByHospitalId(hospId)).thenReturn(List.of(d1, d2));
+            when(staffRepository.findDepartmentIdsWithActiveProviders(hospId))
+                    .thenReturn(java.util.Set.of(d1.getId(), d2.getId()));
 
             List<java.util.Map<String, Object>> result =
-                    service.getDepartmentsForHospital(hospId);
+                    service.getDepartmentsForHospital(auth, hospId);
 
             assertThat(result).hasSize(2);
             assertThat(result.get(0)).containsEntry("name", "Cardiology");
@@ -1643,7 +2288,31 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("getProvidersForDepartment — should map provider fields with fullName and role")
+        @DisplayName("getDepartmentsForHospital — QA D169: a department with no bookable provider is not offered")
+        void getDepartments_hidesDepartmentsWithNoProvider() {
+            UUID hospId = UUID.randomUUID();
+            Department maternity = new Department();
+            maternity.setId(UUID.randomUUID());
+            maternity.setName("Maternite");
+            Department empty = new Department();
+            empty.setId(UUID.randomUUID());
+            empty.setName("Empty");
+
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
+            when(departmentRepository.findByHospitalId(hospId)).thenReturn(List.of(maternity, empty));
+            when(staffRepository.findDepartmentIdsWithActiveProviders(hospId))
+                    .thenReturn(java.util.Set.of(maternity.getId()));
+
+            List<java.util.Map<String, Object>> result =
+                    service.getDepartmentsForHospital(auth, hospId);
+
+            assertThat(result).extracting(m -> m.get("name")).containsExactly("Maternite");
+        }
+
+        @Test
+        @DisplayName("getProvidersForDepartment — should map provider fields with fullName and a bare role token")
         void getProviders_mapsProviderFields() {
             UUID hospId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
@@ -1652,8 +2321,9 @@ class PatientPortalServiceImplPhase2Test {
             staffUser.setFirstName("Jane");
             staffUser.setLastName("Doe");
 
+            // security.roles.name carries the prefix; the picker keys on the bare token.
             Role role = new Role();
-            role.setName("Doctor");
+            role.setName("ROLE_DOCTOR");
 
             UserRoleHospitalAssignment assign = new UserRoleHospitalAssignment();
             assign.setRole(role);
@@ -1664,17 +2334,20 @@ class PatientPortalServiceImplPhase2Test {
             s.setUser(staffUser);
             s.setAssignment(assign);
 
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
             when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospId, deptId))
                     .thenReturn(List.of(s));
 
             List<java.util.Map<String, Object>> result =
-                    service.getProvidersForDepartment(hospId, deptId);
+                    service.getProvidersForDepartment(auth, hospId, deptId);
 
             assertThat(result).hasSize(1);
             assertThat(result.get(0)).containsEntry("id", s.getId());
             assertThat(result.get(0)).containsEntry("name", "Dr. Doe");
             assertThat(result.get(0)).containsEntry("fullName", "Jane Doe");
-            assertThat(result.get(0)).containsEntry("role", "Doctor");
+            assertThat(result.get(0)).containsEntry("role", "DOCTOR");
         }
 
         @Test
@@ -1682,13 +2355,35 @@ class PatientPortalServiceImplPhase2Test {
         void getProviders_emptyWhenNone() {
             UUID hospId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
             when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospId, deptId))
                     .thenReturn(List.of());
 
             List<java.util.Map<String, Object>> result =
-                    service.getProvidersForDepartment(hospId, deptId);
+                    service.getProvidersForDepartment(auth, hospId, deptId);
 
             assertThat(result).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("portal invoice detail (QA D982)")
+    class PortalInvoiceDetail {
+        @Test
+        void theDetailThePdfAndTheReceiptAreThePatientsOwn() {
+            stubPatientResolution();
+            UUID invoiceId = UUID.randomUUID();
+            UUID paymentId = UUID.randomUUID();
+
+            service.getMyInvoiceDetail(auth, invoiceId);
+            service.getMyInvoicePdf(auth, invoiceId, java.util.Locale.FRENCH);
+            service.getMyReceiptPdf(auth, invoiceId, paymentId, java.util.Locale.FRENCH);
+
+            verify(billingInvoiceService).getPortalInvoiceDetail(invoiceId, patientId);
+            verify(billingInvoiceService).getPortalInvoicePdf(invoiceId, patientId, java.util.Locale.FRENCH);
+            verify(billingInvoiceService).getPortalReceiptPdf(invoiceId, paymentId, patientId, java.util.Locale.FRENCH);
         }
     }
 }

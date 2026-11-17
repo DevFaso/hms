@@ -59,9 +59,9 @@
                 <li class="chart-review__timeline-item">
                   <time class="chart-review__timeline-date" [attr.datetime]="event.occurredAt">
                     @if (event.occurredAt) {
-                      {{ event.occurredAt | date: 'mediumDate' }}
+                      {{ event.occurredAt | serverTime | date: 'mediumDate' }}
                       <span class="chart-review__timeline-time">{{
-                        event.occurredAt | date: 'shortTime'
+                        event.occurredAt | serverTime | date: 'shortTime'
                       }}</span>
                     } @else {
                       —
@@ -79,12 +79,51 @@
                       </span>
                       @if (event.status) {
                         <span class="chart-review__pill" [ngClass]="statusClass(event.status)">
-                          {{ event.status | enumLabel: 'status' }}
+                          {{ timelineStatus(event) }}
                         </span>
                       }
                     </div>
-                    @if (event.title) {
-                      <p class="chart-review__timeline-title">{{ event.title }}</p>
+                    @if (event.section === 'ENCOUNTER' && encountersById().get(event.id); as enc) {
+                      <p
+                        class="chart-review__timeline-title"
+                        data-testid="timeline-encounter-title"
+                      >
+                        {{
+                          enc.encounterType
+                            ? (enc.encounterType | enumLabel: 'encounterType')
+                            : '—'
+                        }}{{ enc.departmentName ? ' — ' + enc.departmentName : '' }}
+                      </p>
+                    } @else if (
+                      event.section === 'IMAGING' && imagingById().get(event.id);
+                      as img
+                    ) {
+                      <p class="chart-review__timeline-title">
+                        {{ img.modality ? (img.modality | enumLabel: 'imagingModality') : '—'
+                        }}{{ img.studyType ? ' — ' + img.studyType : '' }}
+                      </p>
+                    } @else if (event.section === 'NOTE' && notesById().get(event.id); as note) {
+                      <p class="chart-review__timeline-title" data-testid="timeline-note-title">
+                        @if (note.source === 'NURSING') {
+                          {{ 'CHART_REVIEW.NURSING_NOTE' | translate }} ·
+                        }
+                        <!-- QA D1107: the title the nurse typed, as on the Notes tab -->
+                        {{
+                          note.title
+                            ? note.title
+                            : note.template
+                              ? (note.template | enumLabel: 'noteTemplate')
+                              : ('CHART_REVIEW.SECTION.NOTE' | translate)
+                        }}{{ note.authorName ? ' — ' + note.authorName : '' }}
+                      </p>
+                    } @else if (event.title) {
+                      <p class="chart-review__timeline-title">
+                        {{ event.title }}
+                        @if (event.section === 'RESULT') {
+                          <!-- QA D1016 (round 18): the chronology marks a correction too -->
+                          <app-lab-correction-badge [corrected]="event.corrected" />
+                        }
+                      </p>
                     }
                     @if (event.summary) {
                       <p class="chart-review__timeline-summary">{{ event.summary }}</p>
@@ -122,7 +161,7 @@
               <tbody>
                 @for (e of c.encounters; track e.id) {
                   <tr>
-                    <td>{{ e.encounterDate | date: 'mediumDate' }}</td>
+                    <td>{{ e.encounterDate | serverTime | date: 'mediumDate' }}</td>
                     <td>
                       {{ e.encounterType ? (e.encounterType | enumLabel: 'encounterType') : '—' }}
                     </td>
@@ -157,12 +196,22 @@
               @for (n of c.notes; track n.id) {
                 <li class="chart-review__card">
                   <header class="chart-review__card-head">
+                    <!-- QA D1076: a nurse's note says so; the template by its name, never its code -->
+                    @if (n.source === 'NURSING') {
+                      <span
+                        class="chart-review__pill chart-review__pill--neutral"
+                        data-testid="note-source-nursing"
+                        >{{ 'CHART_REVIEW.NURSING_NOTE' | translate }}</span
+                      >
+                    }
                     <span class="chart-review__pill chart-review__pill--info">{{
-                      n.template || 'NOTE'
+                      n.template
+                        ? (n.template | enumLabel: 'noteTemplate')
+                        : ('CHART_REVIEW.SECTION.NOTE' | translate)
                     }}</span>
                     @if (n.documentedAt) {
                       <time class="chart-review__card-date">
-                        {{ n.documentedAt | date: 'medium' }}
+                        {{ n.documentedAt | serverTime | dateTime }}
                       </time>
                     }
                     <span
@@ -198,12 +247,20 @@
                       </span>
                     }
                   </header>
+                  @if (n.title) {
+                    <!-- QA D1107: the title the author gave the note -->
+                    <p class="chart-review__card-title" data-testid="note-title">
+                      <strong>{{ n.title }}</strong>
+                    </p>
+                  }
                   @if (n.authorName) {
                     <p class="chart-review__card-meta">
-                      {{ 'CHART_REVIEW.AUTHOR' | translate }}: {{ n.authorName }}
+                      {{ 'CHART_REVIEW.AUTHOR' | translate }}{{ 'COMMON.COLON' | translate }}
+                      <!-- QA D1136: the comma follows the name directly; the job title in the reader's language -->
+                      <span>{{ n.authorName }}</span>
                       @if (n.authorCredentials) {
                         <span class="chart-review__card-credentials"
-                          >, {{ n.authorCredentials }}</span
+                          >, {{ n.authorCredentials | credentialsLabel }}</span
                         >
                       }
                     </p>
@@ -242,7 +299,7 @@
               <tbody>
                 @for (r of c.results; track r.id) {
                   <tr>
-                    <td>{{ r.resultDate | date: 'medium' }}</td>
+                    <td>{{ r.resultDate | serverTime | dateTime }}</td>
                     <td>
                       {{ r.testName || '—' }}
                       @if (r.testCode) {
@@ -250,15 +307,21 @@
                       }
                     </td>
                     <td>
-                      {{ r.resultValue }}
+                      {{ r.resultValue | labValue }}
                       @if (r.resultUnit) {
                         <span class="chart-review__muted">{{ r.resultUnit }}</span>
+                      }
+                      <!-- QA D1016: a correction of a released value. QA D1137: after the
+                           unit, never between the value and its unit ("6,8 [Corrigé] g/dL"),
+                           and a space before it so it is not read "g/dLCorrigé" -->
+                      @if (r.corrected) {
+                        &ngsp;<app-lab-correction-badge [corrected]="r.corrected" />
                       }
                     </td>
                     <td>
                       @if (r.abnormalFlag) {
                         <span class="chart-review__pill" [ngClass]="resultClass(r.abnormalFlag)">
-                          {{ r.abnormalFlag }}
+                          {{ r.abnormalFlag | enumLabel: 'labSeverityFlag' }}
                         </span>
                       } @else {
                         —
@@ -298,7 +361,7 @@
               <tbody>
                 @for (m of c.medications; track m.id) {
                   <tr>
-                    <td>{{ m.createdAt | date: 'mediumDate' }}</td>
+                    <td>{{ m.createdAt | serverTime | date: 'mediumDate' }}</td>
                     <td>
                       {{ m.medicationName || '—' }}
                       @if (m.controlledSubstance) {
@@ -309,7 +372,8 @@
                     </td>
                     <td>{{ m.dosage || '—' }}</td>
                     <td>
-                      {{ m.frequency || '—' }} · {{ m.route || '—' }} · {{ m.duration || '—' }}
+                      {{ m.frequency || '—' }} · {{ (m.route | medicationRoute) || '—' }} ·
+                      {{ m.duration || '—' }}
                     </td>
                     <td>
                       <span class="chart-review__pill" [ngClass]="statusClass(m.status)">
@@ -341,53 +405,94 @@
                 <li class="chart-review__card">
                   <header class="chart-review__card-head">
                     <span class="chart-review__pill chart-review__pill--info">{{
-                      i.modality || '—'
+                      (i.modality | enumLabel: 'imagingModality') || '—'
                     }}</span>
                     <span class="chart-review__card-title">{{ i.studyType || '—' }}</span>
                     @if (i.bodyRegion) {
                       <span class="chart-review__muted">· {{ i.bodyRegion }}</span>
                     }
-                    @if (i.laterality) {
-                      <span class="chart-review__muted">· {{ i.laterality }}</span>
+                    <!-- QA D1926 (r53): not shown when marked not applicable, as on Imagerie. -->
+                    @if (lateralityApplies(i.laterality)) {
+                      <span
+                        class="chart-review__muted"
+                        data-testid="chart-review-imaging-laterality"
+                        >· {{ i.laterality | enumLabel: 'imagingLaterality' }}</span
+                      >
                     }
                     <span class="chart-review__pill" [ngClass]="statusClass(i.status)">
                       {{ (i.status | enumLabel: 'imagingOrderStatus') || '—' }}
                     </span>
+                    <!-- Provisional rule 1 (2026-11-15): done without its pre-authorisation number. -->
+                    @if (i.authorizationPending) {
+                      <span
+                        class="chart-review__pill"
+                        [ngClass]="statusClass('PENDING')"
+                        data-testid="chart-review-imaging-preauth-pending"
+                        >{{ 'IMAGING.PREAUTH_PENDING.FLAG' | translate }}</span
+                      >
+                    }
                   </header>
                   <p class="chart-review__card-meta">
                     @if (i.orderedAt) {
                       <span
-                        >{{ 'CHART_REVIEW.ORDERED' | translate }}:
-                        {{ i.orderedAt | date: 'medium' }}</span
+                        >{{ 'CHART_REVIEW.ORDERED' | translate }}{{ 'COMMON.COLON' | translate }}
+                        {{ i.orderedAt | serverTime | dateTime }}</span
                       >
                     }
-                    @if (i.scheduledFor) {
-                      <span>
-                        · {{ 'CHART_REVIEW.SCHEDULED' | translate }}:
-                        {{ i.scheduledFor | date: 'mediumDate' }}</span
+                    <!-- QA D1926 (r53): with its time when one was set, as on Imagerie. -->
+                    @if (scheduledAt(i); as sched) {
+                      <span data-testid="chart-review-imaging-scheduled">
+                        · {{ 'CHART_REVIEW.SCHEDULED' | translate }}{{ 'COMMON.COLON' | translate }}
+                        {{
+                          i.scheduledTime ? (sched | dateTime) : (sched | date: 'mediumDate')
+                        }}</span
                       >
                     }
                     @if (i.priority) {
-                      <span> · {{ i.priority | enumLabel: 'taskPriority' }}</span>
+                      <span data-testid="chart-review-imaging-priority">
+                        · {{ i.priority | enumLabel: 'imagingOrderPriority' }}</span
+                      >
                     }
                   </p>
                   @if (i.clinicalQuestion) {
                     <p class="chart-review__card-body">
-                      <strong>{{ 'CHART_REVIEW.CLINICAL_QUESTION' | translate }}:</strong>
+                      <strong
+                        >{{ 'CHART_REVIEW.CLINICAL_QUESTION' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
                       {{ i.clinicalQuestion }}
                     </p>
                   }
-                  @if (i.reportImpression) {
-                    <p class="chart-review__card-body">
+                  <!-- QA D1924 (r53): the signed conclusion, then each addendum, labelled. -->
+                  @for (r of imagingReports(i); track r.id) {
+                    <p class="chart-review__card-body" data-testid="chart-review-imaging-report">
                       <strong
-                        >{{ 'CHART_REVIEW.IMPRESSION' | translate }}
-                        @if (i.reportStatus) {
-                          ({{ i.reportStatus | enumLabel: 'imagingReportStatus' }})
+                        >{{
+                          (r.reportStatus === 'ADDENDUM'
+                            ? 'CHART_REVIEW.ADDENDUM'
+                            : 'CHART_REVIEW.IMPRESSION'
+                          ) | translate
+                        }}
+                        @if (r.reportStatus && r.reportStatus !== 'ADDENDUM') {
+                          ({{ r.reportStatus | enumLabel: 'imagingReportStatus' }})
                         }
-                        :
+                        @if (r.signedAt || r.createdAt) {
+                          · {{ r.signedAt || r.createdAt | serverTime | dateTime }}
+                        }
+                        {{ 'COMMON.COLON' | translate }}
                       </strong>
-                      {{ i.reportImpression }}
+                      {{ r.impression || '—' }}
                     </p>
+                  }
+                  @if (canOpenImaging && imagingReports(i).length > 0) {
+                    <button
+                      type="button"
+                      class="chart-review__link"
+                      data-testid="chart-review-imaging-open"
+                      (click)="openImagingOrder(i.id)"
+                    >
+                      {{ 'CHART_REVIEW.OPEN_IMAGING_REPORT' | translate }}
+                    </button>
                   }
                 </li>
               }
@@ -421,14 +526,14 @@
               <tbody>
                 @for (p of c.procedures; track p.id) {
                   <tr>
-                    <td>{{ p.orderedAt | date: 'mediumDate' }}</td>
+                    <td>{{ p.orderedAt | serverTime | date: 'mediumDate' }}</td>
                     <td>
                       {{ p.procedureName || '—' }}
                       @if (p.procedureCategory) {
                         <span class="chart-review__muted"> · {{ p.procedureCategory }}</span>
                       }
                     </td>
-                    <td>{{ p.urgency || '—' }}</td>
+                    <td>{{ (p.urgency | enumLabel: 'procedureUrgency') || '—' }}</td>
                     <td>
                       <span class="chart-review__pill" [ngClass]="statusClass(p.status)">
                         {{ (p.status | enumLabel: 'procedureOrderStatus') || '—' }}
@@ -455,6 +560,23 @@
           }
         </div>
       }
+      <!-- QA D1380: every row of the tab is reachable, counted by the server. -->
+      @if (tabFailed()) {
+        <p class="chart-review__status chart-review__status--error" role="alert">
+          <span class="material-symbols-outlined" aria-hidden="true">error</span>
+          {{ 'CHART_REVIEW.ERROR' | translate }}
+        </p>
+      }
+      <app-range-pager
+        testId="chart-review-pager"
+        [label]="'CHART_REVIEW.TABS.' + activeTab() | uppercase | translate"
+        [page]="tabPage()[activeTab()]"
+        [size]="c.limit"
+        [total]="counts()[activeTab()]"
+        [shown]="rowsOnPage(activeTab())"
+        [busy]="tabLoading()"
+        (pageChange)="loadTabPage($event)"
+      />
     }
   </section>
 }

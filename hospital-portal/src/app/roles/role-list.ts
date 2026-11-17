@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import {
@@ -9,11 +16,17 @@ import {
 } from '../services/role.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { roleDescriptionKey } from './role-description';
+import { EnumLabelService } from '../core/enum-label.service';
+import { bareRole } from '../core/role-token';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 @Component({
   selector: 'app-role-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, FormsModule, TranslateModule, ModalDialogDirective],
   templateUrl: './role-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './role-list.scss',
@@ -22,6 +35,30 @@ export class RoleListComponent implements OnInit {
   private readonly roleService = inject(RoleService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
+
+  /**
+   * QA D868: the card title in the reader's language. A system role's name is
+   * its code (ROLE_DOCTOR), so the card read "ROLE_DOCTOR ROLE_DOCTOR"; it is
+   * shown through the role label. A custom role keeps the name its author typed.
+   *
+   * Whether a label exists is decided by the KEY, not by comparing the label
+   * with a prettified code: in English the real labels are often exactly that
+   * ('Doctor', 'Nurse'), and the comparison sent the English card back to
+   * 'ROLE_DOCTOR'.
+   */
+  roleTitle(role: RoleResponse): string {
+    const code = bareRole(role.code || role.authority || role.name);
+    if (!code || !/^[A-Z][A-Z0-9_]*$/.test(code)) return role.name;
+    const key = `PORTAL.ENUM.ROLE.${code}`;
+    const label: unknown = this.translate.instant(key);
+    if (typeof label === 'string' && label && label !== key) return label;
+    // No label in the bundle: a name that is only the code is still a code,
+    // never what an author typed, so it gets the readable fallback.
+    const name = role.name?.trim() ?? '';
+    if (!name || bareRole(name) === code) return this.enumLabels.transform(code, 'role');
+    return role.name;
+  }
 
   roles = signal<RoleResponse[]>([]);
   loading = signal(true);
@@ -33,6 +70,8 @@ export class RoleListComponent implements OnInit {
   saving = signal(false);
   editing = signal<RoleResponse | null>(null);
   createForm: RoleCreateRequest = { name: '' };
+  /** The role being edited is built in: its code field is read-only. */
+  readonly codeLocked = computed(() => this.editing()?.builtIn === true);
 
   // Delete
   showDeleteConfirm = signal(false);
@@ -45,6 +84,9 @@ export class RoleListComponent implements OnInit {
   allPermissions = signal<PermissionResponse[]>([]);
   selectedPermissionIds = signal<Set<string>>(new Set());
   permissionsLoading = signal(false);
+
+  /** QA D434: a seeded description in the reader's language, else `null`. */
+  readonly descriptionKey = roleDescriptionKey;
 
   ngOnInit(): void {
     this.loadRoles();
@@ -109,8 +151,11 @@ export class RoleListComponent implements OnInit {
     }
     this.saving.set(true);
     const existing = this.editing();
+    // A built-in role always sends back its stored code, whatever the field holds.
+    const payload: RoleCreateRequest =
+      existing?.builtIn === true ? { ...this.createForm, code: existing.code } : this.createForm;
     const op = existing
-      ? this.roleService.update(existing.id, this.createForm)
+      ? this.roleService.update(existing.id, payload)
       : this.roleService.create(this.createForm);
 
     op.subscribe({
@@ -133,6 +178,8 @@ export class RoleListComponent implements OnInit {
   }
 
   confirmDelete(role: RoleResponse): void {
+    // A built-in role is never deleted (the server answers 409); no trash icon offers it.
+    if (role.builtIn) return;
     this.deletingRole.set(role);
     this.showDeleteConfirm.set(true);
   }
@@ -212,8 +259,10 @@ export class RoleListComponent implements OnInit {
           this.saving.set(false);
           this.loadRoles();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('ROLES.TOAST.PERMS_UPDATE_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('ROLES.TOAST.PERMS_UPDATE_FAILED'),
+          );
           this.saving.set(false);
         },
       });

@@ -1,6 +1,7 @@
 package com.example.hms.payload.dto.education;
 
 import com.example.hms.enums.EducationCategory;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -23,6 +24,6 @@ public class VisitEducationDocumentationRequestDTO extends VisitEducationDocumen
     @NotNull(message = "{visitEducationDocumentation.category.required}")
     private EducationCategory category;
 
-    @NotNull(message = "{visitEducationDocumentation.topicDiscussed.required}")
+    @NotBlank(message = "{visitEducationDocumentation.topicDiscussed.required}")
     private String topicDiscussed;
 }

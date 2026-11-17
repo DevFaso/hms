@@ -27,6 +27,19 @@ import java.util.UUID;
 
 public interface NurseTaskService {
 
+    /**
+     * QA D1255: the limit that means "every item" for the worklists (the order
+     * queue, the pending handoffs); a worklist is never cut silently.
+     */
+    int NO_LIMIT = Integer.MAX_VALUE;
+
+    /**
+     * How far ahead a vitals round counts as due: the one default the vitals list
+     * and its dashboard tile share (QA D1402). {@code window} on {@link #getDueVitals}
+     * widens the look-ahead only; it never changes how often a round falls due.
+     */
+    Duration VITALS_LOOK_AHEAD = Duration.ofMinutes(30);
+
     List<NurseVitalTaskResponseDTO> getDueVitals(UUID nurseUserId, UUID hospitalId, Duration window);
 
     List<NurseMedicationTaskResponseDTO> getMedicationTasks(UUID nurseUserId, UUID hospitalId, String statusFilter);
@@ -38,14 +51,28 @@ public interface NurseTaskService {
      *        handoffs were unreadable through any API until 2026-08-21 —
      *        completeHandoff stamped completedAt/completedByName and the only
      *        list query filtered them out.
+     * @param nurseUserId the list filter (assignee=me); null lists the whole hospital
+     * @param viewerUserId the authenticated caller, whatever the filter: who
+     *        {@code completableByMe} is computed for (QA D785)
      */
-    List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID hospitalId, int limit, String status);
+    List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID viewerUserId, UUID hospitalId,
+                                                     int limit, String status);
 
     NurseHandoffSummaryDTO createHandoff(UUID nurseUserId, UUID hospitalId, NurseHandoffCreateRequestDTO request);
 
     void completeHandoff(UUID handoffId, UUID nurseUserId, UUID hospitalId);
 
+    /** QA D776: the colleagues at {@code hospitalId} a handoff can be addressed to (never the caller). */
+    List<com.example.hms.payload.dto.nurse.NurseHandoffRecipientDTO> getHandoffRecipients(UUID nurseUserId, UUID hospitalId);
+
     List<NurseAnnouncementDTO> getAnnouncements(UUID hospitalId, int limit);
+
+    /**
+     * QA D922: the clinicians of {@code hospitalId}, other than {@code selfUserId},
+     * who may witness a controlled dose (active nurse, midwife or doctor).
+     */
+    java.util.List<com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO> listAdministrationWitnessCandidates(
+        UUID selfUserId, UUID hospitalId);
 
     NurseMedicationTaskResponseDTO recordMedicationAdministration(
         UUID medicationTaskId,
@@ -74,7 +101,8 @@ public interface NurseTaskService {
 
     NurseFlowBoardDTO getPatientFlow(UUID hospitalId, UUID departmentId);
 
-    void captureVitals(UUID patientId, UUID nurseUserId, UUID hospitalId, NurseVitalCaptureRequestDTO request);
+    com.example.hms.payload.dto.NurseVitalCaptureResponseDTO captureVitals(UUID patientId, UUID nurseUserId,
+                                                                          UUID hospitalId, NurseVitalCaptureRequestDTO request);
 
     List<NurseAdmissionSummaryDTO> getPendingAdmissions(UUID hospitalId, UUID departmentId);
 

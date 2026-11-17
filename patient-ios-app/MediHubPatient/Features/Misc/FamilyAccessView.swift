@@ -111,13 +111,13 @@ struct ProxyCard: View {
                     Text(proxy.proxyDisplayName ?? proxy.proxyUsername ?? proxy.grantorName ?? "User")
                         .font(.headline)
                     if let relationship = proxy.relationship {
-                        Text(relationship.capitalized)
+                        Text(EnumLabel.text(.relationship, relationship, rawFallback: true))
                             .font(.caption).foregroundColor(.secondary)
                     }
                 }
                 Spacer()
                 StatusBadge(
-                    text: proxy.status?.capitalized ?? "Active",
+                    text: EnumLabel.text(.proxyStatus, proxy.status ?? "ACTIVE"),
                     color: proxy.status?.uppercased() == "ACTIVE" ? "green" : "gray"
                 )
             }
@@ -127,11 +127,11 @@ struct ProxyCard: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(proxy.permissionsList, id: \.self) { perm in
-                            Text(perm.replacingOccurrences(of: "_", with: " ").capitalized)
+                            Text(EnumLabel.text(.proxyPermission, perm))
                                 .font(.caption2).bold()
                                 .padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(Color.accentColor.opacity(0.12))
-                                .foregroundColor(.accentColor)
+                                .background(Color("BrandPrimary").opacity(0.12))
+                                .foregroundColor(Color("BrandPrimaryText"))
                                 .cornerRadius(8)
                         }
                     }

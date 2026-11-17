@@ -1,0 +1,249 @@
+:host {
+  display: contents;
+}
+.avs-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #10233191;
+  backdrop-filter: blur(3px);
+}
+.avs-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(900px, 100%);
+  max-height: min(900px, calc(100dvh - 48px));
+  min-height: 0;
+  background: #f4f8fb;
+  border: 1px solid #d8e4ec;
+  border-radius: 20px;
+  box-shadow: 0 24px 80px #061c3938;
+  overflow: hidden;
+  color: #173348;
+  font-size: 14px;
+}
+.avs-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 28px;
+  background: #fff;
+  border-bottom: 1px solid #dce6ef;
+  flex-shrink: 0;
+}
+.avs-document-icon {
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  border-radius: 14px;
+  background: #123341;
+  color: #bcf0e3;
+  font-size: 28px;
+}
+.avs-heading {
+  min-width: 0;
+  flex: 1;
+  h2 {
+    margin: 7px 0 0;
+    font-size: clamp(20px, 3vw, 26px);
+    letter-spacing: -0.03em;
+    line-height: 1.3;
+    color: #173348;
+  }
+}
+.avs-eyebrow {
+  color: #006f70;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+}
+.avs-close {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #d4e0e9;
+  background: #fff;
+  border-radius: 10px;
+  color: #52667b;
+  cursor: pointer;
+  flex-shrink: 0;
+  &:hover {
+    background: #edf5f7;
+    color: #173348;
+  }
+}
+.avs-body {
+  padding: 24px 28px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+.avs-pending-signature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  background: #fff4e0;
+  border: 1px solid #f0c674;
+  border-radius: 12px;
+  color: #6b4500;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.avs-empty {
+  color: #52667b;
+  line-height: 1.8;
+  padding: 24px;
+  border: 1px dashed #bfcfdd;
+  border-radius: 12px;
+  background: white;
+  text-align: center;
+}
+.avs-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 28px;
+  background: #fff;
+  border-top: 1px solid #dce6ef;
+  flex-shrink: 0;
+  > span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #52667b;
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
+  }
+}
+.avs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.avs-print {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  color: #0b7061;
+  border: 1px solid #0b7061;
+  padding: 10px 18px;
+  min-height: 42px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+  &:hover {
+    background: #edf5f7;
+  }
+}
+.avs-done {
+  background: #0b7061;
+  color: white;
+  border: 1px solid #0b7061;
+  padding: 11px 24px;
+  min-height: 42px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  &:hover {
+    background: #075a50;
+  }
+}
+button:focus-visible {
+  outline: 3px solid #118e85;
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .avs-backdrop {
+    padding: 10px;
+  }
+  .avs-dialog {
+    max-height: calc(100dvh - 20px);
+    border-radius: 15px;
+  }
+  .avs-header {
+    padding: 18px;
+    gap: 12px;
+  }
+  .avs-document-icon {
+    display: none;
+  }
+  .avs-body {
+    padding: 18px;
+  }
+  .avs-footer {
+    padding: 14px 18px;
+  }
+}
+@media (max-height: 500px) {
+  .avs-backdrop {
+    padding: 8px;
+  }
+  .avs-dialog {
+    max-height: calc(100dvh - 16px);
+  }
+  .avs-header {
+    padding: 12px 20px;
+  }
+  .avs-document-icon {
+    display: none;
+  }
+  .avs-footer {
+    padding: 10px 20px;
+  }
+}
+
+/* Polish 2026-11-13: printed alone (print-only.ts), as a flat document. */
+@media print {
+  .avs-backdrop {
+    position: static;
+    display: block;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+  }
+  .avs-dialog {
+    display: block;
+    width: auto;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+    background: #fff;
+  }
+  .avs-header {
+    padding: 0 0 12px;
+  }
+  .avs-document-icon,
+  .avs-close,
+  .avs-actions {
+    display: none !important;
+  }
+  .avs-body {
+    padding: 12px 0 0;
+    overflow: visible;
+  }
+  .avs-footer {
+    padding: 12px 0 0;
+    border-top: 1px solid #999;
+  }
+}

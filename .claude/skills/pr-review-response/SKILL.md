@@ -1,6 +1,6 @@
 ---
 name: pr-review-response
-description: "Use before and after pushing ANY PR branch (the self-review gate: local CI gate, push as a draft, /code-review after every push, ready only when a round is clean and CI is green), when preparing a feature PR commit message, responding to review comments, addressing Sonar findings, or naming a feature branch. Captures HMS foundation-pass commit style, branch-naming convention, started-vs-completed status discipline, and the lessons from recent reviews."
+description: "Use before and after pushing ANY PR branch (the self-review gate: local CI gate, push as a draft, /code-review after every push, ready only when a round is clean and CI is green, and only by the session working directly with the user), when preparing a feature PR commit message, responding to review comments, addressing Sonar findings, or naming a feature branch. Captures HMS foundation-pass commit style, branch-naming convention, started-vs-completed status discipline, and the lessons from recent reviews."
 ---
 
 # PR + review-response patterns
@@ -15,21 +15,31 @@ A PR gets one structured review before the user sees it as mergeable, and
 it is this one. Copilot's review quota has been exhausted since 2026-09-05
 and may or may not come back; when it does, its comments are findings for
 step 3, not a substitute. The user merges PRs without warning, so the PR is
-opened as a **draft** and made ready only at step 6. Draft is a signal, not
-a lock (#509 was flipped to ready and merged), so every push must be a state
-you would let merge, its tasklist bullet included. Not "CI is green and
-there are no comments, so it is ready". What the gate has caught that CI,
-Sonar and the unit suite did not is under
+opened as a **draft** and made ready only at step 6, and only by the session
+working directly with the user; a delegated agent hands back a draft
+([Coordinator mode](#coordinator-mode--only-the-session-working-with-the-user-readies)).
+Draft is a signal, not a lock (#509 was flipped to ready and merged), so
+every push must be a state you would let merge, its tasklist bullet
+included. Not "CI is green and there are no comments, so it is ready". What
+the gate has caught that CI, Sonar and the unit suite did not is under
 [Anti-patterns surfaced by self-review](#anti-patterns-surfaced-by-self-review).
 
+0. **If the PR fixes a QA defect (a D-number) or a regression**, the
+   `defect-fix-mandate` skill applies in full before step 1: the class is
+   hunted across the whole repo, fixed at a choke point, guarded by a
+   codebase-wide test, falsified, and re-run on the running app, and the PR
+   body carries the **class table** (one row per defect id). A missing or
+   thin row is a blocking finding at step 2, and the PR is never readied
+   without it. "Fixed on the reported path" is NOT_FIXED.
 1. **Before every push** run the
    [Mandatory branch CI gate](#mandatory-branch-ci-gate-run-before-pushing)
    for each side the diff touches. Push. First push:
-   `gh pr create --draft --title "<subject>" --body-file <file>` (the tool
-   is non-interactive; without the flags the command fails). A push to a PR
-   already marked ready: `gh pr ready --undo <PR#>` first. CI runs on the
-   pull-request event, so the runs appear seconds after that event, not the
-   push: once `gh pr checks <PR#>` lists them, start
+   `gh pr create --draft --base develop --title "<subject>" --body-file <file>`
+   (the tool is non-interactive; without the flags the command fails, and the
+   default base is `main`, which is prod). Whoever pushes to a PR marked
+   ready runs `gh pr ready --undo <PR#>` first, whoever's PR it is. CI runs
+   on the pull-request event, so the runs appear seconds after that event,
+   not the push: once `gh pr checks <PR#>` lists them, start
    `gh pr checks <PR#> --watch` in the background (~11 min, longer than a
    foreground tool call; started earlier it exits with "no checks
    reported").
@@ -54,7 +64,7 @@ Sonar and the unit suite did not is under
    pass through 1–4 is a round. Two rounds is normal. A third round with
    actionable findings means the fix is being designed in the PR: stop,
    post the round-3 findings as the PR comment (step 5), and ask the user how
-   to proceed before pushing more.
+   to proceed before pushing more (under a coordinator: hand back and ask it).
 5. When a round yields nothing actionable, post one PR comment in three
    buckets: **taken** (grouped by angle, one line each), **dropped** (finding
    plus the one-line reason it does not hold), **noted, not in this PR** (the
@@ -64,15 +74,75 @@ Sonar and the unit suite did not is under
    and issues (they land about ten minutes after the push, so never at step
    2), any review comment (Copilot when it is back), a red check. Each is a
    finding — step 3 — even when every check is green. Then, with the last
-   round clean and every check green: `git status` is clean;
+   round clean at the current head and every check green: `git status` is clean;
    `git rev-list --count origin/<branch>..origin/develop` is 0, else merge
    develop in locally and go back to step 1 — a conflicted merge re-enters
    after re-verifying `changelog.xml` registration (`MigrationRegistrationTest`)
    and the i18n files by hand, because a resolved conflict in either has
    dropped a migration before; a clean merge or a retry of a flaky check
    runs step 1 and skips the review round; `gh pr diff <PR#> --name-only`
-   matches the description. Then `gh pr ready <PR#>` and report: suite
-   count, CI status, rounds, tasklist bullets.
+   matches the description; and, right before handing back or readying,
+   `gh pr view <PR#> --json headRefOid --jq .headRefOid` equals
+   `git rev-parse HEAD`, because the user merges at whatever SHA GitHub
+   shows. Then:
+   - **Delegated** ([Coordinator mode](#coordinator-mode--only-the-session-working-with-the-user-readies)):
+     the PR stays a draft; hand back the PR number, the head SHA, suite
+     count, CI status, rounds and tasklist bullets.
+   - **The session working directly with the user:** never ready while a
+     finding is pending from any source — the user, a PR comment, Sonar, your
+     own review of a delegated agent's PR, or a handback's deferred or
+     unconfirmed items (#750's must-fix findings came from the coordinator's
+     review). Each is taken, dropped with a reason, or deferred as in step 3.
+     Then `gh pr ready <PR#>` and report: suite count, CI status, rounds,
+     tasklist bullets.
+
+### Coordinator mode — only the session working with the user readies
+
+The readier is the session working directly with the user. If you did not
+receive the task from the user directly, you are delegated: you do not
+ready, and neither do the agents you hand work to. A coordinator that is
+itself a subagent hands up like any other delegated agent.
+
+A delegated agent still does everything its brief asks: at minimum step 1's
+gate for each side the diff touches, plus falsification and the CI watch
+when the brief asks for them. The review rounds (steps 2–5) and Sonar are
+the coordinator's unless the brief delegates them.
+
+- It never runs `gh pr ready`, even after a clean round. The PR stays a
+  **draft**; step 6's head check, then hand back.
+- A finding the coordinator sends enters at step 3 — confirm it in the
+  tree, apply what holds — like Sonar and review comments. Findings can
+  arrive while the agent's own round is still running, and they are
+  invisible from inside it.
+
+The coordinator reviews at the head the agent reported; if it is the
+session working with the user it readies through step 6, otherwise it
+hands up.
+
+**Cost:** in one session six PRs were readied by their own agents over
+findings the coordinator had sent minutes earlier; #750 was readied on the
+exact commit carrying three unaddressed must-fix findings, and #738 was
+merged in that state.
+
+## Process lessons — delegated work
+
+2026-09-26 wave — PRs #738 / #749 / #750 / #770.
+
+- **A PR merged one round early gets its fixes on a new branch off develop,
+  never on the merged branch** — nothing reviews or merges commits pushed
+  there. The user merged #749 with its round still open; the rest of the
+  round shipped as #758 off develop.
+- **A coordinator instruction that turns a refusal into a silent fallback is
+  reverted, not patched.** #770 round 1 applied one:
+  `ActingContextArgumentResolver` answered an `X-Hospital-Id` the filter had
+  rejected with the caller's primary hospital instead of refusing it. Round 2
+  reverted the resolver and its tests to develop, because both consumers
+  already refuse the value themselves.
+- **A round's scope is bounded before it starts: "fix N, defer M, then hand
+  back, or ready if you are the one accountable".** The deferred findings go
+  where step 3 sends them. Without the bound the PR does not converge: #738
+  grew to +2,302 lines across its rounds and was merged with must-fix
+  findings still open.
 
 ## Branch naming
 
@@ -264,6 +334,14 @@ locally is seconds; the cost of fixing them via Copilot review +
 re-push cycles is hours of reviewer attention. This is the single
 highest-leverage discipline on the project.
 
+Backend message keys live in per-area bundles,
+`hospital-core/src/main/resources/i18n/messages-<area>{,_en,_fr,_es}.properties`
+(areas in `config/MessageBundles.AREAS`; a key with no clear area goes to
+`common`). Add a new key to its area's four files, never to a root
+`messages.properties` (it no longer exists). `MessageBundleSplitTest` fails on
+a key in two areas or a locale missing a key; a new area needs its four files
+AND an entry in `MessageBundles.AREAS`.
+
 **Frontend (`hospital-portal/`):**
 
 ```bash
@@ -432,15 +510,15 @@ list is cross-cutting muscle memory.
   PR #351; the assumption that "`findById` is tenant-aware" was
   recorded incorrectly in earlier skills notes.
 - **Cross-tenant guard must DENY on null/empty active hospital
-  context, not allow.** A super-admin without an explicit
-  `X-Hospital-Id` header has `HospitalContextHolder.getActiveHospitalId()
-  == null`. A guard that only rejects when both the stored
-  hospitalId AND the current context's hospitalId are non-null lets
-  any super-admin call see any tenant's data — the inverse of the
-  "invisible cross-tenant rejection" contract. Pattern:
-  `if (activeHospitalId == null) return Optional.empty();` first,
-  then the equality check. Caught on `FhirBulkExportService.getJob`
-  in PR #351.
+  context, not allow.** *(Superseded in part: a null check on the raw
+  hospital context is not a reliable "no tenant" test for a super-admin,
+  because what that context holds differs by auth path. Follow "Resolving
+  the tenant" in the `multi-tenancy-scoping` skill.)* A guard that only
+  rejects when both the stored hospitalId AND the resolved one are
+  non-null reads "no tenant" as "unscoped, allow" — the inverse of the
+  "invisible cross-tenant rejection" contract. Refuse on "no tenant"
+  first, then compare. Caught on `FhirBulkExportService.getJob` in
+  PR #351.
 - **Aggregate queries must group by a stable key, not display
   name.** Hospital names are not unique in the schema (only `code`
   is unique); a rename also splits the same tenant across old/new

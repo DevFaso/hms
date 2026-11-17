@@ -23,14 +23,34 @@ public class DispenseResponseDTO {
     private UUID id;
     private UUID prescriptionId;
     private UUID patientId;
+    /** The patient as a person reads them (QA D102: the receipt showed the raw id). */
+    private String patientName;
     private UUID pharmacyId;
+    /** The pharmacy's name (QA D102). */
+    private String pharmacyName;
     private UUID stockLotId;
     private UUID dispensedBy;
+    /**
+     * Who handed the medication over, as a person reads them. The portal's
+     * dispensing history has a "Dispensed by" column that read a field this
+     * DTO never carried, so it was blank on every row. Null when the row
+     * cannot say (a user with no name on file).
+     */
+    private String dispensedByName;
     private UUID verifiedBy;
     private UUID medicationCatalogItemId;
     private String medicationName;
     private BigDecimal quantityRequested;
     private BigDecimal quantityDispensed;
+    /** QA D264: what the dispense costs (quantity x the item's unit price), or null when no price is set. */
+    private BigDecimal chargeAmount;
+    /**
+     * QA D843: whether a payment is POSTED against this dispense, so the
+     * checkout can leave a paid one out instead of offering it again. Set by
+     * the reads the checkout uses (one dispense, a pharmacy's list); null on
+     * the reads that do not compute it.
+     */
+    private Boolean paid;
     private String unit;
     private boolean substitution;
     private String substitutionReason;
@@ -54,6 +74,23 @@ public class DispenseResponseDTO {
     private List<String> verificationOverrides;
 
     private String verificationOverrideReason;
+
+    /* ── Ready for collection (G15) ─────────────────────────────────────── */
+
+    /** Who prepared the fill; null for a one-step fill. Kept after hand-over. */
+    private UUID preparedBy;
+
+    /** Their name, as a person reads it; null when none is on file. */
+    private String preparedByName;
+
+    /** When the fill was marked ready (its creation time); null for a one-step fill. */
+    private LocalDateTime readyAt;
+
+    /** Why a preparation was cancelled or voided ({@code ReadyCancelReason}); null otherwise. */
+    private String cancelReason;
+
+    /** QA D1069: why the pharmacist cancelled a completed fill; null otherwise. */
+    private String cancelNote;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

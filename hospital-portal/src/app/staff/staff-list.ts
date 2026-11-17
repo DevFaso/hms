@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import {
   Component,
   computed,
@@ -9,17 +10,57 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { StaffService, StaffResponse, StaffUpsertRequest } from '../services/staff.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import {
+  HospitalService,
+  HospitalResponse,
+  isOpenForAssignment,
+} from '../services/hospital.service';
 import { UserService, UserSummary } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
+import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { localDateString } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+
+/**
+ * QA r41 (L2): the field reasons of one refusal as one sentence each. Some reasons end in a
+ * period and some do not, so joining them with ". " printed ".." between two of them.
+ */
+export function joinReasons(reasons: unknown[]): string {
+  const parts = reasons
+    .map((r) =>
+      String(r ?? '')
+        .trim()
+        .replace(/[.!?]+$/, ''),
+    )
+    .filter((r) => r.length > 0);
+  return parts.length ? `${parts.join('. ')}.` : '';
+}
+
+/** A user whose only role is ROLE_PATIENT (a patient portal account). */
+function isPatientOnlyUser(u: Pick<UserSummary, 'roleName'>): boolean {
+  return (u.roleName ?? '').toUpperCase().replace(/^ROLE_/, '') === 'PATIENT';
+}
+
+/** QA D541 — the legacy HOSPITAL_ADMINISTRATOR rows still match the one "hospital admin" filter. */
+function canonicalJobTitle(title: string | null | undefined): string {
+  return title === 'HOSPITAL_ADMINISTRATOR' ? 'HOSPITAL_ADMIN' : (title ?? '');
+}
 
 @Component({
   selector: 'app-staff-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './staff-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './staff-list.scss',
@@ -32,6 +73,7 @@ export class StaffListComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly permissions = inject(PermissionService);
   private readonly translate = inject(TranslateService);
+  private readonly auth = inject(AuthService);
 
   /** True when the user can create/edit/delete staff (admin roles only). */
   readonly canManageStaff = this.permissions.hasPermission('Manage Staff');
@@ -61,7 +103,8 @@ export class StaffListComponent implements OnInit {
   deletingStaff = signal<StaffResponse | null>(null);
   deleting = signal(false);
 
-  readonly employmentTypes = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'VOLUNTEER', 'INTERN'];
+  /** EmploymentType's constants. VOLUNTEER was listed here and is not one — picking it failed the save. */
+  readonly employmentTypes = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'LOCUM', 'INTERN'];
 
   /**
    * Exact values from the backend JobTitle enum.
@@ -84,8 +127,9 @@ export class StaffListComponent implements OnInit {
     'LABORATORY_SCIENTIST',
     'QUALITY_MANAGER',
     'TECHNICIAN',
+    // QA D541: HOSPITAL_ADMINISTRATOR is the legacy spelling of HOSPITAL_ADMIN;
+    // both read "Administrateur hôpital", so offering both listed it twice.
     'HOSPITAL_ADMIN',
-    'HOSPITAL_ADMINISTRATOR',
     'ADMINISTRATIVE_STAFF',
     'ADMINISTRATIVE_ASSISTANT',
     'RECEPTIONIST',
@@ -102,7 +146,7 @@ export class StaffListComponent implements OnInit {
    * Grouped by clinical category — no free-text allowed.
    */
   readonly specializations = [
-    // Doctors (all require licence)
+    // Doctors (licence optional)
     'GENERAL_PRACTICE',
     'CARDIOLOGY',
     'NEUROLOGY',
@@ -113,12 +157,12 @@ export class StaffListComponent implements OnInit {
     'ONCOLOGY',
     'RADIOLOGY',
     'PSYCHIATRY',
-    // Nurses (all require licence)
+    // Nurses (licence optional)
     'GENERAL_NURSE',
     'ICU_NURSE',
     'PEDIATRIC_NURSE',
     'SURGICAL_NURSE',
-    // Pharmacists (all require licence)
+    // Pharmacists (licence optional)
     'CLINICAL_PHARMACY',
     'HOSPITAL_PHARMACY',
     // Lab staff (LAB_TECHNICIAN + PATHOLOGY require licence; MICROBIOLOGY role-dependent)
@@ -130,7 +174,9 @@ export class StaffListComponent implements OnInit {
   ];
 
   /**
-   * Job titles that require a medical licence number.
+   * Job titles that take a medical licence number. The number is OPTIONAL for all of them
+   * (clinicians are credentialed on their diploma; decision 2026-11-09): the field is shown for
+   * these titles, never required, and an empty one is simply not sent.
    *
    * Rules (aligned with international medical standards + backend validation):
    *   ✅ ALL doctors/clinicians     — DOCTOR, PHYSICIAN, SURGEON, ANESTHESIOLOGIST,
@@ -160,9 +206,23 @@ export class StaffListComponent implements OnInit {
     'LABORATORY_SCIENTIST',
   ]);
 
-  /** Whether the currently-selected job title requires a specialization / licence */
+  /**
+   * Physician titles: the specialization list is medical specialties
+   * (cardiology, paediatrics...), which a pharmacist, nurse or lab scientist
+   * does not have (QA D195). The server requires one for doctors and
+   * radiologists only.
+   */
+  private readonly specialtyTitles = new Set([
+    'DOCTOR',
+    'PHYSICIAN',
+    'SURGEON',
+    'ANESTHESIOLOGIST',
+    'RADIOLOGIST',
+  ]);
+
+  /** Whether the currently-selected job title takes a medical specialization */
   get needsSpecialization(): boolean {
-    return this.licencedTitles.has(this.form.jobTitle ?? '');
+    return this.specialtyTitles.has(this.form.jobTitle ?? '');
   }
 
   get needsLicence(): boolean {
@@ -172,9 +232,15 @@ export class StaffListComponent implements OnInit {
   ngOnInit(): void {
     this.loadStaff();
     this.loadAssignedHospitals();
-    this.userService.list(0, 500).subscribe({
-      next: (page) => this.users.set(page.content),
-    });
+    // QA D790: the account picker of the create form reads the administrators'
+    // directory; the staff page's readers (reception, lab managers) never open it.
+    if (this.canManageStaff) {
+      // QA D1347: every user (all pages), not the first 500.
+      allRows((page, size) => this.userService.list(page, size)).subscribe({
+        // QA D122: a patient account is never offered as a new staff member.
+        next: (list) => this.users.set(list.filter((u) => !isPatientOnlyUser(u))),
+      });
+    }
   }
 
   /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */
@@ -191,6 +257,16 @@ export class StaffListComponent implements OnInit {
         },
       });
     }
+  }
+
+  /**
+   * QA D818: the super-admin's hospital options. A new staff member is never
+   * placed at an archived hospital; an edited one keeps showing their own,
+   * even if it has closed since.
+   */
+  hospitalOptions(): HospitalResponse[] {
+    const current = this.editing()?.hospitalName;
+    return this.hospitals().filter((h) => isOpenForAssignment(h) || h.name === current);
   }
 
   get lockedHospitalName(): string {
@@ -228,7 +304,8 @@ export class StaffListComponent implements OnInit {
       result = result.filter((s) => s.employmentType === this.employmentTypeFilter);
     }
     if (this.jobTitleFilter) {
-      result = result.filter((s) => s.jobTitle === this.jobTitleFilter);
+      const wanted = canonicalJobTitle(this.jobTitleFilter);
+      result = result.filter((s) => canonicalJobTitle(s.jobTitle) === wanted);
     }
     if (term) {
       result = result.filter(
@@ -316,9 +393,11 @@ export class StaffListComponent implements OnInit {
     if (!payload.employmentType) delete payload.employmentType;
     if (!payload.startDate) delete payload.startDate;
     if (!payload.roleName) delete payload.roleName;
-    // Never send specialization or licenseNumber for non-clinical roles
+    // Never send a specialization for a non-physician, nor a licence for a non-clinical role
     if (!this.needsSpecialization) {
       delete payload.specialization;
+    }
+    if (!this.needsLicence) {
       delete payload.licenseNumber;
     }
 
@@ -340,7 +419,7 @@ export class StaffListComponent implements OnInit {
           existing ? 'STAFF.UPDATE_FAILED' : 'STAFF.CREATE_FAILED',
         );
         if (body?.fieldErrors) {
-          msg = Object.values(body.fieldErrors).join('. ');
+          msg = joinReasons(Object.values(body.fieldErrors));
         } else if (body?.message) {
           msg = body.message;
         }
@@ -351,6 +430,15 @@ export class StaffListComponent implements OnInit {
   }
 
   // ---------- Delete ----------
+  /**
+   * QA D916: the signed-in admin's own card offers no "Deactivate", as on
+   * /users and /admin-assignments (D902); the server refuses it anyway.
+   */
+  isOwnCard(member: StaffResponse): boolean {
+    const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
+    return !!me && member.userId === me;
+  }
+
   confirmDelete(member: StaffResponse): void {
     this.deletingStaff.set(member);
     this.showDeleteConfirm.set(true);
@@ -387,14 +475,6 @@ export class StaffListComponent implements OnInit {
     return name.substring(0, 2).toUpperCase();
   }
 
-  formatJobTitle(jobTitle?: string): string {
-    if (!jobTitle) return this.translate.instant('STAFF.TITLE');
-    return jobTitle
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
-  }
-
   private emptyForm(): StaffUpsertRequest {
     return {
       userEmail: '',
@@ -404,7 +484,7 @@ export class StaffListComponent implements OnInit {
       licenseNumber: '',
       jobTitle: '',
       employmentType: '',
-      startDate: new Date().toISOString().slice(0, 10), // today as default start date
+      startDate: localDateString(), // today as default start date
       roleName: '',
     };
   }

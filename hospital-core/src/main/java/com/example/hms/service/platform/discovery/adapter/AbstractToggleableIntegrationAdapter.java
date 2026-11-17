@@ -7,13 +7,28 @@ import com.example.hms.service.platform.discovery.IntegrationDescriptor;
 import com.example.hms.service.platform.discovery.PlatformIntegrationAdapter;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.context.MessageSource;
 
+/**
+ * A catalog entry with configuration overrides. The default text an adapter
+ * supplies (name, description, capabilities, notes) is a message key resolved
+ * in the caller's locale (D12), so a French super-admin reads the catalog in
+ * French; a value set in configuration is shown as written.
+ */
 public abstract class AbstractToggleableIntegrationAdapter implements PlatformIntegrationAdapter {
 
     private final PlatformIntegrationProperties properties;
+    private final MessageSource messageSource;
 
-    protected AbstractToggleableIntegrationAdapter(PlatformIntegrationProperties properties) {
+    protected AbstractToggleableIntegrationAdapter(PlatformIntegrationProperties properties,
+                                                   MessageSource messageSource) {
         this.properties = properties;
+        this.messageSource = messageSource;
+    }
+
+    /** The catalog text under {@code key}, in {@code locale}. */
+    protected String text(String key, Locale locale) {
+        return messageSource.getMessage(key, null, locale);
     }
 
     @Override

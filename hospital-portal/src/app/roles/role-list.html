@@ -13,6 +13,7 @@
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'ROLES.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [placeholder]="'ROLES.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
@@ -36,23 +37,36 @@
               <span class="material-symbols-outlined">shield</span>
             </div>
             <div>
-              <h4>{{ role.name }}</h4>
+              <h4>{{ roleTitle(role) }}</h4>
               <span class="role-authority">{{ role.authority }}</span>
             </div>
           </div>
           @if (role.description) {
-            <p class="role-desc">{{ role.description }}</p>
+            <p class="role-desc">
+              @if (descriptionKey(role); as key) {
+                {{ key | translate }}
+              } @else {
+                {{ role.description }}
+              }
+            </p>
           }
           <div class="role-footer">
             <span class="perm-count">
               <span class="material-symbols-outlined">lock</span>
-              {{ role.permissions.length }} {{ 'ROLES.PERMISSIONS' | translate }}
+              <!-- QA D868: no permission rows is not "0 permissions": the access
+                   of a role with none is the platform's built-in access for it. -->
+              @if (role.permissions.length > 0) {
+                {{ role.permissions.length }} {{ 'ROLES.PERMISSIONS' | translate }}
+              } @else {
+                {{ 'ROLES.BUILT_IN_ACCESS' | translate }}
+              }
             </span>
             <div class="role-actions">
               <button
                 class="btn-sm"
                 (click)="openPermissions(role)"
                 [title]="'ROLES.MANAGE_PERMISSIONS' | translate"
+                [attr.aria-label]="'ROLES.MANAGE_PERMISSIONS' | translate"
               >
                 <span class="material-symbols-outlined">settings</span>
               </button>
@@ -60,16 +74,20 @@
                 class="btn-sm edit"
                 (click)="openEdit(role)"
                 [title]="'ROLES.EDIT_ROLE' | translate"
+                [attr.aria-label]="'ROLES.EDIT_ROLE' | translate"
               >
                 <span class="material-symbols-outlined">edit</span>
               </button>
-              <button
-                class="btn-sm delete"
-                (click)="confirmDelete(role)"
-                [title]="'ROLES.DELETE_ROLE' | translate"
-              >
-                <span class="material-symbols-outlined">delete</span>
-              </button>
+              @if (!role.builtIn) {
+                <button
+                  class="btn-sm delete"
+                  (click)="confirmDelete(role)"
+                  [title]="'ROLES.DELETE_ROLE' | translate"
+                  [attr.aria-label]="'ROLES.DELETE_ROLE' | translate"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              }
             </div>
           </div>
         </div>
@@ -96,17 +114,23 @@
       tabindex="-1"
     >
       <dialog
+        appModalDialog
+        aria-labelledby="role-list-dialog-1-title"
         class="modal"
         [open]="showCreate()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeCreate()"
+        (keydown.escape)="closeCreate(); $event.stopPropagation()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="role-list-dialog-1-title">
             {{ editing() ? ('ROLES.EDIT_ROLE' | translate) : ('ROLES.CREATE_ROLE' | translate) }}
           </h2>
-          <button class="modal-close" (click)="closeCreate()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeCreate()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -135,20 +159,35 @@
             </div>
             <div class="field">
               <label for="roleCode">{{ 'ROLES.CODE' | translate }}</label>
+              <!-- QA D902 (#968 review): every gate reads a built-in role by
+                   its code; a new one stripped it from every holder. -->
               <input
                 id="roleCode"
                 type="text"
                 [(ngModel)]="createForm.code"
                 name="code"
+                [readonly]="codeLocked()"
+                [attr.aria-describedby]="codeLocked() ? 'roleCodeHint' : null"
                 [placeholder]="'ROLES.CODE_PLACEHOLDER' | translate"
               />
+              @if (codeLocked()) {
+                <small id="roleCodeHint" class="field-hint">{{
+                  'ROLES.CODE_BUILT_IN_HINT' | translate
+                }}</small>
+              }
             </div>
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeCreate()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? ('COMMON.SAVING' | translate)
@@ -172,15 +211,24 @@
       tabindex="-1"
     >
       <dialog
+        appModalDialog
+        aria-labelledby="role-list-dialog-2-title"
         class="modal modal-lg"
         [open]="showPermissions()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closePermissions()"
+        (keydown.escape)="closePermissions(); $event.stopPropagation()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'ROLES.MANAGE_PERMISSIONS' | translate }} — {{ selectedRole()?.name }}</h2>
-          <button class="modal-close" (click)="closePermissions()">
+          <h2 id="role-list-dialog-2-title">
+            {{ 'ROLES.MANAGE_PERMISSIONS' | translate }} —
+            {{ selectedRole() ? roleTitle(selectedRole()!) : '' }}
+          </h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closePermissions()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -190,6 +238,10 @@
               <div class="spinner"></div>
               <p>{{ 'ROLES.LOADING_PERMISSIONS' | translate }}</p>
             </div>
+          } @else if (allPermissions().length === 0) {
+            <p class="perm-empty" data-testid="no-permission-catalogue">
+              {{ 'ROLES.NO_PERMISSION_CATALOGUE' | translate }}
+            </p>
           } @else {
             <div class="perm-list">
               @for (perm of allPermissions(); track perm.id) {
@@ -218,6 +270,9 @@
             type="button"
             class="btn-primary"
             [disabled]="saving()"
+            [appSubmitGuard]="
+              allPermissions().length === 0 && ('SUBMIT_GUARD.PERMISSION' | translate)
+            "
             (click)="savePermissions()"
           >
             {{ saving() ? ('COMMON.SAVING' | translate) : ('ROLES.SAVE_PERMISSIONS' | translate) }}
@@ -236,15 +291,21 @@
       tabindex="-1"
     >
       <dialog
+        appModalDialog
+        aria-labelledby="role-list-dialog-3-title"
         class="modal"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDelete()"
+        (keydown.escape)="cancelDelete(); $event.stopPropagation()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'ROLES.DELETE_ROLE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <h2 id="role-list-dialog-3-title">{{ 'ROLES.DELETE_ROLE' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -252,8 +313,7 @@
           <div class="delete-warning">
             <span class="material-symbols-outlined warning-icon">warning</span>
             <p>
-              {{ 'ROLES.CONFIRM_DELETE' | translate }} <strong>{{ deletingRole()?.name }}</strong
-              >?
+              {{ 'ROLES.CONFIRM_DELETE' | translate }} <strong>{{ deletingRole()?.name }}</strong>
             </p>
             <p class="delete-detail">
               {{ 'ROLES.DELETE_WARNING' | translate }}

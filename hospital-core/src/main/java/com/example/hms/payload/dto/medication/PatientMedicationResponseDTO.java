@@ -33,6 +33,12 @@ public class PatientMedicationResponseDTO {
     private String indication;
     private String instructions;
 
+    @Schema(description = "QA D1398: the prescriber wrote this as needed (PRN), not on a fixed schedule.")
+    private boolean asNeeded;
+
+    @Schema(description = "QA D1398: the least time, in hours, between two doses of an as-needed medicine.")
+    private Integer prnMinIntervalHours;
+
     // ── Refills ──────────────────────────────────────────────────────
     // `refillsAllowed` and `refillsRemaining` have been on the prescriptions
     // table since V1 with no consumer anywhere — the patient portal even
@@ -52,6 +58,12 @@ public class PatientMedicationResponseDTO {
             + "False once it is cancelled, discontinued, or was never signed.")
     private boolean refillable;
 
+    @Schema(description = "Why refillable is false: CONTROLLED (a controlled medicine, never renewed "
+            + "from the portal) or NOT_REFILLABLE (cancelled, discontinued, never signed or no renewals "
+            + "left). Null while it is refillable. QA D813: the portal named a controlled medicine's "
+            + "refusal as an exhausted prescription.")
+    private String refillBlockedReason;
+
     @Schema(description = "Where the patient's most recent refill request stands: "
             + "REQUESTED, PAUSED, APPROVED, DENIED, DISPENSED or CANCELLED. "
             + "Null when they have never asked for one.")
@@ -70,4 +82,12 @@ public class PatientMedicationResponseDTO {
     /** E9 provenance — the hospital that prescribed; equals the acting hospital for a local row. */
     private UUID hospitalId;
     private String hospitalName;
+
+    /**
+     * G15: when a fill of this prescription was marked ready for collection,
+     * and at which pharmacy. Both null when nothing is waiting (none
+     * prepared, handed over, cancelled, or the prescription withdrawn).
+     */
+    private java.time.LocalDateTime readyForCollectionAt;
+    private String readyForCollectionPharmacyName;
 }

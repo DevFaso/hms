@@ -1,16 +1,20 @@
 package com.example.hms.utility;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
+import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.PrincipalUserIds;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.MessageSource;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -19,9 +23,29 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RoleValidator {
     private static final String HOSPITAL_ADMIN_ROLE = "HOSPITAL_ADMIN";
+    private static final String DOCTOR_ROLE = "DOCTOR";
+    private static final String PHYSICIAN_ROLE = "PHYSICIAN";
+    private static final String SURGEON_ROLE = "SURGEON";
+    private static final String NURSE_ROLE = "NURSE";
+    private static final String MIDWIFE_ROLE = "MIDWIFE";
+    private static final String ACCOUNTANT_ROLE = "ACCOUNTANT";
+    private static final String BILLING_SPECIALIST_ROLE = "BILLING_SPECIALIST";
+    private static final String RECEPTIONIST_ROLE = "RECEPTIONIST";
+    private static final String CLAIMS_REVIEWER_ROLE = "CLAIMS_REVIEWER";
+    private static final String ROLE_PREFIX = SecurityConstants.ROLE_PREFIX;
+
+    /**
+     * What a caller with no resolvable hospital is told. Public so a guard
+     * that refuses the same condition for its own reason — the encounter
+     * reads refuse a {@code null} scope the verified super-admin flag does not
+     * back — says it in the same words, and a rewording here reaches both.
+     */
+    public static final String HOSPITAL_CONTEXT_REQUIRED =
+        "Hospital context required. Please select an active hospital or include X-Hospital-Id header.";
 
 
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final ActingScopeResolver actingScopeResolver;
 
     /* =========================================
        Authority helpers (JWT/global authorities)
@@ -29,7 +53,7 @@ public class RoleValidator {
     private Set<String> expandCodes(String base) {
         String u = base == null ? "" : base.toUpperCase();
         // Support both ROLE_* and bare forms
-        return Set.of(u, u.startsWith("ROLE_") ? u.substring(5) : "ROLE_" + u);
+        return Set.of(u, u.startsWith(ROLE_PREFIX) ? u.substring(ROLE_PREFIX.length()) : ROLE_PREFIX + u);
     }
 
     public boolean hasAnyAuthority(String... bases) {
@@ -51,32 +75,28 @@ public class RoleValidator {
             .anyMatch(wanted::contains);
     }
 
-    public boolean isSuperAdminFromAuth() { return hasAuthority("SUPER_ADMIN"); }
+    /**
+     * The same answer as {@link #isSuperAdminFromJwtClaim()}: the live,
+     * verified signal ({@link ActingScopeResolver#isVerifiedSuperAdmin()}).
+     * It used to read the authorities collection, which a stale token, a
+     * demoted super-admin or a Keycloak realm role could carry; its callers
+     * now agree with every other scope decision, so it is kept as a correct
+     * adapter for them rather than deprecated.
+     */
+    public boolean isSuperAdminFromAuth() { return isSuperAdminFromJwtClaim(); }
 
     /**
-     * Authoritative super-admin check based on the discrete
-     * {@code isSuperAdmin} JWT claim (mirrored into
-     * {@link com.example.hms.security.context.HospitalContext#isSuperAdmin()}
-     * by {@link com.example.hms.security.JwtTokenProvider#buildHospitalContext}),
-     * <b>not</b> on the inflated authorities collection.
-     *
-     * <p>Why this matters: {@code JwtTokenProvider.getAuthenticationFromJwt}
-     * inflates a real super-admin's {@code ROLE_SUPER_ADMIN} authority to
-     * also carry {@link com.example.hms.security.RoleExpansion#SUPER_ADMIN_INHERITS}
-     * (the one list both auth paths share since E9 #67) so per-hospital
-     * staff checks "just work". An impersonation context
-     * (or any future code path that copies authorities verbatim) could
-     * therefore present {@code ROLE_SUPER_ADMIN} in {@code authorities}
-     * without the principal actually being a super-admin. The discrete
-     * {@code isSuperAdmin} claim is set only when the token was minted
-     * for a real super-admin, so it's the only safe signal for
-     * cross-tenant authorisation decisions. See design call #1 in
-     * {@code docs/super-admin-cross-tenant-design.md}.</p>
+     * The verified super-admin signal for scope decisions: the caller holds a
+     * live, active SUPER_ADMIN assignment, read from the assignment table on
+     * this request by the shared computation both auth filters use
+     * ({@link ActingScopeResolver#liveContext}). It is NOT the token's
+     * {@code isSuperAdmin} claim and NOT the authorities collection — the name
+     * is historical: the claim it once read was itself derived from the
+     * authorities, and on Keycloak the authority was the only input (design
+     * D5). A demoted super-admin loses it on the next request.
      */
     public boolean isSuperAdminFromJwtClaim() {
-        return com.example.hms.security.context.HospitalContextHolder
-            .getContextOrEmpty()
-            .isSuperAdmin();
+        return actingScopeResolver.isVerifiedSuperAdmin();
     }
 
     public boolean isHospitalAdminFromAuthGlobalOnly() { return hasAuthority(HOSPITAL_ADMIN_ROLE); }
@@ -91,121 +111,63 @@ public class RoleValidator {
 
     /** Quick check for “can act as staff/admin” */
     public boolean isStaffOrAdminFromAuth() {
-        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE,"DOCTOR","PHYSICIAN","NURSE","MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
+        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE, DOCTOR_ROLE, PHYSICIAN_ROLE, NURSE_ROLE, MIDWIFE_ROLE,"STAFF","RECEPTIONIST","SUPER_ADMIN");
     }
 
     /* =========================================
        Current principal helpers
        ========================================= */
+    /**
+     * The caller's local user id: a password-path principal's, or a Keycloak
+     * principal's {@code appUserId} claim ({@link PrincipalUserIds}). Null
+     * when there is none.
+     */
     public UUID getCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) return null;
-        Object principal = auth.getPrincipal();
-
-        // CustomUserDetails with userId is ideal
-        if (principal instanceof com.example.hms.security.CustomUserDetails cud) {
-            return cud.getUserId();
-        }
-        // Sometimes principal is a domain User
-        if (principal instanceof com.example.hms.model.User u) {
+        if (auth != null && auth.getPrincipal() instanceof com.example.hms.model.User u) {
             return u.getId();
         }
-        // Could also be a plain String/username – resolve via repository if you want (not here)
-        return null;
+        return PrincipalUserIds.of(auth).orElse(null);
     }
 
     /**
-     * Resolve a single current hospital if there's exactly one active
-     * assignment that has a hospital attached.
-     *
-     * <p>Important nuance: {@link UserRoleHospitalAssignment#getHospital()}
-     * is legally nullable (no {@code optional=false} on the JPA mapping).
-     * A {@code null} hospital represents a <b>global</b> assignment —
-     * the typical shape for a SUPER_ADMIN role granted without a tenant
-     * scope. Before the cross-tenant list-pages slice this method was
-     * rarely reached for super-admins (the {@code X-Hospital-Id} header
-     * was always set), but the new "global view" deliberately omits the
-     * header, so this method runs and used to NPE on
-     * {@code .getHospital().getId()} when the single assignment was
-     * global. Now we treat that case the same as "no resolvable single
-     * hospital" and return {@code null}, letting the caller's super-admin
-     * branch in {@link #requireActiveHospitalId()} take over.
+     * The hospital this request acts at, or {@code null} for global view or no
+     * hospital. Once its own "exactly one active assignment" lookup; now the
+     * resolver's answer, whose {@code SOLE_ASSIGNMENT} rule subsumes it.
      */
     public UUID getCurrentHospitalId() {
-        UUID uid = getCurrentUserId();
-        if (uid == null) return null;
-        List<UserRoleHospitalAssignment> active = assignmentRepository.findByUser_IdAndActiveTrue(uid);
-        if (active.size() != 1) return null;
-        var hospital = active.get(0).getHospital();
-        return hospital != null ? hospital.getId() : null;
+        return actingScopeResolver.current() instanceof ActingScope.Pinned pinned ? pinned.hospitalId() : null;
     }
 
     /**
-     * Returns the active hospital ID from HospitalContext (set via X-Hospital-Id header + JWT validation).
-     * Falls back to single-assignment detection. Throws if no hospital can be determined and user is not super-admin.
-     * This is the <b>mandatory</b> method for all hospital-scoped operations.
-     *
-     * <p><b>Order of resolution (matters):</b>
-     * <ol>
-     *   <li><b>Real super-admin (JWT claim) without an explicit
-     *       {@code X-Hospital-Id} override ⇒ {@code null}.</b> Closes
-     *       (a) the F1 impersonation correctness gap from design call
-     *       #1 — authorities can be inflated, the JWT
-     *       {@code isSuperAdmin} claim cannot — and (b) the
-     *       "click-card → no data" cross-tenant bug: when no
-     *       {@code X-Hospital-Id} header is sent (super-admin in global
-     *       view), {@link com.example.hms.security.JwtTokenProvider}
-     *       still populates {@code HospitalContext.activeHospitalId}
-     *       from the {@code primaryHospitalId} JWT claim. Without this
-     *       early-out we'd silently re-scope every list endpoint to
-     *       the super-admin's home hospital. <b>However</b>, when the
-     *       super-admin <i>did</i> send an {@code X-Hospital-Id} header
-     *       (chip-scoped view), {@link
-     *       com.example.hms.security.context.HospitalContextRequestOverrides}
-     *       sets {@code headerOverridden=true} on the context — in
-     *       that case we honour the explicit scope. Super-admin via
-     *       {@code ?hospitalId=…} query param doesn't reach this
-     *       fallback because the controller passes the param straight
-     *       to the service.</li>
-     *   <li>HospitalContext (populated by JwtAuthenticationFilter from
-     *       the X-Hospital-Id header).</li>
-     *   <li>Single active assignment (DB lookup).</li>
-     *   <li>Authorities-based super-admin safety net — left in place so
-     *       paths where {@code HospitalContext} isn't populated (legacy
-     *       tests, edge entrypoints) still get the unscoped
-     *       short-circuit instead of throwing.</li>
-     * </ol>
+     * The hospital this request acts at, from the one tenant resolver
+     * ({@link ActingScopeResolver}, docs/security/tenant-resolution.md). This
+     * is the thin adapter every hospital-scoped service calls:
+     * <ul>
+     *   <li>{@code Pinned} → its hospital: the one the caller named
+     *       ({@code X-Hospital-Id} or a controller's {@code narrowTo}), else
+     *       the only one they hold;</li>
+     *   <li>{@code Global} → {@code null}: a VERIFIED super-admin (a live
+     *       SUPER_ADMIN assignment) who named no hospital. Nothing else can
+     *       reach {@code null}; the old authorities-based fallback ("step 4")
+     *       is gone;</li>
+     *   <li>{@code Refused} (several hospitals and none named, none held, no
+     *       local account) → {@link BusinessException} with
+     *       {@link #HOSPITAL_CONTEXT_REQUIRED}.</li>
+     * </ul>
+     * Reading the scope seals it for the rest of the request.
      */
     public UUID requireActiveHospitalId() {
-        com.example.hms.security.context.HospitalContext ctx =
-            com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty();
-
-        // 1. Real super-admin (per JWT claim, not authorities). Honour an
-        //    explicit X-Hospital-Id header override (chip-scoped view);
-        //    drop the JWT-derived primary (global view).
-        if (ctx.isSuperAdmin()) {
-            if (ctx.isHeaderOverridden() && ctx.getActiveHospitalId() != null) {
-                return ctx.getActiveHospitalId();
-            }
-            return null;
-        }
-        // 2. Try HospitalContext (populated by JwtAuthenticationFilter from X-Hospital-Id header)
-        if (ctx.getActiveHospitalId() != null) {
-            return ctx.getActiveHospitalId();
-        }
-        // 3. Fallback: single active assignment
-        UUID singleHospital = getCurrentHospitalId();
-        if (singleHospital != null) {
-            return singleHospital;
-        }
-        // 4. Super-admin safety net for paths without populated HospitalContext.
-        //    The primary check is step 1; this only fires when ctx.isSuperAdmin()
-        //    is false (e.g. unit tests bypassing the filter chain) but the
-        //    authorities still mark the principal as super-admin.
-        if (isSuperAdminFromAuth()) {
-            return null; // super-admin can see cross-hospital
-        }
-        throw new BusinessException("Hospital context required. Please select an active hospital or include X-Hospital-Id header.");
+        ActingScope scope = actingScopeResolver.current();
+        return switch (scope) {
+            case ActingScope.Pinned pinned -> pinned.hospitalId();
+            case ActingScope.Global global -> null;
+            case ActingScope.Refused refused -> throw new BusinessException(HOSPITAL_CONTEXT_REQUIRED);
+            // Never null for a patient: null means an unscoped super-admin to
+            // every caller of this method. A patient-reached path takes its
+            // hospital from the record (design Q1).
+            case ActingScope.PatientOwned owned -> throw HospitalScopeRefusedException.patientOwned();
+        };
     }
 
     /** Active assignment for (currentUser, currentHospital) if uniquely determined */
@@ -229,14 +191,84 @@ public class RoleValidator {
             userId, hospitalId, expandCodesForDb(baseCode));
     }
 
-    public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "DOCTOR"); }
-    public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "PHYSICIAN"); }
-    public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "NURSE"); }
-    public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "MIDWIFE"); }
+    /** Any of several base codes, in ONE query (the repository takes the whole set). */
+    private boolean hasAnyCode(UUID userId, UUID hospitalId, String... baseCodes) {
+        var wanted = new HashSet<String>();
+        for (var base : baseCodes) wanted.addAll(expandCodesForDb(base));
+        return assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(userId, hospitalId, wanted);
+    }
+
+    /**
+     * QA D934: a doctor, physician or surgeon at {@code hospitalId} - the roles
+     * whose signature a prescription carries. One query over the three codes.
+     */
+    public boolean isSigningPhysician(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE);
+    }
+
+    /**
+     * QA D934: a nurse or a midwife at {@code hospitalId} who is not also a
+     * signing physician there: her draft waits for a doctor of that hospital
+     * to sign. Deliberately NOT "anyone who is not a physician" (review of
+     * #975): a doctor credentialed elsewhere, or a prescriber outside these
+     * two roles, keeps "only the prescribing clinician signs".
+     */
+    public boolean draftsForPhysicianSignature(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, NURSE_ROLE, MIDWIFE_ROLE) && !isSigningPhysician(userId, hospitalId);
+    }
+
+    /**
+     * Product decision 2026-10-28 ("as it works in real hospitals"): the
+     * licensed-physician roles this codebase seeds (V2__seed_roles.sql) - the
+     * doctor (general practitioner), the physician, and the specialist
+     * physicians: surgeon, anaesthesiologist, radiologist. Nurses, midwives,
+     * receptionists and administrators are not physicians. The medical
+     * certificate endpoint's {@code @PreAuthorize} names exactly these
+     * (MedicalCertificateServiceImplTest pins the two lists together).
+     */
+    public static final java.util.List<String> LICENSED_PHYSICIAN_ROLE_CODES = java.util.List.of(
+        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", "RADIOLOGIST");
+
+    /**
+     * QA D1164 (round 21): the roles a visit takes as its provider - every
+     * licensed physician, the nurse and the midwife (a midwife runs her own
+     * antenatal and delivery visits), and the hospital administrator the old
+     * check admitted. The walk-in refused the midwife the appointment check-in
+     * accepted, and a physician or a surgeon too, because each check listed
+     * roles by hand; this is the one list.
+     */
+    public static final java.util.List<String> ENCOUNTER_PROVIDER_ROLE_CODES;
+
+    static {
+        java.util.List<String> codes = new java.util.ArrayList<>(LICENSED_PHYSICIAN_ROLE_CODES);
+        codes.addAll(java.util.List.of(NURSE_ROLE, MIDWIFE_ROLE, HOSPITAL_ADMIN_ROLE));
+        ENCOUNTER_PROVIDER_ROLE_CODES = java.util.List.copyOf(codes);
+    }
+
+    /** A role a visit takes as its provider ({@link #ENCOUNTER_PROVIDER_ROLE_CODES}), in one query. */
+    public boolean isEncounterProvider(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, ENCOUNTER_PROVIDER_ROLE_CODES.toArray(new String[0]));
+    }
+
+    /** A licensed physician ({@link #LICENSED_PHYSICIAN_ROLE_CODES}) at {@code hospitalId}, in one query. */
+    public boolean isLicensedPhysician(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, LICENSED_PHYSICIAN_ROLE_CODES.toArray(new String[0]));
+    }
+
+    public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, DOCTOR_ROLE); }
+    public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, PHYSICIAN_ROLE); }
+    public boolean isSurgeon(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, SURGEON_ROLE); }
+    public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, NURSE_ROLE); }
+    public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, MIDWIFE_ROLE); }
+    /** One query: a clinician or a pharmacist at {@code hospitalId}, not the union of the caller's assignments. */
+    public boolean isClinicianOrPharmacist(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE, "PHARMACIST");
+    }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
     public boolean isLabTechnician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_TECHNICIAN"); }
     public boolean isLabManager(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_MANAGER"); }
+    public boolean isLabDirector(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_DIRECTOR"); }
     /** True if the user has any lab staff role (scientist, technician, or manager) in the given hospital. */
     public boolean isLabStaff(UUID userId, UUID hospitalId) {
         return isLabScientist(userId, hospitalId)
@@ -245,11 +277,60 @@ public class RoleValidator {
     }
     public boolean hasRole(UUID userId, UUID hospitalId, String roleCode) { return hasAnyCode(userId, hospitalId, roleCode); }
 
-    public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode, Locale locale, MessageSource messageSource) {
+    /**
+     * Billing-money plan PR 2 (owner decision D-1, 2026-11-15): who maintains a hospital's price list - a hospital
+     * admin or an accountant assignment AT that hospital. Never the cashier, a clinician or the platform super-admin
+     * on their own (RoleExpansion grants the super-admin the hospital admin AUTHORITY, never an assignment).
+     */
+    public boolean canMaintainPriceList(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
+    }
+
+    /** Billing-money plan PR 2 (plan section 3.8): who reads a hospital's price list there. */
+    public boolean canReadPriceList(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,
+            RECEPTIONIST_ROLE, CLAIMS_REVIEWER_ROLE);
+    }
+
+    public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode) {
         if (!hasAnyCode(userId, hospitalId, roleCode)) {
-            throw new BusinessException(
-                messageSource.getMessage("role.notfound", new Object[]{userId, hospitalId}, "Role not found", locale));
+            // #1096 review: the user does not hold the role (role.notfound is a role that does not
+            // exist); the role is named by its label in the reader's language, never by its code.
+            throw new BusinessException("role.notHeld", roleLabel(roleCode));
         }
+    }
+
+    /**
+     * The chosen assignment ITSELF holds the role (#1096 review): it is active, it is at
+     * {@code hospitalId}, and its role is {@code roleCode}. Checking the assignment's user
+     * instead accepted an inactive or a non-doctor assignment of a user who holds an active
+     * doctor assignment elsewhere.
+     */
+    public void requireAssignmentHolds(UserRoleHospitalAssignment assignment, UUID hospitalId, String roleCode) {
+        if (assignment == null || !Boolean.TRUE.equals(assignment.getActive())) {
+            throw new FieldBusinessException("assignmentId", "role.assignment.inactive");
+        }
+        String held = assignment.getRole() == null || assignment.getRole().getCode() == null
+            ? "" : assignment.getRole().getCode().trim().toUpperCase(Locale.ROOT);
+        boolean atHospital = assignment.getHospital() != null && hospitalId != null
+            && hospitalId.equals(assignment.getHospital().getId());
+        if (!atHospital || !expandCodes(roleCode).contains(held)) {
+            throw new FieldBusinessException("assignmentId", "role.assignment.wrongRole", roleLabel(roleCode));
+        }
+    }
+
+    /**
+     * "ROLE_DOCTOR" read as the role's label in the reader's language ("Médecin"); a code with
+     * no label reads as itself, never as a raw bundle key (#1096 review).
+     */
+    private static String roleLabel(String roleCode) {
+        String code = roleCode == null ? "" : roleCode.trim();
+        String bare = code.toUpperCase(Locale.ROOT);
+        if (bare.startsWith("ROLE_")) {
+            bare = bare.substring("ROLE_".length());
+        }
+        String label = MessageUtil.resolveOrNull(null, "email.role.label." + bare);
+        return label != null ? label : code;
     }
 
     public boolean isAnyActiveRole(UUID userId) { return assignmentRepository.existsByUserIdAndActiveTrue(userId); }
@@ -261,28 +342,63 @@ public class RoleValidator {
      * Prescribing is a clinical act: a hospital admin no longer passes (E9 #67,
      * D5), and midwives, who prescribe throughout the OB module, have parity
      * with nurses (E9 #69).
+     *
+     * <p>Physician and surgeon are named because {@code RoleExpansion}'s
+     * doctor-equivalence rule — a surgeon and a physician ARE doctors — runs on
+     * the authorities, so {@code hasAnyAuthority('ROLE_DOCTOR',...)} on
+     * {@code POST /prescriptions} already admits them, while the checks in this
+     * class match the stored ASSIGNMENT code and do not know that. Without the
+     * two arms the endpoint let them in and this predicate threw them out with
+     * {@code prescription.only.doctor.admin}.
      */
     public boolean canCreatePrescription(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
+            || isPhysician(userId, hospitalId)
+            || isSurgeon(userId, hospitalId)
             || isNurse(userId, hospitalId)
             || isMidwife(userId, hospitalId);
     }
 
+    /**
+     * Surgeon for the same reason as above: {@code POST /lab-orders} admits
+     * {@code ROLE_DOCTOR}, which a surgeon holds by expansion, and the order
+     * was then refused here. Midwife is deliberately NOT added — the endpoint
+     * admits it but nothing has established that a midwife orders lab tests,
+     * and widening that is not this change's call.
+     */
     public boolean canOrderLabTests(UUID userId, UUID hospitalId) {
-        return isDoctor(userId, hospitalId)
-            || isPhysician(userId, hospitalId)
-            || isNurse(userId, hospitalId);
+        return LAB_ORDERING_ROLE_CODES.stream().anyMatch(code -> hasAnyCode(userId, hospitalId, code));
     }
 
-    public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {
+    /** The role codes {@link #canOrderLabTests} admits, in the order it checks them. */
+    private static final java.util.List<String> LAB_ORDERING_ROLE_CODES =
+        java.util.List.of(DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE);
+
+    /**
+     * Whether this one assignment's role is one {@link #canOrderLabTests}
+     * admits - the same codes, matched the way the query matches them
+     * ({@code UPPER(role.code)}, bare or {@code ROLE_}-prefixed). Says nothing
+     * about whether the assignment is active or where it is.
+     */
+    public static boolean isLabOrderingRole(UserRoleHospitalAssignment assignment) {
+        String code = assignment == null || assignment.getRole() == null ? null : assignment.getRole().getCode();
+        if (code == null) {
+            return false;
+        }
+        String upper = code.toUpperCase(Locale.ROOT);
+        String bare = upper.startsWith(ROLE_PREFIX) ? upper.substring(ROLE_PREFIX.length()) : upper;
+        return LAB_ORDERING_ROLE_CODES.contains(bare);
+    }
+
+    public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId) {
         if (!(isLabScientist(userId, hospitalId) || isHospitalAdmin(userId, hospitalId))) {
-            throw new BusinessException(messageSource.getMessage("auth.lab.required", null, "Only Lab Scientist or Hospital Admin allowed", locale));
+            throw new BusinessException("auth.lab.required");
         }
     }
 
-    public void requireLabStaffOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {
+    public void requireLabStaffOrAdmin(UUID userId, UUID hospitalId) {
         if (!(isLabStaff(userId, hospitalId) || isHospitalAdmin(userId, hospitalId))) {
-            throw new BusinessException(messageSource.getMessage("auth.lab.staff.required", null, "Only Lab staff or Hospital Admin allowed", locale));
+            throw new BusinessException("auth.lab.staff.required");
         }
     }
 

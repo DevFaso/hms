@@ -8,11 +8,20 @@ import { Observable, of, tap } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { IdleService } from '../core/idle.service';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { refreshWithSupersededRetry } from '../interceptors/error.interceptor';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
 @Component({
   selector: 'app-lock-screen',
   standalone: true,
-  imports: [FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    DialogFocusDirective,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+  ],
   templateUrl: './lock-screen.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lock-screen.scss',
@@ -28,6 +37,14 @@ export class LockScreenComponent {
 
   /** Emitted when a different user wants to sign in (complete session clear) */
   readonly switchedUser = output<void>();
+
+  /**
+   * D2001: emitted when the server answers 423 — the account is locked after
+   * too many wrong passwords (here or at the sign-in) and the server has
+   * already revoked this session's tokens. The shell signs out and shows the
+   * lockout on the sign-in page.
+   */
+  readonly lockedOut = output<void>();
 
   password = '';
   error = '';
@@ -88,7 +105,9 @@ export class LockScreenComponent {
     if (this.auth.getToken() && !this.auth.isExpired()) {
       return of(null);
     }
-    return this.auth.refreshTokenRequest().pipe(
+    // The same 409 "superseded" retry as the interceptor: another tab may
+    // have rotated the shared refresh cookie a moment earlier.
+    return refreshWithSupersededRetry(this.auth).pipe(
       tap((tokens) => {
         this.auth.setToken(tokens.accessToken);
         if (tokens.refreshToken) {
@@ -112,7 +131,16 @@ export class LockScreenComponent {
         },
         // Reached only with a token we just confirmed good, so a 401 here
         // really is the wrong password.
-        error: (err: HttpErrorResponse) => this.failWith(this.verifyErrorKey(err)),
+        error: (err: HttpErrorResponse) => {
+          if (err?.status === 423) {
+            this.loading.set(false);
+            this.password = '';
+            this.idle.unlock(); // clear lock state
+            this.lockedOut.emit();
+            return;
+          }
+          this.failWith(this.verifyErrorKey(err));
+        },
       });
   }
 
@@ -150,6 +178,14 @@ export class LockScreenComponent {
   switchUser(): void {
     this.idle.unlock(); // clear lock state
     this.switchedUser.emit();
+  }
+
+  /**
+   * QA D2011: Escape on the lock screen does nothing — only the password,
+   * "Switch user" or "Sign out" leave it. The dialog idiom routes Escape here.
+   */
+  keepLocked(): void {
+    // Intentionally empty: the session stays locked.
   }
 
   togglePassword(): void {

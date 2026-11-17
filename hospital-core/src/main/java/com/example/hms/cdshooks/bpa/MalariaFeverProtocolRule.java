@@ -1,5 +1,6 @@
 package com.example.hms.cdshooks.bpa;
 
+import com.example.hms.cdshooks.CdsCardText;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsLink;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
@@ -52,9 +53,18 @@ public class MalariaFeverProtocolRule implements BpaRule {
     );
 
     private final BpaProtocolRepository protocolRepository;
+    private final CdsCardText text;
 
+    /** English-only, for rules built outside Spring. */
     public MalariaFeverProtocolRule(BpaProtocolRepository protocolRepository) {
+        this(protocolRepository, CdsCardText.ENGLISH);
+    }
+
+    /** QA D217: the card is written in the caller's language, like the D61 rules. */
+    @org.springframework.beans.factory.annotation.Autowired
+    public MalariaFeverProtocolRule(BpaProtocolRepository protocolRepository, CdsCardText text) {
         this.protocolRepository = protocolRepository;
+        this.text = text;
     }
 
     @Override
@@ -75,7 +85,20 @@ public class MalariaFeverProtocolRule implements BpaRule {
         Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
         if (protocol.isEmpty()) return List.of();
 
-        return List.of(buildCard(protocol.get(), feverEvent.get()));
+        PatientVitalSign latest = latestTemperature(context.recentVitals()).orElse(null);
+        return List.of(buildCard(protocol.get(), feverEvent.get(), latest, text.zoneOf(context.hospitalId())));
+    }
+
+    /**
+     * QA D1231 (round 24): the newest temperature on record, febrile or not.
+     * The card used to call the febrile reading the "most recent temperature"
+     * while a later, lower reading stood in the history. A reading with no
+     * time cannot be placed and is skipped.
+     */
+    static Optional<PatientVitalSign> latestTemperature(List<PatientVitalSign> vitals) {
+        return vitals.stream()
+            .filter(v -> v.getTemperatureCelsius() != null && v.getRecordedAt() != null)
+            .max(java.util.Comparator.comparing(PatientVitalSign::getRecordedAt));
     }
 
     Optional<PatientVitalSign> findFeverInWindow(List<PatientVitalSign> vitals) {
@@ -104,28 +127,35 @@ public class MalariaFeverProtocolRule implements BpaRule {
         return hints.stream().anyMatch(lower::contains);
     }
 
-    private static CdsCard buildCard(BpaProtocol protocol, PatientVitalSign feverEvent) {
-        String detail = protocol.getSummary()
-            + "\n\nMost recent temperature: "
-            + String.format(Locale.ROOT, "%.1f", feverEvent.getTemperatureCelsius())
-            + "°C at "
-            + feverEvent.getRecordedAt() + ".";
+    private CdsCard buildCard(BpaProtocol protocol, PatientVitalSign feverEvent,
+                              PatientVitalSign latest, java.time.ZoneId zone) {
+        // QA D1231: the reading that fired the rule is labelled for what it is,
+        // the febrile one; when a later temperature exists it is shown too, as
+        // the latest, so the card never calls an older reading the last one.
+        String fever = text.get("cds.bpa.malaria.feverReading", "Fever recorded: {0} °C at {1}.",
+            text.decimal(feverEvent.getTemperatureCelsius(), 1),
+            BpaCardText.when(text, feverEvent.getRecordedAt(), zone));
+        String later = latest == null || !latest.getRecordedAt().isAfter(feverEvent.getRecordedAt()) ? ""
+            : " " + text.get("cds.bpa.malaria.latestTemperature", "Latest temperature: {0} °C at {1}.",
+                text.decimal(latest.getTemperatureCelsius(), 1),
+                BpaCardText.when(text, latest.getRecordedAt(), zone));
+        String detail = BpaCardText.summary(text, protocol) + "\n\n" + fever + later;
         List<CdsLink> links = protocol.getProtocolUrl() == null
             ? null
             : List.of(new CdsLink(
-                "WHO malaria guideline",
+                text.get("cds.bpa.malaria.link", "WHO malaria guideline"),
                 protocol.getProtocolUrl(),
                 "absolute",
                 null));
         return new CdsCard(
-            protocol.getName(),
+            BpaCardText.name(text, protocol),
             detail,
             CdsCard.Indicator.WARNING,
-            new Source("HMS Best-Practice Advisory", null, null),
+            new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),
             links,
             null,
             null,
-            java.util.UUID.randomUUID().toString()
+            null // QA D1194: BpaRuleEngine gives the card its stable id (rule + level)
         );
     }
 }

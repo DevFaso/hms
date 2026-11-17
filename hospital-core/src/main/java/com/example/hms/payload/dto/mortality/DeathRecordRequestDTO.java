@@ -2,6 +2,7 @@ package com.example.hms.payload.dto.mortality;
 
 import com.example.hms.enums.MannerOfDeath;
 import com.example.hms.enums.MaternalDeathTiming;
+import com.example.hms.enums.PerinatalBirthStatus;
 import com.example.hms.enums.PerinatalDeathType;
 import com.example.hms.enums.PlaceOfDeath;
 import jakarta.validation.constraints.NotBlank;
@@ -69,6 +70,24 @@ public class DeathRecordRequestDTO {
 
     /** Required when perinatalDeath is true. */
     private PerinatalDeathType perinatalType;
+
+    /** The time of birth, when known. With it the age at death is elapsed time; without it, only dates. */
+    private LocalDateTime bornAt;
+
+    /** Left off or UNKNOWN when not known: a single-infant delivery on file may then answer. */
+    private PerinatalBirthStatus birthStatus;
+
+    /**
+     * Completed weeks. Left off when not known, and the death still saves. Deliberately no bean-validation bound:
+     * that would refuse the death itself with no classification selected. DeathClassificationRules judges it.
+     */
+    private Integer gestationalAgeWeeks;
+
+    /**
+     * QA D1714: the fetal-death event this stillbirth declares, at the acting hospital. Left empty, a stillbirth of a
+     * baby registered from a delivery links to that baby's event when there is one. The register counts it once.
+     */
+    private java.util.UUID fetalDeathEventId;
 
     private Boolean autopsyRequested;
 

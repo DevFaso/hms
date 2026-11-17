@@ -16,7 +16,8 @@ import lombok.Setter;
 @Schema(description = "Request payload for removing a diagnosis entry with justification")
 public class PatientDiagnosisDeleteRequestDTO {
 
-    @NotBlank
+    // QA D1249 (round 25): the refusal names the missing reason ("ne doit pas être vide" said nothing).
+    @NotBlank(message = "{patient.r25.removalReasonRequired}")
     @Schema(description = "Justification required to remove a diagnosis from the active list")
     private String reason;
 }

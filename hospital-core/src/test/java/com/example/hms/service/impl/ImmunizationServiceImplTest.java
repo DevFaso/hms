@@ -44,6 +44,9 @@ import org.junit.jupiter.api.AfterEach;
 @ExtendWith(MockitoExtension.class)
 class ImmunizationServiceImplTest {
 
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @Mock private ImmunizationRepository immunizationRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;
@@ -82,7 +85,7 @@ class ImmunizationServiceImplTest {
         ImmunizationResponseDTO response = new ImmunizationResponseDTO();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(immunizationMapper.toEntity(any(), eq(patient), eq(hospital), isNull(), isNull())).thenReturn(entity);
         when(immunizationRepository.save(entity)).thenReturn(entity);
         when(immunizationMapper.toResponseDTO(entity)).thenReturn(response);
@@ -99,12 +102,13 @@ class ImmunizationServiceImplTest {
         dto.setEncounterId(encounterId);
 
         Staff staff = new Staff(); staff.setId(staffId);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
         Encounter encounter = new Encounter(); encounter.setId(encounterId);
         PatientImmunization entity = new PatientImmunization();
         entity.setId(immunizationId);
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(immunizationMapper.toEntity(any(), eq(patient), eq(hospital), eq(staff), eq(encounter))).thenReturn(entity);
@@ -113,6 +117,82 @@ class ImmunizationServiceImplTest {
 
         service.createImmunization(dto);
         verify(immunizationRepository).save(entity);
+    }
+
+    @Test
+    void qaD1003_aDoseFromTheVaccinationCardIsNotCreditedToTheRecordingClinician() {
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setPatientId(patientId);
+        dto.setHospitalId(hospitalId);
+        dto.setAdministrationDate(java.time.LocalDate.of(2021, 3, 10));
+        dto.setSourceOfRecord("VACCINATION_CARD");
+        dto.setAdministeredByStaffId(staffId); // the portal used to send the caller's own id
+        Staff caller = new Staff(); caller.setId(staffId); caller.setHospital(hospital);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(caller, hospital);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(caller));
+        PatientImmunization entity = new PatientImmunization();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(immunizationMapper.toEntity(any(), eq(patient), eq(hospital), isNull(), isNull())).thenReturn(entity);
+        when(immunizationRepository.save(entity)).thenReturn(entity);
+        when(immunizationMapper.toResponseDTO(entity)).thenReturn(new ImmunizationResponseDTO());
+
+        service.createImmunization(dto);
+
+        // The claim is still checked (it is the caller), but no vaccinator is kept.
+        verify(immunizationMapper).toEntity(any(), eq(patient), eq(hospital), isNull(), isNull());
+    }
+
+    @Test
+    void qaD1003_anEditThatSendsNoSourceKeepsTheStoredSourceAndVaccinator() {
+        Staff vaccinator = new Staff(); vaccinator.setId(staffId);
+        PatientImmunization existing = new PatientImmunization();
+        existing.setId(immunizationId);
+        existing.setHospital(hospital);
+        existing.setAdministeredBy(vaccinator);
+        existing.setSourceOfRecord("Given here"); // a legacy free-text value
+        existing.setAdministrationDate(java.time.LocalDate.now().minusWeeks(1));
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setAdministrationDate(existing.getAdministrationDate());
+        dto.setLotNumber("LOT-2");
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(existing));
+        when(immunizationRepository.save(existing)).thenReturn(existing);
+        when(immunizationMapper.toResponseDTO(existing)).thenReturn(new ImmunizationResponseDTO());
+
+        service.updateImmunization(immunizationId, dto);
+
+        assertThat(existing.getAdministeredBy()).isEqualTo(vaccinator);
+        assertThat(dto.getSourceOfRecord()).isEqualTo("Given here");
+    }
+
+    @Test
+    void qaD1003_anEditOfATranscribedDoseNeverCreditsTheEditor() {
+        PatientImmunization existing = new PatientImmunization();
+        existing.setId(immunizationId);
+        existing.setHospital(hospital);
+        existing.setSourceOfRecord("VACCINATION_CARD");
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setSourceOfRecord("VACCINATION_CARD");
+        dto.setAdministeredByStaffId(staffId); // an edit form resending the caller's id
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(existing));
+        when(immunizationRepository.save(existing)).thenReturn(existing);
+        when(immunizationMapper.toResponseDTO(existing)).thenReturn(new ImmunizationResponseDTO());
+
+        service.updateImmunization(immunizationId, dto);
+
+        assertThat(existing.getAdministeredBy()).isNull();
+        verify(staffRepository, never()).findById(any());
+    }
+
+    @Test
+    void qaD1003_onlyTheFormsTranscriptionCodesDropTheVaccinator() {
+        assertThat(ImmunizationServiceImpl.isTranscribed("VACCINATION_CARD")).isTrue();
+        assertThat(ImmunizationServiceImpl.isTranscribed("EXTERNAL_RECORD")).isTrue();
+        assertThat(ImmunizationServiceImpl.isTranscribed("PATIENT_REPORT")).isTrue();
+        // A missing, GIVEN_HERE or legacy free-text source keeps the previous behaviour.
+        assertThat(ImmunizationServiceImpl.isTranscribed(null)).isFalse();
+        assertThat(ImmunizationServiceImpl.isTranscribed("GIVEN_HERE")).isFalse();
+        assertThat(ImmunizationServiceImpl.isTranscribed("Administered at clinic")).isFalse();
     }
 
     @Test
@@ -229,6 +309,87 @@ class ImmunizationServiceImplTest {
     }
 
     @Test
+    void aRemovedDoseIsNotRemovedAgain_D1242() {
+        PatientImmunization entity = new PatientImmunization();
+        entity.setId(immunizationId);
+        entity.setActive(false);
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(entity));
+
+        assertThatThrownBy(() -> service.deleteImmunization(immunizationId))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("medicalHistory.r25.alreadyRemoved");
+        verify(immunizationRepository, never()).save(any());
+    }
+
+    private PatientImmunization dose(String code, String display, java.time.LocalDate date, Integer doseNumber) {
+        PatientImmunization dose = new PatientImmunization();
+        dose.setId(UUID.randomUUID());
+        dose.setPatient(patient);
+        dose.setHospital(hospital);
+        dose.setVaccineCode(code);
+        dose.setVaccineDisplay(display);
+        dose.setAdministrationDate(date);
+        dose.setDoseNumber(doseNumber);
+        dose.setStatus("COMPLETED");
+        dose.setActive(true);
+        return dose;
+    }
+
+    @Test
+    void theSameDoseIsNotRecordedTwice_D1248() {
+        java.time.LocalDate day = java.time.LocalDate.of(2021, 3, 15);
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setPatientId(patientId);
+        dto.setHospitalId(hospitalId);
+        PatientImmunization candidate = dose(null, "rr ", day, 2);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(immunizationMapper.toEntity(any(), eq(patient), eq(hospital), isNull(), isNull())).thenReturn(candidate);
+        when(immunizationRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(dose(null, "RR", day, 2)));
+
+        assertThatThrownBy(() -> service.createImmunization(dto))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1365: named on the date").isEqualTo("administrationDate"))
+            .extracting("messageKey").isEqualTo("immunization.r25.duplicateDose");
+        verify(immunizationRepository, never()).save(any());
+    }
+
+    @Test
+    void anotherDoseNumberDateOrVaccineIsNotADuplicate_D1248() {
+        java.time.LocalDate day = java.time.LocalDate.of(2021, 3, 15);
+        PatientImmunization stored = dose("03", "RR", day, 2);
+        assertThat(ImmunizationServiceImpl.sameDose(dose("03", "RR", day, 3), stored)).isFalse();
+        assertThat(ImmunizationServiceImpl.sameDose(dose("03", "RR", day.plusDays(1), 2), stored)).isFalse();
+        assertThat(ImmunizationServiceImpl.sameDose(dose("08", "RR", day, 2), stored)).isFalse();
+        assertThat(ImmunizationServiceImpl.sameDose(dose(null, "Rougeole-rubéole", day, 2), stored)).isFalse();
+        assertThat(ImmunizationServiceImpl.sameDose(dose("03", "Autre libellé", day, 2), stored)).isTrue();
+    }
+
+    @Test
+    void anEditOntoAnotherRecordedDoseIsRefusedButAnEditOfItselfIsNot_D1248() {
+        java.time.LocalDate day = java.time.LocalDate.of(2021, 3, 15);
+        PatientImmunization existing = dose(null, "RR", day, 2);
+        existing.setId(immunizationId);
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(existing));
+        when(immunizationRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(existing));
+        when(immunizationRepository.save(existing)).thenReturn(existing);
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setSourceOfRecord("ADMINISTERED");
+
+        service.updateImmunization(immunizationId, dto);
+        verify(immunizationRepository).save(existing);
+
+        PatientImmunization other = dose(null, "RR", day, 2);
+        when(immunizationRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(existing, other));
+        assertThatThrownBy(() -> service.updateImmunization(immunizationId, dto))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1365: named on the date").isEqualTo("administrationDate"))
+            .extracting("messageKey").isEqualTo("immunization.r25.duplicateDose");
+    }
+
+    @Test
     void deleteImmunization_notFound() {
         when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.deleteImmunization(immunizationId)).isInstanceOf(ResourceNotFoundException.class);
@@ -237,6 +398,7 @@ class ImmunizationServiceImplTest {
     @AfterEach
     void clearHospitalContext() {
         HospitalContextHolder.clear();
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test
@@ -296,5 +458,69 @@ class ImmunizationServiceImplTest {
         verify(immunizationRepository, never()).findByPatient_IdAndVaccineCodeOrderByAdministrationDateDesc(any(), any());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requesterId), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void d1425_theCreateRefusesADoseBeforeBirthBeforeAnythingIsStored() {
+        patient.setDateOfBirth(java.time.LocalDate.of(2022, 2, 2));
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setPatientId(patientId);
+        dto.setHospitalId(hospitalId);
+        dto.setAdministrationDate(java.time.LocalDate.of(2019, 5, 5));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowableOfType(
+            com.example.hms.exception.FieldBusinessException.class, () -> service.createImmunization(dto)).getField())
+            .isEqualTo("administrationDate");
+        org.mockito.Mockito.verify(immunizationRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void d1425_anEditOfAStoredWrongDoseOnAnotherFieldSaves_andChangingTheDoseToAWrongOneDoesNot() {
+        PatientImmunization stored = new PatientImmunization();
+        stored.setId(immunizationId);
+        stored.setPatient(patient);
+        stored.setHospital(hospital);
+        stored.setDoseNumber(-1);
+        stored.setAdministrationDate(java.time.LocalDate.now(java.time.ZoneOffset.UTC).plusDays(30));
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(stored));
+        org.mockito.Mockito.lenient().when(immunizationRepository.save(stored)).thenReturn(stored);
+        org.mockito.Mockito.lenient().when(immunizationMapper.toResponseDTO(stored)).thenReturn(new ImmunizationResponseDTO());
+        ImmunizationRequestDTO echo = new ImmunizationRequestDTO();
+        echo.setDoseNumber(-1);
+        echo.setAdministrationDate(stored.getAdministrationDate());
+        echo.setNotes("a note added later");
+
+        assertThat(service.updateImmunization(immunizationId, echo)).isNotNull();
+
+        echo.setDoseNumber(0);
+        assertThat(org.assertj.core.api.Assertions.catchThrowableOfType(
+            com.example.hms.exception.FieldBusinessException.class, () -> service.updateImmunization(immunizationId, echo)).getField())
+            .isEqualTo("doseNumber");
+    }
+
+    @Test
+    void portalRead_leavesOutRemovedAndEnteredInErrorDoses() {
+        // QA round 54 (the D1910/D1912 class): a voided dose reached the patient's portal, apps and health summary.
+        PatientImmunization given = new PatientImmunization();
+        given.setId(UUID.randomUUID());
+        given.setStatus("COMPLETED");
+        PatientImmunization voided = new PatientImmunization();
+        voided.setId(UUID.randomUUID());
+        voided.setStatus("ENTERED_IN_ERROR");
+        PatientImmunization removed = new PatientImmunization();
+        removed.setId(UUID.randomUUID());
+        removed.setStatus("COMPLETED");
+        removed.setActive(false);
+        ImmunizationResponseDTO shown = new ImmunizationResponseDTO();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(immunizationRepository.findByPatient_IdOrderByAdministrationDateDesc(patientId))
+            .thenReturn(List.of(voided, given, removed));
+        when(immunizationMapper.toResponseDTO(given)).thenReturn(shown);
+
+        assertThat(service.getImmunizationsForPatientPortal(patientId)).containsExactly(shown);
+        verify(immunizationMapper, never()).toResponseDTO(voided);
+        verify(immunizationMapper, never()).toResponseDTO(removed);
     }
 }

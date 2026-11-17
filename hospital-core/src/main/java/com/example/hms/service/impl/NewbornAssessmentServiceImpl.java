@@ -1,7 +1,9 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.enums.NewbornAlertSeverity;
 import com.example.hms.enums.NewbornAlertType;
+import com.example.hms.enums.NewbornDangerSignObservation;
 import com.example.hms.enums.NewbornFollowUpAction;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -19,6 +21,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.NewbornAssessmentRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.utility.ObstetricEligibility;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NewbornAssessmentService;
@@ -40,7 +43,7 @@ import java.util.Set;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
-import java.util.Locale;
+import com.example.hms.service.maternity.NewbornAlertRules;
 
 @Service
 @RequiredArgsConstructor
@@ -48,17 +51,11 @@ import java.util.Locale;
 @Transactional
 public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
+    private static final String ALERT_MSG_PREFIX = "newborn.alert.msg.";
+
+    private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
+
     private static final int LOW_APGAR_THRESHOLD = 7;
-    private static final double LOW_TEMP_THRESHOLD = 36.5;
-    private static final double HIGH_TEMP_THRESHOLD = 37.5;
-    private static final double CRITICAL_LOW_TEMP = 36.0;
-    private static final double CRITICAL_HIGH_TEMP = 38.0;
-    private static final int HEART_RATE_LOW = 100;
-    private static final int HEART_RATE_HIGH = 180;
-    private static final int RESP_RATE_LOW = 30;
-    private static final int RESP_RATE_HIGH = 70;
-    private static final int OXYGEN_CRITICAL = 90;
-    private static final int GLUCOSE_CRITICAL = 45;
     private static final int DEFAULT_RECENT_LIMIT = 10;
     private static final int MAX_RECENT_LIMIT = 50;
     private static final int DEFAULT_PAGE_SIZE = 20;
@@ -66,16 +63,56 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
     private final NewbornAssessmentRepository assessmentRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
     private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+    /** QA D1592: the babies a delivery registered as patients. */
+    private final com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    /** QA D605: URGENT alerts reach the on-call team and escalate until acknowledged. */
+    private final com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     private final NewbornAssessmentMapper mapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final MessageSource messageSource;
+    /** Provisional (2026-11-14): no Apgar alert for a confirmed stillborn baby, per baby. */
+    private final com.example.hms.service.maternity.StillbornNeonatalAlerts stillbornNeonatalAlerts;
+
+    /**
+     * QA D1151 (round 21): a newborn assessment records something; a blank
+     * one was saved with no Apgar and no vitals. At least an Apgar score, a
+     * vital sign or an examination finding is required.
+     */
+    static void requireAssessmentFindings(NewbornAssessmentRequestDTO request) {
+        com.example.hms.service.support.ClinicalContent.requireAny("apgarOneMinute",
+            "maternity.newborn.findingsRequired",
+            request.getApgarOneMinute(), request.getApgarFiveMinute(), request.getApgarTenMinute(),
+            request.getApgarNotes(), request.getTemperatureCelsius(), request.getHeartRateBpm(),
+            request.getRespirationsPerMin(), request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(),
+            request.getOxygenSaturationPercent(), request.getGlucoseMgDl(), request.getGlucoseValue(),
+            request.getExamGeneralAppearance(),
+            request.getExamHeadNeck(), request.getExamChestLungs(), request.getExamCardiac(),
+            request.getExamAbdomen(), request.getExamGenitourinary(), request.getExamSkin(),
+            request.getExamNeurological(), request.getExamMusculoskeletal(), request.getExamNotes(),
+            dangerSignFinding(request.getPoorFeeding()), dangerSignFinding(request.getConvulsions()),
+            dangerSignFinding(request.getSevereChestIndrawing()), dangerSignFinding(request.getAbsentSpontaneousMovement()));
+    }
+
+    /** CR-05: a sign looked at is a finding, present or absent; not assessed records nothing. */
+    private static NewbornDangerSignObservation dangerSignFinding(NewbornDangerSignObservation observation) {
+        return NewbornDangerSignObservation.isRecorded(observation) ? observation : null;
+    }
+
+    /** The whole mg/dL the column stores: the value as entered in its unit, else the mg/dL field. */
+    private static Integer glucoseMgDlOf(NewbornAssessmentRequestDTO request) {
+        if (request.getGlucoseValue() == null || request.getGlucoseUnit() == null) {
+            return request.getGlucoseMgDl();
+        }
+        return request.getGlucoseUnit().toMgDl(request.getGlucoseValue());
+    }
 
     @Override
     public NewbornAssessmentResponseDTO recordAssessment(UUID patientId,
@@ -83,23 +120,60 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                                                          UUID recorderUserId) {
         Objects.requireNonNull(patientId, "patientId is required");
         if (request == null) {
-            throw new BusinessException("Newborn assessment request payload is required.");
+            throw new BusinessException("maternity.newborn.payloadRequired");
         }
+        requireAssessmentFindings(request);
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        boolean recordedOnNewbornChart = isNeonate(patient);
+        if (!recordedOnNewbornChart) {
+            // QA D161 (D103 family): the maternity screen records the assessment from
+            // the MOTHER's chart. On a chart that is not a neonate's, the patient is the
+            // mother and the obstetric rule applies, as for every other maternity record.
+            // Since D1592 the baby a delivery registered gets the row (below).
+            ObstetricEligibility.requireObstetricEligible(patient);
+        }
 
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(patient, registration, request.getHospitalId());
+        // QA D401: the record is written at the caller's acting hospital (the
+        // body's hospital id is a claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND, hospital.getId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+        // A newborn assessed on the chart of a mother who died is the living baby: only the newborn's own chart is gated.
+        if (recordedOnNewbornChart) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(patient, request.getAssessmentTime(), "assessmentTime");
+        }
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         User documentedBy = resolveRecorderUser(recorderUserId);
 
         com.example.hms.model.labor.DeliveryRecord deliveryRecord =
-            resolveDeliveryRecord(request.getDeliveryRecordId(), hospital);
+            resolveDeliveryRecord(request.getDeliveryRecordId(), hospital,
+                recordedOnNewbornChart ? null : patient);
+        if (recordedOnNewbornChart && deliveryRecord == null) {
+            // QA D1592: a baby registered from a delivery here is linked to it.
+            deliveryRecord = registeredDeliveryOf(patient, hospital);
+        }
+        if (!recordedOnNewbornChart) {
+            // QA D1592: from the mother's chart, an assessment of a baby the
+            // delivery registered is recorded on that baby's own chart.
+            Patient baby = registeredNewbornOf(deliveryRecord, request.getNewbornPatientId());
+            if (baby != null) {
+                patient = baby;
+                recordedOnNewbornChart = true;
+                patientRegistrationGuard.requireRegisteredAt(baby.getId(), hospital.getId());
+                registration = registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(baby.getId(), hospital.getId())
+                    .orElse(null);
+                com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(baby, request.getAssessmentTime(), "assessmentTime");
+            }
+        }
 
         NewbornAssessment assessment =
             buildAssessment(patient, hospital, registration, staff, documentedBy, request);
         assessment.setDeliveryRecord(deliveryRecord);
-        evaluateAssessment(assessment);
+        requireNotBeforeBirth(assessment.getAssessmentTime(), deliveryRecord,
+            recordedOnNewbornChart ? patient : null);
+        evaluateAssessment(assessment, request, recordedOnNewbornChart);
 
         NewbornAssessment saved = assessmentRepository.save(assessment);
         publishAlerts(saved, documentedBy);
@@ -154,6 +228,27 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             .toList();
     }
 
+    /**
+     * QA D762: an assessment at birth -3 h was accepted and counted toward the
+     * immediate checks. A newborn is assessed after it is born: not before the
+     * delivery's birth time, nor, on the newborn's own chart, before its date
+     * of birth.
+     */
+    private static void requireNotBeforeBirth(LocalDateTime assessmentTime,
+                                              com.example.hms.model.labor.DeliveryRecord deliveryRecord,
+                                              Patient newborn) {
+        if (assessmentTime == null) {
+            return;
+        }
+        LocalDateTime birth = deliveryRecord != null ? deliveryRecord.getBirthDateTime() : null;
+        if (birth == null && newborn != null && newborn.getDateOfBirth() != null) {
+            birth = newborn.getDateOfBirth().atStartOfDay();
+        }
+        if (birth != null && assessmentTime.isBefore(birth)) {
+            throw new com.example.hms.exception.FieldBusinessException("assessmentTime", "maternity.newborn.assessmentTime.beforeBirth");
+        }
+    }
+
     private NewbornAssessment buildAssessment(Patient patient,
                                               Hospital hospital,
                                               PatientHospitalRegistration registration,
@@ -183,7 +278,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             .systolicBpMmHg(request.getSystolicBpMmHg())
             .diastolicBpMmHg(request.getDiastolicBpMmHg())
             .oxygenSaturationPercent(request.getOxygenSaturationPercent())
-            .glucoseMgDl(request.getGlucoseMgDl())
+            .glucoseMgDl(glucoseMgDlOf(request))
             .examGeneralAppearance(request.getExamGeneralAppearance())
             .examHeadNeck(request.getExamHeadNeck())
             .examChestLungs(request.getExamChestLungs())
@@ -194,6 +289,10 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             .examNeurological(request.getExamNeurological())
             .examMusculoskeletal(request.getExamMusculoskeletal())
             .examNotes(request.getExamNotes())
+            .poorFeeding(NewbornDangerSignObservation.orNotAssessed(request.getPoorFeeding()))
+            .convulsions(NewbornDangerSignObservation.orNotAssessed(request.getConvulsions()))
+            .severeChestIndrawing(NewbornDangerSignObservation.orNotAssessed(request.getSevereChestIndrawing()))
+            .absentSpontaneousMovement(NewbornDangerSignObservation.orNotAssessed(request.getAbsentSpontaneousMovement()))
             .followUpNotes(request.getFollowUpNotes())
             .parentEducationNotes(request.getParentEducationNotes())
             .parentEducationCompleted(Boolean.TRUE.equals(request.getParentEducationCompleted()))
@@ -211,20 +310,68 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         return assessment;
     }
 
-    private void evaluateAssessment(NewbornAssessment assessment) {
+    private void evaluateAssessment(NewbornAssessment assessment, NewbornAssessmentRequestDTO request, boolean ownChart) {
         List<NewbornAssessmentAlert> alerts = new ArrayList<>();
-        boolean urgentDetected = false;
-
-        urgentDetected |= evaluateApgar(assessment, alerts);
-        urgentDetected |= evaluateTemperature(assessment, alerts);
-        urgentDetected |= evaluateCardiorespiratory(assessment, alerts);
-        urgentDetected |= evaluateOxygenation(assessment, alerts);
-        urgentDetected |= evaluateGlucose(assessment, alerts);
-
+        // Provisional (2026-11-14), as on the delivery: the Apgar alerts (and their NICU consult and escalation) are not
+        // raised for a confirmed stillborn baby. A sign of life, an unknown or conflicting outcome, or a live twin's
+        // own assessment always alerts. The other newborn alerts are untouched.
+        boolean urgentDetected = !stillbornNeonatalAlerts.confirmedStillbornAssessment(assessment)
+            && evaluateApgar(assessment, alerts);
+        NewbornAlertRules.DangerSigns dangerSigns = new NewbornAlertRules.DangerSigns(assessment.getPoorFeeding(),
+            assessment.getConvulsions(), assessment.getSevereChestIndrawing(), assessment.getAbsentSpontaneousMovement());
+        for (NewbornAlertRules.Finding finding : NewbornAlertRules.evaluate(readingOf(assessment, request, ownChart), dangerSigns)) {
+            alerts.add(buildAlert(finding.type(), finding.severity(), finding.code(), alertText(finding.code()),
+                finding.code()));
+            if (finding.followUp() != null) {
+                assessment.addFollowUpAction(finding.followUp());
+            }
+            urgentDetected |= finding.severity() == NewbornAlertSeverity.URGENT;
+        }
         alerts.forEach(assessment::addAlert);
         if (urgentDetected) {
             assessment.markEscalationRecommended();
         }
+    }
+
+    private NewbornAlertRules.Reading readingOf(NewbornAssessment assessment, NewbornAssessmentRequestDTO request, boolean ownChart) {
+        com.example.hms.enums.GlucoseUnit unit = request.getGlucoseUnit();
+        com.example.hms.model.labor.DeliveryRecord delivery = assessment.getDeliveryRecord();
+        Integer weeks = delivery == null ? null : delivery.getGestationalAgeWeeksAtBirth();
+        return new NewbornAlertRules.Reading(assessment.getTemperatureCelsius(), assessment.getHeartRateBpm(),
+            assessment.getRespirationsPerMin(), assessment.getOxygenSaturationPercent(), assessment.getGlucoseMgDl(),
+            unit == com.example.hms.enums.GlucoseUnit.MMOL_L ? request.getGlucoseValue() : null,
+            assessment.getSystolicBpMmHg(), assessment.getDiastolicBpMmHg(),
+            NewbornAlertRules.hoursSinceBirth(delivery == null ? null : delivery.getBirthDateTime(),
+                ownChart && assessment.getPatient() != null ? assessment.getPatient().getDateOfBirth() : null,
+                assessment.getAssessmentTime()),
+            weeks != null && weeks < NewbornAlertRules.PRETERM_BELOW_WEEKS,
+            previousHeartRateOfConcern(assessment, ownChart),
+            unit == com.example.hms.enums.GlucoseUnit.MG_DL ? request.getGlucoseValue() : null);
+    }
+
+    /**
+     * Whether the last heart rate recorded for this same baby was also of concern. On the
+     * mother's chart that is known only for a singleton's delivery: a twin's reading, or a
+     * previous baby's, says nothing about this one, so the alert then only asks for a recheck.
+     */
+    private boolean previousHeartRateOfConcern(NewbornAssessment assessment, boolean ownChart) {
+        if (!NewbornAlertRules.heartRateOfConcern(assessment.getHeartRateBpm()) || assessment.getPatient() == null) {
+            return false;
+        }
+        com.example.hms.model.labor.DeliveryRecord delivery = assessment.getDeliveryRecord();
+        if (!ownChart && (delivery == null || delivery.getNumberOfInfants() != 1)) {
+            return false;
+        }
+        if (assessment.getHospital() == null || assessment.getAssessmentTime() == null) {
+            return false;
+        }
+        return assessmentRepository
+            .findFirstByPatient_IdAndHospital_IdAndHeartRateBpmIsNotNullAndAssessmentTimeLessThanEqualOrderByAssessmentTimeDesc(
+                assessment.getPatient().getId(), assessment.getHospital().getId(), assessment.getAssessmentTime())
+            .filter(previous -> ownChart || (previous.getDeliveryRecord() != null
+                && Objects.equals(previous.getDeliveryRecord().getId(), delivery.getId())))
+            .filter(previous -> NewbornAlertRules.heartRateOfConcern(previous.getHeartRateBpm()))
+            .isPresent();
     }
 
     private boolean evaluateApgar(NewbornAssessment assessment, List<NewbornAssessmentAlert> alerts) {
@@ -235,103 +382,30 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
         if (oneMinute != null && oneMinute < LOW_APGAR_THRESHOLD) {
             alerts.add(buildAlert(NewbornAlertType.APGAR, NewbornAlertSeverity.URGENT,
-                "newborn-apgar-1", "Apgar score under 7 at 1 minute.", "Apgar 1 minute"));
+                "newborn-apgar-1", alertText("newborn-apgar-1"), "Apgar 1 minute"));
             assessment.addFollowUpAction(NewbornFollowUpAction.NICU_CONSULT);
             urgent = true;
         }
         if (fiveMinute != null && fiveMinute < LOW_APGAR_THRESHOLD) {
             alerts.add(buildAlert(NewbornAlertType.APGAR, NewbornAlertSeverity.URGENT,
-                "newborn-apgar-5", "Apgar score under 7 at 5 minutes.", "Apgar 5 minute"));
+                "newborn-apgar-5", alertText("newborn-apgar-5"), "Apgar 5 minute"));
             assessment.addFollowUpAction(NewbornFollowUpAction.NICU_CONSULT);
             urgent = true;
         }
         if (!urgent && tenMinute != null && tenMinute < LOW_APGAR_THRESHOLD) {
             alerts.add(buildAlert(NewbornAlertType.APGAR, NewbornAlertSeverity.CAUTION,
-                "newborn-apgar-10", "Apgar score remains below 7 at 10 minutes; continue close monitoring.",
+                "newborn-apgar-10", alertText("newborn-apgar-10"),
                 "Apgar 10 minute"));
         }
         return urgent;
     }
 
-    private boolean evaluateTemperature(NewbornAssessment assessment, List<NewbornAssessmentAlert> alerts) {
-        Double temperature = assessment.getTemperatureCelsius();
-        if (temperature == null) {
-            return false;
-        }
-        if (temperature < CRITICAL_LOW_TEMP || temperature > CRITICAL_HIGH_TEMP) {
-            alerts.add(buildAlert(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.URGENT,
-                "newborn-temperature-critical", "Critical temperature instability detected. Initiate thermoregulation protocol.",
-                "Temperature"));
-            assessment.addFollowUpAction(NewbornFollowUpAction.THERMAL_SUPPORT);
-            if (!assessment.isThermoregulationSupportInitiated()) {
-                assessment.setThermoregulationSupportInitiated(true);
-            }
-            return true;
-        }
-        if (temperature < LOW_TEMP_THRESHOLD || temperature > HIGH_TEMP_THRESHOLD) {
-            alerts.add(buildAlert(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.CAUTION,
-                "newborn-temperature", "Temperature outside preferred range. Reassess thermoregulation plan.",
-                "Temperature"));
-        }
-        return false;
-    }
-
-    private boolean evaluateCardiorespiratory(NewbornAssessment assessment, List<NewbornAssessmentAlert> alerts) {
-        boolean urgent = false;
-        Integer heartRate = assessment.getHeartRateBpm();
-        Integer respirations = assessment.getRespirationsPerMin();
-
-        if (heartRate != null && (heartRate < HEART_RATE_LOW || heartRate > HEART_RATE_HIGH)) {
-            alerts.add(buildAlert(NewbornAlertType.CARDIOVASCULAR, NewbornAlertSeverity.URGENT,
-                "newborn-heart-rate", "Heart rate outside safe range. Escalate to neonatal team.",
-                "Heart Rate"));
-            assessment.addFollowUpAction(NewbornFollowUpAction.NICU_CONSULT);
-            urgent = true;
-        }
-        if (respirations != null && (respirations < RESP_RATE_LOW || respirations > RESP_RATE_HIGH)) {
-            alerts.add(buildAlert(NewbornAlertType.RESPIRATORY, NewbornAlertSeverity.URGENT,
-                "newborn-respiratory", "Respiratory rate outside safe range. Initiate respiratory support.",
-                "Respiratory Rate"));
-            assessment.addFollowUpAction(NewbornFollowUpAction.RESPIRATORY_SUPPORT);
-            if (!assessment.isRespiratorySupportInitiated()) {
-                assessment.setRespiratorySupportInitiated(true);
-            }
-            urgent = true;
-        }
-        return urgent;
-    }
-
-    private boolean evaluateOxygenation(NewbornAssessment assessment, List<NewbornAssessmentAlert> alerts) {
-        Integer oxygen = assessment.getOxygenSaturationPercent();
-        if (oxygen == null) {
-            return false;
-        }
-        if (oxygen < OXYGEN_CRITICAL) {
-            alerts.add(buildAlert(NewbornAlertType.OXYGENATION, NewbornAlertSeverity.URGENT,
-                "newborn-oxygenation", "Oxygen saturation under 90%. Provide supplemental oxygen and escalate.",
-                "SpO2"));
-            assessment.addFollowUpAction(NewbornFollowUpAction.OXYGEN_THERAPY);
-            return true;
-        }
-        return false;
-    }
-
-    private boolean evaluateGlucose(NewbornAssessment assessment, List<NewbornAssessmentAlert> alerts) {
-        Integer glucose = assessment.getGlucoseMgDl();
-        if (glucose == null) {
-            return false;
-        }
-        if (glucose < GLUCOSE_CRITICAL) {
-            alerts.add(buildAlert(NewbornAlertType.GLUCOSE, NewbornAlertSeverity.URGENT,
-                "newborn-glucose", "Critical hypoglycemia detected. Initiate glucose protocol immediately.",
-                "Glucose"));
-            assessment.addFollowUpAction(NewbornFollowUpAction.GLUCOSE_MONITORING);
-            if (!assessment.isGlucoseProtocolInitiated()) {
-                assessment.setGlucoseProtocolInitiated(true);
-            }
-            return true;
-        }
-        return false;
+    /**
+     * Alert text in the staff locale (QA D226), like the labor alerts: the alert is
+     * stored and read by staff, so it is never composed in English in code.
+     */
+    private String alertText(String code) {
+        return messageSource.getMessage(ALERT_MSG_PREFIX + code, null, NotificationLocales.STAFF);
     }
 
     private NewbornAssessmentAlert buildAlert(NewbornAlertType type,
@@ -339,12 +413,16 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                                               String code,
                                               String message,
                                               String trigger) {
+        // QA D216 (D172/D61): the stored alert text is shown on the chart and
+        // sent as a notification, so it is rendered in the staff locale from
+        // the bundle; the English literal is only the fallback.
         return NewbornAssessmentAlert.builder()
             .type(type)
             .severity(severity)
             .code(code)
-            .message(message)
-            .triggeredBy(trigger)
+            .message(messageSource.getMessage(ALERT_MSG_PREFIX + code, null, message, NotificationLocales.STAFF))
+            .triggeredBy(messageSource.getMessage("newborn.alert.trigger." + code, null, trigger,
+                NotificationLocales.STAFF))
             .build();
     }
 
@@ -352,27 +430,55 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         if (assessment.getAlerts() == null || assessment.getAlerts().isEmpty()) {
             return;
         }
-        if (documentedBy == null || documentedBy.getUsername() == null) {
-            return;
-        }
-        // Read by the documenting clinician: staff locale, not the request locale.
-        Locale locale = NotificationLocales.STAFF;
-        String fallbackName = messageSource.getMessage("patient.fallback.generic", null, locale);
-        String patientName = assessment.getPatient() != null
-            ? (assessment.getPatient().getFirstName() + " " + assessment.getPatient().getLastName()).trim()
-            : fallbackName;
+        // QA D605: the team is told even when the documenter is unknown.
+        boolean notifyDocumenter = documentedBy != null && documentedBy.getUsername() != null;
+        String fullName = assessment.getPatient() != null
+            ? java.util.Objects.toString(assessment.getPatient().getFullName(), "")
+            : "";
         assessment.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == NewbornAlertSeverity.URGENT)
-            .forEach(alert -> {
-                String message = messageSource.getMessage("newborn.alert.notification",
-                    new Object[]{alert.getType(), patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
-                    locale);
-                try {
-                    notificationService.createNotification(message, documentedBy.getUsername());
-                } catch (RuntimeException ex) {
-                    log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
-                }
-            });
+            .forEach(alert -> publishUrgentAlert(alert, assessment, documentedBy, fullName, notifyDocumenter));
+    }
+
+    /** The documenting clinician's own notice, in her language (QA D665). Never throws. */
+    private void notifyDocumenter(NewbornAssessmentAlert alert, User documentedBy, String fullName, String messageKey) {
+        // Read by the documenting clinician, in her language (QA D665).
+        // QA D216: the type is a translated label, never the raw enum.
+        Object typeKey = alert.getType() == null ? ""
+            : NotificationLocalizer.key("newborn.alert.type." + alert.getType().name());
+        Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
+        try {
+            notificationService.createNotification("newborn.alert.notification",
+                new Object[]{typeKey, patientArg,
+                    com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
+                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), "MATERNITY_ALERT");
+        } catch (RuntimeException ex) {
+            log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
+        }
+    }
+
+    private void publishUrgentAlert(NewbornAssessmentAlert alert, NewbornAssessment assessment, User documentedBy,
+                                    String fullName, boolean notifyDocumenter) {
+        // QA D665: the alert sentence travels as its key, rendered per reader.
+        String messageKey = alert.getCode() == null ? null : ALERT_MSG_PREFIX + alert.getCode();
+        if (notifyDocumenter) {
+            notifyDocumenter(alert, documentedBy, fullName, messageKey);
+        }
+        if (obstetricAlertEscalation != null && assessment.getHospital() != null && assessment.getPatient() != null) {
+            // Stored on the escalation row: staff-locale text (the worker re-keys its notifications).
+            java.util.Locale locale = NotificationLocales.STAFF;
+            String patientName = fullName.isBlank()
+                ? messageSource.getMessage("patient.fallback.generic", null, locale) : fullName;
+            String typeLabel = alert.getType() == null ? ""
+                : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale);
+            String message = messageSource.getMessage("newborn.alert.notification",
+                new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
+            obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                assessment.getHospital().getId(), assessment.getPatient().getId(), patientName,
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN, assessment.getId(),
+                alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
+                documentedBy == null ? null : documentedBy.getId(), message, messageKey, null));
+        }
     }
 
     /**
@@ -381,24 +487,87 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
      * <p>Optional: a newborn may be transferred in already born, or predate the
      * L&amp;D module — the entity javadoc says as much. Null in, null out.
      *
-     * <p>Validated against the HOSPITAL, deliberately not against the patient.
-     * A delivery record's patient is the MOTHER; this assessment's patient is the
-     * BABY. Comparing the two would reject every correct link.
+     * <p>Always validated against the HOSPITAL. A delivery record's patient is
+     * the MOTHER: when the assessment sits on a neonate's chart the two differ
+     * and {@code mother} is null; when it sits on the mother's chart (QA D161,
+     * the only path the maternity screen has today) the delivery must be hers.
      */
     private com.example.hms.model.labor.DeliveryRecord resolveDeliveryRecord(UUID deliveryRecordId,
-                                                                             Hospital hospital) {
+                                                                             Hospital hospital,
+                                                                             Patient mother) {
         if (deliveryRecordId == null) {
-            return null;
+            if (mother == null) {
+                // A neonate's own chart: the baby may have been born elsewhere.
+                return null;
+            }
+            // QA D517: on the mother's chart the newborn comes from a birth
+            // on file - her latest delivery at this hospital - or there is
+            // no newborn to assess. Only a birth within the neonatal period
+            // counts: a delivery from years ago has no newborn left.
+            java.time.LocalDateTime neonatalSince = java.time.LocalDateTime.now(java.time.ZoneId.systemDefault())
+                .minusDays(NEONATAL_PERIOD_DAYS);
+            return (hospital == null ? java.util.Optional.<com.example.hms.model.labor.DeliveryRecord>empty()
+                : deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(
+                    mother.getId(), hospital.getId()))
+                .filter(d -> d.getBirthDateTime() != null && !d.getBirthDateTime().isBefore(neonatalSince))
+                .orElseThrow(() -> new BusinessException("maternity.newborn.noDelivery"));
         }
         com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordRepository.findById(deliveryRecordId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Delivery record not found with ID: " + deliveryRecordId));
+            .orElseThrow(() -> new ResourceNotFoundException("deliveryRecord.notFound", deliveryRecordId));
 
         if (hospital != null && delivery.getHospital() != null
             && !hospital.getId().equals(delivery.getHospital().getId())) {
-            throw new BusinessException("Delivery record belongs to a different hospital.");
+            throw new com.example.hms.exception.FieldBusinessException("deliveryRecordId", "maternity.newborn.deliveryOtherHospital");
+        }
+        if (mother != null && delivery.getPatient() != null
+            && !mother.getId().equals(delivery.getPatient().getId())) {
+            throw new com.example.hms.exception.FieldBusinessException("deliveryRecordId", "newborn.delivery.otherMother");
         }
         return delivery;
+    }
+
+    /** QA D1592: the delivery a baby was registered from, at this hospital; null when none. */
+    private com.example.hms.model.labor.DeliveryRecord registeredDeliveryOf(Patient baby, Hospital hospital) {
+        return deliveryNewbornRepository.findByNewbornPatient_Id(baby.getId())
+            .filter(link -> hospital != null && link.getHospital() != null
+                && hospital.getId().equals(link.getHospital().getId()))
+            .map(com.example.hms.model.labor.DeliveryNewborn::getDeliveryRecord)
+            .orElse(null);
+    }
+
+    /**
+     * QA D1592: the registered baby of {@code delivery} an assessment from the
+     * mother's chart is for. Null when the delivery registered no baby (one
+     * recorded before D1592, or a stillbirth) and no baby was named. A named
+     * baby must be one of this delivery's; a multiple birth must name one.
+     */
+    private Patient registeredNewbornOf(com.example.hms.model.labor.DeliveryRecord delivery, UUID newbornPatientId) {
+        List<com.example.hms.model.labor.DeliveryNewborn> babies = delivery == null ? List.of()
+            : deliveryNewbornRepository.findByDeliveryRecord_IdOrderByBirthOrderAsc(delivery.getId());
+        if (newbornPatientId != null) {
+            return babies.stream()
+                .map(com.example.hms.model.labor.DeliveryNewborn::getNewbornPatient)
+                .filter(baby -> newbornPatientId.equals(baby.getId()))
+                .findFirst()
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(
+                    "newbornPatientId", "maternity.newborn.notThisDelivery"));
+        }
+        if (babies.isEmpty()) {
+            return null;
+        }
+        if (babies.size() > 1) {
+            throw new com.example.hms.exception.FieldBusinessException("newbornPatientId", "maternity.newborn.whichBaby");
+        }
+        return babies.get(0).getNewbornPatient();
+    }
+
+    /** Neonatal period: the first 28 days of life (WHO). */
+    private static final int NEONATAL_PERIOD_DAYS = 28;
+
+    /** True when the chart is a neonate's (born within the neonatal period). */
+    static boolean isNeonate(Patient patient) {
+        java.time.LocalDate dob = patient.getDateOfBirth();
+        return dob != null && !dob.isBefore(java.time.LocalDate.now().minusDays(NEONATAL_PERIOD_DAYS));
     }
 
     private PatientHospitalRegistration resolveRegistration(Patient patient,
@@ -406,9 +575,14 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                                                              UUID hospitalId) {
         if (registrationId != null) {
             PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Registration not found with ID: " + registrationId));
+                .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
             if (!registration.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException("Registration does not belong to the specified patient.");
+                throw new com.example.hms.exception.FieldBusinessException("registrationId", "maternity.registration.otherPatient");
+            }
+            // QA r5 tenancy sweep: a registration of another hospital answers as unknown.
+            if (hospitalId != null && (registration.getHospital() == null
+                    || !hospitalId.equals(registration.getHospital().getId()))) {
+                throw new ResourceNotFoundException("registration.notFound", registrationId);
             }
             return registration;
         }
@@ -429,24 +603,26 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             return registration.getHospital();
         }
         if (requestedHospitalId != null) {
-            return hospitalRepository.findById(requestedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestedHospitalId));
+            return hospitalRepository.findClinicalById(requestedHospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, requestedHospitalId));
         }
         if (patient.getHospitalId() != null) {
-            return hospitalRepository.findById(patient.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", patient.getHospitalId()));
+            return hospitalRepository.findClinicalById(patient.getHospitalId())
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, patient.getHospitalId()));
         }
-        throw new BusinessException("Unable to resolve hospital context for newborn assessment.");
+        throw new BusinessException("maternity.newborn.hospitalUnresolved");
     }
 
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
         if (staffId != null) {
             Staff staff = staffRepository.findByIdAndActiveTrue(staffId)
-                .orElseThrow(() -> new ResourceNotFoundException("Staff not found or inactive with ID: " + staffId));
+                .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
             if (hospital != null && staff.getHospital() != null
                 && !hospital.getId().equals(staff.getHospital().getId())) {
-                throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");
+                throw new com.example.hms.exception.FieldBusinessException("recordedByStaffId", "maternity.recorder.hospitalMismatch");
             }
+            // QA D503 class: the recorder is the caller, not a colleague named in the body.
+            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(staff);
             return staff;
         }
         if (recorderUserId == null) {

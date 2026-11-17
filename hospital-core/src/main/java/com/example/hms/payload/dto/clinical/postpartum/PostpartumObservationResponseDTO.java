@@ -30,6 +30,8 @@ public class PostpartumObservationResponseDTO {
     private UUID id;
     private UUID patientId;
     private UUID hospitalId;
+    /** QA D1631: the hospital that owns the record, so another hospital shows it as theirs, read only. */
+    private String hospitalName;
     private UUID carePlanId;
 
     private LocalDateTime observationTime;

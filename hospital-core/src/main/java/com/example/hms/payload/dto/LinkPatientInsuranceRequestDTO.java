@@ -40,10 +40,29 @@ public class LinkPatientInsuranceRequestDTO {
     @Schema(description = "Set/unset/leave primary flag (true/false/null)")
     private Boolean primary;
 
+    /**
+     * QA D1300 / round 29 sweep: required by the natural-key upsert
+     * ({@code PUT /patient-insurances/link}, which creates the policy when
+     * absent: the {@code OnCreate} group), named with the patient in one
+     * answer; the link by id does not read it.
+     */
+    @jakarta.validation.constraints.NotBlank(groups = com.example.hms.validation.OnCreate.class,
+        message = "{patientinsurance.payer.required}")
     @Schema(description = "Payer code of the insurance (for natural key upsert)", example = "AETNA")
     private String payerCode;
 
+    @jakarta.validation.constraints.NotBlank(groups = com.example.hms.validation.OnCreate.class,
+        message = "{patientinsurance.policy.required}")
     @Schema(description = "Policy number of the insurance (for natural key upsert)", example = "POL1234567")
     private String policyNumber;
+
+    /**
+     * QA D925: the insurer's display name. Optional — a new policy without one
+     * is named after its payer code, because {@code provider_name} is required
+     * and the link used to answer 500 for every new policy.
+     */
+    @jakarta.validation.constraints.Size(max = 150)
+    @Schema(description = "Insurer display name; defaults to the payer code for a new policy", example = "CNAMU")
+    private String providerName;
 
 }

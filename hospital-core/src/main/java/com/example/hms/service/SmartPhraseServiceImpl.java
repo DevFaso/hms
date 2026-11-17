@@ -37,6 +37,8 @@ import java.util.UUID;
 @Service
 @Slf4j
 public class SmartPhraseServiceImpl implements SmartPhraseService {
+    private static final String SMART_PHRASE_NOT_FOUND_KEY = "smartPhrase.notFound";
+
 
     private static final String SUPER_ADMIN_AUTHORITY = "ROLE_SUPER_ADMIN";
 
@@ -44,7 +46,6 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     private static final Set<String> HOSPITAL_ADMIN_ROLES =
         Set.of("ROLE_HOSPITAL_ADMIN", SUPER_ADMIN_AUTHORITY);
 
-    private static final String NOT_FOUND_PREFIX = "SmartPhrase not found: ";
 
     private final SmartPhraseRepository repository;
     private final HospitalRepository hospitalRepository;
@@ -93,7 +94,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     public SmartPhraseResponseDTO update(UUID id, SmartPhraseRequestDTO request) {
         validateRequest(request);
         SmartPhrase existing = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_PREFIX + id));
+            .orElseThrow(() -> new ResourceNotFoundException(SMART_PHRASE_NOT_FOUND_KEY, id));
         User caller = currentUserOrThrow();
 
         // Authorize against the EXISTING macro's scope first — a clinician must not be
@@ -123,7 +124,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     @Transactional
     public void delete(UUID id) {
         SmartPhrase existing = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_PREFIX + id));
+            .orElseThrow(() -> new ResourceNotFoundException(SMART_PHRASE_NOT_FOUND_KEY, id));
         User caller = currentUserOrThrow();
         UUID hid = existing.getHospital() != null ? existing.getHospital().getId() : null;
         UUID oid = existing.getOwner() != null ? existing.getOwner().getId() : null;
@@ -136,7 +137,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     public SmartPhraseResponseDTO get(UUID id) {
         return repository.findById(id)
             .map(this::toDto)
-            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_PREFIX + id));
+            .orElseThrow(() -> new ResourceNotFoundException(SMART_PHRASE_NOT_FOUND_KEY, id));
     }
 
     @Override
@@ -181,7 +182,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     public void recordUsage(UUID id) {
         int updated = repository.incrementUsage(id, LocalDateTime.now(clock));
         if (updated == 0) {
-            throw new ResourceNotFoundException(NOT_FOUND_PREFIX + id);
+            throw new ResourceNotFoundException(SMART_PHRASE_NOT_FOUND_KEY, id);
         }
     }
 
@@ -222,13 +223,13 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
         }
         if (request.getScope() == SmartPhraseScope.GLOBAL
             && (request.getHospitalId() != null || request.getOwnerUserId() != null)) {
-            throw new BusinessException("GLOBAL SmartPhrase must not carry hospitalId or ownerUserId");
+            throw new com.example.hms.exception.FieldBusinessException("scope", "smartPhrase.globalNoOwner");
         }
         if (request.getScope() == SmartPhraseScope.HOSPITAL && request.getHospitalId() == null) {
-            throw new BusinessException("HOSPITAL SmartPhrase requires hospitalId");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "smartPhrase.hospitalRequired");
         }
         if (request.getScope() == SmartPhraseScope.USER && request.getOwnerUserId() == null) {
-            throw new BusinessException("USER SmartPhrase requires ownerUserId");
+            throw new com.example.hms.exception.FieldBusinessException("ownerUserId", "smartPhrase.ownerRequired");
         }
     }
 
@@ -262,9 +263,8 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
         if (request.getHospitalId() == null) {
             return null;
         }
-        return hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + request.getHospitalId()));
+        return hospitalRepository.findClinicalById(request.getHospitalId())
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
     }
 
     private User resolveOwner(SmartPhraseRequestDTO request) {
@@ -272,8 +272,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
             return null;
         }
         return userRepository.findById(request.getOwnerUserId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "User not found: " + request.getOwnerUserId()));
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", request.getOwnerUserId()));
     }
 
     private UUID currentUserIdOrNull() {

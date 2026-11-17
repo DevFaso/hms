@@ -55,26 +55,24 @@ public class SuperAdminDashboardController {
     private static final int HOSPITAL_SEARCH_DEFAULT_LIMIT = 20;
 
     /**
-     * Belt-and-braces re-check that the caller is a <b>real</b> super-admin
-     * per the discrete {@code isSuperAdmin} JWT claim — not just per
-     * authorities (which {@link com.example.hms.security.JwtTokenProvider}
-     * inflates for real super-admins, and which an impersonation context
-     * could carry verbatim). Every cross-tenant endpoint on this controller
-     * must call this <i>before</i> reading data and <i>before</i> emitting
-     * the audit event, so neither the data nor the audit hook can be
-     * reached by a principal whose JWT does not carry the claim.
+     * Refuse unless the caller is a VERIFIED super-admin: a live, active
+     * SUPER_ADMIN assignment, read on this request by the shared computation
+     * both auth filters use ({@code ActingScopeResolver}). Never the
+     * authorities collection, never a token claim — the name of this method
+     * is historical.
      *
-     * <p>{@link PreAuthorize} stays in place as the first line of defence;
-     * this method is the second line. See design call #1 in
-     * {@code docs/super-admin-cross-tenant-design.md} and the F1 entry in
-     * {@code docs/copilot-review.md} (2026-05-06).</p>
+     * <p>{@link PreAuthorize} stays in place as the first line of defence
+     * (and, with the authorities reconciled against the same live signal in
+     * both filters, it now agrees with this one); this method is the second
+     * line. See design call #1 in {@code docs/super-admin-cross-tenant-design.md}
+     * and docs/security/tenant-resolution.md.</p>
      *
-     * @throws ResponseStatusException 403 when the JWT claim is absent.
+     * @throws ResponseStatusException 403 when the caller is not a verified super-admin.
      */
     private void requireRealSuperAdminFromJwtClaim() {
         if (!HospitalContextHolder.getContextOrEmpty().isSuperAdmin()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                "Cross-tenant super-admin endpoint is restricted to principals carrying the isSuperAdmin JWT claim.");
+                "Cross-tenant super-admin endpoint is restricted to verified super-admins.");
         }
     }
 

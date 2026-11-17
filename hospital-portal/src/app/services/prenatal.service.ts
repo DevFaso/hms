@@ -49,7 +49,10 @@ export interface PrenatalScheduleResponse {
   staffId?: string | null;
   estimatedDueDate?: string;
   currentGestationalWeek: number;
-  highRisk: boolean;
+  /** QA D1031: antenatal contacts already held in this pregnancy. */
+  completedContacts?: number;
+  /** Absent for a receptionist (RCPT-CLIN). */
+  highRisk?: boolean;
   recommendations: PrenatalVisitRecommendation[];
   existingAppointments: PrenatalAppointmentSummary[];
   alerts: string[];
@@ -62,6 +65,8 @@ export interface PrenatalRescheduleRequest {
   durationMinutes?: number;
   newStaffId?: string;
   notes?: string;
+  /** QA D1429: why the visit moves outside any published free slot; required then. */
+  overbookReason?: string;
 }
 
 /**

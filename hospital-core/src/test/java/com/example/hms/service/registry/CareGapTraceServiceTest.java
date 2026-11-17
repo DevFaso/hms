@@ -277,5 +277,8 @@ class CareGapTraceServiceTest {
         assertThat(captor.getValue().getPatientId())
             .isEqualTo(enrollment.getPatient().getId());
         assertThat(captor.getValue().getUserName()).isEqualTo("SYSTEM");
+        // QA D786: the SYSTEM row names its hospital by id, so the hospital's
+        // own audit view shows it.
+        assertThat(captor.getValue().getHospitalId()).isEqualTo(enrollment.getHospital().getId());
     }
 }

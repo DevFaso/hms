@@ -96,7 +96,8 @@ class GlobalSessionRevocationServiceTest {
         assertThat(saved.getLastRevokedByUserId()).isEqualTo(actorId);
         assertThat(saved.getLastRevokedByUsername()).isEqualTo("super.alice");
         assertThat(saved.getLastRevokedReason()).isEqualTo("incident X");
-        assertThat(service.getGlobalMinTokenIat()).isEqualTo(takenAt);
+        // Reported at its real time; the token cut-off is that time rounded up.
+        assertThat(service.getGlobalMinTokenIat()).isEqualTo(GlobalSessionRevocationService.cutOff(takenAt));
     }
 
     @Test
@@ -109,7 +110,78 @@ class GlobalSessionRevocationServiceTest {
 
         Instant takenAt = service.revokeAll(null, null, null);
 
-        assertThat(row.getGlobalMinTokenIat()).isEqualTo(takenAt);
-        assertThat(service.getGlobalMinTokenIat()).isEqualTo(takenAt);
+        assertThat(row.getGlobalMinTokenIat()).isEqualTo(GlobalSessionRevocationService.cutOff(takenAt));
+        assertThat(service.getGlobalMinTokenIat()).isEqualTo(GlobalSessionRevocationService.cutOff(takenAt));
+        assertThat(row.getUpdatedAt()).isEqualTo(takenAt);
+    }
+
+    @Test
+    @DisplayName("revokes: only a token issued before the last force-logout-all")
+    void revokesOnlyTokensIssuedBeforeTheRevocation() {
+        assertThat(service.revokes(new java.util.Date())).isFalse();
+
+        Instant takenAt = service.revokeAll(null, null, null);
+
+        assertThat(service.revokes(java.util.Date.from(takenAt.minusSeconds(1)))).isTrue();
+        assertThat(service.revokes(java.util.Date.from(takenAt.plusSeconds(1)))).isFalse();
+        assertThat(service.revokes(null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("revokes: every token of the revocation's whole second is revoked (a kill switch errs safe)")
+    void everyTokenOfTheRevocationsSecond_isRevoked() {
+        java.time.Instant takenAt = service.revokeAll(java.util.UUID.randomUUID(), "admin", "test");
+        java.time.Instant cutOff = GlobalSessionRevocationService.cutOff(takenAt);
+        // The revocation is reported at its real time; only the cut-off rounds up.
+        assertThat(takenAt).isBeforeOrEqualTo(java.time.Instant.now());
+        assertThat(service.getGlobalMinTokenIat()).isEqualTo(cutOff);
+
+        // The stored cut-off is a whole second, rounded UP from the moment of
+        // the revocation: a JWT iat is whole seconds, so a token minted in
+        // that second (iat = the second before the cut-off) is revoked, even
+        // one minted a few milliseconds BEFORE the revocation.
+        assertThat(cutOff.getNano()).isZero();
+        assertThat(service.revokes(java.util.Date.from(cutOff.minusSeconds(1)))).isTrue();
+        assertThat(service.revokes(java.util.Date.from(cutOff))).isFalse();
+    }
+
+    @Test
+    @DisplayName("the cut-off rounds up to the next whole second, and keeps an exact second as is")
+    void theCutOffRoundsUp() {
+        assertThat(GlobalSessionRevocationService.cutOff(java.time.Instant.parse("2026-10-11T12:00:00.100Z")))
+            .isEqualTo(java.time.Instant.parse("2026-10-11T12:00:01Z"));
+        assertThat(GlobalSessionRevocationService.cutOff(java.time.Instant.parse("2026-10-11T12:00:00Z")))
+            .isEqualTo(java.time.Instant.parse("2026-10-11T12:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("revokesFresh reads the row, not the 30-second cache (a lagging instance must not mint)")
+    void revokesFreshReadsTheRow() {
+        java.time.Instant cutOff = java.time.Instant.parse("2026-10-11T12:00:01Z");
+        SecurityRevocation row = new SecurityRevocation();
+        row.setId(SecurityRevocation.SINGLETON_ID);
+        row.setGlobalMinTokenIat(cutOff);
+        when(repository.findById(SecurityRevocation.SINGLETON_ID)).thenReturn(Optional.of(row));
+
+        // The cache still says "no revocation" (another instance revoked).
+        assertThat(service.revokes(java.util.Date.from(cutOff.minusSeconds(5)))).isFalse();
+        assertThat(service.revokesFresh(java.util.Date.from(cutOff.minusSeconds(5)))).isTrue();
+    }
+
+    @Test
+    @DisplayName("revokesFresh never lets an older committed row undo a newer cut-off already in the cache")
+    void revokesFreshKeepsTheLaterCutOff() {
+        // This instance's revokeAll set the cache (T2) before its commit; the
+        // row still says T1. The later one decides, and the cache stays T2.
+        when(repository.findById(SecurityRevocation.SINGLETON_ID)).thenReturn(Optional.empty());
+        java.time.Instant t2 = service.revokeAll(java.util.UUID.randomUUID(), "admin", "incident");
+        java.time.Instant cutOff = GlobalSessionRevocationService.cutOff(t2);
+        SecurityRevocation older = new SecurityRevocation();
+        older.setId(SecurityRevocation.SINGLETON_ID);
+        older.setGlobalMinTokenIat(cutOff.minusSeconds(3600));
+        when(repository.findById(SecurityRevocation.SINGLETON_ID)).thenReturn(Optional.of(older));
+
+        assertThat(service.revokesFresh(java.util.Date.from(cutOff.minusSeconds(1)))).isTrue();
+        assertThat(service.getGlobalMinTokenIat()).isEqualTo(cutOff);
     }
 }

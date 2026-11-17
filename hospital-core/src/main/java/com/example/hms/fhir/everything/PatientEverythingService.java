@@ -1,5 +1,7 @@
 package com.example.hms.fhir.everything;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
@@ -19,6 +21,7 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.DischargeSummaryRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientRepository;
@@ -312,16 +315,17 @@ public class PatientEverythingService {
 
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, ctx.reach(),
             "Cross-hospital FHIR $everything read on the treatment relationship");
-        emitAudit(patient, describe(patientId, params, bundle.getTotal()));
+        emitAudit(patient, hospitalId, describe(patientId, params, bundle.getTotal()));
         return bundle;
     }
 
     private void appendDocumentReferenceSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("DocumentReference")) return;
-        // Uploaded documents are patient-anchored (no hospital column); the
-        // registration gate in loadAndVerifyTenantOwnedPatient already ran.
+        // Uploaded documents follow the patient (the registration gate in
+        // loadAndVerifyTenantOwnedPatient already ran); a document another
+        // hospital issued, such as its medical certificate, does not (QA D961).
         Page<PatientUploadedDocument> docs = uploadedDocumentRepository
-            .findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(ctx.patientId(), ctx.pageRequest());
+            .findForStaffNewestFirst(ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
         ctx.notePageOverflow(docs);
         docs.forEach(d -> {
             if (ctx.passesSinceFilter(d.getUpdatedAt())) {
@@ -342,7 +346,7 @@ public class PatientEverythingService {
     }
 
     private UUID resolveHospitalScopeOrForbid() {
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
             throw forbidden(
                 "FHIR Patient/{id}/$everything requires an active hospital scope; "
@@ -377,7 +381,10 @@ public class PatientEverythingService {
         // iterations.
         if (ctx.includes("Patient") && ctx.isFirstPage()
             && ctx.passesSinceFilter(patient.getUpdatedAt())) {
-            addEntry(bundle, patientMapper.toFhir(patient));
+            // The acting hospital's MRN only: every other identifier system
+            // names a hospital the patient is registered at, and the
+            // sections' treatment-relationship reach does not extend to it.
+            addEntry(bundle, patientMapper.toFhir(patient, ctx.hospitalId()));
         }
     }
 
@@ -416,7 +423,8 @@ public class PatientEverythingService {
         ctx.account(labResults.getContent().stream()
             .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
             .toList());
-        labResults.forEach(r -> {
+        // QA D740/D741: released, current results only.
+        ClinicalLabResultView.releasedAndCurrent(labResults.getContent()).forEach(r -> {
             if (ctx.passesSinceFilter(r.getUpdatedAt())) {
                 addEntry(bundle, observationMapper.toFhir(r));
             }
@@ -432,6 +440,8 @@ public class PatientEverythingService {
         // problem in a sensitive category is withheld (D3).
         List<com.example.hms.model.PatientProblem> problems = patientProblemRepository
             .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable()).stream()
+            // QA D1240 (round 25): a problem removed as entered in error is not part of the record.
+            .filter(c -> !c.isEnteredInError())
             .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), ctx.hospitalId(), sensitivityClassifier.effectiveCategory(c), ctx.unlocked()))
             .toList();
         ctx.account(problems.stream().map(c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital())).toList());
@@ -442,13 +452,21 @@ public class PatientEverythingService {
 
     private void appendMedicationRequestSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("MedicationRequest")) return;
+        // QA D1537: an export carries the orders that were issued, never a draft or a discarded one,
+        // chosen in the query so a page is never thinned after it was fetched. The query is the single
+        // source: an issued order is a sent one (NeverSentRule.sent), so no hospital's never-sent row
+        // reaches this section and no post-filter is needed (QA D652).
         Page<com.example.hms.model.Prescription> prescriptions = prescriptionRepository
-            .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable(), ctx.pageRequest());
+            .findIssuedByPatientIdAndHospitalIdIn(ctx.patientId(), ctx.readable(),
+                com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, ctx.pageRequest());
         ctx.notePageOverflow(prescriptions);
-        ctx.account(prescriptions.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
-        prescriptions.forEach(p -> {
+        List<com.example.hms.model.Prescription> shown = prescriptions.getContent();
+        ctx.account(shown.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
+        List<com.example.hms.model.Admission> closedStays = shown.isEmpty() ? List.of()
+            : medicationRequestMapper.closedStaysOf(ctx.patientId());
+        shown.forEach(p -> {
             if (ctx.passesSinceFilter(p.getUpdatedAt())) {
-                addEntry(bundle, medicationRequestMapper.toFhir(p));
+                addEntry(bundle, medicationRequestMapper.toFhir(p, closedStays));
             }
         });
     }
@@ -481,21 +499,12 @@ public class PatientEverythingService {
     }
 
     private static String describe(UUID patientId, PatientEverythingParams params, int entryCount) {
-        StringBuilder sb = new StringBuilder("FHIR ")
-            .append(PATIENT_PREFIX)
-            .append(patientId)
-            .append("/$everything returned a ")
-            .append(entryCount)
-            .append("-entry Bundle");
-        if (params.since() != null) {
-            sb.append(" since=").append(params.since());
-        }
-        if (!params.types().isEmpty()) {
-            sb.append(" types=").append(String.join(",", params.types()));
-        }
-        sb.append(" count=").append(params.count())
-            .append(" cursor=").append(params.cursor());
-        return sb.toString();
+        // One expression, so AuditDescriptionCoverageTest can read the shape (QA D894).
+        return "FHIR " + PATIENT_PREFIX + patientId + "/$everything returned a " + entryCount + "-entry Bundle"
+            + (params.since() != null ? " since=" + params.since() : "")
+            + (params.types().isEmpty() ? "" : " types=" + String.join(",", params.types()))
+            + " count=" + params.count()
+            + " cursor=" + params.cursor();
     }
 
     private static void addEntry(Bundle bundle, Resource resource) {
@@ -543,7 +552,7 @@ public class PatientEverythingService {
         return new ForbiddenOperationException(message, outcome);
     }
 
-    private void emitAudit(Patient patient, String description) {
+    private void emitAudit(Patient patient, UUID hospitalId, String description) {
         try {
             // Without an explicit actor the audit sink records the exporter
             // as SYSTEM — useless for a PHI-export trail. Best-effort
@@ -554,6 +563,7 @@ public class PatientEverythingService {
                 .eventType(AuditEventType.PATIENT_EXPORT)
                 .status(AuditStatus.SUCCESS)
                 .entityType(AUDIT_ENTITY_TYPE)
+                .hospitalId(hospitalId) // QA D533: anchored at the exporting hospital
                 .userId(actor != null ? actor.getId() : null)
                 .userName(actor != null ? actor.getUsername() : SecurityUtils.getCurrentUsername())
                 .resourceId(patient.getId() == null ? null : patient.getId().toString())

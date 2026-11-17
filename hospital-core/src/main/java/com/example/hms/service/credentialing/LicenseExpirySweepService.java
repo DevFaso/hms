@@ -1,5 +1,6 @@
 package com.example.hms.service.credentialing;
 
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.enums.LicenseAlertStage;
 import com.example.hms.model.Staff;
 import com.example.hms.repository.StaffRepository;
@@ -15,8 +16,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import org.springframework.context.MessageSource;
-import com.example.hms.service.i18n.NotificationLocales;
 
 /**
  * Turns the licence-expiry rows nobody reads into notifications somebody
@@ -53,7 +52,6 @@ public class LicenseExpirySweepService {
     private final StaffRepository staffRepository;
     private final NotificationService notificationService;
     private final Clock clock;
-    private final MessageSource messageSource;
 
     /**
      * Grade every active practitioner's licence and notify on advances.
@@ -89,9 +87,9 @@ public class LicenseExpirySweepService {
                 continue;
             }
 
-            String message = buildMessage(staff, stage, today);
+            NotificationText message = buildMessage(staff, stage, today);
             for (String recipient : recipients) {
-                notificationService.createNotification(message, recipient, NOTIFICATION_TYPE);
+                notificationService.createNotification(message.key(), message.args(), recipient, NOTIFICATION_TYPE);
             }
             notified++;
         }
@@ -119,21 +117,18 @@ public class LicenseExpirySweepService {
         return recipients;
     }
 
-    private String buildMessage(Staff staff, LicenseAlertStage stage, LocalDate today) {
+    private NotificationText buildMessage(Staff staff, LicenseAlertStage stage, LocalDate today) {
         String name = staff.getUser() != null && staff.getUser().getUsername() != null
             ? staff.getUser().getUsername()
             : staff.getId().toString();
         LocalDate expiry = staff.getLicenseExpiryDate();
-        // Read by the practitioner and the hospital administrators — a nightly
-        // sweep has no request locale — so the body is in the staff locale.
-        java.util.Locale locale = NotificationLocales.STAFF;
-
+        // Read by the practitioner and the hospital administrators, each in
+        // their own language when they read it (QA D665).
         if (stage == LicenseAlertStage.EXPIRED) {
-            return messageSource.getMessage("licence.expired.notification",
-                new Object[]{name, String.valueOf(expiry)}, locale);
+            return NotificationText.of("licence.expired.notification", name, String.valueOf(expiry));
         }
         long days = java.time.temporal.ChronoUnit.DAYS.between(today, expiry);
-        return messageSource.getMessage("licence.expiring.notification",
-            new Object[]{name, String.valueOf(expiry), String.valueOf(days)}, locale);
+        return NotificationText.of("licence.expiring.notification",
+            name, String.valueOf(expiry), String.valueOf(days));
     }
 }

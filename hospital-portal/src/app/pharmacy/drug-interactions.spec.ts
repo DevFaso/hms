@@ -69,6 +69,30 @@ describe('DrugInteractionsComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="ddi-row-i-2"]')).not.toBeNull();
   });
 
+  it('shows the advice in the reader language when the server sends it (QA D887)', () => {
+    setup(
+      ['ROLE_PHARMACIST'],
+      [
+        entry({
+          id: 'i-1',
+          recommendation: 'Avoid unless the indication is documented.',
+          displayRecommendation: "À éviter sauf indication documentée ; surveiller l'INR.",
+        }),
+        entry({ id: 'i-2', recommendation: 'Texte saisi par la pharmacie.' }),
+      ],
+    );
+    const cell = (id: string): string =>
+      (
+        fixture.nativeElement.querySelector(
+          `[data-testid="ddi-recommendation-${id}"]`,
+        ) as HTMLElement
+      ).textContent!.trim();
+
+    expect(cell('i-1')).toBe("À éviter sauf indication documentée ; surveiller l'INR.");
+    // A row with no translation (edited by a person) shows what they typed.
+    expect(cell('i-2')).toBe('Texte saisi par la pharmacie.');
+  });
+
   it('hides write controls from read-only roles the backend would refuse', () => {
     // READ spans PHARMACIST/DOCTOR/NURSE/MIDWIFE/admins; WRITE is
     // PHARMACIST/HOSPITAL_ADMIN/SUPER_ADMIN only.
@@ -97,12 +121,33 @@ describe('DrugInteractionsComponent', () => {
     expect(interactionService.create).not.toHaveBeenCalled();
   });
 
+  it('QA D1306: a non-RxCUI code marks that code field, not only a toast', () => {
+    setup(['ROLE_PHARMACIST'], []);
+    component.openCreate();
+    fixture.detectChanges();
+    component.form = {
+      drug1Code: 'amox-500',
+      drug1Name: 'amoxicillin',
+      drug2Code: '1191',
+      drug2Name: 'aspirin',
+      severity: 'MAJOR',
+      recommendation: 'Something.',
+    };
+
+    component.submit();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('#ddi-drug1-code')?.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector('#ddi-drug2-code')?.hasAttribute('aria-invalid')).toBeFalse();
+    expect(interactionService.create).not.toHaveBeenCalled();
+  });
+
   it('surfaces the retired-pair refusal verbatim so the admin knows to reactivate', () => {
     setup(['ROLE_PHARMACIST'], []);
     const backendMessage =
       'An interaction between these two drugs exists but was retired; reactivate it instead of re-creating it.';
     interactionService.create.and.returnValue(
-      throwError(() => ({ error: { message: backendMessage } }) as unknown),
+      throwError(() => ({ status: 400, error: { message: backendMessage } }) as unknown),
     );
     component.form = {
       drug1Code: '11289',

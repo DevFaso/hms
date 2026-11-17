@@ -71,10 +71,9 @@ export function buildUserPayload(
   if (plan.forcePasswordReset) requiredActions.push('UPDATE_PASSWORD');
   if (!plan.requireEmailVerified) requiredActions.push('VERIFY_EMAIL');
 
-  // Backend contract — KeycloakHospitalContextResolver#hospitalIdFromAssignment
-  // splits each entry on '@' and parses the trailing UUID. Anything that does
-  // not match `<ROLE>@<uuid>` is logged and dropped, so changing this format
-  // silently breaks multi-hospital RBAC. See docs/keycloak-implementation-gaps.md.
+  // `<ROLE>@<uuid>` entries. No longer an authorization input: the backend
+  // reads the user's live assignments through appUserId. Kept for the portal
+  // and for tooling that still reads the attribute.
   // (`.map(...)` already returns a fresh array, so `.sort()` mutates it in
   // place without aliasing the caller's `assignments` array.)
   const roleAssignments = user.assignments
@@ -90,6 +89,12 @@ export function buildUserPayload(
     enabled: user.isActive,
     emailVerified: plan.requireEmailVerified,
     attributes: {
+      // The HMS user id: the ONLY identity link the backend reads
+      // (KeycloakHospitalContextResolver, via the appUserId claim). Without
+      // it every hospital-scoped endpoint refuses the user (NO_LOCAL_USER).
+      app_user_id: [user.id],
+      // UI hints only since the one tenant resolver: the backend no longer
+      // authorizes on hospital_id or role_assignments.
       hospital_id: user.primaryHospitalId ? [user.primaryHospitalId] : [],
       role_assignments: roleAssignments,
       ...(user.phoneNumber ? { phone_number: [user.phoneNumber] } : {}),

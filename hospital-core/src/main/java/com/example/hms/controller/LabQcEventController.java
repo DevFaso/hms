@@ -43,7 +43,7 @@ public class LabQcEventController {
     @Operation(summary = "Record QC Event", description = "Records a new QC calibration event for an analyzer run. Pass/fail is computed automatically (±10% tolerance).")
     @ApiResponse(responseCode = "201", description = "QC event recorded")
     public ResponseEntity<ApiResponseWrapper<LabQcEventResponseDTO>> recordQcEvent(
-        @RequestBody LabQcEventRequestDTO request,
+        @jakarta.validation.Valid @RequestBody LabQcEventRequestDTO request,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         LabQcEventResponseDTO created = labQcEventService.recordQcEvent(request, locale);

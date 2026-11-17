@@ -1,3 +1,5 @@
+import { formatLabNumber } from '../shared/lab-value.pipe';
+import { formatDate } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -7,7 +9,8 @@ import { LabReleaseWorklistComponent } from './lab-release-worklist';
 import { LabResultResponse } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
-import { RoleContextStubState, roleContextStub } from '../../testing/role-context.stub';
+import { AuthService } from '../../auth/auth.service';
+import { RoleContextStub, roleContextStub } from '../../testing/role-context.stub';
 
 /**
  * The release worklist (B14).
@@ -22,7 +25,7 @@ describe('LabReleaseWorklistComponent', () => {
   let component: LabReleaseWorklistComponent;
   let httpMock: HttpTestingController;
   let toast: jasmine.SpyObj<ToastService>;
-  let scope: RoleContextStubState;
+  let scope: RoleContextStub;
 
   function result(overrides: Partial<LabResultResponse> = {}): LabResultResponse {
     return {
@@ -56,8 +59,8 @@ describe('LabReleaseWorklistComponent', () => {
     } as LabResultResponse;
   }
 
-  function setup(roles: string[], superAdmin = false): void {
-    scope = { superAdmin, hospitalId: 'h-1', roles: [...roles] };
+  function setup(roles: string[], superAdmin = false, userId: string | null = null): void {
+    scope = roleContextStub({ superAdmin, hospitalId: 'h-1', roles });
     toast = jasmine.createSpyObj<ToastService>('ToastService', [
       'success',
       'error',
@@ -70,8 +73,9 @@ describe('LabReleaseWorklistComponent', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
-        { provide: RoleContextService, useValue: roleContextStub(scope) },
+        { provide: RoleContextService, useValue: scope },
         { provide: ToastService, useValue: toast },
+        { provide: AuthService, useValue: { getUserId: () => userId } },
       ],
     });
 
@@ -116,9 +120,39 @@ describe('LabReleaseWorklistComponent', () => {
     const row = host().querySelector('[data-testid="release-row-result-1"]');
     expect(row?.textContent).toContain('John Doe');
     expect(row?.textContent).toContain('Haemoglobin');
-    expect(row?.textContent).toContain('9.1');
+    // QA D1002: the value in the reader's number format, a space, then the unit.
+    expect(row?.textContent).toContain(formatLabNumber('9.1') + ' g/dL');
     expect(row?.textContent).toContain('g/dL');
     expect(host().querySelector('[data-testid="release-action-result-1"]')).not.toBeNull();
+  });
+
+  /**
+   * QA D1016: the worklist row read "TDR paludisme … Négatif Normal" and the
+   * dialog "Valider TDR paludisme = Négatif ?" for a correction of a result
+   * already validated as Positif. The row is marked and the dialog says the
+   * value replaces a validated one; a first result is neither.
+   */
+  it('QA D1016: a correction is marked on its row and the confirmation says it replaces a validated value', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    const correction = result({ id: 'result-2', supersedesResultId: 'result-0' } as never);
+    flushWorklist([result(), correction]);
+
+    const first = host().querySelector('[data-testid="release-row-result-1"]');
+    const second = host().querySelector('[data-testid="release-row-result-2"]');
+    expect(first?.querySelector('[data-testid="lab-correction-badge"]')).toBeNull();
+    expect(second?.querySelector('[data-testid="lab-correction-badge"]')).not.toBeNull();
+
+    component.askRelease(correction);
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="release-correction-note"]')?.textContent).toContain(
+      'LAB_RELEASE.CONFIRM_CORRECTION',
+    );
+    component.cancelRelease();
+    fixture.detectChanges();
+    component.askRelease(result());
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="release-correction-note"]')).toBeNull();
   });
 
   it('shows the result date and when the row actually landed as two columns', () => {
@@ -134,8 +168,42 @@ describe('LabReleaseWorklistComponent', () => {
     const cells = Array.from(
       host().querySelectorAll('[data-testid="release-row-result-1"] td'),
     ).map((c) => c.textContent ?? '');
-    expect(cells.some((t) => t.includes('8:00'))).toBeTrue();
-    expect(cells.some((t) => t.includes('2:30'))).toBeTrue();
+    // QA D731: both are zone-less UTC server times, shown in the reader's zone.
+    const shown = (iso: string) => formatDate(`${iso}Z`, 'short', 'en-US');
+    expect(cells.some((t) => t.includes(shown('2026-09-20T08:00:00')))).toBeTrue();
+    expect(cells.some((t) => t.includes(shown('2026-09-20T14:30:00')))).toBeTrue();
+  });
+
+  it("tells an analyzer's preliminary from its final, and both from a typed result", () => {
+    // Every row here is unreleased, so `released` cannot tell them apart; the
+    // HL7 message id and OBX-11 can.
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([
+      result({ id: 'prelim', sourceMessageControlId: 'MSG-1', observationResultStatus: 'P' }),
+      result({ id: 'final', sourceMessageControlId: 'MSG-2', observationResultStatus: 'F' }),
+      result({ id: 'odd', sourceMessageControlId: 'MSG-3', observationResultStatus: 'x' }),
+      result({ id: 'typed' }),
+    ]);
+
+    expect(host().querySelector('[data-testid="release-source-instrument-prelim"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="release-source-manual-typed"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="release-source-instrument-typed"]')).toBeNull();
+    expect(host().querySelector('[data-testid="release-row-prelim"]')?.textContent).toContain(
+      'MSG-1',
+    );
+    expect(host().querySelector('[data-testid="release-status-prelim"]')?.textContent?.trim()).toBe(
+      'LAB_RELEASE.STATUS_PRELIMINARY',
+    );
+    expect(host().querySelector('[data-testid="release-status-final"]')?.textContent?.trim()).toBe(
+      'LAB_RELEASE.STATUS_FINAL',
+    );
+    // A code the screen does not name is shown as a code, not guessed at.
+    expect(component.resultStatusKey(result({ observationResultStatus: 'x' }))).toBe(
+      'LAB_RELEASE.STATUS_OTHER',
+    );
+    // A typed row has no analyzer status to show.
+    expect(host().querySelector('[data-testid="release-status-typed"]')).toBeNull();
   });
 
   it('withholds the release control from a role the release endpoint refuses', () => {
@@ -174,7 +242,7 @@ describe('LabReleaseWorklistComponent', () => {
 
     expect(component.canReleaseResult(result())).toBeTrue();
 
-    scope.roles = ['ROLE_LAB_TECHNICIAN'];
+    scope.set({ roles: ['ROLE_LAB_TECHNICIAN'] });
 
     expect(component.canReleaseResult(result())).toBeFalse();
   });
@@ -224,6 +292,73 @@ describe('LabReleaseWorklistComponent', () => {
     expect(component.rows().length).toBe(0);
     expect(toast.success).toHaveBeenCalled();
     expect(host().querySelector('[data-testid="release-just-released"]')).not.toBeNull();
+  });
+
+  it('D58: says so when the reader entered the result, and sends it as a self-release', () => {
+    setup(['ROLE_LAB_SCIENTIST'], false, 'user-1');
+    fixture.detectChanges();
+    const mine = result({ enteredByUserId: 'user-1' });
+    flushWorklist([mine]);
+
+    component.askRelease(mine);
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="self-release-note"]')).not.toBeNull();
+    expect(host().querySelector('[data-testid="release-confirm-submit"]')?.textContent).toContain(
+      'LAB_RELEASE.SELF_RELEASE_CONFIRM',
+    );
+
+    component.confirmRelease();
+    const release = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(release.request.params.get('selfRelease')).toBe('true');
+    release.flush({ ...mine, released: true, selfReleased: true });
+    flushWorklist([]);
+    expect(toast.success).toHaveBeenCalled();
+  });
+
+  it("D58: a colleague's result is released without the self-release flag", () => {
+    setup(['ROLE_LAB_SCIENTIST'], false, 'user-1');
+    fixture.detectChanges();
+    const theirs = result({ enteredByUserId: 'user-2' });
+    flushWorklist([theirs]);
+
+    component.askRelease(theirs);
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="self-release-note"]')).toBeNull();
+
+    component.confirmRelease();
+    const release = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(release.request.params.has('selfRelease')).toBeFalse();
+    release.flush({ ...theirs, released: true });
+    flushWorklist([]);
+  });
+
+  it('D58: when the API answers 409 the dialog stays and asks for an explicit self-release', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result()]);
+
+    component.askRelease(result());
+    component.confirmRelease();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results/result-1/release' && r.method === 'POST')
+      .flush({ message: 'self-release' }, { status: 409, statusText: 'Conflict' });
+    fixture.detectChanges();
+
+    expect(component.releaseTarget()).not.toBeNull();
+    expect(host().querySelector('[data-testid="self-release-note"]')).not.toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+
+    component.confirmRelease();
+    const retry = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(retry.request.params.get('selfRelease')).toBe('true');
+    retry.flush({ ...result(), released: true, selfReleased: true });
+    flushWorklist([]);
   });
 
   it('keeps a row whose release failed, and says why', () => {
@@ -311,6 +446,71 @@ describe('LabReleaseWorklistComponent', () => {
     flushWorklist([result({ performingHospitalId: 'lab-b' })]);
 
     expect(component.canReleaseResult(component.rows()[0])).toBeTrue();
+  });
+
+  it('labels a row no range in its unit could grade "not graded: units differ", not "not flagged"', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result({ severityFlag: 'UNSPECIFIED', unitMismatch: true })]);
+    fixture.detectChanges();
+
+    expect(component.severityKey(component.rows()[0])).toBe('UNIT_MISMATCH');
+    const row = host().querySelector('[data-testid="release-row-result-1"]');
+    expect(row?.textContent).toContain('LAB_RELEASE.FLAG_UNIT_MISMATCH');
+    expect(row?.querySelector('.flag-unit_mismatch')).not.toBeNull();
+  });
+
+  it('QA D1394: labels a row whose limit settles no grade, not "not flagged"', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result({ severityFlag: 'UNSPECIFIED', gradeUnknown: true })]);
+    fixture.detectChanges();
+
+    expect(component.severityKey(component.rows()[0])).toBe('GRADE_UNKNOWN');
+    const row = host().querySelector('[data-testid="release-row-result-1"]');
+    expect(row?.textContent).toContain('LAB_RELEASE.FLAG_GRADE_UNKNOWN');
+  });
+
+  it('keeps the graded flag for a row in its range unit', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result({ severityFlag: 'HIGH', unitMismatch: false })]);
+
+    expect(component.severityKey(component.rows()[0])).toBe('HIGH');
+  });
+
+  it('labels a CRITICAL result "critical", not "not flagged" (QA D212)', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result({ severityFlag: 'CRITICAL', unitMismatch: false })]);
+    fixture.detectChanges();
+
+    expect(component.severityKey(component.rows()[0])).toBe('CRITICAL');
+    const row = host().querySelector('[data-testid="release-row-result-1"]');
+    expect(row?.textContent).toContain('LAB_RELEASE.FLAG_CRITICAL');
+    expect(row?.querySelector('.flag-critical')).not.toBeNull();
+  });
+
+  it('QA D969: labels a positive qualitative answer (ABNORMAL) "abnormal", as /lab-results does', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    flushWorklist([result({ severityFlag: 'ABNORMAL', unitMismatch: false })]);
+    fixture.detectChanges();
+
+    expect(component.severityKey(component.rows()[0])).toBe('ABNORMAL');
+    const row = host().querySelector('[data-testid="release-row-result-1"]');
+    expect(row?.textContent).toContain('LAB_RELEASE.FLAG_ABNORMAL');
+    expect(row?.textContent).not.toContain('LAB_RELEASE.FLAG_UNSPECIFIED');
+    expect(row?.querySelector('.flag-abnormal')).not.toBeNull();
+  });
+
+  it('QA D963: badges a STAT result on the queue', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    flushWorklist([result({ orderPriority: 'STAT' })]);
+    fixture.detectChanges();
+
+    expect(host().querySelector('[data-testid="release-priority-result-1"]')).not.toBeNull();
   });
 
   it('flags a critical result on the queue', () => {

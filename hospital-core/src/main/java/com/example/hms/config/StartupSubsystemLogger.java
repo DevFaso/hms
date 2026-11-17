@@ -33,6 +33,7 @@ public class StartupSubsystemLogger {
     public void announceDisabledSubsystems() {
         announceMail();
         announceRedisBlacklist();
+        announceLoginThrottle();
         announceKafka();
     }
 
@@ -86,6 +87,24 @@ public class StartupSubsystemLogger {
                     "Subsystem disabled: REDIS token blacklist — using in-memory store. "
                             + "OK for single-instance dev; in multi-instance deployments revoked tokens will "
                             + "remain valid on other instances. Set app.redis.token-blacklist.enabled=true.");
+        }
+    }
+
+    /**
+     * The login lockout shares the blacklist's Redis switch
+     * ({@code RedisLoginAttemptStore} / {@code InMemoryLoginAttemptStore}).
+     * Said on its own line because the failure mode differs: not a revoked
+     * token that stays valid, but a lockout, and the reset that ends it, that
+     * each hold on one instance only.
+     */
+    private void announceLoginThrottle() {
+        if (!isTrue(env.getProperty("app.redis.token-blacklist.enabled"))) {
+            log.info(
+                    "Subsystem disabled: REDIS login lockout — failed-login counters are in-memory, per instance. "
+                            + "OK for single-instance dev; with more than one instance a lockout set on one "
+                            + "instance is not enforced by the others, and a reset (successful login, account "
+                            + "activation) on one does not clear it on the others. "
+                            + "Set app.redis.token-blacklist.enabled=true.");
         }
     }
 

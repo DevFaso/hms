@@ -54,7 +54,8 @@ public class PatientInsuranceController {
     @Parameter(name = "X-Role-Code", in = ParameterIn.HEADER,
         description = "Optional STAFF role pin: RECEPTIONIST | NURSE | DOCTOR")
     public ResponseEntity<PatientInsuranceResponseDTO> upsertAndLink(
-        @Valid @RequestBody LinkPatientInsuranceRequestDTO request,
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnCreate.class}) @RequestBody LinkPatientInsuranceRequestDTO request,
         Locale locale,
         com.example.hms.security.ActingContext ctx
     ) {
@@ -113,9 +114,9 @@ public class PatientInsuranceController {
     ) {
         patientInsuranceService.deletePatientInsurance(insuranceId, locale);
         String rawMsg = messageSource.getMessage("patientinsurance.deleted", new Object[]{insuranceId}, locale);
-        String safeMsg = HtmlUtils.htmlEscape(rawMsg);
+        String safeMsg = HtmlUtils.htmlEscape(rawMsg, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMsg);
     }
 }

@@ -19,7 +19,11 @@ describe('PrescriptionClarificationComponent', () => {
   let component: PrescriptionClarificationComponent;
   let prescriptions: jasmine.SpyObj<PrescriptionService>;
   let toast: jasmine.SpyObj<ToastService>;
-  const roleState = { superAdmin: false, hospitalId: 'h-1', roles: ['ROLE_PHARMACIST'] };
+  const roleState = roleContextStub({
+    superAdmin: false,
+    hospitalId: 'h-1',
+    roles: ['ROLE_PHARMACIST'],
+  });
 
   const el = (testId: string): HTMLElement | null =>
     fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
@@ -30,13 +34,13 @@ describe('PrescriptionClarificationComponent', () => {
     status?: string | null;
     medicationLabel?: string | null;
     attentionReason?: string | null;
+    clarificationResolvedAt?: string | null;
     question?: string | null;
     askedAt?: string | null;
   }
 
   function create(roles: string[], inputs: Inputs): void {
-    roleState.roles = roles;
-    roleState.superAdmin = roles.includes('ROLE_SUPER_ADMIN');
+    roleState.set({ roles, superAdmin: roles.includes('ROLE_SUPER_ADMIN') });
     fixture = TestBed.createComponent(PrescriptionClarificationComponent);
     component = fixture.componentInstance;
     fixture.componentRef.setInput('mode', inputs.mode);
@@ -44,14 +48,17 @@ describe('PrescriptionClarificationComponent', () => {
     fixture.componentRef.setInput('status', inputs.status ?? 'SIGNED');
     fixture.componentRef.setInput('medicationLabel', inputs.medicationLabel ?? 'Amoxicillin');
     fixture.componentRef.setInput('attentionReason', inputs.attentionReason ?? null);
+    fixture.componentRef.setInput(
+      'clarificationResolvedAt',
+      inputs.clarificationResolvedAt ?? null,
+    );
     fixture.componentRef.setInput('question', inputs.question ?? null);
     fixture.componentRef.setInput('askedAt', inputs.askedAt ?? null);
     fixture.detectChanges();
   }
 
   beforeEach(async () => {
-    roleState.roles = ['ROLE_PHARMACIST'];
-    roleState.superAdmin = false;
+    roleState.set({ roles: ['ROLE_PHARMACIST'], superAdmin: false });
     prescriptions = jasmine.createSpyObj('PrescriptionService', [
       'getById',
       'requestClarification',
@@ -72,7 +79,7 @@ describe('PrescriptionClarificationComponent', () => {
           // activeRoles, which the doctor-equivalence path reads. A stub with
           // only hasAnyActiveRole cannot exercise that path at all.
           provide: RoleContextService,
-          useValue: roleContextStub(roleState),
+          useValue: roleState,
         },
       ],
     }).compileComponents();
@@ -93,6 +100,11 @@ describe('PrescriptionClarificationComponent', () => {
   it('is absent for a role the request endpoint would reject', () => {
     create(['ROLE_NURSE'], { mode: 'PHARMACY' });
     expect(el('rx-clarification-open-rx-1')).toBeNull();
+  });
+
+  it('offers the control on an order whose SMS dispatch failed — it is back with the hospital', () => {
+    create(['ROLE_PHARMACIST'], { mode: 'PHARMACY', status: 'TRANSMISSION_FAILED' });
+    expect(el('rx-clarification-open-rx-1')).not.toBeNull();
   });
 
   it('is absent on a status the backend refuses a question from', () => {
@@ -150,11 +162,20 @@ describe('PrescriptionClarificationComponent', () => {
     expect(consequence!.textContent).toContain('PRESCRIPTIONS.CLARIFICATION.BLOCKS_DISPENSING');
   });
 
-  it('refuses to send an empty question but allows an empty answer', () => {
+  // QA D1206 (round 22): the button was disabled with no reason given; it now
+  // stays clickable, refuses, marks the question and says why next to it.
+  it('refuses to send an empty question, saying why at the field, but allows an empty answer', () => {
     create(['ROLE_PHARMACIST'], { mode: 'PHARMACY' });
     el('rx-clarification-open-rx-1')!.click();
     fixture.detectChanges();
-    expect((el('rx-clarification-submit-rx-1') as HTMLButtonElement).disabled).toBeTrue();
+    const send = el('rx-clarification-submit-rx-1') as HTMLButtonElement;
+    expect(send.disabled).withContext('never a dead button').toBeFalse();
+    send.click();
+    fixture.detectChanges();
+    expect(prescriptions.requestClarification).not.toHaveBeenCalled();
+    expect(el('rx-clarification-text-rx-1')!.getAttribute('aria-invalid')).toBe('true');
+    expect(el('submit-guard-reason')?.textContent?.trim()).toBeTruthy();
+    expect(send.getAttribute('aria-describedby')).toContain(el('submit-guard-reason')!.id);
 
     create(['ROLE_DOCTOR'], { mode: 'PRESCRIBER', status: 'PENDING_CLARIFICATION' });
     el('rx-clarification-open-rx-1')!.click();
@@ -408,10 +429,24 @@ describe('PrescriptionClarificationComponent', () => {
     );
   });
 
-  it('tells a verifier an unreadable exchange exists even when the flag is masked', () => {
-    // attentionReason reports PENDING_STOCK, not CLARIFICATION_RESOLVED, so
-    // nothing on the row says an answer is waiting; the verifier still
-    // cannot read it and must be told rather than shown a bare form.
+  it('never fires the exchange read for a role the endpoint refuses', () => {
+    create(['ROLE_PHARMACY_VERIFIER'], {
+      mode: 'PHARMACY',
+      status: 'PENDING_STOCK',
+      attentionReason: 'PENDING_STOCK',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+    el('rx-clarification-open-rx-1')!.click();
+    fixture.detectChanges();
+
+    expect(prescriptions.getById).not.toHaveBeenCalled();
+  });
+
+  it('hedges the note on a flagged row whose answer timestamp has been cleared', () => {
+    // The backend clears clarificationResolvedAt as soon as the pharmacy acts
+    // on the answer, so an answered-then-partly-filled row carries a real
+    // exchange and no timestamp. Saying nothing invites a verifier to ask
+    // again about something already answered.
     create(['ROLE_PHARMACY_VERIFIER'], {
       mode: 'PHARMACY',
       status: 'PENDING_STOCK',
@@ -420,8 +455,40 @@ describe('PrescriptionClarificationComponent', () => {
     el('rx-clarification-open-rx-1')!.click();
     fixture.detectChanges();
 
-    expect(prescriptions.getById).not.toHaveBeenCalled();
-    expect(el('rx-clarification-unreadable')).not.toBeNull();
+    expect(el('rx-clarification-unreadable')!.textContent).toContain(
+      'PRESCRIPTIONS.CLARIFICATION.ANSWER_MAY_NOT_BE_VISIBLE',
+    );
+  });
+
+  it('states the note outright once an answer is actually waiting', () => {
+    create(['ROLE_PHARMACY_VERIFIER'], {
+      mode: 'PHARMACY',
+      status: 'PENDING_STOCK',
+      attentionReason: 'PENDING_STOCK',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+    el('rx-clarification-open-rx-1')!.click();
+    fixture.detectChanges();
+
+    expect(el('rx-clarification-unreadable')!.textContent).toContain(
+      'PRESCRIPTIONS.CLARIFICATION.ANSWER_NOT_VISIBLE',
+    );
+  });
+
+  it('labels the button "read the answer" on a row the status reason masks', () => {
+    // The cue the pharmacist actually needs: before clarificationResolvedAt
+    // the button still read "ask a question" on an answered back order.
+    prescriptions.getById.and.returnValue(of({} as PrescriptionResponse));
+    create(['ROLE_PHARMACIST'], {
+      mode: 'PHARMACY',
+      status: 'PENDING_STOCK',
+      attentionReason: 'PENDING_STOCK',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+
+    expect(el('rx-clarification-open-rx-1')!.getAttribute('aria-label')).toContain(
+      'PRESCRIPTIONS.CLARIFICATION.READ_ANSWER',
+    );
   });
 
   it('replaces the backend\'s bare "Access denied" with the rule that was broken', () => {

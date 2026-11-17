@@ -139,17 +139,51 @@ class MedicationCatalogControllerTest {
         mockMvc.perform(get("/medication-catalog"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
-                        org.hamcrest.Matchers.containsString("Hospital context is required")));
+                        org.hamcrest.Matchers.anyOf(org.hamcrest.Matchers.is("pharmacy.hospitalContext.required"),
+                                org.hamcrest.Matchers.startsWith("Select a hospital"))));
     }
 
     @Test
     void search_returnResults() throws Exception {
+        // QA D922: the requested hospital goes through the caller's acting scope.
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false))).thenReturn(hospitalId);
         when(catalogService.search(eq(hospitalId), eq("para"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 
         mockMvc.perform(get("/medication-catalog/search")
                         .param("hospitalId", hospitalId.toString())
                         .param("q", "para"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].genericName").value("Paracetamol"));
+    }
+
+    @Test
+    void search_withoutHospitalId_usesTheActingHospital() throws Exception {
+        // QA D922: the portal never sends hospitalId; every search answered 400.
+        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+                .thenReturn(hospitalId);
+        when(catalogService.search(eq(hospitalId), eq("morph"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleResponse())));
+
+        mockMvc.perform(get("/medication-catalog/search").param("q", "morph"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].genericName").value("Paracetamol"));
+    }
+
+    @Test
+    void search_withNoActingHospital_isRefused() throws Exception {
+        mockMvc.perform(get("/medication-catalog/search").param("q", "morph"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void search_superAdminInGlobalView_searchesTheWholeCatalogue() throws Exception {
+        // Review of #975: the list served the super-admin's global view; the search refused it.
+        when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
+        when(catalogService.search(org.mockito.ArgumentMatchers.isNull(), eq("morph"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleResponse())));
+
+        mockMvc.perform(get("/medication-catalog/search").param("q", "morph"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].genericName").value("Paracetamol"));
     }

@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   OnInit,
   computed,
   inject,
@@ -9,18 +10,37 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LiveRequiredMessage } from '../../shared/required-fields';
 import { catchError, of } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
 
 import { SubscriptionService } from '../../services/subscription.service';
 import { SubscriptionPlan, SubscriptionPlanRequest } from '../../services/subscription.model';
+import { currentLocale, formatCfa } from '../../shared/i18n/app-locale';
+import { refusalReason } from '../../shared/refusal-reason';
+import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { ToastService } from '../../core/toast.service';
+
+/**
+ * QA D865: the currencies a plan can be priced in, as ISO 4217 codes. The
+ * franc CFA first: it is the deployment's currency. A plan saved earlier in
+ * another code keeps it as an extra option, so editing it does not change it.
+ */
+export const PLAN_CURRENCIES: readonly string[] = ['XOF', 'XAF', 'EUR', 'USD', 'GHS', 'NGN', 'GNF'];
+
+/** Prices are stored in hundredths of the currency unit, whatever the currency. */
+const HUNDREDTHS = 100;
 
 const FRESH_REQUEST: SubscriptionPlanRequest = {
   name: '',
   tierCode: '',
   description: '',
   monthlyPriceCents: 0,
-  currency: 'USD',
+  currency: 'XOF',
   includedSeats: 0,
   featureKeys: '',
   active: true,
@@ -29,13 +49,24 @@ const FRESH_REQUEST: SubscriptionPlanRequest = {
 @Component({
   selector: 'app-super-admin-subscriptions',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule],
+  imports: [
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+    SubmitGuardDirective,
+  ],
   templateUrl: './subscriptions.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './subscriptions.scss',
 })
 export class SubscriptionsComponent implements OnInit {
   private readonly service = inject(SubscriptionService);
+  private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly loading = signal(true);
   readonly errored = signal(false);
@@ -45,13 +76,40 @@ export class SubscriptionsComponent implements OnInit {
   readonly editing = signal<SubscriptionPlan | null>(null);
   readonly form = signal<SubscriptionPlanRequest>({ ...FRESH_REQUEST });
   readonly formError = signal<string | null>(null);
+  private readonly formMissing = new LiveRequiredMessage(
+    this.translate,
+    () => [
+      { labelKey: 'SUBSCRIPTIONS.FORM.NAME', value: this.form().name },
+      { labelKey: 'SUBSCRIPTIONS.FORM.TIER_CODE', value: this.form().tierCode },
+    ],
+    this.formError,
+  );
   readonly formBusy = signal(false);
   // Explicit visibility flag — the form reset on "New plan" leaves every
   // field empty, so a derived "is form populated?" predicate would hide
   // the panel exactly when the user just asked to open it.
   readonly formOpen = signal(false);
+  /** A refused deactivation, shown above the plans (the edit form may be closed). */
+  readonly deactivateError = signal<string | null>(null);
 
   readonly hasPlans = computed(() => this.plans().length > 0);
+
+  /**
+   * QA D865: the price is typed in the currency's own unit (francs, euros),
+   * not in hundredths, and a currency with no subunit takes whole amounts.
+   */
+  readonly priceStep = computed(() => (this.fractionDigits(this.form().currency) === 0 ? 1 : 0.01));
+
+  /** The currency picker: the known codes, plus the plan's own when it is another one. */
+  readonly currencyOptions = computed<string[]>(() => {
+    const current = (this.form().currency ?? '').toUpperCase();
+    return current && !PLAN_CURRENCIES.includes(current)
+      ? [...PLAN_CURRENCIES, current]
+      : [...PLAN_CURRENCIES];
+  });
+
+  /** The price the form shows, in the currency's unit. */
+  readonly priceAmount = computed(() => this.form().monthlyPriceCents / HUNDREDTHS);
 
   ngOnInit(): void {
     this.refresh();
@@ -111,8 +169,14 @@ export class SubscriptionsComponent implements OnInit {
 
   submit(): void {
     const body = this.form();
-    if (!body.name?.trim() || !body.tierCode?.trim()) {
-      this.formError.set('SUBSCRIPTIONS.ERROR.REQUIRED_FIELDS');
+    // QA D1358: name the blank fields, not a fixed list (the text passes the
+    // template's translate pipe unchanged).
+    // QA D1940: the banner names only the fields still blank, as they are filled.
+    if (this.formMissing.check(this.host.nativeElement)) {
+      return;
+    }
+    if (this.fractionDigits(body.currency) === 0 && body.monthlyPriceCents % HUNDREDTHS !== 0) {
+      this.formError.set('SUBSCRIPTIONS.ERROR.WHOLE_UNITS');
       return;
     }
     this.formBusy.set(true);
@@ -120,31 +184,100 @@ export class SubscriptionsComponent implements OnInit {
     const obs = target ? this.service.updatePlan(target.id, body) : this.service.createPlan(body);
     obs
       .pipe(
-        catchError(() => {
-          this.formError.set('SUBSCRIPTIONS.ERROR.SAVE_FAILED');
+        catchError((err: HttpErrorResponse) => {
+          // The server's own reason (an unknown currency, a plan in use)
+          // says what to fix; the generic text is the fallback.
+          this.formError.set(refusalReason(err) ?? 'SUBSCRIPTIONS.ERROR.SAVE_FAILED');
           return of(null);
         }),
       )
       .subscribe((saved) => {
         this.formBusy.set(false);
         if (saved) {
+          // QA CX-007: the form closes on a save, so the reader is told it worked.
+          this.toast.success(
+            this.translate.instant(target ? 'SUBSCRIPTIONS.UPDATED' : 'SUBSCRIPTIONS.CREATED', {
+              name: body.name,
+            }),
+          );
           this.cancelEdit();
           this.refresh();
         }
       });
   }
 
-  deactivate(plan: SubscriptionPlan): void {
+  async deactivate(plan: SubscriptionPlan): Promise<void> {
     if (!plan.active) return;
+    this.deactivateError.set(null);
+    // QA CX-010: one click deactivated the plan.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'SUBSCRIPTIONS.DEACTIVATE_CONFIRM',
+      messageKey: 'SUBSCRIPTIONS.DEACTIVATE_CONFIRM_BODY',
+      params: { name: plan.name },
+      confirmKey: 'SUBSCRIPTIONS.DEACTIVATE',
+    });
+    if (!confirmed) return;
     this.service.deactivatePlan(plan.id).subscribe({
-      next: () => this.refresh(),
-      error: () => this.formError.set('SUBSCRIPTIONS.ERROR.DEACTIVATE_FAILED'),
+      next: () => {
+        this.toast.success(
+          this.translate.instant('SUBSCRIPTIONS.DEACTIVATED', { name: plan.name }),
+        );
+        this.refresh();
+      },
+      // QA D850: a plan an organization still holds is refused (409) with
+      // a reason naming how many; show it rather than a generic failure.
+      error: (err: HttpErrorResponse) =>
+        this.deactivateError.set(refusalReason(err) ?? 'SUBSCRIPTIONS.ERROR.DEACTIVATE_FAILED'),
     });
   }
 
   formatPrice(cents: number, currency: string): string {
-    const amount = (cents / 100).toFixed(2);
-    return `${amount} ${currency}`;
+    // QA D621: francs CFA read "F CFA" in every language.
+    if ((currency || '').toUpperCase() === 'XOF') return formatCfa(cents / 100);
+    try {
+      return new Intl.NumberFormat(currentLocale(), { style: 'currency', currency }).format(
+        cents / 100,
+      );
+    } catch {
+      // An unknown ISO code would throw: keep the amount readable.
+      return `${new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100)} ${currency}`;
+    }
+  }
+
+  /** QA D865: the typed amount, in the currency's unit, stored in hundredths. */
+  updatePrice(amount: number | string | null): void {
+    const value = Number(amount);
+    const hundredths = Number.isFinite(value) && value > 0 ? Math.round(value * HUNDREDTHS) : 0;
+    this.updateForm('monthlyPriceCents', hundredths);
+  }
+
+  /** QA D621: the unit beside a typed amount — francs CFA read "F CFA", not "XOF". */
+  currencyUnit(code: string | null | undefined): string {
+    const upper = (code || '').toUpperCase();
+    return upper === 'XOF' ? 'F CFA' : upper;
+  }
+
+  /** The currency's name in the reader's language ("franc CFA (BCEAO)"), or the code. */
+  currencyLabel(code: string): string {
+    try {
+      const name = new Intl.DisplayNames([currentLocale()], { type: 'currency' }).of(code);
+      return name && name !== code ? `${code} — ${name}` : code;
+    } catch {
+      return code;
+    }
+  }
+
+  private fractionDigits(currency: string | undefined): number {
+    try {
+      return (
+        new Intl.NumberFormat('en', {
+          style: 'currency',
+          currency: currency || 'XOF',
+        }).resolvedOptions().maximumFractionDigits ?? 2
+      );
+    } catch {
+      return 2;
+    }
   }
 
   updateForm<K extends keyof SubscriptionPlanRequest>(

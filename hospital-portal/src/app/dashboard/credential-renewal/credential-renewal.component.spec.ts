@@ -203,8 +203,10 @@ describe('CredentialRenewalComponent (Tier 2 item 40)', () => {
     open();
 
     const historyText = root().querySelector('[data-testid="credential-history"]')?.textContent;
-    expect(historyText).toContain('2026-09-30');
-    expect(historyText).toContain('2027-09-30');
+    // QA D1049: the dates read in the reader's format, never as ISO strings.
+    expect(historyText).not.toContain('2026-09-30');
+    expect(historyText).toContain('2026');
+    expect(historyText).toContain('2027');
     expect(historyText).toContain('Admin One');
   });
 

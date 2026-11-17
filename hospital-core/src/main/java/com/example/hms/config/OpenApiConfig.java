@@ -55,7 +55,7 @@ public class OpenApiConfig {
                 .type(SecurityScheme.Type.HTTP)
                 .scheme("bearer")
                 .bearerFormat("JWT")
-                .description("Enter your JWT token like: `Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4MTAzNzU0LCJleHAiOjE3NDgxOTAxNTR9.66n8OvttTrkjHTI6RQ8BNk9rvh4g1LWMrGv0IVXkkuMN4ZW7cBFKMuM7CBznNrkkQw8GzoY2HZQmxLdhK_2ubQ`");
+                .description("Enter your JWT token like: `Bearer <token>`");
     }
 }
 

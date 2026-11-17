@@ -1,5 +1,6 @@
 package com.example.hms.service.recordaccess;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.RecordAccessDenialReason;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.enums.RecordAccessPosture;
@@ -10,6 +11,10 @@ import com.example.hms.model.Staff;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -91,6 +96,148 @@ class RecordAccessPolicyImplTest {
     }
 
     @Test
+    @DisplayName("a provider facility → PROVIDER_FACILITY first: with a staff row, a planted registration and a live break-glass session")
+    void providerFacilityIsRefusedFirst() {
+        hospital.setFacilityType(FacilityType.PHARMACY);
+        PatientHospitalRegistration planted = new PatientHospitalRegistration();
+        planted.setId(UUID.randomUUID());
+        when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId)).thenReturn(Optional.of(planted));
+        BreakGlassSession session = new BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isFalse();
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.PROVIDER_FACILITY);
+        verify(optOutRepository, never()).existsByPatient_IdAndRevokedAtIsNull(any());
+        verify(staffRepository, never()).findByUserIdAndHospitalId(any(), any());
+        verify(registrationRepository, never()).findByPatientIdAndHospitalId(any(), any());
+        verify(resolver, never()).resolve(any(), any(), any());
+        verify(breakGlassGate, never()).liveSession(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a laboratory is refused the same way, and its readable set is empty, its own id included")
+    void laboratoryReadsNothing() {
+        hospital.setFacilityType(FacilityType.LABORATORY);
+
+        assertThat(policy.decide(actor, patient, hospitalId).reason())
+            .isEqualTo(RecordAccessDenialReason.PROVIDER_FACILITY);
+        assertThat(policy.readableHospitalIds(actor, patient, hospitalId)).isEmpty();
+        assertThat(policy.readableHospitalIds(actor, null, hospitalId)).isEmpty();
+        verify(registrationRepository, never()).findByPatientId(any());
+    }
+
+    @Test
+    @DisplayName("with the actor's own context, the readable set reads the acting facility's type from it: no hospital query")
+    void readableSetReadsTheContext() {
+        UUID laboratoryId = UUID.randomUUID();
+        try {
+            HospitalContextHolder.setContext(
+                HospitalContext.builder()
+                    .principalUserId(actor)
+                    .providerFacilityTypes(Set.of(FacilityType.LABORATORY))
+                    .hospitalFacilityTypes(Map.of(laboratoryId, FacilityType.LABORATORY))
+                    .build());
+            assertThat(policy.readableHospitalIds(actor, null, laboratoryId)).isEmpty();
+
+            HospitalContextHolder.setContext(
+                HospitalContext.builder()
+                    .principalUserId(actor)
+                    .assignedRoles(Set.of("ROLE_DOCTOR"))
+                    .permittedHospitalIds(Set.of(hospitalId))
+                    .hospitalFacilityTypes(Map.of(hospitalId, FacilityType.HOSPITAL))
+                    .build());
+            assertThat(policy.readableHospitalIds(actor, null, hospitalId)).containsExactly(hospitalId);
+
+            verify(hospitalRepository, never()).findById(any());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("a confined caller (a lab worker who is also a patient) acting at a CLINICAL hospital is not acting at a provider")
+    void confinementDoesNotDecideTheActingFacility() {
+        UUID laboratoryId = UUID.randomUUID();
+        try {
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .principalUserId(actor)
+                .assignedRoles(Set.of("ROLE_LAB_SCIENTIST", "ROLE_PATIENT"))
+                .providerFacilityTypes(Set.of(FacilityType.LABORATORY))
+                .permittedHospitalIds(Set.of(laboratoryId, hospitalId))
+                .hospitalFacilityTypes(Map.of(laboratoryId, FacilityType.LABORATORY, hospitalId, FacilityType.HOSPITAL))
+                .build());
+
+            assertThat(policy.readableHospitalIds(actor, null, hospitalId)).containsExactly(hospitalId);
+            assertThat(policy.readableHospitalIds(actor, patient, laboratoryId)).isEmpty();
+            verify(hospitalRepository, never()).findById(any());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("another actor's context vouches for nothing: the acting facility is looked up")
+    void anotherActorsContextIsNotTrusted() {
+        UUID pharmacyId = UUID.randomUUID();
+        Hospital pharmacy = new Hospital();
+        pharmacy.setId(pharmacyId);
+        pharmacy.setFacilityType(FacilityType.PHARMACY);
+        when(hospitalRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        try {
+            // The ambient context says HOSPITAL for that id, but it is someone else's.
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .principalUserId(UUID.randomUUID())
+                .hospitalFacilityTypes(Map.of(pharmacyId, FacilityType.HOSPITAL))
+                .build());
+            assertThat(policy.readableHospitalIds(actor, patient, pharmacyId)).isEmpty();
+            verify(hospitalRepository).findById(pharmacyId);
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("an unconfined context does not vouch for a facility it does not carry: the acting facility itself decides")
+    void theActingFacilityItselfDecides() {
+        UUID pharmacyId = UUID.randomUUID();
+        Hospital pharmacy = new Hospital();
+        pharmacy.setId(pharmacyId);
+        pharmacy.setFacilityType(FacilityType.PHARMACY);
+        when(hospitalRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        try {
+            // A context built by a worker, acting at a pharmacy: no provider
+            // types, no facility types of its own.
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(pharmacyId)
+                .assignedRoles(Set.of("ROLE_DOCTOR"))
+                .build());
+            assertThat(policy.readableHospitalIds(actor, patient, pharmacyId)).isEmpty();
+
+            // A hospital doctor (unconfined) passing a provider's id.
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .principalUserId(actor)
+                .assignedRoles(Set.of("ROLE_DOCTOR"))
+                .permittedHospitalIds(Set.of(hospitalId))
+                .hospitalFacilityTypes(Map.of(hospitalId, FacilityType.HOSPITAL))
+                .build());
+            assertThat(policy.readableHospitalIds(actor, patient, pharmacyId)).isEmpty();
+            verify(hospitalRepository, times(2)).findById(pharmacyId);
+            verify(registrationRepository, never()).findByPatientId(any());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("a hospital keeps its own id in the readable set, with or without a patient")
+    void hospitalReadsItself() {
+        assertThat(policy.readableHospitalIds(actor, null, hospitalId)).containsExactly(hospitalId);
+    }
+
+    @Test
     @DisplayName("unknown hospital → HOSPITAL_UNKNOWN, and nothing else is consulted")
     void hospitalUnknown() {
         UUID other = UUID.randomUUID();
@@ -135,6 +282,47 @@ class RecordAccessPolicyImplTest {
 
         assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.PATIENT_OPTED_OUT);
         verify(resolver, never()).resolve(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("D410: a live break-the-glass session overrides the opt-out, as the patient portal promises")
+    void breakGlassOverridesOptOut() {
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        BreakGlassSession session = new BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isTrue();
+        assertThat(d.relationship().kind()).isEqualTo(TreatmentRelationshipKind.BREAK_GLASS);
+        assertThat(d.relationship().carrierId()).isEqualTo(session.getId());
+    }
+
+    @Test
+    @DisplayName("D410: without a session the opt-out still refuses, even with a treatment relationship")
+    void optOutWithoutSessionStillRefuses() {
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.empty());
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.PATIENT_OPTED_OUT);
+        verify(resolver, never()).resolve(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("D410: a non-staff actor with a session is still refused on the opt-out")
+    void optOutNonStaffIgnoresSession() {
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(actor, hospitalId)).thenReturn(Optional.empty());
+        BreakGlassSession session = new BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.PATIENT_OPTED_OUT);
     }
 
     @Test
@@ -234,9 +422,10 @@ class RecordAccessPolicyImplTest {
     }
 
     @Test
-    @DisplayName("a break-the-glass session does not bypass the opt-out or the staff gate")
+    @DisplayName("a break-the-glass session does not bypass the staff gate (D410: it does override the opt-out for staff)")
     void breakGlassDoesNotBypassEarlierGates() {
         when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(actor, hospitalId)).thenReturn(Optional.empty());
         when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(new BreakGlassSession()));
 
         RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
@@ -298,5 +487,49 @@ class RecordAccessPolicyImplTest {
 
         assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.NOT_STAFF_AT_HOSPITAL);
         verify(patientRepository, never()).findByIdUnscoped(patient);
+    }
+
+    private UUID registeredElsewhere() {
+        UUID hospitalA = UUID.randomUUID();
+        Hospital a = new Hospital();
+        a.setId(hospitalA);
+        a.setIsolationMode(TenantIsolationMode.ROW_LEVEL);
+        a.setRecordAccessPosture(RecordAccessPosture.TREATMENT_PRESUMED);
+        PatientHospitalRegistration atA = new PatientHospitalRegistration();
+        atA.setId(UUID.randomUUID());
+        atA.setHospital(a);
+        when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId)).thenReturn(Optional.empty());
+        when(registrationRepository.findByPatientId(patient)).thenReturn(java.util.List.of(atA));
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        return hospitalA;
+    }
+
+    @Test
+    @DisplayName("D504: opt-out + a live session at B → the readable set holds A and B, so every non-allergy read sees A's rows")
+    void optOutBreakGlassReadsTheOtherHospital() {
+        UUID hospitalA = registeredElsewhere();
+        BreakGlassSession session = new BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        assertThat(policy.readableHospitalIds(actor, patient, hospitalId)).containsExactlyInAnyOrder(hospitalId, hospitalA);
+        assertThat(policy.foreignRowsWithheld(actor, patient, hospitalId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("D504: opt-out without a session → exactly {B}, and the withheld signal is raised")
+    void optOutWithoutSessionReadsOnlyHere() {
+        registeredElsewhere();
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(policy.readableHospitalIds(actor, patient, hospitalId)).containsExactly(hospitalId);
+        assertThat(policy.foreignRowsWithheld(actor, patient, hospitalId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("D504: no opt-out → nothing is withheld by it, whatever the decision")
+    void noOptOutWithholdsNothing() {
+        assertThat(policy.foreignRowsWithheld(actor, patient, hospitalId)).isFalse();
+        assertThat(policy.foreignRowsWithheld(actor, null, hospitalId)).isFalse();
     }
 }

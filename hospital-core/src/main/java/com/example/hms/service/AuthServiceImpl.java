@@ -1,7 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.UnauthorizedException;
-import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.PrincipalUserIds;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -19,12 +19,12 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("User is not authenticated");
         }
 
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof CustomUserDetails userDetails) {
-            return userDetails.getUserId();
-        }
-
-        throw new UnauthorizedException("Invalid authentication principal type");
+        // The one principal → user id rule (PrincipalUserIds): a password-path
+        // principal, or a Keycloak token's appUserId. It used to accept only
+        // CustomUserDetails, so every guard built on it refused a Keycloak
+        // user with 401 on their own record.
+        return PrincipalUserIds.of(authentication)
+            .orElseThrow(() -> new UnauthorizedException("Invalid authentication principal type"));
     }
 
     @Override

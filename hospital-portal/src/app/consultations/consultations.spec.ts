@@ -2,22 +2,27 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { of, throwError } from 'rxjs';
 
 import { ConsultationsComponent } from './consultations';
 import {
   ConsultationService,
   ConsultationResponse,
   ConsultationStats,
+  ConsultationStatus,
 } from '../services/consultation.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { roleContextStub } from '../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 
 function mockConsult(overrides: Partial<ConsultationResponse> = {}): ConsultationResponse {
   return {
@@ -40,7 +45,7 @@ describe('ConsultationsComponent', () => {
   let consultSpy: jasmine.SpyObj<ConsultationService>;
   let staffSpy: jasmine.SpyObj<StaffService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
-  let activeRoles: string[];
+  let roleCtx: RoleContextStub;
 
   beforeEach(async () => {
     consultSpy = jasmine.createSpyObj('ConsultationService', [
@@ -71,8 +76,19 @@ describe('ConsultationsComponent', () => {
     staffSpy = jasmine.createSpyObj('StaffService', ['list']);
     staffSpy.list.and.returnValue(
       of([
-        { id: 'st1', name: 'Dr A', active: true, specialization: 'Cardiology' } as StaffResponse,
-        { id: 'st2', name: 'Dr B', active: false } as StaffResponse,
+        {
+          id: 'st1',
+          name: 'Dr A',
+          active: true,
+          roleCode: 'ROLE_DOCTOR',
+          specialization: 'Cardiology',
+        } as StaffResponse,
+        { id: 'st2', name: 'Dr B', active: false, roleCode: 'ROLE_DOCTOR' } as StaffResponse,
+        // QA D122: a receptionist is never offered as a consultant.
+        { id: 'st3', name: 'Desk', active: true, roleCode: 'ROLE_RECEPTIONIST' } as StaffResponse,
+        // QA D715: nor is a nurse or a midwife: the consultant must be a doctor.
+        { id: 'st4', name: 'Nurse N', active: true, roleCode: 'ROLE_NURSE' } as StaffResponse,
+        { id: 'st5', name: 'Midwife M', active: true, roleCode: 'ROLE_MIDWIFE' } as StaffResponse,
       ]),
     );
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
@@ -86,15 +102,14 @@ describe('ConsultationsComponent', () => {
     const patientSpy = jasmine.createSpyObj('PatientService', ['list']);
     patientSpy.list.and.returnValue(of([]));
     const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
-    // The shared stub, not a hand-rolled object: it reads `state` live, so a
-    // test can flip roles before the first read, and it carries the scope
+    // The shared stub, not a hand-rolled object: it is signal-backed, so a
+    // test can move the roles with `set()`, and it carries the scope
     // accessors (hasHospitalScope, effectiveHospitalIdForRequest) this page
-    // will need when it picks up the #566 scope-hint pattern.
-    activeRoles = ['ROLE_DOCTOR'];
-    const roleCtx = roleContextStub({
+    // reads.
+    roleCtx = roleContextStub({
       superAdmin: false,
       hospitalId: 'h1',
-      roles: activeRoles,
+      roles: ['ROLE_DOCTOR'],
     });
 
     await TestBed.configureTestingModule({
@@ -139,11 +154,8 @@ describe('ConsultationsComponent', () => {
     expect(consultSpy.getOverdue).toHaveBeenCalledWith('h1');
   });
 
-  /** Replace the roles the stub reads. In place: the stub holds the array. */
-  const setRoles = (...roles: string[]): void => {
-    activeRoles.length = 0;
-    activeRoles.push(...roles);
-  };
+  /** Replace the roles the stub holds (its signal, not a shared array). */
+  const setRoles = (...roles: string[]): void => roleCtx.set({ roles });
 
   it('hides the "mine" tab from a nurse — they are never the consultant', () => {
     setRoles('ROLE_NURSE');
@@ -167,10 +179,8 @@ describe('ConsultationsComponent', () => {
   });
 
   it('still lets a doctor open the "mine" tab', () => {
-    // Mutated in place, like the two tests above. Reassigning `activeRoles`
-    // here rebound the local while the stub kept its reference to the array
-    // beforeEach created — so this asserted the beforeEach default and would
-    // have passed with any value on that line, doctor or not.
+    // Set explicitly rather than trusting the beforeEach default, so the
+    // assertion depends on this line.
     setRoles('ROLE_DOCTOR');
 
     expect(component.canSeeMyConsultations()).toBeTrue();
@@ -239,14 +249,96 @@ describe('ConsultationsComponent', () => {
     ]);
   });
 
+  function fillForm(): void {
+    component.form.patientId = 'p1';
+    component.form.hospitalId = 'h1';
+    component.form.specialtyRequested = 'Cardiologie';
+    component.form.reasonForConsult = 'Douleur thoracique';
+  }
+
   it('submitForm creates the consultation and reloads', () => {
     component.ngOnInit();
     consultSpy.create.and.returnValue(of(mockConsult()));
     component.openCreate();
+    fillForm();
     component.submitForm();
     expect(consultSpy.create).toHaveBeenCalled();
     expect(component.showModal()).toBeFalse();
     expect(toastSpy.success).toHaveBeenCalled();
+  });
+
+  it('QA D890: an empty form is not posted; the toast names the missing fields', () => {
+    component.ngOnInit();
+    component.openCreate();
+    component.form.hospitalId = 'h1';
+
+    component.submitForm();
+
+    expect(consultSpy.create).not.toHaveBeenCalled();
+    const message = toastSpy.error.calls.mostRecent().args[0] as string;
+    expect(message).toContain('COMMON.MISSING_REQUIRED_FIELDS');
+    expect(component.showModal()).toBeTrue();
+  });
+
+  it('QA D1306: an empty form marks each blank field, not only a toast', () => {
+    const fixture = TestBed.createComponent(ConsultationsComponent);
+    const cmp = fixture.componentInstance;
+    cmp.ngOnInit();
+    cmp.openCreate();
+    cmp.form.hospitalId = 'h1';
+    fixture.detectChanges();
+
+    cmp.submitForm();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#con-specialty')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#con-reason')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#con-hospitalId')?.getAttribute('aria-invalid')).not.toBe('true');
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
+  it("QA D890: the server's field reason is shown under the field's label, not a generic toast", () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      FIELD_LIMITS: { FIELD_REASON: '{{field}} : {{reason}}' },
+      CONSULTATIONS: { SPECIALTY_REQUESTED: 'Spécialité demandée' },
+    });
+    translate.use('fr');
+    component.ngOnInit();
+    consultSpy.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Validation Failed',
+          message: 'La requête contient des erreurs de validation.',
+          fieldErrors: { specialtyRequested: 'ne doit pas dépasser 100 caractères' },
+        },
+      })),
+    );
+    component.openCreate();
+    fillForm();
+
+    component.submitForm();
+
+    const message = toastSpy.error.calls.mostRecent().args[0] as string;
+    expect(message).not.toBe('CONSULTATIONS.CREATE_FAILED');
+    expect(message).toBe('Spécialité demandée : ne doit pas dépasser 100 caractères');
+  });
+
+  it('QA D891: the stat cards are fetched again after a create and after a cancel', () => {
+    component.ngOnInit();
+    expect(consultSpy.getStats).toHaveBeenCalledTimes(1);
+    consultSpy.create.and.returnValue(of(mockConsult()));
+    component.openCreate();
+    fillForm();
+    component.submitForm();
+    expect(consultSpy.getStats).toHaveBeenCalledTimes(2);
+
+    consultSpy.cancel.and.returnValue(of(mockConsult({ status: 'CANCELLED' })));
+    component.confirmCancel(component.consultations()[0]);
+    component.cancelReason.set('doublon');
+    component.executeCancel();
+    expect(consultSpy.getStats).toHaveBeenCalledTimes(3);
   });
 
   it('executeCancel requires a reason', () => {
@@ -270,7 +362,8 @@ describe('ConsultationsComponent', () => {
   it('openAssign loads only active staff for the consultation hospital', () => {
     component.openAssign(mockConsult());
     expect(staffSpy.list).toHaveBeenCalledWith('h1');
-    expect(component.assignStaff().length).toBe(1); // inactive filtered out
+    // Inactive, receptionist, nurse and midwife filtered out (QA D122, D715).
+    expect(component.assignStaff().map((s) => s.id)).toEqual(['st1']);
     expect(component.isReassign()).toBeFalse();
   });
 
@@ -299,6 +392,39 @@ describe('ConsultationsComponent', () => {
     expect(component.showAssignModal()).toBeFalse();
   });
 
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const fixture = TestBed.createComponent(ConsultationsComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
+      EXPECTED_PICKER_SUBLINES,
+    );
+  });
+
+  it('offers Reassign while the consult is held, not only when ASSIGNED (D749)', () => {
+    const fixture = TestBed.createComponent(ConsultationsComponent);
+    fixture.detectChanges();
+    const statuses: ConsultationStatus[] = [
+      'ASSIGNED',
+      'ACKNOWLEDGED',
+      'SCHEDULED',
+      'IN_PROGRESS',
+      'COMPLETED',
+      'REQUESTED',
+    ];
+    fixture.componentInstance.filtered.set(
+      statuses.map((status, i) => mockConsult({ id: 'r' + i, status })),
+    );
+    fixture.detectChanges();
+    const rows: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('tr.data-row'));
+    expect(rows.length).toBe(statuses.length);
+    const offered = rows.map((r) => !!r.querySelector('.reassign-btn'));
+    expect(offered).toEqual([true, true, true, true, false, false]);
+  });
+
   it('reassign requires a reason before calling the service', () => {
     component.openAssign(mockConsult(), true);
     component.assignConsultantId.set('st1');
@@ -319,7 +445,12 @@ describe('ConsultationsComponent', () => {
     component.openSchedule(mockConsult());
     component.scheduleForm.scheduledAt = '2026-08-20T10:00';
     component.submitSchedule();
-    expect(consultSpy.schedule).toHaveBeenCalledWith('c1', '2026-08-20T10:00', undefined);
+    // QA D777/D784: the picked local wall time is sent as the UTC the server keeps.
+    expect(consultSpy.schedule).toHaveBeenCalledWith(
+      'c1',
+      new Date(2026, 7, 20, 10, 0).toISOString().slice(0, 19),
+      undefined,
+    );
     expect(component.showScheduleModal()).toBeFalse();
   });
 

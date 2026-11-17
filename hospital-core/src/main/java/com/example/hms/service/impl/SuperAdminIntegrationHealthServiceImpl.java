@@ -10,8 +10,10 @@ import com.example.hms.payload.dto.superadmin.IntegrationHealthSummaryDTO;
 import com.example.hms.repository.IntegrationHealthSnapshotRepository;
 import com.example.hms.service.SuperAdminIntegrationHealthService;
 import com.example.hms.service.integration.eligibility.EligibilityProvider;
+import com.example.hms.service.integration.health.IntegrationHealthActionService;
 import com.example.hms.service.platform.discovery.IntegrationDescriptor;
 import com.example.hms.service.platform.discovery.PlatformIntegrationAdapter;
+import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,17 +33,23 @@ public class SuperAdminIntegrationHealthServiceImpl implements SuperAdminIntegra
     private final List<EligibilityProvider> eligibilityProviders;
     private final IntegrationHealthSnapshotRepository snapshotRepository;
     private final IntegrationHealthSnapshotMapper snapshotMapper;
+    private final IntegrationHealthActionService actionService;
+    private final MessageSource messageSource;
 
     public SuperAdminIntegrationHealthServiceImpl(
         List<PlatformIntegrationAdapter> platformAdapters,
         List<EligibilityProvider> eligibilityProviders,
         IntegrationHealthSnapshotRepository snapshotRepository,
-        IntegrationHealthSnapshotMapper snapshotMapper
+        IntegrationHealthSnapshotMapper snapshotMapper,
+        IntegrationHealthActionService actionService,
+        MessageSource messageSource
     ) {
         this.platformAdapters = platformAdapters;
         this.eligibilityProviders = eligibilityProviders;
         this.snapshotRepository = snapshotRepository;
         this.snapshotMapper = snapshotMapper;
+        this.actionService = actionService;
+        this.messageSource = messageSource;
     }
 
     @Override
@@ -55,10 +63,28 @@ public class SuperAdminIntegrationHealthServiceImpl implements SuperAdminIntegra
             rows.add(buildRow(descriptor, byIntegration.getOrDefault(descriptor.getId(), List.of())));
         }
         if (hasAnyEligibilityProvider()) {
-            rows.add(buildEligibilityRow(byIntegration.getOrDefault(INTEGRATION_ID_ELIGIBILITY, List.of())));
+            rows.add(buildEligibilityRow(byIntegration.getOrDefault(INTEGRATION_ID_ELIGIBILITY, List.of()), locale));
         }
 
         return aggregate(rows);
+    }
+
+    @Override
+    public boolean isListed(String integrationId) {
+        if (integrationId == null || integrationId.isBlank()) {
+            return false;
+        }
+        if (INTEGRATION_ID_ELIGIBILITY.equals(integrationId)) {
+            return hasAnyEligibilityProvider();
+        }
+        Locale locale = LocaleContextHolder.getLocale();
+        for (PlatformIntegrationAdapter adapter : platformAdapters) {
+            IntegrationDescriptor descriptor = adapter.describe(locale);
+            if (descriptor != null && integrationId.equals(descriptor.getId())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -71,7 +97,7 @@ public class SuperAdminIntegrationHealthServiceImpl implements SuperAdminIntegra
         if (INTEGRATION_ID_ELIGIBILITY.equalsIgnoreCase(integrationId) && hasAnyEligibilityProvider()) {
             List<IntegrationHealthSnapshot> snapshots =
                 snapshotRepository.findByIntegrationIdOrderByLastStatusAscUpdatedAtDesc(INTEGRATION_ID_ELIGIBILITY);
-            return buildEligibilityRow(snapshots);
+            return buildEligibilityRow(snapshots, locale);
         }
         for (PlatformIntegrationAdapter adapter : platformAdapters) {
             IntegrationDescriptor descriptor = adapter.describe(locale);
@@ -117,30 +143,40 @@ public class SuperAdminIntegrationHealthServiceImpl implements SuperAdminIntegra
             .serviceType(descriptor.getServiceType())
             .provider(descriptor.getProvider())
             .enabled(descriptor.isEnabled())
+            .probeSupported(actionService.supportsProbe(descriptor.getId()))
+            .resyncSupported(actionService.supportsResync(descriptor.getId()))
             .capabilities(descriptor.getCapabilities() == null ? List.of() : descriptor.getCapabilities())
             .rolledUpStatus(rollUp(orgEntries))
             .organizations(orgEntries)
             .build();
     }
 
-    private IntegrationHealthRowDTO buildEligibilityRow(List<IntegrationHealthSnapshot> snapshots) {
+    /**
+     * QA D874: the eligibility row is described in the caller's language, like
+     * the adapter rows, and names its provider in words rather than by the
+     * Java class that implements it.
+     */
+    private IntegrationHealthRowDTO buildEligibilityRow(List<IntegrationHealthSnapshot> snapshots,
+                                                        Locale locale) {
         List<IntegrationHealthOrgEntryDTO> orgEntries = mapEntries(snapshots);
-        String provider = eligibilityProviders.stream()
-            .findFirst()
-            .map(p -> p.getClass().getSimpleName())
-            .orElse("Eligibility provider");
         return IntegrationHealthRowDTO.builder()
             .integrationId(INTEGRATION_ID_ELIGIBILITY)
-            .displayName("Insurance eligibility & prior-auth")
+            .displayName(text("integration.eligibility.displayName", locale))
             .serviceType(null)
-            .provider(provider)
+            .provider(text("integration.eligibility.provider", locale))
             .enabled(true)
+            .probeSupported(actionService.supportsProbe(INTEGRATION_ID_ELIGIBILITY))
+            .resyncSupported(actionService.supportsResync(INTEGRATION_ID_ELIGIBILITY))
             .capabilities(List.of(
-                "Coverage check (X12 270/271 analogue)",
-                "Prior-auth submission (X12 278 analogue)"))
+                text("integration.eligibility.capability.coverage", locale),
+                text("integration.eligibility.capability.priorAuth", locale)))
             .rolledUpStatus(rollUp(orgEntries))
             .organizations(orgEntries)
             .build();
+    }
+
+    private String text(String key, Locale locale) {
+        return messageSource.getMessage(key, null, locale);
     }
 
     private List<IntegrationHealthOrgEntryDTO> mapEntries(List<IntegrationHealthSnapshot> snapshots) {

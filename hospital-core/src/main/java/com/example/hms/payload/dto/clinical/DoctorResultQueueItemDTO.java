@@ -22,9 +22,13 @@ public class DoctorResultQueueItemDTO {
     private UUID patientId;
     private String testName;
     private String resultValue;
+    /** QA D1095: the unit the value is in (the test definition's when none was typed). */
+    private String resultUnit;
     private String abnormalFlag;  // NORMAL, ABNORMAL, CRITICAL
     /** LOW / HIGH when the abnormal result's side of the range is known. */
     private com.example.hms.enums.AbnormalDirection abnormalDirection;
     private LocalDateTime resultedAt;
     private String orderingContext;
+    /** QA D1016: the result corrects a released value the clinician may already have acted on. */
+    private boolean corrected;
 }

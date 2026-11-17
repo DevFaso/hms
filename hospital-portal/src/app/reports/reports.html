@@ -103,7 +103,11 @@
                             }}</span>
                           </td>
                           <td>{{ run.rowCount ?? '—' }}</td>
-                          <td>{{ run.generatedAt ? (run.generatedAt | date: 'short') : '—' }}</td>
+                          <td>
+                            {{
+                              run.generatedAt ? (run.generatedAt | serverTime | date: 'short') : '—'
+                            }}
+                          </td>
                           <td class="error-cell">{{ run.errorMessage ?? '—' }}</td>
                         </tr>
                       }
@@ -130,6 +134,8 @@
     [attr.aria-label]="'COMMON.CANCEL' | translate"
   ></div>
   <div
+    appModalDialog
+    (escaped)="showCreate.set(false)"
     class="modal-panel"
     role="dialog"
     aria-modal="true"
@@ -150,6 +156,7 @@
       <div class="form-group">
         <label class="form-label" for="rep-name">{{ 'COMMON.NAME' | translate }} *</label>
         <input
+          required
           id="rep-name"
           class="form-input"
           type="text"
@@ -193,20 +200,41 @@
           {{ 'REPORTS.RECIPIENTS' | translate }} *
         </label>
         <textarea
+          required
           id="rep-recipients"
           class="form-textarea"
           rows="2"
+          [class.invalid]="!!recipientsError()"
+          [attr.aria-invalid]="recipientsError() ? true : null"
+          [attr.aria-describedby]="recipientsError() ? 'rep-recipients-error' : null"
           [placeholder]="'REPORTS.RECIPIENTS_HINT' | translate"
           [ngModel]="recipients()"
-          (ngModelChange)="recipients.set($event)"
+          (ngModelChange)="recipients.set($event); recipientsError.set(null)"
         ></textarea>
+        @if (recipientsError(); as reason) {
+          <p
+            id="rep-recipients-error"
+            class="field-error"
+            role="alert"
+            data-test="recipients-error"
+          >
+            {{ reason }}
+          </p>
+        }
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" type="button" (click)="showCreate.set(false)">
         {{ 'COMMON.CANCEL' | translate }}
       </button>
-      <button class="btn-primary" type="button" [disabled]="saving()" (click)="submitCreate()">
+      <button
+        appSubmitGuard
+        submitGuardRequired
+        class="btn-primary"
+        type="button"
+        [disabled]="saving()"
+        (click)="submitCreate()"
+      >
         @if (saving()) {
           <span class="material-symbols-outlined spin">progress_activity</span>
         }

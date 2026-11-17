@@ -43,8 +43,47 @@ class CrossHospitalReachRecorderTest {
     @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
+    @Mock
+    private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+
     @InjectMocks
     private CrossHospitalReachRecorder recorder;
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSecurity() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    private static com.example.hms.model.UserRoleHospitalAssignment assignment(UUID hospitalId, String roleCode) {
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(roleCode);
+        com.example.hms.model.UserRoleHospitalAssignment a = new com.example.hms.model.UserRoleHospitalAssignment();
+        a.setId(UUID.randomUUID());
+        a.setHospital(hospital);
+        a.setRole(role);
+        return a;
+    }
+
+    @Test
+    @DisplayName("QA D110: with no assignment given, a doctor's read is recorded under the doctor assignment")
+    void resolvesTheActingDoctorAssignment() {
+        UUID acting = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        var nurse = assignment(acting, "ROLE_NURSE");
+        var doctor = assignment(acting, "ROLE_DOCTOR");
+        when(assignmentRepository.findByUser_IdAndActiveTrue(actor)).thenReturn(java.util.List.of(nurse, doctor));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("doc", null,
+                java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DOCTOR"))));
+
+        recorder.recordReach(UUID.randomUUID(), acting, actor, null, Map.of(UUID.randomUUID().toString(), 1L), "read");
+
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        assertThat(captor.getValue().getAssignmentId()).isEqualTo(doctor.getId());
+    }
 
     @Test
     @DisplayName("reachOf counts rows per foreign hospital and ignores local and hospital-less rows")

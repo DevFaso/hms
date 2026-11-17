@@ -25,6 +25,13 @@ public interface BedManagementService {
     /** Assignable beds (active + AVAILABLE) across the active hospital — feeds the picker. */
     List<BedResponseDTO> getAvailableBeds();
 
+    /**
+     * QA D609 (D431 in the picker): the assignable beds this patient may take —
+     * a ward reserved for one population (maternity, paediatrics, NICU) is left
+     * out for a patient outside it. {@code null} lists every assignable bed.
+     */
+    List<BedResponseDTO> getAvailableBeds(UUID patientId);
+
     BedResponseDTO createBed(UUID wardId, BedRequestDTO request);
 
     BedResponseDTO updateBed(UUID bedId, BedRequestDTO request);

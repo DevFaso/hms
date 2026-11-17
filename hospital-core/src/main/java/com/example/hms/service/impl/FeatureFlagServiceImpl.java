@@ -37,6 +37,7 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
     private final FeatureFlagOverrideRepository overrideRepository;
     private final SubscriptionFeatureGateService subscriptionFeatureGate;
     private final AuditEventLogService auditEventLogService;
+    private final com.example.hms.repository.SubscriptionPlanRepository subscriptionPlanRepository;
 
     /**
      * MVP-6c plan-tier audit dedup window. Keyed on
@@ -441,6 +442,44 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
             return Objects.requireNonNull(defaultProfile).trim();
         }
         return "default";
+    }
+
+    /**
+     * A flag someone can act on: configured (defaults, overrides, any
+     * environment), named by a subscription plan, or already overridden (so
+     * a stray row stays editable and removable). Anything else is a typo
+     * that would sit in the table doing nothing (D245).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isKnownFlagKey(String flagKey) {
+        if (!StringUtils.hasText(flagKey)) {
+            return false;
+        }
+        String key = flagKey.trim();
+        if (containsIgnoreCase(properties.getDefaultsOrEmpty().keySet(), key)
+            || containsIgnoreCase(properties.getOverridesOrEmpty().keySet(), key)) {
+            return true;
+        }
+        if (properties.getEnvironments() != null) {
+            for (Map<String, Boolean> env : properties.getEnvironments().values()) {
+                if (env != null && containsIgnoreCase(env.keySet(), key)) {
+                    return true;
+                }
+            }
+        }
+        for (var plan : subscriptionPlanRepository.findAll()) {
+            String keys = plan.getFeatureKeys();
+            if (keys != null && containsIgnoreCase(java.util.Arrays.asList(keys.split(",")), key)) {
+                return true;
+            }
+        }
+        return overrideRepository.findAllByOrderByFlagKeyAsc().stream()
+                .anyMatch(o -> key.equalsIgnoreCase(o.getFlagKey()));
+    }
+
+    private static boolean containsIgnoreCase(java.util.Collection<String> keys, String key) {
+        return keys.stream().anyMatch(k -> k != null && key.equalsIgnoreCase(k.trim()));
     }
 
     private String normalizeKey(String key) {

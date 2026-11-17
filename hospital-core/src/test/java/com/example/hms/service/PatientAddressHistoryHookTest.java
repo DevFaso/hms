@@ -125,6 +125,68 @@ class PatientAddressHistoryHookTest {
     }
 
     @Test
+    @DisplayName("QA D1414: a record stored before the rules stays editable on its other fields, also when the client resends them")
+    void aStoredImpossibleIdentityStaysEditable() {
+        patient.setDateOfBirth(java.time.LocalDate.of(1800, 1, 1));
+        patient.setLastName("12345");
+        PatientProfileUpdateRequestDTO request = new PatientProfileUpdateRequestDTO();
+        request.setCity("Ouagadougou");
+        patientService.patchPatient(patientId, request, null, Locale.FRENCH);
+        assertThat(patient.getCity()).isEqualTo("Ouagadougou");
+
+        PatientProfileUpdateRequestDTO resent = new PatientProfileUpdateRequestDTO();
+        resent.setDateOfBirth(java.time.LocalDate.of(1800, 1, 1));
+        resent.setLastName("12345");
+        resent.setCity("Bobo-Dioulasso");
+        patientService.patchPatient(patientId, resent, null, Locale.FRENCH);
+        assertThat(patient.getCity()).isEqualTo("Bobo-Dioulasso");
+    }
+
+    @Test
+    @DisplayName("QA D1414: the full replace judges a change and lets a stored value through")
+    void theFullReplaceJudgesOnlyAChange() {
+        patient.setDateOfBirth(java.time.LocalDate.of(1800, 1, 1));
+        patient.setLastName("12345");
+        UUID userId = UUID.randomUUID();
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(userId);
+        patient.setUser(user);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        com.example.hms.payload.dto.PatientRequestDTO same = com.example.hms.payload.dto.PatientRequestDTO.builder()
+            .userId(userId).firstName("Awa").lastName("12345").dateOfBirth(java.time.LocalDate.of(1800, 1, 1)).build();
+        org.assertj.core.api.Assertions.assertThatCode(() -> patientService.updatePatient(patientId, same, Locale.FRENCH))
+            .doesNotThrowAnyException();
+
+        same.setDateOfBirth(java.time.LocalDate.of(1801, 1, 1));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> patientService.updatePatient(patientId, same, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getFieldErrors()).containsKey("dateOfBirth"));
+    }
+
+    @Test
+    @DisplayName("QA D1403 + D1414: a future date, an impossible date and a digit name are refused on their field at the edit and at the registration")
+    void theImpossibleIsRefusedOnItsField() {
+        patient.setDateOfBirth(java.time.LocalDate.of(1990, 1, 1));
+        for (java.time.LocalDate bad : List.of(java.time.LocalDate.of(2999, 1, 1), java.time.LocalDate.of(1800, 1, 1))) {
+            PatientProfileUpdateRequestDTO edit = new PatientProfileUpdateRequestDTO();
+            edit.setDateOfBirth(bad);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> patientService.patchPatient(patientId, edit, null, Locale.FRENCH))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getFieldErrors()).containsKey("dateOfBirth"));
+            com.example.hms.payload.dto.PatientRequestDTO create = com.example.hms.payload.dto.PatientRequestDTO.builder()
+                .firstName("Awa").lastName("Sana").dateOfBirth(bad).build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> patientService.createPatientByStaff(create, Locale.FRENCH))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getFieldErrors()).containsKey("dateOfBirth"));
+        }
+        PatientProfileUpdateRequestDTO digits = new PatientProfileUpdateRequestDTO();
+        digits.setLastName("12345");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> patientService.patchPatient(patientId, digits, null, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getFieldErrors()).containsKey("lastName"));
+    }
+
+    @Test
     @DisplayName("re-stating the same address records nothing")
     void restatingTheSameAddressRecordsNothing() {
         PatientProfileUpdateRequestDTO request = new PatientProfileUpdateRequestDTO();

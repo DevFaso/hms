@@ -128,8 +128,8 @@ class SuperAdminDashboardServiceImplTest {
     void getSummary_success() {
         when(userRepository.countByIsDeletedFalse()).thenReturn(100L);
         when(userRepository.countByIsActiveTrueAndIsDeletedFalse()).thenReturn(80L);
-        when(hospitalRepository.count()).thenReturn(10L);
-        when(hospitalRepository.countByActiveTrue()).thenReturn(8L);
+        when(hospitalRepository.countHospitals()).thenReturn(10L);
+        when(hospitalRepository.countActiveHospitals()).thenReturn(8L);
         when(patientRepository.count()).thenReturn(500L);
         when(roleRepository.count()).thenReturn(5L);
         when(assignmentRepository.count()).thenReturn(200L);
@@ -219,7 +219,7 @@ class SuperAdminDashboardServiceImplTest {
 
     @Test
     void getSummary_populatesClinicalCounters() {
-        when(encounterRepository.count()).thenReturn(11L);
+        when(encounterRepository.countVisits()).thenReturn(11L);
         when(consultationRepository.count()).thenReturn(22L);
         when(labOrderRepository.count()).thenReturn(33L);
         when(labResultRepository.count()).thenReturn(44L);
@@ -263,7 +263,7 @@ class SuperAdminDashboardServiceImplTest {
                 .activeHospitalId(chip)
                 .build());
 
-        when(encounterRepository.countByHospital_Id(chip)).thenReturn(1L);
+        when(encounterRepository.countVisitsByHospitalId(chip)).thenReturn(1L);
         when(consultationRepository.countByHospital_Id(chip)).thenReturn(2L);
         when(labOrderRepository.countByHospital_Id(chip)).thenReturn(3L);
         when(labResultRepository.countByLabOrder_Hospital_Id(chip)).thenReturn(4L);
@@ -313,7 +313,7 @@ class SuperAdminDashboardServiceImplTest {
                 .build());
 
         when(consultationRepository.count()).thenReturn(99L);
-        when(encounterRepository.count()).thenReturn(11L);
+        when(encounterRepository.countVisits()).thenReturn(11L);
         when(admissionRepository.count()).thenReturn(66L);
         when(labOrderRepository.count()).thenReturn(33L);
         when(labResultRepository.count()).thenReturn(44L);
@@ -332,7 +332,7 @@ class SuperAdminDashboardServiceImplTest {
         org.mockito.Mockito.verify(consultationRepository, org.mockito.Mockito.never())
             .countByHospital_Id(any());
         org.mockito.Mockito.verify(encounterRepository, org.mockito.Mockito.never())
-            .countByHospital_Id(any());
+            .countVisitsByHospitalId(any());
         org.mockito.Mockito.verify(labResultRepository, org.mockito.Mockito.never())
             .countByLabOrder_Hospital_Id(any());
     }
@@ -362,7 +362,7 @@ class SuperAdminDashboardServiceImplTest {
         List<PrescriptionResponseDTO> result = service.getRecentPrescriptions(5, Locale.ENGLISH);
         assertThat(result).hasSize(1);
         org.mockito.Mockito.verify(prescriptionService, org.mockito.Mockito.never())
-            .list(any(), any(), any(), any(Pageable.class), any());
+            .list(any(), any(), any(), any(), any(Pageable.class), any());
     }
 
     @Test

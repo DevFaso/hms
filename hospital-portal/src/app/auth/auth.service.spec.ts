@@ -260,3 +260,83 @@ describe('AuthService — getHospitalId follows the effective scope', () => {
     expect(service.getHospitalId()).toBe('h2');
   });
 });
+
+/**
+ * Sign-out cleared local storage and nothing else: the server session, and
+ * the HttpOnly refresh cookie that can mint a new access token, stayed live.
+ */
+describe('AuthService — logout revokes the server session', () => {
+  let service: AuthService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(AuthService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('POSTs /auth/logout with the current bearer and the refresh cookie', () => {
+    localStorage.setItem('auth_token', 'current.jwt.token');
+
+    service.logout();
+
+    const req = httpMock.expectOne((r) => r.url.endsWith('/api/auth/logout'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.headers.get('Authorization')).toBe('Bearer current.jwt.token');
+    expect(req.request.withCredentials).toBeTrue();
+    // Local state is gone at once; nothing waits on the server.
+    expect(service.getToken()).toBeNull();
+    req.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  it('clears session flags and chunk recovery state on logout', () => {
+    sessionStorage.setItem('hms-chunk-reload', 'legacy-private-route');
+    localStorage.setItem('auth_token', 'current.jwt.token');
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setProviderUser(true);
+    roleContext.markSessionResolved();
+
+    service.logout();
+    httpMock.expectOne((r) => r.url.endsWith('/api/auth/logout')).flush(null);
+
+    expect(sessionStorage.getItem('hms-chunk-reload')).toBeNull();
+    expect(roleContext.providerUser()).toBeFalse();
+    expect(roleContext.sessionResolved()).toBeFalse();
+  });
+
+  it('still signs out locally when the server call fails', () => {
+    localStorage.setItem('auth_token', 'current.jwt.token');
+    let thrown: unknown = null;
+
+    try {
+      service.logout();
+      httpMock
+        .expectOne((r) => r.url.endsWith('/api/auth/logout'))
+        .flush('down', { status: 503, statusText: 'Service Unavailable' });
+    } catch (e) {
+      thrown = e;
+    }
+
+    expect(thrown).toBeNull();
+    expect(service.getToken()).toBeNull();
+    expect(service.getUserProfile()).toBeNull();
+  });
+
+  it('sends no Authorization header when there is no token to revoke', () => {
+    service.logout();
+    const req = httpMock.expectOne((r) => r.url.endsWith('/api/auth/logout'));
+    expect(req.request.headers.has('Authorization')).toBeFalse();
+    expect(req.request.withCredentials).toBeTrue();
+    req.flush(null);
+  });
+});

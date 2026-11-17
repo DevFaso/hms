@@ -5,11 +5,12 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
-import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.service.AuditEventLogService;
 import org.hibernate.LazyInitializationException;
 import org.junit.jupiter.api.AfterEach;
@@ -66,6 +67,11 @@ class WriteAuditInterceptorTest {
         public void optedOut() {
             // see plain()
         }
+
+        @com.example.hms.security.ReadsOnly("a search under POST for its body")
+        public void declaredRead() {
+            // see plain()
+        }
     }
 
     @SuppressWarnings("unused")
@@ -88,7 +94,7 @@ class WriteAuditInterceptorTest {
         ObjectProvider<AuditEventLogService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(auditService);
         assignmentRepository = mock(UserRoleHospitalAssignmentRepository.class);
-        interceptor = new WriteAuditInterceptor(provider, providerOf(new ControllerAuthUtils(mock(UserRoleHospitalAssignmentRepository.class))),
+        interceptor = new WriteAuditInterceptor(provider, providerOf(new ControllerAuthUtils(ActingScopeTestSupport.resolver())),
             providerOf(assignmentRepository));
         ReflectionTestUtils.setField(interceptor, "enabled", true);
         authenticate();
@@ -102,8 +108,12 @@ class WriteAuditInterceptorTest {
     }
 
     private static void authenticate() {
+        authenticate("ROLE_NURSE");
+    }
+
+    private static void authenticate(String role) {
         CustomUserDetails principal = new CustomUserDetails(
-            NURSE, "nurse.awa", "x", true, List.of(new SimpleGrantedAuthority("ROLE_NURSE")));
+            NURSE, "nurse.awa", "x", true, List.of(new SimpleGrantedAuthority(role)));
         SecurityContextHolder.getContext().setAuthentication(
             new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
     }
@@ -155,6 +165,20 @@ class WriteAuditInterceptorTest {
         assertThat(row.getRoleName()).isEqualTo("NURSE");
         assertThat(row.getIpAddress()).isEqualTo("10.0.0.7");
         assertThat(row.getEventDescription()).isEqualTo("POST /transfusions/requests/{patientId}");
+    }
+
+    @Test
+    @DisplayName("QA D429: what the handler stated (event, resource, patient) wins over the route convention")
+    void honoursTheHandlerStatedDetail() throws Exception {
+        MockHttpServletRequest req = request("POST", "/lab-results", Map.of());
+        req.setAttribute(WriteAuditDetail.ATTRIBUTE,
+            new WriteAuditDetail.Detail(AuditEventType.LAB_RESULT_CREATED, RESOURCE, PATIENT));
+        interceptor.afterCompletion(req, ok(201), handler(Handlers.class, "plain"), null);
+
+        AuditEventRequestDTO row = emitted();
+        assertThat(row.getEventType()).isEqualTo(AuditEventType.LAB_RESULT_CREATED);
+        assertThat(row.getResourceId()).isEqualTo(RESOURCE.toString());
+        assertThat(row.getPatientId()).isEqualTo(PATIENT);
     }
 
     @Test
@@ -239,12 +263,12 @@ class WriteAuditInterceptorTest {
     }
 
     @Test
-    @DisplayName("a Keycloak JwtAuthenticationToken is attributed through its uid claim, not dropped")
+    @DisplayName("a Keycloak JwtAuthenticationToken is attributed through the account the filter linked, not dropped")
     void recordsOidcPrincipals() throws Exception {
         Jwt jwt = Jwt.withTokenValue("t").header("alg", "none")
-            .claim("uid", NURSE.toString()).claim("preferred_username", "nurse.awa").subject("nurse.awa").build();
-        SecurityContextHolder.getContext().setAuthentication(
-            new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_NURSE"))));
+            .claim("appUserId", NURSE.toString()).claim("preferred_username", "nurse.awa").subject("nurse.awa").build();
+        ActingScopeTestSupport.signInLinked(
+            new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_NURSE"))), NURSE);
 
         interceptor.afterCompletion(request("POST", "/labor/episodes", Map.of()), ok(201),
             handler(Handlers.class, "plain"), null);
@@ -256,15 +280,23 @@ class WriteAuditInterceptorTest {
     }
 
     @Test
-    @DisplayName("a POST whose route ends in a read verb is a read, not DATA_CREATE")
-    void readOnlyPostsAreNotRecorded() throws Exception {
-        for (String route : List.of("/appointments/search", "/departments/filter", "/empi/candidates",
-                "/eligibility/check", "/maternal-history/{id}/calculate-risk")) {
-            interceptor.afterCompletion(request("POST", route, Map.of()), ok(200), handler(Handlers.class, "plain"), null);
+    @DisplayName("a POST that declares @ReadsOnly is a read, not DATA_CREATE, whatever its route is called")
+    void aDeclaredReadIsNotRecorded() throws Exception {
+        for (String route : List.of("/appointments/search", "/signatures/verify", "/prenatal/schedule")) {
+            interceptor.afterCompletion(request("POST", route, Map.of()), ok(200), handler(Handlers.class, "declaredRead"), null);
         }
         verify(auditService, never()).logEvent(org.mockito.ArgumentMatchers.any());
-        assertThat(WriteAuditInterceptor.isReadOnlyPost("POST", "/transfusions/requests")).isFalse();
-        assertThat(WriteAuditInterceptor.isReadOnlyPost("PUT", "/x/search")).isFalse();
+    }
+
+    @Test
+    @DisplayName("a route named as a read proves nothing: without @ReadsOnly the write is recorded")
+    void aRouteNamedAsAReadIsRecordedWithoutTheDeclaration() throws Exception {
+        interceptor.afterCompletion(request("POST", "/maternal-history/{id}/calculate-risk", Map.of("id", RESOURCE.toString())),
+            ok(200), handler(Handlers.class, "plain"), null);
+
+        AuditEventRequestDTO row = emitted();
+        assertThat(row.getEventDescription()).isEqualTo("POST /maternal-history/{id}/calculate-risk");
+        assertThat(row.getResourceId()).isEqualTo(RESOURCE.toString());
     }
 
     @Test
@@ -278,13 +310,15 @@ class WriteAuditInterceptorTest {
         Hospital deadProxy = mock(Hospital.class);
         when(deadProxy.getName()).thenThrow(new LazyInitializationException("could not initialize proxy - no session"));
         Role role = new Role();
-        role.setName("ROLE_MIDWIFE");
+        role.setName("Sage-femme");
+        role.setCode("ROLE_MIDWIFE");
+        authenticate("ROLE_MIDWIFE");
         UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
         assignment.setHospital(deadProxy);
         assignment.setRole(role);
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
-            .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
+            .thenReturn(java.util.List.of(assignment));
         HospitalContextHolder.setContext(HospitalContext.builder()
             .principalUserId(NURSE).activeHospitalId(hospitalId).headerOverridden(true).build());
 
@@ -293,7 +327,8 @@ class WriteAuditInterceptorTest {
 
         AuditEventRequestDTO row = emitted();
         assertThat(row.getAssignmentId()).isEqualTo(assignment.getId());
-        // Same bare form as the fallback and the read-side interceptor.
+        // Same bare form as the fallback and the read-side interceptor: the
+        // CODE, never the display name (QA D187).
         assertThat(row.getRoleName()).isEqualTo("MIDWIFE");
         assertThat(row.getHospitalName()).isNull();
         verify(deadProxy, never()).getName();
@@ -307,7 +342,38 @@ class WriteAuditInterceptorTest {
         AuditEventRequestDTO row = emitted();
         assertThat(row.getAssignmentId()).isNull();
         assertThat(row.getHospitalName()).isNull();
-        verify(assignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(
+        verify(assignmentRepository, never()).findAllByUser_IdAndHospital_IdAndActiveTrue(
             org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("QA D1632: a multi-role user's row is filed under the role the token acts under, not the first row")
+    void filesTheRowUnderTheTokensRole() throws Exception {
+        UUID hospitalId = UUID.randomUUID();
+        UserRoleHospitalAssignment doctor = assignmentOf("ROLE_DOCTOR");
+        UserRoleHospitalAssignment labDirector = assignmentOf("ROLE_LAB_DIRECTOR");
+        // The doctor row comes first, as findFirst used to return it.
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(NURSE, hospitalId))
+            .thenReturn(List.of(doctor, labDirector));
+        authenticate("ROLE_LAB_DIRECTOR");
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(NURSE).activeHospitalId(hospitalId).headerOverridden(true).build());
+
+        interceptor.afterCompletion(request("POST", "/lab-results/{id}/release", Map.of("id", RESOURCE.toString())),
+            ok(200), handler(Handlers.class, "plain"), null);
+
+        AuditEventRequestDTO row = emitted();
+        assertThat(row.getAssignmentId()).isEqualTo(labDirector.getId());
+        assertThat(row.getRoleName()).isEqualTo("LAB_DIRECTOR");
+    }
+
+    private static UserRoleHospitalAssignment assignmentOf(String code) {
+        Role role = new Role();
+        role.setCode(code);
+        role.setName(code);
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setRole(role);
+        return assignment;
     }
 }

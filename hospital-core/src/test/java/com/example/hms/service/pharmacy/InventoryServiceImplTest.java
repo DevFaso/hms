@@ -25,7 +25,6 @@ import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.service.AuditEventLogService;
-import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,6 +58,7 @@ import org.mockito.Spy;
 import org.springframework.context.MessageSource;
 import com.example.hms.i18n.TestMessageSources;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class InventoryServiceImplTest {
 
@@ -73,8 +73,13 @@ class InventoryServiceImplTest {
     @Mock private StockTransactionMapper stockTransactionMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
+    /** QA D655: the controlled-stock witness rule. */
+    @Mock private ControlledStockWitness controlledStockWitness;
+    /** The server's clock; real time unless a test pins it. */
+    @Mock private java.time.Clock clock;
 
     @InjectMocks
     private InventoryServiceImpl service;
@@ -94,6 +99,8 @@ class InventoryServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(clock.instant()).thenAnswer(i -> java.time.Instant.now());
+        org.mockito.Mockito.lenient().when(clock.getZone()).thenReturn(java.time.ZoneOffset.UTC);
         hospital = new Hospital();
         hospital.setId(hospitalId);
         hospital.setName("Test Hospital");
@@ -167,6 +174,7 @@ class InventoryServiceImplTest {
         @DisplayName("creates item successfully")
         void success() {
             InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(null);
             InventoryItemResponseDTO responseDTO = buildItemResponse();
 
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
@@ -174,6 +182,8 @@ class InventoryServiceImplTest {
             when(medicationCatalogItemRepository.findById(medicationId)).thenReturn(Optional.of(medication));
             when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, medicationId))
                     .thenReturn(Optional.empty());
+            when(inventoryItemRepository.findByPharmacyIdAndActiveTrue(eq(pharmacyId), any()))
+                    .thenReturn(org.springframework.data.domain.Page.empty());
             when(inventoryItemMapper.toEntity(dto, pharmacy, medication)).thenReturn(inventoryItem);
             when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
             when(inventoryItemMapper.toResponseDTO(inventoryItem)).thenReturn(responseDTO);
@@ -184,6 +194,71 @@ class InventoryServiceImplTest {
             assertThat(result.getId()).isEqualTo(inventoryItemId);
             assertThat(result.getPharmacyId()).isEqualTo(pharmacyId);
             verify(inventoryItemRepository).save(inventoryItem);
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("QA D208: an opening quantity is refused; stock enters through a goods receipt")
+        void openingQuantityRefused() {
+            InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(new BigDecimal("999"));
+
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            stubHospitalScope();
+            when(medicationCatalogItemRepository.findById(medicationId)).thenReturn(Optional.of(medication));
+            when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, medicationId))
+                    .thenReturn(Optional.empty());
+            when(inventoryItemRepository.findByPharmacyIdAndActiveTrue(eq(pharmacyId), any()))
+                    .thenReturn(org.springframework.data.domain.Page.empty());
+
+            assertThatThrownBy(() -> service.createInventoryItem(dto)).isInstanceOf(BusinessException.class);
+            verify(inventoryItemRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D208: a catalogue row that names no molecule has no twin to look for")
+        void unnamedMoleculeSkipsTwinScan() {
+            InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(null);
+            medication.setNameFr(" ");
+            medication.setGenericName(null);
+
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            stubHospitalScope();
+            when(medicationCatalogItemRepository.findById(medicationId)).thenReturn(Optional.of(medication));
+            when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, medicationId))
+                    .thenReturn(Optional.empty());
+            when(inventoryItemMapper.toEntity(dto, pharmacy, medication)).thenReturn(inventoryItem);
+            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+            when(inventoryItemMapper.toResponseDTO(inventoryItem)).thenReturn(buildItemResponse());
+
+            service.createInventoryItem(dto);
+
+            verify(inventoryItemRepository, never()).findByPharmacyIdAndActiveTrue(any(), any());
+            verify(inventoryItemRepository).save(inventoryItem);
+        }
+
+        @Test
+        @DisplayName("QA D208: the same drug under another catalogue row is a duplicate")
+        void sameDrugUnderAnotherCatalogueRowRefused() {
+            InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(null);
+            MedicationCatalogItem twin = new MedicationCatalogItem();
+            twin.setId(UUID.randomUUID());
+            twin.setNameFr("PARACETAMOL ");
+            dto.setMedicationCatalogItemId(twin.getId());
+
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            stubHospitalScope();
+            when(medicationCatalogItemRepository.findById(twin.getId())).thenReturn(Optional.of(twin));
+            when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, twin.getId()))
+                    .thenReturn(Optional.empty());
+            when(inventoryItemRepository.findByPharmacyIdAndActiveTrue(eq(pharmacyId), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(inventoryItem)));
+
+            assertThatThrownBy(() -> service.createInventoryItem(dto))
+                    .isInstanceOf(BusinessException.class).hasMessageContaining("already exists");
+            verify(inventoryItemRepository, never()).save(any());
         }
 
         @Test
@@ -211,7 +286,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.createInventoryItem(dto))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Pharmacy not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "pharmacy.notFound");
         }
 
         @Test
@@ -225,7 +300,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.createInventoryItem(dto))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Medication catalog item not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "medicationCatalogItem.notFound");
         }
     }
 
@@ -257,7 +332,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.getInventoryItem(inventoryItemId))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Inventory item not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "inventoryItem.notFound");
         }
     }
 
@@ -295,7 +370,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.listByPharmacy(pharmacyId, pageable))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Pharmacy not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "pharmacy.notFound");
         }
     }
 
@@ -366,6 +441,25 @@ class InventoryServiceImplTest {
             verify(inventoryItemMapper).updateEntity(inventoryItem, dto);
             verify(inventoryItemRepository).save(inventoryItem);
         }
+
+        @Test
+        @DisplayName("QA D208: an edit cannot move the quantity on hand; that is a ledgered stock transaction")
+        void quantityChangeIsRefused() {
+            InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(new BigDecimal("42.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, dto))
+                    .isInstanceOf(BusinessException.class);
+            verify(inventoryItemRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).setOnHand(any(), any(), any());
+
+            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+            dto.setQuantityOnHand(null);
+            service.updateInventoryItem(inventoryItemId, dto);
+            verify(inventoryItemRepository).save(inventoryItem);
+        }
     }
 
     // ── deactivateInventoryItem ──────────────────────────────────────────
@@ -426,6 +520,65 @@ class InventoryServiceImplTest {
             return lot;
         }
 
+        private void makeItemControlled() {
+            com.example.hms.model.medication.MedicationCatalogItem morphine =
+                    new com.example.hms.model.medication.MedicationCatalogItem();
+            morphine.setId(UUID.randomUUID());
+            morphine.setControlled(true);
+            inventoryItem.setMedicationCatalogItem(morphine);
+        }
+
+        /**
+         * QA D655, the exact replay: POST /pharmacy/inventory/lots for
+         * morphine, 10 units, as PHARMACIST_A with no witness: 201 and
+         * witnessed_by NULL. Nothing is written now.
+         */
+        @Test
+        @DisplayName("D655: a controlled lot is not received without a witness")
+        void d655_controlledReceiptNeedsAWitness() {
+            makeItemControlled();
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("10"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(controlledStockWitness.resolve(null, inventoryItem, user))
+                    .thenThrow(new BusinessException("stockTransaction.witness.required"));
+
+            assertThatThrownBy(() -> service.receiveStock(dto)).isInstanceOf(BusinessException.class);
+
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D655: a witnessed controlled receipt records its witness on the RECEIPT movement")
+        void d655_witnessedControlledReceiptIsRecorded() {
+            makeItemControlled();
+            UUID witnessId = UUID.randomUUID();
+            User witness = new User();
+            witness.setId(witnessId);
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setWitnessedBy(witnessId);
+            StockLot lot = buildStockLot();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(controlledStockWitness.resolve(witnessId, inventoryItem, user)).thenReturn(witness);
+            when(stockLotMapper.toEntity(dto, inventoryItem, user)).thenReturn(lot);
+            when(stockLotRepository.save(lot)).thenReturn(lot);
+
+            service.receiveStock(dto);
+
+            org.mockito.ArgumentCaptor<StockTransaction> tx = org.mockito.ArgumentCaptor.forClass(StockTransaction.class);
+            verify(stockTransactionRepository).save(tx.capture());
+            assertThat(tx.getValue().getWitnessedByUser()).isSameAs(witness);
+        }
+
         @Test
         @DisplayName("saves lot, updates quantity on hand, records transaction, logs audit")
         void success() {
@@ -443,7 +596,11 @@ class InventoryServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotMapper.toEntity(dto, inventoryItem, user)).thenReturn(lot);
             when(stockLotRepository.save(lot)).thenReturn(lot);
-            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+            when(inventoryItemRepository.incrementOnHand(eq(inventoryItemId), any(), any()))
+                    .thenAnswer(inv -> {
+                        inventoryItem.setQuantityOnHand(inventoryItem.getQuantityOnHand().add(inv.getArgument(1)));
+                        return 1;
+                    });
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockTransactionRepository.save(any(StockTransaction.class)))
@@ -462,8 +619,10 @@ class InventoryServiceImplTest {
             // 2. Item quantity on hand is increased by lot's remaining quantity
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("150.00"));
 
-            // 3. Inventory item is saved with updated quantity
-            verify(inventoryItemRepository).save(inventoryItem);
+            // 3. ...atomically (#825 round 5), never by saving a stale copy
+            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId),
+                    eq(new BigDecimal("50.00")), any());
+            verify(inventoryItemRepository, never()).save(inventoryItem);
 
             // 4. RECEIPT stock transaction is recorded
             ArgumentCaptor<StockTransaction> txCaptor = ArgumentCaptor.forClass(StockTransaction.class);
@@ -498,7 +657,6 @@ class InventoryServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotMapper.toEntity(dto, inventoryItem, user)).thenReturn(lot);
             when(stockLotRepository.save(lot)).thenReturn(lot);
-            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
             when(stockTransactionRepository.save(any(StockTransaction.class)))
                     .thenAnswer(inv -> {
                         StockTransaction tx = inv.getArgument(0);
@@ -510,6 +668,245 @@ class InventoryServiceImplTest {
             StockLotResponseDTO result = service.receiveStock(dto);
 
             assertThat(result).isNotNull();
+        }
+
+        @Test
+        @DisplayName("D108: an expired lot is refused at goods receipt and nothing is counted")
+        void expiredLotIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setExpiryDate(LocalDate.now().minusDays(1));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D733: a receipt of 1e9 units is refused")
+        void hugeReceiptIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("1000000000"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D733: the same lot received twice adds to the one row")
+        void sameLotTwiceAddsToTheRow() {
+            StockLotRequestDTO dto = buildLotRequest();
+            StockLot existing = buildStockLot();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findSameLot(inventoryItemId, dto.getLotNumber().trim(), dto.getExpiryDate()))
+                    .thenReturn(List.of(existing));
+
+            service.receiveStock(dto);
+
+            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository).addReceipt(eq(existing.getId()), eq(dto.getInitialQuantity()), any());
+            verify(inventoryItemRepository).lockById(inventoryItemId);
+            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId), eq(dto.getInitialQuantity()), any());
+        }
+
+        @Test
+        @DisplayName("QA D710: a lot expiring today is refused at goods receipt")
+        void lotExpiringTodayIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setExpiryDate(LocalDate.now());
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D341: a negative received quantity is refused with a readable message")
+        void negativeQuantityIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("-5"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D334: a reception date in the future is refused")
+        void futureReceptionDateIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setReceivedDate(LocalDate.now().plusDays(3));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("#948 review: at 23:30Z, the reader's today east of UTC (tomorrow on the server) passes the date check")
+        void readersTodayEastOfUtcPassesTheDateCheck() {
+            com.example.hms.utility.MessageUtil.setMessageSource(
+                    com.example.hms.i18n.TestMessageSources.bundles());
+            when(clock.instant()).thenReturn(java.time.Instant.parse("2026-10-24T23:30:00Z"));
+            StockLotRequestDTO dto = buildLotRequest();
+            // 00:30 on the 25th in a UTC+1 hospital: the portal's default.
+            dto.setReceivedDate(LocalDate.of(2026, 10, 25));
+            // The next check fails on purpose, so reaching it proves the date passed.
+            dto.setRemainingQuantity(new BigDecimal("9999.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+        }
+
+        @Test
+        @DisplayName("#948 review: at 23:30Z, a day after the reader's today is still refused")
+        void dayAfterTheGraceIsRefused() {
+            com.example.hms.utility.MessageUtil.setMessageSource(
+                    com.example.hms.i18n.TestMessageSources.bundles());
+            when(clock.instant()).thenReturn(java.time.Instant.parse("2026-10-24T23:30:00Z"));
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setReceivedDate(LocalDate.of(2026, 10, 26));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.receivedDate.future"));
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D405: a lot received holding more than its received quantity is refused")
+        void remainingAboveReceivedIsRefused() {
+            com.example.hms.utility.MessageUtil.setMessageSource(
+                    com.example.hms.i18n.TestMessageSources.bundles());
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setRemainingQuantity(new BigDecimal("9999.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"))
+                    // QA D1354 (round 30): on the quantity the lot cannot hold.
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "remainingQuantity");
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D315: the same lot number with another expiry date is refused")
+        void sameLotOtherExpiryIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.existsOtherExpiryForLot(inventoryItemId, "LOT-001", dto.getExpiryDate()))
+                    .thenReturn(true);
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D82: a receipt booked in a colleague's name is refused")
+        void receiverMustBeTheCaller() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setReceivedBy(UUID.randomUUID());
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        /** QA D779, the exact replay: POST /pharmacy/inventory/lots, qty 2.5 of a tablet item: 201 before. */
+        @Test
+        @DisplayName("D779: a tablet lot of 2.5 is refused, nothing written")
+        void d779_fractionalTabletsAreRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("2.5"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "stock.quantity.wholeUnitsOnly".equals(((BusinessException) e).getMessageKey()));
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D779: a measured item (ml) may still be received by a fraction")
+        void d779_measuredItemKeepsFractions() {
+            inventoryItem.setUnit("ml");
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("2.5"));
+            dto.setRemainingQuantity(null);
+            dto.setUnitCost(new BigDecimal("-10"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            // Gets past the whole-units rule and stops at the cost rule.
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "stockTransaction.unitCost.min".equals(((BusinessException) e).getMessageKey()));
+        }
+
+        /** QA D778, the exact replay: a lot with unitCost -10: 201 before. */
+        @Test
+        @DisplayName("D778: a negative unit cost is refused, nothing written")
+        void d778_negativeUnitCostIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setUnitCost(new BigDecimal("-10"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "stockTransaction.unitCost.min".equals(((BusinessException) e).getMessageKey()));
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D778: the request DTO itself rejects a negative unit cost (bean validation, 400)")
+        void d778_dtoConstraint() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setUnitCost(new BigDecimal("-10"));
+            try (jakarta.validation.ValidatorFactory f = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+                org.assertj.core.api.Assertions.assertThat(f.getValidator().validate(dto))
+                        .anyMatch(v -> "unitCost".equals(v.getPropertyPath().toString()));
+            }
         }
     }
 
@@ -549,7 +946,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.getStockLot(stockLotId))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Stock lot not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "stockLot.notFound");
         }
     }
 
@@ -654,14 +1051,14 @@ class InventoryServiceImplTest {
             lot.setId(stockLotId);
             StockLotRequestDTO dto = StockLotRequestDTO.builder()
                     .inventoryItemId(inventoryItemId)
-                    .lotNumber("LOT-001-UPDATED")
-                    .expiryDate(LocalDate.now().plusYears(2))
+                    .lotNumber("LOT-001")
+                    .supplier("New supplier")
                     .initialQuantity(new BigDecimal("100.00"))
                     .receivedDate(LocalDate.now())
                     .build();
             StockLotResponseDTO responseDTO = StockLotResponseDTO.builder()
                     .id(stockLotId)
-                    .lotNumber("LOT-001-UPDATED")
+                    .lotNumber("LOT-001")
                     .build();
 
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
@@ -672,9 +1069,86 @@ class InventoryServiceImplTest {
             StockLotResponseDTO result = service.updateStockLot(stockLotId, dto);
 
             assertThat(result).isNotNull();
-            assertThat(result.getLotNumber()).isEqualTo("LOT-001-UPDATED");
+            assertThat(result.getLotNumber()).isEqualTo("LOT-001");
             verify(stockLotMapper).updateEntity(lot, dto);
             verify(stockLotRepository).save(lot);
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D334: the expiry date cannot be changed after receipt")
+        void expiryIsImmutable() {
+            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001")
+                    .expiryDate(LocalDate.now().plusYears(1)).remainingQuantity(new BigDecimal("50.00")).build();
+            lot.setId(stockLotId);
+            StockLotRequestDTO dto = StockLotRequestDTO.builder()
+                    .inventoryItemId(inventoryItemId).lotNumber("LOT-001")
+                    .expiryDate(LocalDate.of(2024, 1, 1)).build();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.updateStockLot(stockLotId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotMapper, never()).updateEntity(any(), any());
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D341: a negative count correction is refused before the database")
+        void negativeRemainingIsRefused() {
+            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001")
+                    .remainingQuantity(new BigDecimal("50.00")).build();
+            lot.setId(stockLotId);
+            StockLotRequestDTO dto = StockLotRequestDTO.builder()
+                    .inventoryItemId(inventoryItemId).remainingQuantity(new BigDecimal("-3")).build();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.updateStockLot(stockLotId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(strings = {"9999", "5", "45.00"})
+        @DisplayName("QA D405: the lot edit changes no count (9999 above 50 received, morphine down to 5): adjust instead")
+        void anyCountChangeIsRefused(String typed) {
+            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001")
+                    .initialQuantity(new BigDecimal("50.00")).remainingQuantity(new BigDecimal("19.00")).build();
+            lot.setId(stockLotId);
+            StockLotRequestDTO dto = StockLotRequestDTO.builder()
+                    .inventoryItemId(inventoryItemId).lotNumber("LOT-001")
+                    .remainingQuantity(new BigDecimal(typed)).build();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.updateStockLot(stockLotId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .matches(e -> e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("adjustment"));
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+            assertThat(lot.getRemainingQuantity()).isEqualByComparingTo("19");
+        }
+
+        @Test
+        @DisplayName("QA D405: a form that echoes the current count back still saves its other fields")
+        void theSameCountIsAccepted() {
+            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001")
+                    .initialQuantity(new BigDecimal("50.00")).remainingQuantity(new BigDecimal("19.00")).build();
+            lot.setId(stockLotId);
+            StockLotRequestDTO dto = StockLotRequestDTO.builder()
+                    .inventoryItemId(inventoryItemId).lotNumber("LOT-001").supplier("New supplier")
+                    .remainingQuantity(new BigDecimal("19")).build();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+            stubHospitalScope();
+            when(stockLotRepository.save(lot)).thenReturn(lot);
+
+            service.updateStockLot(stockLotId, dto);
+
+            verify(stockLotMapper).updateEntity(lot, dto);
+            verify(stockTransactionRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
     }
 
@@ -751,9 +1225,33 @@ class InventoryServiceImplTest {
 
             service.triggerReorderAlerts();
 
-            verify(notificationService).createNotification(
+            verify(notificationService).created(
                     any(String.class), eq("pharmacist1"), eq("REORDER_ALERT"));
             verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
+        }
+
+        @Test
+        @DisplayName("QA D894: a French caller still writes the audit row in English, the shape the portal reads")
+        void d894_auditTextIsEnglishWhateverTheCallerLanguage() {
+            stubHospitalScope();
+            when(inventoryItemRepository.findBelowReorderThresholdByHospital(hospitalId))
+                    .thenReturn(List.of(inventoryItem));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                service.triggerReorderAlerts();
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+
+            org.mockito.ArgumentCaptor<AuditEventRequestDTO> audit =
+                    org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat(audit.getValue().getEventDescription())
+                    .startsWith("Low stock alert: ")
+                    .contains(" on hand, reorder threshold ")
+                    .doesNotContain("Alerte");
         }
 
         @Test
@@ -764,7 +1262,7 @@ class InventoryServiceImplTest {
             service.triggerReorderAlerts();
 
             verify(inventoryItemRepository, never()).findBelowReorderThresholdByHospital(any());
-            verify(notificationService, never()).createNotification(any(), any(), any());
+            verify(notificationService, never()).created(any(), any(), any());
         }
 
         @Test
@@ -786,7 +1284,7 @@ class InventoryServiceImplTest {
             when(userRepository.findById(userId))
                     .thenReturn(Optional.of(user))
                     .thenReturn(Optional.of(user));
-            when(notificationService.createNotification(any(), eq("pharmacist1"), eq("REORDER_ALERT")))
+            when(notificationService.created(any(), eq("pharmacist1"), eq("REORDER_ALERT")))
                     .thenThrow(new RuntimeException("Notification service down"))
                     .thenReturn(null);
 
@@ -813,7 +1311,7 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.getInventoryItem(inventoryItemId))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Pharmacy not found");
+                    .hasFieldOrPropertyWithValue("messageKey", "pharmacy.notFound");
         }
 
         @Test

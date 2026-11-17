@@ -1,5 +1,9 @@
 package com.bitnesttechs.hms.patient.features.visitsummaries
 
+import com.bitnesttechs.hms.patient.core.models.DischargeDisposition
+import com.bitnesttechs.hms.patient.core.models.EncounterType
+import com.bitnesttechs.hms.patient.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,8 +27,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.models.DischargeSummaryDto
 import com.bitnesttechs.hms.patient.core.models.MedicationReconciliationDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 import com.bitnesttechs.hms.patient.ui.theme.WarningOrange
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 
@@ -41,14 +45,14 @@ fun VisitSummariesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Visit Summaries") },
+                title = { Text(stringResource(R.string.after_visit_summaries)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue,
+                    containerColor = BrandPrimary,
                     titleContentColor = Color.White
                 )
             )
@@ -61,7 +65,7 @@ fun VisitSummariesScreen(
                     Modifier.fillMaxSize().padding(padding),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = BrandBlue)
+                    CircularProgressIndicator(color = BrandPrimary)
                 }
             }
             error != null -> {
@@ -70,12 +74,12 @@ fun VisitSummariesScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Unable to load visit summaries",
+                        Text(stringResource(R.string.visit_summaries_load_failed),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(onClick = { viewModel.load() }) {
-                            Text("Retry")
+                            Text(stringResource(R.string.retry))
                         }
                     }
                 }
@@ -94,12 +98,12 @@ fun VisitSummariesScreen(
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            "No visit summaries yet",
+                            stringResource(R.string.no_visit_summaries_yet),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            "After-visit summaries will appear here\nonce your visits are completed.",
+                            stringResource(R.string.visit_summaries_empty_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
@@ -144,26 +148,26 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                 summary.encounterType?.let { type ->
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = BrandBlue.copy(alpha = 0.1f)
+                        color = BrandPrimary.copy(alpha = 0.1f)
                     ) {
                         Text(
-                            type.replace("_", " "),
+                            stringResource(EncounterType.fromWire(type).labelRes),
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelSmall.copy(
                                 letterSpacing = 0.5.sp,
                                 fontWeight = FontWeight.SemiBold
                             ),
-                            color = BrandBlue
+                            color = BrandPrimary
                         )
                     }
                 }
 
                 summary.dischargeDiagnosis?.let {
-                    IconSection(icon = "", title = "Diagnosis", body = it, accentColor = Color(0xFFE53935))
+                    IconSection(icon = "", title = stringResource(R.string.visit_diagnosis), body = it, accentColor = Color(0xFFE53935))
                 }
 
                 summary.hospitalCourse?.let {
-                    IconSection(icon = "", title = "Hospital course", body = it, accentColor = Color(0xFF7B1FA2))
+                    IconSection(icon = "", title = stringResource(R.string.visit_hospital_course), body = it, accentColor = Color(0xFF7B1FA2))
                 }
 
                 // Disposition + Condition pills
@@ -174,16 +178,15 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                     ) {
                         summary.disposition?.let { disposition ->
                             InfoPill(
-                                label = "Disposition",
-                                value = disposition.replace("_", " ")
-                                    .replaceFirstChar { c -> c.uppercase() },
+                                label = stringResource(R.string.visit_disposition),
+                                value = stringResource(DischargeDisposition.fromWire(disposition).labelRes),
                                 color = Color(0xFF3949AB),
                                 modifier = Modifier.weight(1f)
                             )
                         }
                         summary.dischargeCondition?.let { condition ->
                             InfoPill(
-                                label = "Condition",
+                                label = stringResource(R.string.visit_condition),
                                 value = condition.replaceFirstChar { c -> c.uppercase() },
                                 color = Color(0xFF00897B),
                                 modifier = Modifier.weight(1f)
@@ -197,19 +200,19 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                 }
 
                 summary.followUpInstructions?.let {
-                    IconSection(icon = "", title = "Follow-up", body = it, accentColor = WarningOrange)
+                    IconSection(icon = "", title = stringResource(R.string.treatment_plan_follow_up), body = it, accentColor = WarningOrange)
                 }
 
                 summary.activityRestrictions?.let {
-                    IconSection(icon = "", title = "Activity restrictions", body = it, accentColor = Color(0xFF0097A7))
+                    IconSection(icon = "", title = stringResource(R.string.visit_activity_restrictions), body = it, accentColor = Color(0xFF0097A7))
                 }
 
                 summary.dietInstructions?.let {
-                    IconSection(icon = "", title = "Diet", body = it, accentColor = Color(0xFF43A047))
+                    IconSection(icon = "", title = stringResource(R.string.visit_diet), body = it, accentColor = Color(0xFF43A047))
                 }
 
                 summary.woundCareInstructions?.let {
-                    IconSection(icon = "", title = "Wound care", body = it, accentColor = Color(0xFFE91E63))
+                    IconSection(icon = "", title = stringResource(R.string.visit_wound_care), body = it, accentColor = Color(0xFFE91E63))
                 }
 
                 // Warning signs
@@ -218,11 +221,11 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                 }
 
                 summary.patientEducationProvided?.let {
-                    IconSection(icon = "", title = "Patient education", body = it, accentColor = BrandBlue)
+                    IconSection(icon = "", title = stringResource(R.string.visit_patient_education), body = it, accentColor = BrandPrimary)
                 }
 
                 summary.additionalNotes?.let {
-                    IconSection(icon = "", title = "Additional notes", body = it, accentColor = Color(0xFF757575))
+                    IconSection(icon = "", title = stringResource(R.string.additional_notes), body = it, accentColor = Color(0xFF757575))
                 }
             }
         }
@@ -242,14 +245,14 @@ private fun CardHeader(summary: DischargeSummaryDto) {
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(BrandBlue.copy(alpha = 0.12f)),
+                .background(BrandPrimary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = (summary.dischargingProviderName?.firstOrNull()?.uppercase() ?: "P"),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = BrandBlue
+                color = BrandPrimary
             )
         }
 
@@ -278,13 +281,13 @@ private fun CardHeader(summary: DischargeSummaryDto) {
             summary.dischargeDate?.let {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = BrandLightBlue
+                    color = BrandSoft
                 ) {
                     Text(
                         formatDateShort(it.take(10)),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        color = BrandBlue,
+                        color = BrandPrimary,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -296,7 +299,7 @@ private fun CardHeader(summary: DischargeSummaryDto) {
                 color = if (isFinalized) SuccessGreen.copy(alpha = 0.12f) else WarningOrange.copy(alpha = 0.12f)
             ) {
                 Text(
-                    if (isFinalized) "FINALIZED" else "DRAFT",
+                    if (isFinalized) stringResource(R.string.visit_summary_finalized) else stringResource(R.string.visit_summary_draft),
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 9.sp,
@@ -384,15 +387,15 @@ private fun MedicationsSection(meds: List<MedicationReconciliationDto>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(
-                "Medications",
+                stringResource(R.string.medications),
                 style = MaterialTheme.typography.labelMedium,
-                color = BrandBlue,
+                color = BrandPrimary,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.weight(1f))
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = BrandBlue.copy(alpha = 0.12f)
+                color = BrandPrimary.copy(alpha = 0.12f)
             ) {
                 Text(
                     "${meds.size}",
@@ -401,7 +404,7 @@ private fun MedicationsSection(meds: List<MedicationReconciliationDto>) {
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp
                     ),
-                    color = BrandBlue
+                    color = BrandPrimary
                 )
             }
         }
@@ -419,7 +422,7 @@ private fun MedicationsSection(meds: List<MedicationReconciliationDto>) {
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                med.medicationName ?: "Unknown",
+                                med.medicationName ?: stringResource(R.string.medication),
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                             )
                             val details = listOfNotNull(med.dosage, med.frequency)
@@ -465,7 +468,7 @@ private fun WarningSection(warnings: String) {
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    "Warning signs",
+                    stringResource(R.string.visit_warning_signs),
                     style = MaterialTheme.typography.labelMedium,
                     color = WarningOrange
                 )
@@ -479,14 +482,11 @@ private fun WarningSection(warnings: String) {
     }
 }
 
-private fun formatDateShort(iso: String): String {
-    return try {
-        val parts = iso.split("-")
-        if (parts.size == 3) {
-            val months = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-            val month = months[parts[1].toInt() - 1]
-            "$month ${parts[2].toInt()}, ${parts[0]}"
-        } else iso
-    } catch (_: Exception) { iso }
-}
+/** The date, in the app language (it was an English month array). */
+private fun formatDateShort(iso: String): String =
+    runCatching {
+        java.time.LocalDate.parse(iso.take(10)).format(
+            java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+                .withLocale(java.util.Locale.getDefault())
+        )
+    }.getOrDefault(iso)

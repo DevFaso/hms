@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
+import { WithheldResult, recordsWithheld } from './patient.service';
 
 /**
  * Mirrors the backend PatientVitalSignResponseDTO field-for-field. The old
@@ -95,8 +96,11 @@ export class VitalSignService {
     return this.http.post<VitalSignResponse>(`/patients/${patientId}/vitals`, req);
   }
 
-  getRecent(patientId: string): Observable<VitalSignResponse[]> {
-    return this.http.get<VitalSignResponse[]>(`/patients/${patientId}/vitals/recent`);
+  /** QA D504 — `withheld` says the patient's opt-out held other hospitals' vitals back. */
+  getRecent(patientId: string): Observable<WithheldResult<VitalSignResponse[]>> {
+    return this.http
+      .get<VitalSignResponse[]>(`/patients/${patientId}/vitals/recent`, { observe: 'response' })
+      .pipe(map((res) => ({ items: res.body ?? [], withheld: recordsWithheld(res.headers) })));
   }
 
   /** The backend returns a bare array (page/size are plain query params, no Page envelope). */

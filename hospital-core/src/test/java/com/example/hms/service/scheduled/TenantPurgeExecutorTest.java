@@ -20,6 +20,9 @@ import com.example.hms.service.tenant.TenantExportPackager;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -39,6 +43,13 @@ class TenantPurgeExecutorTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private TenantExportPackager exportPackager;
     @Mock private TenantArchiveEncryptionService archiveEncryption;
+
+    /**
+     * Fixed instant, deliberately in the future: a time that is past on the
+     * injected clock but not on the system clock proves which one is read.
+     */
+    private static final Instant NOW = Instant.parse("2099-03-01T03:00:00Z");
+    @Spy private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @InjectMocks private TenantPurgeExecutor executor;
 
@@ -151,4 +162,12 @@ class TenantPurgeExecutorTest {
         assertThat(org.getLifecycleState()).isEqualTo(OrganizationLifecycleState.PURGED);
     }
 
+    @Test
+    void purgedAtIsStampedFromTheInjectedClock() {
+        when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        executor.executePurge(org, false);
+
+        assertThat(org.getPurgedAt()).isEqualTo(NOW);
+    }
 }

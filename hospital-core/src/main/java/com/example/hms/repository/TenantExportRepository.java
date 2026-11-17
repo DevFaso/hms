@@ -69,18 +69,23 @@ public interface TenantExportRepository extends JpaRepository<Organization, UUID
     /**
      * Audit events attributable to one of the organisation's hospitals.
      *
-     * <p>Scoped through {@code assignment.hospital.id} rather than the
-     * denormalised {@code hospitalName}: two hospitals can share a display
-     * name, and a rename would split the history. Rows with no assignment
-     * (SYSTEM actors — schedulers, MLLP, Kafka consumers) carry no per-tenant
-     * attribution and are deliberately out of scope for a tenant's own export.
+     * <p>Scoped by hospital id, never the denormalised {@code hospitalName}:
+     * two hospitals can share a display name, and a rename would split the
+     * history. The WHERE is the one every hospital-scoped audit read uses
+     * ({@link AuditEventLogRepository#ANCHORED_AT_HOSPITALS}, QA D786): the
+     * row's assignment is at one of the hospitals, or the row carries the
+     * hospital itself (a SYSTEM row written by a migration or a job that acted
+     * on that hospital's data, stamped by V235 or at write time). The LEFT
+     * join keeps those rows; a SYSTEM row with no hospital (platform-wide)
+     * stays out of every tenant's export.
      *
      * <p>{@code patientId} comes from the column V141 added, so the archive
      * can say which events concerned which patient.
      */
-    @Query("SELECT ev.id, ev.eventType, ev.eventTimestamp, ev.userName, ev.roleName, "
-        + "       ev.entityType, ev.resourceId, ev.patientId, ev.status "
-        + "FROM AuditEventLog ev WHERE ev.assignment.hospital.id IN :hospitalIds "
-        + "ORDER BY ev.id")
+    @Query("SELECT a.id, a.eventType, a.eventTimestamp, a.userName, a.roleName, "
+        + "       a.entityType, a.resourceId, a.patientId, a.status "
+        + "FROM AuditEventLog a LEFT JOIN a.assignment asg "
+        + "WHERE " + AuditEventLogRepository.ANCHORED_AT_HOSPITALS + " "
+        + "ORDER BY a.id")
     List<Object[]> exportAuditEvents(@Param("hospitalIds") Collection<UUID> hospitalIds, Pageable pageable);
 }

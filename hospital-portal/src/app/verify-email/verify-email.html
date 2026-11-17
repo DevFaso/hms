@@ -2,7 +2,7 @@
   <div class="rp-container">
     <div class="rp-brand">
       <span class="material-symbols-outlined rp-logo-icon">local_hospital</span>
-      <span class="rp-logo-text">HMS</span>
+      <span class="rp-logo-text">e-Keneya</span>
     </div>
 
     <div class="rp-card" data-testid="verify-card">
@@ -50,7 +50,7 @@
             }
             <form (ngSubmit)="resend()" class="rp-form" data-testid="verify-resend-form">
               <div class="rp-field">
-                <label for="verify-email">{{ 'LOGIN.EMAIL_ADDRESS' | translate }}</label>
+                <label for="verify-email">{{ 'LOGIN.EMAIL_ADDRESS' | translate }} *</label>
                 <div class="rp-input-wrapper">
                   <span class="material-symbols-outlined rp-input-icon">mail</span>
                   <input
@@ -64,7 +64,13 @@
                   />
                 </div>
               </div>
-              <button type="submit" class="rp-btn-primary" [disabled]="resendLoading">
+              <button
+                appSubmitGuard
+                submitGuardRequired
+                type="submit"
+                class="rp-btn-primary"
+                [disabled]="resendLoading"
+              >
                 @if (resendLoading) {
                   <span class="rp-spinner"></span>
                   <span>{{ 'LOGIN.SENDING' | translate }}</span>
@@ -81,6 +87,6 @@
       }
     </div>
 
-    <p class="rp-footer">&copy; {{ currentYear }} HMS - Hospital Management System</p>
+    <p class="rp-footer">{{ 'COMMON.COPYRIGHT_FOOTER' | translate: { year: currentYear } }}</p>
   </div>
 </div>

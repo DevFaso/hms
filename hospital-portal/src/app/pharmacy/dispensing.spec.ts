@@ -1,14 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { PrintLabelService } from '../services/print-label.service';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
-import { DispensingComponent } from './dispensing';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Router } from '@angular/router';
+import { DispensingComponent, sameDispenseUnit } from './dispensing';
 import { PharmacyService } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { By } from '@angular/platform-browser';
-import { BehaviorSubject, of, throwError } from 'rxjs';
+import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { RoleContextService } from '../core/role-context.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 
@@ -133,8 +135,14 @@ describe('DispensingComponent', () => {
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
       'listLotsByPharmacy',
+      'listDispensableLots',
       'createDispense',
       'cancelDispense',
+      'listWitnessCandidates',
+      'getDispenseSettings',
+      'markReady',
+      'handOver',
+      'cancelReady',
     ]);
     authSvc = jasmine.createSpyObj('AuthService', [], {
       currentProfile: () => ({ id: 'user-1' }),
@@ -146,6 +154,13 @@ describe('DispensingComponent', () => {
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of(mockDispenses as any));
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of(mockInventory as any));
     pharmacySvc.listLotsByPharmacy.and.returnValue(of(mockLots as any));
+    pharmacySvc.listDispensableLots.and.returnValue(of({ data: mockLots.data.content } as any));
+    pharmacySvc.getDispenseSettings.and.returnValue(
+      of({ data: { readyForCollectionEnabled: true } } as any),
+    );
+    pharmacySvc.listWitnessCandidates.and.returnValue(
+      of({ data: [{ userId: 'user-2', displayName: 'Pharmacist B' }] } as any),
+    );
 
     // Roadmap row 4 / T-68 — substitute the offline queue with a stub so the
     // existing dispensing tests don't open the real IndexedDB. The pending$
@@ -183,6 +198,20 @@ describe('DispensingComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('shows a hint instead of a blank selector when no pharmacy exists (QA D59)', () => {
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="no-pharmacy-hint"]')).toBeNull();
+    expect(el.querySelector('select.pharmacy-select')).not.toBeNull();
+
+    component.pharmacies.set([]);
+    fixture.detectChanges();
+
+    expect(el.querySelector('[data-testid="no-pharmacy-hint"]')?.textContent?.trim()).toBe(
+      'PHARMACY.NO_PHARMACY_HINT',
+    );
+    expect(el.querySelector('select.pharmacy-select')).toBeNull();
+  });
+
   it('should load pharmacies on init', () => {
     expect(pharmacySvc.listPharmacies).toHaveBeenCalled();
     expect(component.pharmacies().length).toBe(1);
@@ -201,6 +230,42 @@ describe('DispensingComponent', () => {
     expect(component.form.prescriptionId).toBe('rx-1');
     expect(component.form.patientId).toBe('pat-1');
     expect(component.form.medicationName).toBe('Amoxicillin');
+  });
+
+  it('QA D1141: the dispense form starts with the unit the order was written in', () => {
+    component.selectPrescription({
+      ...mockWorkQueue.data.content[0],
+      quantityUnit: 'comprimé',
+    } as any);
+    expect(component.form.unit).toBe('comprimé');
+  });
+
+  it('QA D1124 / D1141: "Dispenser" stays clickable and says why it refuses (no unit, no attestation)', () => {
+    component.selectPrescription({ ...mockWorkQueue.data.content[0], quantityUnit: '' } as any);
+    component.form.quantityDispensed = 30;
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const submit = el.querySelector<HTMLButtonElement>('[data-testid="dispense-submit"]')!;
+    expect(submit.disabled).toBeFalse();
+
+    submit.click();
+    fixture.detectChanges();
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    // QA D1256 class (round 27): every gap on the first press — the unit AND
+    // the attestation (it said the unit, then the attestation on the next press).
+    const first = el.querySelector('[data-testid="submit-guard-reason"]')?.textContent ?? '';
+    expect(first).toContain('SUBMIT_GUARD.UNIT');
+    expect(first).toContain('SUBMIT_GUARD.ATTESTATION');
+    expect(el.querySelector('#unit')!.getAttribute('aria-invalid')).toBe('true');
+
+    component.form.unit = 'comprimé';
+    fixture.detectChanges();
+    submit.click();
+    fixture.detectChanges();
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    const second = el.querySelector('[data-testid="submit-guard-reason"]')?.textContent ?? '';
+    expect(second).toContain('SUBMIT_GUARD.ATTESTATION');
+    expect(second).not.toContain('SUBMIT_GUARD.UNIT');
   });
 
   it('should close form', () => {
@@ -231,9 +296,31 @@ describe('DispensingComponent', () => {
     expect(component.showForm()).toBeFalse();
   });
 
+  it('QA D512: the pharmacist attestation is sent as verifiedBy, and only when ticked', () => {
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    const form = {
+      prescriptionId: 'rx-1',
+      patientId: 'pat-1',
+      pharmacyId: 'ph-1',
+      dispensedBy: 'user-1',
+      medicationName: 'Amoxicillin',
+      quantityRequested: 30,
+      quantityDispensed: 30,
+    };
+    component.form = { ...form };
+    component.verifyAttested.set(false);
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].verifiedBy).toBeUndefined();
+
+    component.form = { ...form };
+    component.verifyAttested.set(true);
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].verifiedBy).toBe('user-1');
+  });
+
   it('should show error on dispense failure', () => {
     pharmacySvc.createDispense.and.returnValue(
-      throwError(() => ({ error: { message: 'Insufficient stock' } })),
+      throwError(() => ({ status: 409, error: { message: 'Insufficient stock' } })),
     );
 
     component.form = {
@@ -250,30 +337,334 @@ describe('DispensingComponent', () => {
     expect(toastSvc.error).toHaveBeenCalledWith('Insufficient stock');
   });
 
+  it('QA D1102 class: a serious interaction refusal opens the override field and the reason is sent', () => {
+    const message = 'A serious interaction alert stops this dispense: [major] A ↔ B: bleeding.';
+    pharmacySvc.createDispense.and.returnValue(
+      throwError(() => ({
+        status: 422,
+        error: {
+          message,
+          cdsAdvisories: [{ summary: '[major] A ↔ B: bleeding', indicator: 'critical' }],
+        },
+      })),
+    );
+    const form = {
+      prescriptionId: 'rx-1',
+      patientId: 'pat-1',
+      pharmacyId: 'ph-1',
+      dispensedBy: 'user-1',
+      medicationName: 'Amoxicillin',
+      quantityRequested: 30,
+      quantityDispensed: 30,
+    };
+    component.form = { ...form };
+    component.showForm.set(true);
+    component.submitDispense();
+    fixture.detectChanges();
+
+    expect(toastSvc.error).toHaveBeenCalledWith(message);
+    expect(component.cdsAlerts()).toEqual(['[major] A ↔ B: bleeding']);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="cds-override-reason"]'),
+    ).not.toBeNull();
+
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    component.form.cdsOverrideReason = '  Benefit outweighs the risk, INR monitored  ';
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].cdsOverrideReason).toBe(
+      'Benefit outweighs the risk, INR monitored',
+    );
+  });
+
   it('should cancel dispense', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+    // QA D1069 (declared change): the cancel is no longer a bare confirm(); it
+    // opens the panel that asks why, and sends the reason.
+    const confirmSpy = spyOn(window, 'confirm').and.returnValue(true);
     const mockResponse = { data: { id: 'd-1', status: 'CANCELLED' } };
     pharmacySvc.cancelDispense.and.returnValue(of(mockResponse as any));
 
     component.cancelDispense('d-1');
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
+    component.dispenseCancelReason = '  Erreur de patient  ';
+    component.confirmWitnessedCancel();
 
-    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1');
+    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', 'Erreur de patient', undefined);
     expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.DISPENSE_CANCELLED');
   });
 
+  it('QA D1069: a cancel with no reason is refused where the reason is typed, never sent', () => {
+    pharmacySvc.cancelDispense.and.returnValue(of({ data: { id: 'd-1' } } as any));
+    component.recentDispenses.set([
+      { id: 'd-1', medicationName: 'Amoxicillin', status: 'COMPLETED' } as any,
+    ]);
+    fixture.detectChanges();
+
+    component.cancelDispense('d-1');
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const reason = el.querySelector<HTMLTextAreaElement>(
+      '[data-testid="cancel-witness"] #dispenseCancelReason',
+    );
+    expect(reason).not.toBeNull();
+    // An ordinary fill asks for no witness.
+    expect(el.querySelector('#cancelWitness')).toBeNull();
+    const confirmButton = Array.from(
+      el.querySelectorAll<HTMLButtonElement>('[data-testid="cancel-witness"] button'),
+    ).find((b) => b.textContent?.includes('COMMON.CONFIRM'))!;
+    expect(confirmButton.disabled).toBeFalse();
+
+    confirmButton.click();
+    fixture.detectChanges();
+
+    expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.CANCEL_REASON_REQUIRED');
+    expect(reason!.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  // QA D1307 (round 28): the row's cancel button opened the reason form ABOVE
+  // the table and kept the focus; a keyboard user never reached the reason.
+  it('QA D1307: the cancel form takes the keyboard, and Escape on it gives focus back to the row', async () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    component.recentDispenses.set([
+      { id: 'd-1', medicationName: 'Paracétamol', status: 'COMPLETED', patientName: 'Awa' } as any,
+    ]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    document.body.appendChild(el);
+    try {
+      const rowButton = el
+        .querySelector('[data-testid="recent-dispense-patient"]')!
+        .closest('tr')!
+        .querySelector<HTMLButtonElement>('button.btn-action')!;
+      rowButton.focus();
+      rowButton.click();
+      fixture.detectChanges();
+      await settle();
+      await settle();
+      expect(document.activeElement).toBe(el.querySelector('#dispenseCancelReason'));
+
+      // Nothing typed: Escape closes the form and the row's button has the keyboard again.
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      fixture.detectChanges();
+      await settle();
+      await settle();
+      expect(el.querySelector('[data-testid="cancel-witness"]')).toBeNull();
+      expect(document.activeElement).toBe(rowButton);
+    } finally {
+      el.remove();
+    }
+  });
+
+  // QA D1335 (round 29): the queue's "Dispenser" opened the form above the
+  // queue and left focus on the row; Escape did nothing.
+  it('QA D1335: the dispense form takes the keyboard, Escape closes it, focus goes back to the row', async () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const el: HTMLElement = fixture.nativeElement;
+    document.body.appendChild(el);
+    try {
+      fixture.detectChanges();
+      const row = el.querySelector<HTMLButtonElement>('[data-testid="rx-dispense-rx-1"]')!;
+      row.focus();
+      row.click();
+      fixture.detectChanges();
+      await settle();
+      await settle();
+      const form = el.querySelector('[data-testid="dispense-form"]')!;
+      expect(form).not.toBeNull();
+      expect(form.contains(document.activeElement)).withContext('focus is in the form').toBeTrue();
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      fixture.detectChanges();
+      await settle();
+      await settle();
+      expect(el.querySelector('[data-testid="dispense-form"]')).toBeNull();
+      expect(document.activeElement?.getAttribute('data-testid')).toBe('rx-dispense-rx-1');
+    } finally {
+      el.remove();
+    }
+  });
+
+  // QA D1336 (round 29): after a cancel the history reloaded and focus went
+  // to another patient's claim button in the queue.
+  it('QA D1336: after a dispense cancel, focus is on the history heading, not a queue row', async () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    pharmacySvc.cancelDispense.and.returnValue(of({ data: { id: 'd-1' } } as any));
+    const el: HTMLElement = fixture.nativeElement;
+    document.body.appendChild(el);
+    try {
+      component.recentDispenses.set([
+        {
+          id: 'd-1',
+          medicationName: 'Paracétamol',
+          status: 'COMPLETED',
+          patientName: 'Awa',
+        } as any,
+      ]);
+      fixture.detectChanges();
+      component.cancelDispense('d-1');
+      fixture.detectChanges();
+      await settle();
+      component.dispenseCancelReason = 'Mauvais patient';
+      component.confirmWitnessedCancel();
+      fixture.detectChanges();
+      await settle();
+      await settle();
+      expect(document.activeElement?.id).toBe('recent-dispenses-title');
+    } finally {
+      el.remove();
+    }
+  });
+
+  // ── QA D654: a controlled substance moves only in front of a witness ──
+
+  function makeAmoxicillinControlled(): void {
+    component.inventoryItems.set([
+      {
+        id: 'inv-1',
+        medicationCatalogItemId: 'cat-1',
+        medicationName: 'Morphine',
+        quantityOnHand: 100,
+        controlled: true,
+      } as any,
+    ]);
+  }
+
+  it('QA D654: a fill from a controlled lot shows the witness picker and sends the witness', () => {
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    makeAmoxicillinControlled();
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    // QA D964: the shortest-dated lot is pre-selected, so the witness picker
+    // of a controlled lot shows as soon as the form opens.
+    expect(component.form.stockLotId).toBeTruthy();
+
+    component.form.stockLotId = 'lot-fresh';
+    component.onLotChange();
+    // QA D964: a later lot needs its reason; the dispense now refuses without one (round 19).
+    component.form.fefoOverrideReason = 'Lot entamé à finir';
+    fixture.detectChanges();
+    const picker = el.querySelector<HTMLSelectElement>('#dispWitness');
+    expect(picker).not.toBeNull();
+    expect(picker!.textContent).toContain('Pharmacist B');
+
+    component.submitDispense();
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.WITNESS_REQUIRED');
+
+    component.form.witnessedBy = 'user-2';
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].witnessedBy).toBe('user-2');
+  });
+
+  it('QA D1089 class: a later lot with no FEFO reason is refused under the reason, not by a dead button', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
+    component.form.quantityDispensed = 30;
+    component.form.stockLotId = 'lot-fresh';
+    component.onLotChange();
+    component.verifyAttested.set(true);
+    fixture.detectChanges();
+    expect(component.fefoReasonMissing()).toBeTrue();
+    const el: HTMLElement = fixture.nativeElement;
+    const submit = el.querySelector<HTMLButtonElement>('.form-actions button[type="submit"]')!;
+    expect(submit.disabled).toBeFalse();
+
+    component.submitDispense();
+    fixture.detectChanges();
+
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(el.querySelector('#fefoReason')!.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('QA D654: an ordinary lot sends no witness', () => {
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    component.form.stockLotId = 'lot-fresh';
+    component.form.witnessedBy = 'user-2';
+    component.onLotChange();
+    // QA D964: a later lot needs its reason; the dispense now refuses without one (round 19).
+    component.form.fefoOverrideReason = 'Lot entamé à finir';
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('#dispWitness')).toBeNull();
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].witnessedBy).toBeUndefined();
+  });
+
+  it('QA D654: cancelling a controlled fill asks for the witness and sends it', () => {
+    const confirmSpy = spyOn(window, 'confirm').and.returnValue(true);
+    pharmacySvc.cancelDispense.and.returnValue(of({ data: { id: 'd-1' } } as any));
+    makeAmoxicillinControlled();
+    component.recentDispenses.set([
+      {
+        id: 'd-1',
+        medicationName: 'Morphine',
+        medicationCatalogItemId: 'cat-1',
+        stockLotId: 'lot-fresh',
+        status: 'COMPLETED',
+      } as any,
+    ]);
+    fixture.detectChanges();
+
+    component.cancelDispense('d-1');
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
+    expect(el.querySelector('[data-testid="cancel-witness"] #cancelWitness')).not.toBeNull();
+
+    component.dispenseCancelReason = 'Mauvais lot';
+    component.confirmWitnessedCancel();
+    expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.WITNESS_REQUIRED');
+
+    component.cancelWitnessId = 'user-2';
+    component.confirmWitnessedCancel();
+    fixture.detectChanges();
+    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', 'Mauvais lot', 'user-2');
+    expect(el.querySelector('[data-testid="cancel-witness"]')).toBeNull();
+  });
+
   // ── Tier 2 item 34 — the lot picker and the counter-side scan ────────
+
+  it('asks for the lots of the prescribed drug only (QA D241)', () => {
+    expect(component.dispensableLots()).toEqual([]);
+
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
+
+    expect(pharmacySvc.listDispensableLots).toHaveBeenCalledWith(
+      mockWorkQueue.data.content[0].id,
+      component.selectedPharmacyId,
+    );
+    expect(pharmacySvc.listLotsByPharmacy).not.toHaveBeenCalled();
+  });
 
   it('offers real stock lots, not inventory items', () => {
     // The defect this replaces: the picker listed inventory items and put
     // their ids into stockLotId, so the backend looked each one up in the
     // stock-lot table and 404'd. Selecting a lot could never succeed.
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
     const ids = component.dispensableLots().map((lot) => lot.id);
 
     expect(ids).toContain('lot-fresh');
     expect(ids).not.toContain('inv-1');
   });
 
+  it('QA D710: treats a lot expiring today as expired, and tomorrow as good', () => {
+    const d = new Date();
+    const iso = (x: Date) =>
+      `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    const tomorrow = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    expect(component.isExpired({ expiryDate: iso(d) } as any)).toBeTrue();
+    expect(component.isExpired({ expiryDate: iso(tomorrow) } as any)).toBeFalse();
+  });
+
   it('keeps expired and empty lots out of the picker', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
     const ids = component.dispensableLots().map((lot) => lot.id);
 
     expect(ids).not.toContain('lot-expired');
@@ -281,6 +672,7 @@ describe('DispensingComponent', () => {
   });
 
   it('offers the shortest-dated lot first so stock is used before it expires', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
     const ids = component.dispensableLots().map((lot) => lot.id);
 
     // lot-unlabelled expires 2098, lot-fresh 2099.
@@ -288,6 +680,7 @@ describe('DispensingComponent', () => {
   });
 
   it('clears a product scan when the lot changes', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
     // The scan was taken against the previous pack; carrying it over would
     // send the server a value that cannot match the new lot.
     component.form.stockLotId = 'lot-fresh';
@@ -307,6 +700,8 @@ describe('DispensingComponent', () => {
     component.form.quantityDispensed = 30;
     component.form.stockLotId = 'lot-fresh';
     component.onLotChange();
+    // QA D964: a later lot needs its reason; the dispense now refuses without one (round 19).
+    component.form.fefoOverrideReason = 'Lot entamé à finir';
     component.form.patientScanValue = 'pat-1';
     component.form.productScanValue = 'LOT-4f2a91c07b3e';
 
@@ -351,6 +746,301 @@ describe('DispensingComponent', () => {
     component.prevPage();
     expect(component.queuePage).toBe(0); // Should not go below 0
   });
+  // ── G15 — ready for collection ───────────────────────────────────────
+
+  const preparedRow = {
+    id: 'rx-ready',
+    medicationName: 'Amoxicillin',
+    quantity: 30,
+    status: 'SIGNED',
+    patient: { id: 'pat-1', firstName: 'John', lastName: 'Doe' },
+    readyForCollection: {
+      dispenseId: 'd-ready',
+      readyAt: '2026-10-06T09:00:00',
+      preparedByName: 'Awa Ouedraogo',
+      quantity: 30,
+      unit: 'tablets',
+    },
+  };
+
+  function showQueue(rows: unknown[]): void {
+    component.workQueue.set(rows as any);
+    fixture.detectChanges();
+  }
+
+  function byTestId(id: string): HTMLElement | null {
+    return fixture.nativeElement.querySelector(`[data-testid="${id}"]`);
+  }
+
+  it('reads the ready-for-collection switch from the server', () => {
+    expect(pharmacySvc.getDispenseSettings).toHaveBeenCalled();
+    expect(component.readyForCollectionEnabled()).toBeTrue();
+  });
+
+  it('shows Mark ready next to Dispense only when the server switch is on', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    fixture.detectChanges();
+    expect(byTestId('mark-ready')).not.toBeNull();
+
+    component.readyForCollectionEnabled.set(false);
+    fixture.detectChanges();
+    expect(byTestId('mark-ready')).toBeNull();
+  });
+
+  it('keeps Mark ready hidden when the settings cannot be read', () => {
+    pharmacySvc.getDispenseSettings.and.returnValue(throwError(() => new Error('down')));
+    const again = TestBed.createComponent(DispensingComponent);
+    again.detectChanges();
+    expect(again.componentInstance.readyForCollectionEnabled()).toBeFalse();
+  });
+
+  it('marks ready through its own endpoint, never sending a wristband scan', () => {
+    pharmacySvc.markReady.and.returnValue(of({ data: { id: 'd-new', status: 'PENDING' } } as any));
+    component.form = {
+      prescriptionId: 'rx-1',
+      patientId: 'pat-1',
+      pharmacyId: 'ph-1',
+      dispensedBy: 'user-1',
+      medicationName: 'Amoxicillin',
+      quantityRequested: 30,
+      quantityDispensed: 30,
+      patientScanValue: 'someone',
+    };
+
+    component.submitReady();
+
+    expect(pharmacySvc.markReady).toHaveBeenCalledWith(
+      jasmine.objectContaining({ prescriptionId: 'rx-1', patientScanValue: '' }),
+    );
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.READY_SUCCESS');
+  });
+
+  it('a prepared row offers Hand over and Cancel preparation instead of Dispense and Route', () => {
+    showQueue([preparedRow, mockWorkQueue.data.content[0]]);
+
+    expect(byTestId('rx-hand-over-rx-ready')).not.toBeNull();
+    expect(byTestId('rx-cancel-ready-rx-ready')).not.toBeNull();
+    expect(byTestId('rx-dispense-rx-ready')).toBeNull();
+    expect(byTestId('rx-ready-rx-ready')).not.toBeNull();
+    // the plain row keeps Dispense and has no hand-over
+    expect(byTestId('rx-dispense-rx-1')).not.toBeNull();
+    expect(byTestId('rx-hand-over-rx-1')).toBeNull();
+    // and no "ask the prescriber" control on the prepared row: the server
+    // refuses a question while a fill is waiting (AC-10)
+    const rows = fixture.debugElement.queryAll(By.css('tbody tr'));
+    const prepared = rows.find((r) => r.query(By.css('[data-testid="rx-ready-rx-ready"]')));
+    const plain = rows.find((r) => r.query(By.css('[data-testid="rx-dispense-rx-1"]')));
+    expect(prepared?.query(By.css('app-prescription-clarification'))).toBeNull();
+    expect(plain?.query(By.css('app-prescription-clarification'))).not.toBeNull();
+  });
+
+  it('hands over with the optional wristband scan', () => {
+    pharmacySvc.handOver.and.returnValue(
+      of({ data: { id: 'd-ready', status: 'COMPLETED' } } as any),
+    );
+    component.openHandOver(preparedRow as any);
+    component.handOverScan = ' pat-1 ';
+
+    component.confirmHandOver();
+
+    expect(pharmacySvc.handOver).toHaveBeenCalledWith('d-ready', { patientScanValue: 'pat-1' });
+    expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.HAND_OVER_SUCCESS');
+    expect(component.readyAction()).toBeNull();
+  });
+
+  it('hands over without a scan when none was taken', () => {
+    pharmacySvc.handOver.and.returnValue(of({ data: {} } as any));
+    component.openHandOver(preparedRow as any);
+
+    component.confirmHandOver();
+
+    expect(pharmacySvc.handOver).toHaveBeenCalledWith('d-ready', {});
+  });
+
+  it('shows the server refusal when a hand-over fails', () => {
+    pharmacySvc.handOver.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: 'This prescription can no longer be handed over.' },
+      })),
+    );
+    component.openHandOver(preparedRow as any);
+
+    component.confirmHandOver();
+
+    expect(toastSvc.error).toHaveBeenCalledWith('This prescription can no longer be handed over.');
+    expect(component.readyAction()).not.toBeNull();
+  });
+
+  it('cancels a preparation with the chosen reason', () => {
+    pharmacySvc.cancelReady.and.returnValue(of({ data: {} } as any));
+    component.openCancelReady(preparedRow as any);
+    component.cancelReason = 'STOCK_UNAVAILABLE';
+
+    component.confirmCancelReady();
+
+    expect(pharmacySvc.cancelReady).toHaveBeenCalledWith('d-ready', 'STOCK_UNAVAILABLE');
+    expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.CANCEL_READY_SUCCESS');
+  });
+
+  it('offers only the pharmacist reasons, never the system ones', () => {
+    expect([...component.readyCancelReasons]).toEqual([
+      'STOCK_UNAVAILABLE',
+      'PATIENT_DECLINED',
+      'NOT_COLLECTED',
+      'OTHER',
+    ]);
+  });
+
+  it('labels READY_UNCOLLECTED with the days the fill has waited', () => {
+    const readyAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000 - 60_000).toISOString();
+    const row = {
+      ...preparedRow,
+      needsAttention: true,
+      attentionReason: 'READY_UNCOLLECTED',
+      readyForCollection: { ...preparedRow.readyForCollection, readyAt },
+    } as any;
+
+    expect(component.attentionKey(row)).toBe('PHARMACY.ATTENTION.READY_UNCOLLECTED');
+    expect(component.attentionParams(row)).toEqual({ days: 8 });
+    expect(component.attentionParams(mockWorkQueue.data.content[0] as any)).toEqual({});
+  });
+
+  it('a PENDING row in recent dispenses has no plain Cancel and sorts by when it was prepared', () => {
+    component.recentDispenses.set([
+      {
+        id: 'd-old',
+        medicationName: 'A',
+        quantityDispensed: 1,
+        status: 'COMPLETED',
+        dispensedAt: '2026-10-01T10:00:00',
+        createdAt: '2026-10-01T10:00:00',
+      },
+      {
+        id: 'd-pending',
+        medicationName: 'B',
+        quantityDispensed: 1,
+        status: 'PENDING',
+        createdAt: '2026-10-06T10:00:00',
+      },
+    ] as any);
+    fixture.detectChanges();
+
+    const rows = fixture.debugElement.queryAll(By.css('.section-card:last-of-type tbody tr'));
+    const pendingRow = rows.find((r) => r.nativeElement.textContent.includes('B'));
+    expect(pendingRow?.query(By.css('.btn-action.danger'))).toBeNull();
+    // AC-11: a PENDING row reads "Ready for collection", not "Pending"
+    expect(pendingRow?.query(By.css('.badge')).nativeElement.textContent.trim()).toBe(
+      'Ready for collection',
+    );
+
+    pharmacySvc.listDispensesByPharmacy.and.returnValue(
+      of({
+        data: {
+          content: [
+            {
+              id: 'd-old',
+              status: 'COMPLETED',
+              dispensedAt: '2026-10-01T10:00:00',
+              createdAt: '2026-10-01T10:00:00',
+            },
+            { id: 'd-pending', status: 'PENDING', createdAt: '2026-10-06T10:00:00' },
+          ],
+        },
+      } as any),
+    );
+    component.onPharmacyChange();
+    expect(component.recentDispenses().map((d) => d.id)).toEqual(['d-pending', 'd-old']);
+  });
+
+  it('QA D1128: each recent fill names its patient, so a wrong fill made today is found and cancelled', () => {
+    component.recentDispenses.set([
+      {
+        id: 'd-today',
+        patientName: 'Awa Kaboré',
+        medicationName: 'Amoxicilline',
+        quantityDispensed: 10,
+        unit: 'gélule',
+        status: 'COMPLETED',
+        dispensedAt: '2026-10-31T16:22:00',
+      },
+    ] as any);
+    fixture.detectChanges();
+    const cell = fixture.debugElement.query(By.css('[data-testid="recent-dispense-patient"]'));
+    expect(cell.nativeElement.textContent.trim()).toBe('Awa Kaboré');
+    const row = cell.parent!;
+    expect(row.query(By.css('.btn-action.danger'))).not.toBeNull();
+  });
+
+  /** QA D1584 / D1585: the allergy stop's review state in its three forms, as the server reads it. */
+  const stopCard = {
+    summary:
+      'Allergy alert: Amoxicillin is ordered and the patient has a documented allergy to Penicillin',
+    indicator: 'critical' as const,
+    source: { label: 'HMS allergy check' },
+  };
+  const reviewStates = {
+    AWAITING_REVIEW: { state: 'AWAITING_REVIEW' as const },
+    CONTINUE: {
+      state: 'CONTINUE' as const,
+      reviewedByName: 'Aminata Ouedraogo',
+      reviewedAt: '2026-11-10T09:30:00',
+      plan: 'Surveillance 30 min après chaque dose, adrénaline au chevet',
+      rationale: 'Éruption cutanée ancienne',
+    },
+    STOP: {
+      state: 'STOP' as const,
+      reviewedByName: 'Aminata Ouedraogo',
+      reviewedAt: '2026-11-10T09:30:00',
+    },
+  };
+  function expectReviewState(container: Element | null, state: keyof typeof reviewStates): void {
+    const box = container?.querySelector('[data-testid="allergy-review-state"]');
+    expect(box?.classList).toContain(
+      `allergy-review-state--${({ AWAITING_REVIEW: 'awaiting', CONTINUE: 'continue', STOP: 'stop' } as const)[state]}`,
+    );
+    const title =
+      box?.querySelector('[data-testid="allergy-review-state-title"]')?.textContent ?? '';
+    const plan = box?.querySelector('[data-testid="allergy-review-state-plan"]');
+    const by = box?.querySelector('[data-testid="allergy-review-state-by"]');
+    if (state === 'AWAITING_REVIEW') {
+      expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_AWAITING');
+      expect(by).toBeNull();
+      expect(plan).toBeNull();
+    } else if (state === 'CONTINUE') {
+      expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_CONTINUE');
+      expect(by).not.toBeNull();
+      expect(plan?.textContent).toContain('adrénaline au chevet');
+      expect(box?.textContent).toContain('Éruption cutanée ancienne');
+    } else {
+      expect(title).toContain('ALLERGY_REVIEW_STATE.TITLE_STOP');
+      expect(by).not.toBeNull();
+      expect(plan).toBeNull();
+    }
+  }
+
+  for (const state of ['AWAITING_REVIEW', 'CONTINUE', 'STOP'] as const) {
+    it(`QA D1584: the verify/dispense panel and the hand-over show the review state (${state})`, () => {
+      const rx = {
+        ...mockWorkQueue.data.content[0],
+        allergyAlerts: [stopCard],
+        allergyReview: reviewStates[state],
+      };
+      component.selectPrescription(rx as any);
+      fixture.detectChanges();
+      expectReviewState(byTestId('dispense-allergy-alerts'), state);
+
+      component.closeForm();
+      component.openHandOver({
+        ...preparedRow,
+        allergyAlerts: [stopCard],
+        allergyReview: reviewStates[state],
+      } as any);
+      fixture.detectChanges();
+      expectReviewState(byTestId('hand-over-allergy-alerts'), state);
+    });
+  }
 });
 
 /**
@@ -395,9 +1085,16 @@ describe('DispensingComponent — refill context on the work queue', () => {
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
       'listLotsByPharmacy',
+      'listDispensableLots',
       'createDispense',
       'cancelDispense',
+      'listWitnessCandidates',
+      'getDispenseSettings',
     ]);
+    pharmacySvc.getDispenseSettings.and.returnValue(
+      of({ data: { readyForCollectionEnabled: false } }) as never,
+    );
+    pharmacySvc.listWitnessCandidates.and.returnValue(of({ data: [] }) as never);
     // The component only loads the work queue once a pharmacy is selected,
     // so an empty pharmacy list would leave the queue permanently unrendered.
     pharmacySvc.listPharmacies.and.returnValue(
@@ -413,6 +1110,7 @@ describe('DispensingComponent — refill context on the work queue', () => {
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listDispensableLots.and.returnValue(of({ data: [] }) as never);
 
     const offlineQueueStub: Pick<
       OfflineDispenseQueueService,
@@ -553,9 +1251,16 @@ describe('DispensingComponent — clarification control on the work queue', () =
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
       'listLotsByPharmacy',
+      'listDispensableLots',
       'createDispense',
       'cancelDispense',
+      'listWitnessCandidates',
+      'getDispenseSettings',
     ]);
+    pharmacySvc.getDispenseSettings.and.returnValue(
+      of({ data: { readyForCollectionEnabled: false } }) as never,
+    );
+    pharmacySvc.listWitnessCandidates.and.returnValue(of({ data: [] }) as never);
     pharmacySvc.listPharmacies.and.returnValue(
       of({
         content: [{ id: 'ph-1', name: 'Main Pharmacy' }],
@@ -569,6 +1274,7 @@ describe('DispensingComponent — clarification control on the work queue', () =
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listDispensableLots.and.returnValue(of({ data: [] }) as never);
 
     const offlineQueueStub: Pick<
       OfflineDispenseQueueService,
@@ -637,6 +1343,92 @@ describe('DispensingComponent — clarification control on the work queue', () =
     ).toBeNull();
   });
 
+  it('flags a row that needs a second look, in words rather than an enum name', async () => {
+    await render(['ROLE_PHARMACIST'], {
+      status: 'PENDING_STOCK',
+      needsAttention: true,
+      attentionReason: 'PENDING_STOCK',
+    });
+
+    const cue = fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]');
+    expect(cue).not.toBeNull();
+    expect(cue.textContent).toContain('PHARMACY.ATTENTION.PENDING_STOCK');
+  });
+
+  it('flags an order whose SMS dispatch failed, in words', async () => {
+    await render(['ROLE_PHARMACIST'], {
+      status: 'TRANSMISSION_FAILED',
+      needsAttention: true,
+      attentionReason: 'TRANSMISSION_FAILED',
+    });
+
+    const cue = fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]');
+    expect(cue.textContent).toContain('PHARMACY.ATTENTION.TRANSMISSION_FAILED');
+    expect(cue.textContent).not.toContain('PHARMACY.ATTENTION.UNRECOGNISED');
+  });
+
+  it('leaves a plain fill unflagged', async () => {
+    await render(['ROLE_PHARMACIST']);
+
+    expect(fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="rx-answered-rx-1"]')).toBeNull();
+  });
+
+  it('still flags a row whose attention reason this build has never heard of', async () => {
+    await render(['ROLE_PHARMACIST'], {
+      needsAttention: true,
+      attentionReason: 'SOMETHING_ADDED_LATER',
+    });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]').textContent,
+    ).toContain('PHARMACY.ATTENTION.UNRECOGNISED');
+  });
+
+  it('says the prescriber has answered even when the status wins the attention reason', async () => {
+    // resolveClarification restores the status the question was asked from,
+    // and the single attentionReason reports that status by precedence — so
+    // without its own cue the answer was invisible on the queue.
+    await render(['ROLE_PHARMACIST'], {
+      status: 'PENDING_STOCK',
+      needsAttention: true,
+      attentionReason: 'PENDING_STOCK',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+
+    const answered = fixture.nativeElement.querySelector('[data-testid="rx-answered-rx-1"]');
+    expect(answered).not.toBeNull();
+    expect(answered.textContent).toContain('PHARMACY.ATTENTION.PRESCRIBER_ANSWERED');
+  });
+
+  it('says it once when the attention reason is the clarification itself', async () => {
+    // With nothing of higher precedence the backend derives both fields from
+    // the same timestamp, and that label already reads "the prescriber has
+    // answered — read the answer first".
+    await render(['ROLE_PHARMACIST'], {
+      needsAttention: true,
+      attentionReason: 'CLARIFICATION_RESOLVED',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-attention-rx-1"]').textContent,
+    ).toContain('PHARMACY.ATTENTION.CLARIFICATION_RESOLVED');
+    expect(fixture.nativeElement.querySelector('[data-testid="rx-answered-rx-1"]')).toBeNull();
+  });
+
+  it('passes the answer timestamp to the clarification control', async () => {
+    await render(['ROLE_PHARMACIST'], {
+      status: 'PENDING_STOCK',
+      attentionReason: 'PENDING_STOCK',
+      clarificationResolvedAt: '2026-09-24T09:00:00',
+    });
+
+    const control = fixture.debugElement.query(By.directive(PrescriptionClarificationComponent))
+      .componentInstance as PrescriptionClarificationComponent;
+    expect(control.clarificationResolvedAt()).toBe('2026-09-24T09:00:00');
+  });
+
   it('reloads the queue when a clarification is raised', async () => {
     await render(['ROLE_PHARMACIST']);
     const before = pharmacySvc.getDispenseWorkQueue.calls.count();
@@ -647,5 +1439,798 @@ describe('DispensingComponent — clarification control on the work queue', () =
     fixture.detectChanges();
 
     expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 1);
+  });
+});
+
+describe('DispensingComponent — work-queue claim (G13)', () => {
+  let fixture: ComponentFixture<DispensingComponent>;
+  let component: DispensingComponent;
+  let pharmacySvc: jasmine.SpyObj<PharmacyService>;
+  let toast: jasmine.SpyObj<ToastService>;
+  let router: Router;
+
+  const colleagueClaim = {
+    prescriptionId: 'rx-1',
+    claimedByUserId: 'user-awa',
+    claimedByName: 'Awa Sanou',
+    claimedAt: '2026-10-07T09:05:00',
+    expiresAt: '2026-10-07T09:20:00',
+    mine: false,
+  };
+  const myClaim = { ...colleagueClaim, claimedByUserId: 'user-1', claimedByName: 'Me', mine: true };
+
+  function row(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'rx-1',
+      medicationName: 'Metformin 500mg',
+      dosage: '500mg',
+      quantity: 30,
+      status: 'SIGNED',
+      patient: { id: 'pat-1', firstName: 'John', lastName: 'Doe' },
+      ...overrides,
+    };
+  }
+
+  function page(rows: unknown[]) {
+    return of({
+      data: { content: rows, totalElements: rows.length, totalPages: 1, size: 20, number: 0 },
+    }) as never;
+  }
+
+  async function render(rowOverrides: Record<string, unknown> = {}, claimsOn = true) {
+    pharmacySvc = jasmine.createSpyObj('PharmacyService', [
+      'listPharmacies',
+      'getDispenseWorkQueue',
+      'listDispensesByPharmacy',
+      'listInventoryByPharmacy',
+      'listLotsByPharmacy',
+      'listDispensableLots',
+      'createDispense',
+      'cancelDispense',
+      'listWitnessCandidates',
+      'getDispenseSettings',
+      'markReady',
+      'claimQueueRow',
+      'takeOverQueueRow',
+      'releaseQueueRow',
+      'getStockLotLabel',
+    ]);
+    pharmacySvc.getDispenseSettings.and.returnValue(
+      of({
+        data: {
+          readyForCollectionEnabled: true,
+          queueClaimEnabled: claimsOn,
+          queueClaimTtlMinutes: 15,
+        },
+      }) as never,
+    );
+    pharmacySvc.listWitnessCandidates.and.returnValue(of({ data: [] }) as never);
+    pharmacySvc.listPharmacies.and.returnValue(
+      of({
+        content: [
+          { id: 'ph-1', name: 'Main Pharmacy' },
+          { id: 'ph-2', name: 'Ward Pharmacy' },
+        ],
+        totalElements: 2,
+        totalPages: 1,
+        size: 100,
+        number: 0,
+      }) as never,
+    );
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(page([row(rowOverrides)]));
+    pharmacySvc.listDispensesByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listDispensableLots.and.returnValue(of({ data: [] }) as never);
+    pharmacySvc.releaseQueueRow.and.returnValue(of({ data: null }) as never);
+    toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
+
+    const offlineQueueStub: Pick<
+      OfflineDispenseQueueService,
+      'pending$' | 'pending' | 'enqueue' | 'replayAll' | 'clear'
+    > = {
+      pending$: new BehaviorSubject<number>(0).asObservable(),
+      pending: 0,
+      enqueue: () => Promise.resolve({ id: 'k', request: {} as never, enqueuedAt: 0, attempts: 0 }),
+      replayAll: () => Promise.resolve({ succeeded: 0, failed: 0, remaining: 0 }),
+      clear: () => Promise.resolve(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [DispensingComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PharmacyService, useValue: pharmacySvc },
+        {
+          provide: AuthService,
+          useValue: jasmine.createSpyObj('AuthService', [], {
+            currentProfile: () => ({ id: 'user-1' }),
+          }),
+        },
+        { provide: ToastService, useValue: toast },
+        { provide: OfflineDispenseQueueService, useValue: offlineQueueStub },
+      ],
+    }).compileComponents();
+
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      PHARMACY: {
+        QUEUE_CLAIM: {
+          BEING_PREPARED_BY: 'Being prepared by {{name}}',
+          MINE: 'You are preparing this',
+          SINCE: 'since {{time}}',
+          TAKE_OVER_CONFIRM:
+            '{{name}} has been preparing this prescription since {{time}}. Take it over?',
+        },
+      },
+    });
+    translate.use('en');
+    router = TestBed.inject(Router);
+    spyOn(router, 'navigate').and.resolveTo(true);
+
+    fixture = TestBed.createComponent(DispensingComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
+
+  function text(testId: string): string {
+    const el = fixture.nativeElement.querySelector(
+      `[data-testid="${testId}"]`,
+    ) as HTMLElement | null;
+    return el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  }
+
+  function exists(testId: string): boolean {
+    return !!fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
+  }
+
+  function click(testId: string): void {
+    (fixture.nativeElement.querySelector(`[data-testid="${testId}"]`) as HTMLElement).click();
+    fixture.detectChanges();
+  }
+
+  const conflict = (message: string) =>
+    throwError(() => ({ status: 409, error: { status: 409, message } }));
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  // ── the row ──
+
+  it("names a colleague's claim and how long it has run", async () => {
+    await render({ claim: colleagueClaim });
+    expect(text('rx-claim-rx-1')).toContain('Being prepared by Awa Sanou');
+    expect(text('rx-claim-rx-1')).toContain('since');
+  });
+
+  it('says so when the claim is mine', async () => {
+    await render({ claim: myClaim });
+    expect(text('rx-claim-rx-1')).toContain('You are preparing this');
+    expect(text('rx-claim-rx-1')).not.toContain('Being prepared by');
+  });
+
+  it('offers Claim on an unclaimed row, Release on mine, Take over on a colleague’s', async () => {
+    await render();
+    expect(exists('rx-claim-btn-rx-1')).toBeTrue();
+    expect(exists('rx-release-btn-rx-1')).toBeFalse();
+    expect(exists('rx-take-over-btn-rx-1')).toBeFalse();
+    TestBed.resetTestingModule();
+
+    await render({ claim: myClaim });
+    expect(exists('rx-release-btn-rx-1')).toBeTrue();
+    expect(exists('rx-claim-btn-rx-1')).toBeFalse();
+    TestBed.resetTestingModule();
+
+    await render({ claim: colleagueClaim });
+    expect(exists('rx-take-over-btn-rx-1')).toBeTrue();
+    expect(exists('rx-claim-btn-rx-1')).toBeFalse();
+  });
+
+  it('a prepared row offers no claim control', async () => {
+    await render({ readyForCollection: { dispenseId: 'd-1', readyAt: '2026-10-07T08:00:00' } });
+    expect(exists('rx-claim-btn-rx-1')).toBeFalse();
+    expect(exists('rx-hand-over-rx-1')).toBeTrue();
+  });
+
+  it('shows nothing of the claim when the server has it switched off', async () => {
+    await render({ claim: colleagueClaim }, false);
+    expect(exists('rx-claim-rx-1')).toBeFalse();
+    expect(exists('rx-take-over-btn-rx-1')).toBeFalse();
+    expect(exists('rx-claim-btn-rx-1')).toBeFalse();
+    expect(exists('claim-filter')).toBeFalse();
+
+    click('rx-dispense-rx-1');
+    expect(pharmacySvc.claimQueueRow).not.toHaveBeenCalled();
+    expect(component.showForm()).toBeTrue();
+  });
+
+  it('Claim, Release and Take over call their endpoints', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(of({ data: myClaim }) as never);
+    click('rx-claim-btn-rx-1');
+    expect(pharmacySvc.claimQueueRow).toHaveBeenCalledWith('rx-1');
+    expect(toast.success).toHaveBeenCalledWith('PHARMACY.QUEUE_CLAIM.CLAIMED');
+
+    component.releaseRow(row() as never);
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledWith('rx-1');
+
+    pharmacySvc.takeOverQueueRow.and.returnValue(of({ data: myClaim }) as never);
+    component.requestTakeOver(row({ claim: colleagueClaim }) as never);
+    fixture.detectChanges();
+    click('claim-take-over-confirm');
+    expect(pharmacySvc.takeOverQueueRow).toHaveBeenCalledWith('rx-1');
+    expect(toast.success).toHaveBeenCalledWith('PHARMACY.QUEUE_CLAIM.TAKEN_OVER');
+  });
+
+  // ── Dispense claims first ──
+
+  it('Dispense claims the row, then opens the form', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+
+    click('rx-dispense-rx-1');
+
+    expect(pharmacySvc.claimQueueRow).toHaveBeenCalledWith('rx-1');
+    expect(component.showForm()).toBeTrue();
+    expect(component.formClaimedRowId()).toBe('rx-1');
+  });
+
+  it('a 409 because a colleague holds it asks to take over, naming them; Cancel leaves the form closed', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      conflict('Another pharmacist is preparing this prescription.'),
+    );
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(page([row({ claim: colleagueClaim })]));
+
+    click('rx-dispense-rx-1');
+
+    expect(component.showForm()).toBeFalse();
+    expect(exists('claim-take-over')).toBeTrue();
+    expect(text('claim-take-over-text')).toContain(
+      'Awa Sanou has been preparing this prescription since',
+    );
+
+    click('claim-take-over-cancel');
+    expect(exists('claim-take-over')).toBeFalse();
+    expect(component.showForm()).toBeFalse();
+    expect(pharmacySvc.takeOverQueueRow).not.toHaveBeenCalled();
+  });
+
+  it('Take over in that confirm takes the claim and opens the form', async () => {
+    await render({ claim: colleagueClaim });
+    pharmacySvc.takeOverQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+
+    click('rx-dispense-rx-1');
+    expect(pharmacySvc.claimQueueRow).not.toHaveBeenCalled();
+    click('claim-take-over-confirm');
+
+    expect(pharmacySvc.takeOverQueueRow).toHaveBeenCalledWith('rx-1');
+    expect(component.showForm()).toBeTrue();
+    expect(component.formClaimedRowId()).toBe('rx-1');
+  });
+
+  it('a 409 under the Unclaimed filter still offers the take-over, though the row left that list', async () => {
+    await render();
+    click('claim-filter-UNCLAIMED');
+    pharmacySvc.claimQueueRow.and.returnValue(
+      conflict('Another pharmacist is preparing this prescription.'),
+    );
+    // The server omits a claimed row from UNCLAIMED; the unfiltered queue still has it.
+    pharmacySvc.getDispenseWorkQueue.and.callFake(((_p: number, _s: number, filter: string) =>
+      filter === 'UNCLAIMED' ? page([]) : page([row({ claim: colleagueClaim })])) as never);
+
+    click('rx-dispense-rx-1');
+
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'UNCLAIMED');
+    expect(component.workQueue()).toEqual([]);
+    expect(exists('claim-take-over')).toBeTrue();
+    expect(text('claim-take-over-text')).toContain(
+      'Awa Sanou has been preparing this prescription',
+    );
+    expect(component.showForm()).toBeFalse();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('a 409 for a row no longer claimable says why, reloads the queue and opens no form', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      conflict('This prescription is no longer on the work queue.'),
+    );
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(page([]));
+    const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+
+    click('rx-dispense-rx-1');
+
+    // the visible list, and the unfiltered lookup of the row
+    expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 2);
+    expect(toast.error).toHaveBeenCalledWith('This prescription is no longer on the work queue.');
+    expect(component.showForm()).toBeFalse();
+    expect(component.claimAction()).toBeNull();
+  });
+
+  it('a network failure of the claim still opens the form (advisory), with a warning', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(throwError(() => ({ status: 0 })));
+
+    click('rx-dispense-rx-1');
+
+    expect(component.showForm()).toBeTrue();
+    expect(component.formClaimedRowId()).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.QUEUE_CLAIM.FAILED');
+  });
+
+  // ── the form's own claim ──
+
+  it('closing the form releases the claim the form made', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+
+    component.closeForm();
+
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+    expect(component.formClaimedRowId()).toBeNull();
+  });
+
+  it('closing the form keeps a claim the form only renewed', async () => {
+    await render({ claim: myClaim });
+    pharmacySvc.claimQueueRow.and.returnValue(of({ data: { ...myClaim, renewed: true } }) as never);
+    click('rx-dispense-rx-1');
+
+    component.closeForm();
+
+    expect(pharmacySvc.releaseQueueRow).not.toHaveBeenCalled();
+  });
+
+  it('a dispense keeps nothing to release: the server ended the claim', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-1' } }) as never);
+    click('rx-dispense-rx-1');
+
+    component.submitDispense();
+    component.closeForm();
+
+    expect(pharmacySvc.releaseQueueRow).not.toHaveBeenCalled();
+  });
+
+  it('a pharmacy change, opening a hand-over, or leaving the page releases the form’s claim', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+
+    click('rx-dispense-rx-1');
+    component.onPharmacyChange();
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledTimes(1);
+
+    click('rx-dispense-rx-1');
+    component.openHandOver(row({ id: 'rx-2' }) as never);
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledTimes(2);
+
+    click('rx-dispense-rx-1');
+    fixture.destroy();
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledTimes(3);
+  });
+
+  // ── Route ──
+
+  it('Route on a colleague’s row asks first; Cancel stays on the queue', async () => {
+    await render({ claim: colleagueClaim });
+
+    click('rx-route-rx-1');
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(exists('claim-take-over')).toBeTrue();
+
+    click('claim-take-over-cancel');
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('Route on an unclaimed row goes straight to routing', async () => {
+    await render();
+    click('rx-route-rx-1');
+    expect(router.navigate).toHaveBeenCalledWith(['/pharmacy/stock-routing', 'rx-1']);
+  });
+
+  // ── the filter ──
+
+  it('the filter asks the server for claim=MINE / UNCLAIMED', async () => {
+    await render();
+
+    click('claim-filter-MINE');
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'MINE');
+    click('claim-filter-UNCLAIMED');
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'UNCLAIMED');
+    click('claim-filter-ALL');
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 20, 'ALL');
+  });
+
+  // ── review round 1: the latest queue answer wins ──
+
+  function pageValue(rows: unknown[]) {
+    return {
+      data: { content: rows, totalElements: rows.length, totalPages: 1, size: 20, number: 0 },
+    };
+  }
+
+  it('the latest queue answer wins: an older ALL poll landing after the MINE answer is ignored', async () => {
+    await render();
+    const olderAll = new Subject<unknown>();
+    const newerMine = new Subject<unknown>();
+    pharmacySvc.getDispenseWorkQueue.and.returnValues(olderAll as never, newerMine as never);
+
+    component.loadWorkQueue(true); // the 60 s poll, still ALL
+    click('claim-filter-MINE');
+    newerMine.next(pageValue([row({ id: 'rx-mine', claim: myClaim })]));
+    olderAll.next(pageValue([row(), row({ id: 'rx-2' })]));
+
+    expect(component.claimFilter()).toBe('MINE');
+    expect(component.workQueue().map((r) => r.id)).toEqual(['rx-mine']);
+  });
+
+  it('two polls of the same filter: the older answer arriving last does not overwrite the newer', async () => {
+    await render();
+    const older = new Subject<unknown>();
+    const newer = new Subject<unknown>();
+    pharmacySvc.getDispenseWorkQueue.and.returnValues(older as never, newer as never);
+
+    component.loadWorkQueue(true);
+    component.loadWorkQueue(true);
+    newer.next(pageValue([row({ claim: colleagueClaim })]));
+    older.next(pageValue([row()]));
+
+    expect(component.workQueue()[0].claim?.claimedByName).toBe('Awa Sanou');
+  });
+
+  // ── review round 1: the form keeps its claim ──
+
+  function twoRows(): void {
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      page([row(), row({ id: 'rx-2', claim: { ...colleagueClaim, prescriptionId: 'rx-2' } })]),
+    );
+    component.loadWorkQueue();
+    fixture.detectChanges();
+  }
+
+  it('Dispense on the row whose form is open does nothing, and Cancel still releases the form’s claim', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+
+    pharmacySvc.claimQueueRow.and.returnValue(of({ data: { ...myClaim, renewed: true } }) as never);
+    click('rx-dispense-rx-1');
+
+    expect(pharmacySvc.claimQueueRow).toHaveBeenCalledTimes(1);
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    component.closeForm();
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+  });
+
+  it('a double click on Dispense sends one claim, and Cancel still releases it', async () => {
+    await render();
+    const first = new Subject<unknown>();
+    const second = new Subject<unknown>();
+    pharmacySvc.claimQueueRow.and.returnValues(first as never, second as never);
+
+    click('rx-dispense-rx-1');
+    click('rx-dispense-rx-1');
+    first.next({ data: { ...myClaim, renewed: false } });
+    second.next({ data: { ...myClaim, renewed: true } });
+    fixture.detectChanges();
+
+    expect(pharmacySvc.claimQueueRow).toHaveBeenCalledTimes(1);
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    component.closeForm();
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+  });
+
+  it('a renewed answer for the row the form already claimed keeps the form’s claim and the form', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+    component.form.notes = 'typed already';
+
+    (
+      component as unknown as { openFormFor(rx: unknown, claimedByForm: boolean): void }
+    ).openFormFor(row(), false);
+
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    expect(component.form.notes).toBe('typed already');
+  });
+
+  it('QA D432: the dispense form starts at the prescribed quantity, not 0', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+
+    expect(component.form.quantityRequested).toBe(30);
+    expect(component.form.quantityDispensed).toBe(30);
+  });
+
+  it('QA D1001: a partly filled order starts at what remains, and the queue says so', async () => {
+    await render({ remainingQuantity: 10 });
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    expect(exists('rx-remaining-rx-1')).toBeTrue();
+    click('rx-dispense-rx-1');
+
+    expect(component.form.quantityRequested).toBe(10);
+    expect(component.form.quantityDispensed).toBe(10);
+  });
+
+  it('QA D966: the lot label is fetched with the session and opened for printing', async () => {
+    await render();
+    const printSvc = TestBed.inject(PrintLabelService);
+    const open = spyOn(printSvc, 'openForPrint');
+    const windowOpen = spyOn(window, 'open');
+    const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
+    pharmacySvc.getStockLotLabel.and.returnValue(of(blob) as never);
+    component.form.stockLotId = 'lot-9';
+
+    component.printLotLabel();
+
+    expect(pharmacySvc.getStockLotLabel).toHaveBeenCalledWith('lot-9');
+    expect(open).toHaveBeenCalledWith(blob);
+    expect(windowOpen).not.toHaveBeenCalledWith(
+      '/pharmacy/stock-lots/lot-9/label.pdf',
+      jasmine.anything(),
+      jasmine.anything(),
+    );
+  });
+
+  describe('QA D964: first expired, first out', () => {
+    const lot = (id: string, expiryDate: string, remainingQuantity: number) => ({
+      id,
+      inventoryItemId: 'inv-1',
+      lotNumber: id.toUpperCase(),
+      expiryDate,
+      initialQuantity: 200,
+      remainingQuantity,
+      createdAt: '',
+      updatedAt: '',
+    });
+
+    async function openWithLots(): Promise<void> {
+      await render();
+      pharmacySvc.listDispensableLots.and.returnValue(
+        of({
+          data: [lot('long', '2099-06-30', 200), lot('court', '2098-01-31', 100)],
+        }) as never,
+      );
+      pharmacySvc.claimQueueRow.and.returnValue(
+        of({ data: { ...myClaim, renewed: false } }) as never,
+      );
+      click('rx-dispense-rx-1');
+      fixture.detectChanges();
+    }
+
+    it('QA D1163: a "flacon" order is not offered tablet lots, and says why', async () => {
+      await openWithLots();
+      component.orderUnit.set('flacon');
+      component.stockLots.set([
+        { ...lot('cp', '2098-01-31', 100), unit: 'comprimé' },
+        { ...lot('fl', '2099-01-31', 10), unit: 'Flacons' },
+      ]);
+      fixture.detectChanges();
+      const options = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#stockLot option',
+        ),
+      ).map((o) => o.value);
+      expect(options).toEqual(['', 'fl']);
+      expect(exists('other-form-lots')).toBeTrue();
+      // A lot whose unit the server does not send is still offered (the server checks).
+      expect(sameDispenseUnit(undefined, 'flacon')).toBeTrue();
+      expect(sameDispenseUnit('Comprimés', 'comprimé')).toBeTrue();
+      expect(sameDispenseUnit('comprimé', 'flacon')).toBeFalse();
+    });
+
+    it('pre-selects the shortest-dated lot that covers the fill', async () => {
+      await openWithLots();
+
+      expect(component.form.stockLotId).toBe('court');
+      expect(component.earlierLot()).toBeUndefined();
+      expect(exists('fefo-warning')).toBeFalse();
+    });
+
+    it('a later-dated lot needs a reason, which is sent with the fill', async () => {
+      await openWithLots();
+      component.form.stockLotId = 'long';
+      component.onLotChange();
+      component.verifyAttested.set(true);
+      fixture.detectChanges();
+
+      expect(exists('fefo-warning')).toBeTrue();
+      expect(component.fefoReasonMissing()).toBeTrue();
+
+      pharmacySvc.createDispense.and.returnValue(of({ data: {} }) as never);
+      component.form.fefoOverrideReason = '  lot court réservé aux urgences ';
+      expect(component.fefoReasonMissing()).toBeFalse();
+      component.submitDispense();
+
+      const body = pharmacySvc.createDispense.calls.mostRecent().args[0];
+      expect(body.stockLotId).toBe('long');
+      expect(body.fefoOverrideReason).toBe('lot court réservé aux urgences');
+    });
+
+    /**
+     * QA D1029: 130 tablets with 100 left in the shorter lot. Round 16
+     * pre-selected the later lot ("the one that covers the fill") and the whole
+     * quantity left it with no reason. The shorter lot is now chosen, emptied
+     * first, and the rest comes from the next lot: one fill per lot, in order.
+     */
+    it('QA D1029: a quantity above the shorter lot empties it first, then takes the rest from the next', async () => {
+      await openWithLots();
+      component.form.quantityDispensed = 130;
+      component.form.quantityRequested = 130;
+      fixture.detectChanges();
+
+      expect(component.form.stockLotId).toBe('court');
+      expect(component.earlierLot()).toBeUndefined();
+      expect(component.fefoSplit().map((p) => [p.lot.id, p.quantity])).toEqual([
+        ['court', 100],
+        ['long', 30],
+      ]);
+      expect(exists('fefo-split')).toBeTrue();
+
+      pharmacySvc.createDispense.and.returnValue(of({ data: {} }) as never);
+      component.verifyAttested.set(true);
+      component.submitDispense();
+      // The parts are sent one after the other, each once the previous one is recorded.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const bodies = pharmacySvc.createDispense.calls.allArgs().map((a) => a[0]);
+      expect(bodies.map((b) => [b.stockLotId, b.quantityDispensed])).toEqual([
+        ['court', 100],
+        ['long', 30],
+      ]);
+      expect(bodies.every((b) => b.fefoOverrideReason === undefined)).toBeTrue();
+    });
+
+    it('QA D1029 (review of #978): an order that states no quantity is not split', async () => {
+      await openWithLots();
+      component.selectedPrescription = { ...component.selectedPrescription!, quantity: undefined };
+      component.form.quantityDispensed = 130;
+      expect(component.fefoSplit()).toEqual([]);
+    });
+
+    it('QA D1029: taking the later lot for a quantity the shorter one cannot cover still needs a reason', async () => {
+      await openWithLots();
+      component.form.quantityDispensed = 130;
+      component.form.stockLotId = 'long';
+      component.onLotChange();
+      fixture.detectChanges();
+
+      expect(component.earlierLot()?.id).toBe('court');
+      expect(component.fefoReasonMissing()).toBeTrue();
+      expect(component.fefoSplit()).toEqual([]);
+    });
+  });
+
+  it('Dispense on a colleague’s row then Cancel keeps the open form and its claim', async () => {
+    await render();
+    twoRows();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+
+    click('rx-dispense-rx-2');
+    expect(exists('claim-take-over')).toBeTrue();
+    click('claim-take-over-cancel');
+
+    expect(pharmacySvc.releaseQueueRow).not.toHaveBeenCalled();
+    expect(component.formClaimedRowId()).toBe('rx-1');
+    expect(component.showForm()).toBeTrue();
+    expect(component.selectedPrescription?.id).toBe('rx-1');
+  });
+
+  it('Dispense on a colleague’s row then Take over moves the form and only then releases the old claim', async () => {
+    await render();
+    twoRows();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+    pharmacySvc.takeOverQueueRow.and.returnValue(
+      of({ data: { ...myClaim, prescriptionId: 'rx-2', renewed: false } }) as never,
+    );
+
+    click('rx-dispense-rx-2');
+    expect(pharmacySvc.releaseQueueRow).not.toHaveBeenCalled();
+    click('claim-take-over-confirm');
+
+    expect(pharmacySvc.releaseQueueRow).toHaveBeenCalledOnceWith('rx-1');
+    expect(component.formClaimedRowId()).toBe('rx-2');
+    expect(component.selectedPrescription?.id).toBe('rx-2');
+  });
+
+  // ── polling ──
+
+  describe('polling', () => {
+    afterEach(() => jasmine.clock().uninstall());
+
+    async function renderWithClock(): Promise<void> {
+      await render();
+      jasmine.clock().install();
+      // restart the timer under the mocked clock
+      (component as unknown as { stopQueuePolling(): void }).stopQueuePolling();
+      (component as unknown as { startQueuePolling(): void }).startQueuePolling();
+    }
+
+    it('reloads the queue every minute while the tab is visible', async () => {
+      await renderWithClock();
+      const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+      jasmine.clock().tick(60_000);
+      expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 1);
+    });
+
+    it('does not poll while the tab is hidden, and reloads when it becomes visible', async () => {
+      await renderWithClock();
+      const visibility = spyOnProperty(document, 'visibilityState', 'get').and.returnValue(
+        'hidden',
+      );
+      const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+      jasmine.clock().tick(60_000);
+      expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before);
+
+      visibility.and.returnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before + 1);
+    });
+
+    it('pauses while the form, a take-over confirm or a hand-over dialog is open', async () => {
+      await renderWithClock();
+      const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+
+      component.showForm.set(true);
+      jasmine.clock().tick(60_000);
+      component.showForm.set(false);
+      component.claimAction.set({ rx: row() as never, purpose: 'takeOver' });
+      jasmine.clock().tick(60_000);
+      component.claimAction.set(null);
+      component.readyAction.set({ kind: 'handOver', rx: row() as never });
+      jasmine.clock().tick(60_000);
+
+      expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before);
+    });
+
+    it('stops when the page is left', async () => {
+      await renderWithClock();
+      fixture.destroy();
+      const before = pharmacySvc.getDispenseWorkQueue.calls.count();
+      jasmine.clock().tick(180_000);
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(before);
+    });
+  });
+
+  it('names the queue and recent dispense scroll regions by their section headings', async () => {
+    await render();
+    component.recentDispenses.set([
+      { id: 'dispense-fixture', medicationName: 'Fixture drug', status: 'COMPLETED' },
+    ] as never);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const regions = Array.from(el.querySelectorAll('.table-responsive[role="region"]'));
+    expect(regions.length).toBe(2);
+    const labels = regions.map((region) => region.getAttribute('aria-labelledby'));
+    expect(labels).toEqual(['dispensing-queue-title', 'recent-dispenses-title']);
+    for (const id of labels) expect(el.querySelector('#' + id)?.textContent?.trim()).toBeTruthy();
   });
 });

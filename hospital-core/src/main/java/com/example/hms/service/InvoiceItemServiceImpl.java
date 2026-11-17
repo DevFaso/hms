@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.InvoiceItemMapper;
 import com.example.hms.model.BillingInvoice;
@@ -14,6 +15,8 @@ import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.repository.TreatmentRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.enums.InvoiceStatus;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
@@ -26,6 +29,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class InvoiceItemServiceImpl implements InvoiceItemService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_BILLING_INVOICE_ID = "billingInvoiceId";
+
     private static final String INVOICE_ITEM_NOT_FOUND_KEY = "invoiceitem.notfound";
 
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
@@ -42,26 +48,19 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     private final BillingInvoiceService billingInvoiceService;
     private final MessageSource messageSource;
     private final RoleValidator roleValidator;
+    private final ActingScopeResolver actingScopeResolver;
 
     @Override
     @Transactional
     public InvoiceItemResponseDTO createInvoiceItem(InvoiceItemRequestDTO dto, Locale locale) {
-        BillingInvoice invoice = billingInvoiceRepository.findById(dto.getBillingInvoiceId())
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, dto.getBillingInvoiceId()));
-
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
-
-        // Ensure assignment hospital matches invoice hospital
-        if (!assignment.getHospital().getId().equals(invoice.getHospital().getId())) {
-            throw new BusinessException("assignment.hospital.mismatch");
+        if (dto.getBillingInvoiceId() == null) {
+            throw new FieldBusinessException(FIELD_BILLING_INVOICE_ID, "invoiceitem.invoiceRequired");
         }
-
-        Treatment related = null;
-        if (dto.getRelatedServiceId() != null) {
-            related = treatmentRepository.findById(dto.getRelatedServiceId())
-                .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound"));
-        }
+        requireWholePrice(dto.getUnitPrice());
+        requireLineTotalInRange(dto.getUnitPrice(), dto.getQuantity());
+        BillingInvoice invoice = writableInvoice(dto.getBillingInvoiceId());
+        UserRoleHospitalAssignment assignment = resolveAssignment(dto.getAssignmentId(), invoice);
+        Treatment related = resolveRelatedService(dto.getRelatedServiceId(), invoice);
 
         InvoiceItem item = invoiceItemMapper.toInvoiceItem(dto, invoice, assignment, related);
 
@@ -77,13 +76,13 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional(readOnly = true)
     public InvoiceItemResponseDTO getInvoiceItemById(UUID id, Locale locale) {
         InvoiceItem item = invoiceItemRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
+            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id));
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && item.getBillingInvoice() != null
                 && item.getBillingInvoice().getHospital() != null
                 && !activeHospitalId.equals(item.getBillingInvoice().getHospital().getId())) {
-            throw new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY);
+            throw new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id);
         }
         return invoiceItemMapper.toInvoiceItemResponseDTO(item);
     }
@@ -107,28 +106,37 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Override
     @Transactional
     public InvoiceItemResponseDTO updateInvoiceItem(UUID id, InvoiceItemRequestDTO dto, Locale locale) {
+        requireWholePrice(dto.getUnitPrice());
+        requireLineTotalInRange(dto.getUnitPrice(), dto.getQuantity());
         InvoiceItem item = invoiceItemRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
-
-        BillingInvoice invoice = billingInvoiceRepository.findById(dto.getBillingInvoiceId())
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, dto.getBillingInvoiceId()));
-
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
-
-        if (!assignment.getHospital().getId().equals(invoice.getHospital().getId())) {
-            throw new BusinessException("assignment.hospital.mismatch");
+            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id));
+        // A line stays on its invoice: moving it would leave the old total stale.
+        UUID invoiceId = item.getBillingInvoice().getId();
+        if (dto.getBillingInvoiceId() != null && !dto.getBillingInvoiceId().equals(invoiceId)) {
+            throw new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id);
         }
-
-        Treatment related = null;
-        if (dto.getRelatedServiceId() != null) {
-            related = treatmentRepository.findById(dto.getRelatedServiceId())
-                .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound"));
-        }
+        BillingInvoice invoice = writableInvoice(invoiceId, INVOICE_ITEM_NOT_FOUND_KEY, id);
+        UserRoleHospitalAssignment assignment = dto.getAssignmentId() == null && item.getAssignment() != null
+            ? item.getAssignment()
+            : resolveAssignment(dto.getAssignmentId(), invoice);
+        // QA D1088: a line priced in place keeps the service it was charged
+        // for, which is the checkout's link, as it keeps its owner, unless
+        // the body names another one.
+        Treatment related = dto.getRelatedServiceId() == null && item.getRelatedService() != null
+            ? item.getRelatedService()
+            : resolveRelatedService(dto.getRelatedServiceId(), invoice);
 
         // apply updates
         item.setBillingInvoice(invoice);
-        item.setItemDescription(dto.getItemDescription());
+        // QA D1901: pricing a line in place echoes its description in the
+        // reader's language; an echo keeps the server's code, anything else
+        // is the person's own text, shown as typed.
+        if (!com.example.hms.service.billing.BillingTextRenderer.isShownText(dto.getItemDescription(), item.getTextCode(),
+                item.getTextArgs(), item.getItemDescription())) {
+            item.setItemDescription(dto.getItemDescription());
+            item.setTextCode(null);
+            item.setTextArgs(null);
+        }
         item.setQuantity(dto.getQuantity());
         item.setUnitPrice(dto.getUnitPrice());
         item.setItemCategory(dto.getItemCategory());
@@ -148,11 +156,105 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional
     public void deleteInvoiceItem(UUID id, Locale locale) {
         InvoiceItem item = invoiceItemRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
+            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id));
         UUID invoiceId = item.getBillingInvoice().getId();
+        BillingInvoice invoice = writableInvoice(invoiceId, INVOICE_ITEM_NOT_FOUND_KEY, id);
+        invoice.getInvoiceItems().remove(item);
         invoiceItemRepository.delete(item);
 
         // recompute after deletion
         billingInvoiceService.recomputeAndPersistTotals(invoiceId);
+    }
+
+    private BillingInvoice writableInvoice(UUID invoiceId) {
+        return writableInvoice(invoiceId, BILLING_INVOICE_NOT_FOUND_KEY, invoiceId);
+    }
+
+    /**
+     * The invoice a line write targets, at the caller's acting hospital: an
+     * invoice of another hospital is answered as not found (no probe), and a
+     * cancelled or fully paid invoice takes no line changes.
+     */
+    private BillingInvoice writableInvoice(UUID invoiceId, String missKey, Object missArg) {
+        UUID hospitalId = actingScopeResolver.requirePinned();
+        BillingInvoice invoice = billingInvoiceRepository.findById(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(missKey, missArg));
+        if (invoice.getHospital() == null || !hospitalId.equals(invoice.getHospital().getId())) {
+            throw new ResourceNotFoundException(missKey, missArg);
+        }
+        if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BILLING_INVOICE_ID, "billing.invoice.cancelledLocked");
+        }
+        // QA D147: a settled invoice is a closed record (its receipt was
+        // issued against these lines). Reverse the payment to amend it.
+        if (invoice.getStatus() == InvoiceStatus.PAID) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BILLING_INVOICE_ID, "billing.invoice.paidLinesLocked");
+        }
+        // QA D656: an issued invoice is a document the patient may hold; a
+        // line added to it (2000 on a SENT invoice) changed what they were
+        // billed. It is cancelled (or credited) and re-issued instead.
+        if (invoice.getStatus() != InvoiceStatus.DRAFT) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BILLING_INVOICE_ID, "billing.invoice.issuedLinesLocked");
+        }
+        return invoice;
+    }
+
+    /**
+     * The staff member the line is attributed to: the one named, who must hold
+     * an assignment at the invoice's hospital, or else the caller themself.
+     */
+    private UserRoleHospitalAssignment resolveAssignment(UUID assignmentId, BillingInvoice invoice) {
+        UUID hospitalId = invoice.getHospital().getId();
+        if (assignmentId == null) {
+            UUID userId = roleValidator.getCurrentUserId();
+            if (userId == null) {
+                throw new BusinessException("invoiceitem.noAssignment");
+            }
+            return assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId)
+                .orElseThrow(() -> new BusinessException("invoiceitem.noAssignment"));
+        }
+        UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+        if (assignment.getHospital() == null || !hospitalId.equals(assignment.getHospital().getId())) {
+            throw new ResourceNotFoundException("assignment.notfound");
+        }
+        return assignment;
+    }
+
+    private Treatment resolveRelatedService(UUID relatedServiceId, BillingInvoice invoice) {
+        if (relatedServiceId == null) {
+            return null;
+        }
+        Treatment related = treatmentRepository.findById(relatedServiceId)
+            .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound", relatedServiceId));
+        if (related.getHospital() != null && !invoice.getHospital().getId().equals(related.getHospital().getId())) {
+            throw new ResourceNotFoundException("treatment.notfound", relatedServiceId);
+        }
+        return related;
+    }
+
+    /**
+     * QA D307: the franc CFA has no minor unit; a payment is refused with
+     * decimals (D184), so a line priced with them could never be settled.
+     */
+    private static void requireWholePrice(java.math.BigDecimal price) {
+        if (price != null && price.stripTrailingZeros().scale() > 0) {
+            throw new com.example.hms.exception.FieldBusinessException("unitPrice", "billing.payment.wholeAmountOnly");
+        }
+    }
+
+    /** The largest line total the column holds (numeric(12,2)). */
+    private static final java.math.BigDecimal MAX_LINE_TOTAL = new java.math.BigDecimal("9999999999.99");
+
+    /**
+     * QA D633: a line whose total does not fit the column was refused by the
+     * entity's own validation, in English ("numeric value out of bounds").
+     * Checked here first, with the caller's language.
+     */
+    private static void requireLineTotalInRange(java.math.BigDecimal unitPrice, Integer quantity) {
+        if (unitPrice != null && quantity != null
+                && unitPrice.multiply(java.math.BigDecimal.valueOf(quantity.longValue())).compareTo(MAX_LINE_TOTAL) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException("unitPrice", "billing.item.totalOutOfRange");
+        }
     }
 }

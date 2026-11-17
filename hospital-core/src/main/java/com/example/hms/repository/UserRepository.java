@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,27 +17,59 @@ import java.util.UUID;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
 
+    interface ClinicalActorName {
+        UUID getId();
+        String getFirstName();
+        String getLastName();
+        String getUsername();
+    }
+
+    @Query("SELECT u.id AS id, u.firstName AS firstName, u.lastName AS lastName, u.username AS username "
+        + "FROM User u WHERE u.id IN :ids")
+    java.util.List<ClinicalActorName> findClinicalActorNames(@Param("ids") java.util.Collection<UUID> ids);
+
   /* ---------- Lightweight counts for dashboards ---------- */
   long countByIsDeletedFalse();
   long countByIsActiveTrueAndIsDeletedFalse();
 
+    /*
+     * Login throttle key (LoginAttemptService): the id of every account whose
+     * username matches case-insensitively, deleted accounts included, the same
+     * rows the login lookup (findByUsernameIgnoreCase) can land on. Ids only,
+     * so no entity is loaded or decrypted on the unauthenticated path.
+     */
+    @Query("select u.id from User u where lower(u.username) = lower(CAST(:username AS string))")
+    List<UUID> findIdsByUsernameIgnoreCase(@Param("username") String username);
+
     /* ---------- Existence checks (case-insensitive where it matters) ---------- */
-    @Query("select (count(u) > 0) from User u where lower(u.username) = lower(:username)")
+    @Query("select (count(u) > 0) from User u where lower(u.username) = lower(CAST(:username AS string))")
     Boolean existsByUsername(@Param("username") String username);
 
-    @Query("select (count(u) > 0) from User u where lower(u.email) = lower(:email)")
+    @Query("select (count(u) > 0) from User u where lower(u.email) = lower(CAST(:email AS string))")
     Boolean existsByEmail(@Param("email") String email);
 
+    /**
+     * Does ANOTHER account (deleted ones included) hold this username, ignoring
+     * case? Login resolves usernames case-insensitively while uq_user_username
+     * does not, so a case variant would make both accounts unresolvable.
+     */
+    @Query("select (count(u) > 0) from User u where lower(u.username) = lower(CAST(:username AS string)) and u.id <> :id")
+    boolean existsUsernameOnOtherAccount(@Param("username") String username, @Param("id") UUID id);
+
+    /** The same question for an email. */
+    @Query("select (count(u) > 0) from User u where lower(u.email) = lower(CAST(:email AS string)) and u.id <> :id")
+    boolean existsEmailOnOtherAccount(@Param("email") String email, @Param("id") UUID id);
+
     /* ---------- Simple finders ---------- */
-    @Query("select u from User u where lower(u.email) = lower(:email)")
+    @Query("select u from User u where lower(u.email) = lower(CAST(:email AS string))")
     Optional<User> findByEmail(@Param("email") String email);
 
     Optional<User> findByPhoneNumber(String phoneNumber);
 
-    @Query("select max(u.phoneNumber) from User u where u.phoneNumber like concat(:prefix, '%')")
+    @Query("select max(u.phoneNumber) from User u where u.phoneNumber like concat(CAST(:prefix AS string), '%')")
     Optional<String> findMaxPhoneNumberWithPrefix(@Param("prefix") String prefix);
 
-    @Query("select u.username from User u where lower(u.username) like lower(concat(:prefix, '%'))")
+    @Query("select u.username from User u where lower(u.username) like lower(concat(CAST(:prefix AS string), '%'))")
     List<String> findUsernamesByPrefix(@Param("prefix") String prefix);
 
   @Query("select u from User u where lower(u.email) in :emails")
@@ -47,7 +80,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /* Case-insensitive username finders with roles pre-fetched (for auth) */
     @EntityGraph(attributePaths = {"userRoles", "userRoles.role"})
-    @Query("select u from User u where lower(u.username) = lower(:username)")
+    @Query("select u from User u where lower(u.username) = lower(CAST(:username AS string))")
     Optional<User> findByUsername(@Param("username") String username);
 
     @EntityGraph(attributePaths = {"userRoles", "userRoles.role"})
@@ -57,7 +90,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("""
         select u from User u
         where u.isDeleted = false
-          and (lower(u.email) = lower(:identifier) or u.phoneNumber = :identifier)
+          and (lower(u.email) = lower(CAST(:identifier AS string)) or u.phoneNumber = :identifier)
     """)
     Optional<User> findActiveByEmailOrPhone(@Param("identifier") String identifier);
 
@@ -93,69 +126,114 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * H2 (used by tests) handles untyped binds without complaint, so this
      * 500 surfaces only in the dev/UAT/prod profiles.
      */
-    @Query(value = """
-        SELECT u FROM User u
+    /*
+     * The directory (GET /users, /users/search), one WHERE clause shared by
+     * each value query and its count, so a filter is fixed once and a page's
+     * total can never count rows its content would not show.
+     *
+     * Scope (UserAccountAccess.requireDirectoryAccess): with :scoped = false
+     * (the super-admin) every account, the deleted view included on request.
+     * With :scoped = true only LIVE accounts holding an ACTIVE assignment at
+     * one of :hospitalIds, or an inactive one there while active nowhere
+     * else (a pending invitation or a former employee), the same rule as
+     * UserAccountAccess.canView: someone now working at B is not listed by
+     * A through a stale row left at A (QA D190). EXISTS, not a join, so an
+     * account assigned at two of those hospitals is one row. The scope is in
+     * the query: filtering a global page in memory would load other tenants'
+     * rows and break the paging. An unscoped call passes DIRECTORY_UNSCOPED,
+     * a sentinel no hospital has, because an empty IN list is not portable.
+     */
+    String DIRECTORY_VISIBLE = """
         WHERE ((:onlyDeleted = true AND u.isDeleted = true)
            OR (:onlyDeleted = false AND (:includeDeleted = true OR u.isDeleted = false)))
+          AND (:scoped = false
+               OR (u.isDeleted = false
+                   AND (EXISTS (
+                           SELECT 1 FROM UserRoleHospitalAssignment ha
+                           WHERE ha.user = u
+                             AND ha.active = true
+                             AND ha.hospital.id IN :hospitalIds)
+                        OR (EXISTS (
+                               SELECT 1 FROM UserRoleHospitalAssignment hi
+                               WHERE hi.user = u
+                                 AND hi.hospital.id IN :hospitalIds)
+                            AND NOT EXISTS (
+                               SELECT 1 FROM UserRoleHospitalAssignment ho
+                               LEFT JOIN ho.hospital hoh
+                               WHERE ho.user = u
+                                 AND ho.active = true
+                                 AND (hoh IS NULL OR hoh.id NOT IN :hospitalIds))))))
+        """;
+
+    /*
+     * The search filters. When scoped, the role must be held through an
+     * assignment at one of the caller's hospitals, and a global UserRole does
+     * not count: otherwise a nurse at A searching role=HOSPITAL_ADMIN would
+     * find A's receptionist because that account administers hospital B,
+     * which is another tenant's fact. Active or not, as the list's scope is:
+     * an admin-registered nurse whose assignment waits for her emailed code
+     * is listed by GET /users and must be found by role=NURSE too.
+     * Unscoped (the super-admin), the role filter is unchanged: an active
+     * assignment anywhere, or a global UserRole.
+     * QA D198: the username, e-mail and phone are matched only on rows whose
+     * contacts the caller can read, the same rule UserServiceImpl.directoryRow
+     * masks by: every row for a caller who may read contact details
+     * (contactSearch), otherwise only staff accounts holding no patient
+     * profile. A masked e-mail cannot be confirmed by searching for it, and a
+     * colleague's visible e-mail is still searchable.
+     */
+    String DIRECTORY_SEARCH_FILTERS = """
           AND ( :name IS NULL
                 OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
                 OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR ( ( :contactSearch = true
+                     OR ( EXISTS (SELECT 1 FROM Staff sv WHERE sv.user = u)
+                          AND NOT EXISTS (SELECT 1 FROM Patient pv WHERE pv.user = u) ) )
+                     AND ( LOWER(u.username)            LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                           OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                           OR ( :phoneDigits IS NOT NULL
+                                AND u.phoneNumber LIKE CONCAT('%', cast(:phoneDigits AS string), '%') ) ) )
               )
           AND ( :email IS NULL
-                OR LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%'))
+                OR ( ( :contactSearch = true
+                     OR ( EXISTS (SELECT 1 FROM Staff sv WHERE sv.user = u)
+                          AND NOT EXISTS (SELECT 1 FROM Patient pv WHERE pv.user = u) ) )
+                     AND LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%')) )
               )
           AND ( :role IS NULL
                 OR EXISTS (
                     SELECT 1 FROM UserRoleHospitalAssignment a
                     JOIN a.role r
                     WHERE a.user = u
-                      AND a.active = true
+                      AND ((:scoped = false AND a.active = true)
+                           OR (:scoped = true AND a.hospital.id IN :hospitalIds))
                       AND (LOWER(r.code) = LOWER(cast(:role AS string)) OR LOWER(r.name) = LOWER(cast(:role AS string)))
                 )
-                OR EXISTS (
-                    SELECT 1 FROM UserRole ur
-                    JOIN ur.role r2
-                    WHERE ur.id.userId = u.id
-                      AND (LOWER(r2.code) = LOWER(cast(:role AS string)) OR LOWER(r2.name) = LOWER(cast(:role AS string)))
-                )
+                OR (:scoped = false
+                    AND EXISTS (
+                        SELECT 1 FROM UserRole ur
+                        JOIN ur.role r2
+                        WHERE ur.id.userId = u.id
+                          AND (LOWER(r2.code) = LOWER(cast(:role AS string)) OR LOWER(r2.name) = LOWER(cast(:role AS string)))
+                    ))
               )
-        """,
-        countQuery = """
-        SELECT COUNT(u) FROM User u
-        WHERE ((:onlyDeleted = true AND u.isDeleted = true)
-           OR (:onlyDeleted = false AND (:includeDeleted = true OR u.isDeleted = false)))
-          AND ( :name IS NULL
-                OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-                OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-              )
-          AND ( :email IS NULL
-                OR LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%'))
-              )
-          AND ( :role IS NULL
-                OR EXISTS (
-                    SELECT 1 FROM UserRoleHospitalAssignment a
-                    JOIN a.role r
-                    WHERE a.user = u
-                      AND a.active = true
-                      AND (LOWER(r.code) = LOWER(cast(:role AS string)) OR LOWER(r.name) = LOWER(cast(:role AS string)))
-                )
-                OR EXISTS (
-                    SELECT 1 FROM UserRole ur
-                    JOIN ur.role r2
-                    WHERE ur.id.userId = u.id
-                      AND (LOWER(r2.code) = LOWER(cast(:role AS string)) OR LOWER(r2.name) = LOWER(cast(:role AS string)))
-                )
-              )
-        """)
+        """;
+
+    /** The hospital set an unscoped directory call passes: a sentinel no hospital has. */
+    java.util.Set<UUID> DIRECTORY_UNSCOPED = java.util.Set.of(new UUID(0L, 0L));
+
+    @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS,
+        countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS)
     Page<User> searchUsers(@Param("name") String name,
+                           @Param("phoneDigits") String phoneDigits,
                            @Param("role") String role,
                            @Param("email") String email,
+                           @Param("contactSearch") boolean contactSearch,
                            @Param("includeDeleted") boolean includeDeleted,
                            @Param("onlyDeleted") boolean onlyDeleted,
+                           @Param("scoped") boolean scoped,
+                           @Param("hospitalIds") Collection<UUID> hospitalIds,
                            Pageable pageable);
-
 
     /**
      * The admin list. {@code includeDeleted=true} surfaces soft-deleted rows
@@ -163,16 +241,56 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * users screen shipped, and both were unreachable because this query
      * always filtered them out: a deleted user still holds their unique
      * email (uq_user_email has no isDeleted carve-out), so "already
-     * registered" pointed at a row nobody could see or restore.
+     * registered" pointed at a row nobody could see or restore. Scoped as
+     * {@link #DIRECTORY_VISIBLE} says; a scoped caller never sees the
+     * deleted view.
      */
-    @Query("""
-        select u from User u
-        where (:onlyDeleted = true and u.isDeleted = true)
-           or (:onlyDeleted = false and (:includeDeleted = true or u.isDeleted = false))
-    """)
+    @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE,
+        countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE)
     Page<User> findAllPaged(@Param("includeDeleted") boolean includeDeleted,
                             @Param("onlyDeleted") boolean onlyDeleted,
+                            @Param("scoped") boolean scoped,
+                            @Param("hospitalIds") Collection<UUID> hospitalIds,
                             Pageable pageable);
+
+    /**
+     * QA D430 (D347): a non-administrator's directory lists colleagues only.
+     * Chat and hand-offs need staff ids and names; a patient-only account (no
+     * staff row) is no business of a nurse's, pharmacist's or receptionist's
+     * directory. A colleague is an account with a staff row or a non-patient
+     * role assignment (an admin-registered nurse waiting for her code has the
+     * assignment before the staff row). A staff member who is also a patient is
+     * still a colleague.
+     */
+    String DIRECTORY_STAFF_ONLY = """
+          AND ( EXISTS (SELECT 1 FROM Staff sd WHERE sd.user = u)
+                OR EXISTS (SELECT 1 FROM UserRoleHospitalAssignment sa JOIN sa.role sr
+                           WHERE sa.user = u AND UPPER(sr.code) <> 'ROLE_PATIENT') )
+        """;
+
+    /** {@link #findAllPaged} for a non-administrator: staff accounts only (QA D430). */
+    @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_STAFF_ONLY,
+        countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_STAFF_ONLY)
+    Page<User> findStaffDirectoryPaged(@Param("scoped") boolean scoped,
+                                       @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                       @Param("includeDeleted") boolean includeDeleted,
+                                       @Param("onlyDeleted") boolean onlyDeleted,
+                                       Pageable pageable);
+
+    /** {@link #searchUsers} for a non-administrator: staff accounts only (QA D430). */
+    @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS + DIRECTORY_STAFF_ONLY,
+        countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS + DIRECTORY_STAFF_ONLY)
+    @SuppressWarnings("java:S107") // JPQL search: one bind parameter per filter, mirrors searchUsers
+    Page<User> searchStaffDirectory(@Param("name") String name,
+                                    @Param("phoneDigits") String phoneDigits,
+                                    @Param("role") String role,
+                                    @Param("email") String email,
+                                    @Param("contactSearch") boolean contactSearch,
+                                    @Param("includeDeleted") boolean includeDeleted,
+                                    @Param("onlyDeleted") boolean onlyDeleted,
+                                    @Param("scoped") boolean scoped,
+                                    @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                    Pageable pageable);
 
   List<User> findByIsDeletedFalse();
 

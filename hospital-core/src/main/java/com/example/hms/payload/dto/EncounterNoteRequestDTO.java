@@ -33,7 +33,8 @@ public class EncounterNoteRequestDTO extends EncounterNoteBaseDTO {
     @Size(max = 4096)
     private String chiefComplaint;
 
-    private List<EncounterNoteLinkRequestDTO> customLinks;
+    // QA D1369 class (round 31): a link without its type or id is refused with the note, not at flush.
+    private List<@jakarta.validation.Valid EncounterNoteLinkRequestDTO> customLinks;
     private Set<UUID> linkedLabOrderIds;
     private Set<UUID> linkedPrescriptionIds;
     private Set<UUID> linkedReferralIds;

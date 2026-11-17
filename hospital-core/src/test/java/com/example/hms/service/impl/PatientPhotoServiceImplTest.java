@@ -135,7 +135,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, pdf))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Only image files");
+            .hasMessageContaining("patient.photo.imageOnly");
     }
 
     @Test
@@ -145,7 +145,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, svg))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unsupported image type");
+            .hasMessageContaining("patient.photo.typeUnsupported");
     }
 
     @Test
@@ -154,8 +154,8 @@ class PatientPhotoServiceImplTest {
         MockMultipartFile file = jpeg("face.jpg", new byte[] {1});
 
         assertThatThrownBy(() -> service.upload(patientId, foreignScope, file))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not registered");
+            // QA D1870: "not here" is "not found", like GET /patients/{id}, never a distinct refusal.
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     @Test
@@ -172,7 +172,7 @@ class PatientPhotoServiceImplTest {
     void loadIs404WhenNoPhotoExists() {
         assertThatThrownBy(() -> service.load(patientId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("No photo on file");
+            .hasFieldOrPropertyWithValue("messageKey", "patientPhoto.notFound");
     }
 
     @Test
@@ -183,7 +183,7 @@ class PatientPhotoServiceImplTest {
         // 404-not-403: an unregistered patient looks exactly like a missing one.
         assertThatThrownBy(() -> service.load(patientId, foreignScope))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Patient not found");
+            .hasFieldOrPropertyWithValue("messageKey", "patient.notFound");
     }
 
     @Test
@@ -192,7 +192,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, null, file))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital");
+            .hasMessageContaining("patient.photo.hospitalRequired");
     }
 
     @Test
@@ -201,7 +201,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, empty))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("photo file is required");
+            .hasMessageContaining("patient.photo.required");
     }
 
     @Test
@@ -210,7 +210,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, big))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("5 MB");
+            .hasMessageContaining("patient.photo.tooLarge");
     }
 
     @Test
@@ -220,14 +220,14 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, nameless))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unsupported image type");
+            .hasMessageContaining("patient.photo.typeUnsupported");
     }
 
     @Test
     void deleteRequiresAHospitalScope() {
         assertThatThrownBy(() -> service.delete(patientId, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital");
+            .hasMessageContaining("patient.photo.hospitalRequiredRemove");
     }
 
     @Test
@@ -239,7 +239,7 @@ class PatientPhotoServiceImplTest {
         // no photo, never a 500.
         assertThatThrownBy(() -> service.load(patientId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("No photo on file");
+            .hasFieldOrPropertyWithValue("messageKey", "patientPhoto.notFound");
     }
 
     @Test

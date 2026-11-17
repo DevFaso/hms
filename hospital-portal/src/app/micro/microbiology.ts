@@ -1,21 +1,21 @@
+import { allRows } from '../shared/all-pages';
 import {
   Component,
+  DestroyRef,
+  ElementRef,
   OnInit,
   computed,
   inject,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
-import { Subject, finalize, takeUntil } from 'rxjs';
-import { ActivatedRoute } from '@angular/router';
-import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { finalize } from 'rxjs';
 import { LabOrderResponse, LabService } from '../services/lab.service';
 import {
   GROWTH_RESULTS,
@@ -28,6 +28,15 @@ import {
   MicroSusceptibilityMethod,
   SUSCEPTIBILITY_METHODS,
 } from '../services/micro.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 /**
  * Microbiology workbench (P3 #19) — the lab-facing resulting surface:
@@ -40,28 +49,29 @@ import {
   selector: 'app-microbiology',
   standalone: true,
   imports: [
+    ConfirmDialogComponent,
+    ModalDialogDirective,
+    SubmitGuardDirective,
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
   ],
   templateUrl: './microbiology.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './microbiology.scss',
 })
 export class MicrobiologyComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly microService = inject(MicroService);
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly roleContext = inject(RoleContextService);
-  private readonly route = inject(ActivatedRoute);
-  private readonly scopeUrl = inject(HospitalScopeUrlService);
-  /** See RoleContextService.hasHospitalScope: loads and write buttons wait for a pinned hospital. */
-  readonly scopeReady = this.roleContext.hasHospitalScope;
-  /** Emits on every scope change so a response for the previous hospital can never land. */
-  private readonly scopeChanged$ = new Subject<void>();
 
   readonly growthResults = GROWTH_RESULTS;
   readonly methods = SUSCEPTIBILITY_METHODS;
@@ -92,6 +102,8 @@ export class MicrobiologyComponent implements OnInit {
   readonly editGramStain = signal('');
   readonly editNotes = signal('');
   readonly savingCulture = signal(false);
+  /** QA CX-009: correcting to no growth takes the organisms off; that is asked first. */
+  readonly confirmingNoGrowth = signal(false);
 
   /* Isolate modal */
   readonly showIsolateModal = signal(false);
@@ -144,41 +156,26 @@ export class MicrobiologyComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Read ?hospitalId= before the first load: the chip does the same in its
-    // own ngOnInit, which runs after ours, and the interceptor must see the
-    // right scope on the initial fetch (the pattern every chip host uses).
-    this.scopeUrl.applyUrlScopeSync(this.route);
-    this.load();
-  }
-
-  onScopeChange(): void {
-    this.scopeChanged$.next();
     this.load();
   }
 
   load(): void {
-    if (!this.scopeReady()) {
-      this.cultures.set([]);
-      this.error.set('');
-      this.loading.set(false);
-      return;
-    }
     this.loading.set(true);
     this.error.set('');
     const status = this.statusFilter();
-    this.microService
-      .list({ status: status || undefined, size: 100 })
+    // QA D1347: every culture the filter matches (all pages), not the 100 newest.
+    allRows((page, size) => this.microService.list({ status: status || undefined, page, size }))
       .pipe(
-        takeUntil(this.scopeChanged$),
+        takeUntilDestroyed(this.destroyRef),
         finalize(() => this.loading.set(false)),
       )
       .subscribe({
-        next: (page) => {
-          this.cultures.set(page.content);
+        next: (cultures) => {
+          this.cultures.set(cultures);
           this.loading.set(false);
           const current = this.selected();
           if (current) {
-            this.selected.set(page.content.find((c) => c.id === current.id) ?? null);
+            this.selected.set(cultures.find((c) => c.id === current.id) ?? null);
           }
         },
         error: (err) => {
@@ -208,9 +205,14 @@ export class MicrobiologyComponent implements OnInit {
   /** The selected report is locked and no correction reason is present yet. */
   private missingCorrectionReason(): boolean {
     if (this.selectedLocked() && !this.correctionReason().trim()) {
-      this.toast.error(this.translate.instant('MICRO.CORRECTION_REASON_REQUIRED'));
+      // QA D1305 (D1306 class): the reason box itself is marked and focused,
+      // not only a toast.
+      const message = this.translate.instant('MICRO.CORRECTION_REASON_REQUIRED');
+      refuseFields(this.host.nativeElement, ['correction-reason'], ['correction-reason'], message);
+      this.toast.error(message);
       return true;
     }
+    refuseFields(this.host.nativeElement, [], ['correction-reason'], '');
     return false;
   }
 
@@ -220,8 +222,15 @@ export class MicrobiologyComponent implements OnInit {
   }
 
   private applyUpdated(updated: MicroCultureResponse): void {
+    const before = this.selected();
     this.selected.set(updated);
     this.correctionReason.set('');
+    // QA CX-009: adding an organism can change the outcome. A form still reading the
+    // old one would offer to remove that organism on the next save. Only what the
+    // server changed moves: what the lab has typed and not saved stays.
+    if (before?.growthResult !== updated.growthResult) {
+      this.editGrowthResult.set(updated.growthResult ?? '');
+    }
     this.cultures.set(this.cultures().map((c) => (c.id === updated.id ? updated : c)));
   }
 
@@ -235,7 +244,8 @@ export class MicrobiologyComponent implements OnInit {
     this.formNotes.set('');
     this.showCreateModal.set(true);
     this.ordersLoading.set(true);
-    this.labService.listOrders({ size: 100 }).subscribe({
+    // QA D1347: every order in scope, not the 100 newest.
+    this.labService.listOrders().subscribe({
       next: (orders) => {
         this.orders.set(orders);
         this.ordersLoading.set(false);
@@ -255,7 +265,10 @@ export class MicrobiologyComponent implements OnInit {
 
   submitCreate(): void {
     if (!this.formOrderId()) {
-      this.toast.error(this.translate.instant('MICRO.ORDER_REQUIRED'));
+      // QA D1305 (D1306 class): the order select is marked, not only a toast.
+      const message = this.translate.instant('MICRO.ORDER_REQUIRED');
+      refuseFields(this.host.nativeElement, ['create-order'], ['create-order'], message);
+      this.toast.error(message);
       return;
     }
     if (this.creating()) return;
@@ -264,7 +277,8 @@ export class MicrobiologyComponent implements OnInit {
       .create({
         labOrderId: this.formOrderId(),
         specimenSource: this.formSpecimenSource() || undefined,
-        collectedAt: this.formCollectedAt() || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        collectedAt: this.formCollectedAt() ? toServerDateTime(this.formCollectedAt()) : undefined,
         gramStain: this.formGramStain() || undefined,
         notes: this.formNotes() || undefined,
       })
@@ -288,6 +302,24 @@ export class MicrobiologyComponent implements OnInit {
   saveCulture(): void {
     const culture = this.selected();
     if (!culture || this.savingCulture() || this.missingCorrectionReason()) return;
+    if (
+      this.selectedLocked() &&
+      this.editGrowthResult() === 'NO_GROWTH' &&
+      culture.isolates.length > 0
+    ) {
+      this.confirmingNoGrowth.set(true);
+      return;
+    }
+    this.sendCulture(culture, false);
+  }
+
+  confirmNoGrowth(): void {
+    const culture = this.selected();
+    if (!culture || this.savingCulture()) return;
+    this.sendCulture(culture, true);
+  }
+
+  private sendCulture(culture: MicroCultureResponse, removeIsolates: boolean): void {
     this.savingCulture.set(true);
     this.microService
       .update(culture.id, {
@@ -295,15 +327,18 @@ export class MicrobiologyComponent implements OnInit {
         gramStain: this.editGramStain() || undefined,
         notes: this.editNotes() || undefined,
         correctionReason: this.reasonOrUndefined(),
+        ...(removeIsolates ? { removeIsolates: true } : {}),
       })
       .subscribe({
         next: (updated) => {
           this.savingCulture.set(false);
+          this.confirmingNoGrowth.set(false);
           this.toast.success(this.translate.instant('MICRO.CULTURE_SAVED'));
           this.applyUpdated(updated);
         },
         error: (err) => {
           this.savingCulture.set(false);
+          this.confirmingNoGrowth.set(false);
           this.toast.error(err?.error?.message ?? this.translate.instant('MICRO.SAVE_FAILED'));
         },
       });
@@ -346,7 +381,10 @@ export class MicrobiologyComponent implements OnInit {
     const culture = this.selected();
     if (!culture) return;
     if (!this.isoOrganism().trim()) {
-      this.toast.error(this.translate.instant('MICRO.ORGANISM_REQUIRED'));
+      // QA D1305 (D1306 class): the organism box is marked, not only a toast.
+      const message = this.translate.instant('MICRO.ORGANISM_REQUIRED');
+      refuseFields(this.host.nativeElement, ['iso-organism'], ['iso-organism'], message);
+      this.toast.error(message);
       return;
     }
     if (this.savingIsolate()) return;
@@ -373,9 +411,15 @@ export class MicrobiologyComponent implements OnInit {
       });
   }
 
-  deleteIsolate(isolateId: string): void {
+  async deleteIsolate(isolateId: string): Promise<void> {
     const culture = this.selected();
     if (!culture || this.missingCorrectionReason()) return;
+    // QA CX-010: the correction reason says why, it does not ask whether.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'MICRO.ISOLATE_REMOVE_CONFIRM',
+      confirmKey: 'COMMON.REMOVE',
+    });
+    if (!confirmed) return;
     this.microService.deleteIsolate(culture.id, isolateId, this.reasonOrUndefined()).subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('MICRO.ISOLATE_REMOVED'));
@@ -408,15 +452,10 @@ export class MicrobiologyComponent implements OnInit {
   submitSusc(): void {
     const culture = this.selected();
     if (!culture) return;
-    if (!this.suscAntibiotic().trim()) {
-      this.toast.error(this.translate.instant('MICRO.ANTIBIOTIC_REQUIRED'));
-      return;
-    }
+    // QA D1256 class (round 27): the submit guard names the antibiotic and the
+    // interpretation together and marks each; this used to refuse one per press.
     const interpretation = this.suscInterpretation();
-    if (!interpretation) {
-      this.toast.error(this.translate.instant('MICRO.INTERPRETATION_REQUIRED'));
-      return;
-    }
+    if (!this.suscAntibiotic().trim() || !interpretation) return;
     if (this.savingSusc()) return;
     this.savingSusc.set(true);
     this.microService
@@ -442,9 +481,15 @@ export class MicrobiologyComponent implements OnInit {
       });
   }
 
-  deleteSusceptibility(isolateId: string, susceptibilityId: string): void {
+  async deleteSusceptibility(isolateId: string, susceptibilityId: string): Promise<void> {
     const culture = this.selected();
     if (!culture || this.missingCorrectionReason()) return;
+    // QA CX-010: the correction reason says why, it does not ask whether.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'MICRO.SUSCEPTIBILITY_REMOVE_CONFIRM',
+      confirmKey: 'COMMON.REMOVE',
+    });
+    if (!confirmed) return;
     this.microService
       .deleteSusceptibility(culture.id, isolateId, susceptibilityId, this.reasonOrUndefined())
       .subscribe({

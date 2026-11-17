@@ -28,8 +28,9 @@ watchPatterns = ["keycloak/**", ".dockerignore"]
 # the deprecated --legacy-observability-interface workaround.
 healthcheckPath = "/realms/master/"
 healthcheckTimeout = 300
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
+# Always restart: with on_failure + 3 retries a Keycloak that crashed more
+# than three times stayed down and every sign-in failed (D16). See README.md.
+restartPolicyType = "always"
 
 [deploy.healthcheck]
 path = "/realms/master/"

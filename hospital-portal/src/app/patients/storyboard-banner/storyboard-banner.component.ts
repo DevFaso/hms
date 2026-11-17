@@ -21,6 +21,10 @@ import {
 } from '../../services/storyboard.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { PatientChartChanges } from '../../interceptors/patient-chart-change.interceptor';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -40,7 +44,15 @@ const SEVERE_SEVERITIES: ReadonlySet<AllergySeverity> = new Set(['SEVERE', 'LIFE
 @Component({
   selector: 'app-storyboard-banner',
   standalone: true,
-  imports: [CommonModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
+  imports: [
+    DashPipe,
+    KeyLabelPipe,
+    ServerTimePipe,
+    CommonModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RestrictedRowsComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './storyboard-banner.component.html',
   styleUrl: './storyboard-banner.component.scss',
@@ -82,11 +94,23 @@ export class StoryboardBannerComponent implements OnChanges, OnDestroy {
   });
 
   private readonly storyboardService = inject(StoryboardService);
+  private readonly chartChanges = inject(PatientChartChanges);
   private readonly destroyed$ = new Subject<void>();
   private inFlight?: Subscription;
+  /** QA D957: re-read when this patient's chart is written, wherever on the page. */
+  private changesSub?: Subscription;
 
-  ngOnChanges(_changes: SimpleChanges): void {
+  ngOnChanges(changes: SimpleChanges): void {
     const id = this.patientId();
+    if (changes['patientId']) {
+      this.changesSub?.unsubscribe();
+      this.changesSub = id
+        ? this.chartChanges
+            .of(id)
+            .pipe(takeUntil(this.destroyed$))
+            .subscribe(() => this.load(id, this.hospitalId() ?? undefined, true))
+        : undefined;
+    }
     if (!id) {
       this.cancelInFlight();
       this.summary.set(null);
@@ -136,9 +160,10 @@ export class StoryboardBannerComponent implements OnChanges, OnDestroy {
    * response from a prior `patientId` could land *after* a newer one and overwrite
    * the banner state for the wrong patient — a clinical-safety hazard.
    */
-  private load(patientId: string, hospitalId?: string): void {
+  /** `quiet`: a refresh after a chart write keeps the banner on screen while it reloads. */
+  private load(patientId: string, hospitalId?: string, quiet = false): void {
     this.cancelInFlight();
-    this.state.set('loading');
+    if (!quiet) this.state.set('loading');
     this.inFlight = this.storyboardService
       .getStoryboard(patientId, hospitalId)
       .pipe(takeUntil(this.destroyed$))
@@ -151,6 +176,7 @@ export class StoryboardBannerComponent implements OnChanges, OnDestroy {
               (s.problems?.length ?? 0) === 0 &&
               (s.restrictedRows?.length ?? 0) === 0 &&
               !s.activeEncounter &&
+              !s.lastEncounter &&
               !(s.codeStatus?.status || (s.codeStatus?.directives?.length ?? 0) > 0));
           this.state.set(empty ? 'empty' : 'ready');
         },

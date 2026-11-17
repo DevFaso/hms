@@ -3,12 +3,14 @@
 #
 # Two phases:
 #   1. Optional admin bootstrap via `kc.sh bootstrap-admin user --optimized`.
-#      Runs only when KC_BOOTSTRAP_ADMIN_USERNAME + _PASSWORD are both set.
-#      Idempotent: a non-zero exit caused by "admin already exists" is treated
-#      as success; any other non-zero (DB unreachable, config invalid, password
-#      too weak) is treated as a real failure and aborts the container so
-#      Railway's healthcheck flips red within seconds instead of spending five
-#      minutes retrying a Keycloak that can't connect to its database.
+#      OPT-IN: runs only when KC_BOOTSTRAP_ADMIN=true AND
+#      KC_BOOTSTRAP_ADMIN_USERNAME + _PASSWORD are set. Use it once on a fresh
+#      database, then unset the flag: the subcommand boots a full Keycloak JVM
+#      and was intermittently SIGKILLed (rc=137) on prod, failing deploys.
+#      "Already exists" (incl. Keycloak 26's "user with username exists") is
+#      success; rc=137 (killed) is logged and start continues, since the
+#      server does not depend on it; any other non-zero (DB unreachable,
+#      config invalid, password too weak) aborts the container.
 #   2. `kc.sh start --optimized --import-realm --http-port="$PORT"` so
 #      Keycloak binds to whatever port Railway assigns. PORT is forwarded
 #      via the --http-port CLI flag rather than being exported into
@@ -28,7 +30,16 @@ log() {
 }
 
 # ─── 1. Admin bootstrap ────────────────────────────────────────────────────
-if [ -n "${KC_BOOTSTRAP_ADMIN_USERNAME:-}" ] && [ -n "${KC_BOOTSTRAP_ADMIN_PASSWORD:-}" ]; then
+bootstrap_flag=$(printf '%s' "${KC_BOOTSTRAP_ADMIN:-}" | tr '[:upper:]' '[:lower:]')
+if [ "${bootstrap_flag}" != "true" ]; then
+    if [ -n "${KC_BOOTSTRAP_ADMIN_USERNAME:-}" ]; then
+        log "KC_BOOTSTRAP_ADMIN_USERNAME is set but KC_BOOTSTRAP_ADMIN != true — skipping admin bootstrap (opt-in)"
+    else
+        log "KC_BOOTSTRAP_ADMIN not enabled — skipping admin bootstrap"
+    fi
+elif [ -z "${KC_BOOTSTRAP_ADMIN_USERNAME:-}" ] || [ -z "${KC_BOOTSTRAP_ADMIN_PASSWORD:-}" ]; then
+    log "KC_BOOTSTRAP_ADMIN=true but KC_BOOTSTRAP_ADMIN_USERNAME/_PASSWORD missing — skipping admin bootstrap"
+else
     log "Attempting kc.sh bootstrap-admin user (idempotent, --optimized)"
 
     # Capture combined stdout+stderr so we can grep the output for
@@ -48,10 +59,16 @@ if [ -n "${KC_BOOTSTRAP_ADMIN_USERNAME:-}" ] && [ -n "${KC_BOOTSTRAP_ADMIN_PASSW
 
     if [ "${bootstrap_rc}" -eq 0 ]; then
         log "bootstrap-admin succeeded"
-    elif printf '%s' "${bootstrap_output}" | grep -qiE 'user .* already exists|admin .* exists|user with username .* already exists'; then
+    elif printf '%s' "${bootstrap_output}" | grep -qiE 'user .* already exists|admin .* exists|user with username .*exists'; then
         # Idempotent re-run on an env where the admin was created in a
         # previous deploy. This is the expected steady state.
         log "bootstrap-admin reports admin already exists — continuing"
+    elif [ "${bootstrap_rc}" -eq 137 ]; then
+        # SIGKILL (usually memory pressure while the second JVM boots). The
+        # server itself does not need this step, so do not fail the deploy.
+        log "bootstrap-admin was KILLED (rc=137, SIGKILL) — skipping it and"
+        log "continuing to kc.sh start. If the admin does not exist yet, retry"
+        log "with more memory; otherwise unset KC_BOOTSTRAP_ADMIN."
     else
         # Real failure (DB unreachable, password policy violation, malformed
         # config). Fail fast — `set -e` plus an explicit exit so the
@@ -62,8 +79,6 @@ if [ -n "${KC_BOOTSTRAP_ADMIN_USERNAME:-}" ] && [ -n "${KC_BOOTSTRAP_ADMIN_PASSW
         log "'Driver does not support the provided URL' above, that's it."
         exit "${bootstrap_rc}"
     fi
-else
-    log "No KC_BOOTSTRAP_ADMIN_* env vars — skipping admin bootstrap"
 fi
 
 # ─── 2. Server start ───────────────────────────────────────────────────────

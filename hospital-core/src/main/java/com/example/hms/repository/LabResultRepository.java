@@ -1,6 +1,5 @@
 package com.example.hms.repository;
 
-import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.model.LabResult;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -32,14 +32,50 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * <p>Resolved means acknowledged OR read back. Read-back is the stronger
      * act, but requiring it outright would strand results acknowledged before
      * V116 existed.
+     *
+     * <p>QA D305: the chain is capped at {@code maxRounds}; a row that reached
+     * it leaves the sweep (it stays on the critical worklist).
      */
     @org.springframework.data.jpa.repository.Query(
         "SELECT r FROM LabResult r WHERE r.acknowledged = false "
         + "AND r.criticalReadBackAt IS NULL "
         + "AND r.criticalNotifiedAt IS NOT NULL AND r.criticalNotifiedAt < :cutoff "
-        + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff)")
+        + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff) "
+        + "AND r.criticalEscalationLevel < :maxRounds")
     java.util.List<LabResult> findCriticalAwaitingEscalation(
-        @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff);
+        @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff,
+        @org.springframework.data.repository.query.Param("maxRounds") short maxRounds);
+
+    /**
+     * QA D1553 (Rex P2): the matching read-back, written only while the row has
+     * none. A conditional UPDATE, not check-then-save: of two concurrent
+     * read-backs the second waits on the row lock, re-reads the WHERE and
+     * touches 0 rows, so the first author is never overwritten. 0 means a
+     * read-back was already confirmed.
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query(
+        "UPDATE LabResult r SET r.criticalReadBackValue = :value, r.criticalReadBackByUserId = :byUserId, "
+        + "r.criticalReadBackByDisplay = :byDisplay, r.criticalReadBackAt = :at, r.acknowledged = true, "
+        + "r.acknowledgedAt = :at, r.acknowledgedByUserId = :byUserId, r.acknowledgedByDisplay = :byDisplay, "
+        + "r.updatedAt = :at WHERE r.id = :id AND r.criticalReadBackAt IS NULL")
+    int confirmReadBackIfUnconfirmed(@Param("id") UUID id, @Param("value") String value,
+                                     @Param("byUserId") UUID byUserId, @Param("byDisplay") String byDisplay,
+                                     @Param("at") java.time.LocalDateTime at);
+
+    /**
+     * QA D1553 (Rex P2): the record of a mismatched read-back, written only
+     * while the row has no confirmed read-back; 0 rows means one was confirmed
+     * first, and nothing is written.
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query(
+        "UPDATE LabResult r SET r.criticalReadBackValue = :value, r.criticalReadBackByUserId = :byUserId, "
+        + "r.criticalReadBackByDisplay = :byDisplay, r.updatedAt = :at "
+        + "WHERE r.id = :id AND r.criticalReadBackAt IS NULL")
+    int recordReadBackMismatchIfUnconfirmed(@Param("id") UUID id, @Param("value") String value,
+                                            @Param("byUserId") UUID byUserId, @Param("byDisplay") String byDisplay,
+                                            @Param("at") java.time.LocalDateTime at);
 
     @Override
     @EntityGraph(attributePaths = {
@@ -111,11 +147,50 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     List<LabResult> findByLabOrder_IdIn(Collection<UUID> labOrderIds);
 
     /**
-     * The doctor timeline's lab rows.
+     * A patient's results that a hospital may read, sorted and limited by
+     * {@code pageable} (pass {@link Pageable#unpaged()} for all of them).
+     *
+     * <p>Readable is B1's predicate widened by the patient-read rule, exactly
+     * {@link #findTrendReadableAt}'s: an order placed at any of
+     * {@code readableHospitalIds}, or an order the laboratory of
+     * {@code actingHospitalId} performed for somebody else
+     * ({@code LabOrder.isHandledBy}). {@code performingHospital} is null on
+     * most orders, so the clause compares its id and never joins it: an inner
+     * join would drop every order run where it was placed. A null
+     * {@code actingHospitalId} switches the performed-here clause off, and the
+     * query is then exactly "ordered at one of these hospitals".
+     *
+     * <p>Who calls it, and how wide each read is:
+     * <ul>
+     *   <li>the doctor timeline ({@code PatientServiceImpl.collectLabResultEntries})
+     *       — the {@code RecordAccessPolicy} readable set (acting hospital plus
+     *       the treatment relationship), {@code actingHospitalId} null: widened,
+     *       ordered-at only;</li>
+     *   <li>the doctor record's lab section
+     *       ({@code PatientServiceImpl.collectDoctorRecordLabResults}) — the
+     *       acting hospital alone, {@code actingHospitalId} null: NOT widened,
+     *       unlike the medications and imaging beside it;</li>
+     *   <li>{@link #findAllPatientResults} — every hospital, for the two
+     *       callers that may read them all.</li>
+     * </ul>
+     * No caller passes an acting hospital today: neither surface above shows a
+     * result the acting hospital only performed for another hospital, and the
+     * query now leaves those rows unloaded instead of loading them to drop
+     * them. The clause stays, pinned by {@code LabResultPatientReadableQueryTest},
+     * so a surface that should show a laboratory its own work reads it with
+     * #751's rule rather than a new one.
+     *
+     * <p>This replaced the unscoped {@code findByLabOrder_Patient_Id} pair,
+     * which loaded every hospital's rows for the patient, fully hydrated, for
+     * the callers to throw most of them away in memory. There is no
+     * patient-only finder left to call by name.
+     *
+     * <p>{@code readableHospitalIds} must never be empty (PostgreSQL rejects
+     * {@code IN ()}).
      *
      * <p>{@code labOrder.encounter} and its department are fetched because the
-     * E8 #51 filter runs {@code effectiveCategory(labOrder.getEncounter())} on
-     * every row before any of them is rendered, and that falls back to the
+     * timeline's E8 #51 filter runs {@code effectiveCategory(labOrder.getEncounter())}
+     * on every row before any of them is rendered, and that falls back to the
      * department's default when the encounter carries no explicit tag. Both are
      * LAZY, so without them the sensitivity check alone costs two selects per
      * lab order — on what is usually a chart's highest-count category.
@@ -132,7 +207,36 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "assignment",
         "assignment.user"
     })
-    List<LabResult> findByLabOrder_Patient_Id(UUID patientId);
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.patient.id = :patientId
+          AND (:globalView = true
+               OR r.labOrder.hospital.id IN :readableHospitalIds
+               OR r.labOrder.performingHospital.id = :actingHospitalId)
+    """)
+    List<LabResult> findPatientResultsReadableAt(@Param("patientId") UUID patientId,
+                                                 @Param("readableHospitalIds") Collection<UUID> readableHospitalIds,
+                                                 @Param("actingHospitalId") UUID actingHospitalId,
+                                                 @Param("globalView") boolean globalView,
+                                                 Pageable pageable);
+
+    /**
+     * Every hospital's results for the patient: the only call that sets
+     * {@link #findPatientResultsReadableAt}'s {@code globalView} flag. Two
+     * callers may read that wide, and only they call this:
+     * <ul>
+     *   <li>a verified super-admin in global view
+     *       ({@code ChartReviewServiceImpl}; {@code PatientChartAccess} refuses a
+     *       null scope to anyone else);</li>
+     *   <li>the patient portal with no hospital
+     *       ({@code PatientLabResultServiceImpl}), where the caller is the
+     *       patient and owns every row.</li>
+     * </ul>
+     * The nil UUID names no hospital: the IN list must not be empty.
+     */
+    default List<LabResult> findAllPatientResults(UUID patientId, Pageable pageable) {
+        return findPatientResultsReadableAt(patientId, Set.of(new UUID(0L, 0L)), null, true, pageable);
+    }
 
     @EntityGraph(attributePaths = {
         "labOrder",
@@ -195,6 +299,85 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     """)
     Page<LabResult> findHandledByHospital(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
+    /**
+     * QA D211: the staff list as a non-laboratory reader may see it. With
+     * {@code releasedOnly} an unreleased value never leaves the laboratory
+     * (D160 fixed the per-patient read but not this one); with
+     * {@code anyPatient=false} only {@code patientId}'s results are listed.
+     * The patient id is a sentinel when {@code anyPatient} is true, so the
+     * parameter always has a type on Postgres.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    @Query(value = """
+        SELECT r FROM LabResult r
+        WHERE (r.labOrder.hospital.id = :hospitalId
+           OR r.labOrder.performingHospital.id = :hospitalId)
+          AND (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
+               AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
+          AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+          AND (:anyOrder = true OR r.labOrder.id = :labOrderId)
+    """, countQuery = """
+        SELECT COUNT(r) FROM LabResult r
+        WHERE (r.labOrder.hospital.id = :hospitalId
+           OR r.labOrder.performingHospital.id = :hospitalId)
+          AND (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
+               AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
+          AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+          AND (:anyOrder = true OR r.labOrder.id = :labOrderId)
+    """)
+    Page<LabResult> findHandledByHospitalForReader(@Param("hospitalId") UUID hospitalId,
+                                                   @Param("releasedOnly") boolean releasedOnly,
+                                                   @Param("anyPatient") boolean anyPatient,
+                                                   @Param("patientId") UUID patientId,
+                                                   @Param("anyOrder") boolean anyOrder,
+                                                   @Param("labOrderId") UUID labOrderId,
+                                                   Pageable pageable);
+
+    /**
+     * QA D211 (round 5): the verified super-admin global view of GET
+     * /lab-results applied neither the patientId filter nor the
+     * released-only rule. Same filters as {@link #findHandledByHospitalForReader},
+     * no hospital.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    @Query(value = """
+        SELECT r FROM LabResult r
+        WHERE (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
+               AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
+          AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+          AND (:anyOrder = true OR r.labOrder.id = :labOrderId)
+    """, countQuery = """
+        SELECT COUNT(r) FROM LabResult r
+        WHERE (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
+               AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
+          AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+          AND (:anyOrder = true OR r.labOrder.id = :labOrderId)
+    """)
+    Page<LabResult> findAllForReader(@Param("releasedOnly") boolean releasedOnly,
+                                     @Param("anyPatient") boolean anyPatient,
+                                     @Param("patientId") UUID patientId,
+                                     @Param("anyOrder") boolean anyOrder,
+                                     @Param("labOrderId") UUID labOrderId,
+                                     Pageable pageable);
+
     @EntityGraph(attributePaths = {
         "labOrder",
         "labOrder.patient",
@@ -207,6 +390,21 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     })
     Page<LabResult> findByLabOrder_Hospital_IdIn(Collection<UUID> hospitalIds, Pageable pageable);
 
+    /**
+     * A patient's newest results for one test that a hospital may read: the
+     * orders placed at any of {@code readableHospitalIds} (the acting hospital
+     * plus the treatment-relationship set), and the orders this hospital's
+     * laboratory performed for somebody else (B1).
+     *
+     * <p>This is the ONLY patient-trend query on the repository. There used to
+     * be an unscoped {@code findTop12ByLabOrder_Patient_Id...} beside it, and
+     * three endpoints leaked every hospital's values through it; a trend query
+     * that answers without a hospital does not exist to be found by name.
+     * {@code globalView} is the single way to read across hospitals, and only
+     * {@code LabResultServiceImpl} sets it, for a verified super-admin with no
+     * hospital pinned. {@code readableHospitalIds} must never be empty
+     * (PostgreSQL rejects {@code IN ()}).
+     */
     @EntityGraph(attributePaths = {
         "labOrder",
         "labOrder.patient",
@@ -217,10 +415,21 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "assignment",
         "assignment.user"
     })
-    List<LabResult> findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(
-        UUID patientId,
-        UUID labTestDefinitionId
-    );
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.patient.id = :patientId
+          AND r.labOrder.labTestDefinition.id = :labTestDefinitionId
+          AND (:globalView = true
+               OR r.labOrder.hospital.id IN :readableHospitalIds
+               OR r.labOrder.performingHospital.id = :actingHospitalId)
+        ORDER BY r.resultDate DESC
+    """)
+    List<LabResult> findTrendReadableAt(@Param("patientId") UUID patientId,
+                                        @Param("labTestDefinitionId") UUID labTestDefinitionId,
+                                        @Param("readableHospitalIds") Collection<UUID> readableHospitalIds,
+                                        @Param("actingHospitalId") UUID actingHospitalId,
+                                        @Param("globalView") boolean globalView,
+                                        Pageable pageable);
 
     @EntityGraph(attributePaths = {
         "labOrder",
@@ -332,31 +541,22 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         String sourceMessageControlId);
 
     /**
-     * Paged unscoped variant used by the chart-review aggregator when no
-     * hospital scope is supplied. Sort + limit are applied at the DB level
-     * via the {@link Pageable} argument so we avoid loading the entire
-     * lab-result history into memory.
-     */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
-    Page<LabResult> findByLabOrder_Patient_Id(UUID patientId, Pageable pageable);
-
-    /**
      * The doctor's critical strip (B15): critical results of this provider's
      * orders that nobody has acknowledged yet, no older than the floor. The
      * strip used to count every CRITICAL result ever filed for the staff and
      * show it as the live safety-alert count.
+     *
+     * <p>QA D206: "critical" is what the server paged the doctor for
+     * ({@code criticalNotifiedAt}), or an analyzer's CRITICAL flag. Keyed on
+     * the analyzer flag alone, a hand-entered critical (which never carries
+     * one) was paged and still counted 0 on the tile.
      */
-    long countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-        UUID staffId, AbnormalFlag abnormalFlag, java.time.LocalDateTime floor);
+    @Query("SELECT COUNT(r) FROM LabResult r WHERE r.labOrder.orderingStaff.id = :staffId "
+        + "AND r.acknowledged = false AND r.createdAt > :floor "
+        + "AND (r.criticalNotifiedAt IS NOT NULL "
+        + "OR r.abnormalFlag = com.example.hms.enums.AbnormalFlag.CRITICAL)")
+    long countUnacknowledgedCriticalForOrderingStaff(@Param("staffId") UUID staffId,
+                                                     @Param("floor") java.time.LocalDateTime floor);
 
     /**
      * Hospital-scoped tile count for the super-admin dashboard. LabResult
@@ -366,12 +566,17 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      */
     long countByLabOrder_Hospital_Id(UUID hospitalId);
 
+    boolean existsByLabOrder_Id(UUID labOrderId);
+
     /**
      * B14 — the release worklist: every row of the hospital nobody has
      * released yet, hand-entered or analyzer-ingested alike. With
      * {@code hms.lab.auto-verification.enabled=false} (the default) an ORU
      * observation lands here and stays "pending" for the patient until a
      * lab user releases it, so a worklist MUST be able to find it.
+     *
+     * <p>QA D963: STAT first, then URGENT, then the rest; the page's own sort
+     * (oldest result first by default) orders within each priority.
      */
     @EntityGraph(attributePaths = {
         "labOrder",
@@ -382,6 +587,8 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         SELECT r FROM LabResult r
         WHERE r.released = false
           AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
+        ORDER BY
+          CASE r.labOrder.priority WHEN 'STAT' THEN 0 WHEN 'URGENT' THEN 1 ELSE 2 END
     """, countQuery = """
         SELECT COUNT(r) FROM LabResult r
         WHERE r.released = false

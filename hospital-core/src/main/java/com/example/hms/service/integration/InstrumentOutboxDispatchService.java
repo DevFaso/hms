@@ -1,9 +1,11 @@
 package com.example.hms.service.integration;
 
 import com.example.hms.enums.InstrumentOutboxStatus;
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.hl7.mllp.MllpOutboundProperties;
 import com.example.hms.hl7.mllp.MllpOutboundSender;
 import com.example.hms.model.InstrumentOutbox;
+import com.example.hms.model.LabOrder;
 import com.example.hms.repository.InstrumentOutboxRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -34,6 +37,13 @@ public class InstrumentOutboxDispatchService {
     private final InstrumentOutboxRepository outboxRepository;
     private final MllpOutboundSender sender;
     private final MllpOutboundProperties properties;
+    /**
+     * The outbox clock: it writes {@code lastAttemptAt}/{@code sentAt} and the
+     * retry back-off ({@code findDispatchable}'s {@code retryBefore}) reads
+     * {@code lastAttemptAt} back. {@code InstrumentOutboxServiceImpl} only
+     * clears it on a manual retry.
+     */
+    private final Clock clock;
 
     /**
      * Send one batch of queued messages.
@@ -51,7 +61,7 @@ public class InstrumentOutboxDispatchService {
         }
 
         LocalDateTime retryBefore =
-            LocalDateTime.now().minusSeconds(properties.getRetryAfterSeconds());
+            LocalDateTime.now(clock).minusSeconds(properties.getRetryAfterSeconds());
         List<InstrumentOutbox> batch = outboxRepository.findDispatchable(
             InstrumentOutboxStatus.PENDING,
             properties.getMaxAttempts(),
@@ -68,15 +78,29 @@ public class InstrumentOutboxDispatchService {
     }
 
     private boolean dispatchOne(InstrumentOutbox message) {
+        // QA D820: an order voided as entered in error after its message was
+        // queued must not reach the analyzer. Terminal, not retried, and
+        // nothing is transmitted. QA D1392 class: nor one cancelled meanwhile.
+        LabOrder order = message.getLabOrder();
+        if (order != null && (order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR
+                || order.getStatus() == LabOrderStatus.CANCELLED)) {
+            message.setStatus(InstrumentOutboxStatus.ERROR);
+            message.setLastError(order.getStatus() == LabOrderStatus.CANCELLED
+                ? "Not sent: the lab order was cancelled"
+                : "Not sent: the lab order was entered in error");
+            outboxRepository.save(message);
+            log.info("Instrument outbox {} not sent: its lab order was withdrawn", message.getId());
+            return false;
+        }
         message.setAttempts(message.getAttempts() + 1);
-        message.setLastAttemptAt(LocalDateTime.now());
+        message.setLastAttemptAt(LocalDateTime.now(clock));
 
         try {
             String ack = sender.send(message.getPayload());
 
             if (sender.isPositiveAck(ack)) {
                 message.setStatus(InstrumentOutboxStatus.ACK);
-                message.setSentAt(LocalDateTime.now());
+                message.setSentAt(LocalDateTime.now(clock));
                 message.setLastError(null);
                 outboxRepository.save(message);
                 return true;

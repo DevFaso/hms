@@ -10,6 +10,14 @@ export interface RefillRequest {
   prescriptionId: string;
   medicationName: string | null;
   patientId: string;
+  /**
+   * QA D1276 (round 27): who the refill is for, resolved by the server for the
+   * caller's hospital (fix/r27-backend adds it to MedicationRefillResponseDTO).
+   * Three "Paracétamol" cards could not be told apart.
+   */
+  patientName?: string | null;
+  /** The patient's MRN at the caller's hospital. */
+  patientMrn?: string | null;
   status: RefillStatus;
   preferredPharmacy: string | null;
   notes: string | null;

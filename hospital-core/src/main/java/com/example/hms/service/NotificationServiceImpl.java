@@ -1,5 +1,11 @@
 package com.example.hms.service;
 
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.security.provider.ProviderConfinementPolicy;
+import java.security.Principal;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -14,6 +20,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.controller.NotificationWebSocketController;
 import com.example.hms.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
 
 @Service
 @RequiredArgsConstructor
@@ -30,14 +38,36 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationWebSocketController notificationWebSocketController;
     private final NotificationPreferenceRepository notificationPreferenceRepository;
     private final UserRepository userRepository;
+    // Who may flip a broadcast's shared read flag is decided on the caller's
+    // live context; an ObjectProvider, so no bean cycle forms through it.
+    private final ObjectProvider<ProviderCallerResolver> callerResolverProvider;
+    private final com.example.hms.service.i18n.NotificationLocalizer localizer;
 
     @Override
         public List<Notification> getNotificationsForUser(String username) {
-            return notificationRepository.findByRecipientUsername(username, Pageable.unpaged()).getContent();
+            return notificationRepository.findByRecipientUsername(username, Pageable.unpaged(NEWEST_FIRST)).getContent();
+    }
+
+    /**
+     * QA D278: the list came back in storage order, so today's urgent alert was
+     * on the last page. Every reader gets newest first (id breaks a tie so
+     * paging is stable), whatever order the caller asked for.
+     */
+    static final org.springframework.data.domain.Sort NEWEST_FIRST = org.springframework.data.domain.Sort.by(
+        org.springframework.data.domain.Sort.Order.desc("createdAt"),
+        org.springframework.data.domain.Sort.Order.desc("id"));
+
+    static Pageable newestFirst(Pageable requested) {
+        if (requested == null || requested.isUnpaged()) {
+            return Pageable.unpaged(NEWEST_FIRST);
+        }
+        return org.springframework.data.domain.PageRequest.of(
+            requested.getPageNumber(), requested.getPageSize(), NEWEST_FIRST);
     }
 
     @Override
-        public Page<Notification> getNotificationsForUser(String username, Boolean read, String search, Pageable pageable) {
+        public Page<Notification> getNotificationsForUser(String username, Boolean read, String search, Pageable requested) {
+            Pageable pageable = newestFirst(requested);
             if (read != null && search != null && !search.isEmpty()) {
                 return notificationRepository.findByRecipientUsernameAndReadAndMessageContainingIgnoreCase(username, read, search, pageable);
             } else if (read != null) {
@@ -50,8 +80,62 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public Notification createNotification(String message, String recipientUsername) {
-        return createNotification(message, recipientUsername, null);
+    public Notification createNotification(String messageKey, Object[] args, String recipientUsername, String type) {
+        return storeKeyed(messageKey, args, recipientUsername, type, null);
+    }
+
+    @Override
+    public Notification createNotification(String messageKey, Object[] args, String recipientUsername, String type,
+                                           UUID subjectId) {
+        return storeKeyed(messageKey, args, recipientUsername, type, subjectId);
+    }
+
+    private Notification storeKeyed(String messageKey, Object[] args, String recipientUsername, String type,
+                                    UUID subjectId) {
+        List<Object> stored = com.example.hms.service.i18n.NotificationLocalizer.storable(args);
+        String french = localizer.render(messageKey, stored,
+            com.example.hms.service.i18n.NotificationLocales.STAFF);
+        return store(capped(french), messageKey, stored, recipientUsername, type, subjectId);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public int markReadForSubject(UUID subjectId, java.util.Collection<String> types) {
+        if (subjectId == null || types == null || types.isEmpty()) {
+            return 0;
+        }
+        return notificationRepository.markReadForSubject(subjectId, types);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public int withdrawForSubjects(String recipientUsername, String type, java.util.Collection<UUID> subjectIds) {
+        if (recipientUsername == null || recipientUsername.isBlank() || type == null
+                || subjectIds == null || subjectIds.isEmpty()) {
+            return 0;
+        }
+        return notificationRepository.deleteForRecipientAndSubjects(recipientUsername, type, subjectIds);
+    }
+
+    /** {@code security.notifications.message} is VARCHAR(255); a longer body fails the INSERT. */
+    static final int MAX_MESSAGE_LENGTH = 255;
+
+    /** A body the column can hold: an overlong argument (a medication name) is cut, never a failed INSERT. */
+    static String capped(String message) {
+        if (message == null || message.length() <= MAX_MESSAGE_LENGTH) {
+            return message;
+        }
+        return message.substring(0, MAX_MESSAGE_LENGTH - 1) + "…";
+    }
+
+    @Override
+    public Notification createLiteralNotification(String message, String recipientUsername, String type) {
+        return store(message, null, null, recipientUsername, type, null);
+    }
+
+    @Override
+    public Notification localize(Notification notification, java.util.Locale locale) {
+        return localizer.localized(notification, locale);
     }
 
     /**
@@ -71,12 +155,15 @@ public class NotificationServiceImpl implements NotificationService {
      * the push inline, which is the old behaviour and right for a caller that
      * has nothing to wait for.
      */
-    @Override
-    public Notification createNotification(String message, String recipientUsername, String type) {
+    private Notification store(String message, String messageKey, List<Object> messageArgs,
+                               String recipientUsername, String type, UUID subjectId) {
         Notification notification = Notification.builder()
                 .message(message)
+                .messageKey(messageKey)
+                .messageArgs(messageArgs)
                 .recipientUsername(recipientUsername)
                 .type(type)
+                .subjectId(subjectId)
                 .createdAt(LocalDateTime.now())
                 .read(false)
                 .build();
@@ -101,21 +188,53 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public void markAsRead(UUID notificationId) {
-        notificationRepository.findById(notificationId).ifPresent(n -> {
-            n.setRead(true);
-            notificationRepository.save(n);
-        });
+    public ReadOutcome markAsRead(UUID notificationId, Principal caller, boolean broadcastsMayBeMarked) {
+        if (notificationId == null || caller == null || caller.getName() == null) {
+            return ReadOutcome.NOT_FOUND;
+        }
+        Notification notification = notificationRepository.findById(notificationId).orElse(null);
+        if (notification == null) {
+            return ReadOutcome.NOT_FOUND;
+        }
+        if (isBroadcast(notification)) {
+            if (!broadcastsMayBeMarked || !isUnconfinedStaff(caller)) {
+                return ReadOutcome.BROADCAST_LEFT_UNREAD;
+            }
+        } else if (!caller.getName().equals(notification.getRecipientUsername())) {
+            return ReadOutcome.NOT_FOUND;
+        }
+        notification.setRead(true);
+        notificationRepository.save(notification);
+        return ReadOutcome.MARKED;
     }
 
-    @Override
-    public void markAsRead(UUID notificationId, String ownerUsername) {
-        notificationRepository.findById(notificationId).ifPresent(n -> {
-            if (ownerUsername.equals(n.getRecipientUsername())) {
-                n.setRead(true);
-                notificationRepository.save(n);
-            }
-        });
+    /**
+     * The caller's LIVE context, resolved from the principal as the context
+     * filters resolve it, judged by the one rule
+     * ({@link ProviderConfinementPolicy#isUnconfinedStaff}). A database outage
+     * propagates (a 5xx, retryable), never "not staff"; any other failure to
+     * resolve the caller means not staff.
+     */
+    private boolean isUnconfinedStaff(Principal caller) {
+        ProviderCallerResolver resolver = callerResolverProvider.getIfAvailable();
+        if (resolver == null) {
+            return false;
+        }
+        HospitalContext context;
+        try {
+            context = resolver.liveContext(caller);
+        } catch (DataAccessException | CannotCreateTransactionException databaseDown) {
+            throw databaseDown;
+        } catch (RuntimeException unresolvable) {
+            log.warn("Caller unresolvable ({}); broadcast left unread", unresolvable.getClass().getSimpleName());
+            return false;
+        }
+        return ProviderConfinementPolicy.isUnconfinedStaff(context);
+    }
+
+    /** No recipient: sent to everyone on the broadcast topic (as {@code NotificationWebSocketController} sends it). */
+    private static boolean isBroadcast(Notification notification) {
+        return notification.getRecipientUsername() == null || notification.getRecipientUsername().isBlank();
     }
 
     @Override
@@ -142,7 +261,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     public List<NotificationPreferenceDTO> updatePreferences(UUID userId, List<NotificationPreferenceUpdateDTO> updates) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
 
         notificationPreferenceRepository.deleteByUser_Id(userId);
         notificationPreferenceRepository.flush();
@@ -152,7 +271,7 @@ public class NotificationServiceImpl implements NotificationService {
                         .user(user)
                         .notificationType(u.getNotificationType())
                         .channel(u.getChannel())
-                        .enabled(u.isEnabled())
+                        .enabled(Boolean.TRUE.equals(u.getEnabled()))
                         .build()
         ).toList();
 

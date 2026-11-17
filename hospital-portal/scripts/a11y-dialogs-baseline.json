@@ -1,0 +1,14 @@
+{
+  "$comment": [
+    "Dialogs that lack role/aria-modal/a name/Escape, as they stand today.",
+    "Each key is \"template::rule::anchor\"; \"count\" is how many such sites the",
+    "template holds and \"why\" the QA defect id (or the reason a person wrote).",
+    "A site not listed fails the build; fix a dialog, then delete its pins."
+  ],
+  "pinned": {
+    "src/app/billing/billing.html::subform::lines-table": {
+      "count": 1,
+      "why": "QA D1155 class (round 21): the invoice line edited in place spans two table cells, so appInlineSubForm cannot wrap it; the behaviour is hand-written in billing.ts (onLineEditEscape: Escape closes only the line editor, focus moves into it and returns to the edit button) and proved by the billing.spec.ts DOM spec. Delete this pin when the row moves onto appInlineSubForm (tasklist r21 debt)."
+    }
+  }
+}

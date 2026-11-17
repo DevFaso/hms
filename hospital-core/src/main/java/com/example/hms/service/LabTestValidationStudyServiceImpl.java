@@ -9,7 +9,7 @@ import com.example.hms.payload.dto.LabValidationSummaryDTO;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.LabTestValidationStudyRepository;
 import com.example.hms.utility.RoleValidator;
-import jakarta.persistence.EntityNotFoundException;
+import com.example.hms.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,8 +23,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class LabTestValidationStudyServiceImpl implements LabTestValidationStudyService {
 
-    private static final String STUDY_NOT_FOUND = "Validation study not found";
-    private static final String DEFINITION_NOT_FOUND = "Lab Test Definition not found";
+    private static final String STUDY_NOT_FOUND = "labvalidationstudy.notfound";
+    private static final String DEFINITION_NOT_FOUND = "labtestdefinition.notfound";
 
     private final LabTestValidationStudyRepository repository;
     private final LabTestDefinitionRepository definitionRepository;
@@ -36,22 +36,35 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
     public LabTestValidationStudyResponseDTO create(UUID definitionId,
                                                     LabTestValidationStudyRequestDTO dto) {
         LabTestDefinition definition = definitionRepository.findById(definitionId)
-                .orElseThrow(() -> new EntityNotFoundException(DEFINITION_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(DEFINITION_NOT_FOUND));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(definition.getHospital(), DEFINITION_NOT_FOUND, definitionId);
 
         LabTestValidationStudy study = mapper.toEntity(dto, definition);
+        // QA D503 class: the person who performed the study is the caller.
+        study.setPerformedByUserId(com.example.hms.security.CallerIdentity.resolveActorUserId(dto.getPerformedByUserId()));
         return mapper.toDto(repository.save(study));
     }
 
     @Override
     public LabTestValidationStudyResponseDTO getById(UUID id) {
-        return mapper.toDto(repository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException(STUDY_NOT_FOUND)));
+        LabTestValidationStudy study = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(STUDY_NOT_FOUND));
+        requireOwned(study, id);
+        return mapper.toDto(study);
+    }
+
+    /** A study is read and written under the tenant guard of its test definition's hospital. */
+    private void requireOwned(LabTestValidationStudy study, UUID id) {
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+                study.getLabTestDefinition() == null ? null : study.getLabTestDefinition().getHospital(),
+                STUDY_NOT_FOUND, id);
     }
 
     @Override
     public List<LabTestValidationStudyResponseDTO> getByDefinitionId(UUID definitionId) {
         if (!definitionRepository.existsById(definitionId)) {
-            throw new EntityNotFoundException(DEFINITION_NOT_FOUND);
+            throw new ResourceNotFoundException(DEFINITION_NOT_FOUND);
         }
         return repository.findByLabTestDefinition_IdOrderByStudyDateDesc(definitionId)
                 .stream()
@@ -63,18 +76,25 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
     @Transactional
     public LabTestValidationStudyResponseDTO update(UUID id, LabTestValidationStudyRequestDTO dto) {
         LabTestValidationStudy study = repository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException(STUDY_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(STUDY_NOT_FOUND));
+        requireOwned(study, id);
+        UUID claimed = dto.getPerformedByUserId();
+        // QA D503 class: keeping the recorded performer is fine; naming a new one must name the caller.
+        UUID performer = claimed != null && claimed.equals(study.getPerformedByUserId())
+                ? claimed
+                : com.example.hms.security.CallerIdentity.resolveActorUserId(claimed);
         mapper.updateEntityFromDto(dto, study);
+        study.setPerformedByUserId(performer);
         return mapper.toDto(repository.save(study));
     }
 
     @Override
     @Transactional
     public void delete(UUID id) {
-        if (!repository.existsById(id)) {
-            throw new EntityNotFoundException(STUDY_NOT_FOUND);
-        }
-        repository.deleteById(id);
+        LabTestValidationStudy study = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(STUDY_NOT_FOUND));
+        requireOwned(study, id);
+        repository.delete(study);
     }
 
     @Override

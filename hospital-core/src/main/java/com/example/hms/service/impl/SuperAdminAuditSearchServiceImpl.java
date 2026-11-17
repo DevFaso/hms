@@ -2,16 +2,20 @@ package com.example.hms.service.impl;
 
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.superadmin.AuditSearchFilter;
 import com.example.hms.payload.dto.superadmin.AuditSearchPageDTO;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.service.SuperAdminAuditSearchService;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,12 +27,15 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchService {
 
     private static final String FIELD_EVENT_TIMESTAMP = "eventTimestamp";
+    private static final String FIELD_HOSPITAL_ID = "hospitalId";
 
     private final AuditEventLogRepository auditEventLogRepository;
     private final AuditEventLogMapper mapper;
@@ -140,7 +147,7 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
             List<Predicate> predicates = new ArrayList<>();
             addUserPredicates(predicates, root, cb, f);
             addEventPredicates(predicates, root, cb, f);
-            addHospitalAndOrgPredicates(predicates, root, cb, f);
+            addHospitalAndOrgPredicates(predicates, root, query, cb, f);
             addTargetPredicates(predicates, root, cb, f);
             addDatePredicates(predicates, root, cb, f);
             // distinct() was applied unconditionally before — every join here
@@ -157,9 +164,14 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
             predicates.add(cb.equal(root.get("user").get("id"), f.userId()));
         }
         if (f.userNameLike() != null && !f.userNameLike().isBlank()) {
-            predicates.add(cb.like(
-                cb.lower(root.get("userName")),
-                "%" + f.userNameLike().toLowerCase() + "%"));
+            // The row's userName is a display snapshot ("Awa Traoré"), so a
+            // search for the sign-in name found nothing (D119): match the
+            // actor's username too, through the (nullable) user link.
+            String pattern = "%" + f.userNameLike().trim().toLowerCase(Locale.ROOT) + "%";
+            Join<AuditEventLog, User> actor = root.join("user", JoinType.LEFT);
+            predicates.add(cb.or(
+                cb.like(cb.lower(root.get("userName")), pattern),
+                cb.like(cb.lower(actor.get("username")), pattern)));
         }
         if (f.impersonatorUserId() != null) {
             predicates.add(cb.equal(root.get("impersonatorUserId"), f.impersonatorUserId()));
@@ -184,29 +196,52 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
      * walking one extra hop into hospital.organization.region.
      */
     private void addHospitalAndOrgPredicates(
-        List<Predicate> predicates, Root<AuditEventLog> root, CriteriaBuilder cb, AuditSearchFilter f
+        List<Predicate> predicates, Root<AuditEventLog> root, CriteriaQuery<?> query, CriteriaBuilder cb,
+        AuditSearchFilter f
     ) {
         if (!f.needsHospitalOrOrgJoin()) {
             return;
         }
         Join<?, ?> hospitalJoin = root.join("assignment", JoinType.LEFT)
             .join("hospital", JoinType.LEFT);
+        // QA D786: a SYSTEM row has no assignment; it carries its hospital in
+        // its own hospitalId, so each filter also matches through that.
         if (f.hospitalId() != null) {
-            predicates.add(cb.equal(hospitalJoin.get("id"), f.hospitalId()));
+            predicates.add(cb.or(
+                cb.equal(hospitalJoin.get("id"), f.hospitalId()),
+                cb.equal(root.get(FIELD_HOSPITAL_ID), f.hospitalId())));
         }
         // Both organizationId and tenantRegion live on hospital.organization,
         // so share the join even when only one of the two is set.
         if (f.organizationId() != null || f.tenantRegion() != null) {
             Join<?, ?> orgJoin = hospitalJoin.join("organization", JoinType.LEFT);
             if (f.organizationId() != null) {
-                predicates.add(cb.equal(orgJoin.get("id"), f.organizationId()));
+                predicates.add(orSystemRowOf(cb.equal(orgJoin.get("id"), f.organizationId()),
+                    root, query, cb, "id", f.organizationId()));
             }
             if (f.tenantRegion() != null) {
                 // MVP-9b — region is an enum mapped EnumType.STRING; equality
                 // works directly without any case folding.
-                predicates.add(cb.equal(orgJoin.get("region"), f.tenantRegion()));
+                predicates.add(orSystemRowOf(cb.equal(orgJoin.get("region"), f.tenantRegion()),
+                    root, query, cb, "region", f.tenantRegion()));
             }
         }
+    }
+
+    /**
+     * {@code anchored}, or a SYSTEM row whose own hospitalId is a hospital of
+     * an organization whose {@code orgField} equals {@code value} (QA D786).
+     */
+    private static Predicate orSystemRowOf(Predicate anchored, Root<AuditEventLog> root, CriteriaQuery<?> query,
+                                           CriteriaBuilder cb, String orgField, Object value) {
+        if (query == null) {
+            return anchored;
+        }
+        Subquery<UUID> ids = query.subquery(UUID.class);
+        Root<Hospital> hospital = ids.from(Hospital.class);
+        ids.select(hospital.get("id"))
+            .where(cb.equal(hospital.get("organization").get(orgField), value));
+        return cb.or(anchored, root.get(FIELD_HOSPITAL_ID).in(ids));
     }
 
     private void addTargetPredicates(

@@ -14,7 +14,6 @@ import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -47,8 +46,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     @Override
     public LabInventoryItemResponseDTO getById(UUID id, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INVENTORY_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
         requireHospitalScope(item.getHospital().getId(), locale);
         return mapper.toDto(item);
     }
@@ -59,17 +57,14 @@ public class LabInventoryServiceImpl implements LabInventoryService {
         requireHospitalScope(hospitalId, locale);
 
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("hospital.notfound", new Object[]{hospitalId}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", hospitalId));
 
         if (inventoryRepository.existsByHospitalIdAndItemCode(hospitalId, dto.getItemCode())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("inventory.duplicate.code", new Object[]{dto.getItemCode()}, locale));
+            throw BusinessRuleException.ofKey("inventory.duplicate.code", dto.getItemCode());
         }
 
         if (dto.getQuantity() != null && dto.getQuantity() < 0) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("inventory.quantity.negative", null, locale));
+            throw BusinessRuleException.ofKey("inventory.quantity.negative");
         }
 
         LabInventoryItem item = mapper.toEntity(dto, hospital);
@@ -81,8 +76,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     @Transactional
     public LabInventoryItemResponseDTO update(UUID id, LabInventoryItemRequestDTO dto, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INVENTORY_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
         requireHospitalScope(item.getHospital().getId(), locale);
 
         // Check item code uniqueness if changed
@@ -90,13 +84,11 @@ public class LabInventoryServiceImpl implements LabInventoryService {
                 && !dto.getItemCode().equals(item.getItemCode())
                 && inventoryRepository.existsByHospitalIdAndItemCode(
                     item.getHospital().getId(), dto.getItemCode())) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("inventory.duplicate.code", new Object[]{dto.getItemCode()}, locale));
+            throw BusinessRuleException.ofKey("inventory.duplicate.code", dto.getItemCode());
         }
 
         if (dto.getQuantity() != null && dto.getQuantity() < 0) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("inventory.quantity.negative", null, locale));
+            throw BusinessRuleException.ofKey("inventory.quantity.negative");
         }
 
         mapper.updateEntity(item, dto);
@@ -108,8 +100,7 @@ public class LabInventoryServiceImpl implements LabInventoryService {
     @Transactional
     public void deactivate(UUID id, Locale locale) {
         LabInventoryItem item = inventoryRepository.findByIdAndActiveTrue(id)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage(INVENTORY_NOT_FOUND_KEY, new Object[]{id}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(INVENTORY_NOT_FOUND_KEY, id));
         requireHospitalScope(item.getHospital().getId(), locale);
         item.setActive(false);
         inventoryRepository.save(item);
@@ -139,7 +130,4 @@ public class LabInventoryServiceImpl implements LabInventoryService {
         }
     }
 
-    private String getLocalizedMessage(String key, Object[] args, Locale locale) {
-        return messageSource.getMessage(key, args, key, locale != null ? locale : LocaleContextHolder.getLocale());
-    }
 }

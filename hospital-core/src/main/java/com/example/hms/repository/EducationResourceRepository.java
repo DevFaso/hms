@@ -59,8 +59,8 @@ public interface EducationResourceRepository extends JpaRepository<EducationReso
 
     @Query("SELECT er FROM EducationResource er WHERE er.isActive = true AND " +
            "(:hospitalId IS NULL OR er.hospitalId = :hospitalId) AND (" +
-           "LOWER(er.title) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
-           "LOWER(er.description) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
+           "LOWER(er.title) LIKE LOWER(CONCAT('%', CAST(:searchTerm AS string), '%')) OR " +
+           "LOWER(er.description) LIKE LOWER(CONCAT('%', CAST(:searchTerm AS string), '%'))) " +
            "ORDER BY er.createdAt DESC")
     List<EducationResource> searchResources(
         @Param("searchTerm") String searchTerm,

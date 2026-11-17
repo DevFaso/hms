@@ -9,6 +9,8 @@ import com.example.hms.payload.dto.superadmin.IntegrationMessagePageDTO;
 import com.example.hms.repository.integration.IntegrationMessageEventRepository;
 import com.example.hms.service.SuperAdminIntegrationMessageService;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
+import com.example.hms.service.integration.message.IntegrationMessageRetentionPolicy;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +30,13 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
 
     private final IntegrationMessageEventRepository repository;
     private final IntegrationMessageRecorder recorder;
+
+    /**
+     * The policy object the sweep itself runs on, so the page states the
+     * policy in force - or that retention is off - and never windows a
+     * disabled or refused sweep is not enforcing.
+     */
+    private final IntegrationMessageRetentionPolicy retentionPolicy;
 
     @Override
     public IntegrationMessagePageDTO search(
@@ -60,14 +69,16 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             .totalElements(page.getTotalElements())
             .totalPages(page.getTotalPages())
             .deadLetterCount(deadLetterCount)
+            .retentionActive(retentionPolicy.isActive())
+            .payloadRetentionDays(retentionPolicy.payloadDays())
+            .payloadUnresolvedMaxDays(retentionPolicy.unresolvedMaxDays())
             .build();
     }
 
     @Override
     public IntegrationMessageEventDTO getById(UUID messageId) {
         IntegrationMessageEvent event = repository.findById(messageId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Integration message not found: " + messageId));
+            .orElseThrow(() -> new ResourceNotFoundException("integration.message.notFound", messageId));
         return toDto(event);
     }
 
@@ -79,8 +90,7 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
         // existsById round-trip; the lookup is also needed for the
         // status precondition.
         IntegrationMessageEvent original = repository.findById(originalMessageId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Integration message not found: " + originalMessageId));
+            .orElseThrow(() -> new ResourceNotFoundException("integration.message.notFound", originalMessageId));
 
         // Copilot review fix — only FAILED rows are eligible for replay.
         // Replaying a SENT/RECEIVED row would emit a duplicate to the
@@ -91,6 +101,16 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             throw new ConflictException(
                 "Integration message " + originalMessageId + " is not in FAILED state "
                     + "(current: " + original.getStatus() + "); only FAILED messages can be replayed.");
+        }
+
+        // The retention sweep erased the content (V177) - after resolution,
+        // or past the unresolved ceiling - but the row still says FAILED, so
+        // without this the replay would write a REPLAYED row with no body - a
+        // "retry" of nothing. A clear 409 instead of that or a 500. The
+        // message cites no number of days: which window applied depends on
+        // the row, and the purge stamp is on the DTO.
+        if (original.getPayloadPurgedAt() != null) {
+            throw new ConflictException(MessageUtil.resolve("integration.message.contentPurged"));
         }
 
         // Today the replay is symbolic — we record a REPLAYED row so
@@ -138,6 +158,7 @@ public class SuperAdminIntegrationMessageServiceImpl implements SuperAdminIntegr
             .direction(event.getDirection())
             .messageType(event.getMessageType())
             .correlationId(event.getCorrelationId())
+            .payloadPurgedAt(event.getPayloadPurgedAt())
             .status(event.getStatus())
             .errorMessage(event.getErrorMessage())
             .attemptCount(event.getAttemptCount())

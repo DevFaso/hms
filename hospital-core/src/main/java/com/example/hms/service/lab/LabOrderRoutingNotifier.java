@@ -3,11 +3,9 @@ package com.example.hms.service.lab;
 import com.example.hms.model.LabOrder;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.NotificationService;
-import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.utility.TransactionCallbacks;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -53,7 +51,6 @@ public class LabOrderRoutingNotifier {
 
     private final StaffRepository staffRepository;
     private final NotificationService notificationService;
-    private final MessageSource messageSource;
     private final PlatformTransactionManager transactionManager;
 
     /**
@@ -105,20 +102,12 @@ public class LabOrderRoutingNotifier {
             return;
         }
 
-        String message;
-        try {
-            message = messageSource.getMessage(MESSAGE_KEY,
-                new Object[]{routing.orderingHospitalName(), routing.testName()}, NotificationLocales.STAFF);
-        } catch (RuntimeException ex) {
-            log.warn("Could not render the performing-lab notification for lab order {}: {}",
-                routing.orderId(), ex.getMessage());
-            return;
-        }
-
+        // Rendered in each reader's language when read (QA D665).
+        Object[] args = {routing.orderingHospitalName(), routing.testName()};
         for (String username : recipients) {
             try {
                 ownTransaction.executeWithoutResult(status ->
-                    notificationService.createNotification(message, username, NOTIFICATION_TYPE));
+                    notificationService.createNotification(MESSAGE_KEY, args, username, NOTIFICATION_TYPE));
             } catch (RuntimeException ex) {
                 log.warn("Performing-lab notification for lab order {} failed for one recipient: {}",
                     routing.orderId(), ex.getMessage());

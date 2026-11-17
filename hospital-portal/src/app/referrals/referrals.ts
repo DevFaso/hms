@@ -1,16 +1,34 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
+import { DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { debounceTime, switchMap } from 'rxjs/operators';
 import {
   ReferralService,
   ReferralResponse,
   ReferralRequest,
   DepartmentMinimal,
 } from '../services/referral.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import {
+  HospitalService,
+  HospitalResponse,
+  HospitalDirectoryEntry,
+} from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -19,11 +37,33 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ActionKey, actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { hasValue, missingRequiredMessage } from '../shared/required-fields';
+import { labelledRefusalReason } from '../shared/refusal-reason';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 @Component({
   selector: 'app-referrals',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
+  imports: [
+    DateTimePipe,
+    ListEscapeDirective,
+    SubmitGuardDirective,
+    PersonNamePipe,
+    ModalDialogDirective,
+    PatientSublinePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './referrals.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './referrals.scss',
@@ -38,21 +78,103 @@ export class ReferralsComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** QA D1098: why the referral is cancelled (required, kept on the referral). */
+  readonly cancelReason = signal('');
+  private readonly router = inject(Router);
+
+  /**
+   * QA D998: whether the referral's patient chart opens here. A referral
+   * accepted at another hospital does not by itself open the chart there
+   * (cross-hospital reads are behind a flag), and opening /patients/<id>
+   * used to bounce silently back to the list. The chart is checked first and
+   * the reason is shown in the referral instead.
+   */
+  readonly chartCheck = signal<'idle' | 'checking' | 'unavailable'>('idle');
+  /** The chart-access check is in flight (the only reason "Open chart" is disabled). */
+  readonly chartChecking = computed(() => this.chartCheck() === 'checking');
+
+  openPatientChart(ref: ReferralResponse): void {
+    if (!ref.patientId) return;
+    this.chartCheck.set('checking');
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
+    this.patientService.getById(ref.patientId, hospitalId).subscribe({
+      next: () => {
+        this.chartCheck.set('idle');
+        this.router.navigate(['/patients', ref.patientId]);
+      },
+      error: () => this.chartCheck.set('unavailable'),
+    });
+  }
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;
 
+  /**
+   * QA D427: only a physician or a midwife may write a referral (POST
+   * /referrals refuses a nurse as referrer, QA D319), so nobody else is
+   * offered the button the API would refuse.
+   */
+  protected readonly canWriteReferral = computed(
+    () =>
+      this.roleContext.hasAnyActiveRole(actionRoles('referralCreate')) &&
+      this.roleContext.hasAnyActiveRole([...SERVICE_RULE_ROLES.referralReferrer]),
+  );
+
+  /**
+   * QA D661: acknowledge, schedule, start, complete, reject and cancel are
+   * physician-only at the API, so a nurse or a midwife is never offered a
+   * button that ends in a 403.
+   */
+  protected readonly canAct = computed(() => {
+    const allowed = (action: ActionKey) => this.roleContext.hasAnyActiveRole(actionRoles(action));
+    return {
+      acknowledge: allowed('referralAcknowledge'),
+      schedule: allowed('referralSchedule'),
+      start: allowed('referralStart'),
+      complete: allowed('referralComplete'),
+      reject: allowed('referralReject'),
+      cancel: allowed('referralCancel'),
+    };
+  });
+
+  /**
+   * QA D775 (D611 sibling): acknowledge, reject, schedule, start and complete
+   * belong to the hospital the referral is addressed to (the receiving
+   * hospital, or the sending one for an internal referral) —
+   * GeneralReferralServiceImpl.requireReceivingSide. The role map alone
+   * offered the sender "Prendre en compte" and "Refuser", which ended in 403.
+   */
+  isReceivingSide(r: ReferralResponse): boolean {
+    const active = this.roleContext.effectiveHospitalIdForRequest();
+    const target = r.receivingHospitalId || r.hospitalId;
+    // QA D955: an internal referral's two sides are one hospital; the
+    // receiving steps still belong to someone other than the referrer.
+    const staffId = this.auth.getUserProfile()?.staffId;
+    const isReferrer = !!staffId && r.referringProviderId === staffId;
+    return !!active && !!target && active === target && !isReferrer;
+  }
+
+  /** QA D412/D427: a draft is sent by the clinician who wrote it, and only by them. */
+  isMyDraft(r: ReferralResponse): boolean {
+    const staffId = this.auth.getUserProfile()?.staffId;
+    return r.status === 'DRAFT' && !!staffId && r.referringProviderId === staffId;
+  }
+
   referrals = signal<ReferralResponse[]>([]);
   filtered = signal<ReferralResponse[]>([]);
   loading = signal(true);
+  readonly loadFailed = signal(false);
+  private readonly destroyRef = inject(DestroyRef);
+  private listRequest = 0;
   searchTerm = '';
   activeTab = signal<'all' | 'pending' | 'active' | 'completed'>('all');
   selectedReferral = signal<ReferralResponse | null>(null);
 
   hospitals = signal<HospitalResponse[]>([]);
   /** All hospitals for the destination picker (loaded once) */
-  allHospitals = signal<HospitalResponse[]>([]);
+  allHospitals = signal<HospitalDirectoryEntry[]>([]);
   sourceDepartments = signal<DepartmentMinimal[]>([]);
   targetDepartments = signal<DepartmentMinimal[]>([]);
 
@@ -173,6 +295,14 @@ export class ReferralsComponent implements OnInit {
     }));
   }
 
+  /** The localized specialty name, so a list never shows CARDIOLOGY raw (D121). */
+  specialtyLabel(value: string | null | undefined): string {
+    if (!value) return '';
+    const key = `REFERRALS.SPECIALTY_OPTION.${value}`;
+    const label = this.translate.instant(key);
+    return label && label !== key ? label : value;
+  }
+
   ngOnInit(): void {
     // Cross-tenant: hydrate URL scope before the first list fetch so
     // the auth interceptor sends the right X-Hospital-Id (or omits it
@@ -187,6 +317,10 @@ export class ReferralsComponent implements OnInit {
 
   /** Re-fetch under the new cross-tenant scope when the chip emits. */
   onScopeChange(_hospitalId: string | null): void {
+    this.selectedReferral.set(null);
+    this.searchTerm = '';
+    this.referrals.set([]);
+    this.filtered.set([]);
     this.load();
   }
 
@@ -222,7 +356,7 @@ export class ReferralsComponent implements OnInit {
 
   /** Load all hospitals for the destination hospital picker */
   private loadAllHospitals(): void {
-    this.hospitalService.list().subscribe({
+    this.hospitalService.directory().subscribe({
       next: (h) => this.allHospitals.set(h ?? []),
     });
   }
@@ -272,15 +406,15 @@ export class ReferralsComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          return this.patientService.list(undefined, q);
+          return this.patientService.list(this.patientSearchHospitalId(), q);
         }),
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -310,6 +444,15 @@ export class ReferralsComponent implements OnInit {
     this.patientQuery.set('');
   }
 
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the form's hospital, else the request scope, which for
+   * a super-admin is the hospital the scope chip picked, not their home one.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
+  }
+
   patientInitials(p: PatientResponse): string {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
   }
@@ -335,7 +478,54 @@ export class ReferralsComponent implements OnInit {
     this.showModal.set(false);
   }
 
+  /** QA D890: the referral's required fields, by the label the form shows them under. */
+  private static readonly FIELD_LABELS: Readonly<Record<string, string>> = {
+    patientId: 'PATIENTS.PATIENT',
+    hospitalId: 'REFERRALS.SOURCE_HOSPITAL',
+    referringProviderId: 'REFERRALS.REFERRING_PROVIDER',
+    targetSpecialty: 'REFERRALS.TARGET_SPECIALTY',
+    urgency: 'REFERRALS.URGENCY',
+    referralType: 'REFERRALS.REFERRAL_TYPE',
+    referralReason: 'REFERRALS.REFERRAL_REASON',
+  };
+
+  /** QA D1306 (round 28): the control each required field is entered in (the provider has none). */
+  private static readonly FIELD_IDS: Readonly<Record<string, string>> = {
+    patientId: 'ref-patientSearch',
+    hospitalId: 'ref-hospitalId',
+    targetSpecialty: 'ref-specialty',
+    urgency: 'ref-urgency',
+    referralType: 'ref-type',
+    referralReason: 'ref-reason',
+  };
+
   submitForm(): void {
+    // QA D890: an empty form was posted, and the refusal named the field
+    // "targetSpecialty". The missing fields are named by their labels instead.
+    const values = this.form as unknown as Record<string, unknown>;
+    const missing = missingRequiredMessage(
+      this.translate,
+      Object.entries(ReferralsComponent.FIELD_LABELS).map(([field, labelKey]) => ({
+        labelKey,
+        value: values[field],
+      })),
+    );
+    const allIds = Object.values(ReferralsComponent.FIELD_IDS);
+    if (missing) {
+      // QA D1306 (round 28): the fields are marked, not only a toast.
+      const blankIds = Object.entries(ReferralsComponent.FIELD_IDS)
+        .filter(([field]) => !hasValue(values[field]))
+        .map(([, id]) => id);
+      refuseFields(
+        this.host.nativeElement,
+        blankIds,
+        allIds,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
+      this.toast.error(missing);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], allIds, '');
     this.saving.set(true);
     this.referralService.create(this.form).subscribe({
       next: () => {
@@ -344,14 +534,57 @@ export class ReferralsComponent implements OnInit {
         this.saving.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.SAVE_FAILED'));
+      error: (err: unknown) => {
+        // A validation refusal names its fields by their labels; anything
+        // else (403 included) keeps the existing refusal text.
+        const validation =
+          (err as { error?: { error?: unknown } } | null)?.error?.error === 'Validation Failed'
+            ? labelledRefusalReason(err, this.translate, ReferralsComponent.FIELD_LABELS)
+            : null;
+        this.toast.error(validation ?? this.refusal(err, 'REFERRALS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
   }
 
+  /** QA D611: the refusal of a cancel, shown inside the confirmation dialog. */
+  readonly cancelError = signal('');
+
+  /**
+   * QA D611 (D509): only the clinician who wrote a referral may cancel it,
+   * so nobody else is offered the button the server would refuse.
+   */
+  canCancel(r: ReferralResponse): boolean {
+    const staffId = this.auth.getUserProfile()?.staffId;
+    return (
+      this.canAct().cancel &&
+      isOrderCancellable(r.status) &&
+      !!staffId &&
+      r.referringProviderId === staffId
+    );
+  }
+
+  /**
+   * The server's own sentence for a refused action, in the caller's
+   * language; the opaque access-denied default and transport text are
+   * replaced by translated text (a 403 says "not allowed").
+   */
+  private refusal(err: unknown, failedKey: string): string {
+    const e = (err ?? {}) as {
+      status?: number;
+      error?: { message?: unknown; code?: unknown } | null;
+    };
+    const msg =
+      e.error?.code !== 'ACCESS_DENIED' && typeof e.error?.message === 'string'
+        ? e.error.message.trim()
+        : '';
+    if (msg && msg !== 'Access denied') return msg;
+    return this.translate.instant(e.status === 403 ? 'REFERRALS.ACTION_FORBIDDEN' : failedKey);
+  }
+
   confirmCancel(r: ReferralResponse): void {
+    this.cancelError.set('');
+    this.cancelReason.set('');
     this.deletingRef.set(r);
     this.showDeleteConfirm.set(true);
   }
@@ -360,16 +593,31 @@ export class ReferralsComponent implements OnInit {
     this.deletingRef.set(null);
   }
   executeCancel(): void {
+    const reason = this.cancelReason().trim();
+    if (!reason) {
+      // QA D1098: every cancel states why (the server refuses a blank reason too).
+      const message = this.translate.instant(CANCEL_REASON_REQUIRED_KEY);
+      refuseFields(
+        this.host.nativeElement,
+        ['referral-cancel-reason'],
+        ['referral-cancel-reason'],
+        message,
+      );
+      return;
+    }
     this.deleting.set(true);
-    this.referralService.cancel(this.deletingRef()!.id, 'Cancelled by admin').subscribe({
+    this.referralService.cancel(this.deletingRef()!.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('REFERRALS.CANCEL_SUCCESS'));
         this.cancelDeleteAction();
         this.deleting.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.CANCEL_FAILED'));
+      error: (err: unknown) => {
+        // QA D611: the server's reason, in the open dialog, not a bare toast.
+        const reason = this.refusal(err, 'REFERRALS.CANCEL_FAILED');
+        this.cancelError.set(reason);
+        this.toast.error(reason);
         this.deleting.set(false);
       },
     });
@@ -385,8 +633,8 @@ export class ReferralsComponent implements OnInit {
         this.load();
         this.closeDetail();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.SUBMIT_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.SUBMIT_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -415,8 +663,8 @@ export class ReferralsComponent implements OnInit {
         this.load();
         this.closeDetail();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.ACKNOWLEDGE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.ACKNOWLEDGE_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -438,7 +686,15 @@ export class ReferralsComponent implements OnInit {
     if (!ref || !this.scheduleAppointmentTime) return;
     this.actionLoading.set(true);
     this.referralService
-      .schedule(ref.id, this.scheduleAppointmentTime, this.scheduleLocation || undefined)
+      .schedule(
+        ref.id,
+        // #948 review: kept as the hospital's wall clock, NOT converted to UTC.
+        // The server copies it into the booked Appointment's date and start
+        // time, which are wall-clock fields (calendar, check-in, reminders,
+        // patient emails), so 10:00 must arrive as 10:00.
+        this.scheduleAppointmentTime,
+        this.scheduleLocation || undefined,
+      )
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('REFERRALS.SCHEDULE_SUCCESS'));
@@ -447,8 +703,8 @@ export class ReferralsComponent implements OnInit {
           this.load();
           this.closeDetail();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('REFERRALS.SCHEDULE_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(this.refusal(err, 'REFERRALS.SCHEDULE_FAILED'));
           this.actionLoading.set(false);
         },
       });
@@ -464,8 +720,8 @@ export class ReferralsComponent implements OnInit {
         this.load();
         this.closeDetail();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.START_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.START_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -493,8 +749,8 @@ export class ReferralsComponent implements OnInit {
         this.load();
         this.closeDetail();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.REJECT_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.REJECT_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -523,26 +779,34 @@ export class ReferralsComponent implements OnInit {
         this.load();
         this.closeDetail();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.COMPLETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.COMPLETE_FAILED'));
         this.actionLoading.set(false);
       },
     });
   }
 
   load(): void {
+    const request = ++this.listRequest;
+    this.loadFailed.set(false);
     this.loading.set(true);
-    this.referralService.getAll().subscribe({
-      next: (list) => {
-        this.referrals.set(Array.isArray(list) ? list : []);
-        this.applyFilter();
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.LOAD_FAILED'));
-        this.loading.set(false);
-      },
-    });
+    this.referralService
+      .getAll()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => {
+          if (request !== this.listRequest) return;
+          this.referrals.set(Array.isArray(list) ? list : []);
+          this.applyFilter();
+          this.loading.set(false);
+        },
+        error: () => {
+          if (request !== this.listRequest) return;
+          this.loadFailed.set(true);
+          this.toast.error(this.translate.instant('REFERRALS.LOAD_FAILED'));
+          this.loading.set(false);
+        },
+      });
   }
 
   setTab(tab: 'all' | 'pending' | 'active' | 'completed'): void {
@@ -564,15 +828,16 @@ export class ReferralsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (r) =>
-          (r.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(r.patientName, term) ||
           (r.targetSpecialty ?? '').toLowerCase().includes(term) ||
-          (r.receivingProviderName ?? '').toLowerCase().includes(term),
+          textMatches(r.receivingProviderName, term),
       );
     }
     this.filtered.set(list);
   }
 
   viewDetail(r: ReferralResponse): void {
+    this.chartCheck.set('idle');
     this.selectedReferral.set(r);
   }
   closeDetail(): void {

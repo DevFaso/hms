@@ -1,3 +1,7 @@
+import { LocaleNumberPipe } from '../shared/pipes/lab-value.pipe';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { glucoseMgDlToMmol } from '../shared/glucose-units';
+import { formatDecimal } from '../shared/i18n/app-locale';
 import {
   Component,
   computed,
@@ -6,9 +10,15 @@ import {
   signal,
   viewChild,
   ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
+import { saveBlob } from '../shared/download-file';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DeathDisputeDialogComponent } from '../mortality/death-dispute-dialog.component';
+import { VoidedDeathClosuresBannerComponent } from '../mortality/voided-death-closures-banner.component';
+import { SafeguardingBannerComponent } from './safeguarding-banner/safeguarding-banner.component';
+import { OrderReviewPanelComponent } from './order-review-panel/order-review-panel.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -23,9 +33,14 @@ import { PatientChartComponent } from './patient-chart/patient-chart.component';
 import {
   APPOINTMENT_VIEW_ROLES,
   CHART_REVIEW_VIEW_ROLES,
+  isFrontDeskOnly,
   CHART_VIEW_ROLES,
   ENCOUNTER_VIEW_ROLES,
+  STORYBOARD_VIEW_ROLES,
   VITALS_VIEW_ROLES,
+  VOIDED_CLOSURES_VIEW_ROLES,
+  SAFEGUARDING_VIEW_ROLES,
+  canInvokeCds,
 } from './patient-chart/chart-access';
 import { AdvanceDirectivesTabComponent } from './advance-directives/advance-directives-tab.component';
 import { DIRECTIVE_ROLES } from './advance-directives/directive-access';
@@ -43,6 +58,22 @@ import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner
 import { ChartReviewComponent } from './chart-review/chart-review.component';
 import { BreakGlassBannerComponent } from './break-glass-banner/break-glass-banner.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverDateOrInstant } from '../shared/date-utils';
+import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
+import { NursingNotesPanelComponent } from '../encounters/nursing-notes-panel/nursing-notes-panel.component';
+import { NursingNoteService } from '../services/nursing-note.service';
+import { PatientDemographicsEditComponent } from './patient-demographics-edit/patient-demographics-edit.component';
+import { isGrowthAge } from '../shared/patient-measures';
+import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { DashPipe } from '../shared/pipes/dash.pipe';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { NationalUniqueIdViewComponent } from './national-unique-id-view.component';
+
+/** The chart-restriction reason box: the server names it `reason` in a 400. */
+const RESTRICTION_REASON_FIELD = 'restriction-reason';
 
 type SectionKey = 'overview' | 'clinical' | 'documents' | 'care' | 'administration';
 
@@ -67,8 +98,20 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    DateTimePipe,
+    DashPipe,
+    SubmitGuardDirective,
+    LocaleNumberPipe,
+    MeasurePipe,
+    NursingNotesPanelComponent,
+    ClockTimePipe,
+    ServerTimePipe,
     CommonModule,
     FormsModule,
+    DeathDisputeDialogComponent,
+    VoidedDeathClosuresBannerComponent,
+    SafeguardingBannerComponent,
+    OrderReviewPanelComponent,
     RouterLink,
     TranslateModule,
     PatientChartComponent,
@@ -86,6 +129,8 @@ type TabKey =
     ChartReviewComponent,
     BreakGlassBannerComponent,
     EnumLabelPipe,
+    PatientDemographicsEditComponent,
+    NationalUniqueIdViewComponent,
   ],
   templateUrl: './patient-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -103,6 +148,8 @@ export class PatientDetailComponent implements OnInit {
   protected readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
   private readonly printService = inject(PrintLabelService);
+  // Optional: a few specs build the component outside a view (no ElementRef there).
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
 
   patient = signal<PatientResponse | null>(null);
   loading = signal(true);
@@ -207,13 +254,28 @@ export class PatientDetailComponent implements OnInit {
   /* Sub-tab data */
   vitals = signal<VitalSignResponse[]>([]);
   vitalsLoading = signal(false);
+  /** QA D504 — other hospitals' vitals are held back by the patient's opt-out. */
+  vitalsWithheld = signal(false);
   encounters = signal<EncounterResponse[]>([]);
   encountersLoading = signal(false);
+  /** QA D504 — other hospitals' encounters are held back by the patient's opt-out. */
+  encountersWithheld = signal(false);
   appointments = signal<AppointmentResponse[]>([]);
   appointmentsLoading = signal(false);
 
   /** The route's patient id; read by the template for the restricted-chart prompt (E8 #54). */
   patientId = '';
+
+  /**
+   * QA D1036 / D926: the full name with the middle name, each part once and
+   * single-spaced. The header and "Full name" showed first and last only.
+   */
+  fullName(p: Pick<PatientResponse, 'firstName' | 'middleName' | 'lastName'>): string {
+    return [p.firstName, p.middleName, p.lastName]
+      .map((part) => (part ?? '').trim())
+      .filter((part) => part !== '')
+      .join(' ');
+  }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -267,10 +329,30 @@ export class PatientDetailComponent implements OnInit {
 
   /** E8 #54 — the chart is restricted and the caller holds no live session: the page shows the declaration prompt. */
   readonly restricted = signal(false);
+  /**
+   * QA D998: a chart that does not open here (not registered at this
+   * hospital, or no longer there) is explained on this page. A toast followed
+   * by a redirect to the list was lost with the navigation, so the user saw
+   * the list with no word on why.
+   */
+  readonly unavailable = signal(false);
+
+  /** The urgent dispute of a recorded death: a doctor here; the server asks the role at this hospital. */
+  showDeathDispute = signal(false);
+
+  canDisputeDeath(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
+  }
+
+  onDeathDisputed(): void {
+    this.showDeathDispute.set(false);
+    this.loadPatient(this.patientId);
+  }
 
   loadPatient(id: string): void {
     this.loading.set(true);
     this.restricted.set(false);
+    this.unavailable.set(false);
     const hospitalId = this.scopedHospitalId() ?? undefined;
     this.patientService.getById(id, hospitalId).subscribe({
       next: (p) => {
@@ -284,8 +366,7 @@ export class PatientDetailComponent implements OnInit {
           this.restricted.set(true);
           return;
         }
-        this.toast.error(this.translate.instant('PATIENTS.NOT_FOUND'));
-        this.router.navigate(['/patients']);
+        this.unavailable.set(true);
       },
     });
   }
@@ -303,9 +384,17 @@ export class PatientDetailComponent implements OnInit {
     if (!p || this.restrictionSubmitting()) return;
     const reason = this.restrictionReason().trim();
     if (restricted && reason.length < 5) {
-      this.toast.error(this.translate.instant('PATIENTS.CHART_RESTRICTION_REASON_REQUIRED'));
+      const message = this.translate.instant('PATIENTS.CHART_RESTRICTION_REASON_REQUIRED');
+      refuseFields(
+        this.host?.nativeElement,
+        [RESTRICTION_REASON_FIELD],
+        [RESTRICTION_REASON_FIELD],
+        message,
+      );
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host?.nativeElement, [], [RESTRICTION_REASON_FIELD], '');
     this.restrictionSubmitting.set(true);
     this.patientService
       .setChartRestriction(p.id, restricted, restricted ? reason : undefined)
@@ -324,6 +413,15 @@ export class PatientDetailComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.restrictionSubmitting.set(false);
+          // A 400 that names the reason is shown on the field, not only in a toast.
+          const named = refusedFieldReasons(err, { reason: RESTRICTION_REASON_FIELD });
+          if (named.length) {
+            refuseFields(
+              this.host?.nativeElement,
+              named.map(([id, message]) => ({ id, message })),
+              [RESTRICTION_REASON_FIELD],
+            );
+          }
           this.toast.error(
             err?.error?.message ?? this.translate.instant('PATIENTS.CHART_RESTRICTION_FAILED'),
           );
@@ -339,6 +437,21 @@ export class PatientDetailComponent implements OnInit {
    *  clinicians the backend admits since audit decision D7. */
   canViewVitals(): boolean {
     return this.roleContext.hasAnyActiveRole(VITALS_VIEW_ROLES);
+  }
+
+  /**
+   * The staff vitals reads refuse a request with no hospital scope (a
+   * super-admin in global view): they used to answer with every hospital's
+   * vitals, gated by nothing and disclosed to no one. The tab declines to
+   * read without one, as the chart's Labs section does.
+   */
+  vitalsScoped(): boolean {
+    return this.scopedHospitalId() != null;
+  }
+
+  /** QA D927: only the roles `GET /nurse/notes` admits load the panel (a refused read would leave the page). */
+  canReadNursingNotes(): boolean {
+    return this.roleContext.hasAnyActiveRole(NursingNoteService.READER_ROLES);
   }
 
   /** Mirrors EncounterController's list READ gate — likewise not the
@@ -357,6 +470,16 @@ export class PatientDetailComponent implements OnInit {
    *  that difference. */
   canViewChartReview(): boolean {
     return this.roleContext.hasAnyActiveRole(CHART_REVIEW_VIEW_ROLES);
+  }
+
+  /**
+   * RCPT-CLIN (user decision 2026-11-06): the front desk reads no clinical
+   * content. The server refuses the storyboard and removes allergies and the
+   * history from the patient it answers; this hides what would otherwise read
+   * as "none recorded", a false statement about the patient.
+   */
+  isFrontDeskOnly(): boolean {
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
   }
 
   /** Mirrors GrowthChartController's @PreAuthorize list exactly — NOT the
@@ -391,7 +514,10 @@ export class PatientDetailComponent implements OnInit {
         this.addressHistory.set(entries);
         this.addressHistoryLoaded.set(true);
       },
-      error: () => this.toast.error(this.translate.instant('PATIENTS.ADDRESS_HISTORY_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PATIENTS.ADDRESS_HISTORY_FAILED'),
+        ),
     });
   }
 
@@ -416,12 +542,8 @@ export class PatientDetailComponent implements OnInit {
     this.patientService.downloadRecordPdf(this.patientId).subscribe({
       next: (blob) => {
         this.recordDownloadLoading.set(false);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `patient-record-${this.patientId}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
+        // QA D1009: named by the MRN the user can read, not the patient's database id.
+        saveBlob(blob, `patient-record-${this.patient()?.mrn || 'export'}.pdf`);
       },
       error: (err: HttpErrorResponse) => {
         this.recordDownloadLoading.set(false);
@@ -453,7 +575,7 @@ export class PatientDetailComponent implements OnInit {
       .then((text) => {
         // Show the server's own wording when it sent one; it names the
         // remedy. Anything unparseable falls back to the translated key.
-        let message = '';
+        let message: string;
         try {
           message = (JSON.parse(text) as { message?: string }).message ?? '';
         } catch {
@@ -487,11 +609,33 @@ export class PatientDetailComponent implements OnInit {
         this.wristbandLoading.set(false);
         this.printService.openForPrint(blob);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.wristbandLoading.set(false);
-        this.toast.error(this.translate.instant('PATIENTS.WRISTBAND_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PATIENTS.WRISTBAND_FAILED'));
       },
     });
+  }
+
+  /** QA D926: the demographics edit dialog is open. */
+  editingDemographics = signal(false);
+
+  /** QA D926: mirrors PATCH /patients/{id}'s @PreAuthorize list. */
+  canEditDemographics(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_RECEPTIONIST',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_DOCTOR',
+      'ROLE_SUPER_ADMIN',
+    ]);
+  }
+
+  /** QA D926: the corrected chart replaces the shown one. */
+  onDemographicsSaved(updated: PatientResponse): void {
+    const current = this.patient();
+    this.patient.set(current ? { ...current, ...updated } : updated);
+    this.editingDemographics.set(false);
   }
 
   /** Mirrors PatientPhotoController.WRITE_ROLES exactly (P3 #21). */
@@ -527,16 +671,39 @@ export class PatientDetailComponent implements OnInit {
    *  tab hides for adults rather than rendering a lifetime weight log. */
   showGrowthTab(): boolean {
     if (!this.canViewGrowth()) return false;
-    const dob = this.patient()?.dateOfBirth;
-    if (!dob) return false;
-    const ageMs = Date.now() - new Date(dob).getTime();
-    return ageMs >= 0 && ageMs < 20 * 365.25 * 24 * 3600 * 1000;
+    // QA D1077: one rule for every growth surface (shared/patient-measures).
+    return isGrowthAge(this.patient()?.dateOfBirth);
   }
 
   /** Whether the current user can view the structured Chart tab (roles that can
    *  access at least one of allergies / diagnoses / chart updates). */
   canViewChart(): boolean {
     return this.roleContext.hasAnyActiveRole(CHART_VIEW_ROLES);
+  }
+
+  /**
+   * The Best-Practice Advisory panel POSTs to /cds-services on load, which the
+   * backend admits for CDS_CLINICIAN_ROLES only. Reception, admins, the lab
+   * bench and the consulting clinicians open this page too; for them the
+   * panel is not rendered at all.
+   */
+  canSeeBpaPanel(): boolean {
+    return canInvokeCds(this.roleContext);
+  }
+
+  /** QA D1524: the voided-death banner, for the roles GET .../voided-closures admits. */
+  canSeeVoidedClosures(): boolean {
+    return this.roleContext.hasAnyActiveRole(VOIDED_CLOSURES_VIEW_ROLES);
+  }
+
+  /** r53: the child-protection vigilance banner, for the roles GET /safeguarding/patients/{id}/reviews admits. */
+  canSeeSafeguarding(): boolean {
+    return this.roleContext.hasAnyActiveRole(SAFEGUARDING_VIEW_ROLES);
+  }
+
+  /** QA D1524: the storyboard banner, for the roles GET /patients/{id}/storyboard admits. */
+  canSeeStoryboard(): boolean {
+    return this.roleContext.hasAnyActiveRole(STORYBOARD_VIEW_ROLES);
   }
 
   /** Insurance endpoints grant HOSPITAL_ADMIN/RECEPTIONIST/NURSE/DOCTOR only
@@ -551,29 +718,52 @@ export class PatientDetailComponent implements OnInit {
   }
 
   /**
-   * The documents tab is hospital-pinned (the backend reads through the
-   * hospital the patient is registered at). The chart has no scope selector
-   * of its own, so the tab hosts the cross-tenant chip and forwards the
-   * selection; a change re-fetches under the new X-Hospital-Id.
+   * The scope the Documents tab's list was loaded for.
+   *
+   * The tab is hospital-pinned (the backend reads through the hospital the
+   * patient is registered at). The chart has no scope selector of its own, so
+   * the tab hosts the cross-tenant chip and forwards the selection; a change
+   * re-fetches under the new X-Hospital-Id.
+   *
+   * DERIVED from the live scope, not a signal the chip writes into.
+   *
+   * `DocumentsTabComponent` reloads only when this input actually changes, and
+   * the value itself is never sent — the interceptor scopes the request — so
+   * the input has to track whatever the interceptor will send or the two drift
+   * apart. A `null` seed did that immediately (the chip's "All hospitals"
+   * emitted null, matched the seed, reloaded nothing, and the chip then read
+   * "all" over the pinned hospital's documents); a value captured once at
+   * construction does it more slowly, as soon as anything else moves the
+   * scope while the chart is open. The chip mutates `RoleContextService`
+   * BEFORE it emits, so reading the service covers the chip's own picks too,
+   * and its `scopeChange` output is no longer needed here.
    */
-  readonly documentsScope = signal<string | null>(null);
+  readonly documentsScope = computed(() => this.scopedHospitalId());
 
-  onDocumentsScopeChange(hospitalId: string | null): void {
-    this.documentsScope.set(hospitalId);
-  }
+  /** Mirrors PatientDocumentStaffController.READ_ROLES: the roles that read every
+   *  type of upload, no lab roles, no pharmacy (QA D112), never ROLE_PATIENT
+   *  (their reads stay on /me). */
+  static readonly DOCUMENT_CLINICAL_ROLES = [
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ];
 
-  /** Mirrors PatientDocumentStaffController.READ_ROLES: the roles that read a
-   *  chart, no lab roles, never ROLE_PATIENT (their reads stay on /me). */
+  /** QA D1599: the front desk opens insurance papers only (ACCESS_ROLES minus the above). */
+  static readonly DOCUMENT_INSURANCE_ROLES = ['ROLE_RECEPTIONIST'];
+
   canViewDocuments(): boolean {
     return this.roleContext.hasAnyActiveRole([
-      'ROLE_DOCTOR',
-      'ROLE_NURSE',
-      'ROLE_MIDWIFE',
-      'ROLE_PHARMACIST',
-      'ROLE_RECEPTIONIST',
-      'ROLE_HOSPITAL_ADMIN',
-      'ROLE_SUPER_ADMIN',
+      ...PatientDetailComponent.DOCUMENT_CLINICAL_ROLES,
+      ...PatientDetailComponent.DOCUMENT_INSURANCE_ROLES,
     ]);
+  }
+
+  /** The tab is the insurance-only view unless the active role reads every type. */
+  documentsInsuranceOnly(): boolean {
+    return !this.roleContext.hasAnyActiveRole(PatientDetailComponent.DOCUMENT_CLINICAL_ROLES);
   }
 
   /** Backend reads on /medical-history exclude admins (they may only delete). */
@@ -594,7 +784,13 @@ export class PatientDetailComponent implements OnInit {
 
   setTab(tab: TabKey): void {
     this.activeTab.set(tab);
-    if (tab === 'vitals' && this.canViewVitals() && this.vitals().length === 0) this.loadVitals();
+    if (
+      tab === 'vitals' &&
+      this.canViewVitals() &&
+      this.vitalsScoped() &&
+      this.vitals().length === 0
+    )
+      this.loadVitals();
     if (tab === 'encounters' && this.canViewEncounters() && this.encounters().length === 0)
       this.loadEncounters();
     if (tab === 'appointments' && this.canViewAppointments() && this.appointments().length === 0)
@@ -604,8 +800,9 @@ export class PatientDetailComponent implements OnInit {
   private loadVitals(): void {
     this.vitalsLoading.set(true);
     this.vitalService.getRecent(this.patientId).subscribe({
-      next: (v) => {
-        this.vitals.set(v);
+      next: (result) => {
+        this.vitals.set(result.items);
+        this.vitalsWithheld.set(result.withheld);
         this.vitalsLoading.set(false);
       },
       error: () => {
@@ -617,9 +814,10 @@ export class PatientDetailComponent implements OnInit {
 
   private loadEncounters(): void {
     this.encountersLoading.set(true);
-    this.encounterService.list({ patientId: this.patientId }).subscribe({
-      next: (e) => {
-        this.encounters.set(e);
+    this.encounterService.listForPatient(this.patientId).subscribe({
+      next: (result) => {
+        this.encounters.set(result.items);
+        this.encountersWithheld.set(result.withheld);
         this.encountersLoading.set(false);
       },
       error: () => {
@@ -651,7 +849,7 @@ export class PatientDetailComponent implements OnInit {
 
   getAge(dob?: string): string {
     if (!dob) return '—';
-    const birth = new Date(dob);
+    const birth = serverDateOrInstant(dob);
     const now = new Date();
     let age = now.getFullYear() - birth.getFullYear();
     if (
@@ -660,12 +858,19 @@ export class PatientDetailComponent implements OnInit {
     ) {
       age--;
     }
-    return this.translate.instant('PATIENTS.AGE_YEARS', { age });
+    return this.translate.instant(age === 1 ? 'PATIENTS.AGE_YEAR' : 'PATIENTS.AGE_YEARS', {
+      count: age,
+    });
   }
 
   /** True for a real measurement, including 0 — but not null/undefined.
    *  (A missing JSON key parses to undefined, which `=== null` misses; that
    *  exact gap once hid this tab's wire mismatch behind "sparse data".) */
+  /** QA D530: glucose shown in mmol/L, the unit the lab reports. */
+  glucoseMmol(mgDl: number | null | undefined): string {
+    return mgDl == null ? '' : formatDecimal(glucoseMgDlToMmol(mgDl), 1);
+  }
+
   hasValue(value: number | null | undefined): boolean {
     return value !== null && value !== undefined;
   }
@@ -694,6 +899,7 @@ export class PatientDetailComponent implements OnInit {
       case 'IN_PROGRESS':
         return 'status-badge scheduled';
       case 'CANCELLED':
+      case 'LEFT_WITHOUT_BEING_SEEN':
         return 'status-badge cancelled';
       default:
         return 'status-badge';

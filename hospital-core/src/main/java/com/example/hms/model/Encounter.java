@@ -18,7 +18,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -52,9 +52,25 @@ import java.util.Set;
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-@ToString(exclude = {"patient", "staff", "hospital", "appointment", "department", "assignment", "encounterTreatments", "encounterNote"})
+@ToString(exclude = {"patient", "staff", "hospital", "appointment", "department", "assignment", "encounterTreatments", "encounterNotes"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Encounter extends BaseEntity {
+
+    /**
+     * Marks the completed consultation a prescription creates when it has no
+     * visit to hang on (QA D41/D85). It is bookkeeping, not documentation, so
+     * the chart review and record PDF keep its notes out of "Notes".
+     */
+    public static final String PRESCRIPTION_ANCHOR_NOTE = "Auto-generated for prescription entry";
+
+    /**
+     * QA D759: the encounter only anchors a prescription written outside a
+     * visit. It is not a visit the patient made, so the patient's visit
+     * history leaves it out (its untranslated bookkeeping note with it).
+     */
+    public boolean isPrescriptionAnchor() {
+        return PRESCRIPTION_ANCHOR_NOTE.equals(notes);
+    }
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "patient_id", nullable = false,
@@ -65,8 +81,16 @@ public class Encounter extends BaseEntity {
     @OneToMany(mappedBy = "encounter", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<EncounterTreatment> encounterTreatments = new HashSet<>();
 
-    @OneToOne(mappedBy = "encounter", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private EncounterNote encounterNote;
+    /**
+     * QA D831: the encounter's note entries, oldest first. An outpatient visit
+     * has one; an inpatient stay has one per progress note, each with its own
+     * author, signature and addenda. {@link #getEncounterNote()} is the
+     * current (latest) entry.
+     */
+    @Builder.Default
+    @OneToMany(mappedBy = "encounter", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("createdAt ASC")
+    private java.util.List<EncounterNote> encounterNotes = new java.util.ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "staff_id", nullable = false,
@@ -117,6 +141,15 @@ public class Encounter extends BaseEntity {
     @Column(name = "chief_complaint", length = 2048)
     private String chiefComplaint;
 
+    /**
+     * RCPT-CLIN (user decision 2026-11-06): what the desk itself typed as the complaint.
+     * {@link #chiefComplaint} is overwritten by triage and the nursing intake, and a receptionist
+     * reads only this one, so a new writer of the clinical column cannot reach the desk by accident.
+     */
+    @Column(name = "desk_chief_complaint", columnDefinition = "TEXT")
+    @jakarta.persistence.Convert(converter = com.example.hms.security.EncryptedStringConverter.class)
+    private String deskChiefComplaint;
+
     /** ESI acuity score (1-5) assigned at triage (MVP 2). */
     @Column(name = "esi_score")
     private Integer esiScore;
@@ -148,6 +181,14 @@ public class Encounter extends BaseEntity {
     /** Discharge diagnoses stored as JSON array text (MVP 6). */
     @Column(name = "discharge_diagnoses", columnDefinition = "TEXT")
     private String dischargeDiagnoses;
+
+    /**
+     * The admission this INPATIENT encounter belongs to (QA D134/D135, V193).
+     * Null for every outpatient row. A discharge completes the encounters
+     * carrying its admission id and no others.
+     */
+    @Column(name = "admission_id")
+    private java.util.UUID admissionId;
 
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
@@ -215,16 +256,80 @@ public class Encounter extends BaseEntity {
         return this.encounterDate != null ? this.encounterDate.toLocalTime() : null;
     }
 
+    /**
+     * QA D831: the current note entry, the one created last (an entry not yet
+     * persisted is the newest). Null when the encounter has no note.
+     */
+    public EncounterNote getEncounterNote() {
+        if (encounterNotes == null || encounterNotes.isEmpty()) {
+            return null;
+        }
+        EncounterNote latest = null;
+        for (EncounterNote entry : encounterNotes) {
+            if (entry != null && (latest == null || !createdBefore(entry, latest))) {
+                latest = entry;
+            }
+        }
+        return latest;
+    }
+
+    /**
+     * The latest entry that carries a signature, or null. What a patient-facing
+     * summary may draw on: an unsigned draft is never shown to the patient.
+     */
+    public EncounterNote getLatestSignedEncounterNote() {
+        if (encounterNotes == null) {
+            return null;
+        }
+        EncounterNote latest = null;
+        for (EncounterNote entry : encounterNotes) {
+            if (entry != null && entry.getSignedAt() != null
+                    && (latest == null || !createdBefore(entry, latest))) {
+                latest = entry;
+            }
+        }
+        return latest;
+    }
+
+    /**
+     * Provisional platform rule (unsigned-note workflow): while any note entry of the visit waits for
+     * its author's signature, the visit's summary is shown as not finalised.
+     */
+    public boolean hasNoteAwaitingSignature() {
+        return encounterNotes != null && encounterNotes.stream()
+            .anyMatch(entry -> entry != null && entry.awaitsSignature());
+    }
+
+    /** True when {@code a} was created strictly before {@code b}; an unsaved entry is the newest. */
+    private static boolean createdBefore(EncounterNote a, EncounterNote b) {
+        if (a.getCreatedAt() == null) {
+            return false;
+        }
+        return b.getCreatedAt() == null || a.getCreatedAt().isBefore(b.getCreatedAt());
+    }
+
+    /**
+     * Adds {@code note} as an entry of this encounter (once), binding it to the
+     * encounter's patient and hospital. A null clears the entries.
+     */
     public void setEncounterNote(EncounterNote note) {
-        this.encounterNote = note;
-        if (note != null) {
-            note.setEncounter(this);
-            if (this.patient != null) {
-                note.setPatient(this.patient);
-            }
-            if (this.hospital != null) {
-                note.setHospital(this.hospital);
-            }
+        if (encounterNotes == null) {
+            encounterNotes = new java.util.ArrayList<>();
+        }
+        if (note == null) {
+            encounterNotes.clear();
+            return;
+        }
+        note.setEncounter(this);
+        if (this.patient != null) {
+            note.setPatient(this.patient);
+        }
+        if (this.hospital != null) {
+            note.setHospital(this.hospital);
+        }
+        boolean present = encounterNotes.stream().anyMatch(entry -> entry == note);
+        if (!present) {
+            encounterNotes.add(note);
         }
     }
 

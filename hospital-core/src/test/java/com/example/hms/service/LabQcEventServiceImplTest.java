@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.enums.LabQcEventLevel;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabQcEventMapper;
 import com.example.hms.model.LabQcEvent;
@@ -37,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabQcEventServiceImplTest {
 
@@ -163,8 +165,8 @@ class LabQcEventServiceImplTest {
             .build();
 
         assertThatThrownBy(() -> service.recordQcEvent(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("hospitalId");
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "hospitalId");
     }
 
     @Test
@@ -176,8 +178,9 @@ class LabQcEventServiceImplTest {
             .build();
 
         assertThatThrownBy(() -> service.recordQcEvent(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("measuredValue");
+            // QA round 29 (assertion changed): named on its own field, not in the sentence.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsOnlyKeys("measuredValue"));
     }
 
     @Test
@@ -189,8 +192,9 @@ class LabQcEventServiceImplTest {
             .build();
 
         assertThatThrownBy(() -> service.recordQcEvent(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("expectedValue");
+            // QA round 29 (assertion changed): named on its own field, not in the sentence.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsOnlyKeys("expectedValue"));
     }
 
     @Test

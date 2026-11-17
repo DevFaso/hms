@@ -34,7 +34,7 @@ service. There is no admin-UI toggle.
 
 4. **Who can run it:** kickoff, poll and download all require
    `SUPER_ADMIN` or `HOSPITAL_ADMIN` (a bulk export is a mass PHI extract;
-   `/fhir/**` itself carries no role gate, so the gate lives in the service
+   `SecurityConfig` admits the same pair on the two `$export` paths, and the gate also lives in the service
    and on the status controller). Every call must carry an active hospital
    scope (`X-Hospital-Id` for super-admins) — kickoff without one is a 400,
    and jobs are pinned to that hospital for their lifetime.

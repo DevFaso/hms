@@ -1,5 +1,9 @@
 import { Injectable, signal, computed } from '@angular/core';
 
+import { expandRoleEquivalents, roleSatisfies } from './role-equivalence';
+
+const HELD_ROLES_KEY = 'hms.heldRoles';
+
 @Injectable({ providedIn: 'root' })
 export class RoleContextService {
   isReceptionist(): boolean {
@@ -45,6 +49,101 @@ export class RoleContextService {
   private readonly _selectedHospitalId = signal<string | null>(null);
 
   readonly activeHospitalIdSignal = computed(() => this._activeHospitalId());
+
+  private readonly _providerUser = signal<boolean>(false);
+
+  /**
+   * The caller is confined to a provider facility (pharmacy or laboratory),
+   * as the session bootstrap states it: what such a user may not reach (the
+   * emergency-broadcast socket) is not attempted.
+   */
+  readonly providerUser = computed(() => this._providerUser());
+
+  setProviderUser(providerUser: boolean): void {
+    this._providerUser.set(providerUser);
+  }
+
+  private readonly _sessionResolved = signal<boolean>(false);
+
+  /**
+   * The session bootstrap has been applied on this page (or, when the server
+   * could not be asked, the stored profile stands in): until then
+   * {@link providerUser} is only its initial false, not an answer.
+   */
+  readonly sessionResolved = computed(() => this._sessionResolved());
+
+  markSessionResolved(): void {
+    this._sessionResolved.set(true);
+  }
+
+  /** Sign-out: the next user starts unresolved and unconfined, never with the last user's flags. */
+  clearSession(): void {
+    this._providerUser.set(false);
+    this._sessionResolved.set(false);
+    this.setHeldRoles([]);
+    this._refusedRoles.set(null);
+  }
+
+  /**
+   * Every role the account holds, as the login role picker listed them. The
+   * JWT carries only the role picked there, so without this a refused page
+   * cannot tell the user that another of their roles would open it. Kept in
+   * sessionStorage so a reload of the 403 page still knows it; a convenience
+   * only, never an authorization input.
+   */
+  private readonly _heldRoles = signal<string[]>(RoleContextService.readHeldRoles());
+
+  /** The roles the last refused route asked for; null when the refusal came from the server. */
+  private readonly _refusedRoles = signal<string[] | null>(null);
+
+  get heldRoles(): string[] {
+    return this._heldRoles();
+  }
+
+  setHeldRoles(roles: string[]): void {
+    this._heldRoles.set(roles);
+    try {
+      if (roles.length) {
+        sessionStorage.setItem(HELD_ROLES_KEY, JSON.stringify(roles));
+      } else {
+        sessionStorage.removeItem(HELD_ROLES_KEY);
+      }
+    } catch {
+      // Storage blocked: the hint simply has less to go on after a reload.
+    }
+  }
+
+  /** Records what a refused route required, for the 403 page's hint. */
+  noteRefusal(requiredRoles: string[] | null): void {
+    this._refusedRoles.set(requiredRoles);
+  }
+
+  /**
+   * A role the account holds, other than the active one, that would have
+   * opened the refused page: the first held role satisfying the route's
+   * roles, or — for a server refusal, whose required roles the portal cannot
+   * know — ROLE_SUPER_ADMIN when held, since it reaches everything else.
+   */
+  roleThatWouldAllow(): string | null {
+    const active = this._activeRole();
+    if (!active) return null;
+    const others = this._heldRoles().filter((r) => r !== active);
+    const required = this._refusedRoles();
+    if (required?.length) {
+      return others.find((r) => roleSatisfies(required, r)) ?? null;
+    }
+    return others.includes('ROLE_SUPER_ADMIN') ? 'ROLE_SUPER_ADMIN' : null;
+  }
+
+  private static readHeldRoles(): string[] {
+    try {
+      const raw = sessionStorage.getItem(HELD_ROLES_KEY);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter((r): r is string => typeof r === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
 
   /** True when the current user holds ROLE_SUPER_ADMIN. */
   readonly isSuperAdmin = computed(() => this._activeRoles().includes('ROLE_SUPER_ADMIN'));
@@ -110,9 +209,16 @@ export class RoleContextService {
 
   setRoles(roles: string[]): void {
     this._activeRoles.set(roles);
+    const active = this._activeRole();
     // Auto-set activeRole when exactly one role
     if (roles.length === 1) {
       this._activeRole.set(roles[0]);
+    } else if (active && !roles.includes(active)) {
+      this._activeRole.set(null);
+    }
+    if (!roles.includes('ROLE_SUPER_ADMIN')) {
+      this._globalView.set(false);
+      this._selectedHospitalId.set(null);
     }
   }
 
@@ -128,8 +234,29 @@ export class RoleContextService {
    * Active-role-aware check for gating page actions. When the user picked an
    * active role at login only that role counts (a multi-role user scoped to
    * NURSE must not see doctor-only actions); otherwise all JWT roles apply.
+   *
+   * Applies the same doctor equivalence as `RoleGuard` and the shell nav
+   * (`role-equivalence.ts`, role audit C2): a physician or surgeon satisfies a
+   * list naming ROLE_DOCTOR. It used to compare raw strings, so every
+   * in-component gate was narrower than the route hosting it and hid controls
+   * the backend would serve. The expansion widens the HELD roles, never the
+   * list asked about: a list with no ROLE_DOCTOR in it (the pharmacist-verify
+   * gate, say) admits exactly whom it admitted before.
    */
   hasAnyActiveRole(roles: string[]): boolean {
+    const active = this._activeRole();
+    if (active) return roleSatisfies(roles, active);
+    return expandRoleEquivalents(this._activeRoles()).some((r) => roles.includes(r));
+  }
+
+  /**
+   * `hasAnyActiveRole` WITHOUT the doctor equivalence, for the few gates whose
+   * backend admits physicians and surgeons at the annotation and then refuses
+   * them one layer down (`RoleValidator.isDoctor` matches the stored
+   * assignment code DOCTOR only). Expanding there would offer a control that
+   * can only fail. Each caller says which service check it mirrors.
+   */
+  hasAnyActiveRoleExactly(roles: string[]): boolean {
     const active = this._activeRole();
     if (active) return roles.includes(active);
     return roles.some((r) => this._activeRoles().includes(r));

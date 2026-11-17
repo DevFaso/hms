@@ -32,4 +32,10 @@ public class PatientEducationQuestionSubmitDTO {
     private Boolean isUrgent;
 
     private Boolean requiresInPersonDiscussion;
+
+    /**
+     * Optional, for a general question (no resource): the hospital it is for,
+     * one of the patient's registrations.
+     */
+    private UUID hospitalId;
 }

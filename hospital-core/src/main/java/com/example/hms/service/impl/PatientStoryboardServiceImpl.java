@@ -54,13 +54,7 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 public class PatientStoryboardServiceImpl implements PatientStoryboardService {
 
-    /** Cap each chip list to keep the banner compact on mobile. */
-    static final int MAX_ALLERGIES = 8;
-    static final int MAX_PROBLEMS = 8;
-    static final int MAX_DIRECTIVES = 5;
-
-    private static final Set<EncounterStatus> TERMINAL_ENCOUNTER_STATUSES =
-        Set.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED);
+    private static final Set<EncounterStatus> TERMINAL_ENCOUNTER_STATUSES = EncounterStatus.CLOSED;
 
     private static final Set<AllergySeverity> HIGH_SEVERITY =
         Set.of(AllergySeverity.SEVERE, AllergySeverity.LIFE_THREATENING);
@@ -93,11 +87,14 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
         // problems the D3 rule withholds; the ledger row names the session.
         boolean unlocked = readable != null && breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
-        List<AllergySummaryDTO> allergies = loadAllergies(patientId);
+        List<AllergySummaryDTO> allergies = loadAllergies(patientId, hospitalId);
         // E9 #64 — what D3 withholds is counted, so the banner can say so.
         WithheldRows withheld = new WithheldRows();
         List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable, unlocked, withheld);
         ActiveEncounterDTO activeEncounter = loadActiveEncounter(patientId, hospitalId);
+        // QA D252: with no open visit the banner said "no visit" although the
+        // patient had finished ones; it now names the last one.
+        ActiveEncounterDTO lastEncounter = activeEncounter == null ? loadLastEncounter(patientId, hospitalId) : null;
         CodeStatusDTO codeStatus = loadCodeStatus(patient, readable);
         // E9 #60 — the storyboard surfaces foreign allergies (#56), problems and
         // directives (#59a); every one of them is accounted, once per source
@@ -124,8 +121,14 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         return PatientStoryboardDTO.builder()
             .patient(buildHeader(patient, hospitalId))
             .allergies(allergies)
+            // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
+            .allergiesWithheld(com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                allergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId))
+            // QA D504: the problems and encounters below are narrowed the same way.
+            .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId))
             .problems(problems)
             .activeEncounter(activeEncounter)
+            .lastEncounter(lastEncounter)
             .codeStatus(codeStatus)
             .hasHighSeverityAllergy(highSeverityAllergy)
             .hasChronicProblem(chronicProblem)
@@ -167,15 +170,20 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
      * penicillin allergy recorded at Hôpital A is exactly the row the ED at
      * Hôpital B must see.
      */
-    private List<AllergySummaryDTO> loadAllergies(UUID patientId) {
-        List<PatientAllergy> source = allergyRepository.findByPatient_Id(patientId);
+    private List<AllergySummaryDTO> loadAllergies(UUID patientId, UUID hospitalId) {
+        // Round 33 (CX-003 class): every active allergy, problem and directive. The banner
+        // stopped at 8, 8 and 5 with no word, and a clinician read a cut list as complete.
+        // QA D110: an opted-out patient's other-hospital rows stay there.
+        // QA D504: unless a break-the-glass session overrides the opt-out.
+        List<PatientAllergy> source = com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
+            allergyRepository, recordAccessPolicy,
+            HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(), patientId, hospitalId);
         return source.stream()
             .filter(PatientAllergy::isActive)
             .sorted(Comparator
                 .comparing(PatientStoryboardServiceImpl::severityRank).reversed()
                 .thenComparing(a -> Optional.ofNullable(a.getRecordedDate()).orElse(LocalDate.MIN),
                     Comparator.reverseOrder()))
-            .limit(MAX_ALLERGIES)
             .map(this::toAllergyDto)
             .toList();
     }
@@ -201,7 +209,6 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
                 .comparing(PatientProblem::isChronic).reversed()
                 .thenComparing(p -> Optional.ofNullable(p.getOnsetDate()).orElse(LocalDate.MIN),
                     Comparator.reverseOrder()))
-            .limit(MAX_PROBLEMS)
             .map(this::toProblemDto)
             .toList();
     }
@@ -227,6 +234,22 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .orElse(null);
     }
 
+    /** QA D252: the latest COMPLETED visit at this hospital (any hospital in global view). */
+    private ActiveEncounterDTO loadLastEncounter(UUID patientId, UUID hospitalId) {
+        // QA D791: the last visit, not the last prescription written outside one.
+        java.util.stream.Stream<Encounter> completed = hospitalId == null
+            ? encounterRepository.findByPatient_Id(patientId).stream()
+                .filter(e -> e.getStatus() == EncounterStatus.COMPLETED && !e.isPrescriptionAnchor())
+            : encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(patientId, hospitalId,
+                java.util.EnumSet.complementOf(java.util.EnumSet.of(EncounterStatus.COMPLETED))).stream()
+                .filter(e -> !e.isPrescriptionAnchor());
+        return completed
+            .max(Comparator.comparing(Encounter::getEncounterDate,
+                Comparator.nullsFirst(Comparator.naturalOrder())))
+            .map(this::toEncounterDto)
+            .orElse(null);
+    }
+
     /** E9 #59 — a code status is a property of the patient; directives travel with them. */
     private CodeStatusDTO loadCodeStatus(Patient patient, Set<UUID> readable) {
         List<AdvanceDirective> directives = readable != null
@@ -237,7 +260,6 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .sorted(Comparator
                 .comparing((AdvanceDirective d) -> Optional.ofNullable(d.getEffectiveDate()).orElse(LocalDate.MIN))
                 .reversed())
-            .limit(MAX_DIRECTIVES)
             .map(this::toDirectiveDto)
             .toList();
         if ((patient.getCodeStatus() == null || patient.getCodeStatus().isBlank())
@@ -309,7 +331,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         if (hospitalId == null) {
             return null;
         }
-        return hospitalRepository.findById(hospitalId)
+        return hospitalRepository.findClinicalById(hospitalId)
             .map(Hospital::getName)
             .orElse(null);
     }

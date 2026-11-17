@@ -56,6 +56,42 @@ class SepsisQsofaProtocolRuleTest {
             vitals, problems, List.of());
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.ConsciousnessLevel.class,
+        names = {"NEW_CONFUSION", "VOICE", "PAIN", "UNRESPONSIVE"})
+    void qaD953_theConsciousnessLevelRecordedAtTriageCounts(com.example.hms.enums.ConsciousnessLevel level) {
+        when(repo.findByProtocolCodeAndActiveTrue("SEPSIS_QSOFA"))
+            .thenReturn(Optional.of(activeProtocol()));
+        PatientVitalSign triage = vitals(28, 85, LocalDateTime.now().minusMinutes(20));
+        triage.setConsciousnessLevel(level);
+
+        List<CdsCard> cards = rule.evaluate(context(List.of(triage), List.of()));
+
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).detail()).contains("3/3");
+    }
+
+    @Test
+    void qaD953_anAlertPatientScoresNoMentationPoint() {
+        PatientVitalSign triage = vitals(28, 85, LocalDateTime.now().minusMinutes(20));
+        triage.setConsciousnessLevel(com.example.hms.enums.ConsciousnessLevel.ALERT);
+        assertThat(rule.scoreQsofa(List.of(triage), List.of()).ams()).isFalse();
+    }
+
+    @Test
+    void qaD953_aFrenchProblemEntryCountsAsAlteredMentation() {
+        PatientVitalSign v = vitals(28, 130, LocalDateTime.now().minusMinutes(20));
+        assertThat(rule.scoreQsofa(List.of(v), List.of(problem("Altération de la conscience"))).ams()).isTrue();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "alteration de la conscience", "ENCEPHALOPATHIE hepatique", "encefalopatia", "Confusion aigue"})
+    void qaD953_aProblemTypedWithoutAccentsStillCounts(String entry) {
+        PatientVitalSign v = vitals(28, 130, LocalDateTime.now().minusMinutes(20));
+        assertThat(rule.scoreQsofa(List.of(v), List.of(problem(entry))).ams()).isTrue();
+    }
+
     @Test
     void firesWhenRrAndSbpBothMeetCriteriaInWindow() {
         when(repo.findByProtocolCodeAndActiveTrue("SEPSIS_QSOFA"))
@@ -133,5 +169,30 @@ class SepsisQsofaProtocolRuleTest {
         BpaRuleContext empty = new BpaRuleContext(null, UUID.randomUUID(),
             List.of(), List.of(), List.of());
         assertThat(rule.evaluate(empty)).isEmpty();
+    }
+
+    /** QA D606: the exact QA case — a 6-year-old, RR 24-28, SBP 95-100. */
+    @Test
+    void noAdultCardForASixYearOld() {
+        when(repo.findByProtocolCodeAndActiveTrue("SEPSIS_QSOFA"))
+            .thenReturn(Optional.of(activeProtocol()));
+        Patient child = patient();
+        child.setDateOfBirth(java.time.LocalDate.now().minusYears(6));
+        BpaRuleContext ctx = new BpaRuleContext(child, UUID.randomUUID(),
+            List.of(vitals(28, 95, LocalDateTime.now().minusHours(1)),
+                vitals(24, 100, LocalDateTime.now().minusHours(2))),
+            List.of(), List.of());
+        assertThat(rule.evaluate(ctx)).isEmpty();
+    }
+
+    @Test
+    void adultWithABirthDateStillGetsTheCard() {
+        when(repo.findByProtocolCodeAndActiveTrue("SEPSIS_QSOFA"))
+            .thenReturn(Optional.of(activeProtocol()));
+        Patient adult = patient();
+        adult.setDateOfBirth(java.time.LocalDate.now().minusYears(18));
+        BpaRuleContext ctx = new BpaRuleContext(adult, UUID.randomUUID(),
+            List.of(vitals(24, 95, LocalDateTime.now().minusHours(1))), List.of(), List.of());
+        assertThat(rule.evaluate(ctx)).hasSize(1);
     }
 }

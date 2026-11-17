@@ -3,7 +3,9 @@ package com.example.hms.service;
 import static com.example.hms.config.SecurityConstants.*;
 
 import com.example.hms.enums.LabTestDefinitionApprovalStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.mapper.LabTestDefinitionMapper;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestReferenceRange;
 import com.example.hms.model.User;
@@ -13,12 +15,13 @@ import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.payload.dto.LabTestReferenceRangeDTO;
+import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.terminology.TerminologyCodes;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
@@ -27,7 +30,7 @@ import com.itextpdf.layout.element.Cell;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.UnitValue;
-import jakarta.persistence.EntityNotFoundException;
+import com.example.hms.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -52,17 +55,27 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
-    private static final String LAB_TEST_DEFINITION_NOT_FOUND = "Lab Test Definition not found";
+    private static final String LAB_TEST_DEFINITION_NOT_FOUND = "labtestdefinition.notfound";
     private static final String CURRENT_USER_RESOLUTION_ERROR = "Unable to resolve current user context";
-    private static final String ASSIGNMENT_NOT_FOUND = "Assignment not found";
+    private static final String ASSIGNMENT_NOT_FOUND = "assignment.notfound";
 
     private final LabTestDefinitionRepository repository;
     private final LabTestDefinitionMapper mapper;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final UserRepository userRepository;
+    private final HospitalRepository hospitalRepository;
+    private final ActingScopeResolver actingScopeResolver;
+    /** QA D213: each approval step is audited by name. */
+    private final com.example.hms.service.AuditEventLogService auditEventLogService;
+    private final com.example.hms.repository.LabOrderRepository labOrderRepository;
+
+    /** Roles that may author or edit a definition AT a hospital (D30: checked at that hospital). */
+    private static final Set<String> HOSPITAL_MANAGE_ROLES = Set.of(
+        ROLE_HOSPITAL_ADMIN, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN, ROLE_LAB_SCIENTIST, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER);
 
     @Override
     public LabTestDefinitionResponseDTO create(LabTestDefinitionRequestDTO dto) {
+        requireOrderedRanges(dto.getReferenceRanges(), REFERENCE_RANGES_FIELD);
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test creation");
@@ -71,45 +84,197 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         User currentUser = userRepository.findByUsername(username)
             .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
 
+        // D30: a definition belongs to the hospital it was authored at. It was
+        // saved with hospital_id NULL whatever the caller sent - a global row
+        // every other tenant read, whose own author then got 403 on its
+        // reference ranges because global rows are super-admin only.
         UserRoleHospitalAssignment assignment = null;
+        Hospital hospital = null;
         if (dto.getAssignmentId() != null) {
             assignment = assignmentRepository.findById(dto.getAssignmentId())
-                .orElseThrow(() -> new EntityNotFoundException(ASSIGNMENT_NOT_FOUND));
-            assertUserCanManageHospital(currentUser, assignment);
-        } else {
-            assertUserCanManageGlobal(currentUser);
+                .orElseThrow(() -> new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND));
+            assertOwnAssignment(currentUser, assignment);
+            hospital = assignment.getHospital();
+            if (hospital == null) {
+                throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.assignmentNoHospital"));
+            }
+            assertWithinActiveScope(currentUser, hospital.getId());
+            assertUserCanManageHospitalId(currentUser, hospital.getId());
+        } else if (!isSuperAdmin(currentUser)) {
+            // No assignment named: the active hospital is the scope. Only a
+            // super-admin creates a global (hospital-less) definition.
+            UUID activeHospitalId = pinnedHospitalId();
+            if (activeHospitalId == null) {
+                throw new AccessDeniedException("Only Super Admins may manage global lab test definitions.");
+            }
+            assertUserCanManageHospitalId(currentUser, activeHospitalId);
+            hospital = hospitalRepository.findById(activeHospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", activeHospitalId));
         }
 
         dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
+        // QA D1120: a code already live in this catalogue is refused, not
+        // silently duplicated; a changed test is a new version of it.
+        requireCodeFree(dto.getTestCode(), hospital != null ? hospital.getId() : null, null);
         LabTestDefinition entity = mapper.toEntity(dto, assignment);
-        entity.setHospital(null);
+        entity.setHospital(hospital);
         return mapper.toDto(repository.save(entity));
+    }
+
+    /**
+     * QA D1120: refuses {@code testCode} when a definition that is not
+     * retired already carries it in the same catalogue (the hospital's, or the
+     * global one for a null hospital), other than {@code selfId}. A second
+     * "K" was accepted silently and linked to nothing, so a live range could
+     * be changed only by retiring the old definition and starting again.
+     */
+    private void requireCodeFree(String testCode, UUID hospitalId, UUID selfId) {
+        if (testCode == null || testCode.isBlank()) {
+            return;
+        }
+        String code = testCode.trim();
+        List<LabTestDefinition> live = hospitalId != null
+            ? repository.findLiveByCodeAtHospital(code, hospitalId)
+            : repository.findLiveGlobalByCode(code);
+        boolean taken = live != null && live.stream().anyMatch(other -> !Objects.equals(other.getId(), selfId));
+        if (taken) {
+            // QA D1338 (round 29): still a 409, now marked on the code field.
+            throw new com.example.hms.exception.ConflictException("testCode:"
+                + com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.duplicateCode",
+                    code.toUpperCase(Locale.ROOT)));
+        }
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public LabTestDefinitionResponseDTO createNewVersion(UUID id) {
+        String username = SecurityUtils.getCurrentUsername();
+        if (username == null) {
+            throw new AccessDeniedException("Unauthenticated access to lab test versioning");
+        }
+        User currentUser = userRepository.findByUsername(username)
+            .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
+        LabTestDefinition current = repository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+        // Authored like a new definition, at the definition's own hospital.
+        assertCanManage(currentUser, current);
+        // Only the live version is versioned: a draft is edited in place, and a
+        // retired one is history.
+        if (current.getApprovalStatus() != LabTestDefinitionApprovalStatus.ACTIVE) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.versionOnlyActive"));
+        }
+        // One version in progress at a time: a second one would race the first
+        // to replace the same live definition.
+        boolean inProgress = repository.findBySupersedesDefinitionId(current.getId()).stream()
+            .anyMatch(next -> next.getApprovalStatus() != LabTestDefinitionApprovalStatus.RETIRED);
+        if (inProgress) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.versionInProgress"));
+        }
+        LabTestDefinition next = LabTestDefinition.builder()
+            .testCode(current.getTestCode())
+            .name(current.getName())
+            .category(current.getCategory())
+            .description(current.getDescription())
+            .sampleType(current.getSampleType())
+            .unit(current.getUnit())
+            .loincCode(current.getLoincCode())
+            .loincDisplay(current.getLoincDisplay())
+            .preparationInstructions(current.getPreparationInstructions())
+            .turnaroundTimeMinutes(current.getTurnaroundTimeMinutes())
+            .expectedResult(current.getExpectedResult())
+            .pointOfCare(current.isPointOfCare())
+            .referenceRanges(copyRanges(current.getReferenceRanges()))
+            .assignment(current.getAssignment())
+            .hospital(current.getHospital())
+            // A DRAFT, not orderable, through the same four-eyes approval.
+            .active(false)
+            .approvalStatus(LabTestDefinitionApprovalStatus.DRAFT)
+            .supersedesDefinitionId(current.getId())
+            .versionNumber((current.getVersionNumber() != null ? current.getVersionNumber() : 1) + 1)
+            .build();
+        LabTestDefinition saved = repository.save(next);
+        auditApprovalStep(currentUser, saved, "NEW_VERSION", false);
+        return mapper.toDto(saved);
+    }
+
+    private static UUID hospitalIdOf(LabTestDefinition definition) {
+        return definition.getHospital() != null ? definition.getHospital().getId() : null;
+    }
+
+    /** QA D1120: the ranges as independent copies, every field kept, so editing the draft never touches the live ones. */
+    private static List<com.example.hms.model.LabTestReferenceRange> copyRanges(
+            List<com.example.hms.model.LabTestReferenceRange> ranges) {
+        List<com.example.hms.model.LabTestReferenceRange> copies = new java.util.ArrayList<>();
+        if (ranges != null) {
+            ranges.stream().filter(Objects::nonNull).forEach(range -> copies.add(range.toBuilder().build()));
+        }
+        return copies;
+    }
+
+    /**
+     * QA D1120: activating a version retires the one it replaces, in the same
+     * transaction, so the test code is live exactly once. Its orders and
+     * results keep pointing at it: they were graded against it as it stood.
+     */
+    private void retireSupersededVersion(User currentUser, LabTestDefinition activated) {
+        if (activated.getSupersedesDefinitionId() == null) {
+            return;
+        }
+        repository.findById(activated.getSupersedesDefinitionId())
+            .filter(previous -> previous.getApprovalStatus() != LabTestDefinitionApprovalStatus.RETIRED)
+            // Only in the same catalogue: a link never reaches another hospital's definition.
+            .filter(previous -> Objects.equals(hospitalIdOf(previous), hospitalIdOf(activated)))
+            .ifPresent(previous -> {
+                previous.setApprovalStatus(LabTestDefinitionApprovalStatus.RETIRED);
+                previous.setActive(false);
+                LabTestDefinition retired = repository.save(previous);
+                auditApprovalStep(currentUser, retired, "RETIRE_SUPERSEDED", false);
+            });
     }
 
     @Override
     public LabTestDefinitionResponseDTO getById(UUID id) {
-        return mapper.toDto(repository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND)));
+        LabTestDefinition definition = repository.findById(id)
+            .filter(this::isVisibleToCaller)
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+        return mapper.toDto(definition);
     }
 
+    /**
+     * D30: the catalog a caller reads is the global rows plus their active
+     * hospital's own. A super-admin in global view (no active hospital) reads
+     * every row; anyone else with no active hospital reads the global rows.
+     */
     @Override
     public List<LabTestDefinitionResponseDTO> getAll() {
-        return repository.findAll()
-                .stream()
+        ActingScope scope = actingScopeResolver.current();
+        List<LabTestDefinition> rows = scope instanceof ActingScope.Global
+            ? repository.findAll()
+            : repository.findVisibleAt(pinnedHospitalIdOf(scope));
+        return rows.stream()
                 .map(mapper::toDto)
                 .toList();
     }
 
     @Override
     public List<LabTestDefinitionResponseDTO> getActiveByHospital(UUID hospitalId) {
+        // The path id is a claim, not a scope.
+        if (hospitalId != null && !mayReadHospital(hospitalId)) {
+            throw new AccessDeniedException("Not permitted to read this hospital's lab test catalog.");
+        }
         List<LabTestDefinition> globalDefinitions = repository.findByHospitalIsNullAndActiveTrue();
         List<LabTestDefinition> hospitalDefinitions = hospitalId != null
             ? repository.findByHospital_IdAndActiveTrue(hospitalId)
             : List.of();
 
         Map<String, LabTestDefinition> deduplicated = new LinkedHashMap<>();
-        hospitalDefinitions.forEach(def -> deduplicated.put(def.getTestCode(), def));
-        globalDefinitions.forEach(def -> deduplicated.putIfAbsent(def.getTestCode(), def));
+        // QA D535: the active catalog lists only what may be ordered.
+        hospitalDefinitions.stream().filter(LabTestDefinition::isOrderable)
+            .forEach(def -> deduplicated.put(def.getTestCode(), def));
+        globalDefinitions.stream().filter(LabTestDefinition::isOrderable)
+            .forEach(def -> deduplicated.putIfAbsent(def.getTestCode(), def));
 
         return deduplicated.values().stream()
                 .map(mapper::toDto)
@@ -118,6 +283,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO update(UUID id, LabTestDefinitionRequestDTO dto) {
+        requireOrderedRanges(dto.getReferenceRanges(), REFERENCE_RANGES_FIELD);
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test update");
@@ -126,32 +292,57 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
 
         LabTestDefinition existing = repository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
-        if (isGlobalDefinition(existing)) {
-            assertUserCanManageGlobal(currentUser);
-        } else {
-            assertUserCanManageHospital(currentUser, existing.getAssignment());
-        }
+        assertCanManage(currentUser, existing);
+        assertNotRetired(existing);
 
         dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
 
-        if (dto.getAssignmentId() != null) {
-            if (existing.getAssignment() == null
-                || !dto.getAssignmentId().equals(existing.getAssignment().getId())) {
-                UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
-                    .orElseThrow(() -> new EntityNotFoundException(ASSIGNMENT_NOT_FOUND));
-                assertUserCanManageHospital(currentUser, assignment);
-                existing.setAssignment(assignment);
-            }
-        } else if (existing.getAssignment() != null) {
-            assertUserCanManageGlobal(currentUser);
-            existing.setAssignment(null);
-            existing.setHospital(null);
+        applyAssignmentChange(dto, existing, currentUser);
+        if (dto.getReferenceRanges() != null) {
+            assertRangesEditable(existing, mapper.mapRangeDtosToEntities(dto.getReferenceRanges()));
         }
-        existing.setHospital(null);
+        assertClinicalFieldsEditable(existing, dto);
+        // QA D1120: a version keeps the code of the test it replaces; any
+        // other changed code must not already be live in the catalogue.
+        if (dto.getTestCode() != null && !sameText(existing.getTestCode(), dto.getTestCode())) {
+            if (existing.getSupersedesDefinitionId() != null) {
+                throw new com.example.hms.exception.ConflictException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.versionCodeFixed"));
+            }
+            requireCodeFree(dto.getTestCode(), existing.getHospital() != null ? existing.getHospital().getId() : null,
+                existing.getId());
+        }
+        // Activation belongs to the approval workflow: an edit may switch a
+        // definition off, never on (QA D159, same bypass as the ranges).
+        if (Boolean.TRUE.equals(dto.getActive()) && !existing.isActive()) {
+            throw new IllegalStateException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.activateViaApproval"));
+        }
         mapper.updateEntityFromDto(dto, existing);
         return mapper.toDto(repository.save(existing));
+    }
+
+    /**
+     * D30: an edit never moves a definition between hospitals (or into the
+     * global catalog) - it used to null hospital_id on every save. A new
+     * owning assignment must be the caller's own, at the same hospital.
+     */
+    private void applyAssignmentChange(LabTestDefinitionRequestDTO dto, LabTestDefinition existing, User currentUser) {
+        if (dto.getAssignmentId() == null
+            || (existing.getAssignment() != null && dto.getAssignmentId().equals(existing.getAssignment().getId()))) {
+            return;
+        }
+        UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
+            .orElseThrow(() -> new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND));
+        assertOwnAssignment(currentUser, assignment);
+        UUID assignmentHospitalId = assignment.getHospital() != null ? assignment.getHospital().getId() : null;
+        UUID definitionHospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        if (!Objects.equals(assignmentHospitalId, definitionHospitalId)) {
+            throw new AccessDeniedException("A lab test definition cannot be moved to another hospital.");
+        }
+        existing.setAssignment(assignment);
     }
 
     @Override
@@ -164,21 +355,74 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
 
         LabTestDefinition existing = repository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
-        if (isGlobalDefinition(existing)) {
-            assertUserCanManageGlobal(currentUser);
-        } else {
-            assertUserCanManageHospital(currentUser, existing.getAssignment());
-        }
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+        assertCanManage(currentUser, existing);
         Objects.requireNonNull(existing, "Lab Test Definition reference cannot be null");
+        // QA D601: a definition is clinical reference data. Once it has been
+        // activated or ordered, its orders and released results point at it,
+        // so it may only be retired (soft), never hard-deleted.
+        if (!EnumSet.of(LabTestDefinitionApprovalStatus.DRAFT, LabTestDefinitionApprovalStatus.REJECTED)
+                .contains(existing.getApprovalStatus())) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.deleteRetireInstead"));
+        }
+        if (labOrderRepository.existsByLabTestDefinition_Id(existing.getId())) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.deleteHasOrders"));
+        }
         repository.delete(existing);
     }
 
     @Override
     public Page<LabTestDefinitionResponseDTO> search(String keyword, String unit, String category, Boolean active, LabTestDefinitionApprovalStatus approvalStatus, Pageable pageable) {
         Pageable normalizedPageable = normalizePageable(pageable);
-        return repository.search(keyword, unit, category, active, approvalStatus, normalizedPageable)
-                .map(mapper::toDto);
+        ActingScope scope = actingScopeResolver.current();
+        UUID activeHospitalId = pinnedHospitalIdOf(scope);
+        boolean everyHospital = scope instanceof ActingScope.Global;
+        // QA D639: only the lab's configuration roles see the catalogue's
+        // drafts and pending definitions; a clinician searching to order sees
+        // only what can actually be ordered.
+        if (!callerManagesCatalogue()) {
+            active = Boolean.TRUE;
+            approvalStatus = LabTestDefinitionApprovalStatus.ACTIVE;
+        }
+        User caller = currentUserOrNull();
+        return repository.search(keyword, unit, category, active, approvalStatus,
+                everyHospital, activeHospitalId, normalizedPageable)
+                .map(definition -> withApproveHint(caller, definition));
+    }
+
+    /**
+     * QA D722: the queue offered "Approve" to the QA reviewer and the server
+     * then refused it. Whether this caller, as the reviewer, may also approve
+     * (the sole-director exception) is decided here, so the UI shows the
+     * button only when the server will accept it.
+     */
+    private LabTestDefinitionResponseDTO withApproveHint(User caller, LabTestDefinition definition) {
+        LabTestDefinitionResponseDTO dto = mapper.toDto(definition);
+        if (dto != null && caller != null
+            && definition.getApprovalStatus() == LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL
+            && reviewerIsApprover(caller, definition)) {
+            dto.setReviewerMayApprove(isSoleDirector(caller, definition)
+                && !caller.getId().equals(definition.getSubmittedById()));
+        }
+        return dto;
+    }
+
+    private User currentUserOrNull() {
+        String username = SecurityUtils.getCurrentUsername();
+        return username == null ? null : userRepository.findByUsername(username).orElse(null);
+    }
+
+    private static boolean callerManagesCatalogue() {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        return auth.getAuthorities().stream()
+            .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+            .anyMatch(HOSPITAL_MANAGE_ROLES::contains);
     }
 
     private Pageable normalizePageable(Pageable pageable) {
@@ -230,24 +474,66 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         };
     }
 
-    private void assertUserCanManageHospital(User currentUser, UserRoleHospitalAssignment assignment) {
-        if (assignment == null || assignment.getHospital() == null) {
-            throw new IllegalStateException("Assignment is not linked to a hospital");
+    /** D30: authority over a definition is decided at ITS hospital, not by who created it. */
+    private void assertCanManage(User currentUser, LabTestDefinition definition) {
+        if (isGlobalDefinition(definition)) {
+            assertUserCanManageGlobal(currentUser);
+        } else {
+            assertUserCanManageHospitalId(currentUser, definition.getHospital().getId());
         }
+    }
 
-        if (assignment.getUser() != null && assignment.getUser().getId().equals(currentUser.getId())) {
+    private void assertUserCanManageHospitalId(User currentUser, UUID hospitalId) {
+        if (isSuperAdmin(currentUser)) {
             return;
         }
-
-        boolean hasElevatedRole = assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
-            currentUser.getId(),
-            assignment.getHospital().getId(),
-            Set.of(ROLE_HOSPITAL_ADMIN, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN, ROLE_LAB_SCIENTIST, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER)
-        );
-
-        if (!hasElevatedRole) {
+        if (hospitalId == null || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                currentUser.getId(), hospitalId, HOSPITAL_MANAGE_ROLES)) {
             throw new AccessDeniedException("Unauthorized to manage lab tests for this hospital.");
         }
+    }
+
+    /** The assignment a definition is filed under must be the caller's own (a super-admin may name any). */
+    private void assertOwnAssignment(User currentUser, UserRoleHospitalAssignment assignment) {
+        if (isSuperAdmin(currentUser)) {
+            return;
+        }
+        if (assignment.getUser() == null || !currentUser.getId().equals(assignment.getUser().getId())) {
+            throw new AccessDeniedException("Unauthorized to manage lab tests for this hospital.");
+        }
+    }
+
+    /** A caller pinned to a hospital may not author into another one by naming its assignment. */
+    private void assertWithinActiveScope(User currentUser, UUID hospitalId) {
+        UUID activeHospitalId = pinnedHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(hospitalId) && !isSuperAdmin(currentUser)) {
+            throw new AccessDeniedException("The assignment does not belong to the active hospital.");
+        }
+    }
+
+    /** The hospital this request acts at, or {@code null} for global view and every refusal. */
+    private UUID pinnedHospitalId() {
+        return pinnedHospitalIdOf(actingScopeResolver.current());
+    }
+
+    private static UUID pinnedHospitalIdOf(ActingScope scope) {
+        return scope instanceof ActingScope.Pinned pinned ? pinned.hospitalId() : null;
+    }
+
+    private boolean isSuperAdmin(User user) {
+        return hasAnyRole(user, Set.of(ROLE_SUPER_ADMIN, "SUPER_ADMIN"));
+    }
+
+    private boolean isVisibleToCaller(LabTestDefinition definition) {
+        if (definition.getHospital() == null) {
+            return true;
+        }
+        return mayReadHospital(definition.getHospital().getId());
+    }
+
+    private boolean mayReadHospital(UUID hospitalId) {
+        ActingScope scope = actingScopeResolver.current();
+        return scope instanceof ActingScope.Global || hospitalId.equals(pinnedHospitalIdOf(scope));
     }
 
     private void assertUserCanManageGlobal(User currentUser) {
@@ -279,7 +565,45 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         return definition == null || definition.getHospital() == null;
     }
 
+    /** The APPROVE step; returns whether the sole director did the combined review-approval (D417). */
+    private boolean approve(User currentUser, LabTestDefinition definition) {
+        assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+        assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
+        // QA D314 / D417: the director may also have done the QA review.
+        // Four eyes means two people, the author and an independent
+        // reviewer-approver; requiring a third (allowed only when the
+        // hospital had a single director) left a lab with a second,
+        // absent director unable to activate anything. The combined
+        // review is recorded in the audit row. The submitter rule holds.
+        requireRangesBeforeReview(definition);
+        boolean singleDirectorException = reviewerIsApprover(currentUser, definition);
+        // QA D523: the combined review-approval (D417) is allowed only
+        // when the hospital has exactly one active lab director, and
+        // it is then recorded in the audit row. With two directors, or
+        // for anyone else (the super-admin included), the approver
+        // must be someone other than the QA reviewer.
+        if (singleDirectorException && !isSoleDirector(currentUser, definition)) {
+            throw new BusinessException("lab.definition.fourEyes.approverNotReviewer");
+        }
+        // QA D707: four eyes is two people. When an independent
+        // reviewer (never the submitter, enforced at COMPLETE_QA_REVIEW)
+        // stands between, the submitting director may approve: one
+        // director plus a quality manager, or two directors, can bring
+        // a test live. The approver must differ from the submitter only
+        // when no independent review sits between them (the combined
+        // sole-director review, or a legacy row with no reviewer).
+        if (singleDirectorException || definition.getReviewedById() == null) {
+            assertNotSameUser(currentUser, definition.getSubmittedById(),
+                "lab.definition.fourEyes.approverNotSubmitter");
+        }
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.setApprovedById(currentUser.getId());
+        definition.setApprovedAt(LocalDateTime.now());
+        return singleDirectorException;
+    }
+
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public LabTestDefinitionResponseDTO processApprovalAction(UUID id, LabTestDefinitionApprovalRequestDTO dto) {
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
@@ -289,77 +613,324 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
 
         LabTestDefinition definition = repository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
         String action = dto.getAction() == null ? "" : dto.getAction().trim().toUpperCase(Locale.ROOT);
+        boolean singleDirectorException = false;
 
         switch (action) {
             case "SUBMIT_FOR_QA" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                // QA D707: the quality manager may author too; the four-eyes
+                // rules below still need a second person to review.
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.DRAFT, LabTestDefinitionApprovalStatus.REJECTED));
+                // QA D417: ranges lock from submission on, and activation needs
+                // one, so a definition submitted without a range came out of
+                // approval stuck: it could neither be activated nor edited.
+                requireRangesBeforeReview(definition);
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
                 definition.setRejectionReason(null);
+                definition.setSubmittedById(currentUser.getId());
+                definition.setReviewedById(null);
+                definition.setApprovedById(null);
             }
             case "COMPLETE_QA_REVIEW" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_QUALITY_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_QUALITY_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW));
+                // QA D213 (round 5): a definition submitted before V201 has no
+                // recorded submitter, so the four-eyes check below passed for
+                // anyone, including the submitter. It is sent back (REJECT)
+                // and resubmitted, which records who submitted it.
+                // QA D523: no super-admin exemption either - the super-admin
+                // alone could submit, review and approve.
+                if (definition.getSubmittedById() == null) {
+                    throw new BusinessException("lab.definition.submitterUnknown");
+                }
+                assertNotSameUser(currentUser, definition.getSubmittedById(),
+                    "lab.definition.fourEyes.qaNotSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
                 definition.setReviewedById(currentUser.getId());
                 definition.setReviewedAt(LocalDateTime.now());
             }
-            case "APPROVE" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
-                assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
-                definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
-                definition.setApprovedById(currentUser.getId());
-                definition.setApprovedAt(LocalDateTime.now());
-            }
+            case "APPROVE" -> singleDirectorException = approve(currentUser, definition);
             case "ACTIVATE" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.APPROVED));
+                // QA D213: a live test with no reference range grades nothing.
+                // QA D834: a qualitative test grades against its expected answer.
+                if (!definition.hasGradingBasis()) {
+                    throw new BusinessException("lab.definition.rangesRequired");
+                }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
                 definition.setActive(true);
+                // QA D1120: a new version replaces the live one on activation.
+                retireSupersededVersion(currentUser, definition);
             }
             case "REJECT" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN));
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN));
+                // QA D417: APPROVED too, so a definition approved before the
+                // range rule (no range, cannot activate) can go back to edit.
                 assertInStatus(definition, EnumSet.of(
                     LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
-                    LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
+                    LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
+                    LabTestDefinitionApprovalStatus.APPROVED));
                 if (dto.getRejectionReason() == null || dto.getRejectionReason().isBlank()) {
-                    throw new IllegalArgumentException("A rejection reason is required.");
+                    throw new com.example.hms.exception.FieldBusinessException("rejectionReason", "lab.definition.rejectionReasonRequired");
                 }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.REJECTED);
                 definition.setRejectionReason(dto.getRejectionReason());
                 definition.setActive(false);
             }
             case "RETIRE" -> {
-                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.ACTIVE, LabTestDefinitionApprovalStatus.APPROVED));
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.RETIRED);
                 definition.setActive(false);
             }
-            default -> throw new IllegalArgumentException("Unknown approval action: " + dto.getAction());
+            default -> throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.unknownAction", String.valueOf(dto.getAction())));
         }
 
-        return mapper.toDto(repository.save(definition));
+        LabTestDefinition saved = repository.save(definition);
+        auditApprovalStep(currentUser, saved, action, singleDirectorException);
+        return mapper.toDto(saved);
     }
 
-    private void assertHasAnyRole(User user, Set<String> roles) {
-        if (!hasAnyRole(user, roles)) {
+    /**
+     * QA D314 / D417: true when the approver also completed the QA review,
+     * which the audit row then records. A super-admin is not flagged.
+     */
+    private boolean reviewerIsApprover(User user, LabTestDefinition definition) {
+        return definition.getReviewedById() != null
+            && definition.getReviewedById().equals(user.getId());
+    }
+
+    /**
+     * QA D523: the caller is the definition's hospital's one active lab
+     * director. A one-director hospital does not let a super-admin (or anyone
+     * else) who did the QA review approve it too.
+     */
+    private boolean isSoleDirector(User user, LabTestDefinition definition) {
+        return !isGlobalDefinition(definition)
+            && assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                user.getId(), definition.getHospital().getId(), Set.of(ROLE_LAB_DIRECTOR))
+            && assignmentRepository.countActiveUsersWithRoleCodeAtHospital(
+                definition.getHospital().getId(), ROLE_LAB_DIRECTOR) == 1;
+    }
+
+    /**
+     * QA D650: a retired definition is history - its orders and results were
+     * graded against it as it stands. It is read-only on every edit path.
+     */
+    private static void assertNotRetired(LabTestDefinition definition) {
+        if (definition.getApprovalStatus() == LabTestDefinitionApprovalStatus.RETIRED) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.retiredReadOnly"));
+        }
+    }
+
+    /**
+     * QA D417: no definition enters review without a reference range.
+     * QA D834: or, for a qualitative test, its expected answer ("Négatif"):
+     * a malaria rapid test has no numeric range, and the fake 0-0 range it
+     * needed was shown to patients as "Normal: 0 - 0".
+     */
+    private static void requireRangesBeforeReview(LabTestDefinition definition) {
+        if (!definition.hasGradingBasis()) {
+            throw new BusinessException("lab.definition.rangesRequiredForReview");
+        }
+    }
+
+    /**
+     * QA D213: the four steps were four identical generic audit rows. This
+     * one names the step and the status it led to. Ids only, no PHI.
+     */
+    private void auditApprovalStep(User actor, LabTestDefinition definition, String action,
+                                   boolean singleDirectorException) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        // QA D638 (re-test): this ran outside any transaction and read the
+        // definition's LAZY hospital for its name, so every step died on a
+        // LazyInitializationException (dev log, 17:50Z) and wrote nothing.
+        // Everything is read here, inside the approval transaction, and the
+        // row is written after commit with ids and strings only: a rolled-back
+        // step leaves no row, and a failed audit does not undo the step.
+        com.example.hms.model.Hospital hospital = definition.getHospital();
+        com.example.hms.payload.dto.AuditEventRequestDTO request = com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+            .eventType(com.example.hms.enums.AuditEventType.CONFIGURATION_CHANGED)
+            .status(com.example.hms.enums.AuditStatus.SUCCESS)
+            .userId(actor.getId())
+            .hospitalName(hospital != null ? hospital.getName() : null)
+            .hospitalId(hospital != null ? hospital.getId() : null)
+            // QA D638: the row names the step and the definition. QA D894: in
+            // English with the step and the status as codes, like every other
+            // audit description; the audit log reads it in the reader's language
+            // (a row written in the caller's language stayed French for everyone).
+            .eventDescription(com.example.hms.utility.MessageUtil.resolve(java.util.Locale.ENGLISH,
+                singleDirectorException ? "lab.definition.audit.stepSingleDirector" : "lab.definition.audit.step",
+                action, definition.getTestCode(),
+                definition.getApprovalStatus() == null ? "" : definition.getApprovalStatus().name()))
+            .entityType("LabTestDefinition")
+            .resourceId(definition.getId() != null ? definition.getId().toString() : null)
+            .build();
+        UUID definitionId = definition.getId();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(request);
+            } catch (RuntimeException ex) {
+                org.slf4j.LoggerFactory.getLogger(LabTestDefinitionServiceImpl.class)
+                    .warn("Approval-step audit not written for definition {}: {}", definitionId,
+                        ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /**
+     * QA D213 / D523: four-eyes, for everyone. The super-admin exemption let
+     * one super-admin submit, review and approve alone; a global definition
+     * needs a second super-admin.
+     */
+    private void assertNotSameUser(User user, UUID previousActor, String message) {
+        if (previousActor != null && previousActor.equals(user.getId())) {
+            throw new BusinessException(message);
+        }
+    }
+
+    /**
+     * D30: the approval role must be held AT the definition's hospital — a
+     * director at hospital B does not approve hospital A's catalog. A global
+     * definition's workflow stays with the super-admin.
+     */
+    private void assertHasAnyRoleAt(User user, LabTestDefinition definition, Set<String> roles) {
+        if (isSuperAdmin(user)) {
+            return;
+        }
+        if (isGlobalDefinition(definition)
+            || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                user.getId(), definition.getHospital().getId(), roles)) {
             throw new AccessDeniedException("Insufficient role to perform this approval action.");
         }
     }
 
+    /** The request property a definition body carries its ranges under. */
+    private static final String REFERENCE_RANGES_FIELD = "referenceRanges";
+
+    /** Statuses whose reference ranges were reviewed and may not move without a new review (QA D159). */
+    private static final EnumSet<LabTestDefinitionApprovalStatus> RANGES_LOCKED = EnumSet.of(
+        LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
+        LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
+        LabTestDefinitionApprovalStatus.APPROVED,
+        LabTestDefinitionApprovalStatus.ACTIVE,
+        LabTestDefinitionApprovalStatus.RETIRED);
+
+    /**
+     * QA D287: an inverted reference or critical range was saved (bean
+     * validation on a bare list body is not guaranteed to run), and every
+     * value graded against it was wrong. The same rules as the DTO's
+     * constraints, enforced on every write path.
+     */
+    static void requireOrderedRanges(List<LabTestReferenceRangeDTO> ranges) {
+        requireOrderedRanges(ranges, "");
+    }
+
+    /**
+     * QA D896: a critical limit is refused on its own field, with a message
+     * that names it ({@code [0].criticalHigh} for the bare list of the
+     * reference-range PUT, {@code referenceRanges[0].criticalHigh} for a
+     * definition body), as the bean constraint reports it.
+     */
+    static void requireOrderedRanges(List<LabTestReferenceRangeDTO> ranges, String listField) {
+        if (ranges == null) {
+            return;
+        }
+        for (int i = 0; i < ranges.size(); i++) {
+            LabTestReferenceRangeDTO range = ranges.get(i);
+            if (range == null) {
+                continue;
+            }
+            if (!range.isReferenceRangeOrdered()) {
+                throw new com.example.hms.exception.FieldBusinessException(REFERENCE_RANGES_FIELD, "lab.referenceRange.inverted");
+            }
+            List<LabTestReferenceRangeDTO.CriticalLimitProblem> problems = range.criticalLimitProblems();
+            if (!problems.isEmpty()) {
+                LabTestReferenceRangeDTO.CriticalLimitProblem first = problems.get(0);
+                throw new com.example.hms.exception.FieldBusinessException(
+                    listField + "[" + i + "]." + first.field(), first.messageKey());
+            }
+            if (!range.isAgeRangeOrdered()) {
+                throw new com.example.hms.exception.FieldBusinessException(REFERENCE_RANGES_FIELD, "lab.referenceRange.ageInverted");
+            }
+        }
+    }
+
+    /**
+     * QA D159: the reference ranges are what QA and the director approved,
+     * and they grade every result. Changing them on a definition under
+     * review, approved or live would put unreviewed ranges in front of
+     * clinicians, so only a draft or a rejected definition takes new ones.
+     * Re-sending the same ranges (an edit of the name, say) is not a change.
+     */
+    private void assertRangesEditable(LabTestDefinition definition, List<LabTestReferenceRange> proposed) {
+        if (!RANGES_LOCKED.contains(definition.getApprovalStatus())) {
+            return;
+        }
+        List<LabTestReferenceRange> current = definition.getReferenceRanges() == null
+            ? List.of() : definition.getReferenceRanges();
+        List<LabTestReferenceRange> next = proposed == null ? List.of() : proposed;
+        if (!current.equals(next)) {
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "lab.definition.rangesLocked", statusLabel(definition.getApprovalStatus())));
+        }
+    }
+
+    /**
+     * QA D705 / D721: D617 locked only the reference ranges, so the unit,
+     * sample type, test code or LOINC of a definition under review, approved
+     * or live could still move through this PUT. A range in mmol/L then graded
+     * a value reported in g/L. These fields are what QA and the director
+     * approved together with the ranges, so they lock with them; a change
+     * goes back through REJECT (to edit) or a new definition.
+     */
+    private void assertClinicalFieldsEditable(LabTestDefinition definition, LabTestDefinitionRequestDTO dto) {
+        if (!RANGES_LOCKED.contains(definition.getApprovalStatus())) {
+            return;
+        }
+        boolean changed = (dto.getTestCode() != null && !sameText(definition.getTestCode(), dto.getTestCode()))
+            || !sameText(definition.getUnit(), dto.getUnit())
+            || !sameText(definition.getSampleType(), dto.getSampleType())
+            || !sameText(definition.getLoincCode(), dto.getLoincCode())
+            // QA D834: the expected answer grades a qualitative test, like a range.
+            || !sameText(definition.getExpectedResult(), dto.getExpectedResult());
+        if (changed) {
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "lab.definition.clinicalFieldsLocked", statusLabel(definition.getApprovalStatus())));
+        }
+    }
+
+    private static boolean sameText(String current, String proposed) {
+        String a = current == null ? "" : current.trim();
+        String b = proposed == null ? "" : proposed.trim();
+        return a.equals(b);
+    }
+
+    /** QA D314 / D318 (round 5): a status the reader can read, not the enum name. */
+    private static String statusLabel(LabTestDefinitionApprovalStatus status) {
+        return status == null ? "" : com.example.hms.utility.MessageUtil.resolveOrRaw(
+            "lab.definition.status." + status.name());
+    }
+
     private void assertInStatus(LabTestDefinition definition, EnumSet<LabTestDefinitionApprovalStatus> allowed) {
         if (!allowed.contains(definition.getApprovalStatus())) {
-            throw new IllegalStateException(
-                "Action not allowed from status: " + definition.getApprovalStatus()
-                + ". Allowed: " + allowed);
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "lab.definition.actionNotAllowed", statusLabel(definition.getApprovalStatus()),
+                allowed.stream().map(LabTestDefinitionServiceImpl::statusLabel)
+                    .collect(java.util.stream.Collectors.joining(", "))));
         }
     }
 
     @Override
     public LabTestDefinitionResponseDTO updateReferenceRanges(UUID id, List<LabTestReferenceRangeDTO> ranges) {
+        requireOrderedRanges(ranges);
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to reference range update");
@@ -368,15 +939,13 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
 
         LabTestDefinition definition = repository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
-        if (isGlobalDefinition(definition)) {
-            assertUserCanManageGlobal(currentUser);
-        } else {
-            assertUserCanManageHospital(currentUser, definition.getAssignment());
-        }
+        assertCanManage(currentUser, definition);
+        assertNotRetired(definition);
 
         List<LabTestReferenceRange> entityRanges = mapper.mapRangeDtosToEntities(ranges);
+        assertRangesEditable(definition, entityRanges);
 
         definition.setReferenceRanges(entityRanges);
         return mapper.toDto(repository.save(definition));
@@ -384,15 +953,23 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public byte[] exportPdf() {
-        UUID hospitalId = HospitalContextHolder.getContext()
-            .map(HospitalContext::getActiveHospitalId)
-            .orElse(null);
-
-        List<LabTestDefinition> definitions = hospitalId != null
-            ? repository.findByHospital_IdAndActiveTrue(hospitalId)
-            : repository.findAll().stream()
-                .filter(def -> def.isActive())
+        // D30: the export follows the acting scope. A pinned scope exports that
+        // hospital plus the global catalog; a super-admin in global view exports
+        // every hospital (never a stale active hospital that is not pinned);
+        // anyone else without a pin gets the global catalog.
+        ActingScope scope = actingScopeResolver.current();
+        UUID hospitalId = pinnedHospitalIdOf(scope);
+        List<LabTestDefinition> definitions;
+        if (hospitalId != null) {
+            definitions = repository.findByHospital_IdAndActiveTrue(hospitalId);
+        } else {
+            List<LabTestDefinition> unscoped = scope instanceof ActingScope.Global
+                ? repository.findAll()
+                : repository.findVisibleAt(null);
+            definitions = unscoped.stream()
+                .filter(LabTestDefinition::isActive)
                 .toList();
+        }
 
         // Include global definitions when hospital-scoped
         if (hospitalId != null) {

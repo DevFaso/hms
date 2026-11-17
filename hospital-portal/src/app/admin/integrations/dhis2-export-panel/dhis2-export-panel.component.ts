@@ -1,3 +1,4 @@
+import { allRows } from '../../../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -21,8 +22,11 @@ import {
   Dhis2TriggerRequest,
 } from '../../../services/integrations/dhis2.model';
 import { RoleContextService } from '../../../core/role-context.service';
+import { refusalReason } from '../../../shared/refusal-reason';
 import { ToastService } from '../../../core/toast.service';
+import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 /**
  * Manual-trigger panel + last-N runs table.
  *
@@ -34,7 +38,7 @@ import { ToastService } from '../../../core/toast.service';
 @Component({
   selector: 'app-dhis2-export-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dhis2-export" data-testid="dhis2-export-panel">
@@ -44,7 +48,7 @@ import { ToastService } from '../../../core/toast.service';
 
       <form class="dhis2-export__form" (ngSubmit)="onTrigger()" data-testid="dhis2-export-form">
         <label>
-          {{ 'DHIS2.PANEL.DATASET_UID' | translate }}
+          {{ 'DHIS2.PANEL.DATASET_UID' | translate }} *
           <input
             type="text"
             name="datasetUid"
@@ -66,7 +70,7 @@ import { ToastService } from '../../../core/toast.service';
         </label>
 
         <label>
-          {{ 'DHIS2.PANEL.PERIOD_ISO' | translate }}
+          {{ 'DHIS2.PANEL.PERIOD_ISO' | translate }} *
           <input
             type="text"
             name="periodIso"
@@ -82,7 +86,9 @@ import { ToastService } from '../../../core/toast.service';
           type="submit"
           class="btn-primary"
           data-testid="dhis2-export-trigger"
-          [disabled]="triggering() || !canTrigger()"
+          [disabled]="triggering()"
+          [appSubmitGuard]="!canTrigger()"
+          submitGuardRequired
         >
           {{ 'DHIS2.PANEL.TRIGGER' | translate }}
         </button>
@@ -115,11 +121,13 @@ import { ToastService } from '../../../core/toast.service';
           <tbody>
             @for (r of runs(); track trackById($index, r)) {
               <tr [attr.data-run-id]="r.id">
-                <td>{{ r.startedAt | date: 'short' }}</td>
+                <td>{{ r.startedAt | serverTime | date: 'short' }}</td>
                 <td>{{ r.datasetUid }}</td>
                 <td>{{ r.periodIso }}</td>
                 <td>
-                  <span class="status-pill" [ngClass]="statusClass(r.status)">{{ r.status }}</span>
+                  <span class="status-pill" [ngClass]="statusClass(r.status)">{{
+                    'DHIS2.RUN_STATUS.' + r.status | translate
+                  }}</span>
                 </td>
                 <td>{{ r.valueCount }}</td>
                 <td>{{ r.skippedCount }}</td>
@@ -236,9 +244,11 @@ export class Dhis2ExportPanelComponent implements OnInit, OnDestroy {
         this.toast.success(this.translate.instant('DHIS2.PANEL.TRIGGERED'));
         this.refreshRuns();
       },
-      error: () => {
+      error: (err) => {
         this.triggering.set(false);
-        this.toast.error(this.translate.instant('DHIS2.PANEL.TRIGGER_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('DHIS2.PANEL.TRIGGER_FAILED'),
+        );
       },
     });
   }
@@ -252,9 +262,10 @@ export class Dhis2ExportPanelComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     this.error.set(false);
     this.listSub?.unsubscribe();
-    this.listSub = this.dhis2.listRuns(hospitalId).subscribe({
-      next: (page) => {
-        this.runs.set(page.content);
+    // QA D1347: every export run (all pages), not the 20 newest.
+    this.listSub = allRows((page, size) => this.dhis2.listRuns(hospitalId, page, size)).subscribe({
+      next: (runs) => {
+        this.runs.set(runs);
         this.loading.set(false);
       },
       error: () => {

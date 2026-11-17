@@ -13,7 +13,11 @@ import {
   PermissionMatrixService,
 } from '../services/permission-matrix.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 interface EditableRow {
   domain: string;
   actions: string;
@@ -24,7 +28,15 @@ interface EditableRow {
 @Component({
   selector: 'app-gov-matrix-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './matrix-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -79,7 +91,9 @@ export class MatrixTabComponent implements OnInit {
     this.latest.set(null);
     this.service.latestSnapshot(this.environment()).subscribe({
       next: (snap) => {
-        this.latest.set(snap);
+        // 204 (no body): no snapshot yet for this environment (D248).
+        this.latest.set(snap ?? null);
+        this.latestEmpty.set(!snap);
         this.latestLoading.set(false);
       },
       error: (err: HttpErrorResponse) => {

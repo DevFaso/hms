@@ -1,3 +1,4 @@
+import { ChunkRecoveryService } from './core/chunk-recovery.service';
 import { Component, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -14,10 +15,50 @@ import { DEFAULT_LANG, storedLang } from './shared/i18n/app-locale';
   selector: 'app-root',
   standalone: true,
   imports: [RouterOutlet, TranslateModule],
-  template: `<router-outlet />`,
+  template: `
+    @if (chunkRecovery.failedUrl()) {
+      <section class="chunk-recovery" role="alert" aria-labelledby="chunk-recovery-title">
+        <h1 id="chunk-recovery-title">{{ 'CHUNK_RECOVERY.TITLE' | translate }}</h1>
+        <p>{{ 'CHUNK_RECOVERY.MESSAGE' | translate }}</p>
+        <button type="button" (click)="chunkRecovery.reload()">
+          {{ 'CHUNK_RECOVERY.RELOAD' | translate }}
+        </button>
+      </section>
+    }
+    <router-outlet />
+  `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
+      .chunk-recovery {
+        position: relative;
+        z-index: 100;
+        margin: 18px;
+        padding: 22px;
+        border: 1px solid #e3bd7b;
+        border-radius: 12px;
+        background: #fff9ed;
+        color: #593a10;
+      }
+      .chunk-recovery h1 {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+      .chunk-recovery p {
+        line-height: 1.6;
+      }
+      .chunk-recovery button {
+        border: 0;
+        border-radius: 7px;
+        background: #0b7061;
+        color: white;
+        padding: 12px 18px;
+        cursor: pointer;
+      }
+      .chunk-recovery button:focus-visible {
+        outline: 3px solid #087269;
+        outline-offset: 3px;
+      }
       :host {
         display: block;
         height: 100%;
@@ -27,6 +68,7 @@ import { DEFAULT_LANG, storedLang } from './shared/i18n/app-locale';
 })
 export class AppComponent implements OnInit {
   title = 'hospital-portal';
+  readonly chunkRecovery = inject(ChunkRecoveryService);
 
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);

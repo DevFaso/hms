@@ -48,6 +48,71 @@ public class CrossHospitalReachRecorder {
     private final AuditEventLogService auditEventLogService;
     private final BreakGlassGate breakGlassGate;
     private final org.springframework.transaction.PlatformTransactionManager transactionManager;
+    private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+
+    /** Clinical precedence when the actor holds several roles at the acting hospital (QA D110). */
+    private static final List<String> ROLE_PRECEDENCE = List.of(
+        "ROLE_DOCTOR", "ROLE_MIDWIFE", "ROLE_NURSE", "ROLE_PHARMACIST", "ROLE_LAB_SCIENTIST");
+
+    /**
+     * QA D110: with no assignment from the caller, the audit service fell back to an
+     * arbitrary one of the actor's roles, so a doctor's read could be recorded as
+     * ROLE_NURSE. Resolve the actor's own active assignment at the acting hospital
+     * instead: the only one, else one whose role the request presents, by clinical
+     * precedence. Null when nothing fits — the audit service's fallback then applies.
+     */
+    UUID actingAssignmentId(UUID requesterUserId, UUID actingHospitalId) {
+        if (requesterUserId == null || actingHospitalId == null) {
+            return null;
+        }
+        try {
+            List<com.example.hms.model.UserRoleHospitalAssignment> here =
+                assignmentRepository.findByUser_IdAndActiveTrue(requesterUserId).stream()
+                    .filter(a -> a.getHospital() != null && actingHospitalId.equals(a.getHospital().getId()))
+                    .filter(a -> a.getRole() != null && a.getRole().getCode() != null)
+                    .toList();
+            if (here.size() == 1) {
+                return here.get(0).getId();
+            }
+            java.util.Set<String> presented = presentedAuthorities();
+            for (String role : ROLE_PRECEDENCE) {
+                for (com.example.hms.model.UserRoleHospitalAssignment a : here) {
+                    String code = prefixed(a.getRole().getCode());
+                    if (role.equals(code) && presented.contains(code)) {
+                        return a.getId();
+                    }
+                }
+            }
+            return here.stream()
+                .filter(a -> presented.contains(prefixed(a.getRole().getCode())))
+                .map(com.example.hms.model.UserRoleHospitalAssignment::getId)
+                .findFirst()
+                .orElse(null);
+        } catch (RuntimeException ex) {
+            log.debug("[record-access] could not resolve the acting assignment: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private static String prefixed(String code) {
+        String upper = code.trim().toUpperCase(java.util.Locale.ROOT);
+        return upper.startsWith("ROLE_") ? upper : "ROLE_" + upper;
+    }
+
+    private static java.util.Set<String> presentedAuthorities() {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return java.util.Set.of();
+        }
+        java.util.Set<String> out = new java.util.HashSet<>();
+        auth.getAuthorities().forEach(g -> {
+            if (g.getAuthority() != null) {
+                out.add(g.getAuthority());
+            }
+        });
+        return out;
+    }
 
     /**
      * Count the source hospitals in {@code sourceHospitalIds} that are not
@@ -70,6 +135,29 @@ public class CrossHospitalReachRecorder {
     /** The id of an entity's {@code hospital} association, or {@code null} when it has none. */
     public static UUID hospitalIdOf(Hospital hospital) {
         return hospital == null ? null : hospital.getId();
+    }
+
+    /**
+     * B1 + E8 (#751): the description a lab result disclosure carries when the
+     * row surfaced because the acting hospital's laboratory performed an order
+     * another hospital placed. One string for every surface that reads such
+     * rows, so the patient's disclosure report groups them under one reason.
+     */
+    public static final String LAB_RESULT_PERFORMED_HERE_DESCRIPTION =
+        "Cross-hospital lab result read at the performing laboratory";
+
+    /**
+     * True when {@code result} is readable at {@code actingHospitalId} because
+     * that hospital's laboratory performed the order another hospital placed
+     * ({@link com.example.hms.model.LabOrder#isPerformedAt}). Such a row is
+     * accounted under {@link #LAB_RESULT_PERFORMED_HERE_DESCRIPTION} and never
+     * again under the treatment relationship, even when the ordering hospital
+     * is also readable — the split {@code LabResultServiceImpl} makes on its
+     * own reads.
+     */
+    public static boolean isPerformedHere(com.example.hms.model.LabResult result, UUID actingHospitalId) {
+        return result != null && result.getLabOrder() != null
+            && result.getLabOrder().isPerformedAt(actingHospitalId);
     }
 
     /** Merge {@code more} into {@code into}, summing counts per source hospital. */
@@ -108,6 +196,8 @@ public class CrossHospitalReachRecorder {
         if (perPatient == null || perPatient.isEmpty()) {
             return;
         }
+        UUID effectiveAssignmentId = assignmentId != null
+            ? assignmentId : actingAssignmentId(requesterUserId, actingHospitalId);
         // One transaction for the page's break-glass reads, with the
         // per-patient handling inside it: a transaction each was the cost the
         // batching exists to remove, and it opened one even for a patient
@@ -133,7 +223,7 @@ public class CrossHospitalReachRecorder {
                         .eventType(AuditEventType.RECORD_SHARE)
                         .status(AuditStatus.SUCCESS)
                         .userId(requesterUserId)
-                        .assignmentId(assignmentId)
+                        .assignmentId(effectiveAssignmentId)
                         .patientId(patientId)
                         .entityType(ENTITY_TYPE_PATIENT)
                         .resourceId(patientId.toString())
@@ -209,6 +299,8 @@ public class CrossHospitalReachRecorder {
         if (perSource == null || perSource.isEmpty() || patientId == null) {
             return;
         }
+        UUID effectiveAssignmentId = assignmentId != null
+            ? assignmentId : actingAssignmentId(requesterUserId, actingHospitalId);
         // E9 #62 — a read under break-the-glass names the session on every row
         // it enabled, so the patient's disclosure report can say why.
         Optional<UUID> breakGlassSessionId = breakGlassGate.liveSessionId(requesterUserId, patientId, actingHospitalId);
@@ -223,7 +315,7 @@ public class CrossHospitalReachRecorder {
                     .eventType(AuditEventType.RECORD_SHARE)
                     .status(AuditStatus.SUCCESS)
                     .userId(requesterUserId)
-                    .assignmentId(assignmentId)
+                    .assignmentId(effectiveAssignmentId)
                     .patientId(patientId)
                     .entityType(ENTITY_TYPE_PATIENT)
                     .resourceId(patientId.toString())

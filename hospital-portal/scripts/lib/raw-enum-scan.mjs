@@ -25,6 +25,7 @@
  * So an interpolation now counts only where a person reads it — in element
  * text content, or in the value of a text-bearing attribute.
  */
+import { unresolvedParts } from './pipe-scope.mjs';
 
 /**
  * Field names that usually hold an enum. The TAIL is matched, not the whole
@@ -75,12 +76,48 @@ export const ENUM_WORDS = [
   'jobTitle',
   'roleName',
   'roleCode',
+  // QA D619: an audit row's `resourceName` is, for every write audit, the
+  // entity token (TRANSFER, PRESCRIPTION, BILLING_INVOICE). The dashboard
+  // passed it through a helper that echoed it, and no tail above names it.
+  'resourceName',
+  // QA D1062: a proxy grant's `permissions` is a comma-joined list of scope
+  // codes (VIEW_APPOINTMENTS,VIEW_LAB_RESULTS); no tail above named it, and the
+  // "granted by me" table showed the codes raw while the received table piped them.
+  'permissions',
 ];
+
+/**
+ * Component methods that return a translated label for the enum they are
+ * given, so their ARGUMENT never reaches the screen. Each entry must look its
+ * argument up in the i18n bundle (referrals.ts `specialtyLabel` reads
+ * REFERRALS.SPECIALTY_OPTION.<value>). Named one by one on purpose: a
+ * `*Label` naming convention would excuse any helper that merely echoes its
+ * input. Add a name only after reading the method.
+ */
+export const RESOLVING_HELPERS = ['specialtyLabel', 'entityLabel', 'auditResourceLabel'];
+
+const HELPER_CALL = new RegExp(String.raw`\b(?:${RESOLVING_HELPERS.join('|')})\s*\(`, 'g');
+
+/** Blank the argument list of every resolving helper call, offsets kept. */
+function blankHelperArgs(part) {
+  let out = part;
+  for (const m of part.matchAll(HELPER_CALL)) {
+    const open = m.index + m[0].length - 1;
+    let depth = 0;
+    let close = open;
+    for (; close < part.length; close++) {
+      if (part[close] === '(') depth++;
+      else if (part[close] === ')' && --depth === 0) break;
+    }
+    out = out.slice(0, open + 1) + blank(out.slice(open + 1, close)) + out.slice(close);
+  }
+  return out;
+}
 
 /** `a.b?.c.encounterType` — any number of optional-chain steps. */
 const FIELD = new RegExp(
-  String.raw`\b[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*` +
-    String.raw`\??\.\w*?(?:${ENUM_WORDS.join('|')})\b`,
+  String.raw`\b[A-Za-z_$][\w$]*(?:\(\))?!?(?:\??\.[A-Za-z_$][\w$]*(?:\(\))?!?)*` +
+    String.raw`\??\.\w*?(?:${ENUM_WORDS.join('|')})\b(?![?!]?\.[A-Za-z_$])`,
   'gi',
 );
 
@@ -88,6 +125,16 @@ const FIELD = new RegExp(
  * Attributes whose value a person reads. Everything else — `class`, `style`,
  * `id`, `data-*`, `routerLink`, a `(click)` handler, a `#ref` — is machinery,
  * and an enum inside one is not on screen.
+ *
+ * Every entry is an HTML attribute a browser or a screen reader presents, and
+ * each has a case in raw-enum-scan.test.mjs. `title`, `alt`, `placeholder`,
+ * `aria-label` and `label` (`<optgroup [label]>`, and the skip link's and KPI
+ * card's `[label]` inputs) are bound in the templates today; `aria-description`
+ * and `aria-valuetext` are not yet, and stay because they are read aloud the
+ * moment someone writes one. Angular Material's `matTooltip`/`matBadge` were
+ * listed once and are gone: the package is installed but no template in
+ * src/app uses a Material component, so they described config a reader had to
+ * re-verify rather than markup that exists.
  */
 const TEXT_ATTRS = new Set([
   'title',
@@ -97,16 +144,19 @@ const TEXT_ATTRS = new Set([
   'aria-description',
   'aria-valuetext',
   'label',
-  'mattooltip',
-  'matbadge',
 ]);
 
 /**
- * `value` is read only when it is written as a plain interpolated attribute:
- * `value="{{ x.status }}"` is painted into the field, while `[value]="x.status"`
- * on an `<option>` is the form value behind a label rendered separately.
+ * `value` is read only on an `<input>`, and only when written as a plain
+ * interpolated attribute: `<input value="{{ x.status }}">` is painted into the
+ * field. `[value]="x.status"` is a property binding whose text the scan cannot
+ * see as a string, and on an `<option>` or a `<button>` the value is the form
+ * value behind a label rendered separately — counting
+ * `<option value="{{ o.status }}">{{ o.status | enumLabel: 'x' }}</option>`
+ * would be the class-vs-label confusion this scan exists to remove, in the
+ * other direction.
  */
-const TEXT_IF_INTERPOLATED = new Set(['value']);
+const TEXT_IF_INTERPOLATED = new Map([['value', new Set(['input'])]]);
 
 /**
  * One attribute assignment. The name may be plain (`title=`), bound
@@ -118,14 +168,14 @@ const TEXT_IF_INTERPOLATED = new Set(['value']);
  */
 const ATTR = /([@*#([]?[\w.\-$]+[)\]]?)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
+const OPTION_ECHO =
+  /<option\b[^>]*?\[(?:value|ngValue)\]\s*=\s*"\s*([A-Za-z_$][\w$]*)\s*"[^>]*>\s*\{\{\s*\1\s*\}\}\s*<\/option>/g;
+
+const IF_ALIAS =
+  /@if\s*\(([^;{}()]*(?:\([^;{}()]*\)[^;{}()]*)*);\s*as\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\)/g;
+
 const COMMENT = /<!--[\s\S]*?-->/g;
 const INTERPOLATION = /\{\{([\s\S]*?)\}\}/g;
-
-/**
- * An expression already handed to a pipe that resolves it — enumLabel does the
- * job, and translate/date/number/currency mean the value is not a bare enum.
- */
-const RESOLVED = /\|\s*(enumLabel|roleLabel|translate|date|number|currency|percent)\b/;
 
 /** `[attr.aria-label]` and `[title]` and `matTooltip` all reduce to a name. */
 function attrName(raw) {
@@ -149,9 +199,21 @@ export function rawEnumRenders(html) {
   const hits = [];
   const lineAt = (index) => html.slice(0, index).split('\n').length;
 
+  // `index` is the offset of `body` in the template. The line reported is the
+  // FIELD's own, so a binding Prettier wrapped over several lines — a `[title]`
+  // ternary, a `{{ … }}` split after a `??` — points at the render, not at the
+  // attribute name or the opening braces.
+  //
+  // Only the parts no resolving pipe covers are read (lib/pipe-scope.mjs): a
+  // `translate` anywhere in the binding used to excuse all of it, including
+  // the `{ role: a.roleName }` it splices into the sentence and the
+  // `s.roleName ?? ('…' | translate)` whose pipe covers only the fallback.
   const collectExpr = (body, index) => {
-    if (RESOLVED.test(body)) return;
-    for (const field of body.matchAll(FIELD)) hits.push({ expr: field[0], line: lineAt(index) });
+    for (const part of unresolvedParts(body)) {
+      for (const field of blankHelperArgs(part).matchAll(FIELD)) {
+        hits.push({ expr: field[0], at: index + field.index, line: lineAt(index + field.index) });
+      }
+    }
   };
 
   // Each `{{ … }}` is judged on its own. Testing the whole attribute value at
@@ -160,12 +222,23 @@ export function rawEnumRenders(html) {
   const collectValue = (value, index) => {
     const parts = [...value.matchAll(INTERPOLATION)];
     if (!parts.length) return collectExpr(value, index);
-    for (const part of parts) collectExpr(part[1], index);
+    for (const part of parts) collectExpr(part[1], index + part.index + 2);
   };
 
   // Commented-out markup is not on screen; counting it mints baseline pins for
   // dead code, and uncommenting the block then reports them stale.
   let work = html.replace(COMMENT, blank);
+
+  // The tag an attribute sits on, read from a copy with every attribute
+  // blanked so a `<` inside an earlier value (`*ngIf="a < b"`) cannot pose as
+  // the start of a tag.
+  const skeleton = work.replace(ATTR, blank);
+  const tagAt = (offset) => {
+    const open = skeleton.lastIndexOf('<', offset);
+    return open === -1
+      ? ''
+      : (/^<([A-Za-z][\w-]*)/.exec(skeleton.slice(open))?.[1] ?? '').toLowerCase();
+  };
 
   // Blank every attribute value, scanning the text-bearing ones on the way
   // past. Blanking through replace() keeps the offsets exact — hand-computed
@@ -175,14 +248,39 @@ export function rawEnumRenders(html) {
     const value = doubled ?? singled ?? '';
     const plain = !/^[[(@*#]/.test(name);
     const key = attrName(name);
-    if (TEXT_ATTRS.has(key) || (plain && TEXT_IF_INTERPOLATED.has(key))) {
-      collectValue(value, offset);
+    const readOn = TEXT_IF_INTERPOLATED.get(key);
+    if (TEXT_ATTRS.has(key) || (plain && readOn?.has(tagAt(offset)))) {
+      // The value ends one character (the closing quote) before the match does.
+      collectValue(value, offset + match.length - 1 - value.length);
     }
     return blank(match);
   });
 
-  // What is left is element text content — the words on screen.
-  for (const binding of work.matchAll(INTERPOLATION)) collectExpr(binding[1], binding.index);
+  // QA D619: `@if (label(evt.resourceName); as resource) { {{ resource }} }`
+  // renders the expression under an alias, so the interpolation names only
+  // the alias. Read the aliased expression as the render.
+  // Only when the alias itself is printed bare — `@if (panel().result; as r)`
+  // followed by `{{ r.message }}` renders a field of it, not the expression.
+  for (const m of work.matchAll(IF_ALIAS)) {
+    const bare = new RegExp(String.raw`\{\{\s*${m[2].replaceAll('$', '\\$')}\s*\}\}`);
+    if (bare.test(work)) collectExpr(m[1], m.index + m[0].indexOf(m[1]));
+  }
 
-  return hits.sort((a, b) => a.line - b.line);
+  // What is left is element text content — the words on screen.
+  for (const binding of work.matchAll(INTERPOLATION)) {
+    collectExpr(binding[1], binding.index + 2);
+  }
+
+  // QA D620: `<option [value]="m">{{ m }}</option>` echoes the loop variable
+  // as its own label. The variable is a bare identifier, so FIELD (which needs
+  // a `.field`) never sees it, and a picker of XRAY/CT/ROUTINE/STAT shipped raw
+  // in every language. An option whose text IS its value is reported as
+  // `<option>name`; a list of free values (timezones, departments) is pinned.
+  const noComments = html.replace(COMMENT, blank);
+  for (const m of noComments.matchAll(OPTION_ECHO)) {
+    const at = m.index + m[0].lastIndexOf(m[1]);
+    hits.push({ expr: `<option>${m[1]}`, at, line: lineAt(at) });
+  }
+
+  return hits.sort((a, b) => a.at - b.at).map(({ expr, line }) => ({ expr, line }));
 }

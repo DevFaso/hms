@@ -72,7 +72,7 @@ class LabResultEntryGuardTest {
         authenticateAs("ROLE_NURSE");
         assertThatThrownBy(() -> guard.requireMayEnterResult(test(false)))
             .isInstanceOf(UnauthorizedAccessException.class)
-            .hasMessageContaining("Only laboratory staff");
+            .satisfies(e -> assertThat(rendered(e)).contains("Only laboratory staff"));
     }
 
     @Test
@@ -84,8 +84,7 @@ class LabResultEntryGuardTest {
         enforcePointOfCare(true);
         authenticateAs("ROLE_MIDWIFE");
         assertThatThrownBy(() -> guard.requireMayEnterResult(test(false)))
-            .hasMessageContaining("point-of-care")
-            .hasMessageContaining("Glucose");
+            .satisfies(e -> assertThat(rendered(e)).contains("point-of-care").contains("Glucose"));
     }
 
     @Test
@@ -136,7 +135,7 @@ class LabResultEntryGuardTest {
         authenticateAs("ROLE_RECEPTIONIST");
         assertThatThrownBy(() -> guard.requireMayEnterResult(test(true)))
             .isInstanceOf(UnauthorizedAccessException.class)
-            .hasMessageContaining("may not enter laboratory results");
+            .satisfies(e -> assertThat(rendered(e)).contains("may not enter laboratory results"));
     }
 
     @Test
@@ -189,5 +188,21 @@ class LabResultEntryGuardTest {
             .doesNotContain("ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_DOCTOR")
             .containsExactlyInAnyOrder(
                 "ROLE_LAB_SCIENTIST", "ROLE_LAB_MANAGER", "ROLE_LAB_DIRECTOR", "ROLE_SUPER_ADMIN");
+    }
+
+    /**
+     * The refusal carries a message key (QA D226); the exception handler renders
+     * it in the request locale. Render it the same way, in English.
+     */
+    private static String rendered(Throwable e) {
+        java.util.Locale previous = org.springframework.context.i18n.LocaleContextHolder.getLocale();
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+        try {
+            return com.example.hms.utility.MessageUtil.resolveOrRaw(
+                e.getMessage(), ((UnauthorizedAccessException) e).getArgs());
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(previous);
+        }
     }
 }

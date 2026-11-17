@@ -1,13 +1,15 @@
 package com.example.hms.mapper;
 
 import com.example.hms.enums.PostpartumEducationTopic;
-import com.example.hms.enums.PostpartumSchedulePhase;
 import com.example.hms.model.postpartum.PostpartumCarePlan;
 import com.example.hms.model.postpartum.PostpartumObservation;
 import com.example.hms.model.postpartum.PostpartumObservationAlert;
 import com.example.hms.payload.dto.clinical.postpartum.PostpartumAlertDTO;
 import com.example.hms.payload.dto.clinical.postpartum.PostpartumObservationResponseDTO;
 import com.example.hms.payload.dto.clinical.postpartum.PostpartumScheduleDTO;
+import com.example.hms.service.i18n.NotificationLocalizer;
+import com.example.hms.service.maternity.ObstetricAlertText;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -16,6 +18,21 @@ import java.util.Set;
 
 @Component
 public class PostpartumObservationMapper {
+
+    private static final String ALERT_MSG_PREFIX = "postpartum.alert.msg.";
+    private static final String ALERT_TRIGGER_PREFIX = "postpartum.alert.trigger.";
+
+    private final NotificationLocalizer localizer;
+
+    /** Without a localizer every alert shows its stored text. */
+    public PostpartumObservationMapper() {
+        this(null);
+    }
+
+    @Autowired
+    public PostpartumObservationMapper(NotificationLocalizer localizer) {
+        this.localizer = localizer;
+    }
 
     public PostpartumObservationResponseDTO toResponse(PostpartumObservation observation, PostpartumCarePlan plan) {
         if (observation == null) {
@@ -32,6 +49,7 @@ public class PostpartumObservationMapper {
             .id(observation.getId())
             .patientId(observation.getPatient() != null ? observation.getPatient().getId() : null)
             .hospitalId(observation.getHospital() != null ? observation.getHospital().getId() : null)
+            .hospitalName(observation.getHospital() != null ? observation.getHospital().getName() : null)
             .carePlanId(effectivePlan != null ? effectivePlan.getId() : null)
             .observationTime(observation.getObservationTime())
             .documentedAt(observation.getDocumentedAt())
@@ -99,8 +117,9 @@ public class PostpartumObservationMapper {
                 .type(alert.getType())
                 .severity(alert.getSeverity())
                 .code(alert.getCode())
-                .message(alert.getMessage())
-                .triggeredBy(alert.getTriggeredBy())
+                // QA D1427: the stored copy is in the staff language; the reader reads hers.
+                .message(ObstetricAlertText.render(localizer, ALERT_MSG_PREFIX, alert.getCode(), List.of(), alert.getMessage()))
+                .triggeredBy(ObstetricAlertText.render(localizer, ALERT_TRIGGER_PREFIX, alert.getCode(), List.of(), alert.getTriggeredBy()))
                 .createdAt(alert.getCreatedAt())
                 .build())
             .toList();
@@ -110,10 +129,9 @@ public class PostpartumObservationMapper {
         if (plan == null) {
             return null;
         }
-        boolean overdue = plan.getOverdueSince() != null && plan.getOverdueSince().isBefore(LocalDateTime.now());
-        Integer frequency = plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING
-            ? null
-            : plan.getShiftFrequencyMinutes();
+        // QA D215: overdue means the next check is in the past, not a stale overdueSince.
+        boolean overdue = plan.getNextDueAt() != null && plan.getNextDueAt().isBefore(LocalDateTime.now());
+        Integer frequency = plan.currentCheckFrequencyMinutes();
         return PostpartumScheduleDTO.builder()
             .carePlanId(plan.getId())
             .phase(plan.getActivePhase())

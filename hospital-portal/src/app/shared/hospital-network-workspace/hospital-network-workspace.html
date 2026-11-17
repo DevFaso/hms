@@ -1,0 +1,146 @@
+<div class="network-workspace" data-testid="hospital-network-workspace">
+  <header class="network-header">
+    <div>
+      <p class="network-eyebrow">{{ 'HOSPITAL_NETWORK.EYEBROW' | translate }}</p>
+      <h1>{{ moduleTitleKey() | translate }}</h1>
+      <p>{{ 'HOSPITAL_NETWORK.SUBTITLE' | translate }}</p>
+    </div>
+    <app-hospital-scope-chip [preserveScope]="true" />
+  </header>
+  <section class="network-overview" [attr.aria-label]="'HOSPITAL_NETWORK.OVERVIEW' | translate">
+    <div class="network-metric network-lead">
+      <span class="material-symbols-outlined" aria-hidden="true">domain</span
+      ><strong>{{ loading() || failed() ? '—' : hospitals().length }}</strong
+      ><span>{{ 'HOSPITAL_NETWORK.HOSPITALS' | translate }}</span>
+    </div>
+    <div class="network-metric">
+      <span class="material-symbols-outlined" aria-hidden="true">check_circle</span
+      ><strong>{{ loading() || failed() ? '—' : activeCount() }}</strong
+      ><span>{{ 'HOSPITAL_NETWORK.ACTIVE' | translate }}</span>
+    </div>
+    <div class="network-help">
+      <strong>{{ 'HOSPITAL_NETWORK.ACTIONS_TITLE' | translate }}</strong>
+      <p>{{ 'HOSPITAL_NETWORK.ACTIONS_HELP' | translate }}</p>
+    </div>
+  </section>
+  <section class="network-panel">
+    <div class="network-panel-heading">
+      <div>
+        <h2>{{ 'HOSPITAL_NETWORK.DIRECTORY' | translate }}</h2>
+        <p>{{ 'HOSPITAL_NETWORK.DIRECTORY_HELP' | translate }}</p>
+      </div>
+      <button class="btn-secondary" (click)="load()" [disabled]="loading()">
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
+        ><span>{{ 'COMMON.REFRESH' | translate }}</span>
+      </button>
+    </div>
+    <div class="network-toolbar">
+      <label class="network-search"
+        ><span class="material-symbols-outlined" aria-hidden="true">search</span
+        ><input
+          [ngModel]="search()"
+          (ngModelChange)="search.set($event); page.set(0)"
+          [attr.aria-label]="'HOSPITAL_NETWORK.SEARCH' | translate"
+          [placeholder]="'HOSPITAL_NETWORK.SEARCH' | translate" /></label
+      ><label class="network-toggle"
+        ><input
+          type="checkbox"
+          [ngModel]="activeOnly()"
+          (ngModelChange)="activeOnly.set($event); page.set(0)"
+        />{{ 'HOSPITAL_NETWORK.ACTIVE_ONLY' | translate }}</label
+      >
+    </div>
+    @if (loading()) {
+      <p class="network-empty" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+    } @else if (failed()) {
+      <div class="network-empty" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <h3>{{ 'HOSPITAL_NETWORK.LOAD_FAILED' | translate }}</h3>
+        <button class="btn-secondary" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+      </div>
+    } @else if (filtered().length === 0) {
+      <div class="network-empty" role="status">
+        <span class="material-symbols-outlined" aria-hidden="true">domain</span>
+        <h3>
+          {{
+            (hospitals().length ? 'HOSPITAL_NETWORK.NO_MATCHES' : 'HOSPITAL_NETWORK.EMPTY')
+              | translate
+          }}
+        </h3>
+        @if (hospitals().length) {
+          <button class="btn-secondary" (click)="reset()">
+            {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
+          </button>
+        }
+      </div>
+    } @else {
+      <div
+        class="network-table"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'HOSPITAL_NETWORK.DIRECTORY' | translate"
+      >
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+              <th scope="col">{{ 'HOSPITAL_NETWORK.ORGANIZATION' | translate }}</th>
+              <th scope="col">{{ 'HOSPITAL_NETWORK.CITY' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (hospital of visibleRows(); track hospital.id) {
+              <tr>
+                <td>
+                  <strong>{{ hospital.name }}</strong
+                  ><small>{{ hospital.code || hospital.id }}</small>
+                </td>
+                <td>{{ hospital.organizationName || '—' }}</td>
+                <td>{{ hospital.city || '—' }}</td>
+                <td>
+                  <span class="network-status" [class.network-inactive]="!hospital.active">{{
+                    (hospital.active ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate
+                  }}</span>
+                </td>
+                <td>
+                  <button
+                    class="network-open"
+                    [attr.aria-label]="
+                      'HOSPITAL_NETWORK.OPEN_CONTEXT'
+                        | translate
+                          : { module: (moduleTitleKey() | translate), hospital: hospital.name }
+                    "
+                    (click)="openHospital(hospital)"
+                    [attr.data-testid]="'network-open-' + hospital.id"
+                  >
+                    {{ 'HOSPITAL_NETWORK.OPEN_MODULE' | translate
+                    }}<span class="material-symbols-outlined" aria-hidden="true"
+                      >arrow_forward</span
+                    >
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="network-pagination">
+        <app-range-pager
+          [page]="page()"
+          [size]="pageSize"
+          [total]="filtered().length"
+          [busy]="loading()"
+          (pageChange)="page.set($event)"
+        />
+      </div>
+      <p class="network-result" role="status">
+        {{
+          'HOSPITAL_NETWORK.RESULTS'
+            | translate: { count: filtered().length, total: hospitals().length }
+        }}
+      </p>
+    }
+  </section>
+</div>

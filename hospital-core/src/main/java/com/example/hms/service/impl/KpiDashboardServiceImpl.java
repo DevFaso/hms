@@ -1,13 +1,12 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.analytics.KpiMaterializedViewProperties;
 import com.example.hms.payload.dto.analytics.KpiDashboardDTO;
 import com.example.hms.payload.dto.analytics.KpiDashboardDTO.DispenseLeadTime;
 import com.example.hms.payload.dto.analytics.KpiDashboardDTO.DoorToDoctor;
 import com.example.hms.payload.dto.analytics.KpiDashboardDTO.KpiTrendPoint;
 import com.example.hms.payload.dto.analytics.KpiDashboardDTO.NoShowRate;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.KpiDashboardService;
 import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManager;
@@ -131,13 +130,10 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
             throw new IllegalArgumentException("toInclusive must be on or after fromInclusive");
         }
 
-        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-        // For super-admins the JWT-derived primary hospital is global context, not
-        // a scoped view. Only an explicit X-Hospital-Id header (headerOverridden=true)
-        // establishes a pinned hospital scope. Without the pin, return an empty rollup.
-        UUID hospitalId = (ctx.isSuperAdmin() && !ctx.isHeaderOverridden())
-            ? null
-            : ctx.getActiveHospitalId();
+        // The hospital the request is pinned to (the one resolver): a
+        // super-admin in global view, or a caller holding several hospitals who
+        // named none, has none, and gets the empty rollup.
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
             // Super-admin without an explicit hospital pin: return an
             // empty rollup. The dashboard must be opened inside a

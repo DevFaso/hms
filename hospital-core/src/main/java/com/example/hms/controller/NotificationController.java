@@ -2,6 +2,7 @@ package com.example.hms.controller;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Notification;
 import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
@@ -49,20 +50,36 @@ public class NotificationController {
         String username = principal.getName();
         Pageable pageable = PageRequest.of(page, size);
         Page<Notification> notifications = notificationService.getNotificationsForUser(username, read, search, pageable);
-        return ResponseEntity.ok(notifications);
+        // In the reader's language, from Accept-Language (QA D665).
+        java.util.Locale locale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
+        return ResponseEntity.ok(notifications.map(n -> notificationService.localize(n, locale)));
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')")
     public ResponseEntity<Notification> createNotification(@RequestParam String message, @RequestParam String recipientUsername) {
-        Notification notification = notificationService.createNotification(message, recipientUsername);
+        // Typed by the administrator: shown as written, in every language.
+        Notification notification = notificationService.createLiteralNotification(message, recipientUsername, "ADMIN_MESSAGE");
         return ResponseEntity.ok(notification);
     }
 
+    /**
+     * Marks the caller's OWN notification read. Someone else's notification
+     * answers exactly as an unknown id (404): the handler used to mark any
+     * notification read by id, with no owner check. A broadcast (no
+     * recipient) has ONE read flag, shared by everyone: unconfined staff may
+     * set it, as before; anyone else gets the foreign-id answer (the service
+     * decides, on the caller's live context).
+     */
     @PutMapping("/{id}/read")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Void> markAsRead(@PathVariable UUID id) {
-        notificationService.markAsRead(id);
+    public ResponseEntity<Void> markAsRead(@PathVariable UUID id, Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).build();
+        }
+        if (notificationService.markAsRead(id, principal, true) != NotificationService.ReadOutcome.MARKED) {
+            throw new ResourceNotFoundException("notification.notFound", id);
+        }
         return ResponseEntity.ok().build();
     }
 

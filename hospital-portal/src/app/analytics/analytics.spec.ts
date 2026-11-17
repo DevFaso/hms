@@ -79,6 +79,7 @@ describe('AnalyticsComponent', () => {
         APPOINTMENTS: 'Rendez-vous',
         CARD: { TOTAL_PATIENTS: 'Total des patients', ACTIVE_HOSPITALS: 'Hôpitaux actifs' },
       },
+      COMMON: { LABEL: { PRESCRIPTIONS: 'Ordonnances', USERS: 'Utilisateurs' } },
       PORTAL: {
         ENUM: {
           APPOINTMENT_STATUS: { SCHEDULED: 'Planifié', COMPLETED: 'Terminé' },
@@ -99,6 +100,10 @@ describe('AnalyticsComponent', () => {
     expect(labels).toContain('Total des patients');
     expect(labels).toContain('Hôpitaux actifs');
     expect(labels).toContain('Rendez-vous');
+    // The two labels the dashboard and super-admin screens share, keyed once
+    // under COMMON.LABEL rather than once per screen.
+    expect(labels).toContain('Ordonnances');
+    expect(labels).toContain('Utilisateurs');
     // The two halves of the regression: raw English, or an unpiped key path.
     expect(labels).not.toContain('Total Patients');
     expect(labels).not.toContain('ANALYTICS.CARD.TOTAL_PATIENTS');

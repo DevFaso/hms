@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.MessageResponse;
@@ -7,6 +8,7 @@ import com.example.hms.payload.dto.UpdateUserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.payload.dto.UserSummaryDTO;
 import com.example.hms.service.UserService;
+import com.example.hms.utility.RoleValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -47,7 +49,10 @@ public class UserController {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(UserController.class);
 
     private final UserService userService;
+    private final com.example.hms.service.PatientAccountRegistrationService patientAccountRegistrationService;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
+    private final RoleValidator roleValidator;
+    private final org.springframework.context.MessageSource messageSource;
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
     @Operation(
@@ -55,7 +60,7 @@ public class UserController {
         description = "SUPER/HOSPITAL_ADMIN can register any role. RECEPTIONIST can only register PATIENT; hospital is resolved from JWT."
     )
     @PostMapping("/admin-register")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.ADMIN_REGISTER_AUTHORITIES + ")")
     public ResponseEntity<UserResponseDTO> adminRegister(
         @Valid @RequestBody AdminSignupRequest request,
         Authentication auth // inject instead of pulling from SecurityContextHolder
@@ -75,6 +80,27 @@ public class UserController {
         final boolean isPatientOnly = effectiveRoles.size() == 1 &&
             (effectiveRoles.contains(ROLE_PATIENT) || effectiveRoles.contains("ROLE_PATIENT"));
 
+        // QA D626 (regression of D329): D329 refused PATIENT only NEXT TO a
+        // staff role, so a staff onboarding that ticked the patient role alone
+        // still answered 201 with an account and no patient record. Only the
+        // patient form (which says so) or a receptionist (whose roles are
+        // forced to PATIENT above) registers a patient here.
+        if (!callerIsReceptionistOnly
+            && effectiveRoles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.replaceFirst("(?i)^ROLE_", "")))
+            && !Boolean.TRUE.equals(request.getPatientRegistration())) {
+            throw new com.example.hms.exception.BusinessException("users.roles.patientFromPatientForm");
+        }
+        // QA D626 (verification): the flag alone proves nothing, the client sets
+        // it. A patient registration carries the patient record and both are
+        // written in one transaction, so no PATIENT account is left without one.
+        // QA D1416: a receptionist only ever registers a patient (the roles were
+        // forced above), so the same rule holds for them, flag or no flag.
+        final boolean patientRegistration = callerIsReceptionistOnly
+            || Boolean.TRUE.equals(request.getPatientRegistration());
+        if (patientRegistration && request.getPatient() == null) {
+            throw new com.example.hms.exception.FieldBusinessException("patient", "users.patientRegistration.patientRequired");
+        }
+
         // SUPER_ADMIN is a global (platform-level) role — it has no hospital context.
         // Skip the hospital-presence check so the request reaches the service, which
         // correctly returns null for the hospitalId when registering a SUPER_ADMIN.
@@ -82,8 +108,7 @@ public class UserController {
             "SUPER_ADMIN".equalsIgnoreCase(r) || SUPER_ADMIN_AUTHORITY.equalsIgnoreCase(r));
 
         if (!callerIsReceptionistOnly && !isPatientOnly && !isGlobalRole && request.getHospitalId() == null) {
-            ResponseEntity<UserResponseDTO> badRequest = resolveHospitalFromName(request);
-            if (badRequest != null) return badRequest;
+            resolveHospitalFromName(request);
         }
 
         // Delivery outcomes are recorded by the send paths — including the
@@ -93,7 +118,10 @@ public class UserController {
         // instead of a green 201 over a silent WARN log.
         com.example.hms.utility.ActivationDeliveryTracker.open();
         try {
-            UserResponseDTO dto = userService.createUserWithRolesAndHospital(request);
+            UserResponseDTO dto = patientRegistration
+                ? patientAccountRegistrationService.registerPatient(request,
+                    org.springframework.context.i18n.LocaleContextHolder.getLocale())
+                : userService.createUserWithRolesAndHospital(request);
             dto.setActivationDelivery(com.example.hms.utility.ActivationDeliveryTracker.close());
             return ResponseEntity.created(URI.create("/users/" + dto.getId())).body(dto);
         } finally {
@@ -127,62 +155,96 @@ public class UserController {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private ResponseEntity<UserResponseDTO> resolveHospitalFromName(AdminSignupRequest request) {
+    /**
+     * A staff registration with no hospital id: by name when one is given,
+     * otherwise the hospital the caller acts at (a hospital admin onboards
+     * into their own hospital, D201). With neither, a translated 400 body
+     * instead of an empty one.
+     */
+    private void resolveHospitalFromName(AdminSignupRequest request) {
         if (request.getHospitalName() != null && !request.getHospitalName().isBlank()) {
-            var hospital = hospitalRepository.findByName(request.getHospitalName()).orElse(null);
+            // By NAME a hospital only: a provider facility is named by id (the
+            // path of its PROVIDER_ADMIN), and by name it answers as an unknown
+            // hospital (provider plan AC-11).
+            var hospital = hospitalRepository.findClinicalByName(request.getHospitalName())
+                .orElse(null);
             if (hospital == null) {
                 log.warn("[ADMIN REGISTER] Hospital not found for provided hospital name.");
-                return ResponseEntity.badRequest().build();
+                throw new com.example.hms.exception.BusinessException("user.adminRegister.hospitalNotFound");
             }
             request.setHospitalId(hospital.getId());
-            return null;
+            return;
+        }
+        UUID acting = com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull();
+        if (acting != null) {
+            request.setHospitalId(acting);
+            return;
         }
         log.warn("[ADMIN REGISTER] Missing hospital for non-patient staff/admin registration.");
-        return ResponseEntity.badRequest().build();
+        throw new com.example.hms.exception.BusinessException("user.adminRegister.hospitalRequired");
     }
 
-    @Operation(summary = "Get user by ID")
+    // Who may read, edit, delete and restore which account, and who may use the
+    // directory, is decided in the service (UserAccountAccess), so no other
+    // entry point over UserService can skip it. A refused id answers 404, the
+    // same as a missing one.
+    @Operation(summary = "Get user by ID",
+        description = "Your own account, or one you administer (super-admin; hospital admin of a "
+            + "hospital the account is assigned to). Anything else answers 404.")
     @GetMapping("/{id}")
     public ResponseEntity<UserResponseDTO> getUserById(@PathVariable UUID id) {
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
     @Operation(summary = "Get all users with pagination (summary view)",
-        description = "includeDeleted=true also returns soft-deleted accounts; onlyDeleted=true "
-            + "returns only them (the restore worklist). Both are honoured only for SUPER_ADMIN "
-            + "- the user directory is global, so surfacing deleted identities to a "
-            + "hospital-scoped admin would let one tenant enumerate another tenant's account "
-            + "history. Everyone else silently gets the live-only view.")
+        description = "Administrators only (QA D790): a caller with no active HOSPITAL_ADMIN or ADMIN "
+            + "assignment gets 403. A super-admin sees every account; an administrator "
+            + "sees the live accounts holding an assignment (any role, active or not) at a hospital "
+            + "they administer. includeDeleted=true also returns soft-deleted "
+            + "accounts; onlyDeleted=true returns only them (the restore worklist). Both are "
+            + "honoured only for SUPER_ADMIN; for anyone else includeDeleted is ignored and "
+            + "onlyDeleted returns an empty page (QA D919).")
     @GetMapping
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_DIRECTORY_AUTHORITIES + ")")
     public ResponseEntity<Page<UserSummaryDTO>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "false") boolean includeDeleted,
             @RequestParam(defaultValue = "false") boolean onlyDeleted) {
         boolean allowed = canSeeDeleted();
+        // QA D919: the deleted worklist asked for by someone it is not for is
+        // empty. It used to fall back to the live list, so a hospital admin
+        // clicking "Supprimé" got every live account with edit buttons.
+        if (onlyDeleted && !allowed) {
+            return ResponseEntity.ok(org.springframework.data.domain.Page.empty(
+                org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.max(size, 1))));
+        }
         return ResponseEntity.ok(userService.getAllUsers(
             page, size, includeDeleted && allowed, onlyDeleted && allowed));
     }
 
     /**
-     * Deleted-account visibility is SUPER_ADMIN-only. The user directory is
-     * global (not hospital-scoped), so honouring this for HOSPITAL_ADMIN
-     * would let one tenant's admin enumerate another tenant's deleted
-     * identities; scoping the directory itself is the larger pre-existing
-     * question, and the deleted view must not widen it.
+     * Deleted-account visibility is SUPER_ADMIN-only. A soft delete removes
+     * the account's assignments, so a deleted account belongs to no hospital
+     * and the hospital-scoped directory has nothing to match it on: honouring
+     * this for a HOSPITAL_ADMIN would hand them every tenant's deleted
+     * identities. The scoped service query has no deleted view at all.
      */
     private boolean canSeeDeleted() {
-        // From the SecurityContext, not a method-injected Authentication: the
-        // latter rides request.getUserPrincipal(), which is only populated by
-        // the security filter chain and is null in filterless slices.
-        Set<String> authorities = extractAuthorities(
-            org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication());
-        return authorities.contains(SUPER_ADMIN_AUTHORITY);
+        // The same super-admin signal the rest of the /users rules use
+        // (UserAccountAccess), so the two cannot disagree.
+        return roleValidator.isSuperAdminFromJwtClaim();
     }
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
-    @Operation(summary = "Update user by ID (partial update — only send fields you want to change)")
+    @Operation(summary = "Update user by ID (partial update — only send fields you want to change)",
+        description = "Your own account: names and phone only. The password and username have "
+            + "their own endpoints (POST /auth/me/change-password, /auth/me/change-username); "
+            + "your email goes through POST /auth/me/change-email and its code (400 on a self "
+            + "change here), and nobody "
+            + "switches their own account on or off. Another account: super-admin, or a hospital admin when "
+            + "every one of its assignments is at a hospital they administer and it is not a "
+            + "super-admin. Anything else answers 404.")
     @PutMapping("/{id}")
     public ResponseEntity<UserResponseDTO> updateUser(@PathVariable UUID id,
                                                       @Valid @RequestBody UpdateUserRequestDTO dto) {
@@ -190,13 +252,20 @@ public class UserController {
     }
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
-    @Operation(summary = "Delete user by ID (Soft Delete)")
+    @Operation(summary = "Delete user by ID (Soft Delete)",
+        description = "Administrators of the account, as for update. A registrar (the roles "
+            + "admin-register admits) may also discard the unclaimed patient account its own "
+            + "failed patient registration just created. Anything else answers 404.")
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_REGISTRAR_AUTHORITIES + ")")
     public ResponseEntity<MessageResponse> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
-        return ResponseEntity.ok(new MessageResponse("User deleted successfully."));
+        // QA D911: in the reader's language, like every other answer here.
+        return ResponseEntity.ok(new MessageResponse(messageSource.getMessage(
+            "user.deleted", null, org.springframework.context.i18n.LocaleContextHolder.getLocale())));
     }
 
+    @WriteAudited(skip = true, reason = "service emits USER_RESTORE")
     @Operation(summary = "Restore a soft-deleted user")
     @PatchMapping("/{id}/restore")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
@@ -205,8 +274,21 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Search users by name, role, or email with pagination (summary view)")
+    @Operation(summary = "Colleagues the caller may start a chat with",
+        description = "QA D790: the chat's new-conversation picker. Any caller holding an active "
+            + "non-patient assignment; the active, live staff accounts at the caller's hospitals, "
+            + "with id, name and role only (no username, e-mail or status flags). Patients get 403 "
+            + "and use their own care-team pickers.")
+    @GetMapping("/chat-recipients")
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.ChatRecipientDTO>> getChatRecipients(
+            @RequestParam(defaultValue = "200") int size) {
+        return ResponseEntity.ok(userService.listChatRecipients(size));
+    }
+
+    @Operation(summary = "Search users by name, role, or email with pagination (summary view)",
+        description = "Administrators only (QA D790), scoped exactly as GET /users is.")
     @GetMapping("/search")
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_DIRECTORY_AUTHORITIES + ")")
     public ResponseEntity<Page<UserSummaryDTO>> searchUsers(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String role,
@@ -216,6 +298,11 @@ public class UserController {
             @RequestParam(defaultValue = "false") boolean includeDeleted,
             @RequestParam(defaultValue = "false") boolean onlyDeleted) {
         boolean allowed = canSeeDeleted();
+        // QA D919: as GET /users, the deleted worklist is empty for anyone else.
+        if (onlyDeleted && !allowed) {
+            return ResponseEntity.ok(org.springframework.data.domain.Page.empty(
+                org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.max(size, 1))));
+        }
         return ResponseEntity.ok(userService.searchUsers(
             name, role, email, page, size, includeDeleted && allowed, onlyDeleted && allowed));
     }

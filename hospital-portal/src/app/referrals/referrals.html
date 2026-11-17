@@ -1,6 +1,7 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <span class="specialist-eyebrow">{{ 'SPECIALIST_DASH.REFERRAL_EYEBROW' | translate }}</span>
       <h1 class="page-title">{{ 'REFERRALS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'REFERRALS.SUBTITLE' | translate }}</p>
     </div>
@@ -10,46 +11,63 @@
            the "Hospital" column shows the *referring* hospital — not the
            receiving one (which is already a column on the table). -->
       <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
-      <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> {{ 'REFERRALS.NEW' | translate }}
-      </button>
+      @if (canWriteReferral()) {
+        <button class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          {{ 'REFERRALS.NEW' | translate }}
+        </button>
+      }
     </div>
   </div>
-  <div class="summary-cards">
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon pending">pending_actions</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('pending') }}</span
-        ><span class="card-label">{{ 'COMMON.PENDING' | translate }}</span>
+  <section class="specialist-overview">
+    <div class="overview-heading">
+      <h2>{{ 'SPECIALIST_DASH.OVERVIEW' | translate }}</h2>
+      <span class="material-symbols-outlined" aria-hidden="true">monitoring</span>
+    </div>
+    <div class="summary-cards">
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon pending">pending_actions</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : countByGroup('pending')
+          }}</span
+          ><span class="card-label">{{ 'COMMON.PENDING' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon active">sync</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : countByGroup('active')
+          }}</span
+          ><span class="card-label">{{ 'COMMON.ACTIVE' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon completed">check_circle</span>
+        <div class="card-info">
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : countByGroup('completed')
+          }}</span
+          ><span class="card-label">{{ 'COMMON.COMPLETED' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon total">bar_chart</span>
+        <div class="card-info">
+          <span class="card-value">{{ loading() || loadFailed() ? '—' : referrals().length }}</span
+          ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+        </div>
       </div>
     </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon active">sync</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('active') }}</span
-        ><span class="card-label">{{ 'COMMON.ACTIVE' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon completed">check_circle</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('completed') }}</span
-        ><span class="card-label">{{ 'COMMON.COMPLETED' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon total">bar_chart</span>
-      <div class="card-info">
-        <span class="card-value">{{ referrals().length }}</span
-        ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
-      </div>
-    </div>
-  </div>
+    <p class="specialist-scope-note">{{ 'SPECIALIST_DASH.LOADED_SCOPE' | translate }}</p>
+  </section>
   <div class="filter-bar">
     <div class="tabs">
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'all'"
+        [attr.aria-pressed]="activeTab() === 'all'"
         (click)="setTab('all')"
         [title]="'COMMON.SHOW_ALL' | translate"
       >
@@ -58,6 +76,7 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'pending'"
+        [attr.aria-pressed]="activeTab() === 'pending'"
         (click)="setTab('pending')"
         [title]="'COMMON.SHOW_PENDING' | translate"
       >
@@ -66,6 +85,7 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'active'"
+        [attr.aria-pressed]="activeTab() === 'active'"
         (click)="setTab('active')"
         [title]="'COMMON.SHOW_ACTIVE' | translate"
       >
@@ -74,6 +94,7 @@
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'completed'"
+        [attr.aria-pressed]="activeTab() === 'completed'"
         (click)="setTab('completed')"
         [title]="'COMMON.SHOW_COMPLETED' | translate"
       >
@@ -83,6 +104,7 @@
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
+        [attr.aria-label]="'REFERRALS.SEARCH' | translate"
         type="text"
         [placeholder]="'REFERRALS.SEARCH' | translate"
         [(ngModel)]="searchTerm"
@@ -90,16 +112,43 @@
       />
     </div>
   </div>
+  @if (!loading() && !loadFailed()) {
+    <div class="workspace-caption">
+      <span>{{
+        'SPECIALIST_DASH.VISIBLE'
+          | translate: { shown: filtered().length, loaded: referrals().length }
+      }}</span>
+      @if (searchTerm) {
+        <button type="button" class="clear-search" (click)="searchTerm = ''; applyFilter()">
+          {{ 'SPECIALIST_DASH.CLEAR_SEARCH' | translate }}
+        </button>
+      }
+    </div>
+  }
+  @if (!loading() && loadFailed()) {
+    <div class="dashboard-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <div>
+        <h2>{{ 'SPECIALIST_DASH.UNAVAILABLE' | translate }}</h2>
+        <p>{{ 'REFERRALS.LOAD_FAILED' | translate }}</p>
+      </div>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
       <p>{{ 'REFERRALS.LOADING' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length === 0) {
+  @if (!loading() && !loadFailed() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">send</span>
-      @if (isSuperAdmin() && globalView()) {
+      @if (referrals().length > 0) {
+        <h3>{{ 'SPECIALIST_DASH.NO_MATCHES' | translate }}</h3>
+      } @else if (isSuperAdmin() && globalView()) {
         <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.REFERRALS' | translate }}</h3>
       } @else {
         <h3>{{ 'REFERRALS.NO_REFERRALS' | translate }}</h3>
@@ -107,8 +156,13 @@
       <p>{{ 'REFERRALS.WILL_APPEAR' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length > 0) {
-    <div class="data-table">
+  @if (!loading() && !loadFailed() && filtered().length > 0) {
+    <div
+      class="data-table"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'REFERRALS.TITLE' | translate"
+    >
       <table>
         <thead>
           <tr>
@@ -138,12 +192,12 @@
                 </div>
                 <div class="cell-secondary">{{ r.patientMrn }}</div>
               </td>
-              <td>{{ r.targetSpecialty || '—' }}</td>
+              <td>{{ specialtyLabel(r.targetSpecialty) || '—' }}</td>
               <td>{{ r.referringProviderName || '—' }}</td>
               <td>{{ r.receivingProviderName || ('REFERRALS.UNASSIGNED' | translate) }}</td>
               <td>
                 <span class="urgency-badge {{ getUrgencyClass(r.urgency) }}">{{
-                  r.urgency | enumLabel: 'consultationUrgency'
+                  r.urgency | enumLabel: 'referralUrgency'
                 }}</span>
               </td>
               <td>
@@ -154,73 +208,93 @@
               <td>
                 <div class="action-group">
                   <button
+                    [attr.aria-label]="'REFERRALS.VIEW_DETAILS' | translate"
                     class="action-link"
                     (click)="viewDetail(r)"
                     [title]="'REFERRALS.VIEW_DETAILS' | translate"
                   >
-                    <span class="material-symbols-outlined">visibility</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                   </button>
-                  @if (r.status === 'DRAFT') {
+                  @if (isMyDraft(r)) {
                     <button
+                      [attr.aria-label]="'REFERRALS.SUBMIT_REFERRAL' | translate"
                       class="action-link submit"
                       (click)="submitReferral(r)"
                       [title]="'REFERRALS.SUBMIT_REFERRAL' | translate"
                     >
-                      <span class="material-symbols-outlined">send</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">send</span>
                     </button>
                   }
-                  @if (r.status === 'SUBMITTED') {
+                  @if (canAct().acknowledge && isReceivingSide(r) && r.status === 'SUBMITTED') {
                     <button
+                      [attr.aria-label]="'REFERRALS.ACKNOWLEDGE_REFERRAL' | translate"
                       class="action-link acknowledge"
                       (click)="openAcknowledge(r)"
                       [title]="'REFERRALS.ACKNOWLEDGE_REFERRAL' | translate"
                     >
-                      <span class="material-symbols-outlined">task_alt</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
                     </button>
                   }
-                  @if (['SUBMITTED', 'ACKNOWLEDGED'].includes(r.status)) {
+                  @if (
+                    canAct().reject &&
+                    isReceivingSide(r) &&
+                    ['SUBMITTED', 'ACKNOWLEDGED'].includes(r.status)
+                  ) {
                     <button
+                      [attr.aria-label]="'REFERRALS.REJECT_REFERRAL' | translate"
                       class="action-link reject"
                       (click)="openReject(r)"
                       [title]="'REFERRALS.REJECT_REFERRAL' | translate"
                     >
-                      <span class="material-symbols-outlined">block</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">block</span>
                     </button>
                   }
-                  @if (r.status === 'ACKNOWLEDGED') {
+                  @if (canAct().schedule && isReceivingSide(r) && r.status === 'ACKNOWLEDGED') {
                     <button
+                      [attr.aria-label]="'REFERRALS.SCHEDULE_APPOINTMENT' | translate"
                       class="action-link schedule"
                       (click)="openSchedule(r)"
                       [title]="'REFERRALS.SCHEDULE_APPOINTMENT' | translate"
                     >
-                      <span class="material-symbols-outlined">event</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">event</span>
                     </button>
                   }
-                  @if (['ACKNOWLEDGED', 'SCHEDULED'].includes(r.status)) {
+                  @if (
+                    canAct().start &&
+                    isReceivingSide(r) &&
+                    ['ACKNOWLEDGED', 'SCHEDULED'].includes(r.status)
+                  ) {
                     <button
+                      [attr.aria-label]="'REFERRALS.START_CONSULTATION' | translate"
                       class="action-link start"
                       (click)="startReferral(r)"
                       [title]="'REFERRALS.START_CONSULTATION' | translate"
                     >
-                      <span class="material-symbols-outlined">play_circle</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">play_circle</span>
                     </button>
                   }
-                  @if (['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(r.status)) {
+                  @if (
+                    canAct().complete &&
+                    isReceivingSide(r) &&
+                    ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(r.status)
+                  ) {
                     <button
+                      [attr.aria-label]="'REFERRALS.COMPLETE_REFERRAL' | translate"
                       class="action-link complete"
                       (click)="openComplete(r)"
                       [title]="'REFERRALS.COMPLETE_REFERRAL' | translate"
                     >
-                      <span class="material-symbols-outlined">check_circle</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
                     </button>
                   }
-                  @if (!['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(r.status)) {
+                  @if (canCancel(r)) {
                     <button
+                      [attr.aria-label]="'REFERRALS.CANCEL_REFERRAL' | translate"
                       class="action-link delete"
                       (click)="confirmCancel(r)"
                       [title]="'REFERRALS.CANCEL_REFERRAL' | translate"
                     >
-                      <span class="material-symbols-outlined">cancel</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
                     </button>
                   }
                 </div>
@@ -233,18 +307,43 @@
   }
   @if (selectedReferral(); as ref) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="referrals-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'REFERRALS.DETAILS' | translate }}</h2>
-          <button class="btn-close" (click)="closeDetail()" [title]="'COMMON.CLOSE' | translate">
-            <span class="material-symbols-outlined">close</span>
+          <h2 id="referrals-panel-1-title">{{ 'REFERRALS.DETAILS' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="btn-close"
+            (click)="closeDetail()"
+            [title]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
         <div class="detail-body">
           <div class="detail-grid">
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT' | translate }}</span
-              ><span class="field-value">{{ ref.patientName }}</span>
+              ><span class="field-value"
+                >{{ ref.patientName }}
+                <button
+                  type="button"
+                  class="action-link open-chart"
+                  [disabled]="chartChecking()"
+                  (click)="openPatientChart(ref)"
+                >
+                  {{ 'REFERRALS.OPEN_CHART' | translate }}
+                </button></span
+              >
+              @if (chartCheck() === 'unavailable') {
+                <p class="chart-unavailable" role="status">
+                  {{ 'REFERRALS.CHART_UNAVAILABLE' | translate }}
+                </p>
+              }
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.MRN' | translate }}</span
@@ -268,7 +367,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.SPECIALTY' | translate }}</span
-              ><span class="field-value">{{ ref.targetSpecialty }}</span>
+              ><span class="field-value">{{ specialtyLabel(ref.targetSpecialty) }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.URGENCY' | translate }}</span
@@ -299,13 +398,13 @@
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.SUBMITTED' | translate }}</span
               ><span class="field-value">{{
-                ref.submittedAt ? (ref.submittedAt | date: 'medium') : '—'
+                ref.submittedAt ? (ref.submittedAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.SCHEDULED_AT' | translate }}</span
               ><span class="field-value">{{
-                ref.scheduledAppointmentAt ? (ref.scheduledAppointmentAt | date: 'medium') : '—'
+                ref.scheduledAppointmentAt ? (ref.scheduledAppointmentAt | dateTime) : '—'
               }}</span>
             </div>
             <div class="detail-field">
@@ -315,19 +414,19 @@
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.STARTED_AT' | translate }}</span
               ><span class="field-value">{{
-                ref.startedAt ? (ref.startedAt | date: 'medium') : '—'
+                ref.startedAt ? (ref.startedAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.COMPLETED' | translate }}</span
               ><span class="field-value">{{
-                ref.completedAt ? (ref.completedAt | date: 'medium') : '—'
+                ref.completedAt ? (ref.completedAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span
               ><span class="field-value">{{
-                ref.createdAt ? (ref.createdAt | date: 'medium') : '—'
+                ref.createdAt ? (ref.createdAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
           </div>
@@ -378,13 +477,13 @@
 
           <!-- Detail Panel Actions -->
           <div class="detail-actions">
-            @if (ref.status === 'DRAFT') {
+            @if (isMyDraft(ref)) {
               <button
                 class="btn-primary"
                 (click)="submitReferral(ref)"
                 [disabled]="actionLoading()"
               >
-                <span class="material-symbols-outlined">send</span>
+                <span class="material-symbols-outlined" aria-hidden="true">send</span>
                 {{
                   actionLoading()
                     ? ('REFERRALS.SUBMITTING' | translate)
@@ -392,31 +491,39 @@
                 }}
               </button>
             }
-            @if (ref.status === 'SUBMITTED') {
+            @if (canAct().acknowledge && isReceivingSide(ref) && ref.status === 'SUBMITTED') {
               <button
                 class="btn-primary"
                 (click)="openAcknowledge(ref)"
                 [disabled]="actionLoading()"
               >
-                <span class="material-symbols-outlined">task_alt</span>
+                <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
                 {{ 'REFERRALS.ACTION_ACKNOWLEDGE' | translate }}
               </button>
             }
-            @if (['SUBMITTED', 'ACKNOWLEDGED'].includes(ref.status)) {
+            @if (
+              canAct().reject &&
+              isReceivingSide(ref) &&
+              ['SUBMITTED', 'ACKNOWLEDGED'].includes(ref.status)
+            ) {
               <button class="btn-danger" (click)="openReject(ref)" [disabled]="actionLoading()">
-                <span class="material-symbols-outlined">block</span>
+                <span class="material-symbols-outlined" aria-hidden="true">block</span>
                 {{ 'REFERRALS.ACTION_REJECT' | translate }}
               </button>
             }
-            @if (ref.status === 'ACKNOWLEDGED') {
+            @if (canAct().schedule && isReceivingSide(ref) && ref.status === 'ACKNOWLEDGED') {
               <button class="btn-primary" (click)="openSchedule(ref)" [disabled]="actionLoading()">
-                <span class="material-symbols-outlined">event</span>
+                <span class="material-symbols-outlined" aria-hidden="true">event</span>
                 {{ 'REFERRALS.ACTION_SCHEDULE' | translate }}
               </button>
             }
-            @if (['ACKNOWLEDGED', 'SCHEDULED'].includes(ref.status)) {
+            @if (
+              canAct().start &&
+              isReceivingSide(ref) &&
+              ['ACKNOWLEDGED', 'SCHEDULED'].includes(ref.status)
+            ) {
               <button class="btn-primary" (click)="startReferral(ref)" [disabled]="actionLoading()">
-                <span class="material-symbols-outlined">play_circle</span>
+                <span class="material-symbols-outlined" aria-hidden="true">play_circle</span>
                 {{
                   actionLoading()
                     ? ('REFERRALS.STARTING' | translate)
@@ -424,15 +531,19 @@
                 }}
               </button>
             }
-            @if (['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(ref.status)) {
+            @if (
+              canAct().complete &&
+              isReceivingSide(ref) &&
+              ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(ref.status)
+            ) {
               <button class="btn-primary" (click)="openComplete(ref)" [disabled]="actionLoading()">
-                <span class="material-symbols-outlined">check_circle</span>
+                <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
                 {{ 'REFERRALS.ACTION_COMPLETE' | translate }}
               </button>
             }
-            @if (!['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(ref.status)) {
+            @if (canCancel(ref)) {
               <button class="btn-danger" (click)="confirmCancel(ref)">
-                <span class="material-symbols-outlined">cancel</span>
+                <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
                 {{ 'COMMON.CANCEL' | translate }}
               </button>
             }
@@ -450,9 +561,16 @@
       (click)="closeModal()"
       (keydown.escape)="closeModal()"
     ></div>
-    <div class="modal modal-lg">
+    <div
+      appModalDialog
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-1-title"
+      (keydown.escape)="closeModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'REFERRALS.NEW' | translate }}</h2>
+        <h2 id="referrals-dialog-1-title">{{ 'REFERRALS.NEW' | translate }}</h2>
         <button class="modal-close" (click)="closeModal()" [title]="'COMMON.CLOSE' | translate">
           &times;
         </button>
@@ -465,13 +583,12 @@
             @if (selectedPatient()) {
               <div class="picker-chip">
                 <span class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</span>
-                <span class="chip-info">
-                  <span class="chip-name"
-                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                  >
-                  <span class="chip-sub">{{
-                    selectedPatient()!.mrn || selectedPatient()!.email
-                  }}</span>
+                {{ ' '
+                }}<span class="chip-info">
+                  <span class="chip-name">{{ selectedPatient() | personName }}</span>
+                  @if (selectedPatient() | patientSubline; as sub) {
+                    {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
+                  }
                 </span>
                 <button
                   type="button"
@@ -486,12 +603,17 @@
               <div class="patient-picker-wrap">
                 <span class="picker-search-icon material-icons">person_search</span>
                 <input
+                  required
+                  data-escape-discards
                   id="ref-patientSearch"
+                  [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
                   type="text"
                   class="picker-input"
                   [value]="patientQuery()"
                   (input)="onPatientQueryChange($any($event.target).value)"
                   (blur)="patientDropdownOpen.set(false)"
+                  [appListEscape]="patientDropdownOpen()"
+                  (listEscape)="patientDropdownOpen.set(false)"
                   [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
                   autocomplete="off"
                 />
@@ -507,8 +629,10 @@
                       <li class="picker-option" (mousedown)="selectPatient(p)">
                         <span class="opt-avatar">{{ patientInitials(p) }}</span>
                         <span class="opt-info">
-                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
-                          <span class="opt-meta">{{ p.mrn }} · {{ p.email }}</span>
+                          <span class="opt-name">{{ p | personName }}</span>
+                          @if (p | patientSubline; as sub) {
+                            {{ ' ' }}<span class="opt-meta">{{ sub }}</span>
+                          }
                         </span>
                       </li>
                     }
@@ -533,6 +657,7 @@
                 <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
               } @else {
                 <select
+                  required
                   id="ref-hospitalId"
                   [ngModel]="form.hospitalId"
                   (ngModelChange)="onSourceHospitalChange($event)"
@@ -605,6 +730,7 @@
           <div class="field">
             <label for="ref-specialty">{{ 'REFERRALS.TARGET_SPECIALTY' | translate }} *</label>
             <select
+              required
               id="ref-specialty"
               [(ngModel)]="form.targetSpecialty"
               [title]="'REFERRALS.TARGET_SPECIALTY' | translate"
@@ -618,12 +744,13 @@
           <div class="field">
             <label for="ref-urgency">{{ 'REFERRALS.URGENCY' | translate }} *</label>
             <select
+              required
               id="ref-urgency"
               [(ngModel)]="form.urgency"
               [title]="'REFERRALS.URGENCY' | translate"
             >
               @for (u of urgencies; track u) {
-                <option [value]="u">{{ u }}</option>
+                <option [value]="u">{{ u | enumLabel: 'referralUrgency' }}</option>
               }
             </select>
           </div>
@@ -632,6 +759,7 @@
           <div class="field">
             <label for="ref-type">{{ 'REFERRALS.REFERRAL_TYPE' | translate }} *</label>
             <select
+              required
               id="ref-type"
               [(ngModel)]="form.referralType"
               [title]="'REFERRALS.REFERRAL_TYPE' | translate"
@@ -648,6 +776,7 @@
           <div class="field" style="flex: 1">
             <label for="ref-reason">{{ 'REFERRALS.REFERRAL_REASON' | translate }} *</label>
             <textarea
+              required
               id="ref-reason"
               [(ngModel)]="form.referralReason"
               rows="3"
@@ -682,7 +811,13 @@
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="saving()"
+        >
           {{ saving() ? ('COMMON.SAVING' | translate) : ('REFERRALS.CREATE_REFERRAL' | translate) }}
         </button>
       </div>
@@ -697,9 +832,16 @@
       (click)="cancelDeleteAction()"
       (keydown.escape)="cancelDeleteAction()"
     ></div>
-    <div class="modal">
+    <div
+      appModalDialog
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-2-title"
+      (keydown.escape)="cancelDeleteAction()"
+    >
       <div class="modal-header">
-        <h2>{{ 'REFERRALS.CANCEL_REFERRAL' | translate }}</h2>
+        <h2 id="referrals-dialog-2-title">{{ 'REFERRALS.CANCEL_REFERRAL' | translate }}</h2>
         <button
           class="modal-close"
           (click)="cancelDeleteAction()"
@@ -717,11 +859,29 @@
                 | translate
                   : {
                       name: deletingRef()?.patientName,
-                      specialty: deletingRef()?.targetSpecialty,
+                      specialty: specialtyLabel(deletingRef()?.targetSpecialty),
                     }
             }}
           </p>
         </div>
+        <!-- QA D1098: every cancel states why; it used to send "Cancelled by admin". -->
+        <div class="form-group">
+          <label for="referral-cancel-reason"
+            >{{ 'ORDER_LIFECYCLE.CANCEL_REASON_LABEL' | translate }} *</label
+          >
+          <textarea
+            id="referral-cancel-reason"
+            rows="3"
+            maxlength="500"
+            required
+            aria-required="true"
+            [ngModel]="cancelReason()"
+            (ngModelChange)="cancelReason.set($event)"
+          ></textarea>
+        </div>
+        @if (cancelError()) {
+          <p class="form-error" role="alert">{{ cancelError() }}</p>
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDeleteAction()">
@@ -746,9 +906,16 @@
       (click)="closeAcknowledgeModal()"
       (keydown.escape)="closeAcknowledgeModal()"
     ></div>
-    <div class="modal">
+    <div
+      appModalDialog
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-3-title"
+      (keydown.escape)="closeAcknowledgeModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'REFERRALS.ACKNOWLEDGE_REFERRAL' | translate }}</h2>
+        <h2 id="referrals-dialog-3-title">{{ 'REFERRALS.ACKNOWLEDGE_REFERRAL' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeAcknowledgeModal()"
@@ -764,13 +931,14 @@
               | translate
                 : {
                     name: acknowledgingRef()?.patientName,
-                    specialty: acknowledgingRef()?.targetSpecialty,
+                    specialty: specialtyLabel(acknowledgingRef()?.targetSpecialty),
                   }
           }}
         </p>
         <div class="field">
           <label for="ack-notes">{{ 'REFERRALS.ACKNOWLEDGEMENT_NOTES' | translate }} *</label>
           <textarea
+            required
             id="ack-notes"
             [(ngModel)]="acknowledgeNotes"
             rows="3"
@@ -785,7 +953,9 @@
         <button
           class="btn-primary"
           (click)="executeAcknowledge()"
-          [disabled]="actionLoading() || !acknowledgeNotes.trim()"
+          [disabled]="actionLoading()"
+          [appSubmitGuard]="!acknowledgeNotes.trim()"
+          [submitGuardFields]="['ack-notes']"
         >
           {{
             actionLoading()
@@ -805,9 +975,16 @@
       (click)="closeScheduleModal()"
       (keydown.escape)="closeScheduleModal()"
     ></div>
-    <div class="modal">
+    <div
+      appModalDialog
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-4-title"
+      (keydown.escape)="closeScheduleModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'REFERRALS.SCHEDULE_REFERRAL' | translate }}</h2>
+        <h2 id="referrals-dialog-4-title">{{ 'REFERRALS.SCHEDULE_REFERRAL' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeScheduleModal()"
@@ -823,13 +1000,18 @@
               | translate
                 : {
                     name: schedulingRef()?.patientName,
-                    specialty: schedulingRef()?.targetSpecialty,
+                    specialty: specialtyLabel(schedulingRef()?.targetSpecialty),
                   }
           }}
         </p>
         <div class="field">
           <label for="schedule-time">{{ 'REFERRALS.APPOINTMENT_DATETIME' | translate }} *</label>
-          <input id="schedule-time" type="datetime-local" [(ngModel)]="scheduleAppointmentTime" />
+          <input
+            required
+            id="schedule-time"
+            type="datetime-local"
+            [(ngModel)]="scheduleAppointmentTime"
+          />
         </div>
         <div class="field">
           <label for="schedule-location">{{ 'APPOINTMENTS.LOCATION' | translate }}</label>
@@ -849,7 +1031,9 @@
         <button
           class="btn-primary"
           (click)="executeSchedule()"
-          [disabled]="actionLoading() || !scheduleAppointmentTime"
+          [disabled]="actionLoading()"
+          [appSubmitGuard]="!scheduleAppointmentTime"
+          [submitGuardFields]="['schedule-time']"
         >
           {{
             actionLoading()
@@ -869,9 +1053,16 @@
       (click)="closeRejectModal()"
       (keydown.escape)="closeRejectModal()"
     ></div>
-    <div class="modal">
+    <div
+      appModalDialog
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-5-title"
+      (keydown.escape)="closeRejectModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'REFERRALS.REJECT_REFERRAL' | translate }}</h2>
+        <h2 id="referrals-dialog-5-title">{{ 'REFERRALS.REJECT_REFERRAL' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeRejectModal()"
@@ -887,13 +1078,14 @@
               | translate
                 : {
                     name: rejectingRef()?.patientName,
-                    specialty: rejectingRef()?.targetSpecialty,
+                    specialty: specialtyLabel(rejectingRef()?.targetSpecialty),
                   }
           }}
         </p>
         <div class="field">
           <label for="reject-reason">{{ 'REFERRALS.REASON' | translate }} *</label>
           <textarea
+            required
             id="reject-reason"
             [(ngModel)]="rejectReason"
             rows="3"
@@ -909,7 +1101,9 @@
         <button
           class="btn-danger"
           (click)="executeReject()"
-          [disabled]="actionLoading() || !rejectReason.trim()"
+          [disabled]="actionLoading()"
+          [appSubmitGuard]="!rejectReason.trim()"
+          [submitGuardFields]="['reject-reason']"
         >
           {{
             actionLoading()
@@ -929,9 +1123,16 @@
       (click)="closeCompleteModal()"
       (keydown.escape)="closeCompleteModal()"
     ></div>
-    <div class="modal">
+    <div
+      appModalDialog
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-6-title"
+      (keydown.escape)="closeCompleteModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'REFERRALS.COMPLETE_REFERRAL' | translate }}</h2>
+        <h2 id="referrals-dialog-6-title">{{ 'REFERRALS.COMPLETE_REFERRAL' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeCompleteModal()"
@@ -947,13 +1148,14 @@
               | translate
                 : {
                     name: completingRef()?.patientName,
-                    specialty: completingRef()?.targetSpecialty,
+                    specialty: specialtyLabel(completingRef()?.targetSpecialty),
                   }
           }}
         </p>
         <div class="field">
           <label for="complete-summary">{{ 'REFERRALS.COMPLETION_SUMMARY' | translate }} *</label>
           <textarea
+            required
             id="complete-summary"
             [(ngModel)]="completeSummary"
             rows="3"
@@ -979,7 +1181,9 @@
         <button
           class="btn-primary"
           (click)="executeComplete()"
-          [disabled]="actionLoading() || !completeSummary.trim()"
+          [disabled]="actionLoading()"
+          [appSubmitGuard]="!completeSummary.trim()"
+          [submitGuardFields]="['complete-summary']"
         >
           {{
             actionLoading()

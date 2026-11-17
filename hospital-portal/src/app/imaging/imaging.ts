@@ -1,6 +1,10 @@
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
+  DestroyRef,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -12,12 +16,16 @@ import {
   ImagingService,
   ImagingOrderResponse,
   ImagingOrderRequest,
+  ImagingOrderStatus,
   ImagingModality,
   ImagingPriority,
   ImagingLaterality,
   ImagingReportResponse,
   ImagingReportStatus,
   ImagingReportAuthorRequest,
+  ImagingDuplicateMatch,
+  ImagingDuplicateOverrideReason,
+  IMAGING_DUPLICATE_OVERRIDE_REASONS,
 } from '../services/imaging.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -27,10 +35,41 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { actionRoles } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import {
+  labelledRefusalReason,
+  refusalReason,
+  refusedFieldReasons,
+} from '../shared/refusal-reason';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { AuthorshipService } from '../shared/authorship.service';
+import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { joinReasons } from '../shared/required-fields';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { localDateString, serverLocalDate } from '../shared/date-utils';
+import { ActivatedRoute } from '@angular/router';
+import { catchError, forkJoin, map, of, Subscription } from 'rxjs';
+
+/** The cancellation reason's field (QA D1098), marked when it is refused. */
+const CANCEL_REASON_ID = 'imaging-cancel-reason';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
 };
+
+/** QA D1922 (r53): the order's free-text fields, sent trimmed. */
+const ORDER_TEXT_FIELDS = [
+  'contrastType',
+  'contrastAllergyDetails',
+  'scheduledTime',
+  'appointmentLocation',
+  'authorizationNumber',
+] as const;
 
 /** The statuses a radiologist may assert while authoring. */
 type AuthorableReportStatus = Extract<
@@ -61,28 +100,139 @@ interface ReportForm {
   reportStatus: AuthorableReportStatus;
 }
 
+/** The orders view's tabs. */
+export type ImagingOrderTab = 'all' | 'ordered' | 'completed' | 'cancelled';
+
+/**
+ * r44: the one bucketing the tabs, the stat cards and the rows share. The
+ * cards counted ORDERED/SCHEDULED/IN_PROGRESS as "active" while a DRAFT or
+ * PENDING_AUTHORIZATION order belonged to no tab but "All", so two rows
+ * showed as 0 active and 1 completed.
+ */
+export const IMAGING_ORDER_TAB_STATUSES: Readonly<
+  Record<Exclude<ImagingOrderTab, 'all'>, readonly ImagingOrderStatus[]>
+> = {
+  ordered: ['DRAFT', 'ORDERED', 'PENDING_AUTHORIZATION', 'SCHEDULED', 'IN_PROGRESS'],
+  completed: ['COMPLETED', 'RESULTS_AVAILABLE'],
+  cancelled: ['CANCELLED'],
+};
+
+/**
+ * User decision 2026-11-14: the administrative roles read Imagerie and never
+ * act on it; a clinical role held on its own is what acts.
+ */
+export const IMAGING_ADMIN_READER_ROLES: readonly string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+  'ROLE_ADMIN',
+];
+export const IMAGING_CLINICAL_ROLES: readonly string[] = [
+  'ROLE_DOCTOR',
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_RADIOLOGIST',
+];
+/** The report statuses an administrator may read: released (signed) reads only. */
+export const RELEASED_REPORT_STATUSES: readonly ImagingReportStatus[] = [
+  'FINAL',
+  'ADDENDUM',
+  'CORRECTED',
+  'AMENDED',
+];
+
+/** Provisional rule 2: the note « Autre » requires, in the duplicate warning. */
+const DUPLICATE_NOTE_ID = 'img-duplicate-note';
+/** Provisional rule 1: the drawer's pre-authorisation number field. */
+const RECORD_AUTH_NUMBER_ID = 'img-record-authNumber';
+
+/** QA D1821: the order statuses a study is started from (placed, not yet performed). */
+export const STARTABLE_ORDER_STATUSES: readonly ImagingOrderStatus[] = ['ORDERED', 'SCHEDULED'];
+
+/** The new-order form: each request field's element id (QA D1156). */
+const ORDER_FIELD_IDS: Readonly<Record<string, string>> = {
+  patientId: 'img-patientSearch',
+  hospitalId: 'img-hospitalId',
+  modality: 'img-modality',
+  priority: 'img-priority',
+  studyType: 'img-studyType',
+  bodyRegion: 'img-bodyRegion',
+  laterality: 'img-laterality',
+  clinicalQuestion: 'img-clinicalQ',
+  contrastType: 'img-contrastType',
+  contrastAllergyDetails: 'img-contrastAllergy',
+  scheduledDate: 'img-scheduledDate',
+  scheduledTime: 'img-scheduledTime',
+  appointmentLocation: 'img-location',
+  authorizationNumber: 'img-authNumber',
+};
+
+/** The new-order form: each request field's label key (QA D1156). */
+const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
+  patientId: 'PATIENTS.PATIENT_NAME',
+  hospitalId: 'ENCOUNTERS.HOSPITAL',
+  modality: 'IMAGING.MODALITY',
+  priority: 'IMAGING.PRIORITY',
+  studyType: 'IMAGING.STUDY_TYPE',
+  bodyRegion: 'IMAGING.BODY_REGION',
+  laterality: 'IMAGING.LATERALITY',
+  clinicalQuestion: 'IMAGING.CLINICAL_QUESTION',
+  contrastType: 'IMAGING.CONTRAST_TYPE',
+  contrastAllergyDetails: 'IMAGING.CONTRAST_ALLERGY_DETAILS',
+  scheduledDate: 'IMAGING.SCHEDULED_DATE',
+  scheduledTime: 'IMAGING.SCHEDULED_TIME',
+  appointmentLocation: 'IMAGING.LOCATION',
+  authorizationNumber: 'IMAGING.AUTHORIZATION_NUMBER',
+};
+
 @Component({
   selector: 'app-imaging',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
+  imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PatientPickerComponent,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+  ],
   templateUrl: './imaging.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './imaging.scss',
 })
 export class ImagingComponent implements OnInit {
   private readonly imagingService = inject(ImagingService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** QA D1924 (r53): the chart opens an order here with `?order=<id>`. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
+  /** QA D1098: the shared rule for which orders still offer edit and cancel. */
+  readonly isOrderCancellable = isOrderCancellable;
+  /** QA D1098: why the order is cancelled (required, kept on the order). */
+  readonly cancelReason = signal('');
 
   orders = signal<ImagingOrderResponse[]>([]);
   filtered = signal<ImagingOrderResponse[]>([]);
   loading = signal(true);
   searchTerm = '';
-  activeTab = signal<'all' | 'ordered' | 'completed' | 'cancelled'>('all');
+  /** r44: the ordered-on range (yyyy-MM-dd, the reader's calendar), '' = open. */
+  dateFrom = '';
+  dateTo = '';
+  /** The orders the search and the dates keep, before the tab: what the cards count. */
+  readonly matched = signal<ImagingOrderResponse[]>([]);
+  activeTab = signal<ImagingOrderTab>('all');
   selectedOrder = signal<ImagingOrderResponse | null>(null);
   selectedOrderReports = signal<ImagingReportResponse[]>([]);
 
@@ -97,6 +247,47 @@ export class ImagingComponent implements OnInit {
   saving = signal(false);
   editId = '';
   form: ImagingForm = this.emptyForm();
+  /** QA D1922: the earliest exam day the form offers (the server refuses a past one). */
+  readonly today = localDateString();
+
+  /**
+   * QA D1921 (r53): the warning shown before a new order is sent, when the
+   * patient already has a recent order of the same modality (and region)
+   * here. The clinician goes back, or orders anyway. Same pattern as the
+   * lab's (#1150).
+   */
+  readonly duplicateMatches = signal<ImagingDuplicateMatch[]>([]);
+  /** Each check, close, reopen or dismissal advances it; a stale reply is ignored. */
+  private duplicateCheckSeq = 0;
+  /**
+   * Rex on #1169: the preview on the wire. Closing, reopening, dismissing or
+   * leaving the page cancels it, so a late answer never places an order and
+   * never leaves the form busy.
+   */
+  private previewSub: Subscription | null = null;
+  /** A create or update is on the wire; closing the dialog never releases it. */
+  private writeInFlight = false;
+  /** Advanced on every open and close: a write answers only to the dialog that sent it. */
+  private dialogSession = 0;
+  /** The patient, hospital, modality and region the shown warning is about. */
+  private duplicateWarningKey: string | null = null;
+
+  /**
+   * Provisional rule 2 (2026-11-15, pending the radiology approver):
+   * « Commander quand même » names why, from a short fixed list; « Autre »
+   * needs a note. The server refuses an override without its reason too.
+   */
+  readonly overrideReasons = IMAGING_DUPLICATE_OVERRIDE_REASONS;
+  readonly overrideReason = signal<ImagingDuplicateOverrideReason | null>(null);
+  readonly overrideNote = signal('');
+  readonly overrideError = signal<string | null>(null);
+
+  /**
+   * Provisional rule 1 (2026-11-15): the pre-authorisation number obtained
+   * after an urgent study, recorded from the request drawer.
+   */
+  readonly authorizationNumberDraft = signal('');
+  readonly authorizationSaving = signal(false);
 
   showDeleteConfirm = signal(false);
   deletingItem = signal<ImagingOrderResponse | null>(null);
@@ -130,9 +321,34 @@ export class ImagingComponent implements OnInit {
   reportEditId = signal<string | null>(null);
   reportOrderId = signal<string | null>(null);
   reportForm: ReportForm = this.emptyReportForm();
+  /** QA D1923 (r53): whose report the authoring form writes. */
+  readonly reportPatient = signal<{ name: string | null; mrn: string | null } | null>(null);
+
+  /**
+   * User decision 2026-11-14: an administrator (super-admin, hospital admin,
+   * admin) with no clinical role reads orders and released reports, nothing
+   * else; the server answers the same way.
+   */
+  readonly isAdminReader =
+    this.roleContext.hasAnyActiveRole([...IMAGING_ADMIN_READER_ROLES]) &&
+    !this.roleContext.hasAnyActiveRole([...IMAGING_CLINICAL_ROLES]);
+
+  /** The super-admin's « Tous les hôpitaux » view and its hospital filter ('' = all). */
+  readonly canPickHospital = this.roleContext.isSuperAdmin();
+  /** The super-admin's hospital directory has answered (PR #1163: results wait for it). */
+  readonly hospitalsLoaded = signal(false);
+  /** « Tous les hôpitaux » results: the hospitals whose reports could not be read. */
+  readonly reportsFailedHospitals = signal<string[]>([]);
+  readonly hospitalFilter = signal(
+    this.roleContext.isSuperAdmin() && !this.roleContext.globalView()
+      ? (this.roleContext.selectedHospitalId() ?? '')
+      : '',
+  );
+  /** The combined view names each row's hospital. */
+  readonly showHospitalColumn = computed(() => this.canPickHospital && !this.hospitalFilter());
 
   /** Filter tabs on the Results view — reading by any status is fine. */
-  readonly reportStatuses: ImagingReportStatus[] = [
+  private readonly allReportStatuses: ImagingReportStatus[] = [
     'DRAFT',
     'PRELIMINARY',
     'FINAL',
@@ -141,6 +357,11 @@ export class ImagingComponent implements OnInit {
     'AMENDED',
     'CANCELLED',
   ];
+
+  /** The tabs offered: an administrator's are the released statuses only. */
+  readonly reportStatuses: ImagingReportStatus[] = this.isAdminReader
+    ? [...RELEASED_REPORT_STATUSES]
+    : this.allReportStatuses;
 
   /**
    * The statuses an author may assert. FINAL is absent because signing is the
@@ -159,24 +380,135 @@ export class ImagingComponent implements OnInit {
   /** What the void modal may write. */
   readonly voidStatuses: VoidReportStatus[] = ['CANCELLED', 'ERROR'];
 
-  readonly canSeeResults = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canSeeResults = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingReportsByHospital'),
+  );
   /** Mirrors CREATE_RADIOLOGY_REPORTS / SIGN_IMAGING_REPORTS on the controller. */
-  readonly canAuthorReports = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  readonly canUpdateReportStatus = this.canAuthorReports;
+  readonly canAuthorReports = this.roleContext.hasAnyActiveRole(actionRoles('imagingReportCreate'));
+  readonly canUpdateReportStatus = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingReportStatus'),
+  );
+  /** QA D527: POST /imaging/orders — the ordering clinicians, not the radiologist. */
+  readonly canCreateOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderCreate')),
+  );
+  /** QA D527: PUT /imaging/orders/{id} — the ordering clinicians. */
+  readonly canEditOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderUpdate')),
+  );
+  /** The server's reason when a save is refused, shown in the open modal (QA D611). */
+  readonly formError = signal<string | null>(null);
+
+  /**
+   * QA D611 (regression of D527): the role alone is not enough. PUT
+   * /imaging/orders/{id} refuses a signed order (it is what the signer
+   * attested) and an unsigned order of another ordering clinician; the edit
+   * button was offered on a signed order and the save took the page to a 403.
+   */
+  canEditThisOrder(o: ImagingOrderResponse): boolean {
+    if (!this.canEditOrder() || o.providerSignedAt) {
+      return false;
+    }
+    if (this.roleContext.isSuperAdmin() && this.roleContext.globalView()) {
+      return true;
+    }
+    const me = this.auth.getUserProfile()?.id;
+    return !o.orderingProviderUserId || o.orderingProviderUserId === me;
+  }
+
+  /**
+   * QA D527: cancelling goes through PUT /imaging/orders/{id}/status, which a
+   * midwife or nurse is refused; she was offered the button and got a 403.
+   */
+  readonly canCancelOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderStatus')),
+  );
+  /**
+   * QA D1081: cancelling an imaging order is its author's (the server refuses
+   * any other clinician after the confirm). Per row, through the shared rule.
+   */
+  canCancelThisOrder(o: ImagingOrderResponse): boolean {
+    return (
+      this.canCancelOrder() &&
+      // QA D1098: a resulted order (RESULTS_AVAILABLE) offered "Annuler la demande".
+      isOrderCancellable(o.status) &&
+      this.authorship.isAuthor({ authorUserId: o.authorUserId ?? o.orderingProviderUserId })
+    );
+  }
+
+  /**
+   * QA D1821 (r51): the portal could neither start nor complete a study, so
+   * a new order could not be reported from the UI. Both go through PUT
+   * /imaging/orders/{id}/status, so they are offered to its roles
+   * (imagingOrderStatus), no others. A placed order (ordered or scheduled)
+   * is started; a study in progress is completed. A draft or an order
+   * awaiting authorisation is not started from here, and a study is not
+   * completed before it is started.
+   */
+  canStartStudy(o: ImagingOrderResponse): boolean {
+    return this.canCancelOrder() && STARTABLE_ORDER_STATUSES.includes(o.status);
+  }
+
+  canCompleteStudy(o: ImagingOrderResponse): boolean {
+    return this.canCancelOrder() && o.status === 'IN_PROGRESS';
+  }
+
+  /** The order whose status write is in flight; its buttons stay disabled until it answers. */
+  readonly studyStatusSavingId = signal<string | null>(null);
+
+  startStudy(o: ImagingOrderResponse): void {
+    this.writeStudyStatus(o, 'IN_PROGRESS', 'IMAGING.STUDY_STARTED');
+  }
+
+  /** Completing closes the study for good (a resulted order is not reopened), so it asks first. */
+  async completeStudy(o: ImagingOrderResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'IMAGING.COMPLETE_STUDY_CONFIRM',
+        confirmKey: 'IMAGING.COMPLETE_STUDY',
+      }))
+    )
+      return;
+    this.writeStudyStatus(o, 'COMPLETED', 'IMAGING.STUDY_COMPLETED');
+  }
+
+  /**
+   * The status alone travels: the server keeps the schedule, the location,
+   * the notes and the pre-authorisation it is not sent (QA D1822).
+   */
+  private writeStudyStatus(
+    o: ImagingOrderResponse,
+    status: Extract<ImagingOrderStatus, 'IN_PROGRESS' | 'COMPLETED'>,
+    doneKey: string,
+  ): void {
+    if (this.studyStatusSavingId()) return;
+    this.studyStatusSavingId.set(o.id);
+    this.imagingService.updateOrderStatus(o.id, { status }).subscribe({
+      next: (updated) => {
+        this.studyStatusSavingId.set(null);
+        this.toast.success(this.translate.instant(doneKey));
+        if (this.selectedOrder()?.id === o.id) {
+          this.selectedOrder.set(updated ?? { ...o, status });
+        }
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.studyStatusSavingId.set(null);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('IMAGING.STUDY_STATUS_ERROR'),
+        );
+      },
+    });
+  }
+
+  /** From the request drawer: the authoring form opens over the list, the drawer closes. */
+  authorFromDrawer(o: ImagingOrderResponse): void {
+    this.closeDetail();
+    this.openAuthorReport(o, o.status === 'RESULTS_AVAILABLE');
+  }
+
   /** RADIOLOGIST joins DOCTOR here — the endpoint has admitted the role since item 26. */
-  readonly canAckCritical = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canAckCritical = this.roleContext.hasAnyActiveRole(actionRoles('imagingCriticalAck'));
 
   modalities: ImagingModality[] = [
     'XRAY',
@@ -210,9 +542,27 @@ export class ImagingComponent implements OnInit {
     ];
   }
 
+  constructor() {
+    // Rex on #1169: a preview still pending when the page is left is dropped.
+    inject(DestroyRef).onDestroy(() => this.clearDuplicateWarning());
+  }
+
   ngOnInit(): void {
     this.load();
     this.loadAssignedHospitals();
+    this.openOrderFromLink();
+  }
+
+  /** QA D1924 (r53): the chart's link to a study lands on the order's drawer and its reports. */
+  private openOrderFromLink(): void {
+    const orderId = this.route?.snapshot?.queryParamMap?.get('order');
+    if (!orderId) return;
+    this.imagingService.getOrder(orderId).subscribe({
+      next: (order) => {
+        if (order) this.viewDetail(order);
+      },
+      error: () => this.toast.error(this.translate.instant('IMAGING.ORDER_NOT_FOUND')),
+    });
   }
 
   emptyForm(): ImagingForm {
@@ -223,13 +573,30 @@ export class ImagingComponent implements OnInit {
       studyType: '',
       priority: 'ROUTINE' as ImagingPriority,
       laterality: undefined,
+      contrastRequired: false,
+      contrastType: '',
+      hasContrastAllergy: false,
+      contrastAllergyDetails: '',
+      scheduledDate: '',
+      scheduledTime: '',
+      appointmentLocation: '',
+      requiresAuthorization: false,
+      authorizationNumber: '',
     };
   }
 
   /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */
   private loadAssignedHospitals(): void {
     if (this.roleContext.isSuperAdmin()) {
-      this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+      this.hospitalService.list().subscribe({
+        next: (h) => {
+          this.hospitals.set(h ?? []);
+          this.hospitalsLoaded.set(true);
+          // Results opened while the directory was loading wait for it (PR #1163).
+          if (this.view() === 'results' && !this.hospitalFilter()) this.loadReports();
+        },
+        error: () => this.hospitalsLoaded.set(true),
+      });
     } else {
       this.hospitalService.getMyHospitalAsResponse().subscribe({
         next: (h) => {
@@ -255,7 +622,10 @@ export class ImagingComponent implements OnInit {
   }
 
   openCreate(): void {
+    this.dialogSession++;
     this.form = this.emptyForm();
+    this.formError.set(null);
+    this.clearDuplicateWarning();
     this.editing.set(false);
     this.editId = '';
     this.selectedPatient.set(null);
@@ -277,7 +647,18 @@ export class ImagingComponent implements OnInit {
       priority: o.priority ?? 'ROUTINE',
       laterality: (o.laterality as ImagingLaterality) || '',
       clinicalQuestion: o.clinicalQuestion ?? '',
+      contrastRequired: !!o.contrastRequired,
+      contrastType: o.contrastType ?? '',
+      hasContrastAllergy: !!o.hasContrastAllergy,
+      contrastAllergyDetails: o.contrastAllergyDetails ?? '',
+      scheduledDate: o.scheduledDate ?? '',
+      scheduledTime: o.scheduledTime ?? '',
+      appointmentLocation: o.appointmentLocation ?? '',
+      requiresAuthorization: !!o.requiresAuthorization,
+      authorizationNumber: o.authorizationNumber ?? '',
     };
+    this.dialogSession++;
+    this.clearDuplicateWarning();
     this.selectedPatient.set({
       id: o.patientId,
       firstName: o.patientDisplayName?.split(' ')[0] ?? '',
@@ -286,43 +667,231 @@ export class ImagingComponent implements OnInit {
       mrn: o.patientMrn,
     } as PatientResponse);
     this.editId = o.id;
+    this.formError.set(null);
     this.editing.set(true);
     this.showModal.set(true);
   }
 
   closeModal(): void {
+    this.dialogSession++;
     this.showModal.set(false);
+    this.clearDuplicateWarning();
   }
 
+  /** What a duplicate is judged on: this patient, this hospital, this modality and region. */
+  private duplicateKey(): string {
+    return [
+      this.form.patientId,
+      this.form.hospitalId,
+      this.form.modality,
+      (this.form.bodyRegion ?? '').trim().toLowerCase(),
+    ].join('|');
+  }
+
+  private clearDuplicateWarning(): void {
+    this.duplicateCheckSeq++;
+    this.duplicateWarningKey = null;
+    this.duplicateMatches.set([]);
+    this.overrideReason.set(null);
+    this.overrideNote.set('');
+    this.overrideError.set(null);
+    // Rex on #1169: a cancelled preview releases the form; a write in flight keeps it.
+    if (this.previewSub) {
+      this.previewSub.unsubscribe();
+      this.previewSub = null;
+    }
+    if (!this.writeInFlight) this.saving.set(false);
+  }
+
+  /**
+   * QA D1922: what the form refuses before any request: a time with no day,
+   * and a new order for a day that has passed (the server refuses it too, QA D253).
+   */
+  private refuseScheduleFields(): boolean {
+    const date = (this.form.scheduledDate ?? '').trim();
+    const time = (this.form.scheduledTime ?? '').trim();
+    const ids = [ORDER_FIELD_IDS['scheduledDate']];
+    let reason: string | null = null;
+    if (time && !date) reason = 'IMAGING.SCHEDULED_TIME_NEEDS_DATE';
+    else if (date && date < this.today && !this.editing()) reason = 'IMAGING.SCHEDULED_DATE_PAST';
+    if (!reason) {
+      refuseFields(this.host.nativeElement, [], ids, '');
+      return false;
+    }
+    const message = this.translate.instant(reason);
+    refuseFields(this.host.nativeElement, ids, ids, message);
+    this.formError.set(message);
+    return true;
+  }
+
+  /**
+   * QA D1921 (r53): a new order first asks whether the patient already has a
+   * recent order of the same study here; if so the warning is shown and
+   * nothing is sent until the clinician chooses "Order anyway". A failed
+   * check never blocks the order (the server checks again when it is placed).
+   */
   submitForm(): void {
+    if (this.saving()) return;
+    this.formError.set(null);
+    if (this.refuseScheduleFields()) return;
+    if (this.editing()) {
+      this.saveOrder(false);
+      return;
+    }
+    this.clearDuplicateWarning();
+    const seq = this.duplicateCheckSeq;
+    const key = this.duplicateKey();
+    const current = (): boolean => {
+      if (seq !== this.duplicateCheckSeq) return false;
+      if (!this.showModal() || key !== this.duplicateKey()) {
+        this.saving.set(false);
+        return false;
+      }
+      return true;
+    };
     this.saving.set(true);
+    this.previewSub = this.imagingService
+      .checkDuplicates(this.form.patientId, this.form.modality, this.form.bodyRegion)
+      .subscribe({
+        next: (matches) => {
+          this.previewSub = null;
+          if (!current()) return;
+          if (Array.isArray(matches) && matches.length > 0) {
+            this.duplicateWarningKey = key;
+            this.duplicateMatches.set(matches);
+            this.saving.set(false);
+            return;
+          }
+          this.saveOrder(false);
+        },
+        error: () => {
+          this.previewSub = null;
+          if (current()) this.saveOrder(false);
+        },
+      });
+  }
+
+  /**
+   * "Order anyway": asked again if the form changed since the warning, and
+   * only with a reason (and a note for « Autre ») (provisional rule 2).
+   */
+  orderAnyway(): void {
+    if (this.duplicateMatches().length === 0 || this.duplicateWarningKey !== this.duplicateKey()) {
+      this.submitForm();
+      return;
+    }
+    const reason = this.overrideReason();
+    const reasonIds = this.overrideReasons.map((r) => `img-duplicate-reason-${r}`);
+    const allIds = [...reasonIds, DUPLICATE_NOTE_ID];
+    // A reason, and with « Autre » its note: every missing part said at once.
+    const refused: { id: string; message: string }[] = [];
+    if (!reason) {
+      refused.push({
+        id: reasonIds[0],
+        message: this.translate.instant('IMAGING.DUPLICATE.REASON_REQUIRED'),
+      });
+    } else if (reason === 'OTHER' && !this.overrideNote().trim()) {
+      refused.push({
+        id: DUPLICATE_NOTE_ID,
+        message: this.translate.instant('IMAGING.DUPLICATE.NOTE_REQUIRED'),
+      });
+    }
+    const message = joinReasons(refused.map((r) => r.message));
+    refuseFields(this.host.nativeElement, refused, allIds, message ?? '');
+    if (message) {
+      this.overrideError.set(message);
+      return;
+    }
+    this.overrideError.set(null);
+    this.saveOrder(true);
+  }
+
+  /** Back to the form without ordering. */
+  dismissDuplicateWarning(): void {
+    this.clearDuplicateWarning();
+  }
+
+  /** The request: free text trimmed; on an edit a cleared field is sent empty so it is cleared. */
+  private orderPayload(): ImagingOrderRequest {
+    const editing = this.editing();
+    const text = (value: string | undefined): string | undefined => {
+      const trimmed = (value ?? '').trim();
+      return trimmed || (editing ? '' : undefined);
+    };
     const payload: ImagingOrderRequest = {
       ...this.form,
       laterality: this.form.laterality || undefined,
+      scheduledDate: (this.form.scheduledDate ?? '').trim() || undefined,
     };
-    const op = this.editing()
+    for (const field of ORDER_TEXT_FIELDS) payload[field] = text(this.form[field]);
+    // A contrast type, an allergy detail or a number only stands with its box ticked.
+    const cleared = editing ? '' : undefined;
+    if (!payload.contrastRequired) payload.contrastType = cleared;
+    if (!payload.hasContrastAllergy) payload.contrastAllergyDetails = cleared;
+    if (!payload.requiresAuthorization) payload.authorizationNumber = cleared;
+    return payload;
+  }
+
+  private saveOrder(acknowledgedDuplicate: boolean): void {
+    if (this.writeInFlight) return;
+    this.writeInFlight = true;
+    this.saving.set(true);
+    this.formError.set(null);
+    const payload = this.orderPayload();
+    if (acknowledgedDuplicate && this.overrideReason()) {
+      payload.duplicateOverride = true;
+      payload.duplicateOverrideReason = this.overrideReason() ?? undefined;
+      payload.duplicateOverrideNote = this.overrideNote().trim() || undefined;
+    }
+    const wasEditing = this.editing();
+    const session = this.dialogSession;
+    const op = wasEditing
       ? this.imagingService.updateOrder(this.editId, payload)
       : this.imagingService.createOrder(payload);
     op.subscribe({
-      next: () => {
-        this.toast.success(
-          this.translate.instant(
-            this.editing() ? 'IMAGING.ORDER_UPDATED' : 'IMAGING.ORDER_CREATED',
-          ),
-        );
-        this.closeModal();
+      next: (saved) => {
+        this.writeInFlight = false;
         this.saving.set(false);
         this.load();
+        // An answer that outlived its dialog refreshes the list only: it never
+        // closes or toasts over a dialog opened since.
+        if (session !== this.dialogSession) return;
+        this.toast.success(
+          this.translate.instant(wasEditing ? 'IMAGING.ORDER_UPDATED' : 'IMAGING.ORDER_CREATED'),
+        );
+        // QA D1921: a duplicate the server found that nobody was shown (an
+        // order placed since the preview, or a preview that failed) is told.
+        if (!wasEditing && !acknowledgedDuplicate && saved?.duplicateOfRecentOrder) {
+          this.toast.warning(this.translate.instant('IMAGING.DUPLICATE.PLACED_ANYWAY'));
+        }
+        this.closeModal();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.writeInFlight = false;
         this.saving.set(false);
+        if (session !== this.dialogSession) return;
+        // QA D611: the server's reason stays in the open modal; nothing typed is lost.
+        // QA D1156: a validation refusal names its fields by their labels and
+        // marks them, never the bare "must not be null" text.
+        const reason = labelledRefusalReason(err, this.translate, ORDER_FIELD_LABELS);
+        const refused = refusedFieldReasons(err, ORDER_FIELD_IDS);
+        if (refused.length > 0) {
+          // Each field carries the server's own reason for it, not always "required".
+          refuseFields(this.host.nativeElement, [], Object.values(ORDER_FIELD_IDS), '');
+          // Reversed: each call focuses its field, so the first refused one ends up focused.
+          for (const [id, text] of [...refused].reverse()) {
+            refuseFields(this.host.nativeElement, [id], [id], text);
+          }
+        }
+        this.formError.set(reason);
+        this.toast.error(reason ?? this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
       },
     });
   }
 
   confirmCancel(o: ImagingOrderResponse): void {
     this.deletingItem.set(o);
+    this.cancelReason.set('');
     this.showDeleteConfirm.set(true);
   }
   cancelDeleteAction(): void {
@@ -330,10 +899,18 @@ export class ImagingComponent implements OnInit {
     this.deletingItem.set(null);
   }
   executeCancel(): void {
+    const reason = this.cancelReason().trim();
+    if (!reason) {
+      // QA D1098: the server refuses a cancel without a reason; the field says so first.
+      const message = this.translate.instant(CANCEL_REASON_REQUIRED_KEY);
+      refuseFields(this.host.nativeElement, [CANCEL_REASON_ID], [CANCEL_REASON_ID], message);
+      return;
+    }
     this.deleting.set(true);
     this.imagingService
       .updateOrderStatus(this.deletingItem()!.id, {
         status: 'CANCELLED',
+        cancellationReason: reason,
         // Stored on the order and read back by everyone, so it stays canonical
         // English: translating it would bake the cancelling user's locale
         // into the record and give the same note three spellings.
@@ -346,8 +923,11 @@ export class ImagingComponent implements OnInit {
           this.deleting.set(false);
           this.load();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'));
+        error: (err: unknown) => {
+          // QA D930 class: "only the ordering provider or a radiologist" is the reason.
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'),
+          );
           this.deleting.set(false);
         },
       });
@@ -355,7 +935,12 @@ export class ImagingComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.imagingService.getAllOrders().subscribe({
+    const hospitalId = this.canPickHospital ? this.hospitalFilter() : '';
+    const orders$ = hospitalId
+      ? this.imagingService.getOrdersByHospital(hospitalId)
+      : // « Tous les hôpitaux »: without the chip's hospital, or the combined view is one hospital.
+        this.imagingService.getAllOrders(undefined, { allHospitals: this.canPickHospital });
+    orders$.subscribe({
       next: (list) => {
         this.orders.set(Array.isArray(list) ? list : []);
         this.applyFilter();
@@ -368,34 +953,140 @@ export class ImagingComponent implements OnInit {
     });
   }
 
-  setTab(tab: 'all' | 'ordered' | 'completed' | 'cancelled'): void {
+  setTab(tab: ImagingOrderTab): void {
     this.activeTab.set(tab);
     this.applyFilter();
   }
 
+  /** r44: search (patient name, MRN, study, region, modality) and the ordered-on range. */
   applyFilter(): void {
     let list = this.orders();
-    const tab = this.activeTab();
-    if (tab === 'ordered')
-      list = list.filter((o) => ['ORDERED', 'SCHEDULED', 'IN_PROGRESS'].includes(o.status));
-    else if (tab === 'completed')
-      list = list.filter((o) => ['COMPLETED', 'RESULTS_AVAILABLE'].includes(o.status));
-    else if (tab === 'cancelled') list = list.filter((o) => o.status === 'CANCELLED');
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
         (o) =>
-          (o.patientDisplayName ?? '').toLowerCase().includes(term) ||
+          textMatches(o.patientDisplayName, term) ||
+          (o.patientMrn ?? '').toLowerCase().includes(term) ||
           (o.studyType ?? '').toLowerCase().includes(term) ||
           (o.bodyRegion ?? '').toLowerCase().includes(term) ||
           (o.modality ?? '').toLowerCase().includes(term),
       );
     }
-    this.filtered.set(list);
+    if (this.dateFrom || this.dateTo) {
+      list = list.filter((o) => {
+        const day = serverLocalDate(o.orderedAt);
+        return (
+          !!day && (!this.dateFrom || day >= this.dateFrom) && (!this.dateTo || day <= this.dateTo)
+        );
+      });
+    }
+    this.matched.set(list);
+    const tab = this.activeTab();
+    this.filtered.set(tab === 'all' ? list : list.filter((o) => this.inTab(o, tab)));
+  }
+
+  clearDates(): void {
+    this.dateFrom = '';
+    this.dateTo = '';
+    this.applyFilter();
+  }
+
+  private inTab(o: ImagingOrderResponse, tab: Exclude<ImagingOrderTab, 'all'>): boolean {
+    return IMAGING_ORDER_TAB_STATUSES[tab].includes(o.status);
+  }
+
+  /**
+   * r44: "Planifié" with its time when one was set. The date alone is a
+   * calendar date (mediumDate); with a time it is a wall time (dateTime).
+   */
+  scheduledAt(o: ImagingOrderResponse): { scheduledAt: Date; withTime: boolean } | null {
+    const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(o.scheduledDate ?? '');
+    if (!day) return null;
+    // A clinic wall time (LocalDate + typed time), never a server instant.
+    const time = /^(\d{2}):(\d{2})/.exec((o.scheduledTime ?? '').trim());
+    const [y, m, d] = [Number(day[1]), Number(day[2]) - 1, Number(day[3])];
+    return time
+      ? { scheduledAt: new Date(y, m, d, Number(time[1]), Number(time[2])), withTime: true }
+      : { scheduledAt: new Date(y, m, d), withTime: false };
+  }
+
+  /** QA D1921: the earlier order a flagged one may duplicate, when it is in the list. */
+  duplicateReference(o: ImagingOrderResponse): ImagingOrderResponse | null {
+    if (!o.duplicateReferenceOrderId) return null;
+    return this.orders().find((x) => x.id === o.duplicateReferenceOrderId) ?? null;
+  }
+
+  /**
+   * Provisional rule 1: whoever may start a study (the status endpoint's
+   * roles) records the number of a study done without it.
+   */
+  canRecordAuthorization(o: ImagingOrderResponse): boolean {
+    return this.canCancelOrder() && !!o.authorizationPending;
+  }
+
+  recordAuthorization(o: ImagingOrderResponse): void {
+    const number = this.authorizationNumberDraft().trim();
+    if (!number) {
+      const message = this.translate.instant('IMAGING.PREAUTH_PENDING.NUMBER_REQUIRED');
+      refuseFields(
+        this.host.nativeElement,
+        [RECORD_AUTH_NUMBER_ID],
+        [RECORD_AUTH_NUMBER_ID],
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], [RECORD_AUTH_NUMBER_ID], '');
+    if (this.authorizationSaving()) return;
+    this.authorizationSaving.set(true);
+    this.imagingService.recordAuthorization(o.id, number).subscribe({
+      next: (updated) => {
+        this.authorizationSaving.set(false);
+        this.authorizationNumberDraft.set('');
+        this.toast.success(this.translate.instant('IMAGING.PREAUTH_PENDING.RECORDED'));
+        if (this.selectedOrder()?.id === o.id) {
+          this.selectedOrder.set(
+            updated ?? {
+              ...o,
+              authorizationNumber: number,
+              authorizationPending: false,
+              authorizationPendingSince: null,
+            },
+          );
+        }
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.authorizationSaving.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('IMAGING.PREAUTH_PENDING.RECORD_ERROR'),
+        );
+      },
+    });
+  }
+
+  /** QA D1922: a pre-authorisation required and not yet numbered (the study cannot start, D1925). */
+  awaitsAuthorizationNumber(o: {
+    requiresAuthorization?: boolean | null;
+    authorizationNumber?: string | null;
+  }): boolean {
+    return !!o.requiresAuthorization && !(o.authorizationNumber ?? '').trim();
+  }
+
+  /** r44: a laterality the orderer marked not applicable is not shown at all. */
+  lateralityApplies(o: ImagingOrderResponse): boolean {
+    return o.laterality !== 'NOT_APPLICABLE';
+  }
+
+  /** r44: "Completed at" only applies once the study is done. */
+  isResulted(o: ImagingOrderResponse): boolean {
+    return IMAGING_ORDER_TAB_STATUSES.completed.includes(o.status);
   }
 
   viewDetail(o: ImagingOrderResponse): void {
     this.selectedOrder.set(o);
+    this.authorizationNumberDraft.set('');
     this.selectedOrderReports.set([]);
     this.imagingService.getReportsForOrder(o.id).subscribe({
       next: (reports) => this.selectedOrderReports.set(reports ?? []),
@@ -445,13 +1136,15 @@ export class ImagingComponent implements OnInit {
     }
   }
 
+  /** r44: each card counts exactly the rows its tab shows. */
   readonly activeOrderCount = computed(
-    () =>
-      this.orders().filter((o) => ['ORDERED', 'SCHEDULED', 'IN_PROGRESS'].includes(o.status))
-        .length,
+    () => this.matched().filter((o) => this.inTab(o, 'ordered')).length,
   );
   readonly completedOrderCount = computed(
-    () => this.orders().filter((o) => ['COMPLETED', 'RESULTS_AVAILABLE'].includes(o.status)).length,
+    () => this.matched().filter((o) => this.inTab(o, 'completed')).length,
+  );
+  readonly cancelledOrderCount = computed(
+    () => this.matched().filter((o) => this.inTab(o, 'cancelled')).length,
   );
 
   /* ── Results ── */
@@ -464,12 +1157,31 @@ export class ImagingComponent implements OnInit {
   }
 
   private resultsHospitalId(): string | null {
+    if (this.canPickHospital) return this.hospitalFilter() || null;
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
   }
 
+  /** The super-admin picks « Tous les hôpitaux » ('') or one hospital; both views reload. */
+  setHospitalFilter(hospitalId: string): void {
+    this.hospitalFilter.set(hospitalId ?? '');
+    this.load();
+    if (this.view() === 'results') this.loadReports();
+    else this.reports.set([]);
+  }
+
+  /** A row's hospital in the combined view (a report carries its id only). */
+  hospitalNameOf(hospitalId: string | null | undefined, name?: string | null): string {
+    if (name) return name;
+    return this.hospitals().find((h) => h.id === hospitalId)?.name ?? '—';
+  }
+
   loadReports(): void {
+    this.reportsFailedHospitals.set([]);
     const hospitalId = this.resultsHospitalId();
-    if (!hospitalId) return;
+    if (!hospitalId) {
+      if (this.canPickHospital) this.loadReportsEverywhere();
+      return;
+    }
     this.reportsLoading.set(true);
     // Backend ignores `modality` whenever `status` is present, so fetch by
     // status only and apply the modality filter client-side (visibleReports).
@@ -485,6 +1197,44 @@ export class ImagingComponent implements OnInit {
           this.reportsLoading.set(false);
         },
       });
+  }
+
+  /**
+   * « Tous les hôpitaux »: the reports are listed per hospital, so the
+   * combined list is each hospital's, merged; a hospital that fails to answer
+   * costs its own rows only.
+   */
+  private loadReportsEverywhere(): void {
+    this.reportsFailedHospitals.set([]);
+    if (!this.hospitalsLoaded()) {
+      // The directory is still loading: it reloads the results when it lands.
+      this.reportsLoading.set(true);
+      return;
+    }
+    const hospitals = this.hospitals();
+    if (hospitals.length === 0) {
+      this.reports.set([]);
+      this.reportsLoading.set(false);
+      return;
+    }
+    this.reportsLoading.set(true);
+    forkJoin(
+      hospitals.map((h) =>
+        this.imagingService.getReportsByHospital(h.id, { status: this.reportStatusFilter() }).pipe(
+          map((list) => ({ hospital: h, list: Array.isArray(list) ? list : [], failed: false })),
+          catchError(() => of({ hospital: h, list: [] as ImagingReportResponse[], failed: true })),
+        ),
+      ),
+    ).subscribe((answers) => {
+      this.reports.set(answers.flatMap((a) => a.list));
+      // A hospital that did not answer is named, never shown as "no reports".
+      const failed = answers.filter((a) => a.failed).map((a) => a.hospital.name);
+      this.reportsFailedHospitals.set(failed);
+      if (failed.length === answers.length) {
+        this.toast.error(this.translate.instant('IMAGING.RESULTS_LOAD_ERROR'));
+      }
+      this.reportsLoading.set(false);
+    });
   }
 
   setReportStatusFilter(status: ImagingReportStatus): void {
@@ -549,8 +1299,10 @@ export class ImagingComponent implements OnInit {
         this.selectedReport.set(updated);
         this.loadReports();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.CRITICAL_ACK_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('IMAGING.CRITICAL_ACK_ERROR'),
+        );
         this.acknowledging.set(false);
       },
     });
@@ -581,6 +1333,10 @@ export class ImagingComponent implements OnInit {
     };
     this.reportOrderId.set(order.id);
     this.reportEditId.set(null);
+    this.reportPatient.set({
+      name: order.patientDisplayName ?? null,
+      mrn: order.patientMrn ?? null,
+    });
     this.showReportModal.set(true);
   }
 
@@ -601,12 +1357,17 @@ export class ImagingComponent implements OnInit {
       impression: report.impression ?? '',
       recommendations: report.recommendations ?? '',
       contrastAdministered: !!report.contrastAdministered,
-      contrastDetails: '',
+      // QA D1822 class: a revision sent the details blank and erased them.
+      contrastDetails: report.contrastDetails ?? '',
       criticalFinding: report.criticalFinding,
       reportStatus: this.authorableStatusOf(report.reportStatus),
     };
     this.reportOrderId.set(report.imagingOrderId);
     this.reportEditId.set(report.id);
+    this.reportPatient.set({
+      name: report.patientDisplayName ?? null,
+      mrn: report.patientMrn ?? null,
+    });
     this.showReportModal.set(true);
   }
 
@@ -614,6 +1375,7 @@ export class ImagingComponent implements OnInit {
     this.showReportModal.set(false);
     this.reportEditId.set(null);
     this.reportOrderId.set(null);
+    this.reportPatient.set(null);
   }
 
   submitReport(): void {
@@ -649,8 +1411,8 @@ export class ImagingComponent implements OnInit {
         this.selectedReport.set(saved);
         this.loadReports();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.REPORT_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.REPORT_SAVE_ERROR'));
         this.reportSubmitting.set(false);
       },
     });
@@ -661,8 +1423,14 @@ export class ImagingComponent implements OnInit {
    * edits, so it asks first — the backend refuses a re-sign outright and the
    * only way back is a corrected version.
    */
-  signReport(report: ImagingReportResponse): void {
-    if (!window.confirm(this.translate.instant('IMAGING.SIGN_CONFIRM'))) return;
+  async signReport(report: ImagingReportResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'IMAGING.SIGN_CONFIRM',
+        confirmKey: 'IMAGING.SIGN_REPORT',
+      }))
+    )
+      return;
     this.signing.set(true);
     this.imagingService.signReport(report.id).subscribe({
       next: (signed) => {
@@ -671,8 +1439,8 @@ export class ImagingComponent implements OnInit {
         this.selectedReport.set(signed);
         this.loadReports();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.REPORT_SIGN_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.REPORT_SIGN_ERROR'));
         this.signing.set(false);
       },
     });
@@ -728,8 +1496,10 @@ export class ImagingComponent implements OnInit {
           }
           this.loadReports();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('IMAGING.STATUS_UPDATE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('IMAGING.STATUS_UPDATE_ERROR'),
+          );
           this.statusSubmitting.set(false);
         },
       });
@@ -751,6 +1521,14 @@ export class ImagingComponent implements OnInit {
       criticalFinding: false,
       reportStatus: 'PRELIMINARY',
     };
+  }
+
+  /**
+   * QA D1098: a draft read on a cancelled order is neither revised nor signed
+   * (the server refuses both); the order is looked up in the loaded list.
+   */
+  reportOrderCancelled(report: ImagingReportResponse): boolean {
+    return this.orders().some((o) => o.id === report.imagingOrderId && o.status === 'CANCELLED');
   }
 
   /** An order can only be read once the study has actually been acquired. */

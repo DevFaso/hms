@@ -63,7 +63,6 @@ public class RoiRequestService {
     /** Worklist page-size ceiling: a triage read is a page, never a dump. */
     static final int MAX_WORKLIST_PAGE = 200;
 
-    private static final String NOT_FOUND = "ROI request not found.";
 
     private final RoiRequestRepository roiRepository;
     private final PatientRepository patientRepository;
@@ -82,9 +81,7 @@ public class RoiRequestService {
         Patient patient = requirePatientInTenant(patientId, hospitalId);
         if (request.getRequesterType() == RoiRequesterType.THIRD_PARTY
                 && trimToNull(request.getRequesterName()) == null) {
-            throw new BusinessException(
-                "A third-party request needs the requester's name - a release to an "
-                    + "unnamed outside party cannot be accounted for.");
+            throw new com.example.hms.exception.FieldBusinessException("requesterType", "roi.request.thirdPartyNameRequired");
         }
         return persistRequest(patient, hospitalId, request);
     }
@@ -98,7 +95,7 @@ public class RoiRequestService {
     public RoiRequestResponseDTO createForSelf(Patient patient, UUID hospitalId,
                                                RoiSelfRequestCreateDTO request) {
         if (patient == null || hospitalId == null) {
-            throw new BusinessException("A registered hospital is required to file a request.");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "roi.request.hospitalRequired");
         }
         return persistRequest(patient, hospitalId, RoiRequestCreateDTO.builder()
             .requesterType(RoiRequesterType.PATIENT)
@@ -115,7 +112,7 @@ public class RoiRequestService {
         LocalDate today = LocalDate.now(clock);
         LocalDate requestedOn = request.getRequestedOn() != null ? request.getRequestedOn() : today;
         if (requestedOn.isAfter(today)) {
-            throw new BusinessException("The request date cannot be in the future.");
+            throw new com.example.hms.exception.FieldBusinessException("requestedOn", "roi.request.dateInFuture");
         }
         Hospital hospital = hospitalRepository.getReferenceById(hospitalId);
         RoiRequest saved = roiRepository.save(RoiRequest.builder()
@@ -158,12 +155,13 @@ public class RoiRequestService {
 
     @Transactional
     public RoiRequestResponseDTO deny(UUID requestId, RoiDecisionDTO decision) {
-        UUID hospitalId = requireHospital();
-        String note = trimToNull(decision.getNote());
+        // QA round 29 sweep (D1333 class): read before the scope and the lookup,
+        // named under fieldErrors.note and translated (it was English prose with no field).
+        String note = trimToNull(decision == null ? null : decision.getNote());
         if (note == null) {
-            throw new BusinessException(
-                "Denying a request needs a reason - it is the outcome the requester is told.");
+            throw new com.example.hms.exception.FieldBusinessException("note", "roi.deny.noteRequired");
         }
+        UUID hospitalId = requireHospital();
         RoiRequest request = requirePendingInTenant(requestId, hospitalId);
         decide(request, RoiRequestStatus.DENIED, note, hospitalId);
         emitAudit(AuditEventType.ROI_DENIED, request, "ROI request denied");
@@ -190,8 +188,7 @@ public class RoiRequestService {
             // caller gets a refusal, not a silent overwrite.
             roiRepository.saveAndFlush(request);
         } catch (OptimisticLockingFailureException e) {
-            throw new BusinessException(
-                "The request was decided at the same time by someone else - reload and retry.");
+            throw new BusinessException("roi.request.decideConflict");
         }
         log.info("ROI request {} -> {} at hospital {}", request.getId(), target, hospitalId);
     }
@@ -234,7 +231,7 @@ public class RoiRequestService {
     private UUID requireHospital() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital context is required.");
+            throw new BusinessException("roi.request.hospitalContextRequired");
         }
         return hospitalId;
     }
@@ -242,7 +239,7 @@ public class RoiRequestService {
     private Patient requirePatientInTenant(UUID patientId, UUID hospitalId) {
         return patientRepository.findById(patientId)
             .filter(p -> p.isRegisteredInHospital(hospitalId))
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
     }
 
     /**
@@ -253,9 +250,9 @@ public class RoiRequestService {
     private RoiRequest requirePendingInTenant(UUID requestId, UUID hospitalId) {
         RoiRequest request = roiRepository.findById(requestId)
             .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
-            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("roi.request.notFound", requestId));
         if (request.getStatus() != RoiRequestStatus.PENDING) {
-            throw new BusinessException("The request is already " + request.getStatus() + ".");
+            throw new BusinessException("roi.request.alreadyDecided", com.example.hms.utility.MessageUtil.resolveOrRaw("roi.request.status." + request.getStatus().name()));
         }
         return request;
     }
@@ -291,9 +288,7 @@ public class RoiRequestService {
             buildAudit(AuditEventType.PATIENT_EXPORT, request,
                 "Record copy released under ROI request " + request.getId()));
         if (persisted == null) {
-            throw new BusinessException(
-                "The release could not be recorded in the disclosure log, so the "
-                    + "fulfilment was not saved - try again.");
+            throw new BusinessException("roi.request.disclosureNotRecorded");
         }
     }
 
@@ -323,6 +318,7 @@ public class RoiRequestService {
             .userId(roleValidator.getCurrentUserId())
             .userName(SecurityUtils.getCurrentUsername())
             .hospitalName(request.getHospital() != null ? request.getHospital().getName() : null)
+            .hospitalId(request.getHospital() != null ? request.getHospital().getId() : null) // QA D533
             .eventDescription(description)
             .build();
     }

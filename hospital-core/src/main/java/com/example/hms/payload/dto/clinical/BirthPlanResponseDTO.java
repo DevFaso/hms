@@ -51,6 +51,11 @@ public class BirthPlanResponseDTO {
 
     private String providerComments;
 
+    /** QA D1241 (round 25): a reviewed plan withdrawn with a reason (kept for the record). */
+    private LocalDateTime withdrawnAt;
+
+    private String withdrawalReason;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

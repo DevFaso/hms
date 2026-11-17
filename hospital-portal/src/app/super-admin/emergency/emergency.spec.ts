@@ -9,6 +9,8 @@ import { UserService, UserSummary } from '../../services/user.service';
 import { HospitalService } from '../../services/hospital.service';
 import { signal } from '@angular/core';
 import { EmergencyActionResponse } from '../../services/emergency-control.model';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
 
 const ok = (affectedRows: number): EmergencyActionResponse => ({
   action: 'FORCE_MFA_REENROL',
@@ -154,8 +156,9 @@ describe('EmergencyComponent — MFA-reset picker', () => {
     expect(users.search).not.toHaveBeenCalled();
   });
 
-  it('sends the selected ids and hospital scope — never resetAll', () => {
+  it('sends the selected ids and hospital scope — never resetAll', async () => {
     controls.forceMfaReenrol.and.returnValue(of(ok(1)));
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     component.addMfaTarget(user('u1', 'Awa'));
     component.addMfaTarget(user('u2', 'Bintou'));
     component.removeMfaTarget('u2');
@@ -163,7 +166,7 @@ describe('EmergencyComponent — MFA-reset picker', () => {
     component.mfaReason.set('phishing at site A');
     component.mfaMfa.set('123456');
 
-    component.forceMfaReenrol();
+    await component.forceMfaReenrol();
 
     expect(controls.forceMfaReenrol).toHaveBeenCalledWith(
       { userIds: ['u1'], hospitalId: 'h1', resetAll: undefined, reason: 'phishing at site A' },
@@ -190,15 +193,190 @@ describe('EmergencyComponent — MFA-reset picker', () => {
     expect(component.mfaResetAllConfirm()).toBe('');
   });
 
-  it('surfaces the server message when the backend refuses', () => {
+  it('surfaces the server message when the backend refuses', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     controls.forceMfaReenrol.and.returnValue(
       throwError(() => ({ error: { message: 'mfa_required: invalid or missing X-Mfa-Token' } })),
     );
     component.addMfaTarget(user('u1', 'Awa'));
     component.mfaReason.set('reason ok');
-    component.forceMfaReenrol();
+    await component.forceMfaReenrol();
     expect(component.mfaPanel().error).toBe('mfa_required: invalid or missing X-Mfa-Token');
     expect(component.mfaPanel().busy).toBeFalse();
+  });
+});
+
+describe('EmergencyComponent — every action asks, and a blank form marks its fields (QA CX-001)', () => {
+  let fixture: ComponentFixture<EmergencyComponent>;
+  let component: EmergencyComponent;
+  let controls: jasmine.SpyObj<EmergencyControlService>;
+  let ask: jasmine.Spy;
+  let toggle: jasmine.Spy;
+
+  beforeEach(async () => {
+    controls = jasmine.createSpyObj<EmergencyControlService>('EmergencyControlService', [
+      'forceLogoutAll',
+      'killFeature',
+      'forceMfaReenrol',
+      'broadcast',
+    ]);
+    controls.killFeature.and.returnValue(of(ok(1)));
+    controls.broadcast.and.returnValue(of(ok(1)));
+    controls.forceMfaReenrol.and.returnValue(of(ok(1)));
+    const hospitals = jasmine.createSpyObj<HospitalService>('HospitalService', ['list']);
+    hospitals.list.and.returnValue(of([]));
+    toggle = jasmine.createSpy('toggle').and.returnValue(of({ readOnly: true }));
+    await TestBed.configureTestingModule({
+      imports: [EmergencyComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: EmergencyControlService, useValue: controls },
+        { provide: UserService, useValue: jasmine.createSpyObj('UserService', ['search']) },
+        { provide: HospitalService, useValue: hospitals },
+        {
+          provide: DowntimeService,
+          useValue: { load: jasmine.createSpy('load'), status: signal(null), toggle },
+        },
+      ],
+    }).compileComponents();
+    ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    fixture = TestBed.createComponent(EmergencyComponent);
+    component = fixture.componentInstance;
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  });
+
+  afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+  it('activating read-only with no message marks it, asks nothing, sends nothing', () => {
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="downtime-activate"]',
+      sent: toggle,
+    });
+    expect(marked).toEqual(['emergency-downtime-message']);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it('a direct call without a message is refused on the field too', async () => {
+    await component.setDowntime(true);
+    expect(toggle).not.toHaveBeenCalled();
+    expect(ask).not.toHaveBeenCalled();
+    const field = (fixture.nativeElement as HTMLElement).querySelector(
+      '#emergency-downtime-message',
+    );
+    expect(field?.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('activating read-only asks first and sends nothing until the answer; a no sends nothing', async () => {
+    component.downtimeMessage.set('  Maintenance until 14:00  ');
+    let answer!: (value: boolean) => void;
+    ask.and.returnValue(new Promise<boolean>((resolve) => (answer = resolve)));
+
+    const done = component.setDowntime(true);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(toggle).not.toHaveBeenCalled();
+    answer(false);
+    await done;
+    expect(toggle).not.toHaveBeenCalled();
+
+    ask.and.resolveTo(true);
+    await component.setDowntime(true);
+    expect(toggle).toHaveBeenCalledOnceWith(true, 'Maintenance until 14:00');
+  });
+
+  it('lifting read-only asks too, and needs no reason', async () => {
+    await component.setDowntime(false);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(toggle).toHaveBeenCalledOnceWith(false, undefined);
+  });
+
+  it('the panel of an active mode offers no message to fill', () => {
+    component.downtimeStatus.set({ readOnly: true } as never);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#emergency-downtime-message')).toBeNull();
+    expect(host.querySelector('[data-test="downtime-deactivate"]')).not.toBeNull();
+  });
+
+  it('a blank kill form marks the key and the reason and sends nothing', () => {
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="emergency-kill-submit"]',
+      sent: controls.killFeature,
+    });
+    expect(marked).toEqual(['emergency-kill-key', 'emergency-kill-reason']);
+  });
+
+  it('a filled kill form asks, then sends; a no sends nothing', async () => {
+    component.killFlagKey.set(' feature.x ');
+    component.killReason.set('broken since noon');
+    ask.and.resolveTo(false);
+    await component.killFeature();
+    expect(controls.killFeature).not.toHaveBeenCalled();
+
+    ask.and.resolveTo(true);
+    await component.killFeature();
+    expect(controls.killFeature).toHaveBeenCalledOnceWith(
+      { flagKey: 'feature.x', reason: 'broken since noon' },
+      '',
+    );
+  });
+
+  it('a blank broadcast marks the message and sends nothing', () => {
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="emergency-broadcast-submit"]',
+      sent: controls.broadcast,
+    });
+    expect(marked).toEqual(['emergency-broadcast-message']);
+  });
+
+  it('a filled broadcast asks, then sends; a no sends nothing', async () => {
+    component.broadcastMessage.set('Restart at noon');
+    ask.and.resolveTo(false);
+    await component.broadcast();
+    expect(controls.broadcast).not.toHaveBeenCalled();
+
+    ask.and.resolveTo(true);
+    await component.broadcast();
+    expect(controls.broadcast).toHaveBeenCalledTimes(1);
+  });
+
+  it('a blank force-logout marks the reason and the phrase and sends nothing', () => {
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="emergency-logout-submit"]',
+      sent: controls.forceLogoutAll,
+    });
+    expect(marked).toEqual(['emergency-logout-reason', 'emergency-logout-confirm']);
+  });
+
+  it('force-logout with the wrong phrase is refused: the typed phrase is its confirmation', () => {
+    component.logoutReason.set('credential leak');
+    component.logoutConfirm.set('force logout');
+    component.forceLogoutAll();
+    expect(controls.forceLogoutAll).not.toHaveBeenCalled();
+    expect(component.logoutPanel().error).toBeTruthy();
+  });
+
+  it('a blank reset of everyone marks the phrase and the reason and sends nothing', () => {
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="emergency-mfa-submit"]',
+      sent: controls.forceMfaReenrol,
+    });
+    expect(marked).toEqual(['emergency-mfa-confirm', 'emergency-mfa-reason']);
+  });
+
+  it('a reset of named users asks first: no typed phrase protects it', async () => {
+    component.addMfaTarget(user('u1', 'Awa'));
+    component.mfaReason.set('phishing at site A');
+    ask.and.resolveTo(false);
+    await component.forceMfaReenrol();
+    expect(controls.forceMfaReenrol).not.toHaveBeenCalled();
+    expect(component.mfaSelected().length).toBe(1);
+
+    ask.and.resolveTo(true);
+    await component.forceMfaReenrol();
+    expect(controls.forceMfaReenrol).toHaveBeenCalledTimes(1);
   });
 });
 

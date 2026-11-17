@@ -236,4 +236,80 @@ class Hl7v2MessageBuilderAdtParserTest {
             assertThat(builder.parseOruR01(oru)).isEmpty();
         }
     }
+
+    @Nested
+    @DisplayName("field widths (Hl7FieldBounds)")
+    class FieldWidths {
+
+        private String adtWith(String mrn, String location, String visitNumber) {
+            String pv1 = "PV1|1|I|" + location + "|".repeat(16) + visitNumber + "\r";
+            return "MSH|^~\\&|REG|HOSP1|HMS|HOSP1|20260428||ADT^A01|CTRL-W|P|2.5\r"
+                + "PID|1||" + mrn + "^^^Authority-1||DOE^JANE||19850101|F\r"
+                + pv1;
+        }
+
+        @Test
+        @DisplayName("PID-3, PV1-3 and PV1-19 at exactly their column widths are read verbatim")
+        void atTheColumnWidthsEverythingIsReadVerbatim() {
+            String mrn = "M".repeat(Hl7FieldBounds.MRN_MAX);
+            String location = "L".repeat(Hl7FieldBounds.ASSIGNED_LOCATION_MAX);
+            String visit = "V".repeat(Hl7FieldBounds.VISIT_NUMBER_MAX);
+
+            ParsedAdtMessage parsed = builder.parseAdtMessage(adtWith(mrn, location, visit), "A01");
+
+            assertThat(parsed).isNotNull();
+            assertThat(parsed.mrn()).isEqualTo(mrn);
+            assertThat(parsed.assignedLocation()).isEqualTo(location);
+            assertThat(parsed.visitNumber()).isEqualTo(visit);
+        }
+
+        @Test
+        @DisplayName("ADT identifiers are read raw: HL7 escapes are not decoded on the ADT path")
+        void adtIdentifiersStayRaw() {
+            // The lab paths decode escapes; ADT keeps its pre-existing split so a
+            // stored visit number still matches the same visit on an update.
+            ParsedAdtMessage parsed = builder.parseAdtMessage(
+                adtWith("MRN\\S\\1", "WARD-A", "V\\S\\1^EXT"), "A01");
+
+            assertThat(parsed).isNotNull();
+            assertThat(parsed.visitNumber()).isEqualTo("V\\S\\1");
+            assertThat(parsed.mrn()).isEqualTo("MRN\\S\\1");
+        }
+
+        @Test
+        @DisplayName("One character over on PID-3 is refused, not truncated")
+        void anOverWidthMrnIsRefused() {
+            assertThat(builder.parseAdtMessage(
+                adtWith("M".repeat(Hl7FieldBounds.MRN_MAX + 1), "WARD-A", "VISIT-1"), "A01"))
+                .isNull();
+        }
+
+
+        @Test
+        @DisplayName("A long PV1-3 is fine when its point of care fits - only that component is read")
+        void aLongLocationWithAShortPointOfCareIsRead() {
+            String location = "WARD-A^ROOM-12^BED-3^HOSP1^^^MAIN^2^" + "D".repeat(300);
+
+            ParsedAdtMessage parsed = builder.parseAdtMessage(
+                adtWith("MRN-1", location, "VISIT-1"), "A01");
+
+            assertThat(parsed).isNotNull();
+            assertThat(parsed.assignedLocation()).isEqualTo(location);
+        }
+
+        @Test
+        @DisplayName("Over-width PV1-3 and PV1-19 still parse: the demographics are not refused for them")
+        void overWidthVisitFieldsStillParse() {
+            // Only the visit projection reads these, and it bounds them. A
+            // parser refusal here would drop the A08's demographic update too.
+            String location = "L".repeat(Hl7FieldBounds.ASSIGNED_LOCATION_MAX + 1);
+            String visit = "V".repeat(Hl7FieldBounds.VISIT_NUMBER_MAX + 1);
+
+            ParsedAdtMessage parsed = builder.parseAdtMessage(adtWith("MRN-1", location, visit), "A01");
+
+            assertThat(parsed).isNotNull();
+            assertThat(parsed.lastName()).isEqualTo("DOE");
+            assertThat(parsed.visitNumber()).isEqualTo(visit);
+        }
+    }
 }

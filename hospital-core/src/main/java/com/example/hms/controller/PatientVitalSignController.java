@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.controller.support.RecordsWithheldHeaders;
 import com.example.hms.payload.dto.PatientVitalSignRequestDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.service.PatientVitalSignService;
@@ -55,6 +56,7 @@ public class PatientVitalSignController {
 
     private final PatientVitalSignService patientVitalSignService;
     private final ControllerAuthUtils authUtils;
+    private final RecordsWithheldHeaders recordsWithheld;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -101,7 +103,8 @@ public class PatientVitalSignController {
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, null, false);
         List<PatientVitalSignResponseDTO> vitals = patientVitalSignService
             .getRecentVitals(patientId, resolvedHospitalId, effectiveLimit);
-        return ResponseEntity.ok(vitals);
+        // QA D504: a list narrowed by the patient's opt-out says so.
+        return ResponseEntity.ok().headers(recordsWithheld.forRead(auth, patientId, resolvedHospitalId)).body(vitals);
     }
 
     @GetMapping
@@ -128,6 +131,7 @@ public class PatientVitalSignController {
         int safePage = Math.max(page, 0);
         List<PatientVitalSignResponseDTO> vitals = patientVitalSignService
             .getVitals(patientId, resolvedHospitalId, fromDate, toDate, safePage, safeSize);
-        return ResponseEntity.ok(vitals);
+        // QA D504: a list narrowed by the patient's opt-out says so.
+        return ResponseEntity.ok().headers(recordsWithheld.forRead(auth, patientId, resolvedHospitalId)).body(vitals);
     }
 }

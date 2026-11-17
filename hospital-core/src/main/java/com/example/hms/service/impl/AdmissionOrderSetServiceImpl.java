@@ -20,6 +20,8 @@ import com.example.hms.service.AdmissionOrderSetService;
 import com.example.hms.service.orderset.DispatchResult;
 import com.example.hms.service.orderset.OrderSetApplicationContext;
 import com.example.hms.service.orderset.OrderSetItemDispatcher;
+import com.example.hms.service.orderset.OrderSetItemPrnRules;
+import com.example.hms.service.orderset.OrderSetItemQuantityRules;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -36,14 +38,12 @@ import java.util.UUID;
 
 @Service
 public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
+    private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
+    private static final String STAFF_NOT_FOUND_KEY = "staff.notFound";
+
 
     private static final Logger logger = LoggerFactory.getLogger(AdmissionOrderSetServiceImpl.class);
 
-    private static final String ORDER_SET_NOT_FOUND = "Admission order set not found";
-    private static final String HOSPITAL_NOT_FOUND = "Hospital not found";
-    private static final String DEPARTMENT_NOT_FOUND = "Department not found";
-    private static final String STAFF_NOT_FOUND = "Staff not found";
-    private static final String ADMISSION_NOT_FOUND = "Admission not found";
 
     private final AdmissionOrderSetRepository orderSetRepository;
     private final AdmissionRepository admissionRepository;
@@ -52,6 +52,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     private final StaffRepository staffRepository;
     private final AdmissionOrderSetMapper mapper;
     private final OrderSetItemDispatcher dispatcher;
+    private final OrderSetItemQuantityRules quantityRules;
 
     public AdmissionOrderSetServiceImpl(
         AdmissionOrderSetRepository orderSetRepository,
@@ -60,7 +61,8 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
         DepartmentRepository departmentRepository,
         StaffRepository staffRepository,
         AdmissionOrderSetMapper mapper,
-        OrderSetItemDispatcher dispatcher
+        OrderSetItemDispatcher dispatcher,
+        OrderSetItemQuantityRules quantityRules
     ) {
         this.orderSetRepository = orderSetRepository;
         this.admissionRepository = admissionRepository;
@@ -69,6 +71,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
         this.staffRepository = staffRepository;
         this.mapper = mapper;
         this.dispatcher = dispatcher;
+        this.quantityRules = quantityRules;
     }
 
     @Override
@@ -104,13 +107,22 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     @Override
     @Transactional
     public AdmissionOrderSetResponseDTO create(AdmissionOrderSetRequestDTO request) {
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND));
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        // QA r5 tenancy sweep: an order set is created at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", request.getHospitalId());
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
+            if (department != null) {
+                com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId());
+            }
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, request.getCreatedByStaffId()));
+        // QA D1382 / D1378: an as-needed medication item names its interval at save.
+        OrderSetItemPrnRules.requireValid(request.getOrderItems());
+        // QA D1396: a controlled drug states its quantity at save, or it could never be applied.
+        quantityRules.requireValid(request.getOrderItems(), hospital.getId());
 
         AdmissionOrderSet entity = new AdmissionOrderSet();
         entity.setName(request.getName());
@@ -143,10 +155,16 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
                     + " but request targets " + request.getHospitalId());
         }
         Staff modifiedBy = staffRepository.findById(request.getCreatedByStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, request.getCreatedByStaffId()));
+        // QA D1382 / D1378: every new version is held to the item rule too.
+        OrderSetItemPrnRules.requireValid(request.getOrderItems());
+        quantityRules.requireValid(request.getOrderItems(), parentHospitalId);
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
+            if (department != null) {
+                com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId());
+            }
 
         // Freeze the parent: keep the row but flip active off so the picker
         // only surfaces the head of the version chain.
@@ -174,8 +192,11 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     @Transactional
     public AdmissionOrderSetResponseDTO deactivate(UUID id, String reason, UUID actingStaffId) {
         AdmissionOrderSet entity = loadOrderSet(id);
-        Staff actor = staffRepository.findById(actingStaffId)
-            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND));
+        // QA D1226 class (round 24): who deactivated it is the session, never a
+        // staff id the client names (any staff of any hospital was accepted).
+        // The parameter is kept for old clients and ignored.
+        Staff actor = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, null,
+            com.example.hms.security.CallerIdentity.hospitalIdOf(entity.getHospital()));
         entity.deactivate(reason, actor);
         return mapper.toDto(orderSetRepository.save(entity));
     }
@@ -194,7 +215,11 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
         }
 
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException("admission.notFound", admissionId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(admission.getHospital(), "admission.notFound", admissionId);
+        // QA D1428: a closed stay takes no new orders.
+        admission.requireOpen();
 
         // Resolve the ordering staff's active hospital assignment so the lab
         // fan-out can populate LabOrderRequestDTO.assignmentId (@NotNull).
@@ -216,7 +241,8 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
             request.orderingStaffId(),
             assignmentId,
             admission.getPrimaryDiagnosisCode(),
-            request.forceOverride()
+            request.forceOverride(),
+            request.overrideReason()
         );
 
         List<UUID> prescriptionIds = new ArrayList<>();
@@ -227,6 +253,10 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
 
         List<Map<String, Object>> items = orderSet.getOrderItems() == null
             ? List.of() : orderSet.getOrderItems();
+        // QA D1382 / D1378 / D1396: a set saved before the item rules is refused
+        // by name before any order is created, never applied with an item skipped.
+        OrderSetItemPrnRules.requireValidToApply(items);
+        quantityRules.requireValid(items, ctx.hospitalId());
         for (Map<String, Object> item : items) {
             // CdsCriticalBlockException propagates and rolls back the whole
             // transaction; non-blocking advisories are accumulated.
@@ -260,8 +290,12 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     }
 
     private AdmissionOrderSet loadOrderSet(UUID id) {
-        return orderSetRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(ORDER_SET_NOT_FOUND));
+        AdmissionOrderSet orderSet = orderSetRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("orderSet.notFound", id));
+        // QA r5 tenancy sweep: another hospital's order set answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+            orderSet.getHospital(), "orderSet.notFound", id);
+        return orderSet;
     }
 
     /**

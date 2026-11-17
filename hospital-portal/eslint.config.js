@@ -60,6 +60,34 @@ module.exports = tseslint.config(
       '@angular-eslint/template/no-negated-async': 'off',
     },
   },
+  // The gate scripts CI runs (i18n parity/referenced/translated/enums/raw-enums,
+  // coverage) and their node:test suites. Plain Node, no TypeScript: the
+  // recommended JS rules plus the handful of Node globals they use, spelled out
+  // rather than pulled from the `globals` package, which is only a transitive
+  // dependency here. `.js` is CommonJS (the two one-off add-portal-translations
+  // scripts); `.mjs` is ESM.
+  {
+    files: ['scripts/**/*.mjs'],
+    extends: [eslint.configs.recommended],
+    languageOptions: {
+      sourceType: 'module',
+      globals: { process: 'readonly', console: 'readonly', URL: 'readonly' },
+    },
+  },
+  {
+    files: ['scripts/**/*.js'],
+    extends: [eslint.configs.recommended],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        require: 'readonly',
+        module: 'writable',
+        __dirname: 'readonly',
+      },
+    },
+  },
   {
     files: ['src/**/*.spec.ts'],
     rules: {

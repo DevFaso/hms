@@ -3,13 +3,15 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Subject, Subscription, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { Subject, Subscription, debounceTime, of, switchMap } from 'rxjs';
 
 import {
   AcuityLevel,
@@ -23,6 +25,12 @@ import { HospitalResponse, HospitalService } from '../../services/hospital.servi
 import { ReferralService } from '../../services/referral.service';
 import { StaffResponse, StaffService } from '../../services/staff.service';
 import { ToastService } from '../../core/toast.service';
+import { EnumLabelService } from '../../core/enum-label.service';
+import { bareRole } from '../../core/role-token';
+import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
 
 interface HospitalOption {
   id: string;
@@ -37,7 +45,16 @@ interface DepartmentOption {
 interface StaffOption {
   id: string;
   label: string;
+  /** The physician's assignment at the hospital, the A04 default (QA D872). */
+  assignmentId: string | null;
 }
+
+/**
+ * QA D852: the roles that may admit, as the server checks them
+ * (AdtIntakeProviderConfigService.ADMITTING_ROLE_CODES). The picker offers
+ * nobody else; the server refuses anybody else.
+ */
+const ADMITTING_ROLES: readonly string[] = ['DOCTOR', 'PHYSICIAN', 'SURGEON'];
 
 const ADMISSION_TYPES: AdmissionType[] = [
   'EMERGENCY',
@@ -90,7 +107,9 @@ const EMPTY_FORM: IntakeFormState = {
   defaultAdmissionType: 'EMERGENCY',
   defaultAcuityLevel: 'LEVEL_2_MODERATE',
   defaultEncounterType: 'INPATIENT',
-  defaultChiefComplaint: 'Auto-created from ADT^A01',
+  // QA D872: left empty, the server writes its default reason in the
+  // admin's language; the field's placeholder says so.
+  defaultChiefComplaint: '',
   enabled: false,
 };
 
@@ -102,7 +121,7 @@ const EMPTY_FORM: IntakeFormState = {
 @Component({
   selector: 'app-adt-intake-config',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe, SubmitGuardDirective, ListEscapeDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="adt-intake" data-testid="adt-intake-admin">
@@ -139,9 +158,9 @@ const EMPTY_FORM: IntakeFormState = {
             @for (cfg of configs(); track trackById($index, cfg)) {
               <tr [attr.data-config-id]="cfg.id">
                 <td>{{ cfg.hospitalName || cfg.hospitalId }}</td>
-                <td>{{ cfg.defaultAdmissionType }}</td>
-                <td>{{ cfg.defaultAcuityLevel }}</td>
-                <td>{{ cfg.defaultEncounterType }}</td>
+                <td>{{ cfg.defaultAdmissionType | enumLabel: 'admissionType' }}</td>
+                <td>{{ cfg.defaultAcuityLevel | enumLabel: 'acuityLevel' }}</td>
+                <td>{{ cfg.defaultEncounterType | enumLabel: 'encounterType' }}</td>
                 <td>
                   <span
                     class="adt-intake__pill"
@@ -200,18 +219,23 @@ const EMPTY_FORM: IntakeFormState = {
         </h2>
 
         <div class="form-row adt-intake__typeahead">
-          <label for="adt-hospital-search">{{
-            'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate
-          }}</label>
+          <label for="adt-hospital-search"
+            >{{ 'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate }} *</label
+          >
           <input
             id="adt-hospital-search"
             name="hospitalSearch"
             type="text"
             autocomplete="off"
+            required
+            data-server-field="hospitalId"
+            [attr.data-submit-blank]="form.hospitalId ? 'false' : 'true'"
             [attr.aria-label]="'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate"
             [placeholder]="'ADT_INTAKE.PLACEHOLDER.HOSPITAL_SEARCH' | translate"
             [ngModel]="hospitalSearchTerm()"
             (ngModelChange)="onHospitalSearchInput($event)"
+            [appListEscape]="hospitalOptions().length > 0"
+            (listEscape)="hospitalOptions.set([])"
             [disabled]="!!editingId()"
             data-testid="adt-intake-hospital-search"
           />
@@ -261,13 +285,15 @@ const EMPTY_FORM: IntakeFormState = {
         </div>
 
         <div class="form-row">
-          <label for="adt-provider">{{ 'ADT_INTAKE.FIELD.PROVIDER' | translate }}</label>
+          <label for="adt-provider">{{ 'ADT_INTAKE.FIELD.PROVIDER' | translate }} *</label>
           <select
             id="adt-provider"
             name="admittingProviderId"
             required
             [(ngModel)]="form.admittingProviderId"
+            (ngModelChange)="onProviderChange($event)"
             [disabled]="!form.hospitalId"
+            [attr.aria-invalid]="fieldError('admittingProviderId') ? true : null"
             data-testid="adt-intake-provider"
           >
             <option value="">
@@ -282,6 +308,15 @@ const EMPTY_FORM: IntakeFormState = {
           @if (form.hospitalId && !dependentsLoading() && staffOptions().length === 0) {
             <small data-testid="adt-intake-provider-empty">
               {{ 'ADT_INTAKE.PROVIDER_NO_OPTIONS' | translate }}
+            </small>
+          }
+          @if (fieldError('admittingProviderId'); as reason) {
+            <small
+              class="adt-intake__field-error"
+              role="alert"
+              data-testid="adt-intake-provider-error"
+            >
+              {{ reason }}
             </small>
           }
         </div>
@@ -312,15 +347,31 @@ const EMPTY_FORM: IntakeFormState = {
         </div>
 
         <div class="form-row">
-          <label for="adt-assignment">{{ 'ADT_INTAKE.FIELD.ASSIGNMENT_ID' | translate }}</label>
-          <input
+          <!-- QA D872: a picker of the hospital's physicians' assignments, not a typed UUID. -->
+          <label for="adt-assignment">{{ 'ADT_INTAKE.FIELD.ASSIGNMENT' | translate }}</label>
+          <select
             id="adt-assignment"
             name="defaultAssignmentId"
-            type="text"
             [(ngModel)]="form.defaultAssignmentId"
+            [disabled]="!form.hospitalId"
+            [attr.aria-invalid]="fieldError('defaultAssignmentId') ? true : null"
             data-testid="adt-intake-assignment"
-          />
+          >
+            <option value="">{{ 'ADT_INTAKE.FIELD.ASSIGNMENT_NONE' | translate }}</option>
+            @for (s of assignmentOptions(); track s.assignmentId) {
+              <option [value]="s.assignmentId">{{ s.label }}</option>
+            }
+          </select>
           <small>{{ 'ADT_INTAKE.FIELD.ASSIGNMENT_HINT' | translate }}</small>
+          @if (fieldError('defaultAssignmentId'); as reason) {
+            <small
+              class="adt-intake__field-error"
+              role="alert"
+              data-testid="adt-intake-assignment-error"
+            >
+              {{ reason }}
+            </small>
+          }
         </div>
 
         <div class="form-row">
@@ -334,7 +385,7 @@ const EMPTY_FORM: IntakeFormState = {
             data-testid="adt-intake-admission-type"
           >
             @for (opt of admissionTypes; track opt) {
-              <option [value]="opt">{{ opt }}</option>
+              <option [value]="opt">{{ opt | enumLabel: 'admissionType' }}</option>
             }
           </select>
         </div>
@@ -348,7 +399,7 @@ const EMPTY_FORM: IntakeFormState = {
             data-testid="adt-intake-acuity"
           >
             @for (opt of acuityLevels; track opt) {
-              <option [value]="opt">{{ opt }}</option>
+              <option [value]="opt">{{ opt | enumLabel: 'acuityLevel' }}</option>
             }
           </select>
         </div>
@@ -364,7 +415,7 @@ const EMPTY_FORM: IntakeFormState = {
             data-testid="adt-intake-encounter-type"
           >
             @for (opt of encounterTypes; track opt) {
-              <option [value]="opt">{{ opt }}</option>
+              <option [value]="opt">{{ opt | enumLabel: 'encounterType' }}</option>
             }
           </select>
         </div>
@@ -376,6 +427,7 @@ const EMPTY_FORM: IntakeFormState = {
             name="defaultChiefComplaint"
             type="text"
             maxlength="500"
+            [placeholder]="'ADT_INTAKE.PLACEHOLDER.CHIEF_COMPLAINT' | translate"
             [(ngModel)]="form.defaultChiefComplaint"
             data-testid="adt-intake-complaint"
           />
@@ -392,11 +444,20 @@ const EMPTY_FORM: IntakeFormState = {
           <label for="adt-enabled">{{ 'ADT_INTAKE.FIELD.ENABLED' | translate }}</label>
         </div>
 
+        @if (saveError(); as reason) {
+          <p class="adt-intake__error" role="alert" data-testid="adt-intake-save-error">
+            {{ reason }}
+          </p>
+        }
+
         <div class="form-actions">
           <button
             type="submit"
             class="btn-primary"
             [disabled]="saving()"
+            appSubmitGuard
+            submitGuardRequired
+            [submitGuardFields]="['adt-hospital-search', 'adt-provider']"
             data-testid="adt-intake-save"
           >
             {{ saving() ? ('ADT_INTAKE.SAVING' | translate) : ('ADT_INTAKE.SAVE' | translate) }}
@@ -425,7 +486,8 @@ const EMPTY_FORM: IntakeFormState = {
         margin-top: 0;
         color: var(--muted, #64748b);
       }
-      .adt-intake__error {
+      .adt-intake__error,
+      .adt-intake__field-error {
         color: var(--danger, #b00020);
       }
       .adt-intake__pill {
@@ -503,6 +565,19 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
   // — operator sees a "no staff at this hospital" hint instead of a
   // silent dropdown.
   protected readonly staffOptions = signal<StaffOption[]>([]);
+  /** The admitting physician picked in the form (the form object itself is not a signal). */
+  private readonly selectedProviderId = signal('');
+  /**
+   * QA D852/D872: the default-assignment picker offers the selected
+   * physician's own assignment only. The server refuses any other pairing:
+   * the encounter is recorded under that staff AND that assignment.
+   */
+  protected readonly assignmentOptions = computed(() =>
+    this.staffOptions().filter((s) => !!s.assignmentId && s.id === this.selectedProviderId()),
+  );
+  /** The server's refusal of the last save, and the field it is about. */
+  protected readonly saveError = signal<string | null>(null);
+  private readonly saveErrorField = signal<string | null>(null);
   protected readonly departmentOptions = signal<DepartmentOption[]>([]);
   protected readonly dependentsLoading = signal(false);
 
@@ -514,6 +589,9 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
   private readonly referralService = inject(ReferralService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
+  private readonly enumLabels = inject(EnumLabelService);
 
   private readonly hospitalSearchSubject = new Subject<string>();
   private hospitalSearchSub?: Subscription;
@@ -523,7 +601,6 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     this.hospitalSearchSub = this.hospitalSearchSubject
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
         switchMap((term) => {
           // Below-threshold queries must clear stale suggestions
           // (user deletes back to 1 char and the prior list would
@@ -575,6 +652,8 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     // clear them so a stale provider UUID can't sneak through.
     this.form.admittingProviderId = '';
     this.form.departmentId = '';
+    this.form.defaultAssignmentId = '';
+    this.selectedProviderId.set('');
     this.loadHospitalDependents(option.id);
   }
 
@@ -585,12 +664,19 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     // sees the empty-state rather than a stuck spinner.
     this.staffService.list(hospitalId).subscribe({
       next: (staff) => {
+        // QA D852: only the hospital's doctors, physicians and surgeons can
+        // admit; the list used to offer every staff role.
         this.staffOptions.set(
           (staff as StaffResponse[])
-            .filter((s) => !!s.id)
+            .filter(
+              (s) =>
+                !!s.id &&
+                ADMITTING_ROLES.includes((bareRole(s.roleCode ?? s.roleName) ?? '').toUpperCase()),
+            )
             .map((s) => ({
               id: s.id,
               label: this.staffLabel(s),
+              assignmentId: s.assignmentId ?? null,
             })),
         );
       },
@@ -610,11 +696,35 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
 
   private staffLabel(staff: StaffResponse): string {
     const name = (staff.name ?? '').trim();
-    const role = (staff.roleName ?? staff.jobTitle ?? '').trim();
+    // QA D852: the role in the reader's language, not its ROLE_* code.
+    const code = bareRole(staff.roleCode ?? staff.roleName);
+    const role = code ? this.enumLabels.transform(code, 'role').trim() : '';
     if (name && role) return `${name} — ${role}`;
     if (name) return name;
     if (role) return role;
     return staff.id;
+  }
+
+  /**
+   * QA D852/D872: the A04 default assignment follows the admitting physician.
+   * It used to keep the previous physician's assignment when the provider
+   * changed, so encounters were recorded as Dr B under Dr A's assignment.
+   */
+  protected onProviderChange(providerId: string): void {
+    this.clearSaveError();
+    this.selectedProviderId.set(providerId ?? '');
+    const chosen = this.staffOptions().find((s) => s.id === providerId);
+    this.form.defaultAssignmentId = chosen?.assignmentId ?? '';
+  }
+
+  /** The server's reason when the last save was refused on {@code field}. */
+  protected fieldError(field: string): string | null {
+    return this.saveErrorField() === field ? this.saveError() : null;
+  }
+
+  private clearSaveError(): void {
+    this.saveError.set(null);
+    this.saveErrorField.set(null);
   }
 
   protected trackById(_index: number, cfg: AdtIntakeConfig): string {
@@ -634,6 +744,7 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
       defaultChiefComplaint: cfg.defaultChiefComplaint,
       enabled: cfg.enabled,
     };
+    this.selectedProviderId.set(cfg.admittingProviderId ?? '');
     this.selectedHospitalLabel.set(cfg.hospitalName || cfg.hospitalId);
     this.hospitalSearchTerm.set(cfg.hospitalName || cfg.hospitalId);
     // Pre-load the dependents so the provider / department selects
@@ -643,8 +754,10 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
   }
 
   protected resetForm(): void {
+    this.clearSaveError();
     this.editingId.set(null);
     this.form = { ...EMPTY_FORM };
+    this.selectedProviderId.set('');
     this.selectedHospitalLabel.set('');
     this.hospitalSearchTerm.set('');
     this.hospitalOptions.set([]);
@@ -678,10 +791,12 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
       defaultAdmissionType: this.form.defaultAdmissionType,
       defaultAcuityLevel: this.form.defaultAcuityLevel,
       defaultEncounterType: this.form.defaultEncounterType,
-      defaultChiefComplaint: this.form.defaultChiefComplaint.trim() || 'Auto-created from ADT^A01',
+      // Blank: the server writes its default reason in the admin's language.
+      defaultChiefComplaint: this.form.defaultChiefComplaint.trim() || null,
       enabled: this.form.enabled,
     };
 
+    this.clearSaveError();
     this.saving.set(true);
     this.service.upsert(request).subscribe({
       next: () => {
@@ -690,22 +805,27 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
         this.resetForm();
         this.reload();
       },
-      error: () => {
+      error: (err) => {
         this.saving.set(false);
-        this.toastError('ADT_INTAKE.TOAST.SAVE_FAILED');
+        // QA D872: the server's reason (a non-physician, a foreign
+        // assignment) under the field it is about, not a generic toast.
+        const reason = refusalReason(err);
+        const field = (err as { error?: { field?: unknown } } | null)?.error?.field;
+        this.saveError.set(reason ?? this.translate.instant('ADT_INTAKE.TOAST.SAVE_FAILED'));
+        this.saveErrorField.set(typeof field === 'string' ? field : null);
+        this.toast.error(reason ?? this.translate.instant('ADT_INTAKE.TOAST.SAVE_FAILED'));
       },
     });
   }
 
-  protected remove(cfg: AdtIntakeConfig): void {
-    // ToastService and globalThis.confirm both render their input
-    // verbatim; resolve the i18n key via TranslateService first so the
-    // admin page stays localizable. Caught on PR #360 Copilot review
-    // (High + Medium).
-    const message = this.translate.instant('ADT_INTAKE.CONFIRM_DELETE', {
-      hospital: cfg.hospitalName || cfg.hospitalId,
+  protected async remove(cfg: AdtIntakeConfig): Promise<void> {
+    // QA D1229: the in-app confirmation (localized, keyboard contract), never
+    // the browser's own confirm.
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'ADT_INTAKE.CONFIRM_DELETE',
+      params: { hospital: cfg.hospitalName || cfg.hospitalId },
+      confirmKey: 'COMMON.DELETE',
     });
-    const confirmed = globalThis.confirm(message);
     if (!confirmed) return;
     this.service.remove(cfg.id).subscribe({
       next: () => {

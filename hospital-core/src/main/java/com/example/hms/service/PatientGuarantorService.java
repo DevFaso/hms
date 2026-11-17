@@ -16,7 +16,8 @@ public interface PatientGuarantorService {
 
     List<GuarantorResponseDTO> list(UUID patientId, UUID hospitalId);
 
-    GuarantorResponseDTO deactivate(UUID patientId, UUID guarantorId, UUID hospitalId);
+    /** QA D1247 (round 25): a deactivation states why; the reason, time and actor are kept. */
+    GuarantorResponseDTO deactivate(UUID patientId, UUID guarantorId, UUID hospitalId, String reason, UUID actorUserId);
 
     GuarantorResponseDTO reactivate(UUID patientId, UUID guarantorId, UUID hospitalId);
 }

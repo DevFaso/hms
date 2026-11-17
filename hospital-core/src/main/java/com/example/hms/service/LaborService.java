@@ -26,4 +26,24 @@ public interface LaborService {
                                              DeliveryRecordRequestDTO request);
 
     DeliveryRecordResponseDTO getDelivery(UUID patientId, UUID episodeId, UUID hospitalId);
+
+    /** QA D1714: correct one baby's recorded outcome; the fetal-death event is superseded or created, never deleted. */
+    DeliveryRecordResponseDTO correctBabyOutcome(UUID patientId, UUID episodeId, UUID userId,
+        com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO request);
+
+    /**
+     * The episode's own hospital hands an active labour to another hospital
+     * (provisional rule, 2026-11-12): this episode closes as TRANSFERRED_OUT
+     * and the destination gets a new active episode linked to it.
+     */
+    LaborEpisodeResponseDTO transferEpisode(UUID patientId, UUID episodeId, UUID callerUserId,
+                                            com.example.hms.payload.dto.clinical.labor.LaborTransferRequestDTO request);
+
+    /**
+     * She arrived at the acting hospital in labour without a handover: the
+     * other hospital's active episode closes as LEFT_WITHOUT_HANDOVER and the
+     * acting hospital opens its own, linked to it.
+     */
+    LaborEpisodeResponseDTO recordArrivalWithoutHandover(UUID patientId, UUID sourceEpisodeId, UUID callerUserId,
+                                                         com.example.hms.payload.dto.clinical.labor.LaborArrivalRequestDTO request);
 }

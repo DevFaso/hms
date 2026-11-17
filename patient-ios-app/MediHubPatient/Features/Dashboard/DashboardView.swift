@@ -199,7 +199,7 @@ struct SectionCard<Content: View>: View {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color("BrandBlue"))
+                    .foregroundStyle(Color("BrandPrimary"))
                 Text(title)
                     .font(.headline)
             }
@@ -218,7 +218,7 @@ struct AppointmentRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 4)
-                .fill(appointment.statusColor == "green" ? Color.green : Color("BrandBlue"))
+                .fill(appointment.statusColor == "green" ? Color.green : Color("BrandPrimary"))
                 .frame(width: 4, height: 48)
             VStack(alignment: .leading, spacing: 4) {
                 Text(appointment.staffName ?? "Doctor")
@@ -308,7 +308,9 @@ struct StatusBadge: View {
         case "yellow": .yellow
         case "orange": .orange
         case "gray": .gray
-        default: .blue
+        // Brand teal: the text variant, which keeps 4.5:1 on its own tint in
+        // both appearances (plain teal on a 12% teal tint is 4.33:1).
+        default: Color("BrandPrimaryText")
         }
     }
 

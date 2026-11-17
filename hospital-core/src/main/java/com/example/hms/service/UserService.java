@@ -36,10 +36,24 @@ public interface UserService {
     Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
                                      boolean includeDeleted, boolean onlyDeleted);
 
+    /**
+     * QA D790: the chat's colleague picker. Active, live staff accounts at the
+     * caller's hospitals (every one for a super-admin), id, name and role only.
+     * Refused (403) for a caller with no active non-patient assignment.
+     */
+    java.util.List<com.example.hms.payload.dto.ChatRecipientDTO> listChatRecipients(int size);
+
     boolean verifyEmail(String email, String token);
 
     // ✅ Admin/staff/hospital-specific registration
     UserResponseDTO createUserWithRolesAndHospital(@Valid AdminSignupRequest adminSignupRequest);
+
+    /**
+     * QA D1592: the PATIENT account of a baby a recorded delivery registers, at
+     * the delivering hospital only. Not a registration entry point: only
+     * NewbornRegistrationService calls it (NewbornRegistrationGuardTest).
+     */
+    UserResponseDTO createNewbornPatientAccount(AdminSignupRequest request, java.util.UUID deliveringHospitalId);
 
     // ✅ Bootstrap first user (Super Admin) when system has no users
     BootstrapSignupResponse bootstrapFirstUser(BootstrapSignupRequest request);
@@ -66,4 +80,14 @@ public interface UserService {
      * @param newUsername  the desired new username (must be unique, already validated by caller)
      */
     void changeOwnUsername(UUID userId, String newUsername);
+
+    /**
+     * The forced first sign-in, in one transaction: the new username (when
+     * given) and the new password (when given) are applied together, and each
+     * forced-change flag clears only with its own change. Either both land or
+     * neither does, so a rename can no longer end the session before the
+     * password is changed (D17). The caller has already verified the current
+     * password and validated both values.
+     */
+    void completeAccountSetup(UUID userId, String newUsername, String newPassword);
 }

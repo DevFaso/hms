@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.education
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -160,7 +161,7 @@ class EducationViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(savingIds = it.savingIds - item.resourceId, outcome = if (notify) Outcome(R.string.education_save_failed, e.message) else it.outcome)
+                    it.copy(savingIds = it.savingIds - item.resourceId, outcome = if (notify) Outcome(R.string.education_save_failed, FailureText.of(e)) else it.outcome)
                 }
             }
         }
@@ -215,7 +216,7 @@ class EducationViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(askSubmitting = false, askError = Outcome(R.string.question_failed, e.message)) }
+                _state.update { it.copy(askSubmitting = false, askError = Outcome(R.string.question_failed, FailureText.of(e))) }
             }
         }
     }

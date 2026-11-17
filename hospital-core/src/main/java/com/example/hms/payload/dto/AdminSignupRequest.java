@@ -21,24 +21,24 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@LicenseRequiredForMedicalRoles(message = "{adminSignup.licenseNumber.required}")
 public class AdminSignupRequest {
     /** Optional: hospital name for registration (alternative to hospitalId). */
     @JsonProperty("hospitalName")
     private String hospitalName;
 
-    @NotBlank(message = "{adminSignup.username.required}")
+    // Optional: when omitted the service generates a temporary unique username
+    // from the first/last name and sets forceUsernameChange=true.
     private String username;
 
     // Optional for PATIENT registrations (phone-first: most patients have no
     // email). Staff/admin roles still require it — enforced in UserServiceImpl
     // because the requirement depends on roleNames.
-    @Email
+    @Email(message = "{validation.email.invalid}")
     private String email;
 
-    // Password is optional for non-patient staff registrations: when omitted the service
-    // auto-generates a temporary password and sets forcePasswordChange=true so the user
-    // is prompted to choose a permanent one on first login.
+    // Optional, kept for API compatibility: when omitted (the portal never sends
+    // it) the service generates a strong one-time password and sets
+    // forcePasswordChange=true. An admin-typed password is never e-mailed.
     private String password;
 
     @NotBlank(message = "{adminSignup.firstName.required}")
@@ -48,6 +48,7 @@ public class AdminSignupRequest {
     private String lastName;
 
     @NotBlank(message = "{adminSignup.phoneNumber.required}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     // IMPORTANT: keep nullable so receptionists aren't forced to send it
@@ -57,10 +58,24 @@ public class AdminSignupRequest {
     @NotEmpty(message = "{adminSignup.roleNames.required}")
     private Set<@NotBlank String> roleNames;
 
-    private String licenseNumber;              // required only for medical/admin roles (validator)
+    private String licenseNumber;              // optional for every role: licences are never mandatory
     private JobTitle jobTitle;                 // optional
     private EmploymentType employmentType;     // optional; service defaults FULL_TIME if null
     private UUID departmentId;                 // optional
     private Specialization specialization;     // optional
     private Boolean forcePasswordChange;       // optional
+    /**
+     * QA D626: set by the patient form (step 1 of a patient registration).
+     * A PATIENT role on admin-register without it is a staff onboarding that
+     * picked the patient role, and is refused: a patient is registered from
+     * the patient form, which also creates the patient record.
+     */
+    private Boolean patientRegistration;       // optional
+
+    /**
+     * QA D626: the patient record, REQUIRED when {@link #patientRegistration}
+     * is true. The account and this record are written in one transaction.
+     * Validated after the account exists (its userId is set server-side).
+     */
+    private PatientRequestDTO patient;
 }

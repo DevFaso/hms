@@ -85,7 +85,8 @@ describe('VerifyEmailComponent — the e-mail activation link lands somewhere', 
       (r) =>
         r.method === 'POST' &&
         r.url === '/auth/resend-verification' &&
-        r.params.get('email') === 'a@b.c',
+        r.body?.email === 'a@b.c' &&
+        r.urlWithParams === '/auth/resend-verification',
     );
     req.flush({}, { status: 500, statusText: 'Server Error' });
     fixture.detectChanges();
@@ -102,5 +103,18 @@ describe('VerifyEmailComponent — the e-mail activation link lands somewhere', 
     component.resend();
     httpMock.expectNone((r) => r.url === '/auth/resend-verification');
     expect(component.resendError()).toBe('LOGIN.ENTER_EMAIL');
+  });
+
+  it('QA D1306: an empty address marks the field itself, not only the banner', () => {
+    const fixture = open({});
+    const component = fixture.componentInstance;
+    component.resendEmail = '';
+    component.resend();
+    const input = (fixture.nativeElement as HTMLElement).querySelector('#verify-email');
+    expect(input?.getAttribute('aria-invalid')).toBe('true');
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('#verify-email-invalid-msg')
+        ?.textContent,
+    ).toBe('LOGIN.ENTER_EMAIL');
   });
 });

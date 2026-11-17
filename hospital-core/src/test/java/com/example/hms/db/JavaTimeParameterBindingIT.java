@@ -13,7 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -45,7 +45,7 @@ class JavaTimeParameterBindingIT {
 
     @Container
     @SuppressWarnings("resource")
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
+    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
         .withDatabaseName("hms_binding")
         .withUsername("hms_test_user")
         .withPassword("hms_test_pass");
@@ -63,6 +63,8 @@ class JavaTimeParameterBindingIT {
     }
 
     @Autowired
+    private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
+    @Autowired
     private IntegrationMessageEventRepository integrationMessageEventRepository;
     @Autowired
     private AuditEventLogRepository auditEventLogRepository;
@@ -70,6 +72,13 @@ class JavaTimeParameterBindingIT {
     private BillingInvoiceRepository billingInvoiceRepository;
     @Autowired
     private PermissionMatrixAuditEventRepository permissionMatrixAuditEventRepository;
+
+    /** QA D1430: the desk's list projects the new column; V270 and the JPQL on the real engine. */
+    @Test
+    void theRegistrationDeskRowsReadTheDeactivationReason() {
+        assertThatCode(() -> registrationRepository.findDeskRowsByHospitalId(java.util.UUID.randomUUID()))
+            .doesNotThrowAnyException();
+    }
 
     @Test
     void theMessageLogSearchAcceptsEmptyDates() {
@@ -100,10 +109,18 @@ class JavaTimeParameterBindingIT {
     @Test
     void aLocalDateRangeAcceptsEmptyBounds() {
         assertThatCode(() -> billingInvoiceRepository.findAllWithFilters(
-                null, null, List.of(InvoiceStatus.PAID), null, null, PageRequest.of(0, 5)))
+                null, null, List.of(InvoiceStatus.PAID), null, null, null, PageRequest.of(0, 5)))
             .doesNotThrowAnyException();
         assertThatCode(() -> billingInvoiceRepository.findAllWithFilters(
-                null, null, List.of(InvoiceStatus.PAID), LocalDate.of(2026, 1, 1), null, PageRequest.of(0, 5)))
+                null, null, List.of(InvoiceStatus.PAID), LocalDate.of(2026, 1, 1), null, null, PageRequest.of(0, 5)))
+            .doesNotThrowAnyException();
+        // QA D203: the server-side search term, empty and set, and a sort with an id tiebreaker.
+        assertThatCode(() -> billingInvoiceRepository.findAllWithFilters(
+                null, null, null, null, null, "%gh-2026%", PageRequest.of(0, 5,
+                    org.springframework.data.domain.Sort.by("invoiceDate", "createdAt", "id").descending())))
+            .doesNotThrowAnyException();
+        // QA D209: the KPI aggregate binds a null hospital (global view) and a date.
+        assertThatCode(() -> billingInvoiceRepository.summarize(null, LocalDate.of(2026, 1, 1)))
             .doesNotThrowAnyException();
     }
 }

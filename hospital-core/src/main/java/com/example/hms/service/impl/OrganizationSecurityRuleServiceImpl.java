@@ -61,7 +61,7 @@ public class OrganizationSecurityRuleServiceImpl implements OrganizationSecurity
     @Transactional(readOnly = true)
     public OrganizationSecurityRuleResponseDTO getRuleByIdAsDto(UUID id) {
         OrganizationSecurityRule rule = ruleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("OrganizationSecurityRule", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException("securityRule.notFound", id));
         return toResponseDto(rule);
     }
 
@@ -69,7 +69,7 @@ public class OrganizationSecurityRuleServiceImpl implements OrganizationSecurity
     @Transactional
     public OrganizationSecurityRuleResponseDTO createRuleFromDto(OrganizationSecurityRuleRequestDTO dto) {
         OrganizationSecurityPolicy policy = policyRepository.findById(dto.getSecurityPolicyId())
-                .orElseThrow(() -> new ResourceNotFoundException("OrganizationSecurityPolicy", "id", dto.getSecurityPolicyId()));
+                .orElseThrow(() -> new ResourceNotFoundException("securityPolicy.notFound", dto.getSecurityPolicyId()));
 
         OrganizationSecurityRule rule = OrganizationSecurityRule.builder()
                 .name(dto.getName())
@@ -89,10 +89,10 @@ public class OrganizationSecurityRuleServiceImpl implements OrganizationSecurity
     @Transactional
     public OrganizationSecurityRuleResponseDTO updateRuleFromDto(UUID id, OrganizationSecurityRuleRequestDTO dto) {
         OrganizationSecurityRule rule = ruleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("OrganizationSecurityRule", "id", id));
+                .orElseThrow(() -> new ResourceNotFoundException("securityRule.notFound", id));
 
         OrganizationSecurityPolicy policy = policyRepository.findById(dto.getSecurityPolicyId())
-                .orElseThrow(() -> new ResourceNotFoundException("OrganizationSecurityPolicy", "id", dto.getSecurityPolicyId()));
+                .orElseThrow(() -> new ResourceNotFoundException("securityPolicy.notFound", dto.getSecurityPolicyId()));
 
         rule.setName(dto.getName());
         rule.setCode(dto.getCode());

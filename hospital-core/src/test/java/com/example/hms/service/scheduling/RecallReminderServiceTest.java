@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.RecallStatus;
@@ -11,16 +12,16 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.scheduling.PatientRecall;
 import com.example.hms.repository.scheduling.PatientRecallRepository;
-import java.time.LocalDate;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.MessageSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** Recall notice sweep (P3 #22) — the V112 exactly-once stamp idiom. */
@@ -29,10 +30,14 @@ class RecallReminderServiceTest {
 
     @Mock private PatientRecallRepository recallRepository;
     @Mock private PatientOutreachNotifier outreachNotifier;
-    @Mock private MessageSource messageSource;
     @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
 
     private RecallReminderService service;
+
+    /** Fixed instant: the notice window and the stamp come from the injected clock. */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 6, 0);
+    private static final Clock FIXED =
+        Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
 
     private Patient patient;
     private PatientRecall recall;
@@ -40,7 +45,7 @@ class RecallReminderServiceTest {
     @BeforeEach
     void setUp() {
         service = new RecallReminderService(
-            recallRepository, outreachNotifier, messageSource, patientLocaleResolver);
+            recallRepository, outreachNotifier, patientLocaleResolver, FIXED);
         ReflectionTestUtils.setField(service, "leadDays", 14L);
         ReflectionTestUtils.setField(service, "outreachLocale", "fr");
         org.mockito.Mockito.lenient()
@@ -58,13 +63,11 @@ class RecallReminderServiceTest {
         recall = PatientRecall.builder()
             .patient(patient)
             .hospital(hospital)
-            .dueDate(LocalDate.now().plusDays(7))
+            .dueDate(NOW.toLocalDate().plusDays(7))
             .reason("Post-op review")
             .build();
         recall.setId(UUID.randomUUID());
 
-        lenient().when(messageSource.getMessage(eq("sms.recall.due"), any(), any(Locale.class)))
-            .thenReturn("Une visite de suivi vous attend à CHU Yalgado.");
         lenient().when(recallRepository.save(any(PatientRecall.class)))
             .thenAnswer(inv -> inv.getArgument(0));
         lenient().when(recallRepository.findAwaitingNotification(any()))
@@ -73,7 +76,7 @@ class RecallReminderServiceTest {
 
     @Test
     void notifiesAndStampsTheRecall() {
-        when(outreachNotifier.notifyPatient(eq(patient), any())).thenReturn(true);
+        when(outreachNotifier.notifyPatient(eq(patient), any(), any())).thenReturn(true);
 
         int notified = service.sendDueRecallNotices();
 
@@ -83,9 +86,21 @@ class RecallReminderServiceTest {
     }
 
     @Test
+    void noticeWindowAndStampComeFromTheInjectedClock() {
+        when(recallRepository.findAwaitingNotification(NOW.toLocalDate().plusDays(14)))
+            .thenReturn(List.of(recall));
+        when(outreachNotifier.notifyPatient(eq(patient), any(), any())).thenReturn(true);
+
+        assertThat(service.sendDueRecallNotices()).isEqualTo(1);
+
+        verify(recallRepository).findAwaitingNotification(NOW.toLocalDate().plusDays(14));
+        assertThat(recall.getNotifiedAt()).isEqualTo(NOW);
+    }
+
+    @Test
     void stampsEvenWhenNoChannelDispatched() {
         // Otherwise the sweep re-evaluates the same row forever.
-        when(outreachNotifier.notifyPatient(eq(patient), any())).thenReturn(false);
+        when(outreachNotifier.notifyPatient(eq(patient), any(), any())).thenReturn(false);
 
         int notified = service.sendDueRecallNotices();
 
@@ -100,7 +115,7 @@ class RecallReminderServiceTest {
         broken.setId(UUID.randomUUID());
         when(recallRepository.findAwaitingNotification(any()))
             .thenReturn(List.of(broken, recall));
-        when(outreachNotifier.notifyPatient(any(), any()))
+        when(outreachNotifier.notifyPatient(any(), any(), any()))
             .thenAnswer(inv -> inv.getArgument(0) == patient);
 
         int notified = service.sendDueRecallNotices();

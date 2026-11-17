@@ -28,6 +28,16 @@ public class MedicationRefillResponseDTO {
     @Schema(description = "Patient ID")
     private UUID patientId;
 
+    /**
+     * QA D1276 (round 27): the refill queue named only the drug, so three
+     * identical "Paracétamol" cards could not be told apart.
+     */
+    @Schema(description = "Patient display name")
+    private String patientName;
+
+    @Schema(description = "Patient MRN at the hospital of the prescription (never another hospital's)")
+    private String patientMrn;
+
     @Schema(description = "Current status: REQUESTED, APPROVED, DENIED, DISPENSED")
     private String status;
 

@@ -2,7 +2,15 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 import { DoctorResultQueueItem } from '../../services/dashboard.service';
+import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { LabValuePipe } from '../../lab/shared/lab-value.pipe';
+
+/** QA D731 sibling: resultedAt is a zone-less UTC wall time. */
+const SERVER_TIME = new ServerTimePipe();
 
 const LOCALE_MAP: Record<string, string> = {
   en: 'en-US',
@@ -13,7 +21,14 @@ const LOCALE_MAP: Record<string, string> = {
 @Component({
   selector: 'app-doctor-results-panel',
   standalone: true,
-  imports: [RouterLink, TranslateModule],
+  imports: [
+    LabCorrectionBadgeComponent,
+    RouterLink,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+    LabValuePipe,
+  ],
   templateUrl: './doctor-results-panel.html',
   styleUrl: './doctor-results-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -40,6 +55,18 @@ export class DoctorResultsPanelComponent {
    * The same window opened on the first load of the page.
    */
   loading = input(false);
+  /**
+   * A hospital is in scope, so the queue could be read at all.
+   *
+   * `GET /me/results/review-queue` filters by the hospital the caller is
+   * acting in and answers 404 when none resolves, so an unscoped physician —
+   * or a super-admin in global view — must be shown the scope hint, not the
+   * green "all results reviewed" card. That card over a queue that was never
+   * read is how a released CRITICAL result reaches nobody.
+   */
+  scoped = input(true);
+  /** Ids with an acknowledge in flight; their ✓ is disabled until it lands. */
+  acknowledging = input<string[]>([]);
   patientSelected = output<string>();
   resultAcknowledged = output<string>();
   reloadRequested = output<void>();
@@ -79,7 +106,7 @@ export class DoctorResultsPanelComponent {
 
   formatDate(iso: string): string {
     if (!iso) return '';
-    const d = new Date(iso);
+    const d = new Date(SERVER_TIME.transform(iso));
     const lang = this.translate.currentLang || this.translate.defaultLang || 'en';
     const locale = LOCALE_MAP[lang] ?? 'en-US';
     // 12-hour clock for English; 24-hour for French/Spanish per regional convention.

@@ -15,6 +15,7 @@
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'DEPARTMENTS.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [placeholder]="'DEPARTMENTS.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
@@ -38,7 +39,7 @@
           </div>
           <div class="dept-info">
             <h4>{{ dept.name }}</h4>
-            <span class="dept-code">{{ dept.code }}</span>
+            <span class="dept-code">{{ dept.departmentCode }}</span>
             @if (dept.description) {
               <p class="dept-desc">{{ dept.description }}</p>
             }
@@ -50,7 +51,8 @@
                 {{ dept.staffCount }}
               </span>
             }
-            <span class="status-badge" [class.active]="dept.active">
+            {{ ' '
+            }}<span class="status-badge" [class.active]="dept.active">
               {{ dept.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
             </span>
             <div class="action-group">
@@ -58,6 +60,7 @@
                 <button
                   class="action-link"
                   [title]="'COMMON.EDIT' | translate"
+                  [attr.aria-label]="'COMMON.EDIT' | translate"
                   (click)="openEdit(dept)"
                 >
                   <span class="material-symbols-outlined">edit</span>
@@ -65,6 +68,7 @@
                 <button
                   class="action-link danger"
                   [title]="'COMMON.DELETE' | translate"
+                  [attr.aria-label]="'COMMON.DELETE' | translate"
                   (click)="confirmDelete(dept)"
                 >
                   <span class="material-symbols-outlined">delete</span>
@@ -103,14 +107,20 @@
         class="modal modal-lg"
         [open]="showModal()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeModal()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="department-list-dialog-2-title"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="department-list-dialog-2-title">
             {{ editing() ? ('DEPARTMENTS.EDIT' | translate) : ('DEPARTMENTS.CREATE' | translate) }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -119,10 +129,10 @@
             <div class="form-row">
               <div class="field">
                 <label for="dHospital">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
-                @if (hospitalLocked) {
+                @if (hospitalLocked || editing()) {
                   <div class="locked-field">
                     <span class="material-symbols-outlined locked-icon">business</span>
-                    {{ lockedHospitalName }}
+                    {{ editing()?.hospitalName || lockedHospitalName }}
                   </div>
                   <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
                 } @else {
@@ -185,6 +195,7 @@
                 <input
                   id="dPhone"
                   type="tel"
+                  appPhoneField
                   [(ngModel)]="form.phoneNumber"
                   name="phoneNumber"
                   [placeholder]="'DEPARTMENTS.PLACEHOLDER.PHONE' | translate"
@@ -209,13 +220,45 @@
                     <option value="">— {{ 'COMMON.NONE' | translate }} —</option>
                     @for (s of staffForHospital(); track s.id) {
                       <option [value]="s.email">
-                        {{ s.name }}{{ s.jobTitle ? ' · ' + s.jobTitle : '' }}
+                        {{ s.name
+                        }}{{ s.jobTitle ? ' · ' + (s.jobTitle | enumLabel: 'jobTitle') : '' }}
                       </option>
                     }
                   </select>
                 }
               </div>
             </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="dBeds">{{ 'DEPARTMENTS.BED_CAPACITY' | translate }}</label>
+                <input
+                  id="dBeds"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputmode="numeric"
+                  [(ngModel)]="form.bedCapacity"
+                  name="bedCapacity"
+                />
+              </div>
+            </div>
+
+            <fieldset class="field name-languages">
+              <legend>{{ 'DEPARTMENTS.NAMES_PER_LANGUAGE' | translate }}</legend>
+              <span class="field-hint">{{
+                'DEPARTMENTS.NAMES_PER_LANGUAGE_HINT' | translate
+              }}</span>
+              @for (lang of nameLanguages; track lang.code) {
+                <label [for]="'dName-' + lang.code">{{ lang.labelKey | translate }}</label>
+                <input
+                  [id]="'dName-' + lang.code"
+                  type="text"
+                  [(ngModel)]="langNames[lang.code]"
+                  [name]="'name-' + lang.code"
+                />
+              }
+            </fieldset>
 
             <div class="field">
               <label for="dDesc">{{ 'DEPARTMENTS.DESCRIPTION' | translate }}</label>
@@ -241,7 +284,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? editing()
@@ -270,12 +319,18 @@
         class="modal"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDelete()"
+        (keydown.escape)="cancelDelete(); $event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="department-list-dialog-1-title"
       >
         <div class="modal-header">
-          <h2>{{ 'DEPARTMENTS.DELETE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <h2 id="department-list-dialog-1-title">{{ 'DEPARTMENTS.DELETE' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -283,7 +338,7 @@
           <p class="delete-warning">
             {{ 'DEPARTMENTS.DELETE_CONFIRM' | translate }}
             <strong>{{ deletingDept()?.name }}</strong
-            >? {{ 'COMMON.CANNOT_UNDO' | translate }}
+            >{{ 'COMMON.QUESTION_MARK' | translate }} {{ 'COMMON.CANNOT_UNDO' | translate }}
           </p>
         </div>
         <div class="modal-actions">

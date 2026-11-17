@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -10,11 +17,34 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { localDateString, toServerDateTime } from '../../shared/date-utils';
+import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog.component';
+import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { blankFields, refuseFields } from '../../shared/forms/invalid-fields';
+
+/** QA D1281: the grant form's required fields, in reading order. */
+const GRANT_USERNAME_ID = 'family-proxy-username';
+const GRANT_RELATIONSHIP_ID = 'family-relationship';
+const GRANT_FIELDS = [GRANT_USERNAME_ID, GRANT_RELATIONSHIP_ID];
+/** QA D1464: the grant's optional end date. */
+const EXPIRES_FIELD = 'proxy-expires';
 
 @Component({
   selector: 'app-my-family-access',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, RouterLink, EnumLabelPipe, TranslateModule],
+  imports: [
+    ConfirmDialogComponent,
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    RouterLink,
+    EnumLabelPipe,
+    TranslateModule,
+  ],
   templateUrl: './my-family-access.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-family-access.component.scss', '../patient-portal-pages.scss'],
@@ -23,6 +53,7 @@ export class MyFamilyAccessComponent implements OnInit {
   private readonly portalService = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   proxies = signal<ProxyResponse[]>([]);
   proxyAccess = signal<ProxyResponse[]>([]);
@@ -46,7 +77,7 @@ export class MyFamilyAccessComponent implements OnInit {
    */
   expiresOn = '';
   /** Earliest selectable expiry — a grant that expires in the past is a revoke. */
-  readonly minExpiry = new Date().toISOString().slice(0, 10);
+  readonly minExpiry = localDateString();
 
   ngOnInit(): void {
     this.loadProxies();
@@ -59,8 +90,8 @@ export class MyFamilyAccessComponent implements OnInit {
         this.proxies.set(list);
         this.loading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PORTAL.FAMILY.LOAD_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PORTAL.FAMILY.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -75,8 +106,10 @@ export class MyFamilyAccessComponent implements OnInit {
           this.proxyAccess.set(list);
           this.loadingReceived.set(false);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('PORTAL.FAMILY.LOAD_ACCESS_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.FAMILY.LOAD_ACCESS_FAILED'),
+          );
           this.loadingReceived.set(false);
         },
       });
@@ -84,11 +117,47 @@ export class MyFamilyAccessComponent implements OnInit {
   }
 
   grantAccess(): void {
-    if (!this.form.proxyUsername || !this.form.relationship) {
-      this.toast.error(this.translate.instant('PORTAL.FAMILY.REQUIRED_FIELDS'));
+    // QA D1281: only the blank fields are named and marked (the static
+    // "username and relationship are required" showed with the username typed).
+    const blank = blankFields(
+      {
+        [GRANT_USERNAME_ID]: this.form.proxyUsername,
+        [GRANT_RELATIONSHIP_ID]: this.form.relationship,
+      },
+      GRANT_FIELDS,
+    );
+    if (blank.length > 0) {
+      refuseFields(
+        this.host.nativeElement,
+        blank,
+        GRANT_FIELDS,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
+      const labels = blank.map((id) =>
+        this.translate.instant(
+          id === GRANT_USERNAME_ID ? 'PORTAL.FAMILY.USERNAME' : 'PORTAL.FAMILY.RELATIONSHIP',
+        ),
+      );
+      this.toast.error(
+        this.translate.instant('COMMON.MISSING_REQUIRED_FIELDS', { fields: labels.join(', ') }),
+      );
       return;
     }
-    this.form.expiresAt = this.expiresOn ? `${this.expiresOn}T23:59:59` : undefined;
+    // QA D1464: `min` only limits the calendar; a typed past date reached the server,
+    // which then answered "access granted" for a grant born expired.
+    if (this.expiresOn && this.expiresOn < this.minExpiry) {
+      const message = this.translate.instant('PORTAL.FAMILY.EXPIRY_IN_PAST');
+      refuseFields(this.host.nativeElement, [EXPIRES_FIELD], [EXPIRES_FIELD], message);
+      this.toast.error(message);
+      return;
+    }
+    // #948 review: the end of the reader's day, on the server's UTC clock
+    // that the expiry is checked against (and that the list reads back
+    // through serverTime). Sent as the wall clock, the grant lasted hours too
+    // long or too short and was listed under the next day east of UTC.
+    this.form.expiresAt = this.expiresOn
+      ? toServerDateTime(`${this.expiresOn}T23:59:59`)
+      : undefined;
     this.granting.set(true);
     this.portalService.grantProxy(this.form).subscribe({
       next: (proxy) => {
@@ -99,20 +168,54 @@ export class MyFamilyAccessComponent implements OnInit {
         this.granting.set(false);
         this.toast.success(this.translate.instant('PORTAL.FAMILY.ACCESS_GRANTED'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.granting.set(false);
-        this.toast.error(this.translate.instant('PORTAL.FAMILY.GRANT_FAILED'));
+        this.toast.error(this.grantFailureMessage(err));
       },
     });
   }
 
+  /**
+   * QA D893: a refused grant says what the patient can fix. The server's own
+   * message (already in the reader's language: unknown username, yourself,
+   * already granted) for a 4xx; an unknown username without one still names
+   * the problem; anything else stays the generic failure.
+   */
+  private grantFailureMessage(err: unknown): string {
+    const status = (err as { status?: number } | null)?.status ?? 0;
+    const message = (err as { error?: { message?: unknown } } | null)?.error?.message;
+    if (status >= 400 && status < 500 && typeof message === 'string' && message.trim()) {
+      return message;
+    }
+    return this.translate.instant(
+      status === 404 ? 'PORTAL.FAMILY.USER_NOT_FOUND' : 'PORTAL.FAMILY.GRANT_FAILED',
+    );
+  }
+
+  /** QA D1197: the access being revoked, awaiting the confirmation. */
+  revoking = signal<ProxyResponse | null>(null);
+  revokeBusy = signal(false);
+
+  askRevoke(proxy: ProxyResponse): void {
+    this.revoking.set(proxy);
+  }
+
   revokeAccess(proxyId: string): void {
+    if (this.revokeBusy()) return;
+    this.revokeBusy.set(true);
     this.portalService.revokeProxy(proxyId).subscribe({
       next: () => {
+        this.revokeBusy.set(false);
+        this.revoking.set(null);
         this.proxies.update((list) => list.filter((p) => p.id !== proxyId));
         this.toast.success(this.translate.instant('PORTAL.FAMILY.ACCESS_REVOKED'));
       },
-      error: () => this.toast.error(this.translate.instant('PORTAL.FAMILY.REVOKE_FAILED')),
+      error: (err: unknown) => {
+        this.revokeBusy.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.FAMILY.REVOKE_FAILED'),
+        );
+      },
     });
   }
 }

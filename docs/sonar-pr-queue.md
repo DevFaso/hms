@@ -170,5 +170,6 @@ commit bodies:
   Landed on `develop` via PR #299.
 - [docs/copilot-review.md](./copilot-review.md) — raw export of the
   SonarCloud snapshot this campaign is working against
-- [.github/workflows/build.yml](../.github/workflows/build.yml) — the CI
-  workflow that runs SonarCloud on every push / PR
+- [.github/workflows/project-quality.yml](../.github/workflows/project-quality.yml)
+  — the `sonar-analysis` job runs SonarCloud on every push / PR, fed by
+  the backend job's JaCoCo report (the suite runs once)

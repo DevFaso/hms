@@ -36,14 +36,34 @@ import java.util.UUID;
  * @param patientWeightKg          most recent recorded weight in kg, when
  *                                 available (may be null — pediatric rule
  *                                 then degrades to advisory)
- * @param activePrescriptions      the patient's currently-active
- *                                 prescriptions, hospital-scoped, used by
- *                                 the duplicate-order and DDI rules
+ * @param activePrescriptions      the patient's other orders, hospital-scoped:
+ *                                 in force or proposed (QA D1523), read ONLY by
+ *                                 the duplicate-order and DDI rules, never by an
+ *                                 exposure total or a dose limit
  * @param activePrescriptionRxnorms RxNorm codes already resolved for the
  *                                 active prescriptions (parallel to
  *                                 activePrescriptions order, with nulls
  *                                 where a prescription could not be
  *                                 mapped to a catalog item)
+ * @param proposedFrequency        round 18 (QA D935): the order's free-text
+ *                                 frequency, read by the paediatric daily
+ *                                 checks (may be null)
+ * @param proposedDoseUnits        round 18: the dose as a count of units
+ *                                 (tablets) when it is written that way
+ *                                 ("2 cp"), for weight-band drugs (may be null)
+ * @param patientWeightRecordedAt  round 18: when {@code patientWeightKg} was
+ *                                 recorded; an older weight is flagged (may
+ *                                 be null when unknown)
+ * @param proposedPrnDosesPerDay   QA D1397: the most doses a day an as-needed
+ *                                 order allows, from its minimum interval
+ *                                 (24 / interval); {@code null} for any other
+ * @param paracetamolFacts         what the adult paracetamol check reads beyond
+ *                                 the order; {@link ParacetamolFacts#NONE} for
+ *                                 another drug or a child
+ * @param proposedRoute            CR-01: the route and formulation of THIS order, never
+ *                                 null and never the catalogue item's route standing in
+ *                                 for it; {@link OrderedRoute#NOT_STATED} when none was
+ *                                 given, which a dose rule reads as "cannot assess"
  */
 public record CdsRuleContext(
     Patient patient,
@@ -55,11 +75,76 @@ public record CdsRuleContext(
     MedicationCatalogItem proposedCatalogItem,
     Double patientWeightKg,
     List<Prescription> activePrescriptions,
-    List<String> activePrescriptionRxnorms
+    List<String> activePrescriptionRxnorms,
+    String proposedFrequency,
+    Double proposedDoseUnits,
+    java.time.LocalDateTime patientWeightRecordedAt,
+    Double proposedPrnDosesPerDay,
+    ParacetamolFacts paracetamolFacts,
+    OrderedRoute proposedRoute
 ) {
+
+    /** A context with no route: {@link OrderedRoute#NOT_STATED}, so no route-bound limit is judged. */
+    public CdsRuleContext(Patient patient, UUID hospitalId, String proposedMedicationName,
+                          String proposedMedicationCode, String proposedRxnormCode, Double proposedDoseMg,
+                          MedicationCatalogItem proposedCatalogItem, Double patientWeightKg,
+                          List<Prescription> activePrescriptions, List<String> activePrescriptionRxnorms,
+                          String proposedFrequency, Double proposedDoseUnits,
+                          java.time.LocalDateTime patientWeightRecordedAt, Double proposedPrnDosesPerDay,
+                          ParacetamolFacts paracetamolFacts) {
+        this(patient, hospitalId, proposedMedicationName, proposedMedicationCode, proposedRxnormCode,
+            proposedDoseMg, proposedCatalogItem, patientWeightKg, activePrescriptions,
+            activePrescriptionRxnorms, proposedFrequency, proposedDoseUnits, patientWeightRecordedAt,
+            proposedPrnDosesPerDay, paracetamolFacts, OrderedRoute.NOT_STATED);
+    }
+
+    /** This context for an order written with this route and formulation. */
+    public CdsRuleContext withRoute(String route, String formulation) {
+        return new CdsRuleContext(patient, hospitalId, proposedMedicationName, proposedMedicationCode,
+            proposedRxnormCode, proposedDoseMg, proposedCatalogItem, patientWeightKg, activePrescriptions,
+            activePrescriptionRxnorms, proposedFrequency, proposedDoseUnits, patientWeightRecordedAt,
+            proposedPrnDosesPerDay, paracetamolFacts, OrderedRoute.of(route, formulation));
+    }
+
+    /** The context of an order the adult paracetamol check does not read. */
+    public CdsRuleContext(Patient patient, UUID hospitalId, String proposedMedicationName,
+                          String proposedMedicationCode, String proposedRxnormCode, Double proposedDoseMg,
+                          MedicationCatalogItem proposedCatalogItem, Double patientWeightKg,
+                          List<Prescription> activePrescriptions, List<String> activePrescriptionRxnorms,
+                          String proposedFrequency, Double proposedDoseUnits,
+                          java.time.LocalDateTime patientWeightRecordedAt, Double proposedPrnDosesPerDay) {
+        this(patient, hospitalId, proposedMedicationName, proposedMedicationCode, proposedRxnormCode,
+            proposedDoseMg, proposedCatalogItem, patientWeightKg, activePrescriptions,
+            activePrescriptionRxnorms, proposedFrequency, proposedDoseUnits, patientWeightRecordedAt,
+            proposedPrnDosesPerDay, ParacetamolFacts.NONE);
+    }
+
+    /** The context of an order with no as-needed interval. */
+    public CdsRuleContext(Patient patient, UUID hospitalId, String proposedMedicationName,
+                          String proposedMedicationCode, String proposedRxnormCode, Double proposedDoseMg,
+                          MedicationCatalogItem proposedCatalogItem, Double patientWeightKg,
+                          List<Prescription> activePrescriptions, List<String> activePrescriptionRxnorms,
+                          String proposedFrequency, Double proposedDoseUnits,
+                          java.time.LocalDateTime patientWeightRecordedAt) {
+        this(patient, hospitalId, proposedMedicationName, proposedMedicationCode, proposedRxnormCode,
+            proposedDoseMg, proposedCatalogItem, patientWeightKg, activePrescriptions,
+            activePrescriptionRxnorms, proposedFrequency, proposedDoseUnits, patientWeightRecordedAt, null);
+    }
+
+    /** The context without frequency, unit count or weight date (rules and callers before round 18). */
+    public CdsRuleContext(Patient patient, UUID hospitalId, String proposedMedicationName,
+                          String proposedMedicationCode, String proposedRxnormCode, Double proposedDoseMg,
+                          MedicationCatalogItem proposedCatalogItem, Double patientWeightKg,
+                          List<Prescription> activePrescriptions, List<String> activePrescriptionRxnorms) {
+        this(patient, hospitalId, proposedMedicationName, proposedMedicationCode, proposedRxnormCode,
+            proposedDoseMg, proposedCatalogItem, patientWeightKg, activePrescriptions,
+            activePrescriptionRxnorms, null, null, null);
+    }
 
     /** Defensive copy + null guards to keep the record fully immutable. */
     public CdsRuleContext {
+        paracetamolFacts = paracetamolFacts == null ? ParacetamolFacts.NONE : paracetamolFacts;
+        proposedRoute = proposedRoute == null ? OrderedRoute.NOT_STATED : proposedRoute;
         activePrescriptions = activePrescriptions == null
             ? List.of() : List.copyOf(activePrescriptions);
         activePrescriptionRxnorms = activePrescriptionRxnorms == null

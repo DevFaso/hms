@@ -171,7 +171,8 @@ class LabResultControllerTest {
     @Test
     void getAllLabResults_preAuthorize_includesSuperAdmin() throws Exception {
         List<String> roles = extractRolesFromMethod("getAllLabResults",
-                Pageable.class, Locale.class);
+                Pageable.class, java.util.UUID.class, java.util.UUID.class, Locale.class,
+                org.springframework.security.core.Authentication.class);
         assertThat(roles).contains("SUPER_ADMIN");
     }
 
@@ -179,8 +180,9 @@ class LabResultControllerTest {
 
     @Test
     void releaseLabResult_preAuthorize_excludesLabTechnician() throws Exception {
+        // QA D1092: the endpoint also takes ungradedConfirmed.
         List<String> roles = extractRolesFromMethod("releaseLabResult",
-                UUID.class, Locale.class);
+                UUID.class, boolean.class, boolean.class, Locale.class);
         assertThat(roles).isNotEmpty()
                 .doesNotContain("LAB_TECHNICIAN");
     }

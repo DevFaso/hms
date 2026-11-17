@@ -69,6 +69,7 @@ Under **Variables**, add:
 | `KC_DB_USERNAME` | `${{hms-keycloak-<env>-db.PGUSER}}` | |
 | `KC_DB_PASSWORD` | `${{hms-keycloak-<env>-db.PGPASSWORD}}` | |
 | `KC_HOSTNAME` | `https://hms-keycloak-<env>.up.railway.app` | **Must include the `https://` scheme.** A bare hostname (no scheme) causes the account console to return HTTP 403 — Keycloak's URL builder gets ambiguous about the scheme behind Railway's edge proxy. No trailing slash. Must match the public domain exactly. |
+| `KC_BOOTSTRAP_ADMIN` | `true` on first boot only | **Opt-in flag.** The entrypoint runs `kc.sh bootstrap-admin user` only when this is `true` AND both credentials below are set. Unset it once the admin exists — the subcommand boots a second JVM and was intermittently SIGKILLed (rc=137) on prod, failing deploys (2026-10-09, 2026-10-13). |
 | `KC_BOOTSTRAP_ADMIN_USERNAME` | `kc-admin` (or your convention) | Used once on first boot. |
 | `KC_BOOTSTRAP_ADMIN_PASSWORD` | (generate 32 random bytes, base64) | **Rotate within 24 h** via the admin console. |
 | `KC_LOG_LEVEL` | `INFO` (`DEBUG` only for `dev` while troubleshooting) | Don't leave `DEBUG` on in prod. |
@@ -98,9 +99,10 @@ confirm the JSON comes back.
    bootstrap admin account. Remove `KC_BOOTSTRAP_ADMIN_USERNAME` and
    `KC_BOOTSTRAP_ADMIN_PASSWORD` from the Railway service — the
    container entrypoint runs `kc.sh bootstrap-admin user` on every
-   boot when both vars are set (idempotent: a no-op once an admin
-   exists), so removing them is what turns the bootstrap step into a
-   true no-op and avoids leaving the bootstrap credential standing on
+   boot when `KC_BOOTSTRAP_ADMIN=true` and both vars are set (since
+   2026-10 the step is opt-in; without the flag it is skipped even if
+   the credentials remain), so removing the flag and the credentials
+   is what turns the bootstrap step into a true no-op and avoids leaving the bootstrap credential standing on
    Railway. (Earlier revisions of this README claimed the env vars
    were "dead weight afterwards" because Keycloak reads them only on
    first boot; that was true under the old `--bootstrap-admin-*`
@@ -172,6 +174,18 @@ Rotate the admin account password every 90 days or after any credential
 exposure. `KC_DB_PASSWORD` rotates with the linked Postgres service —
 use Railway's built-in rotation; Keycloak reads the value on boot so a
 restart is required after rotating.
+
+### Restart policy
+
+`railway.toml` sets `restartPolicyType = "always"` for every
+`hms-keycloak-{env}` service. It used to be `on_failure` with
+`restartPolicyMaxRetries = 3`: after a fourth crash (an out-of-memory kill,
+a Postgres blip during boot) Railway stopped restarting it and every sign-in
+failed until someone redeployed by hand (D16). With `always`, Railway keeps
+restarting it; a crash loop is visible in the deploy logs and the
+`/realms/master/` healthcheck, and must be fixed at its cause rather than by
+capping retries. `RailwayConfigTest` in hospital-core fails if the cap comes
+back.
 
 ### Scaling
 

@@ -50,7 +50,9 @@ import static org.mockito.Mockito.when;
 import com.example.hms.i18n.TestMessageSources;
 import com.example.hms.service.i18n.PatientLocaleResolver;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class PrenatalSchedulingServiceImplTest {
 
@@ -64,10 +66,18 @@ class PrenatalSchedulingServiceImplTest {
     private StaffRepository staffRepository;
     @Mock
     private AppointmentService appointmentService;
-    @Mock
-    private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS)
+    private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock
     private PatientLocaleResolver patientLocaleResolver;
+    @Mock
+    private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+    @Mock
+    private com.example.hms.repository.LaborEpisodeRepository laborEpisodeRepository;
+    @Mock
+    private com.example.hms.repository.MaternalHistoryRepository maternalHistoryRepository;
+    @Mock
+    private com.example.hms.repository.HighRiskPregnancyCarePlanRepository carePlanRepository;
 
     private PrenatalSchedulingServiceImpl service;
     private static final String SCHEDULER_USERNAME = "scheduler";
@@ -90,7 +100,10 @@ class PrenatalSchedulingServiceImplTest {
             notificationService,
             fixedClock,
             TestMessageSources.bundles(),
-            patientLocaleResolver
+            deliveryRecordRepository,
+            laborEpisodeRepository,
+            maternalHistoryRepository,
+            carePlanRepository
         );
         // The patient in these fixtures states no language: the resolver
         // answers the fallback, which is what production does too.
@@ -142,6 +155,30 @@ class PrenatalSchedulingServiceImplTest {
         HospitalContextHolder.clear();
     }
 
+    /** RCPT-CLIN: the box does not count for the desk, so neither the alert nor the cadence says it. */
+    @Test
+    void theHighRiskBoxDoesNotCountForTheDesk() {
+        LocalDate lmp = LocalDate.of(2023, 9, 4); // 30 weeks on fixed clock date
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId)).thenReturn(List.of());
+        PrenatalScheduleRequestDTO ticked = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).lastMenstrualPeriodDate(lmp).highRisk(true).build();
+        PrenatalScheduleRequestDTO unticked = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).lastMenstrualPeriodDate(lmp).highRisk(false).build();
+        PrenatalScheduleResponseDTO asNobody = service.generateSchedule(unticked, Locale.US, SCHEDULER_USERNAME);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.TestingAuthenticationToken("desk", "p", "ROLE_RECEPTIONIST"));
+        try {
+            PrenatalScheduleResponseDTO desk = service.generateSchedule(ticked, Locale.US, SCHEDULER_USERNAME);
+            assertThat(desk.getAlerts()).noneSatisfy(alert -> assertThat(alert).contains("High-risk"));
+            assertThat(desk.getCurrentGestationalWeek()).isEqualTo(asNobody.getCurrentGestationalWeek());
+            assertThat(desk.getRecommendations()).hasSameSizeAs(asNobody.getRecommendations());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
     @Test
     void generateScheduleHighRiskProducesWeeklyVisitsAfterTwentyEightWeeks() {
         LocalDate lmp = LocalDate.of(2023, 9, 4); // 30 weeks on fixed clock date
@@ -159,7 +196,7 @@ class PrenatalSchedulingServiceImplTest {
         existing.setId(UUID.randomUUID());
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId))
             .thenReturn(List.of(existing));
 
@@ -172,7 +209,7 @@ class PrenatalSchedulingServiceImplTest {
 
     PrenatalScheduleResponseDTO response = service.generateSchedule(request, Locale.US, SCHEDULER_USERNAME);
 
-    assertThat(response.isHighRisk()).isTrue();
+    assertThat(response.getHighRisk()).isTrue();
     assertThat(response.getAlerts()).anySatisfy(alert -> assertThat(alert).contains("High-risk"));
 
         List<Integer> weeks = response.getRecommendations().stream()
@@ -192,6 +229,135 @@ class PrenatalSchedulingServiceImplTest {
 
         assertThat(response.getRecommendations())
             .anySatisfy(rec -> assertThat(rec.isScheduled()).isTrue());
+    }
+
+    /** QA D519: a GP visit and a cancelled prenatal appointment are not antenatal visits. */
+    @Test
+    void generateScheduleIgnoresGpAndCancelledAppointments() {
+        LocalDate lmp = LocalDate.of(2023, 9, 4);
+        Appointment gp = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Médecine générale").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2024, 4, 8)).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(9, 30))
+            .status(AppointmentStatus.SCHEDULED).reason("Consultation").build();
+        gp.setId(UUID.randomUUID());
+        Appointment cancelled = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Maternité").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2024, 4, 15)).startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(10, 30))
+            .status(AppointmentStatus.CANCELLED).reason("Consultation prénatale").build();
+        cancelled.setId(UUID.randomUUID());
+        Appointment prenatal = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Maternité").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2024, 4, 22)).startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(10, 30))
+            .status(AppointmentStatus.SCHEDULED).reason("CPN").build();
+        prenatal.setId(UUID.randomUUID());
+        // QA D1031: two antenatal contacts already held (and a GP visit, not one).
+        Appointment held1 = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Maternité").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2023, 11, 20)).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(9, 45))
+            .status(AppointmentStatus.COMPLETED).reason("CPN").build();
+        held1.setId(UUID.randomUUID());
+        Appointment held2 = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Maternité").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2024, 1, 15)).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(9, 30))
+            .status(AppointmentStatus.COMPLETED).reason("CPN").build();
+        held2.setId(UUID.randomUUID());
+        Appointment gpHeld = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Médecine générale").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2024, 2, 5)).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(9, 30))
+            .status(AppointmentStatus.COMPLETED).reason("Consultation").build();
+        gpHeld.setId(UUID.randomUUID());
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId))
+            .thenReturn(List.of(gp, cancelled, prenatal, held1, held2, gpHeld));
+
+        PrenatalScheduleResponseDTO response = service.generateSchedule(PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).lastMenstrualPeriodDate(lmp).build(), Locale.US, SCHEDULER_USERNAME);
+
+        assertThat(response.getExistingAppointments())
+            .extracting(com.example.hms.payload.dto.prenatal.PrenatalAppointmentSummaryDTO::getAppointmentId)
+            .containsExactly(prenatal.getId());
+        assertThat(response.getCompletedContacts()).isEqualTo(2);
+        assertThat(response.getRecommendations())
+            .filteredOn(PrenatalVisitRecommendationDTO::isScheduled)
+            .extracting(PrenatalVisitRecommendationDTO::getAppointmentId)
+            .containsExactly(prenatal.getId());
+    }
+
+    /** QA D519: a midwife's appointment counts even with no reason or maternity department. */
+    @Test
+    void aMidwifeAppointmentCountsAsAPrenatalVisit() {
+        com.example.hms.model.Staff midwife = new com.example.hms.model.Staff();
+        midwife.setJobTitle(com.example.hms.enums.JobTitle.MIDWIFE);
+        Appointment appt = Appointment.builder().staff(midwife)
+            .appointmentDate(LocalDate.of(2024, 4, 22)).status(AppointmentStatus.CONFIRMED).build();
+        assertThat(PrenatalSchedulingServiceImpl.countsAsPrenatalVisit(appt)).isTrue();
+        appt.setStatus(AppointmentStatus.NO_SHOW);
+        assertThat(PrenatalSchedulingServiceImpl.countsAsPrenatalVisit(appt)).isFalse();
+    }
+
+    @Test
+    void generateScheduleNeverRecommendsAPastTargetOrAnInvertedWindow() {
+        // QA D47: on a Sunday, LMP + whole weeks lands on the previous Monday;
+        // the first visit's target was six days ago and its window ran from
+        // today back to three days ago.
+        LocalDate sunday = LocalDate.of(2024, 4, 7);
+        PrenatalSchedulingServiceImpl sundayService = new PrenatalSchedulingServiceImpl(
+            appointmentRepository, patientRepository, hospitalRepository, staffRepository,
+            appointmentService, notificationService,
+            Clock.fixed(Instant.parse("2024-04-07T10:00:00Z"), ZoneId.of("UTC")),
+            TestMessageSources.bundles(), deliveryRecordRepository, laborEpisodeRepository,
+            maternalHistoryRepository, carePlanRepository);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId)).thenReturn(List.of());
+
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(LocalDate.of(2024, 1, 1))
+            .supplementalVisitWeeks(List.of(6, 14))
+            .build();
+
+        PrenatalScheduleResponseDTO response = sundayService.generateSchedule(request, Locale.US, SCHEDULER_USERNAME);
+
+        assertThat(response.getRecommendations()).isNotEmpty().allSatisfy(rec -> {
+            assertThat(rec.getTargetDate()).isAfterOrEqualTo(sunday);
+            assertThat(rec.getWindowStart()).isAfterOrEqualTo(sunday);
+            assertThat(rec.getWindowStart()).isBeforeOrEqualTo(rec.getTargetDate());
+            assertThat(rec.getWindowEnd()).isAfterOrEqualTo(rec.getTargetDate());
+        });
+        PrenatalVisitRecommendationDTO first = response.getRecommendations().get(0);
+        assertThat(first.getTargetDate()).isEqualTo(LocalDate.of(2024, 4, 8));
+        // Week 6 is behind this pregnancy; week 14 is still ahead.
+        assertThat(response.getRecommendations())
+            .extracting(PrenatalVisitRecommendationDTO::getGestationalWeek)
+            .doesNotContain(6)
+            .contains(14);
+    }
+
+    @Test
+    void generateScheduleRefusesAPatientRecordedAsMale() {
+        // QA D46: obstetric records were accepted for a MALE patient.
+        patient.setGender("MALE");
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(LocalDate.of(2024, 1, 1))
+            .build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.generateSchedule(request, Locale.US, SCHEDULER_USERNAME))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.mockito.Mockito.verifyNoInteractions(appointmentRepository);
     }
 
     @Test
@@ -246,6 +412,76 @@ class PrenatalSchedulingServiceImplTest {
         AppointmentRequestDTO dto = captor.getValue();
         assertThat(dto.getStartTime()).isEqualTo(LocalTime.of(11, 0));
         assertThat(dto.getEndTime()).isEqualTo(LocalTime.of(11, 20));
+        // QA D977 class: a moved visit is booked at its new time (SCHEDULED), as the
+        // desk and portal reschedules land it; RESCHEDULED is a superseded booking.
+        assertThat(dto.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+        assertThat(dto.getNotes()).contains("Patient requested later morning slot");
+    }
+
+    @Test
+    void reviewRound14_aMovedTentativeVisitStaysTentative() {
+        assertThat(PrenatalSchedulingServiceImpl.rescheduledStatus(AppointmentStatus.PENDING))
+            .isEqualTo(AppointmentStatus.PENDING);
+        assertThat(PrenatalSchedulingServiceImpl.rescheduledStatus(AppointmentStatus.CONFIRMED))
+            .isEqualTo(AppointmentStatus.SCHEDULED);
+        assertThat(PrenatalSchedulingServiceImpl.rescheduledStatus(AppointmentStatus.NO_SHOW))
+            .isEqualTo(AppointmentStatus.RESCHEDULED);
+    }
+
+    @Test
+    void d977_reschedulePrenatalAppointmentDelegatesToAppointmentService_fromAMissedVisit() {
+        UUID appointmentId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = Staff.builder()
+            .hospital(hospital)
+            .build();
+        staff.setId(staffId);
+
+        Department department = Department.builder()
+            .name("OB")
+            .hospital(hospital)
+            .build();
+
+        Appointment appointment = Appointment.builder()
+            .patient(patient)
+            .staff(staff)
+            .hospital(hospital)
+            .department(department)
+            .appointmentDate(LocalDate.of(2024, 4, 2))
+            .startTime(LocalTime.of(9, 0))
+            .endTime(LocalTime.of(9, 30))
+            .status(AppointmentStatus.NO_SHOW)
+            .reason(PRENATAL_REASON)
+            .build();
+        appointment.setId(appointmentId);
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        AppointmentResponseDTO mockedResponse = AppointmentResponseDTO.builder().id(appointmentId).build();
+        when(appointmentService.updateAppointment(any(UUID.class), any(AppointmentRequestDTO.class), any(Locale.class), any(String.class)))
+            .thenReturn(mockedResponse);
+
+        PrenatalRescheduleRequestDTO request = PrenatalRescheduleRequestDTO.builder()
+            .appointmentId(appointmentId)
+            .newAppointmentDate(LocalDate.of(2024, 4, 10))
+            .newStartTime(LocalTime.of(11, 0))
+            .durationMinutes(20)
+            .newStaffId(staffId)
+            .notes("Patient requested later morning slot")
+            .build();
+
+    AppointmentResponseDTO response = service.reschedulePrenatalAppointment(request, Locale.US, SCHEDULER_USERNAME);
+        assertThat(response).isSameAs(mockedResponse);
+
+    ArgumentCaptor<AppointmentRequestDTO> captor = ArgumentCaptor.forClass(AppointmentRequestDTO.class);
+    verify(appointmentService).updateAppointment(eq(appointmentId), captor.capture(), any(Locale.class), any(String.class));
+
+        AppointmentRequestDTO dto = captor.getValue();
+        assertThat(dto.getStartTime()).isEqualTo(LocalTime.of(11, 0));
+        assertThat(dto.getEndTime()).isEqualTo(LocalTime.of(11, 20));
+        // QA D977 class: a moved visit is booked at its new time (SCHEDULED), as the
+        // desk and portal reschedules land it; RESCHEDULED is a superseded booking.
         assertThat(dto.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
         assertThat(dto.getNotes()).contains("Patient requested later morning slot");
     }
@@ -273,7 +509,7 @@ class PrenatalSchedulingServiceImplTest {
 
     service.createReminder(request, Locale.US, SCHEDULER_USERNAME);
 
-    verify(notificationService).createNotification(any(String.class), eq(patient.getUser().getUsername()));
+    verify(notificationService).created(any(String.class), eq(patient.getUser().getUsername()), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -300,5 +536,106 @@ class PrenatalSchedulingServiceImplTest {
         assertThatThrownBy(() -> service.createReminder(request, Locale.US, SCHEDULER_USERNAME))
             .isInstanceOf(RuntimeException.class)
             .hasMessageContaining("Cannot create reminders for appointments in the past");
+    }
+
+    // ── QA D164 ───────────────────────────────────────────────────────────
+
+    @Test
+    void anLmpNinetyThreeWeeksAgoIsRefused() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(LocalDate.of(2024, 4, 1).minusWeeks(93))
+            .build();
+
+        assertThatThrownBy(() -> service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("prenatal.lmp.implausible"));
+    }
+
+    @Test
+    void noAntenatalPlanAfterTheDeliveryOfThatPregnancy() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        LocalDate lmp = LocalDate.of(2024, 4, 1).minusWeeks(41);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(patientId, lmp.atStartOfDay()))
+            .thenReturn(true);
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(lmp)
+            .build();
+
+        assertThatThrownBy(() -> service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("prenatal.pregnancy.delivered"));
+    }
+
+    /**
+     * QA D796, the exact round-12 step: A3 is in labour (an episode is open)
+     * and the Prénatal tab asks for a calendar with an LMP 14 weeks ago. It
+     * was planned at week 14 with no alert; it is refused now.
+     */
+    @Test
+    void noAntenatalPlanWhileThePatientIsInLabour() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(laborEpisodeRepository.existsByPatient_IdAndStatus(patientId, com.example.hms.enums.LaborStatus.ACTIVE))
+            .thenReturn(true);
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(LocalDate.of(2024, 4, 1).minusWeeks(14))
+            .build();
+
+        assertThatThrownBy(() -> service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("prenatal.pregnancy.inLabour"));
+        verify(appointmentRepository, never()).findByHospital_IdAndPatient_Id(any(), any());
+    }
+
+    /* ── QA D249: schedule recommendations in the caller's language ─────── */
+
+    @Test
+    void generateScheduleRendersRecommendationsAndAlertsInFrench() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId)).thenReturn(List.of());
+
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(LocalDate.of(2023, 9, 4))
+            .highRisk(true)
+            .build();
+
+        PrenatalScheduleResponseDTO response = service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME);
+
+        assertThat(response.getRecommendations()).isNotEmpty().allSatisfy(rec -> {
+            assertThat(rec.getRecommendation()).contains("semaine").doesNotContain("week");
+            assertThat(rec.getNotes()).doesNotContain("Monitor").doesNotContain("Standard");
+        });
+        assertThat(response.getAlerts()).anySatisfy(alert -> assertThat(alert).startsWith("Grossesse à haut risque"));
+    }
+
+    /** QA D1465: a due date before the LMP, beside a gestational age of 21 weeks. */
+    @Test
+    void aDueDateThatContradictsTheLmpIsRefusedOnTheField() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        // 21 weeks on the fixed clock date.
+        LocalDate lmp = LocalDate.of(2024, 4, 1).minusWeeks(21);
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(lmp).estimatedDueDate(lmp.minusMonths(5)).build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.generateSchedule(request, Locale.US, SCHEDULER_USERNAME))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> org.assertj.core.api.Assertions.assertThat(ex.getField()).isEqualTo("estimatedDueDate"));
     }
 }

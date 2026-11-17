@@ -122,7 +122,7 @@ class TransferServiceImplTest {
         admission.setStatus(AdmissionStatus.ACTIVE);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
         when(bedRepository.findByIdAndWard_Hospital_Id(any(), any()))
             .thenAnswer(i -> Optional.of(destinationBed));
@@ -178,6 +178,34 @@ class TransferServiceImplTest {
 
     // ── Ordering ────────────────────────────────────────────────────────
 
+    /** QA D609: NURSE_A transfers a 6-year-old girl to maternity bed MATA/M1 — refused at order time. */
+    @Test
+    void d609_requestTransfer_toAMaternityBedForAChild_isRefusedAndReservesNothing() {
+        patient.setGender("FEMALE");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(6));
+
+        assertThatThrownBy(() -> service.requestTransfer(base().build()))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(
+                ((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.ward.maternityMismatch"))
+            // QA D1366 class (added assertion): named on the destination picker.
+            .hasFieldOrPropertyWithValue("field", "toBedId");
+        verify(bedAssignmentService, never()).reserveBed(any(), any());
+        verify(transferOrderRepository, never()).save(any());
+    }
+
+    /** QA D609 path re-verified: an adult woman may still be transferred to the maternity bed. */
+    @Test
+    void d609_requestTransfer_toAMaternityBedForAnAdultWoman_stillReserves() {
+        patient.setGender("FEMALE");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(28));
+
+        service.requestTransfer(base().build());
+
+        verify(bedAssignmentService).reserveBed(destinationBed.getId(), hospitalId);
+    }
+
+
     @Test
     void orderingATransferHoldsTheDestinationBed() {
         TransferOrderResponseDTO result = service.requestTransfer(base().build());
@@ -215,7 +243,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reason is required");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.reasonRequired"));
         verify(bedAssignmentService, never()).reserveBed(any(), any());
     }
 
@@ -227,7 +255,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already has a transfer");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.alreadyPending"));
         verify(bedAssignmentService, never()).reserveBed(any(), any());
     }
 
@@ -240,7 +268,9 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already on its way");
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("transfer.r7.destinationTaken"))
+            // QA D1366 class (added assertion): named on the destination picker.
+            .hasFieldOrPropertyWithValue("field", "toBedId");
     }
 
     @Test
@@ -251,7 +281,10 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already in that bed");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.alreadyInBed"))
+            // QA D1352 (round 30): on the destination bed the form offers.
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "toBedId");
     }
 
     @Test
@@ -261,7 +294,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not holding a bed");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.noBedHeld"));
     }
 
     // ── The isolation interlock ─────────────────────────────────────────
@@ -275,12 +308,11 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("airborne precautions")
-            // The refusal must NAME the bed. Asserting only on the prose let a
-            // precedence bug through: .formatted binds tighter than +, so it
-            // applied to the second literal and the clinician was refused with
-            // a raw "%s" where the bed should have been.
-            .hasMessageContaining(BedAssignmentService.bedLabel(destinationBed))
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("transfer.r7.isolationRequired"))
+            // The refusal must NAME the bed: it travels as the message argument
+            // (QA D424), so the bundle in the reader's language places it.
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getArgs())
+                .containsExactly(BedAssignmentService.bedLabel(destinationBed)))
             .hasMessageNotContaining("%s");
         // A refused order must not strand the bed it was going to use.
         verify(bedAssignmentService, never()).reserveBed(any(), any());
@@ -348,7 +380,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("needs a reason");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.overrideReasonRequired"));
     }
 
     // ── Completion ──────────────────────────────────────────────────────
@@ -378,7 +410,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.completeTransfer(orderId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no longer waiting");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.notPending"));
     }
 
     // ── Cancellation ────────────────────────────────────────────────────
@@ -398,6 +430,27 @@ class TransferServiceImplTest {
     }
 
     @Test
+    void cancellingInAColleaguesNameIsRefusedAndKeepsTheBed_D503() {
+        TransferOrder order = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        com.example.hms.model.Staff colleague = new com.example.hms.model.Staff();
+        colleague.setId(UUID.randomUUID());
+        colleague.setHospital(order.getHospital());
+        com.example.hms.model.User colleagueUser = new com.example.hms.model.User();
+        colleagueUser.setId(UUID.randomUUID());
+        colleague.setUser(colleagueUser);
+        when(staffRepository.findById(colleague.getId())).thenReturn(Optional.of(colleague));
+        UUID orderId = order.getId();
+        TransferCancellationRequestDTO request = TransferCancellationRequestDTO.builder()
+            .cancellationReason("Patient improved").cancelledByStaffId(colleague.getId()).build();
+
+        assertThatThrownBy(() -> service.cancelTransfer(orderId, request))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isNotEqualTo(TransferOrderStatus.CANCELLED);
+        verify(bedAssignmentService, never()).releaseReservation(any());
+    }
+
+    @Test
     void cancellingNeedsAReasonBecauseTheBedWasHeldOutOfCirculation() {
         TransferOrder order = pendingOrder(destinationBed);
         when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
@@ -407,7 +460,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.cancelTransfer(orderId, blank))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reason is required");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.heldBedReasonRequired"));
         verify(bedAssignmentService, never()).releaseReservation(any());
     }
 
@@ -422,7 +475,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.cancelTransfer(orderId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no longer waiting");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.notPending"));
     }
 
     // ── Reads and tenancy ───────────────────────────────────────────────
@@ -482,7 +535,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital is required");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.hospitalRequired"));
     }
 
     @Test
@@ -497,5 +550,69 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ── QA D713: the server records who requested and who completed ──────
+
+    private Staff signInAsStaffHere() {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(UUID.randomUUID());
+        Staff me = new Staff();
+        me.setId(UUID.randomUUID());
+        me.setHospital(hospital);
+        me.setUser(user);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, List.of()));
+        when(staffRepository.findByUserIdAndHospitalId(user.getId(), hospitalId)).thenReturn(Optional.of(me));
+        return me;
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSession() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void d713_aTransferOrderedFromTheBedBoardRecordsTheCallerAsRequester() {
+        // bed-board.ts sends no requestedByStaffId: the row was anonymous.
+        Staff me = signInAsStaffHere();
+
+        service.requestTransfer(base().build());
+
+        org.mockito.ArgumentCaptor<TransferOrder> saved = org.mockito.ArgumentCaptor.forClass(TransferOrder.class);
+        verify(transferOrderRepository).save(saved.capture());
+        assertThat(saved.getValue().getRequestedBy()).isEqualTo(me);
+    }
+
+    @Test
+    void d713_completingATransferRecordsTheCallerAsCompleter() {
+        Staff me = signInAsStaffHere();
+        TransferOrder order = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+
+        service.completeTransfer(order.getId(), TransferCompletionRequestDTO.builder().build());
+
+        assertThat(order.getCompletedBy()).isEqualTo(me);
+    }
+
+    @Test
+    void d713_completingInAColleaguesNameIsRefused() {
+        signInAsStaffHere();
+        TransferOrder order = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        colleague.setHospital(hospital);
+        com.example.hms.model.User colleagueUser = new com.example.hms.model.User();
+        colleagueUser.setId(UUID.randomUUID());
+        colleague.setUser(colleagueUser);
+        when(staffRepository.findById(colleague.getId())).thenReturn(Optional.of(colleague));
+        UUID orderId = order.getId();
+        TransferCompletionRequestDTO request = TransferCompletionRequestDTO.builder()
+            .completedByStaffId(colleague.getId()).build();
+
+        assertThatThrownBy(() -> service.completeTransfer(orderId, request))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(bedAssignmentService, never()).assignBed(any(), any(), any());
     }
 }

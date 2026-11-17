@@ -39,6 +39,13 @@ public interface PatientService {
 
     PatientResponseDTO createPatient(PatientRequestDTO patientRequestDTO, Locale locale);
 
+    /**
+     * QA D1592: the record of a baby a recorded delivery registers, judged by
+     * the identity rules like a desk registration. Called by
+     * PatientAccountRegistrationService.registerNewborn only.
+     */
+    PatientResponseDTO createNewbornPatient(PatientRequestDTO patientRequestDTO, Locale locale);
+
     PatientResponseDTO updatePatient(UUID id, PatientRequestDTO patientRequestDTO, Locale locale);
 
     /** E8 #54 — restrict or lift the restriction on a chart; the administrator's act, audited by convention. */
@@ -88,6 +95,16 @@ public interface PatientService {
      */
     List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, UUID hospitalId);
 
+    /**
+     * QA D1061 / D1064: the match with the form's name and date of birth: each
+     * phone or e-mail match says whether it is the same person, and the same
+     * name and date of birth at another hospital of the organisation is
+     * proposed even when the phone differs.
+     */
+    List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, String firstName,
+                                                       String lastName, java.time.LocalDate dateOfBirth,
+                                                       UUID hospitalId);
+
     PatientTimelineResponseDTO getDoctorTimeline(
         UUID patientId,
         UUID hospitalId,
@@ -105,6 +122,19 @@ public interface PatientService {
     );
 
     List<PatientAllergyResponseDTO> getPatientAllergies(UUID patientId, UUID hospitalId, UUID requesterUserId);
+
+    /**
+     * QA D504 — true when the patient's sharing opt-out holds other hospitals'
+     * allergy rows back from this reader (no break-the-glass override), so the
+     * response can say the list is not the whole record.
+     */
+    boolean foreignAllergiesWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId);
+
+    /**
+     * QA D504: true when the patient's sharing opt-out narrows every clinical
+     * list read at this hospital to its own rows (nothing overrides it).
+     */
+    boolean foreignRecordsWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId);
 
     PatientAllergyResponseDTO createPatientAllergy(
         UUID patientId,

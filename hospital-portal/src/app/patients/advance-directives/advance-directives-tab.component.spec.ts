@@ -8,6 +8,11 @@ import {
   AdvanceDirectiveService,
 } from '../../services/advance-directive.service';
 import { ToastService } from '../../core/toast.service';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../../testing/form-refusal-behaviour';
 
 /**
  * Advance-directives tab (P2 #13) — the first write surface for a table that
@@ -108,6 +113,8 @@ describe('AdvanceDirectivesTabComponent', () => {
     setup([]);
     component.form = {
       directiveType: 'DO_NOT_RESUSCITATE',
+      status: 'ACTIVE',
+      physicianName: 'Dr Ouédraogo',
       effectiveDate: '2026-08-22',
       expirationDate: '2026-08-01',
     };
@@ -122,13 +129,121 @@ describe('AdvanceDirectivesTabComponent', () => {
     setup([]);
     const backendMessage = 'An advance directive cannot expire before it takes effect.';
     directiveService.create.and.returnValue(
-      throwError(() => ({ error: { message: backendMessage } }) as unknown),
+      throwError(() => ({ status: 400, error: { message: backendMessage } }) as unknown),
     );
-    component.form = { directiveType: 'LIVING_WILL' };
+    component.form = {
+      directiveType: 'LIVING_WILL',
+      status: 'ACTIVE',
+      effectiveDate: '2026-08-22',
+    };
 
     component.submit();
 
     expect(toast.error).toHaveBeenCalledWith(backendMessage);
+  });
+
+  it('QA D1148: one click on Save records nothing — type, status and date are named, the DNR needs its physician', async () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    // The form as the reader sees it: ngModel has written the blank choices
+    // (round 30: the save button's submit guard reads the DOM).
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    // A submit button submits only a form that is in the document.
+    document.body.appendChild(host);
+    // Nothing is pre-filled.
+    expect(component.form.directiveType).toBe('');
+    expect(component.form.status).toBe('');
+    host.querySelector<HTMLButtonElement>('[data-testid="directive-save"]')!.click();
+    fixture.detectChanges();
+    expect(directiveService.create).not.toHaveBeenCalled();
+    for (const id of ['directive-type', 'directive-status', 'directive-effective']) {
+      expect(host.querySelector('#' + id)?.getAttribute('aria-invalid'))
+        .withContext(id)
+        .toBe('true');
+    }
+
+    component.form = {
+      directiveType: 'DO_NOT_RESUSCITATE',
+      status: 'ACTIVE',
+      effectiveDate: '2026-10-31',
+    };
+    fixture.detectChanges();
+    host.querySelector<HTMLButtonElement>('[data-testid="directive-save"]')!.click();
+    fixture.detectChanges();
+    expect(directiveService.create).not.toHaveBeenCalled();
+    expect(host.querySelector('#directive-physician')?.getAttribute('aria-invalid')).toBe('true');
+    host.remove();
+  });
+
+  it('QA D1357: an empty save names the blank fields once, never one sentence repeated under each', async () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    host.querySelector<HTMLButtonElement>('[data-testid="directive-save"]')!.click();
+    fixture.detectChanges();
+    expect(directiveService.create).not.toHaveBeenCalled();
+    const alerts = [...host.querySelectorAll('[role="alert"]')].map((a) => a.textContent?.trim());
+    expect(alerts).not.toContain('DIRECTIVES.REQUIRED_FIELDS');
+    // The one summary that names the fields (the submit guard, under the button).
+    expect(alerts.filter((t) => t?.includes('COMMON.MISSING_REQUIRED_FIELDS')).length).toBe(1);
+    host.remove();
+
+    // The component's own check (a path the guard cannot see) names them too.
+    component.form = { directiveType: '', status: '', effectiveDate: '' };
+    component.submit();
+    expect(toast.error).toHaveBeenCalledWith('COMMON.MISSING_REQUIRED_FIELDS');
+    expect(directiveService.create).not.toHaveBeenCalled();
+  });
+
+  it('round-29 behaviour: the empty save marks every blank required field and sends nothing', async () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="directive-save"]',
+      sent: directiveService.create,
+    });
+    expect(marked).toEqual(
+      jasmine.arrayContaining(['directive-type', 'directive-status', 'directive-effective']),
+    );
+    host.remove();
+  });
+
+  it('QA D1355: every field the server names under fieldErrors is marked with its reason', () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    directiveService.create.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({
+          physicianName: 'Le médecin est obligatoire.',
+          effectiveDate: "La date d'effet est obligatoire.",
+        }),
+      ),
+    );
+    component.form = {
+      directiveType: 'DO_NOT_RESUSCITATE',
+      status: 'ACTIVE',
+      effectiveDate: '2026-11-02',
+      physicianName: 'Dr K',
+    };
+    component.submit();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, {
+      'directive-physician': 'Le médecin est obligatoire.',
+      'directive-effective': "La date d'effet est obligatoire.",
+    });
   });
 
   it('revokes through the revoke endpoint after confirmation, then reloads', () => {
@@ -142,10 +257,79 @@ describe('AdvanceDirectivesTabComponent', () => {
       fixture.nativeElement.querySelector('[data-testid="directive-revoke-modal"]'),
     ).not.toBeNull();
 
-    component.executeRevoke();
+    component.executeRevoke('Patient a changé d’avis');
 
-    expect(directiveService.revoke).toHaveBeenCalledWith('d-1');
+    expect(directiveService.revoke).toHaveBeenCalledWith('d-1', 'Patient a changé d’avis');
     expect(directiveService.listForPatient).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * QA D1180 (round 22, regression): the server requires the reason; the
+   * confirmation had no field and sent `{}`, so an active DNR stayed on the
+   * banner. Driven through the real dialog: open, refuse empty, type, confirm.
+   */
+  describe('QA D1180: the revoke dialog asks for the reason', () => {
+    function openDialog(): HTMLElement {
+      const row = directive({ id: 'd-act', status: 'ACTIVE' });
+      setup([row]);
+      directiveService.revoke.and.returnValue(of({ ...row, status: 'REVOKED' }));
+      const host = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(host);
+      host.querySelector<HTMLButtonElement>('[data-testid="directive-revoke-d-act"]')!.click();
+      fixture.detectChanges();
+      return host;
+    }
+
+    it('has a required reason field, and an empty confirm sends nothing and says why', () => {
+      const host = openDialog();
+      const field = host.querySelector<HTMLTextAreaElement>('[data-testid="reason-dialog-reason"]');
+      expect(field).withContext('the dialog asks for the reason').not.toBeNull();
+      expect(field!.required).toBeTrue();
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(directiveService.revoke).not.toHaveBeenCalled();
+      expect(field!.getAttribute('aria-invalid')).toBe('true');
+      expect(host.querySelector('[data-testid="submit-guard-reason"]')?.textContent?.trim())
+        .withContext('the refusal is said next to the button')
+        .toBeTruthy();
+      host.remove();
+    });
+
+    it('sends the typed reason in the body and reloads the banner', () => {
+      const host = openDialog();
+      const field = host.querySelector<HTMLTextAreaElement>(
+        '[data-testid="reason-dialog-reason"]',
+      )!;
+      field.value = '  Directive remplacée par une nouvelle  ';
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(directiveService.revoke).toHaveBeenCalledOnceWith(
+        'd-act',
+        'Directive remplacée par une nouvelle',
+      );
+      expect(host.querySelector('[data-testid="reason-dialog"]')).toBeNull();
+      host.remove();
+    });
+
+    it('shows the server refusal and keeps the dialog open on a 400', () => {
+      const host = openDialog();
+      directiveService.revoke.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'Indiquez le motif' } })),
+      );
+      const field = host.querySelector<HTMLTextAreaElement>(
+        '[data-testid="reason-dialog-reason"]',
+      )!;
+      field.value = 'x';
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(toast.error).toHaveBeenCalledWith('Indiquez le motif');
+      expect(host.querySelector('[data-testid="reason-dialog"]')).not.toBeNull();
+      host.remove();
+    });
   });
 
   it('has no delete anywhere — a directive once in force is part of the record', () => {

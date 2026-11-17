@@ -23,6 +23,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class EncounterTreatmentServiceImpl implements EncounterTreatmentService {
+    private static final String ENCOUNTER_NOT_FOUND_KEY = "encounter.notfound";
     private final EncounterRepository encounterRepository;
     private final TreatmentRepository treatmentRepository;
     private final StaffRepository staffRepository;
@@ -34,14 +35,22 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
     @Transactional
     public EncounterTreatmentResponseDTO addTreatmentToEncounter(EncounterTreatmentRequestDTO dto) {
         Encounter encounter = encounterRepository.findById(dto.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, dto.getEncounterId()));
         Treatment treatment = treatmentRepository.findById(dto.getTreatmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Treatment not found"));
-        Staff staff = null;
-        if (dto.getStaffId() != null) {
-            staff = staffRepository.findById(dto.getStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Staff not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound", dto.getTreatmentId()));
+        // QA r5 tenancy sweep: the encounter is the caller's hospital's, and so is the treatment.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, dto.getEncounterId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(treatment.getHospital(), "treatment.notfound", dto.getTreatmentId());
+        // QA D1428 class: a visit closed unseen had no treatment. A COMPLETED one
+        // takes a late entry: the treatment was given and is being documented.
+        if (com.example.hms.enums.EncounterStatus.ENDED_UNSEEN.contains(encounter.getStatus())) {
+            throw new com.example.hms.exception.FieldBusinessException("encounterId", "encounter.treatment.endedUnseen", encounter.getStatus().localizedLabel());
         }
+        // QA D1488: a late entry of a treatment given stays open; one timed after the death does not.
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(encounter.getPatient(), dto.getPerformedAt(), "performedAt");
+        // QA D503 class: the clinician who gave the treatment is the caller.
+        Staff staff = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, dto.getStaffId(),
+                com.example.hms.security.CallerIdentity.hospitalIdOf(encounter.getHospital()));
         EncounterTreatment entity = mapper.toEntity(dto, encounter, treatment, staff);
         return mapper.toDto(encounterTreatmentRepository.save(entity));
     }
@@ -50,11 +59,11 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
     @Transactional(readOnly = true)
     public List<EncounterTreatmentResponseDTO> getTreatmentsByEncounter(UUID encounterId) {
         Encounter encounter = encounterRepository.findById(encounterId)
-                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, encounterId));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && encounter.getHospital() != null
                 && !activeHospitalId.equals(encounter.getHospital().getId())) {
-            throw new ResourceNotFoundException("Encounter not found");
+            throw new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, encounterId);
         }
         List<EncounterTreatment> list = encounterTreatmentRepository.findByEncounter_Id(encounterId);
         return list.stream().map(mapper::toDto).toList();

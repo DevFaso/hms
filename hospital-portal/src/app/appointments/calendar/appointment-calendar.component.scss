@@ -1,0 +1,147 @@
+/*
+ * FullCalendar 7 no longer injects its own CSS: the structural skeleton and
+ * the look (a theme) are stylesheets the app loads. They live here, in the
+ * lazy calendar chunk, rather than in angular.json's global styles, so
+ * FullCalendar's CSS still ships only when /appointments/calendar is visited
+ * (as the injected v6 CSS did).
+ *
+ * The classic theme is the v6 look. Its stock palette.css is deliberately NOT
+ * loaded: it hard-codes FullCalendar's blue (#3788d8) and slate buttons. The
+ * --fc-classic-* variables are mapped onto the portal design tokens below
+ * instead. The theme's class names are hashed (.fc-classic-xxx), so these
+ * variables are the only supported way to restyle it.
+ *
+ * The variables sit on :root, not on the page: FullCalendar portals some of
+ * its DOM into document.body (the "+N more" popover; the drag mirror if
+ * dragging is ever enabled), where nothing under the page could reach it.
+ * They are still not global: this stylesheet ships in the lazy calendar
+ * chunk, and Angular removes it when the component is destroyed.
+ *
+ * The component uses ViewEncapsulation.None (FullCalendar's DOM is created by
+ * Preact, outside Angular's renderer, so emulated attributes never reach it),
+ * which is why the page's own rules are scoped under its root element
+ * (.cal-page, not the component tag: TestBed hosts the component in a plain
+ * <div>, so a tag selector would leave the specs unthemed).
+ *
+ * Colours the portal has no token for are literals, named as such: white
+ * text on primary, and the error red. The color-mix() tints come after a
+ * plain fallback inside @supports, the way FullCalendar's own theme.css
+ * guards its color-mix() use.
+ */
+@use 'fullcalendar/skeleton';
+@use 'fullcalendar/themes/classic/theme';
+
+:root {
+  /* buttons (toolbar: prev/next/today and the view switcher) */
+  --fc-classic-button: var(--primary);
+  --fc-classic-button-border: var(--primary);
+  --fc-classic-button-strong: var(--primary-dark);
+  --fc-classic-button-strong-border: var(--primary-dark);
+  /* the keyboard focus ring: --primary-light is 2.52:1 (fills only) */
+  --fc-classic-button-outline: var(--primary);
+  --fc-classic-button-foreground: #fff; /* white on primary: no token */
+
+  /* primary (focus outlines, selection) */
+  --fc-classic-primary: var(--primary);
+
+  /* calendar content */
+  --fc-classic-event: var(--primary);
+  --fc-classic-event-contrast: #fff;
+  --fc-classic-background-event: var(--primary-light);
+  --fc-classic-background-event-opacity: 15%;
+  --fc-classic-background-event-foreground-opacity: 50%;
+  /* selection/drop highlight is painted over the grid: keep it translucent
+     (fallback = --primary-tint #ccebe4 at 60%) */
+  --fc-classic-highlight: rgba(204, 235, 228, 0.6);
+  --fc-classic-today: var(--primary-soft);
+  /* the error red, defined once for this page: styles.scss has no
+     danger/error token. Used by the now-line and the error text. */
+  --cal-error: #b00020;
+  --fc-classic-now: var(--cal-error);
+  --fc-classic-small-dot-width: 8px;
+  --fc-classic-large-dot-width: 10px;
+
+  /* neutral backgrounds: tints of the body text colour
+     (fallbacks = --text-primary #1e293b at 4/8/14%) */
+  --fc-classic-background: #fff;
+  --fc-classic-faint: rgba(30, 41, 59, 0.04);
+  --fc-classic-muted: rgba(30, 41, 59, 0.08);
+  --fc-classic-strong: rgba(30, 41, 59, 0.14);
+
+  /* neutral foregrounds (--text-secondary is 4.76:1 on white: AA) */
+  --fc-classic-foreground: var(--text-primary);
+  --fc-classic-faint-foreground: var(--text-secondary);
+  --fc-classic-muted-foreground: var(--text-secondary);
+
+  /* neutral borders (fallback = --border and --text-secondary half and half) */
+  --fc-classic-border: var(--border);
+  --fc-classic-strong-border: #a3aebe;
+}
+
+/* The plain values above are the fallbacks for browsers without color-mix()
+   (styles.scss names legacy WebViews and kiosk browsers). They are hand-
+   computed from the tokens, so a token change must update both places. */
+@supports (color: color-mix(in srgb, red, blue)) {
+  :root {
+    --fc-classic-highlight: color-mix(in srgb, var(--primary-tint) 60%, transparent);
+    --fc-classic-faint: color-mix(in srgb, var(--text-primary) 4%, transparent);
+    --fc-classic-muted: color-mix(in srgb, var(--text-primary) 8%, transparent);
+    --fc-classic-strong: color-mix(in srgb, var(--text-primary) 14%, transparent);
+    --fc-classic-strong-border: color-mix(in srgb, var(--border), var(--text-secondary));
+  }
+}
+
+.cal-page {
+  padding: 1.5rem;
+
+  /* The theme marks the active view only by --primary-dark against --primary
+     (about 1.5:1). WCAG 1.4.11 asks 3:1 of a state indicator, so the active
+     tab inverts: white fill (5.10:1 against its primary neighbours) with
+     primary text and border. Selected by the ARIA state FullCalendar renders,
+     since its class names are hashed. */
+  [role='tab'][aria-selected='true'] {
+    background-color: #fff;
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  &__status {
+    /* one line, reserved whether or not a fetch is running */
+    min-height: 1.5rem;
+    margin: 0 0 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+  }
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    gap: 1rem;
+  }
+
+  &__filter {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+
+    label {
+      font-size: 0.8125rem;
+      /* --text-secondary is only 4.34:1 on the page background (axe) */
+      color: var(--text-primary);
+    }
+
+    select {
+      padding: 0.4rem 0.6rem;
+      /* a control's boundary needs 3:1 (WCAG 1.4.11): --border is 1.23:1 */
+      border: 1px solid var(--text-secondary);
+      border-radius: 6px;
+    }
+  }
+
+  &__error {
+    color: var(--cal-error);
+  }
+}

@@ -1,28 +1,90 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-
+import { refusalReason } from '../../shared/refusal-reason';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { PatientPortalService, CareTeamMember } from '../../services/patient-portal.service';
+import {
+  CareTeamDTO,
+  PatientPortalService,
+  PrimaryCareEntry,
+  VisitClinicianEntry,
+} from '../../services/patient-portal.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
+/**
+ * The patient's care team, as GET /me/patient/care-team defines it: the
+ * current primary care providers (one per hospital) and the earlier ones, with dates. The page
+ * used to read a `members` array the endpoint never sends, so it always
+ * rendered its empty state.
+ */
 @Component({
   selector: 'app-my-care-team',
   standalone: true,
-  imports: [TranslateModule],
+  imports: [ServerTimePipe, DatePipe, TranslateModule],
   templateUrl: './my-care-team.component.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-care-team.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyCareTeamComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
-  members = signal<CareTeamMember[]>([]);
+  private readonly team = signal<CareTeamDTO | null>(null);
   loading = signal(true);
+  failed = signal(false);
+  /** QA D1212: the server's reason the read failed (a 4xx), when it gave one. */
+  failureReason = signal<string | null>(null);
 
-  ngOnInit() {
+  /** Every current primary-care provider, one per hospital (QA D1850). */
+  readonly currents = computed<PrimaryCareEntry[]>(() => {
+    const team = this.team();
+    // An older server sends only `primaryCare`.
+    return team?.primaryCares ?? (team?.primaryCare ? [team.primaryCare] : []);
+  });
+  /** Earlier links only: the history also carries the current ones. */
+  readonly previous = computed<PrimaryCareEntry[]>(() => {
+    const currentIds = new Set(this.currents().map((c) => c.id));
+    return (this.team()?.primaryCareHistory ?? []).filter(
+      (e) => !e.current && !currentIds.has(e.id),
+    );
+  });
+  /**
+   * QA D1941 (round 54): a link closed before #1165 on the day it started has an
+   * end the day before its start ("14 nov. – 13 nov."). Never shown: such an
+   * end reads as the start. Both are ISO local dates (`yyyy-MM-dd`), so they compare as text.
+   */
+  shownEnd(e: PrimaryCareEntry): string | null {
+    if (e.endDate && e.startDate && e.endDate < e.startDate) {
+      return e.startDate;
+    }
+    return e.endDate;
+  }
+  /** The clinicians of the patient's visits still open (QA D115). */
+  readonly visitClinicians = computed<VisitClinicianEntry[]>(
+    () => this.team()?.visitClinicians ?? [],
+  );
+  readonly empty = computed(
+    () =>
+      this.currents().length === 0 &&
+      this.previous().length === 0 &&
+      this.visitClinicians().length === 0,
+  );
+
+  ngOnInit(): void {
     this.portal.getMyCareTeam().subscribe({
       next: (team) => {
-        this.members.set(team.members ?? []);
+        this.team.set(team);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: (err: unknown) => {
+        this.failureReason.set(refusalReason(err));
+        this.failed.set(true);
+        this.loading.set(false);
+      },
     });
   }
 }

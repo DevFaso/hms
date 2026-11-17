@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.service.PatientSubjectReadGuard;
 import java.time.Clock;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.ConsultationUrgency;
@@ -40,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -63,7 +66,20 @@ class ConsultationServiceImplTest {
     /** Real system clock — the production bean is Clock.systemDefaultZone(). */
     @Spy private Clock clock = Clock.systemDefaultZone();
 
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private com.example.hms.security.tenant.ActingScopeResolver scopeResolver;
+
     @InjectMocks private ConsultationServiceImpl service;
+
+    /**
+     * The real subject guard. These tests set no authentication, so it waves
+     * every read through, as it does for any caller that is not patient-only;
+     * the patient cases are in PatientSubjectReadGuardTest and the
+     * per-service ownership tests.
+     */
+    @Spy
+    private PatientSubjectReadGuard subjectReadGuard =
+        new PatientSubjectReadGuard(mock(ControllerAuthUtils.class), mock(PatientRepository.class));
 
     private UUID patientId, hospitalId, staffId, consultationId;
     private Patient patient;
@@ -72,13 +88,20 @@ class ConsultationServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // Consultants in these fixtures hold an active assignment at the
+        // consultation's hospital unless a test says otherwise.
+        org.mockito.Mockito.lenient().when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(java.util.Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         staffId = UUID.randomUUID();
         consultationId = UUID.randomUUID();
         patient = new Patient(); patient.setId(patientId); patient.setFirstName("John"); patient.setLastName("Doe");
         hospital = new Hospital(); hospital.setId(hospitalId); hospital.setName("General Hospital");
-        staff = new Staff(); staff.setId(staffId);
+        staff = new Staff(); staff.setId(staffId); staff.setHospital(hospital);
+        com.example.hms.model.User staffUser = new com.example.hms.model.User(); staffUser.setId(UUID.randomUUID());
+        staff.setUser(staffUser);
         // The self-proxy this used to wire is gone: getAllConsultations now
         // calls a private shared body instead of re-entering the public
         // method, so there is no self-invocation left to route.
@@ -103,7 +126,7 @@ class ConsultationServiceImplTest {
         r.setPatientId(patientId); r.setHospitalId(hospitalId);
         r.setSpecialtyRequested("Cardiology"); r.setUrgency(ConsultationUrgency.ROUTINE);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(consultationRepository.save(any())).thenAnswer(i -> { Consultation c = i.getArgument(0); c.setId(consultationId); return c; });
@@ -115,6 +138,7 @@ class ConsultationServiceImplTest {
     @Test void createConsultation_patientNotFound() {
         ConsultationRequestDTO r = new ConsultationRequestDTO();
         r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setUrgency(ConsultationUrgency.URGENT);
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createConsultation(r, staffId)).isInstanceOf(ResourceNotFoundException.class);
     }
@@ -155,8 +179,37 @@ class ConsultationServiceImplTest {
     @Test void acknowledgeConsultation_success() {
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.REQUESTED)));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        when(scopeResolver.isVerifiedSuperAdmin()).thenReturn(true); // an unassigned consult: only a coordinator takes it (QA D735)
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         assertThat(service.acknowledgeConsultation(consultationId, staffId).getStatus()).isEqualTo(ConsultationStatus.ACKNOWLEDGED);
+    }
+
+    @Test void qaD955_aConsultCannotBeCreatedWithItsRequesterAsConsultant() {
+        ConsultationRequestDTO r = new ConsultationRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        r.setSpecialtyRequested("Cardiology"); r.setUrgency(ConsultationUrgency.ROUTINE);
+        r.setPreferredConsultantId(staffId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        assertThatThrownBy(() -> service.createConsultation(r, staffId)).isInstanceOf(BusinessException.class);
+        verify(consultationRepository, never()).save(any());
+    }
+
+    // QA D955 class: the requester is never the consultant of her own consult.
+    @Test void qaD955_theRequesterCannotBeTheConsultant() {
+        Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+        requested.setRequestingProvider(staff);
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(scopeResolver.isVerifiedSuperAdmin()).thenReturn(true);
+        assertThatThrownBy(() -> service.acknowledgeConsultation(consultationId, staffId))
+            .isInstanceOf(BusinessException.class);
+        verify(consultationRepository, never()).save(any());
     }
 
     @Test void acknowledgeConsultation_alreadyAcknowledged() {
@@ -166,7 +219,10 @@ class ConsultationServiceImplTest {
 
     @Test void completeConsultation_success() {
         CompleteConsultationRequestDTO u = CompleteConsultationRequestDTO.builder().recommendations("All good").consultantNote("All good").build();
-        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.IN_PROGRESS)));
+        Consultation inProgress = buildConsultation(ConsultationStatus.IN_PROGRESS);
+        inProgress.setConsultant(staff);
+        when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(inProgress));
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         ConsultationResponseDTO r = service.completeConsultation(consultationId, u);
         assertThat(r.getStatus()).isEqualTo(ConsultationStatus.COMPLETED);
@@ -186,11 +242,26 @@ class ConsultationServiceImplTest {
     }
 
     @Test void cancelConsultation_success() {
-        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.REQUESTED)));
+        Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+        requested.setRequestingProvider(staff);
+        when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         ConsultationResponseDTO r = service.cancelConsultation(consultationId, "No longer needed");
         assertThat(r.getStatus()).isEqualTo(ConsultationStatus.CANCELLED);
         assertThat(r.getCancellationReason()).isEqualTo("No longer needed");
+    }
+
+    /** QA D1098: the service states why too, whatever the caller (the DTO checks only the HTTP edge). */
+    @Test void cancelConsultation_refusesABlankReason_D1098() {
+        Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+        requested.setRequestingProvider(staff);
+        when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
+        assertThatThrownBy(() -> service.cancelConsultation(consultationId, ""))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(requested.getStatus()).isEqualTo(ConsultationStatus.REQUESTED);
     }
 
     @Test void cancelConsultation_alreadyCompleted() {
@@ -205,6 +276,7 @@ class ConsultationServiceImplTest {
 
     @Test void updateConsultation_setsScheduledStatus() {
         ConsultationUpdateDTO u = new ConsultationUpdateDTO(); u.setScheduledAt(LocalDateTime.now().plusDays(1));
+        org.mockito.Mockito.lenient().when(scopeResolver.isVerifiedSuperAdmin()).thenReturn(true); // QA D735: a coordinator reschedules
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.ACKNOWLEDGED)));
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         assertThat(service.updateConsultation(consultationId, u).getStatus()).isEqualTo(ConsultationStatus.SCHEDULED);

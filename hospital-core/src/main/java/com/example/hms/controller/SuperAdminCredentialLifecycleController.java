@@ -12,10 +12,13 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import com.example.hms.security.PrincipalUserIds;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -46,12 +49,18 @@ public class SuperAdminCredentialLifecycleController {
 
     @PutMapping("/{userId}/mfa")
     @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
-    @Operation(summary = "Upsert MFA enrollments for a user")
+    @Operation(summary = "Upsert MFA enrollments for a user (requires the actor's MFA step-up in X-Mfa-Token)")
     public ResponseEntity<List<UserMfaEnrollmentDTO>> upsertMfaEnrolments(
         @PathVariable UUID userId,
-        @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload
+        @Valid @RequestBody List<UserMfaEnrollmentRequestDTO> payload,
+        @RequestHeader(value = "X-Mfa-Token", required = false) String stepUpCode,
+        Authentication authentication
     ) {
-        return ResponseEntity.ok(userCredentialLifecycleService.upsertMfaEnrollments(userId, payload));
+        // Both session kinds: a Keycloak principal carries the local id in
+        // its appUserId claim (never its sub); a legacy one, the user.
+        UUID actorId = PrincipalUserIds.of(authentication).orElse(null);
+        return ResponseEntity.ok(userCredentialLifecycleService.upsertMfaEnrollmentsAsSuperAdmin(
+            actorId, userId, payload, stepUpCode));
     }
 
     @PutMapping("/{userId}/recovery")

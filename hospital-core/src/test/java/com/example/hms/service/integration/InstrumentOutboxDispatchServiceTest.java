@@ -1,9 +1,11 @@
 package com.example.hms.service.integration;
 
 import com.example.hms.enums.InstrumentOutboxStatus;
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.hl7.mllp.MllpOutboundProperties;
 import com.example.hms.hl7.mllp.MllpOutboundSender;
 import com.example.hms.model.InstrumentOutbox;
+import com.example.hms.model.LabOrder;
 import com.example.hms.repository.InstrumentOutboxRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,9 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.io.IOException;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,6 +46,11 @@ class InstrumentOutboxDispatchServiceTest {
     @Mock private InstrumentOutboxRepository outboxRepository;
     @Mock private MllpOutboundSender sender;
 
+    /** Fixed instant: the attempt stamps and the retry back-off read the injected clock. */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 12, 0);
+    private static final Clock FIXED =
+        Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+
     private MllpOutboundProperties properties;
     private InstrumentOutboxDispatchService service;
     private InstrumentOutbox message;
@@ -49,7 +60,7 @@ class InstrumentOutboxDispatchServiceTest {
         properties = new MllpOutboundProperties();
         properties.setEnabled(true);
         properties.setMaxAttempts(3);
-        service = new InstrumentOutboxDispatchService(outboxRepository, sender, properties);
+        service = new InstrumentOutboxDispatchService(outboxRepository, sender, properties, FIXED);
 
         message = new InstrumentOutbox();
         message.setId(UUID.randomUUID());
@@ -71,6 +82,35 @@ class InstrumentOutboxDispatchServiceTest {
         assertThat(message.getStatus()).isEqualTo(InstrumentOutboxStatus.ACK);
         assertThat(message.getSentAt()).isNotNull();
         assertThat(message.getLastError()).isNull();
+    }
+
+    /** QA D820: an order voided after its work order was queued is never transmitted. */
+    @Test
+    void aMessageForAVoidedOrderIsNeverSent() throws Exception {
+        LabOrder order = new LabOrder();
+        order.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        message.setLabOrder(order);
+
+        assertThat(service.dispatchPending()).isZero();
+        verify(sender, never()).send(anyString());
+        assertThat(message.getStatus()).isEqualTo(InstrumentOutboxStatus.ERROR);
+        assertThat(message.getAttempts()).isZero();
+        assertThat(message.getLastError()).contains("entered in error");
+    }
+
+    @Test
+    void attemptStampsAndRetryBackOffComeFromTheInjectedClock() throws Exception {
+        when(sender.send(anyString())).thenReturn("MSA|AA|MSGID");
+        when(sender.isPositiveAck(anyString())).thenReturn(true);
+
+        service.dispatchPending();
+
+        // A row last tried before NOW - retryAfterSeconds is due again; the
+        // stamps it gets are the same clock's NOW.
+        verify(outboxRepository).findDispatchable(eq(InstrumentOutboxStatus.PENDING), eq(3),
+            eq(NOW.minusSeconds(properties.getRetryAfterSeconds())), any());
+        assertThat(message.getLastAttemptAt()).isEqualTo(NOW);
+        assertThat(message.getSentAt()).isEqualTo(NOW);
     }
 
     @Test
@@ -131,5 +171,18 @@ class InstrumentOutboxDispatchServiceTest {
 
         verify(outboxRepository).save(message);
         assertThat(message.getLastError()).contains("IOException");
+    }
+
+    /** QA D1392 class: an order cancelled after its work order was queued is not sent either. */
+    @Test
+    void aMessageForACancelledOrderIsNeverSent() throws Exception {
+        LabOrder order = new LabOrder();
+        order.setStatus(LabOrderStatus.CANCELLED);
+        message.setLabOrder(order);
+
+        assertThat(service.dispatchPending()).isZero();
+        verify(sender, never()).send(anyString());
+        assertThat(message.getStatus()).isEqualTo(InstrumentOutboxStatus.ERROR);
+        assertThat(message.getLastError()).contains("cancelled");
     }
 }

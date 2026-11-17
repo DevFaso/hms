@@ -46,7 +46,7 @@ public interface PrescriptionRoutingDecisionRepository extends JpaRepository<Pre
             select d from PrescriptionRoutingDecision d
             where d.routingType = :routingType
               and d.status in :statuses
-              and lower(cast(d.id as string)) like concat(:idPrefix, '%')
+              and lower(cast(d.id as string)) like concat(CAST(:idPrefix AS string), '%')
             """)
     List<PrescriptionRoutingDecision> findOpenByIdPrefix(
             @Param("routingType") RoutingType routingType,

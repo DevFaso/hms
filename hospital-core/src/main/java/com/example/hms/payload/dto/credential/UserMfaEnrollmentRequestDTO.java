@@ -20,5 +20,9 @@ public class UserMfaEnrollmentRequestDTO {
 
     private LocalDateTime enrolledAt;
 
+    /**
+     * Ignored: only a verified code sets this (MfaService). Accepted so an
+     * older client's payload still parses.
+     */
     private LocalDateTime lastVerifiedAt;
 }

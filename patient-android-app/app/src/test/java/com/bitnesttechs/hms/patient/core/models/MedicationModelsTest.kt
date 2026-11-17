@@ -91,7 +91,7 @@ class MedicationModelsTest {
         val backend = setOf(
             "DRAFT", "PENDING_SIGNATURE", "SIGNED", "TRANSMITTED", "TRANSMISSION_FAILED",
             "CANCELLED", "DISCONTINUED", "PENDING_CLARIFICATION", "DISPENSED",
-            "PARTIALLY_FILLED", "PENDING_STOCK", "REQUIRES_EXTERNAL_FILL", "SENT_TO_PARTNER",
+            "PARTIALLY_FILLED", "PENDING_STOCK", "SENT_TO_PARTNER",
             "PARTNER_ACCEPTED", "PARTNER_REJECTED", "PARTNER_DISPENSED", "PRINTED_FOR_PATIENT"
         )
         val named = PrescriptionStatus.entries
@@ -100,6 +100,23 @@ class MedicationModelsTest {
             .toSet()
 
         assertEquals(backend, named)
+    }
+
+    /// `PatientMedicationServiceImpl.resolveStatus`, plus the safe default.
+    @Test
+    fun theEnumCoversEveryBackendMedicationStatus() {
+        val backend = setOf("ACTIVE", "COMPLETED", "DISCONTINUED", "ON_HOLD")
+        val named = MedicationStatus.entries
+            .filter { it != MedicationStatus.UNKNOWN }
+            .map { it.name }
+            .toSet()
+        assertEquals(backend, named)
+
+        assertEquals(MedicationStatus.UNKNOWN, MedicationStatus.fromWire(null))
+        assertEquals(MedicationStatus.UNKNOWN, MedicationStatus.fromWire(""))
+        assertEquals(MedicationStatus.UNKNOWN, MedicationStatus.fromWire("SOMETHING_NEW"))
+        assertEquals(MedicationStatus.ON_HOLD, MedicationStatus.fromWire(" on_hold "))
+        assertEquals(MedicationStatus.ON_HOLD, MedicationDto(status = "ON_HOLD").statusEnum)
     }
 
     @Test
@@ -166,5 +183,45 @@ class MedicationModelsTest {
         val refillLabels = RefillStatus.entries.map { it.labelRes }
         assertEquals(RefillStatus.entries.size, refillLabels.toSet().size)
         assertTrue(refillLabels.none { it == 0 })
+    }
+
+    // ── G15: ready for collection ─────────────────────────────────────────
+
+    @Test
+    fun prescriptionDecodesReadiness() {
+        val rx = decode(
+            """
+            {"success": true, "message": "ok", "data": [{
+              "id": "rx-1", "medicationName": "Amoxicillin", "status": "SIGNED",
+              "readyForCollectionAt": "2026-10-06T15:30:00",
+              "readyForCollectionPharmacyName": "Pharmacie Centrale"
+            }]}
+            """.trimIndent()
+        )
+
+        assertEquals("2026-10-06T15:30:00", rx.readyForCollectionAt)
+        assertEquals("Pharmacie Centrale", rx.readyForCollectionPharmacyName)
+    }
+
+    @Test
+    fun medicationDecodesReadinessAndToleratesItsAbsence() {
+        val listType = Types.newParameterizedType(List::class.java, MedicationDto::class.java)
+        val responseType = Types.newParameterizedType(ApiResponse::class.java, listType)
+        val adapter = moshi.adapter<ApiResponse<List<MedicationDto>>>(responseType)
+        val meds = adapter.fromJson(
+            """
+            {"success": true, "message": "ok", "data": [
+              {"id": "m-1", "medicationName": "Amoxicillin", "status": "ACTIVE",
+               "readyForCollectionAt": "2026-10-06T15:30:00",
+               "readyForCollectionPharmacyName": "Pharmacie Centrale"},
+              {"id": "m-2", "medicationName": "Metformin", "status": "ACTIVE"}
+            ]}
+            """.trimIndent()
+        )?.data.orEmpty()
+
+        assertEquals("Pharmacie Centrale", meds[0].readyForCollectionPharmacyName)
+        assertEquals("2026-10-06T15:30:00", meds[0].readyForCollectionAt)
+        assertEquals(null, meds[1].readyForCollectionAt)
+        assertEquals(null, meds[1].readyForCollectionPharmacyName)
     }
 }

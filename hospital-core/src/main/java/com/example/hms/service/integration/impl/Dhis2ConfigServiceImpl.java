@@ -15,6 +15,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.integration.Dhis2DataElementMappingRepository;
 import com.example.hms.repository.integration.Dhis2FacilityConfigRepository;
 import com.example.hms.service.integration.Dhis2ConfigService;
+import com.example.hms.service.support.OutboundUrlGuard;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -25,8 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
-
-    private static final String MSG_HOSPITAL_NOT_FOUND = "Hospital not found: ";
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
 
     private final Dhis2FacilityConfigRepository facilityConfigRepository;
     private final Dhis2DataElementMappingRepository mappingRepository;
@@ -46,6 +46,20 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
         this.mappingMapper = mappingMapper;
     }
 
+    /**
+     * QA D898: the DHIS2 base URL is admin-supplied and the export POSTs to
+     * it from inside the deployment, so it must be HTTPS to a public host —
+     * the same SSRF gate as webhook URLs. Checked when the config is saved
+     * and again right before every push (rows saved before this check, and
+     * names that resolve differently by the time the export runs).
+     *
+     * @throws com.example.hms.exception.FieldBusinessException (400, field
+     *         {@code baseUrl}) when the URL may not be called
+     */
+    public static void requireCallableBaseUrl(String baseUrl) {
+        OutboundUrlGuard.requirePublicHttps(baseUrl, "baseUrl", "dhis2FacilityConfig.baseUrl");
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Optional<Dhis2FacilityConfigResponseDTO> getFacilityConfig(UUID hospitalId) {
@@ -56,9 +70,9 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
     @Override
     public Dhis2FacilityConfigResponseDTO upsertFacilityConfig(UUID hospitalId,
                                                                Dhis2FacilityConfigRequestDTO request) {
-        final Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                MSG_HOSPITAL_NOT_FOUND + hospitalId));
+        final Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        requireCallableBaseUrl(request.baseUrl());
 
         final Dhis2FacilityConfig saved = facilityConfigRepository.findByHospital_Id(hospitalId)
             .map(existing -> {
@@ -83,9 +97,8 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
     @Override
     public Dhis2DataElementMappingResponseDTO createMapping(UUID hospitalId,
                                                             Dhis2DataElementMappingRequestDTO request) {
-        final Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                MSG_HOSPITAL_NOT_FOUND + hospitalId));
+        final Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
         final Dhis2DataElementMapping saved = mappingRepository.save(
             mappingMapper.toEntity(request, hospital));
         return mappingMapper.toResponseDTO(saved);
@@ -95,12 +108,10 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
     public Dhis2DataElementMappingResponseDTO updateMapping(UUID mappingId,
                                                             UUID hospitalId,
                                                             Dhis2DataElementMappingRequestDTO request) {
-        final Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                MSG_HOSPITAL_NOT_FOUND + hospitalId));
+        final Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
         final Dhis2DataElementMapping existing = mappingRepository.findById(mappingId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "DHIS2 mapping not found: " + mappingId));
+            .orElseThrow(() -> new ResourceNotFoundException("dhis2.mapping.notFound", mappingId));
         if (!existing.getHospital().getId().equals(hospitalId)) {
             throw new BusinessException(
                 "Cross-tenant edit blocked: mapping belongs to another hospital");
@@ -112,8 +123,7 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
     @Override
     public void deleteMapping(UUID mappingId, UUID hospitalId) {
         final Dhis2DataElementMapping existing = mappingRepository.findById(mappingId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "DHIS2 mapping not found: " + mappingId));
+            .orElseThrow(() -> new ResourceNotFoundException("dhis2.mapping.notFound", mappingId));
         if (!existing.getHospital().getId().equals(hospitalId)) {
             throw new BusinessException(
                 "Cross-tenant delete blocked: mapping belongs to another hospital");

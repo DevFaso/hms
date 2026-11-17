@@ -1,4 +1,5 @@
 import type { TranslateService } from '@ngx-translate/core';
+import type { ConfirmService } from '../confirm-dialog/confirm.service';
 
 /**
  * The one place the UI language and the Intl/Angular locale are decided.
@@ -53,6 +54,110 @@ export function currentLocale(): string {
   return localeFor(storedLang());
 }
 
+/**
+ * A wall-clock "HH:mm[:ss]" time in the active locale: "08:30" in French and
+ * Spanish, "8:30 AM" in English (QA D348). Unparseable input is returned as is.
+ */
+export function formatClockTime(time: string, locale: string = currentLocale()): string {
+  const [h, m] = time.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return time;
+  // English keeps its 12-hour "8:30 AM"; French and Spanish read "08:30".
+  const hour = locale.startsWith('en') ? 'numeric' : '2-digit';
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString(locale, { hour, minute: '2-digit' });
+}
+
+/**
+ * A number with exactly `digits` decimals in the active locale's
+ * notation: 1.235 reads "1,235" in French and Spanish, "1.235" in English
+ * (QA D434, the QC chart labels used toFixed and always printed a dot).
+ */
+export function formatDecimal(
+  value: number,
+  digits: number,
+  locale: string = currentLocale(),
+): string {
+  return value.toLocaleString(locale, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    useGrouping: false,
+  });
+}
+
+/**
+ * Decimal numbers inside a display string written with the locale's
+ * separator: "37.9" reads "37,9" in French and Spanish (QA D344). Only a dot
+ * between two digits is touched, so "mg/dL", dates and ids are left alone.
+ */
+export function localizeDecimals(text: string, locale: string = currentLocale()): string {
+  const separator = (1.5).toLocaleString(locale).charAt(1);
+  return separator === '.' ? text : text.replaceAll(/(\d)\.(\d)/g, `$1${separator}$2`);
+}
+
+/** A number as typed: an optional comparator, a sign, digits, an optional decimal part. */
+const TYPED_NUMBER = /^([<>≤≥]=?\s*)?(-?\d+)(?:[.,](\d+))?$/;
+
+/**
+ * QA D1002 / D1106 / D1115 / D1116: THE formatter for a measured value a
+ * person reads — a lab value, a reference range, a vital, a growth
+ * measurement. Every template goes through it (`| labValue`, `| labRange`,
+ * `| localeNumber`, `| measure`), and `scripts/lib/lab-locale-format.test.mjs`
+ * fails on a decimal interpolated any other way.
+ *
+ * A number keeps exactly the precision it was entered with ("0.32" reads
+ * "0,32" in French, "0.320" keeps three decimals: a lab value is never
+ * rounded for display), and its comparator ("< 0.5" reads "< 0,5"). Text
+ * that is not one number ("Positif", "1/64", "3.5 - 5") keeps its words and
+ * only takes the reader's decimal separator.
+ */
+export function formatLabNumber(
+  value: string | number | null | undefined,
+  locale: string = currentLocale(),
+): string {
+  if (value === null || value === undefined) return '';
+  const raw = String(value).trim();
+  const m = TYPED_NUMBER.exec(raw);
+  if (!m) return localizeDecimals(raw, locale);
+  const [, comparator = '', whole, fraction = ''] = m;
+  const formatted = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: fraction.length,
+    maximumFractionDigits: fraction.length,
+  }).format(Number(`${whole}.${fraction || '0'}`));
+  return `${comparator}${formatted}`;
+}
+
+/**
+ * A reference range as the reader writes it: "12 - 15.5 g/dL" reads
+ * "12 – 15,5 g/dL" in French (the locale's separator, an en dash between
+ * the two limits, QA D1106). Empty for null.
+ */
+export function formatLabRange(
+  range: string | null | undefined,
+  locale: string = currentLocale(),
+): string {
+  if (range === null || range === undefined) return '';
+  return localizeDecimals(range.trim(), locale).replaceAll(/(\d)\s*[-–]\s*(\d)/g, '$1 – $2');
+}
+
+/**
+ * QA D811 / D1115: a measurement followed by its unit ("37,5 °C", "7 000 g"),
+ * at most `maxFractionDigits` decimals, and a bare "—" when nothing was
+ * measured, never a dash with a unit.
+ */
+export function formatMeasure(
+  value: number | null | undefined,
+  unit: string,
+  maxFractionDigits = 1,
+  locale: string = currentLocale(),
+): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  const number = new Intl.NumberFormat(locale, { maximumFractionDigits: maxFractionDigits }).format(
+    value,
+  );
+  if (unit === '%' && locale.startsWith('en')) return `${number}%`;
+  // A rate per unit reads "72/min" in every language, never "72 /min".
+  return unit.startsWith('/') ? `${number}${unit}` : `${number} ${unit}`;
+}
+
 /** Specs that set `localStorage.lang` between cases must drop the cache. */
 export function resetStoredLangForTests(): void {
   cached = undefined;
@@ -84,10 +189,44 @@ export function applyLanguage(lang: SupportedLang): boolean {
  * Reloading discards unsaved forms, so the user is asked first; a refusal
  * leaves everything as it was.
  */
-export function switchLanguage(lang: string, translate: TranslateService): boolean {
+export async function switchLanguage(
+  lang: string,
+  translate: TranslateService,
+  confirmService: ConfirmService,
+): Promise<boolean> {
   if (!isSupportedLang(lang) || lang === storedLang()) return false;
-  if (!window.confirm(translate.instant('COMMON.LANGUAGE_RELOAD_CONFIRM'))) return false;
+  // QA D1229: the in-app confirmation, in the reader's language, never the browser's.
+  if (!(await confirmService.ask({ titleKey: 'COMMON.LANGUAGE_RELOAD_CONFIRM' }))) return false;
   translate.use(lang);
   if (applyLanguage(lang)) window.location.reload();
   return true;
+}
+
+/**
+ * QA D621: an amount in francs CFA, read the same way in every language:
+ * "4 000 F CFA" in French, "4,000 F CFA" in English, "4.000 F CFA" in Spanish.
+ * `Intl`'s own XOF currency printed "XOF" in Spanish and "F CFA4,000" in
+ * English. Another currency keeps `Intl`'s formatting.
+ */
+export function formatCfa(
+  amount: number | null | undefined,
+  currency: string | null | undefined = 'XOF',
+  locale: string = currentLocale(),
+): string {
+  const value = Number(amount ?? 0);
+  const code = (currency || 'XOF').toUpperCase();
+  if (code !== 'XOF') {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: code,
+      maximumFractionDigits: 0,
+    }).format(value);
+  }
+  // QA D1008: Spanish groups only from five digits by default ("8225" next to
+  // "19.875"); an explicit true means "always" (ECMA-402 NumberFormat v3).
+  const digits = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 0,
+    useGrouping: true,
+  }).format(value);
+  return `${digits}\u00a0F\u00a0CFA`;
 }

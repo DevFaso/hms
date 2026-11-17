@@ -42,6 +42,24 @@ public class SessionBootstrapResponseDTO {
     private boolean superAdmin;
     private boolean hospitalAdmin;
 
+    /**
+     * The caller is confined to a provider facility (a pharmacy or a
+     * laboratory; a verified super-admin never is), by the same rule the
+     * confinement filter applies. The portal skips what such a user may not
+     * reach, e.g. the emergency-broadcast socket.
+     */
+    private boolean providerUser;
+
+    /**
+     * Provider plan AC-13: a {@link #providerUser} whose token carries no
+     * second factor (no {@code otp} in {@code amr}, on either auth path). Every
+     * request outside sign-in and MFA enrolment then answers 403
+     * {@code mfa.enrollment.required}, so the portal sends the user to MFA
+     * enrolment or the challenge (legacy) or back through Keycloak with OTP.
+     * Always false for a hospital user and a verified super-admin.
+     */
+    private boolean mfaEnrollmentRequired;
+
     // ── Staff profile (null when the user has no staff record) ───────────────
     private UUID staffId;
     private String staffRoleCode;

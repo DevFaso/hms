@@ -55,6 +55,68 @@ public class SecurityConstants {
     public static final String CONSULTING_CLINICIANS_ROLES =
         "'RADIOLOGIST','ANESTHESIOLOGIST','PHYSIOTHERAPIST'";
     public static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
+
+    /**
+     * Who may register an account ({@code POST /users/admin-register}) and so
+     * also send the patient-registration form's compensation delete. A SpEL
+     * fragment for {@code hasAnyAuthority(...)}, written once: both
+     * {@code UserController} annotations and {@code UserAccountAccess} read it.
+     */
+    // The same authorities as POST /patients (PatientController
+    // .createPatientByReceptionist): a registrar this list admitted but that
+    // endpoint refused created a patient ACCOUNT and then got a 403 on the
+    // patient record, leaving an orphan (QA D55, the doctor). A guard test
+    // keeps the two lists equal.
+    public static final String USER_REGISTRAR_AUTHORITIES =
+        "'ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE'";
+
+    /**
+     * The other way into {@code POST /users/admin-register}: the administrator
+     * of an external provider facility, registering staff at that facility
+     * (provider plan §6.3). Kept OUT of {@link #USER_REGISTRAR_AUTHORITIES}:
+     * every role on that list may register PATIENT accounts, and a provider
+     * admin never may. The admin-register annotation and its
+     * {@code SecurityConfig} matcher read both lists.
+     */
+    public static final String PROVIDER_REGISTRAR_AUTHORITIES = "'ROLE_PROVIDER_ADMIN'";
+
+    /**
+     * Who may read the provider directory ({@code GET /provider-directory},
+     * provider plan §6.5): the hospital staff who add a provider to their
+     * registry, route a prescription or pick a performing lab. Written once:
+     * the controller annotation and the {@code SecurityConfig} matcher read
+     * it. The caller must also act at a HOSPITAL and hold one of these roles
+     * there, live (the service checks).
+     */
+    public static final String PROVIDER_DIRECTORY_AUTHORITIES =
+        "'ROLE_HOSPITAL_ADMIN','ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_DOCTOR','ROLE_MIDWIFE',"
+            + "'ROLE_NURSE','ROLE_SUPER_ADMIN'";
+
+    /**
+     * QA D790: who may page or search the user directory ({@code GET /users},
+     * {@code GET /users/search}): the administrators. The service decides the
+     * same from the assignment table ({@code UserAccountAccess.requireDirectoryAccess});
+     * this is the annotation in front of it.
+     */
+    public static final String USER_DIRECTORY_AUTHORITIES =
+        "'ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN'";
+
+    /** Every authority admitted to {@code POST /users/admin-register}: both registrar lists. */
+    public static final String ADMIN_REGISTER_AUTHORITIES =
+        USER_REGISTRAR_AUTHORITIES + "," + PROVIDER_REGISTRAR_AUTHORITIES;
+
+    /**
+     * The authorities of a quoted SpEL fragment such as
+     * {@link #USER_REGISTRAR_AUTHORITIES}, for the places that need them as
+     * values (a {@code requestMatchers(...).hasAnyAuthority(...)} rule), so
+     * the annotation and the filter chain read one list.
+     */
+    public static String[] authorities(String quotedFragment) {
+        return java.util.Arrays.stream(quotedFragment.split(","))
+            .map(part -> part.replace("'", "").trim())
+            .filter(part -> !part.isEmpty())
+            .toArray(String[]::new);
+    }
     public static final String ROLE_BILLING_SPECIALIST = "ROLE_BILLING_SPECIALIST";
 
     // Pharmacy sub-roles
@@ -94,6 +156,41 @@ public class SecurityConstants {
     // forensic trail back to the real super admin.
     public static final String CLAIM_IMPERSONATOR_USER_ID = "impersonatorUserId";
     public static final String CLAIM_IMPERSONATOR_USERNAME = "impersonatorUsername";
+
+    // Authentication Method Reference (RFC 8176), the second-factor proof the
+    // provider MFA gate reads (provider plan AC-13). Keycloak puts it in its
+    // tokens through the realm's AMR mapper; the legacy issuer stamps it on the
+    // tokens minted after a TOTP challenge (and carries it through a refresh),
+    // never on a password-only token.
+    public static final String CLAIM_AMR = "amr";
+    public static final String AMR_PASSWORD = "pwd";
+    public static final String AMR_OTP = "otp";
+    /** When the legacy second factor was verified (epoch seconds), so its age can be checked. */
+    public static final String CLAIM_OTP_AT = "otp_at";
+
+    /**
+     * QA D902 (#968 review): the codes of the roles the platform ships with.
+     * Every security gate, route guard and claim reads a role by its code, so
+     * changing one of these strips the role from every holder at once - for
+     * ROLE_SUPER_ADMIN, the platform's only way back. {@code PUT /roles/{id}}
+     * refuses a code change to or from any of them; the name and description
+     * stay editable. {@code SUPER_ADMIN} is the legacy spelling still counted
+     * as a super-admin. The codes V159 retired (no gate reads them, and
+     * RoleRegistryTest keeps it so) are not listed: a leftover row with one of
+     * them is an ordinary role that can be deleted once nobody holds it.
+     */
+    public static final java.util.Set<String> BUILT_IN_ROLE_CODES = java.util.Set.of(
+        ROLE_SUPER_ADMIN, "SUPER_ADMIN", ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_DOCTOR, "ROLE_PHYSICIAN",
+        ROLE_NURSE, ROLE_MIDWIFE, ROLE_PATIENT, ROLE_RECEPTIONIST, ROLE_STAFF,
+        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
+        ROLE_PHARMACIST, ROLE_PHARMACY_VERIFIER, ROLE_CLAIMS_REVIEWER, ROLE_INVENTORY_CLERK,
+        ROLE_STORE_MANAGER, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST, ROLE_RADIOLOGIST, ROLE_SURGEON,
+        ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, "ROLE_PROVIDER_ADMIN");
+
+    /** Whether this stored role code is one the platform ships with ({@link #BUILT_IN_ROLE_CODES}). */
+    public static boolean isBuiltInRoleCode(String code) {
+        return code != null && BUILT_IN_ROLE_CODES.contains(code.trim().toUpperCase(java.util.Locale.ROOT));
+    }
 
     // Prevent instantiation
     private SecurityConstants() {

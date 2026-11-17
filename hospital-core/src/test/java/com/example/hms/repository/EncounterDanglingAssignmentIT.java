@@ -4,7 +4,6 @@ import com.example.hms.enums.EmploymentType;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.JobTitle;
-import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
@@ -13,16 +12,11 @@ import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.security.EncryptionKeyHolder;
-import com.example.hms.security.tenant.TenantContextAccessor;
 import jakarta.persistence.EntityManager;
 import org.hibernate.Hibernate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
-import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,9 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * assertion is the one that matters: after the update flushes, the assignment proxy is still
  * uninitialized, so a missing row behind it cannot have been touched.
  */
-@DataJpaTest
-@ActiveProfiles("test")
-@Import({TenantContextAccessor.class, EncryptionKeyHolder.class})
+@TenantScopedDataJpaTest
 class EncounterDanglingAssignmentIT {
 
     @Autowired
@@ -53,11 +45,8 @@ class EncounterDanglingAssignmentIT {
 
     @Test
     void updatingAnEncounterDoesNotLoadTheAssignmentItCarriesOver() {
-        Organization organization = em.persist(Organization.builder()
-            .name("Dangling Org").code("ORG-DE1").type(OrganizationType.HOSPITAL_CHAIN).build());
-        Hospital hospital = em.persist(Hospital.builder()
-            .name("Hospital B").code("HOSP-DE1").address("1 Rue").city("Ouagadougou").country("BF")
-            .organization(organization).build());
+        Organization organization = em.persist(HospitalFixtures.organization("Dangling Org", "ORG-DE1"));
+        Hospital hospital = em.persist(HospitalFixtures.hospital(organization, "Hospital B", "HOSP-DE1"));
         User patientUser = em.persist(User.builder()
             .username("de_patient_1").passwordHash("h").email("de_patient_1@example.com")
             .phoneNumber("+22670000921").firstName("Patient").lastName("One").build());

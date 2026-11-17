@@ -119,7 +119,7 @@ class HospitalControllerIT extends BaseIT {
                 .city(city)
                 .state(state)
                 .country("Burkina Faso")
-                .phoneNumber("+226-555-0000")
+                .phoneNumber("+226 25 55 00 00")
                 .active(true)
                 .build();
         hospital.setOrganization(organization);

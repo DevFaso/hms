@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.mock;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
@@ -52,6 +53,7 @@ import static org.mockito.Mockito.when;
  * null restock date, null/blank medication code, null quantityOnHand entries,
  * and the best-effort partner SMS error-handling paths.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class StockOutRoutingServiceImplBranchesTest {
 
@@ -67,6 +69,25 @@ class StockOutRoutingServiceImplBranchesTest {
     @Mock private PharmacyServiceSupport support;
     @Mock private PartnerNotificationChannel partnerChannel;
     @Mock private PrescriberPharmacyNotifier prescriberNotifier;
+
+    /** G13: the work-queue claim; exit-path releases are verified where they matter. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
+
+    /** QA D792: real, over an empty stay history, so the guards apply the rule itself. */
+    @org.mockito.Spy
+    private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
+        new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class));
+
+    /** QA D792 (#953 review, round 2): ends an ended-stay order once its hold goes. */
+
+    @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
+
+
+
+    /** QA D899: the real dispense DRUG rule, so the stock check is tested against the matcher the fill uses. */
+    @org.mockito.Spy
+    private DispenseVerificationService dispenseVerificationService =
+        new DispenseVerificationService(java.time.Clock.systemUTC());
 
     @InjectMocks
     private StockOutRoutingServiceImpl service;
@@ -233,7 +254,7 @@ class StockOutRoutingServiceImplBranchesTest {
                 .routingType("BACKORDER").build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
         when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -250,7 +271,7 @@ class StockOutRoutingServiceImplBranchesTest {
     @DisplayName("resolveCurrentUser throws BusinessException when no user in context")
     void resolveCurrentUserNullThrows() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(roleValidator.getCurrentUserId()).thenReturn(null);
 
         assertThatThrownBy(() -> service.printForPatient(prescriptionId))
@@ -262,7 +283,7 @@ class StockOutRoutingServiceImplBranchesTest {
     @DisplayName("resolveCurrentUser throws ResourceNotFoundException when user missing from repo")
     void resolveCurrentUserMissingThrows() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
@@ -290,7 +311,7 @@ class StockOutRoutingServiceImplBranchesTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         when(pharmacyRepository.findById(partnerId)).thenReturn(Optional.of(partnerPharmacy));
         when(routingMapper.toEntity(eq(request), any())).thenReturn(decision);
         when(routingDecisionRepository.save(decision)).thenReturn(decision);
@@ -366,7 +387,7 @@ class StockOutRoutingServiceImplBranchesTest {
         prescription.setHospital(other);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
         assertThatThrownBy(() -> service.backOrder(prescriptionId, LocalDate.now().plusDays(3)))
                 .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
@@ -389,6 +410,7 @@ class StockOutRoutingServiceImplBranchesTest {
 
         assertThatThrownBy(() -> service.partnerRespond(decisionId, true))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PENDING");
+                // QA D1090 class: the refusal reads as people do, never the raw code.
+                .extracting("messageKey").isEqualTo("stock.routing.notPending");
     }
 }

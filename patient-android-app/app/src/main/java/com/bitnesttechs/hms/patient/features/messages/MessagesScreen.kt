@@ -22,9 +22,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.R
-import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.OnBrandMuted
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
+import androidx.compose.ui.platform.LocalConfiguration
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.core.os.ConfigurationCompat
+import java.time.LocalDateTime
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,12 +48,31 @@ fun MessagesScreen(
     val isLoadingCareTeam by viewModel.isLoadingCareTeam.collectAsState()
     var showProviderPicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val locale = currentLocale()
+    val yesterday = stringResource(R.string.chat_yesterday)
+
+    // Every time the inbox is shown, not once per ViewModel: coming back from
+    // a thread must clear the badge that opening it marked read.
+    LaunchedEffect(Unit) { viewModel.load() }
+
+    // Android 13+: the notification permission is asked for once, on the first
+    // visit to Messages (not at cold start), and only when push is configured.
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            viewModel.shouldAskNotificationPermission() &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.markNotificationPermissionAsked()
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.messages)) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary,
                     titleContentColor = Color.White)
             )
         },
@@ -53,7 +82,7 @@ fun MessagesScreen(
                     viewModel.loadCareTeam()
                     showProviderPicker = true
                 },
-                containerColor = BrandBlue
+                containerColor = BrandPrimary
             ) {
                 Icon(Icons.Default.Edit, stringResource(R.string.new_message), tint = Color.White)
             }
@@ -61,7 +90,7 @@ fun MessagesScreen(
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -95,16 +124,16 @@ fun MessagesScreen(
                         },
                         leadingContent = {
                             Box(
-                                Modifier.size(44.dp).clip(CircleShape).background(BrandLightBlue),
+                                Modifier.size(44.dp).clip(CircleShape).background(BrandSoft),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Person, null, tint = BrandBlue)
+                                Icon(Icons.Default.Person, null, tint = BrandPrimary)
                             }
                         },
                         trailingContent = {
                             Column(horizontalAlignment = Alignment.End) {
-                                convo.lastMessageTimestamp?.let {
-                                    Text(it.take(10), style = MaterialTheme.typography.labelSmall,
+                                ChatTime.inboxLabel(convo.lastMessageTimestamp, LocalDateTime.now(), locale, yesterday)?.let {
+                                    Text(it, style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 if (convo.unreadCount > 0) {
@@ -135,7 +164,7 @@ fun MessagesScreen(
                 if (careTeamMembers.isEmpty()) {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         if (isLoadingCareTeam) {
-                            CircularProgressIndicator(color = BrandBlue)
+                            CircularProgressIndicator(color = BrandPrimary)
                         } else {
                             Text(stringResource(R.string.no_providers_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -143,27 +172,21 @@ fun MessagesScreen(
                 } else {
                     careTeamMembers.forEach { member ->
                         ListItem(
-                            headlineContent = { Text(member.name, fontWeight = FontWeight.Medium) },
-                            supportingContent = {
-                                val info = listOfNotNull(
-                                    LocaleHelper.translateProviderDescriptor(context, member.role),
-                                    LocaleHelper.translateProviderDescriptor(context, member.specialty),
-                                    LocaleHelper.translateProviderDescriptor(context, member.department)
-                                )
-                                    .joinToString(" · ")
-                                if (info.isNotEmpty()) Text(info)
+                            headlineContent = {
+                                Text(member.name.ifBlank { stringResource(R.string.provider_fallback) }, fontWeight = FontWeight.Medium)
                             },
+                            supportingContent = member.hospitalName?.takeIf { it.isNotBlank() }?.let { { Text(it) } },
                             leadingContent = {
                                 Box(
-                                    Modifier.size(40.dp).clip(CircleShape).background(BrandLightBlue),
+                                    Modifier.size(40.dp).clip(CircleShape).background(BrandSoft),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.Person, null, tint = BrandBlue)
+                                    Icon(Icons.Default.Person, null, tint = BrandPrimary)
                                 }
                             },
                             modifier = Modifier.clickable {
                                 showProviderPicker = false
-                                onThreadClick(member.id)
+                                onThreadClick(member.userId)
                             }
                         )
                         HorizontalDivider()
@@ -187,6 +210,16 @@ fun MessageThreadScreen(
     val isSending by viewModel.isSending.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val locale = currentLocale()
+    val context = LocalContext.current
+    val attachmentFiles by viewModel.attachmentFiles.collectAsState()
+    val failedAttachments by viewModel.failedAttachments.collectAsState()
+    val playingAudioId by viewModel.playingAudioId.collectAsState()
+    var fullScreenPhoto by remember { mutableStateOf<java.io.File?>(null) }
+
+    fullScreenPhoto?.let { photo -> FullScreenPhoto(photo) { fullScreenPhoto = null } }
+    // A voice note stops when the thread is left, not when it ends on its own.
+    DisposableEffect(Unit) { onDispose { viewModel.stopAudio() } }
 
     LaunchedEffect(threadId) { viewModel.loadThread(threadId) }
     LaunchedEffect(messages.size) {
@@ -202,7 +235,7 @@ fun MessageThreadScreen(
                         Icon(Icons.Default.ArrowBack, stringResource(R.string.back), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary,
                     titleContentColor = Color.White)
             )
         },
@@ -234,7 +267,7 @@ fun MessageThreadScreen(
                         enabled = inputText.isNotBlank() && !isSending
                     ) {
                         if (isSending) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        else Icon(Icons.Default.Send, null, tint = BrandBlue)
+                        else Icon(Icons.Default.Send, null, tint = BrandPrimary)
                     }
                 }
             }
@@ -242,7 +275,7 @@ fun MessageThreadScreen(
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -264,22 +297,39 @@ fun MessageThreadScreen(
                             bottomStart = if (isMine) 16.dp else 4.dp,
                             bottomEnd = if (isMine) 4.dp else 16.dp
                         ),
-                        color = if (isMine) BrandBlue else MaterialTheme.colorScheme.surfaceVariant,
+                        color = if (isMine) BrandPrimary else MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.widthIn(max = 280.dp)
                     ) {
-                        Column(Modifier.padding(10.dp)) {
-                            Text(
-                                msg.content,
-                                color = if (isMine) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                msg.timestamp.take(16),
-                                color = if (isMine) Color.White.copy(alpha = 0.7f)
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Attachment-only messages are legal: a wound photo or a
+                            // voice note may come with no text at all.
+                            msg.attachmentList.forEach { attachment ->
+                                ChatAttachmentView(
+                                    attachment = attachment,
+                                    isMine = isMine,
+                                    file = attachmentFiles[attachment.id],
+                                    failed = attachment.id in failedAttachments,
+                                    playing = playingAudioId == attachment.id,
+                                    onFetch = { viewModel.fetchAttachment(attachment) },
+                                    onToggleAudio = { viewModel.toggleAudio(attachment) },
+                                    onOpenPhoto = { fullScreenPhoto = it },
+                                    onOpenFile = { viewModel.fetchAttachment(attachment) { file -> openAttachmentFile(context, file, attachment) } }
+                                )
+                            }
+                            msg.text?.let { text ->
+                                Text(
+                                    text,
+                                    color = if (isMine) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            ChatTime.bubbleLabel(msg.timestamp, LocalDateTime.now(), locale)?.let { sentAt -> Text(
+                                sentAt,
+                                color = if (isMine) OnBrandMuted
                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.align(Alignment.End)
-                            )
+                            ) }
                         }
                     }
                 }
@@ -287,3 +337,8 @@ fun MessageThreadScreen(
         }
     }
 }
+
+/** The app language's locale, as applied to this activity's configuration. */
+@Composable
+private fun currentLocale(): Locale =
+    ConfigurationCompat.getLocales(LocalConfiguration.current)[0] ?: Locale.getDefault()

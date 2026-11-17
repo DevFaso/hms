@@ -28,7 +28,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.util.Locale;
@@ -77,7 +76,7 @@ class TreatmentServiceImplTest {
         TreatmentResponseDTO responseDTO = TreatmentResponseDTO.builder().id(treatment.getId()).build();
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
-        when(hospitalRepository.findById(hospId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospId)).thenReturn(Optional.of(hospital));
         when(authService.getCurrentUserId()).thenReturn(userId);
         when(authService.getCurrentUserToken()).thenReturn("token");
         when(jwtTokenProvider.getRolesFromToken("token")).thenReturn(List.of("DOCTOR"));
@@ -99,7 +98,6 @@ class TreatmentServiceImplTest {
         dto.setHospitalId(UUID.randomUUID());
 
         when(departmentRepository.findById(dto.getDepartmentId())).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.createTreatment(dto, locale, null))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -129,7 +127,7 @@ class TreatmentServiceImplTest {
         TreatmentResponseDTO responseDTO = TreatmentResponseDTO.builder().id(treatment.getId()).build();
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(dept));
-        when(hospitalRepository.findById(hospId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospId)).thenReturn(Optional.of(hospital));
         when(authService.getCurrentUserId()).thenReturn(userId);
         when(authService.getCurrentUserToken()).thenReturn("token");
         when(jwtTokenProvider.getRolesFromToken("token")).thenReturn(List.of("ADMIN", "DOCTOR"));
@@ -162,7 +160,7 @@ class TreatmentServiceImplTest {
 
         when(treatmentRepository.findWithAssignmentById(id)).thenReturn(Optional.of(treatment));
         when(departmentRepository.findById(dto.getDepartmentId())).thenReturn(Optional.of(dept));
-        when(hospitalRepository.findById(dto.getHospitalId())).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(dto.getHospitalId())).thenReturn(Optional.of(hospital));
         when(treatmentRepository.save(treatment)).thenReturn(treatment);
         when(treatmentMapper.toTreatmentResponseDTO(treatment, "en")).thenReturn(responseDTO);
 
@@ -175,7 +173,6 @@ class TreatmentServiceImplTest {
         UUID id = UUID.randomUUID();
         TreatmentRequestDTO dto = new TreatmentRequestDTO();
         when(treatmentRepository.findWithAssignmentById(id)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.updateTreatment(id, dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -186,17 +183,18 @@ class TreatmentServiceImplTest {
     @Test
     void deleteTreatment_success() {
         UUID id = UUID.randomUUID();
-        when(treatmentRepository.existsById(id)).thenReturn(true);
+        Treatment treatment = new Treatment();
+        when(treatmentRepository.findById(id)).thenReturn(Optional.of(treatment));
 
         service.deleteTreatment(id);
 
-        verify(treatmentRepository).deleteById(id);
+        verify(treatmentRepository).delete(treatment);
     }
 
     @Test
     void deleteTreatment_notFound() {
         UUID id = UUID.randomUUID();
-        when(treatmentRepository.existsById(id)).thenReturn(false);
+        when(treatmentRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.deleteTreatment(id))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -222,7 +220,6 @@ class TreatmentServiceImplTest {
     void getTreatmentById_notFound() {
         UUID id = UUID.randomUUID();
         when(treatmentRepository.findWithAssignmentAndUserById(id)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getTreatmentById(id, locale, "en"))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -260,7 +257,6 @@ class TreatmentServiceImplTest {
 
         when(treatmentRepository.findWithAssignmentAndUserById(id)).thenReturn(Optional.of(treatment));
         when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
         assertThatThrownBy(() -> service.getTreatmentById(id, locale, "en"))
             .isInstanceOf(ResourceNotFoundException.class);

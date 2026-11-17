@@ -10,6 +10,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
   padding: 14px 16px;
   border-bottom: 1px solid #e2e8f0;
 }
@@ -209,6 +211,16 @@
   &:last-child {
     border-bottom: none;
   }
+}
+
+.rp-row-select {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
 }
 
 .rp-row-info {

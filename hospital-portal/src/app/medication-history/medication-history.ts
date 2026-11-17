@@ -25,7 +25,14 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
 /**
  * Medication-history workspace (Phase 3 task 15): the /medication-history
  * timeline (prescriptions + external pharmacy fills with overlap/interaction
@@ -36,7 +43,18 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
   selector: 'app-medication-history',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent, EnumLabelPipe],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    MedicationRoutePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './medication-history.html',
   styleUrl: './medication-history.scss',
 })
@@ -219,7 +237,13 @@ export class MedicationHistoryComponent implements OnInit {
   submitFill(): void {
     const form = this.fillForm;
     if (!form.medicationName.trim() || !form.fillDate) {
-      this.toast.error(this.translate.instant('MED_TIMELINE.FILL_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MED_TIMELINE.MEDICATION', value: form.medicationName.trim() },
+          { labelKey: 'MED_TIMELINE.FILL_DATE', value: form.fillDate },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     this.fillSaving.set(true);
@@ -243,8 +267,10 @@ export class MedicationHistoryComponent implements OnInit {
         );
         this.reloadTimelineOnly();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_TIMELINE.FILL_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_TIMELINE.FILL_SAVE_ERROR'),
+        );
         this.fillSaving.set(false);
       },
     });

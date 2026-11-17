@@ -10,10 +10,13 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.EffectiveRoles;
 import com.example.hms.security.context.ImpersonationContext;
 import com.example.hms.security.context.ImpersonationContextHolder;
 import tools.jackson.core.JacksonException;
@@ -28,14 +31,18 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.utility.RoleNames;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AuditEventLogServiceImpl implements AuditEventLogService {
+public class AuditEventLogServiceImpl implements AuditEventLogService, RequiredAuditEventLogPort {
 
     private final UserRepository userRepository;
     private final AuditEventLogRepository auditRepository;
@@ -43,6 +50,8 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final ObjectMapper objectMapper;
     private final PatientRepository patientRepository;
+    private final PatientHospitalRegistrationRepository registrationRepository;
+    private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
@@ -52,6 +61,15 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
      * page for a single unlucky row.
      */
     private static final int REPLAY_FAILURE_LIMIT = 3;
+
+    /** Existing fail-open callers are unchanged; explicit IU operations require atomic auditing. */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AuditEventLogResponseDTO logRequiredEvent(AuditEventRequestDTO request) {
+        User actor = resolveUser(request);
+        if (actor == null) throw new org.springframework.security.access.AccessDeniedException("Access denied");
+        return doLogEvent(request, actor);
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -96,7 +114,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     @Transactional(readOnly = true)
     public Page<AuditEventLogResponseDTO> getAuditLogsByHospital(UUID hospitalId, Pageable pageable) {
         return auditRepository
-            .findByAssignment_Hospital_IdOrderByEventTimestampDesc(hospitalId, pageable)
+            .findAnchoredAtHospital(hospitalId, pageable)
             .map(auditMapper::toDto);
     }
 
@@ -202,18 +220,28 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
      * Separated from {@link #logEvent} so the outer method can swallow exceptions.
      */
     private AuditEventLogResponseDTO doLogEvent(AuditEventRequestDTO requestDTO) {
-        User user = resolveUser(requestDTO);
+        return doLogEvent(requestDTO, resolveUser(requestDTO));
+    }
+
+    private AuditEventLogResponseDTO doLogEvent(AuditEventRequestDTO requestDTO, User user) {
         UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO, user);
         ActorContext actor = resolveActorContext(requestDTO, user);
         String hospitalName = resolveHospitalName(requestDTO, assignment);
-        String roleName = resolveRoleName(requestDTO, assignment, user);
+        String roleName = resolveRoleName(requestDTO, assignment, user, hospitalName);
         String detailsStr = convertDetailsToString(requestDTO.getDetails());
 
         String resourceId = requestDTO.getResourceId();
         String resourceName = requestDTO.getResourceName();
         if ("PATIENT".equalsIgnoreCase(requestDTO.getEntityType())) {
-            resourceId = resolvePatientResourceId(resourceId, resourceName);
+            resourceId = resolvePatientResourceId(requestDTO, resourceId, resourceName, assignment);
             resourceName = resolvePatientResourceName(resourceName, resourceId);
+        }
+        // QA D309/D429: rows written by the generic write audit (consents,
+        // organisations, ...) carry no name, and every one of them read
+        // "Unknown Resource". The entity type is what the row is about.
+        if ((resourceName == null || resourceName.isBlank())
+                && requestDTO.getEntityType() != null && !requestDTO.getEntityType().isBlank()) {
+            resourceName = requestDTO.getEntityType();
         }
 
         ImpersonatorIdentity impersonator = resolveImpersonatorIdentity(requestDTO);
@@ -243,6 +271,8 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
                 .impersonatorUserId(impersonatorUserId)
                 .impersonatorUsername(impersonatorUsername)
                 .patientId(resolvePatientKey(requestDTO, resourceId))
+                // An assignment's hospital is stamped by the entity itself.
+                .hospitalId(systemRowHospital(requestDTO, user, assignment))
                 .build();
 
         AuditEventLog saved = auditRepository.save(event);
@@ -282,6 +312,20 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     }
 
     /**
+     * QA D786: a SYSTEM row (no actor user, so no assignment) that the server
+     * wrote for one hospital's data belongs to that hospital's audit log. Only
+     * for SYSTEM rows: a user's row is anchored on the user's own assignment
+     * there (QA D521/D533), never on a hospital it merely names.
+     */
+    private static UUID systemRowHospital(AuditEventRequestDTO requestDTO, User user,
+                                          UserRoleHospitalAssignment assignment) {
+        if (user != null || assignment != null) {
+            return null;
+        }
+        return requestDTO.getHospitalId();
+    }
+
+    /**
      * Resolve the acting user. Returns {@code null} when no user can be found
      * (e.g. SYSTEM / bootstrap flows) — this is intentional, not an error.
      */
@@ -308,9 +352,37 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
             && !assignment.getUser().getId().equals(user.getId())) {
             log.debug("Audit assignment/user mismatch (assignment user id: {}, actor id: {}). Dropping assignment link.",
                 assignment.getUser().getId(), user.getId());
-            return null;
+            assignment = null;
+        }
+        // QA D521/D533: no usable assignment, but the emitter named the hospital
+        // the action happened at. Anchor on the actor's own active assignment
+        // there, so the row reaches that hospital's audit log with its name.
+        // QA D1632: of the actor's assignments there, the one of the role they
+        // act under (the role the emitter named, else the request's token when
+        // it is the actor's own), not the first active row.
+        if (assignment == null && user != null && requestDTO.getHospitalId() != null) {
+            assignment = com.example.hms.security.audit.ActingAssignments
+                .resolve(assignmentRepository, user.getId(), requestDTO.getHospitalId(), actingRolesOf(requestDTO, user))
+                .orElse(null);
         }
         return assignment;
+    }
+
+    /**
+     * The roles the actor is acting under: the one the emitter named, else the
+     * current request's own roles when the request is the actor's (a job or
+     * another user's request says nothing about this actor's role).
+     */
+    private static List<String> actingRolesOf(AuditEventRequestDTO requestDTO, User user) {
+        if (requestDTO.getRoleName() != null && !requestDTO.getRoleName().isBlank()) {
+            return List.of(requestDTO.getRoleName());
+        }
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (com.example.hms.security.PrincipalUserIds.of(auth).filter(user.getId()::equals).isEmpty()) {
+            return List.of();
+        }
+        return com.example.hms.security.audit.ActingAssignments.actingRoles(auth);
     }
 
     private String resolveHospitalName(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment) {
@@ -321,52 +393,137 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         return hospitalName;
     }
 
-    private String resolveRoleName(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment, User user) {
+    private String resolveRoleName(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment,
+                                   User user, String hospitalName) {
         String roleName = requestDTO.getRoleName();
-        if ((roleName == null || roleName.isBlank()) && assignment != null && assignment.getRole() != null) {
-            roleName = assignment.getRole().getName();
-        }
-        if ((roleName == null || roleName.isBlank()) && user != null && user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
-            roleName = user.getUserRoles().iterator().next().getRole().getName();
-        }
         if (roleName == null || roleName.isBlank()) {
-            roleName = "Unknown Role";
+            roleName = com.example.hms.security.audit.ActingAssignments.roleName(assignment,
+                user == null ? List.of() : actingRolesOf(requestDTO, user));
         }
-        return roleName;
+        if ((roleName == null || roleName.isBlank()) && user != null) {
+            roleName = effectiveRoleOf(user, hospitalName);
+        }
+        // One format for every writer (QA D187): the bare code, DOCTOR not
+        // ROLE_DOCTOR, whichever path supplied it.
+        String bare = RoleNames.bareRole(roleName);
+        return bare == null ? RoleNames.UNKNOWN_ROLE : bare;
     }
 
-    private String resolvePatientResourceId(String resourceId, String resourceName) {
-        if ((resourceId != null && !resourceId.isBlank()) || resourceName == null || resourceName.isBlank()) {
+    /**
+     * The role an event with no assignment is filed under: the actor's ACTIVE
+     * role at the event's hospital, else a role they effectively hold
+     * (EffectiveRoles). The first raw {@code user_roles} link used to be taken,
+     * which filed a break-glass at hospital B under ROLE_NURSE from an
+     * inactive assignment at hospital A (QA D110, D165) and a receptionist's
+     * check-in under a leftover ROLE_PATIENT (QA D132).
+     */
+    private String effectiveRoleOf(User user, String hospitalName) {
+        List<UserRoleHospitalAssignment> rows = assignmentRepository.findAllByUserId(user.getId());
+        if (hospitalName != null && !hospitalName.isBlank()) {
+            Optional<String> atHospital = rows.stream()
+                .filter(a -> Boolean.TRUE.equals(a.getActive()))
+                .filter(a -> a.getHospital() != null && hospitalName.equals(a.getHospital().getName()))
+                .map(UserRoleHospitalAssignment::getRole)
+                .filter(Objects::nonNull)
+                .map(com.example.hms.model.Role::getCode)
+                .filter(Objects::nonNull)
+                .sorted()
+                .findFirst();
+            if (atHospital.isPresent()) {
+                return atHospital.get();
+            }
+        }
+        return EffectiveRoles.codes(user, rows).stream().sorted().findFirst().orElse(null);
+    }
+
+    /**
+     * The patient a PATIENT-typed row names only by its resource name (a full
+     * name, an email, a phone number, an MRN).
+     *
+     * <p>QA round 16 residual #13 (class: an audit row's patient taken as the
+     * first free-text match in the whole database). The desk records shared
+     * family numbers and a name or an email can belong to several people, so
+     * "the first holder" filed a disclosure row under somebody else, possibly
+     * at another hospital. The rule now: the request's own patient id wins;
+     * otherwise only patients actively registered at the event's hospital are
+     * candidates, and the name resolves only when exactly one of them matches.
+     * No hospital, or two holders, leaves the resource unresolved: an access
+     * row with no patient is honest, one under the wrong patient is not.
+     */
+    private String resolvePatientResourceId(AuditEventRequestDTO requestDTO, String resourceId, String resourceName,
+                                            UserRoleHospitalAssignment assignment) {
+        if (resourceId != null && !resourceId.isBlank()) {
             return resourceId;
         }
-        Patient patient = findPatientByName(resourceName);
-        if (patient == null && resourceName.contains("@")) {
-            patient = patientRepository.findByEmailContainingIgnoreCase(resourceName)
-                .stream().findFirst().orElse(null);
+        if (requestDTO.getPatientId() != null) {
+            return requestDTO.getPatientId().toString();
         }
-        if (patient == null && resourceName.matches("\\d{6,}")) {
-            patient = findPatientByPhone(resourceName);
+        if (resourceName == null || resourceName.isBlank()) {
+            return resourceId;
         }
-        return patient != null ? patient.getId().toString() : resourceId;
+        UUID hospitalId = eventHospitalId(requestDTO, assignment);
+        if (hospitalId == null) {
+            return resourceId;
+        }
+        String identifier = resourceName.trim();
+        java.util.Set<UUID> holders = new java.util.LinkedHashSet<>();
+        registrationRepository.findActiveByHospitalIdAndIdentifier(hospitalId, identifier).stream()
+            .map(r -> r.getPatient() != null ? r.getPatient().getId() : null)
+            .filter(Objects::nonNull)
+            .forEach(holders::add);
+        if (identifier.matches("\\+?\\d{6,}")) {
+            holders.addAll(phoneHoldersAt(identifier, hospitalId, assignment));
+        }
+        if (holders.size() != 1) {
+            if (holders.size() > 1) {
+                log.debug("[AUDIT] PATIENT resource name matches {} patients at the event's hospital; left unresolved",
+                    holders.size());
+            }
+            return resourceId;
+        }
+        return holders.iterator().next().toString();
     }
 
-    private Patient findPatientByName(String resourceName) {
-        String[] parts = resourceName.trim().split(" ");
-        if (parts.length < 2) {
-            return null;
+    /** The hospital the event happened at: the request's, else its assignment's. */
+    private static UUID eventHospitalId(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment) {
+        if (requestDTO.getHospitalId() != null) {
+            return requestDTO.getHospitalId();
         }
-        String first = parts[0];
-        String last = parts[parts.length - 1];
-        return patientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(first, last)
-            .stream().findFirst().orElse(null);
+        return assignment != null && assignment.getHospital() != null ? assignment.getHospital().getId() : null;
     }
 
-    private Patient findPatientByPhone(String resourceName) {
-        Patient patient = patientRepository.findByPhoneNumberPrimary(resourceName).orElse(null);
-        if (patient == null) {
-            patient = patientRepository.findByPhoneNumberSecondary(resourceName).orElse(null);
+    /**
+     * Every patient registered at {@code hospitalId} whose primary or
+     * secondary number is {@code number}: as stored, or the same subscriber
+     * (QA D942, the hospital's calling code for a national number).
+     */
+    private java.util.Set<UUID> phoneHoldersAt(String number, UUID hospitalId, UserRoleHospitalAssignment assignment) {
+        java.util.Set<UUID> holders = new java.util.LinkedHashSet<>();
+        java.util.stream.Stream.concat(
+                patientRepository.findAllByPhoneNumberPrimary(number).stream(),
+                patientRepository.findAllByPhoneNumberSecondary(number).stream())
+            .map(Patient::getId)
+            .filter(Objects::nonNull)
+            .filter(id -> registrationRepository.isPatientRegisteredInHospitalFixed(id, hospitalId))
+            .forEach(holders::add);
+        String key = com.example.hms.utility.PatientMatchKeys.phoneKey(number);
+        if (com.example.hms.utility.PatientMatchKeys.isSubscriberKey(key)) {
+            String country = assignment != null && assignment.getHospital() != null
+                    && hospitalId.equals(assignment.getHospital().getId())
+                ? assignment.getHospital().getCountry()
+                : hospitalRepository.findById(hospitalId).map(com.example.hms.model.Hospital::getCountry).orElse(null);
+            String callingCode = com.example.hms.utility.PhoneNumbers.callingCodeForCountry(country);
+            patientRepository.findAllByPhoneSubscriberAtHospital("%" + key, hospitalId,
+                    org.springframework.data.domain.PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
+                .filter(p -> com.example.hms.utility.PatientMatchKeys.samePhone(
+                        p.getPhoneNumberPrimary(), number, callingCode)
+                    || com.example.hms.utility.PatientMatchKeys.samePhone(
+                        p.getPhoneNumberSecondary(), number, callingCode))
+                .map(Patient::getId)
+                .filter(Objects::nonNull)
+                .forEach(holders::add);
         }
-        return patient;
+        return holders;
     }
 
     private String resolvePatientResourceName(String resourceName, String resourceId) {

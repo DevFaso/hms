@@ -13,15 +13,20 @@ final class LocalizationManager: ObservableObject {
 
     private(set) var bundle: Bundle
 
+    /// Each language named in itself, as a picker should.
     static let supportedLanguages: [(code: String, name: String)] = [
         ("en", "English"),
         ("fr", "Français"),
+        ("es", "Español"),
     ]
 
     private init() {
         let saved = UserDefaults.standard.string(forKey: "app_language") ?? "en"
-        currentLanguage = saved
-        bundle = Self.loadBundle(for: saved)
+        // A saved code this build no longer ships falls back to English
+        // rather than to a bundle that does not exist.
+        let language = Self.supportedLanguages.contains { $0.code == saved } ? saved : "en"
+        currentLanguage = language
+        bundle = Self.loadBundle(for: language)
     }
 
     private static func loadBundle(for languageCode: String) -> Bundle {

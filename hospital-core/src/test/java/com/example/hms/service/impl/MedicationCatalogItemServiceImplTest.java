@@ -99,7 +99,7 @@ class MedicationCatalogItemServiceImplTest {
         // check — JWT must report this hospital as the active scope.
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(mapper.toEntity(requestDTO)).thenReturn(item);
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
         when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
@@ -113,7 +113,7 @@ class MedicationCatalogItemServiceImplTest {
     @Test
     void create_hospitalNotFound_throws() {
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -161,12 +161,36 @@ class MedicationCatalogItemServiceImplTest {
      * entry by omitting hospitalId. Catalog governance stays with super-admin.
      */
     @Test
-    void create_asHospitalAdmin_withoutHospitalId_throws() {
+    void create_asHospitalAdmin_withoutHospitalId_defaultsToActingHospital() {
+        // D34: the portal form never sends hospitalId; the admin's entry goes to
+        // the hospital they act for, never to the global catalog.
+        MedicationCatalogItemRequestDTO noHospital = MedicationCatalogItemRequestDTO.builder()
+                .nameFr("Amoxicilline")
+                .genericName("Amoxicillin")
+                .build();
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(mapper.toEntity(noHospital)).thenReturn(item);
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+
+        service.create(noHospital);
+
+        ArgumentCaptor<MedicationCatalogItem> captor =
+                ArgumentCaptor.forClass(MedicationCatalogItem.class);
+        verify(catalogRepository).save(captor.capture());
+        assertThat(captor.getValue().getHospital()).isSameAs(hospital);
+    }
+
+    @Test
+    void create_asHospitalAdmin_withoutHospitalIdOrScope_throws() {
         MedicationCatalogItemRequestDTO global = MedicationCatalogItemRequestDTO.builder()
                 .nameFr("Amoxicilline")
                 .genericName("Amoxicillin")
                 .build();
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
 
         assertThatThrownBy(() -> service.create(global))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class)
@@ -196,7 +220,7 @@ class MedicationCatalogItemServiceImplTest {
 
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId); // NOT foreign
-        when(hospitalRepository.findById(foreignHospitalId)).thenReturn(Optional.of(foreign));
+        when(hospitalRepository.findClinicalById(foreignHospitalId)).thenReturn(Optional.of(foreign));
 
         assertThatThrownBy(() -> service.create(foreignReq))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class)
@@ -212,7 +236,7 @@ class MedicationCatalogItemServiceImplTest {
     @Test
     void create_asSuperAdmin_withExplicitHospitalId_savesAsTenantScoped() {
         when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(mapper.toEntity(requestDTO)).thenReturn(item);
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
         when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
@@ -276,6 +300,17 @@ class MedicationCatalogItemServiceImplTest {
     }
 
     // ── listByCategory ──
+
+    @Test
+    void listByCategory_globalViewListsEveryTenant() {
+        // Review of #975: a null scope (verified super-admin, no hospital pinned) is the whole platform.
+        Pageable pageable = PageRequest.of(0, 20);
+        when(catalogRepository.findByCategoryAndActiveTrue("Analgesic", pageable))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        assertThat(service.listByCategory(null, "Analgesic", pageable).getContent()).isEmpty();
+        verify(catalogRepository).findByCategoryAndActiveTrue("Analgesic", pageable);
+    }
 
     @Test
     void listByCategory_returnsPage() {

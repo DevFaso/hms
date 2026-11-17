@@ -3,6 +3,7 @@ import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@a
 import { Router, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { storedLang, switchLanguage } from '../shared/i18n/app-locale';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 interface SettingsCard {
   icon: string;
@@ -32,11 +33,12 @@ const SUPPORTED_LANGS = [
   standalone: true,
   imports: [RouterLink, TranslateModule],
   templateUrl: './settings.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './settings.scss',
 })
 export class SettingsComponent {
   private readonly translate = inject(TranslateService);
+  private readonly confirmService = inject(ConfirmService);
   private readonly router = inject(Router);
 
   readonly languages = SUPPORTED_LANGS;
@@ -83,7 +85,9 @@ export class SettingsComponent {
     },
   ]);
 
-  switchLang(lang: string): void {
-    if (switchLanguage(lang, this.translate)) this.currentLang.set(storedLang());
+  async switchLang(lang: string): Promise<void> {
+    if (await switchLanguage(lang, this.translate, this.confirmService)) {
+      this.currentLang.set(storedLang());
+    }
   }
 }

@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-workspace' as diagnostics;
 @use '../../shared/styles/page-common';
 
 :host {
@@ -399,4 +400,11 @@
   .page-header h1 {
     font-size: 1.125rem;
   }
+}
+
+@include diagnostics.workspace;
+
+:host {
+  padding: 0;
+  max-width: none;
 }

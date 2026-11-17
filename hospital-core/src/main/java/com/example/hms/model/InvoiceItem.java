@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMin;
@@ -51,6 +52,19 @@ public class InvoiceItem extends BaseEntity {
     @Column(nullable = false, length = 255)
     private String itemDescription;
 
+    /**
+     * QA D1901: when the server wrote {@link #itemDescription} (the default
+     * consultation, the bed days, a transfusion, a delivery), its message code
+     * and arguments (V301), so each reader sees it in their own language;
+     * {@link #itemDescription} keeps the French copy. Null for a line a person
+     * typed or a hospital's own service name, shown as written.
+     */
+    @Column(name = "text_code", length = 120)
+    private String textCode;
+
+    @Column(name = "text_args", columnDefinition = "TEXT")
+    private String textArgs;
+
     @NotNull @Positive
     @Column(nullable = false)
     private Integer quantity;
@@ -79,6 +93,11 @@ public class InvoiceItem extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_item_service"))
     private Treatment relatedService;
 
+    /**
+     * QA D72: this ran on update only, so a NEW line reached the insert with
+     * no total and bean validation refused it ("totalPrice must not be null").
+     */
+    @PrePersist
     @PreUpdate
     public void validateAndCalculate() {
         // If linked to a service and unitPrice is not set, default from service

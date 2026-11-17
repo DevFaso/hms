@@ -1,7 +1,7 @@
 .hospital-typeahead {
   display: flex;
   flex-direction: column;
-  min-width: 320px;
+  min-width: var(--hospital-typeahead-min-width, 320px);
   max-width: 400px;
   background: var(--surface, #fff);
   border: 1px solid var(--border, #e2e8f0);

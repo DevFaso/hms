@@ -22,6 +22,9 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.platform.AdtIntakeProviderConfigRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService;
+import com.example.hms.service.integration.message.MllpRecordingContext;
+import com.example.hms.utility.Hl7FieldBounds;
+import com.example.hms.utility.Hl7SenderText;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 
 import java.time.LocalDateTime;
@@ -94,6 +97,14 @@ public class MllpInboundAdtVisitProjectionServiceImpl
     // Row-24 A04 follow-on additional dependency.
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
+    // QA D515: an A03 discharge frees the bed and cancels a pending transfer
+    // like every in-app discharge path.
+    private final com.example.hms.service.BedAssignmentService bedAssignmentService;
+    // QA D804: an A02 moves the stay's encounter with the admission, as the
+    // in-app transfer does. A provider keeps the projection free of a bean
+    // cycle through the stay service.
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AdmissionStayEncounterService>
+        stayEncounters;
 
     /**
      * Runs in a nested transaction so a projection failure cannot roll
@@ -129,6 +140,21 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             // place to surface that — degrade quietly.
             return VisitProjectionResult.SKIPPED;
         }
+        // PV1-19 is held to its column here, where it is read, and not in the
+        // ADT parser: this projection is its only reader, and refusing the
+        // message for it would drop the demographic update it also carries.
+        // Skipped rather than truncated - a cut visit number could reconcile
+        // against somebody else's visit. Bounded as matched (trimmed). The log
+        // does not name the value. PV1-3 is bounded in applyTransfer, the only
+        // step that reads it, so a long location cannot skip a discharge.
+        if (!Hl7FieldBounds.fits(parsed.visitNumber().trim(), Hl7FieldBounds.VISIT_NUMBER_MAX)) {
+            UUID hospitalId = receivingHospital.getId();
+            String loggedControlId = MllpRecordingContext.quotedControlId(messageControlId);
+            log.warn("ADT visit-sync skipped — PV1-19 is wider than its column "
+                    + "(sender={}/{} hospital={} msgCtrlId={})",
+                sendingApplication, sendingFacility, hospitalId, loggedControlId);
+            return VisitProjectionResult.SKIPPED_OVER_WIDTH;
+        }
 
         ProjectionContext ctx = new ProjectionContext(
             parsed,
@@ -138,7 +164,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             parsed.visitNumber().trim(),
             trimToNull(sendingApplication),
             trimToNull(sendingFacility),
-            trimToNull(messageControlId)
+            // Stored as sent (spaces aside), not trim()med: the same MSH-10
+            // rule as the ORU replay key, so ABC and ABC+BEL stay distinct.
+            MllpRecordingContext.messageControlIdKey(messageControlId)
         );
 
         Optional<VisitProjectionResult> reconciled = tryReconcileAdmission(ctx);
@@ -183,7 +211,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         admissionRepository.save(row);
         log.info("ADT visit-sync reconciled — admission={} visit={} sender={}/{} hospital={} event={} result={} msgCtrlId={}",
             row.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.parsed.triggerEvent(), result, ctx.controlId);
+            ctx.parsed.triggerEvent(), result, ctx.loggedControlId);
         return Optional.of(result);
     }
 
@@ -207,19 +235,24 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             : LocalDateTime.now();
 
         boolean firstTransition = row.getStatus() != AdmissionStatus.DISCHARGED
-            && row.getStatus() != AdmissionStatus.DECEASED;
+            && row.getStatus() != AdmissionStatus.DECEASED
+            // QA D1516: its bed was released when the voided death closed it.
+            && row.getStatus() != AdmissionStatus.CLOSED_IN_ERROR;
 
         row.setStatus(AdmissionStatus.DISCHARGED);
         row.setActualDischargeDateTime(dischargeAt);
         row.calculateLengthOfStay();
 
         if (firstTransition) {
+            bedAssignmentService.releaseBed(row);
+            // QA D1435: an ADT discharge ends the stay's nursing work like any other.
+            stayEncounters.ifAvailable(service -> service.closeNursingWorkOfEndedStay(row));
             emitAdmissionLifecycleAudit(
                 AuditEventType.ADMISSION_DISCHARGED, row, ctx,
                 String.format(
                     "ADT^A03 discharge — visit=%s sender=%s/%s hospital=%s patient=%s dischargeAt=%s msgCtrlId=%s",
-                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-                    ctx.patient.getId(), dischargeAt, ctx.controlId));
+                    ctx.quotedVisitNumber(), ctx.quotedApp(), ctx.quotedFac(), ctx.hospitalId,
+                    ctx.patient.getId(), dischargeAt, ctx.quotedControlId()));
         }
         return VisitProjectionResult.ADMISSION_DISCHARGED;
     }
@@ -243,22 +276,48 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         String rawLocation = ctx.parsed.assignedLocation();
         String destination = firstComponent(rawLocation);
 
+        // PV1-3's point of care is bounded here, the only place it is read.
+        // Wider than any department code or name, it can match nothing, so it
+        // is handled as an unresolvable destination - the transfer is still
+        // reconciled and audited - and the audit records that it was over
+        // width instead of quoting it: never truncated, never stored whole.
+        //
+        // The marker is ours and unquoted; a destination the sender wrote is
+        // always quoted. That is what makes the marker unforgeable: a sender
+        // whose PV1-3 reads "(over 255 characters)" is audited as
+        // destination="(over 255 characters)", never as the marker itself.
+        boolean destinationOverWidth =
+            !Hl7FieldBounds.fits(destination, Hl7FieldBounds.ASSIGNED_LOCATION_MAX);
+        String auditedDestination = destinationOverWidth
+            ? "(over " + Hl7FieldBounds.ASSIGNED_LOCATION_MAX + " characters)"
+            : Hl7SenderText.quote(destination);
+
         Department previous = row.getDepartment();
-        Department resolved = resolveTransferDepartment(destination, ctx.hospitalId);
+        Department resolved = destinationOverWidth
+            ? null
+            : resolveTransferDepartment(destination, ctx.hospitalId);
         if (resolved != null) {
             row.setDepartment(resolved);
+            // QA D804: the encounter list showed the admitting department for
+            // the whole stay, because only the in-app transfer moved the stay's
+            // encounter, and an A03 discharge never carries the move onto it.
+            com.example.hms.service.AdmissionStayEncounterService stayService =
+                stayEncounters.getIfAvailable();
+            if (stayService != null) {
+                stayService.followStayDepartment(row);
+            }
         }
 
         emitAdmissionLifecycleAudit(
             AuditEventType.ADMISSION_TRANSFERRED, row, ctx,
             String.format(
                 "ADT^A02 transfer — visit=%s sender=%s/%s hospital=%s patient=%s destination=%s resolved=%s previous=%s msgCtrlId=%s",
-                ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+                ctx.quotedVisitNumber(), ctx.quotedApp(), ctx.quotedFac(), ctx.hospitalId,
                 ctx.patient.getId(),
-                destination == null ? "" : destination,
+                auditedDestination,
                 resolved != null ? resolved.getId() : NULL_HOSPITAL_PLACEHOLDER,
                 previous != null ? previous.getId() : NULL_HOSPITAL_PLACEHOLDER,
-                ctx.controlId));
+                ctx.quotedControlId()));
         return VisitProjectionResult.ADMISSION_TRANSFERRED;
     }
 
@@ -279,8 +338,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         Optional<Department> byName =
             departmentRepository.findByHospitalIdAndNameIgnoreCase(hospitalId, token);
         if (byName.isPresent()) return byName.get();
-        log.warn("ADT^A02 transfer destination '{}' could not be resolved at hospital {} — department change skipped",
-            token, hospitalId);
+        String loggedDestination = Hl7SenderText.quote(token);
+        log.warn("ADT^A02 transfer destination {} could not be resolved at hospital {} — department change skipped",
+            loggedDestination, hospitalId);
         return null;
     }
 
@@ -327,7 +387,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         encounterRepository.save(row);
         log.info("ADT visit-sync reconciled — encounter={} visit={} sender={}/{} hospital={} event={} msgCtrlId={}",
             row.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.parsed.triggerEvent(), ctx.controlId);
+            ctx.parsed.triggerEvent(), ctx.loggedControlId);
         return Optional.of(VisitProjectionResult.ENCOUNTER_RECONCILED);
     }
 
@@ -389,13 +449,28 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         if (resolved.isEmpty()) return Optional.empty();
         AutoCreateContext ac = resolved.get();
 
+        // QA D304: one open stay per patient, on this path too. An A01 for a
+        // patient already in a bed does not open a second, bedless stay.
+        if (admissionRepository.existsOpenAdmissionForPatient(ctx.patient.getId())) {
+            log.warn("ADT auto-create skipped — patient {} already has an open admission at hospital {}",
+                ctx.patient.getId(), ctx.hospitalId);
+            return Optional.empty();
+        }
+
         Admission admission = buildAdmission(ctx, ac.config(), ac.provider(), ac.department());
         admission = admissionRepository.save(admission);
         emitAutoCreateAudit(admission, ctx);
+        // r53 (provisional): an intake configured to admit as labour screens a minor like any labour admission.
+        if (admission.getAdmissionType() == com.example.hms.enums.AdmissionType.LABOR_DELIVERY
+                && minorLabourSafeguarding != null) {
+            minorLabourSafeguarding.onLabourAdmission(ctx.patient, ctx.receivingHospital.getId(),
+                admission.getAdmissionDateTime(), com.example.hms.model.safeguarding.SafeguardingReview.SOURCE_ADMISSION,
+                admission.getId(), null);
+        }
 
         log.info("ADT visit-sync auto-created admission={} visit={} sender={}/{} hospital={} patient={} provider={} msgCtrlId={}",
             admission.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.patient.getId(), ac.provider().getId(), ctx.controlId);
+            ctx.patient.getId(), ac.provider().getId(), ctx.loggedControlId);
         return Optional.of(VisitProjectionResult.ADMISSION_AUTOCREATED);
     }
 
@@ -438,6 +513,16 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 hospitalId);
             return Optional.empty();
         }
+        // QA D852: a config saved before the write rule existed may name a
+        // non-physician; it must not admit anyone under that name.
+        UUID providerUserId = provider.getUser() != null ? provider.getUser().getId() : null;
+        if (providerUserId == null || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                providerUserId, hospitalId,
+                com.example.hms.service.platform.AdtIntakeProviderConfigService.ADMITTING_ROLE_CODES)) {
+            log.warn("ADT auto-create skipped — admittingProviderId {} in intake config for hospital {} holds no doctor, physician or surgeon role there",
+                provider.getId(), hospitalId);
+            return Optional.empty();
+        }
         return Optional.of(provider);
     }
 
@@ -468,6 +553,14 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             return Optional.empty();
         }
         return Optional.of(department);
+    }
+
+    /** r53: the safeguarding screen of a labour admission (setter-injected: never part of the constructor). */
+    private com.example.hms.service.safeguarding.MinorLabourSafeguarding minorLabourSafeguarding;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMinorLabourSafeguarding(com.example.hms.service.safeguarding.MinorLabourSafeguarding minorLabourSafeguarding) {
+        this.minorLabourSafeguarding = minorLabourSafeguarding;
     }
 
     private Admission buildAdmission(
@@ -545,7 +638,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         }
 
         Optional<UserRoleHospitalAssignment> assignmentOpt =
-            resolveAssignment(ac.config(), ctx.hospitalId);
+            resolveAssignment(ac.config(), ac.provider(), ctx.hospitalId);
         if (assignmentOpt.isEmpty()) return Optional.empty();
 
         Encounter encounter = buildEncounter(
@@ -555,7 +648,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
 
         log.info("ADT A04 auto-created encounter={} visit={} sender={}/{} hospital={} patient={} staff={} msgCtrlId={}",
             encounter.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.patient.getId(), ac.provider().getId(), ctx.controlId);
+            ctx.patient.getId(), ac.provider().getId(), ctx.loggedControlId);
         return Optional.of(VisitProjectionResult.ENCOUNTER_AUTOCREATED);
     }
 
@@ -566,7 +659,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
      * {@code Encounter#validate}.
      */
     private Optional<UserRoleHospitalAssignment> resolveAssignment(
-        AdtIntakeProviderConfig config, UUID hospitalId
+        AdtIntakeProviderConfig config, Staff provider, UUID hospitalId
     ) {
         Optional<UserRoleHospitalAssignment> opt =
             assignmentRepository.findById(config.getDefaultAssignmentId());
@@ -582,6 +675,17 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 assignment.getId(),
                 assignment.getHospital() != null ? assignment.getHospital().getId() : NULL_HOSPITAL_PLACEHOLDER,
                 hospitalId);
+            return Optional.empty();
+        }
+        // QA D852/D872: a config saved before the write rule existed may pair
+        // the physician with another person's assignment, or with a
+        // non-physician one; no encounter is recorded under that pairing.
+        UUID providerUserId = provider.getUser() != null ? provider.getUser().getId() : null;
+        if (!Boolean.TRUE.equals(assignment.getActive())
+            || !com.example.hms.service.platform.AdtIntakeProviderConfigService
+                .isAdmittingAssignmentOf(assignment, providerUserId)) {
+            log.warn("ADT A04 auto-create skipped — defaultAssignmentId {} in intake config for hospital {} is not an active physician assignment of admitting provider {}",
+                assignment.getId(), hospitalId, provider.getId());
             return Optional.empty();
         }
         return Optional.of(assignment);
@@ -630,8 +734,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 .resourceId(encounter.getId().toString())
                 .eventDescription(String.format(
                     "ADT^A04 auto-create — visit=%s sender=%s/%s hospital=%s patient=%s msgCtrlId=%s",
-                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-                    ctx.patient.getId(), ctx.controlId))
+                    ctx.quotedVisitNumber(), ctx.quotedApp(), ctx.quotedFac(), ctx.hospitalId,
+                    ctx.patient.getId(), ctx.quotedControlId()))
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {
@@ -654,8 +758,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 .resourceId(admission.getId().toString())
                 .eventDescription(String.format(
                     "ADT^A01 auto-create — visit=%s sender=%s/%s hospital=%s patient=%s msgCtrlId=%s",
-                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-                    ctx.patient.getId(), ctx.controlId))
+                    ctx.quotedVisitNumber(), ctx.quotedApp(), ctx.quotedFac(), ctx.hospitalId,
+                    ctx.patient.getId(), ctx.quotedControlId()))
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {
@@ -707,6 +811,11 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         final String app;
         final String fac;
         final String controlId;
+        /**
+         * MSH-10 as the log lines show it: {@link MllpRecordingContext#quotedControlId},
+         * computed once so no log call evaluates a method in its arguments.
+         */
+        final String loggedControlId;
 
         ProjectionContext(
             ParsedAdtMessage parsed,
@@ -726,6 +835,31 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             this.app = app;
             this.fac = fac;
             this.controlId = controlId;
+            this.loggedControlId = MllpRecordingContext.quotedControlId(controlId);
+        }
+
+        /*
+         * The sender's text as the persisted audit descriptions show it:
+         * quoted and escaped (Hl7SenderText), so a visit number, a sender
+         * pair or an MSH-10 cannot end its slot and write text that reads as
+         * ours, nor carry an ANSI escape or a line separator into the audit
+         * trail. An absent value is Hl7SenderText.ABSENT, unquoted.
+         */
+
+        String quotedVisitNumber() {
+            return Hl7SenderText.quote(visitNumber);
+        }
+
+        String quotedApp() {
+            return Hl7SenderText.quote(app);
+        }
+
+        String quotedFac() {
+            return Hl7SenderText.quote(fac);
+        }
+
+        String quotedControlId() {
+            return Hl7SenderText.quote(controlId);
         }
     }
 }

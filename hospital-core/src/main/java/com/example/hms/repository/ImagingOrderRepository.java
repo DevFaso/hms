@@ -17,6 +17,19 @@ import java.util.UUID;
 @Repository
 public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID> {
 
+    /** QA D972: a visit's imaging orders, for the checkout charge (withdrawn ones excluded by the caller's list). */
+    List<ImagingOrder> findByEncounterIdAndStatusNotIn(UUID encounterId, java.util.Collection<ImagingOrderStatus> excluded);
+
+    /**
+     * QA D623 (D508 did not hold): the order by id WITHOUT the repository tenant
+     * filter. The scoped {@code findById} answers only for the acting hospital,
+     * so an order the by-patient list showed across hospitals 404'd before the
+     * service could apply the list's own readable-hospitals rule. Only the
+     * by-id READ uses this, and it then applies that rule itself.
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT o FROM ImagingOrder o WHERE o.id = :id")
+    java.util.Optional<ImagingOrder> findByIdUnscoped(@org.springframework.data.repository.query.Param("id") UUID id);
+
     List<ImagingOrder> findByPatient_IdOrderByOrderedAtDesc(UUID patientId);
 
     List<ImagingOrder> findByPatient_IdAndStatusOrderByOrderedAtDesc(UUID patientId, ImagingOrderStatus status);
@@ -29,15 +42,23 @@ public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID
 
     List<ImagingOrder> findAllByOrderByOrderedAtDesc();
 
+    /**
+     * The duplicate-order check: this patient's orders AT this hospital (QA
+     * D1920: another hospital's orders are never a duplicate the caller may
+     * see), same modality and region, not cancelled, placed since the cutoff.
+     * {@code hospitalId} is required; the caller bounds the window.
+     */
     @Query("SELECT o FROM ImagingOrder o " +
         "WHERE o.patient.id = :patientId " +
+        "AND o.hospital.id = :hospitalId " +
         "AND o.modality = :modality " +
-        "AND (:bodyRegion IS NULL OR LOWER(o.bodyRegion) = LOWER(:bodyRegion)) " +
+        "AND (:bodyRegion IS NULL OR LOWER(o.bodyRegion) = LOWER(CAST(:bodyRegion AS string))) " +
         "AND o.status <> com.example.hms.enums.ImagingOrderStatus.CANCELLED " +
         "AND o.orderedAt >= :orderedAfter " +
         "ORDER BY o.orderedAt DESC")
     List<ImagingOrder> findPotentialDuplicates(
         @Param("patientId") UUID patientId,
+        @Param("hospitalId") UUID hospitalId,
         @Param("modality") ImagingModality modality,
         @Param("bodyRegion") String bodyRegion,
         @Param("orderedAfter") LocalDateTime orderedAfter

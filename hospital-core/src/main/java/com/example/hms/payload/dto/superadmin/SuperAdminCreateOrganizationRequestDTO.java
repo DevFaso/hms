@@ -34,6 +34,7 @@ public class SuperAdminCreateOrganizationRequestDTO {
     private String contactEmail;
 
     @Size(max = 32, message = "{superAdmin.organization.contactPhone.size}")
+    @com.example.hms.validation.PhoneNumber
     private String contactPhone;
 
     @Size(max = 1000, message = "{superAdmin.organization.notes.size}")

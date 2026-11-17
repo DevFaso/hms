@@ -50,8 +50,11 @@ import static org.mockito.Mockito.when;
  * signs the result of an order sent to it — judged by its roles THERE — and
  * the ordering hospital reads it; a third hospital gets 404 throughout.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabResultServiceImplPerformingHospitalTest {
+
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
 
     @Mock private LabResultRepository labResultRepository;
     @Mock private LabResultEntryGuard labResultEntryGuard;
@@ -67,6 +70,9 @@ class LabResultServiceImplPerformingHospitalTest {
     @Mock private CriticalValueNotificationService criticalValueNotificationService;
     @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+
+    @Mock private com.example.hms.service.lab.LabOrderDuplicateCheck labOrderDuplicateCheck;
 
     @InjectMocks
     private LabResultServiceImpl service;
@@ -244,8 +250,7 @@ class LabResultServiceImplPerformingHospitalTest {
     void resultIsReadableByBothHospitalsAndNotByAThird() {
         when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
         when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
-        when(labResultRepository
-            .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(any(), any()))
+        org.mockito.Mockito.lenient().when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(List.of());
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
@@ -433,6 +438,7 @@ class LabResultServiceImplPerformingHospitalTest {
         when(labResultRepository.findHandledByHospitals(List.of(performing.getId())))
             .thenReturn(List.of(result));
         when(labResultMapper.toResponseDTO(result)).thenReturn(critical);
+        when(labResultMapper.raisesCriticalAlert("CRITICAL")).thenReturn(true);
 
         assertThat(service.getCriticalResults(ordering.getId(), LocalDateTime.now().minusDays(1), Locale.ENGLISH))
             .containsExactly(critical);
@@ -445,11 +451,98 @@ class LabResultServiceImplPerformingHospitalTest {
     void pagedResultsReadWhatTheHospitalOrdersOrPerforms() {
         PageRequest page = PageRequest.of(0, 10);
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
-        when(labResultRepository.findHandledByHospital(performing.getId(), page))
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), false, true,
+                new UUID(0L, 0L), true, new UUID(0L, 0L), newestFirst(page)))
             .thenReturn(new PageImpl<>(List.of(result)));
         when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
 
         assertThat(service.getLabResultsPage(page, Locale.ENGLISH).getContent()).containsExactly(mapped);
+    }
+
+    /** QA D1361: the list query has no ORDER BY, so an unsorted read is newest result first. */
+    private static PageRequest newestFirst(PageRequest page) {
+        return PageRequest.of(page.getPageNumber(), page.getPageSize(),
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "resultDate"));
+    }
+
+    /** QA D1361: an unsorted list read pages newest result first; a caller's own sort is kept. */
+    @Test
+    void anUnsortedListReadIsNewestResultFirstAndACallersSortIsKept() {
+        PageRequest unsorted = PageRequest.of(3, 20);
+        assertThat(LabResultServiceImpl.newestResultFirst(unsorted)).isEqualTo(newestFirst(unsorted));
+        PageRequest sorted = PageRequest.of(1, 20, org.springframework.data.domain.Sort.by("resultValue"));
+        assertThat(LabResultServiceImpl.newestResultFirst(sorted)).isSameAs(sorted);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), false, true,
+                new UUID(0L, 0L), true, new UUID(0L, 0L), newestFirst(unsorted)))
+            .thenReturn(new PageImpl<>(List.of(result)));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
+
+        assertThat(service.getLabResultsPage(unsorted, Locale.ENGLISH).getContent()).containsExactly(mapped);
+    }
+
+    /** QA D211: a doctor's list is released-only and honours patientId. */
+    @Test
+    void nonLaboratoryListIsReleasedOnlyAndFilteredByPatient() {
+        PageRequest page = PageRequest.of(0, 10);
+        UUID patientId = UUID.randomUUID();
+        result.setReleased(true);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, true, new UUID(0L, 0L), newestFirst(page)))
+            .thenReturn(new PageImpl<>(List.of(result)));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
+
+        assertThat(service.getLabResultsPage(page, Locale.ENGLISH, patientId, false).getContent())
+            .containsExactly(mapped);
+    }
+
+    /** Self-review of #939 (QA D741): the list judges a legacy duplicate against its order's rows. */
+    @Test
+    void nonLaboratoryListDropsALegacyDuplicateWhoseNewerSiblingIsOnAnotherPage() {
+        PageRequest page = PageRequest.of(0, 10);
+        UUID patientId = UUID.randomUUID();
+        result.setReleased(true);
+        result.setResultDate(LocalDateTime.of(2026, 10, 1, 8, 0));
+        LabResult newer = LabResult.builder().labOrder(order).resultValue("2")
+            .resultDate(result.getResultDate().plusHours(1)).build();
+        newer.setId(UUID.randomUUID());
+        newer.setReleased(true);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, true, new UUID(0L, 0L), newestFirst(page)))
+            .thenReturn(new PageImpl<>(List.of(result), page, 2));
+        when(labResultRepository.findByLabOrder_IdIn(any())).thenReturn(List.of(result, newer));
+
+        org.springframework.data.domain.Page<?> out = service.getLabResultsPage(page, Locale.ENGLISH, patientId, false);
+
+        assertThat(out.getContent()).isEmpty();
+    }
+
+    /** QA D211: the by-id read does not hand an unreleased value to a non-laboratory reader. */
+    @Test
+    void nonLaboratoryByIdReadOfUnreleasedResultIsNotFound() {
+        result.setReleased(false);
+        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(result));
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.getLabResultById(result.getId(), Locale.ENGLISH, false)))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    /** Self-review of #939 (QA D741): a by-id read of a forward-link-only superseded row is not found. */
+    @Test
+    void nonLaboratoryByIdReadOfAForwardLinkSupersededResultIsNotFound() {
+        result.setReleased(true);
+        LabResult correction = LabResult.builder().labOrder(order).resultValue("12.0")
+            .resultDate(LocalDateTime.now()).build();
+        correction.setId(UUID.randomUUID());
+        correction.setReleased(true);
+        correction.setSupersedesResultId(result.getId());
+        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(result));
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result, correction));
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.getLabResultById(result.getId(), Locale.ENGLISH, false)))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     @Test
@@ -471,6 +564,60 @@ class LabResultServiceImplPerformingHospitalTest {
             .resultValue("12.1")
             .resultDate(LocalDateTime.now())
             .build();
+    }
+
+    /** r44 result drawer: the detail read carries the collected specimen and the performing laboratory. */
+    @Test
+    void theDetailReadCarriesTheCollectedSpecimenAndThePerformingLab() {
+        LabResultResponseDTO detail = LabResultResponseDTO.builder().id("detail").build();
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(detail);
+        org.mockito.Mockito.lenient().when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        LocalDateTime earlier = LocalDateTime.of(2026, 11, 12, 7, 30);
+        LocalDateTime later = earlier.plusHours(2);
+        com.example.hms.model.LabSpecimen first = specimen("Sérum", earlier, com.example.hms.enums.LabSpecimenStatus.RECEIVED);
+        com.example.hms.model.LabSpecimen rejected = specimen("Hémolysé", later.plusHours(1), com.example.hms.enums.LabSpecimenStatus.REJECTED);
+        com.example.hms.model.LabSpecimen recollected = specimen("Plasma fluoré", later, com.example.hms.enums.LabSpecimenStatus.COMPLETED);
+        com.example.hms.model.LabSpecimen notCollected = specimen("Sang total", null, com.example.hms.enums.LabSpecimenStatus.PENDING);
+        when(labSpecimenRepository.findByLabOrder_Id(order.getId()))
+            .thenReturn(List.of(first, rejected, recollected, notCollected));
+
+        LabResultResponseDTO response = service.getLabResultById(result.getId(), Locale.ENGLISH);
+
+        assertThat(response.getSpecimenType()).isEqualTo("Plasma fluoré");
+        assertThat(response.getSpecimenCollectedAt()).isEqualTo(later);
+        assertThat(response.getPerformingLabName()).isEqualTo("Central Laboratory");
+    }
+
+    /** r44: nothing recorded is nothing shown; an in-house order names no performing lab. */
+    @Test
+    void theDetailReadLeavesUnrecordedContextEmpty() {
+        order.setPerformingHospital(null);
+        LabResultResponseDTO detail = LabResultResponseDTO.builder().id("detail").build();
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(detail);
+        org.mockito.Mockito.lenient().when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(labSpecimenRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of());
+
+        LabResultResponseDTO response = service.getLabResultById(result.getId(), Locale.ENGLISH);
+
+        assertThat(response.getSpecimenType()).isNull();
+        assertThat(response.getSpecimenCollectedAt()).isNull();
+        assertThat(response.getPerformingLabName()).isNull();
+    }
+
+    private com.example.hms.model.LabSpecimen specimen(String type, LocalDateTime collectedAt,
+                                                       com.example.hms.enums.LabSpecimenStatus status) {
+        com.example.hms.model.LabSpecimen specimen = new com.example.hms.model.LabSpecimen();
+        specimen.setLabOrder(order);
+        specimen.setSpecimenType(type);
+        specimen.setCollectedAt(collectedAt);
+        specimen.setStatus(status);
+        return specimen;
     }
 
     private static Hospital hospital(String name) {

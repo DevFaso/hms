@@ -33,7 +33,7 @@ full per-platform redirect-URI matrix.
 
 ### Role Mapping
 
-The realm ships 26 realm roles — the
+The realm ships 27 realm roles (`ROLE_PROVIDER_ADMIN` added by #851) — the
 [`keycloak/realm-export.json`](../keycloak/realm-export.json) is the
 single source of truth and must stay in sync with
 [`SecurityConstants.java`](../hospital-core/src/main/java/com/example/hms/config/SecurityConstants.java).

@@ -168,7 +168,7 @@ public class CareGapTraceService {
         String programName = messageSource.getMessage(
             "care.gap.program." + enrollment.getProgram().name(), null, locale);
         String reason = messageSource.getMessage("care.gap.recall.reason",
-            new Object[]{programName, missedDate}, locale);
+            new Object[]{programName, com.example.hms.utility.DisplayDates.date(missedDate, locale)}, locale);
         PatientRecall saved = recallRepository.saveAndFlush(PatientRecall.builder()
             .patient(enrollment.getPatient())
             .hospital(enrollment.getHospital())
@@ -205,6 +205,10 @@ public class CareGapTraceService {
                 .userName("SYSTEM")
                 .hospitalName(enrollment.getHospital() != null
                     ? enrollment.getHospital().getName() : null)
+                // QA D786: a SYSTEM row has no assignment; without the id the
+                // hospital's own audit view never showed this trace.
+                .hospitalId(enrollment.getHospital() != null
+                    ? enrollment.getHospital().getId() : null)
                 .patientId(enrollment.getPatient() != null
                     ? enrollment.getPatient().getId() : null)
                 .eventDescription("Care-gap sweep created a tracing recall for "

@@ -28,20 +28,41 @@ public class NotificationDeliveryStatusDTO {
     public static final String PURPOSE_ACTIVATION = "ACTIVATION";
     public static final String PURPOSE_CREDENTIALS = "CREDENTIALS";
     public static final String PURPOSE_WELCOME = "WELCOME";
+    /**
+     * The mail a self-service email change sends to the NEW address: the code,
+     * or, when that address already has an account, a notice to its holder.
+     * One purpose for both, so the report cannot tell them apart.
+     */
+    public static final String PURPOSE_EMAIL_CHANGE_CODE = "EMAIL_CHANGE_CODE";
+    /** The notice to the previous address that the account's email changed. */
+    public static final String PURPOSE_EMAIL_CHANGE_NOTICE = "EMAIL_CHANGE_NOTICE";
 
+    /** Handed to the transport and accepted: SMS today (mail is never sent on the request). */
     public static final String OUTCOME_SENT = "SENT";
+    /**
+     * Mail accepted into the outbox (V173) for the dispatch sweep, which sends
+     * it within seconds and retries a failed send. Not SENT: nothing has
+     * reached the SMTP server when the report is written, and a send that
+     * later fails for good is visible in {@code platform.mail_outbox}, not here.
+     */
+    public static final String OUTCOME_QUEUED = "QUEUED";
     public static final String OUTCOME_FAILED = "FAILED";
     /** The transport itself is absent/disabled on this deployment. */
     public static final String OUTCOME_NOT_CONFIGURED = "NOT_CONFIGURED";
     /** The mock SMS channel accepted the message but no phone receives it. */
     public static final String OUTCOME_MOCKED = "MOCKED";
+    /**
+     * QA D1842: SMS only. This environment's SMS_RECIPIENT_ALLOWLIST (dev, uat)
+     * does not list the number, so nothing was sent; the transport is fine.
+     */
+    public static final String OUTCOME_RECIPIENT_NOT_ALLOWED = "RECIPIENT_NOT_ALLOWED";
     /** The account has no address/number for this channel — informational. */
     public static final String OUTCOME_NO_CONTACT = "NO_CONTACT";
 
     /** {@link #CHANNEL_EMAIL} or {@link #CHANNEL_SMS}. */
     private String channel;
 
-    /** What the message carried: ACTIVATION code, one-time CREDENTIALS, or WELCOME mail. */
+    /** What the message carried: ACTIVATION code, one-time CREDENTIALS, WELCOME mail, or an EMAIL_CHANGE_* mail. */
     private String purpose;
 
     /** One of the OUTCOME_* constants. */

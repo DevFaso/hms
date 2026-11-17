@@ -45,11 +45,15 @@ class PatientPrimaryCareServiceImplTest {
 
     @Mock private PatientPrimaryCareRepository pcpRepo;
     @Mock private PatientRepository patientRepo;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepo;
     @Mock private HospitalRepository hospitalRepo;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepo;
     @Mock private PatientPrimaryCareMapper mapper;
     @Mock private RoleValidator roleValidator;
     @Mock private MessageSource messageSource;
+
+    @org.mockito.Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     @InjectMocks
     private PatientPrimaryCareServiceImpl service;
@@ -58,6 +62,7 @@ class PatientPrimaryCareServiceImplTest {
     private UUID patientId;
     private UUID hospitalId;
     private UUID assignmentId;
+    private UUID doctorUserId;
     private UUID pcpId;
 
     // shared entities
@@ -81,8 +86,12 @@ class PatientPrimaryCareServiceImplTest {
         hospital = new Hospital();
         hospital.setId(hospitalId);
 
+        doctorUserId = UUID.randomUUID();
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(doctorUserId);
         assignment = new UserRoleHospitalAssignment();
         assignment.setId(assignmentId);
+        assignment.setUser(doctor);
         assignment.setHospital(hospital);
 
         pcpEntity = PatientPrimaryCare.builder()
@@ -125,7 +134,7 @@ class PatientPrimaryCareServiceImplTest {
         @Test
         void hospitalNotFound() {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.assignPrimaryCare(patientId, requestDTO))
                     .isInstanceOf(ResourceNotFoundException.class)
@@ -135,7 +144,7 @@ class PatientPrimaryCareServiceImplTest {
         @Test
         void assignmentNotFound() {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.assignPrimaryCare(patientId, requestDTO))
@@ -150,12 +159,12 @@ class PatientPrimaryCareServiceImplTest {
             assignment.setHospital(otherHospital);
 
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
 
             assertThatThrownBy(() -> service.assignPrimaryCare(patientId, requestDTO))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("mismatch");
+                    .extracting("messageKey").isEqualTo("primaryCare.assignmentHospitalMismatch");
         }
 
         @Test
@@ -167,10 +176,10 @@ class PatientPrimaryCareServiceImplTest {
             existing.setId(UUID.randomUUID());
 
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(assignmentId), eq(hospitalId),
-                    eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
+            doNothing().when(roleValidator).requireAssignmentHolds(eq(assignment), eq(hospitalId),
+                    eq("ROLE_DOCTOR"));
             when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId))
                     .thenReturn(Optional.of(existing));
             when(pcpRepo.save(existing)).thenReturn(existing);
@@ -189,12 +198,44 @@ class PatientPrimaryCareServiceImplTest {
         }
 
         @Test
+        @org.junit.jupiter.api.DisplayName("QA D1851: a same-day reassignment ends the old link the day it started, never before")
+        void sameDayReassignmentNeverEndsBeforeStart() {
+            PatientPrimaryCare existing = PatientPrimaryCare.builder()
+                    .patient(patient).hospital(hospital).assignment(assignment)
+                    .startDate(LocalDate.now()).current(true).build();
+            existing.setId(UUID.randomUUID());
+
+            when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
+            when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId)).thenReturn(Optional.of(existing));
+            when(pcpRepo.save(existing)).thenReturn(existing);
+            when(mapper.toEntity(requestDTO, patient, hospital, assignment)).thenReturn(pcpEntity);
+            when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
+            when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
+
+            service.assignPrimaryCare(patientId, requestDTO);
+
+            assertThat(existing.isCurrent()).isFalse();
+            assertThat(existing.getEndDate()).isEqualTo(existing.getStartDate());
+        }
+
+        @Test
+        void endDateOnReassignmentClamps() {
+            LocalDate today = LocalDate.of(2026, 11, 14);
+            assertThat(PatientPrimaryCareServiceImpl.endDateOnReassignment(today, today)).isEqualTo(today);
+            assertThat(PatientPrimaryCareServiceImpl.endDateOnReassignment(today.minusDays(5), today))
+                    .isEqualTo(today.minusDays(1));
+            assertThat(PatientPrimaryCareServiceImpl.endDateOnReassignment(null, today)).isEqualTo(today.minusDays(1));
+        }
+
+        @Test
         void noExistingPcpCreatesNew() {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepo.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(assignmentId), eq(hospitalId),
-                    eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
+            doNothing().when(roleValidator).requireAssignmentHolds(eq(assignment), eq(hospitalId),
+                    eq("ROLE_DOCTOR"));
             when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId))
                     .thenReturn(Optional.empty());
             when(mapper.toEntity(requestDTO, patient, hospital, assignment))
@@ -280,7 +321,7 @@ class PatientPrimaryCareServiceImplTest {
                     .build();
 
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(pcpEntity));
-            when(hospitalRepo.findById(newHospitalId)).thenReturn(Optional.of(newHospital));
+            when(hospitalRepo.findClinicalById(newHospitalId)).thenReturn(Optional.of(newHospital));
             when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
 
@@ -297,7 +338,7 @@ class PatientPrimaryCareServiceImplTest {
                     .build();
 
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(pcpEntity));
-            when(hospitalRepo.findById(newHospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepo.findClinicalById(newHospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.updatePrimaryCare(pcpId, req))
                     .isInstanceOf(ResourceNotFoundException.class)
@@ -327,6 +368,10 @@ class PatientPrimaryCareServiceImplTest {
             UUID newAssignmentId = UUID.randomUUID();
             UserRoleHospitalAssignment newAssignment = new UserRoleHospitalAssignment();
             newAssignment.setId(newAssignmentId);
+            UUID newDoctorId = UUID.randomUUID();
+            com.example.hms.model.User newDoctor = new com.example.hms.model.User();
+            newDoctor.setId(newDoctorId);
+            newAssignment.setUser(newDoctor);
             newAssignment.setHospital(hospital); // same hospital
 
             PatientPrimaryCareRequestDTO req = PatientPrimaryCareRequestDTO.builder()
@@ -336,8 +381,8 @@ class PatientPrimaryCareServiceImplTest {
 
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(pcpEntity));
             when(assignmentRepo.findById(newAssignmentId)).thenReturn(Optional.of(newAssignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(newAssignmentId), eq(hospitalId),
-                    eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
+            doNothing().when(roleValidator).requireAssignmentHolds(eq(newAssignment), eq(hospitalId),
+                    eq("ROLE_DOCTOR"));
             when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
 
@@ -381,7 +426,7 @@ class PatientPrimaryCareServiceImplTest {
 
             assertThatThrownBy(() -> service.updatePrimaryCare(pcpId, req))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("mismatch");
+                    .extracting("messageKey").isEqualTo("primaryCare.assignmentHospitalMismatch");
         }
 
         @Test
@@ -436,7 +481,7 @@ class PatientPrimaryCareServiceImplTest {
             LocalDate endDate = LocalDate.of(2025, 5, 1);
             assertThatThrownBy(() -> service.endPrimaryCare(pcpId, endDate))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("before startDate");
+                    .extracting("messageKey").isEqualTo("primaryCare.endBeforeStart");
         }
 
         @Test
@@ -490,7 +535,7 @@ class PatientPrimaryCareServiceImplTest {
 
         @Test
         void found() {
-            when(pcpRepo.findByPatient_IdAndCurrentTrue(patientId)).thenReturn(Optional.of(pcpEntity));
+            when(pcpRepo.findByPatient_IdAndCurrentTrueOrderByStartDateDesc(patientId)).thenReturn(List.of(pcpEntity));
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
 
             Optional<PatientPrimaryCareResponseDTO> result = service.getCurrentPrimaryCare(patientId);
@@ -500,11 +545,101 @@ class PatientPrimaryCareServiceImplTest {
 
         @Test
         void notFound() {
-            when(pcpRepo.findByPatient_IdAndCurrentTrue(patientId)).thenReturn(Optional.empty());
+            when(pcpRepo.findByPatient_IdAndCurrentTrueOrderByStartDateDesc(patientId)).thenReturn(List.of());
 
             Optional<PatientPrimaryCareResponseDTO> result = service.getCurrentPrimaryCare(patientId);
 
             assertThat(result).isEmpty();
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("QA D1850: a current doctor at two hospitals answers the newest, never a 500")
+        void twoHospitalsAnswersTheNewest() {
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            PatientPrimaryCare atOther = PatientPrimaryCare.builder()
+                    .patient(patient).hospital(other).assignment(assignment)
+                    .startDate(LocalDate.now().minusDays(3)).current(true).build();
+            when(pcpRepo.findByPatient_IdAndCurrentTrueOrderByStartDateDesc(patientId))
+                    .thenReturn(List.of(pcpEntity, atOther));
+            when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
+
+            assertThat(service.getCurrentPrimaryCare(patientId)).contains(responseDTO);
+        }
+    }
+
+    // ─── getOwnPrimaryCareLinks (QA D1850) ───────────────────────
+
+    @Nested
+    class GetOwnPrimaryCareLinks {
+
+        private final UUID patientUserId = UUID.randomUUID();
+
+        @BeforeEach
+        void signInAsThePatient() {
+            com.example.hms.model.User user = new com.example.hms.model.User();
+            user.setId(patientUserId);
+            patient.setUser(user);
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                    com.example.hms.security.context.HospitalContext.builder().principalUserId(patientUserId).build());
+            org.mockito.Mockito.lenient().when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
+        }
+
+        @org.junit.jupiter.api.AfterEach
+        void signOut() {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("another account reads the patient as missing")
+        void anotherCallerIsRefused() {
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                    com.example.hms.security.context.HospitalContext.builder().principalUserId(UUID.randomUUID()).build());
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getOwnPrimaryCareLinks(patientId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            verify(pcpRepo, never()).findByPatient_IdOrderByStartDateDesc(any());
+        }
+
+        private com.example.hms.model.PatientHospitalRegistration registration(Hospital at, boolean active) {
+            com.example.hms.model.PatientHospitalRegistration r = new com.example.hms.model.PatientHospitalRegistration();
+            r.setHospital(at);
+            r.setActive(active);
+            return r;
+        }
+
+        @Test
+        @org.junit.jupiter.api.DisplayName("every hospital that registers the patient, and none that does not")
+        void spansRegisteredHospitalsOnly() {
+            Hospital b = new Hospital();
+            b.setId(UUID.randomUUID());
+            Hospital deactivated = new Hospital();
+            deactivated.setId(UUID.randomUUID());
+            Hospital unregistered = new Hospital();
+            unregistered.setId(UUID.randomUUID());
+            PatientPrimaryCare atB = PatientPrimaryCare.builder().patient(patient).hospital(b)
+                    .assignment(assignment).startDate(LocalDate.now()).current(true).build();
+            PatientPrimaryCare atDeactivated = PatientPrimaryCare.builder().patient(patient).hospital(deactivated)
+                    .assignment(assignment).startDate(LocalDate.now()).current(true).build();
+            PatientPrimaryCare atUnregistered = PatientPrimaryCare.builder().patient(patient).hospital(unregistered)
+                    .assignment(assignment).startDate(LocalDate.now()).current(true).build();
+            PatientPrimaryCareResponseDTO dtoB = PatientPrimaryCareResponseDTO.builder().hospitalId(b.getId()).build();
+            when(registrationRepo.findByPatientId(patientId)).thenReturn(List.of(
+                    registration(hospital, true), registration(b, true), registration(deactivated, false)));
+            when(pcpRepo.findByPatient_IdOrderByStartDateDesc(patientId))
+                    .thenReturn(List.of(atB, pcpEntity, atDeactivated, atUnregistered));
+            when(mapper.toDto(atB)).thenReturn(dtoB);
+            when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
+
+            assertThat(service.getOwnPrimaryCareLinks(patientId)).containsExactly(dtoB, responseDTO);
+        }
+
+        @Test
+        void noActiveRegistrationReadsNothing() {
+            when(registrationRepo.findByPatientId(patientId)).thenReturn(List.of(registration(hospital, false)));
+
+            assertThat(service.getOwnPrimaryCareLinks(patientId)).isEmpty();
+            verify(pcpRepo, never()).findByPatient_IdOrderByStartDateDesc(any());
         }
     }
 
@@ -551,7 +686,7 @@ class PatientPrimaryCareServiceImplTest {
 
         @Test
         void notFoundThrows() {
-            when(pcpRepo.existsById(pcpId)).thenReturn(false);
+            when(pcpRepo.findById(pcpId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.deletePrimaryCare(pcpId))
                     .isInstanceOf(ResourceNotFoundException.class)
@@ -560,12 +695,12 @@ class PatientPrimaryCareServiceImplTest {
 
         @Test
         void deletesWhenExists() {
-            when(pcpRepo.existsById(pcpId)).thenReturn(true);
-            doNothing().when(pcpRepo).deleteById(pcpId);
+            PatientPrimaryCare link = new PatientPrimaryCare();
+            when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(link));
 
             service.deletePrimaryCare(pcpId);
 
-            verify(pcpRepo).deleteById(pcpId);
+            verify(pcpRepo).delete(link);
         }
     }
 }

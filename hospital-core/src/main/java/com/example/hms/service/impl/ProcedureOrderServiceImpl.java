@@ -13,10 +13,14 @@ import com.example.hms.payload.dto.procedure.ProcedureOrderResponseDTO;
 import com.example.hms.payload.dto.procedure.ProcedureOrderUpdateDTO;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.service.support.PatientSafeView;
 import com.example.hms.service.ProcedureOrderService;
+import com.example.hms.service.PatientSubjectReadGuard;
+import com.example.hms.service.PatientSubjectReaderRoles;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
@@ -44,22 +49,48 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     private final RoleValidator roleValidator;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final PatientSubjectReadGuard subjectReadGuard;
+    private final PatientHospitalRegistrationRepository registrationRepository;
 
     @Override
     public ProcedureOrderResponseDTO createProcedureOrder(ProcedureOrderRequestDTO request, UUID orderingProviderId) {
+        // Placed only at the hospital the caller acts at (update and cancel are
+        // already held there by requireInScope), for a patient registered
+        // there. Either refusal answers exactly as the missing row does, and
+        // both come before the patient is loaded.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        if (actingHospitalId != null) {
+            if (!actingHospitalId.equals(request.getHospitalId())) {
+                throw new ResourceNotFoundException("hospital.notFound", request.getHospitalId());
+            }
+            if (request.getPatientId() == null
+                    || !registrationRepository.existsByPatientIdAndHospitalId(request.getPatientId(), actingHospitalId)) {
+                throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
+            }
+        }
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
+        // The controller hands over the caller's USER id; a staff id is still
+        // accepted. One staff row per user (uq_staff_user), so the user's row
+        // is found wherever it is filed.
         Staff orderingProvider = staffRepository.findById(orderingProviderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Ordering provider not found with ID: " + orderingProviderId));
+            .or(() -> staffRepository.findByUserIdAndHospitalId(orderingProviderId, hospital.getId()))
+            .or(() -> staffRepository.findFirstByUserIdOrderByCreatedAtAsc(orderingProviderId))
+            .orElseThrow(() -> new ResourceNotFoundException("procedureOrder.orderingProvider.notFound", orderingProviderId));
+
+        // QA D857: a procedure is not planned for a time already past.
+        requireNotInPast(request.getScheduledDatetime());
 
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
             encounter = encounterRepository.findById(request.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found with ID: " + request.getEncounterId()));
+                .filter(e -> belongsTo(e, patient, hospital))
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
         ProcedureOrder procedureOrder = ProcedureOrder.builder()
@@ -73,7 +104,9 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             .indication(request.getIndication())
             .clinicalNotes(request.getClinicalNotes())
             .urgency(request.getUrgency())
-            .status(ProcedureOrderStatus.ORDERED)
+            // QA D880: an order placed with its date is already planned,
+            // exactly as a later reschedule of an ORDERED order makes it.
+            .status(request.getScheduledDatetime() != null ? ProcedureOrderStatus.SCHEDULED : ProcedureOrderStatus.ORDERED)
             .scheduledDatetime(request.getScheduledDatetime())
             .estimatedDurationMinutes(request.getEstimatedDurationMinutes())
             .requiresAnesthesia(request.getRequiresAnesthesia() != null ? request.getRequiresAnesthesia() : Boolean.FALSE)
@@ -103,13 +136,48 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     @Transactional(readOnly = true)
     public ProcedureOrderResponseDTO getProcedureOrder(UUID orderId) {
-        ProcedureOrder procedureOrder = getProcedureOrderEntity(orderId);
-        return toResponseDTO(procedureOrder);
+        ProcedureOrder order = procedureOrderRepository.findById(orderId)
+            .orElseThrow(() -> procedureOrderNotFound(orderId));
+        // A patient caller is bounded by ownership, not by a hospital, as on
+        // the encounter, prescription and ultrasound reads: their own order
+        // wherever it was written, another patient's exactly as a missing id,
+        // and before the hospital check, which can answer differently. Staff
+        // are held to their hospital — and, staff who are also patients
+        // (#754's rule), read their own order elsewhere as its patient.
+        if (subjectReadGuard.isPatientOnly(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS)) {
+            if (!subjectReadGuard.callerOwns(order.getPatient())) {
+                throw procedureOrderNotFound(orderId);
+            }
+            // QA D1960: the patient's copy, not the clinical notes or why it was cancelled.
+            return PatientSafeView.procedureOrder(toResponseDTO(order));
+        }
+        if (!inScope(order)) {
+            if (!subjectReadGuard.ownsAsItsPatient(order.getPatient())) {
+                throw procedureOrderNotFound(orderId);
+            }
+            return PatientSafeView.procedureOrder(toResponseDTO(order));
+        }
+        return toResponseDTO(order);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ProcedureOrderResponseDTO> getProcedureOrdersForPatient(UUID patientId) {
+        // A patient caller reads only their own. Another patient's id answers
+        // exactly as an id that matches no row does -- an empty list -- and
+        // before the hospital lookup below, which can answer differently.
+        if (!subjectReadGuard.mayRead(PatientSubjectReaderRoles.PROCEDURE_ORDER_READS, patientId)) {
+            return List.of();
+        }
+        if (subjectReadGuard.ownsAsItsPatient(patientId)) {
+            // Their own record, read as its patient wherever it was written
+            // (a patient, or staff who are also this patient, #754's rule).
+            // Reading one's own record is not a disclosure: no reach recorded.
+            return procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId).stream()
+                .map(this::toResponseDTO)
+                .map(PatientSafeView::procedureOrder)
+                .toList();
+        }
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<ProcedureOrder> orders;
         if (activeHospitalId != null) {
@@ -171,22 +239,60 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             .toList();
     }
 
+    /**
+     * QA D857: a reschedule to a past date was accepted (01/01/2020 made the
+     * order "Planifié" and offered "Débuter la procédure"). Checked before
+     * anything is applied, so a refused request changes nothing.
+     */
+    private void requireRescheduleNotInPast(ProcedureOrderUpdateDTO updateDTO, ProcedureOrder procedureOrder) {
+        if (updateDTO.getScheduledDatetime() != null
+                && !updateDTO.getScheduledDatetime().equals(procedureOrder.getScheduledDatetime())) {
+            requireNotInPast(updateDTO.getScheduledDatetime());
+        }
+    }
+
     @Override
     public ProcedureOrderResponseDTO updateProcedureOrder(UUID orderId, ProcedureOrderUpdateDTO updateDTO) {
         ProcedureOrder procedureOrder = getProcedureOrderEntity(orderId);
 
         if (procedureOrder.getStatus() == ProcedureOrderStatus.COMPLETED) {
-            throw new BusinessException("Cannot update a completed procedure order");
+            throw new BusinessException("procedureOrder.completed.locked");
         }
 
         if (procedureOrder.getStatus() == ProcedureOrderStatus.CANCELLED) {
-            throw new BusinessException("Cannot update a cancelled procedure order");
+            throw new BusinessException("procedureOrder.cancelled.locked");
         }
+
+        // Product decision 2026-10-28 (QA D930 class): recording the order's
+        // execution - planning, pre-op steps, start, completion, postponement,
+        // consent capture, site marking - stays with the care team (nurses,
+        // the procedure and theatre staff), so care is never blocked. Ending
+        // the order is the ordering clinician's decision: a CANCELLED sent
+        // here passes the same author check as POST /cancel, before anything
+        // is applied. A cancelled order is locked above for everyone, so
+        // there is no way back out of CANCELLED to gate.
+        boolean cancelling = updateDTO.getStatus() == ProcedureOrderStatus.CANCELLED;
+        // QA D1098 (round 19): every cancel states why, on this path as on POST /cancel.
+        if (cancelling) {
+            requireCancelAuthor(procedureOrder);
+        }
+        String cancellationReason = cancelling
+            ? com.example.hms.service.support.CancelledOrders.requireCancelReason(updateDTO.getCancellationReason(), "cancellationReason")
+            : null;
+
+        requireRescheduleNotInPast(updateDTO, procedureOrder);
 
         if (updateDTO.getStatus() != null) {
             procedureOrder.setStatus(updateDTO.getStatus());
             if (updateDTO.getStatus() == ProcedureOrderStatus.COMPLETED) {
-                procedureOrder.setCompletedAt(LocalDateTime.now());
+                procedureOrder.setCompletedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+            }
+            // The stamp belongs to the transition (the order was not cancelled,
+            // checked above), as POST /cancel writes it; this path used to set
+            // CANCELLED with no time and no reason.
+            if (cancelling) {
+                procedureOrder.setCancelledAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+                procedureOrder.setCancellationReason(cancellationReason);
             }
         }
 
@@ -212,18 +318,21 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     public ProcedureOrderResponseDTO cancelProcedureOrder(UUID orderId, String cancellationReason) {
         ProcedureOrder procedureOrder = getProcedureOrderEntity(orderId);
+        requireCancelAuthor(procedureOrder);
 
         if (procedureOrder.getStatus() == ProcedureOrderStatus.COMPLETED) {
-            throw new BusinessException("Cannot cancel a completed procedure order");
+            throw new BusinessException("procedureOrder.completed.cancel");
         }
 
         if (procedureOrder.getStatus() == ProcedureOrderStatus.CANCELLED) {
-            throw new BusinessException("Procedure order is already cancelled");
+            throw new BusinessException("procedureOrder.alreadyCancelled");
         }
+        // QA D1098: a blank reason passed the required request parameter.
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason, "cancellationReason");
 
         procedureOrder.setStatus(ProcedureOrderStatus.CANCELLED);
         procedureOrder.setCancelledAt(LocalDateTime.now());
-        procedureOrder.setCancellationReason(cancellationReason);
+        procedureOrder.setCancellationReason(reason);
 
         ProcedureOrder saved = procedureOrderRepository.save(procedureOrder);
         log.info("Procedure order {} cancelled: {}", orderId, cancellationReason);
@@ -242,17 +351,94 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             .toList();
     }
 
+    /**
+     * QA D857: how far before "now" a planned time may lie and still be taken
+     * as now: the form's clock and the server's differ by a few minutes, and a
+     * procedure planned "for now" is not a past one.
+     */
+    private static final long SCHEDULE_PAST_TOLERANCE_MINUTES = 15;
+
+    /** QA D857: a planned date and time must not be in the past. */
+    private static void requireNotInPast(LocalDateTime scheduledDatetime) {
+        if (scheduledDatetime != null
+                && scheduledDatetime.isBefore(LocalDateTime.now().minusMinutes(SCHEDULE_PAST_TOLERANCE_MINUTES))) {
+            throw new com.example.hms.exception.FieldBusinessException("scheduledDatetime", "procedureOrder.scheduledInPast");
+        }
+    }
+
     // Helper methods
 
     private ProcedureOrder getProcedureOrderEntity(UUID orderId) {
         ProcedureOrder order = procedureOrderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Procedure order not found with ID: " + orderId));
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && order.getHospital() != null
-                && !activeHospitalId.equals(order.getHospital().getId())) {
-            throw new ResourceNotFoundException("Procedure order not found with ID: " + orderId);
+            .orElseThrow(() -> procedureOrderNotFound(orderId));
+        return requireInScope(order);
+    }
+
+    /** A procedure order outside the caller's active hospital answers as a missing one. */
+    private ProcedureOrder requireInScope(ProcedureOrder order) {
+        if (!inScope(order)) {
+            throw procedureOrderNotFound(order.getId());
         }
         return order;
+    }
+
+    /** Is the order at the caller's active hospital (a null scope reaches every hospital)? */
+    private boolean inScope(ProcedureOrder order) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        return activeHospitalId == null || order.getHospital() == null
+            || activeHospitalId.equals(order.getHospital().getId());
+    }
+
+    /**
+     * Product decision 2026-10-28 (QA D930 class): who may end a procedure
+     * order. The clinician who ordered it; a physician (doctor, physician,
+     * surgeon) of the order's hospital when the order was placed by a nurse or
+     * midwife who drafts for a physician's signature there (the prescription
+     * and imaging co-sign rule, QA D934); a verified super-admin in global
+     * view. An order whose ordering staff record carries no user keeps the old
+     * rule, anyone in scope, as imaging does for an order with no recorded
+     * provider. Anyone else gets a translated 403; the order was resolved in
+     * the caller's scope first, so the refusal discloses nothing.
+     */
+    private void requireCancelAuthor(ProcedureOrder order) {
+        Staff orderer = order.getOrderingProvider();
+        if (orderer == null || orderer.getUser() == null || orderer.getUser().getId() == null
+                || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
+                || com.example.hms.security.CallerIdentity.isCaller(orderer)) {
+            return;
+        }
+        UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        UUID hospitalId = com.example.hms.security.CallerIdentity.hospitalIdOf(order.getHospital());
+        if (caller != null && hospitalId != null
+                && roleValidator.draftsForPhysicianSignature(orderer.getUser().getId(), hospitalId)
+                && roleValidator.isSigningPhysician(caller, hospitalId)) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("procedureOrder.cancelForbidden"));
+    }
+
+    private static ResourceNotFoundException procedureOrderNotFound(UUID orderId) {
+        return new ResourceNotFoundException("procedureOrder.notFound", orderId);
+    }
+
+    private static UUID orderingUserId(ProcedureOrder order) {
+        Staff orderer = order.getOrderingProvider();
+        return orderer != null && orderer.getUser() != null ? orderer.getUser().getId() : null;
+    }
+
+    /**
+     * QA D1081: the same question requireCancelAuthor asks, for the list's
+     * per-row Annuler; unknown (null in the response) without an author or a
+     * hospital.
+     */
+    private Optional<Boolean> authorIsPhysician(ProcedureOrder order) {
+        UUID author = orderingUserId(order);
+        UUID hospitalId = com.example.hms.security.CallerIdentity.hospitalIdOf(order.getHospital());
+        if (author == null || hospitalId == null) {
+            return Optional.empty();
+        }
+        return Optional.of(!roleValidator.draftsForPhysicianSignature(author, hospitalId));
     }
 
     private ProcedureOrderResponseDTO toResponseDTO(ProcedureOrder order) {
@@ -264,6 +450,8 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         
         return ProcedureOrderResponseDTO.builder()
             .id(order.getId())
+            .authorUserId(orderingUserId(order))
+            .authorIsPhysician(authorIsPhysician(order).orElse(null))
             .patientId(order.getPatient() != null ? order.getPatient().getId() : null)
             .patientName(order.getPatient() != null ? order.getPatient().getFullName() : null)
             .patientMrn(patientMrn)
@@ -315,5 +503,17 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         if (dto.getConsentFormLocation() != null) {
             order.setConsentFormLocation(dto.getConsentFormLocation());
         }
+    }
+
+    /**
+     * The encounter an order or consultation is filed against must be this
+     * patient's, at this hospital. The lookup is a bare {@code findById}, so
+     * another hospital's (or another patient's) encounter used to be attached;
+     * it now answers exactly as an encounter id that matches no row.
+     */
+    private static boolean belongsTo(Encounter encounter, Patient patient, Hospital hospital) {
+        return encounter.getHospital() != null && encounter.getPatient() != null
+            && encounter.getHospital().getId().equals(hospital.getId())
+            && encounter.getPatient().getId().equals(patient.getId());
     }
 }

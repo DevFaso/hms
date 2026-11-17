@@ -1,4 +1,6 @@
-import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
+import { map } from 'rxjs';
+import { allRows } from '../shared/all-pages';
+import { CommonModule, DatePipe } from '@angular/common';
 import {
   Component,
   OnInit,
@@ -8,17 +10,21 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PharmacyClaimResponse,
   PharmacyClaimStatus,
   PharmacyService,
 } from '../services/pharmacy.service';
 import { ToastService } from '../core/toast.service';
+import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
+import { refusalReason } from '../shared/refusal-reason';
 
 interface StatusOption {
   value: PharmacyClaimStatus;
-  labelFr: string;
+  labelKey: string;
 }
 
 /**
@@ -30,7 +36,15 @@ interface StatusOption {
 @Component({
   selector: 'app-pharmacy-claims',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, DecimalPipe],
+  imports: [
+    ReasonDialogComponent,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    DatePipe,
+    CfaPipe,
+  ],
   templateUrl: './pharmacy-claims.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-claims.scss',
@@ -45,11 +59,11 @@ export class PharmacyClaimsComponent implements OnInit {
   readonly filter = signal<PharmacyClaimStatus | 'ALL'>('ALL');
 
   readonly statusOptions: StatusOption[] = [
-    { value: 'DRAFT', labelFr: 'Brouillon' },
-    { value: 'SUBMITTED', labelFr: 'Soumis' },
-    { value: 'ACCEPTED', labelFr: 'Accepté' },
-    { value: 'REJECTED', labelFr: 'Rejeté' },
-    { value: 'PAID', labelFr: 'Payé' },
+    { value: 'DRAFT', labelKey: 'PHARMACY_CLAIMS.STATUS.DRAFT' },
+    { value: 'SUBMITTED', labelKey: 'PHARMACY_CLAIMS.STATUS.SUBMITTED' },
+    { value: 'ACCEPTED', labelKey: 'PHARMACY_CLAIMS.STATUS.ACCEPTED' },
+    { value: 'REJECTED', labelKey: 'PHARMACY_CLAIMS.STATUS.REJECTED' },
+    { value: 'PAID', labelKey: 'PHARMACY_CLAIMS.STATUS.PAID' },
   ];
 
   ngOnInit(): void {
@@ -58,9 +72,12 @@ export class PharmacyClaimsComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.pharmacy.listClaimsByHospital(0, 100).subscribe({
-      next: (res) => {
-        this.claims.set(res.data?.content ?? []);
+    // QA D1347: every claim (all pages), not the 100 newest.
+    allRows((page, size) =>
+      this.pharmacy.listClaimsByHospital(page, size).pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (claims) => {
+        this.claims.set(claims);
         this.loading.set(false);
       },
       error: () => {
@@ -77,7 +94,8 @@ export class PharmacyClaimsComponent implements OnInit {
   });
 
   statusLabel(s: PharmacyClaimStatus): string {
-    return this.statusOptions.find((o) => o.value === s)?.labelFr ?? s;
+    const key = this.statusOptions.find((o) => o.value === s)?.labelKey;
+    return key ? this.translate.instant(key) : s;
   }
 
   submit(c: PharmacyClaimResponse): void {
@@ -86,7 +104,10 @@ export class PharmacyClaimsComponent implements OnInit {
         this.toast.success(this.translate.instant('PHARMACY.CLAIM_SUBMITTED'));
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_SUBMIT_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_SUBMIT_FAILED'),
+        ),
     });
   }
 
@@ -96,21 +117,37 @@ export class PharmacyClaimsComponent implements OnInit {
         this.toast.success(this.translate.instant('PHARMACY.CLAIM_ACCEPTED'));
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_ACCEPT_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_ACCEPT_FAILED'),
+        ),
     });
   }
 
+  /** QA D1201: the claim being rejected; the shared reason dialog asks why. */
+  rejecting = signal<PharmacyClaimResponse | null>(null);
+  rejectBusy = signal(false);
+
   reject(c: PharmacyClaimResponse): void {
-    const reason = window.prompt(this.translate.instant('PHARMACY.CLAIM_REJECT_REASON_PROMPT'));
-    if (!reason || !reason.trim()) {
-      return;
-    }
+    this.rejecting.set(c);
+  }
+
+  confirmReject(c: PharmacyClaimResponse, reason: string): void {
+    if (this.rejectBusy()) return;
+    this.rejectBusy.set(true);
     this.pharmacy.rejectClaim(c.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.CLAIM_REJECTED'));
+        this.rejectBusy.set(false);
+        this.rejecting.set(null);
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_REJECT_FAILED')),
+      error: (err: unknown) => {
+        this.rejectBusy.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_REJECT_FAILED'),
+        );
+      },
     });
   }
 
@@ -120,21 +157,28 @@ export class PharmacyClaimsComponent implements OnInit {
         this.toast.success(this.translate.instant('PHARMACY.PAYMENT_RECORDED'));
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_PAY_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_PAY_FAILED')),
     });
   }
 
   exportCsv(): void {
     this.pharmacy.exportClaimsCsv(['SUBMITTED', 'ACCEPTED']).subscribe({
       next: (blob) => this.download(blob, 'pharmacy-claims.csv'),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_EXPORT_CSV_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_EXPORT_CSV_FAILED'),
+        ),
     });
   }
 
   exportFhir(): void {
     this.pharmacy.exportClaimsFhir(['SUBMITTED', 'ACCEPTED']).subscribe({
       next: (blob) => this.download(blob, 'pharmacy-claims.fhir.json'),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_EXPORT_FHIR_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_EXPORT_FHIR_FAILED'),
+        ),
     });
   }
 

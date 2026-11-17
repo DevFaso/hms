@@ -78,4 +78,69 @@ class PhoneNumbersTest {
         assertThat(PhoneNumbers.candidates(null, BF)).isEmpty();
         assertThat(PhoneNumbers.candidates("  ", BF)).isEmpty();
     }
+
+    @Test
+    @DisplayName("toE164: a local Burkina Faso number takes +226; spaced, 00 and + forms agree")
+    void toE164NormalisesLocalNumbers() {
+        assertThat(PhoneNumbers.toE164("70202020", BF)).isEqualTo("+22670202020");
+        assertThat(PhoneNumbers.toE164("70 20 20 20", BF)).isEqualTo("+22670202020");
+        assertThat(PhoneNumbers.toE164("0022670202020", BF)).isEqualTo("+22670202020");
+        assertThat(PhoneNumbers.toE164("+226 70-20-20-20", BF)).isEqualTo("+22670202020");
+        assertThat(PhoneNumbers.toE164("0612345678", "33")).isEqualTo("+33612345678");
+    }
+
+    @Test
+    @DisplayName("toE164: letters, too few or too many digits, and a malformed +226 number are refused")
+    void toE164RefusesInvalid() {
+        assertThat(PhoneNumbers.toE164("abc", BF)).isNull();
+        assertThat(PhoneNumbers.toE164("7020", BF)).isNull();
+        assertThat(PhoneNumbers.toE164("702020201", BF)).isNull();
+        assertThat(PhoneNumbers.toE164("+2267020202", BF)).isNull();
+        assertThat(PhoneNumbers.toE164("+1234567890123456", BF)).isNull();
+        assertThat(PhoneNumbers.toE164("  ", BF)).isNull();
+    }
+
+    @Test
+    @DisplayName("callingCodeForCountry: Burkina Faso by name or code, and the default when unknown")
+    void callingCodes() {
+        assertThat(PhoneNumbers.callingCodeForCountry("Burkina Faso")).isEqualTo("226");
+        assertThat(PhoneNumbers.callingCodeForCountry("BF")).isEqualTo("226");
+        assertThat(PhoneNumbers.callingCodeForCountry("Côte d’Ivoire")).isEqualTo("225");
+        assertThat(PhoneNumbers.callingCodeForCountry(null)).isEqualTo("226");
+        assertThat(PhoneNumbers.callingCodeForCountry("Atlantis")).isEqualTo("226");
+    }
+
+    @Test
+    @DisplayName("QA D833: a facility number keeps its last digit and loses its spaces")
+    void facilityPhoneIsNormalised() {
+        assertThat(PhoneNumbers.normalizeFacilityPhone("+226 25 36 12 40", "Burkina Faso")).isEqualTo("+22625361240");
+        assertThat(PhoneNumbers.normalizeFacilityPhone("25 36 12 40", "Burkina Faso")).isEqualTo("+22625361240");
+        assertThat(PhoneNumbers.normalizeFacilityPhone("+33 1 23 45 67 89", "France")).isEqualTo("+33123456789");
+        // A country whose numbering plan this class does not know keeps its digits.
+        assertThat(PhoneNumbers.normalizeFacilityPhone("(123) 456-7890", "US")).isEqualTo("1234567890");
+    }
+
+    @Test
+    @DisplayName("QA D833: an 8-digit number for an unlisted country is not given the Burkina prefix")
+    void facilityPhoneForAnUnlistedCountryKeepsItsDigits() {
+        // Was "+22662123456": the 226 default applied to any country not in the table.
+        assertThat(PhoneNumbers.normalizeFacilityPhone("62 12 34 56", "Tchad")).isEqualTo("62123456");
+        assertThat(PhoneNumbers.normalizeFacilityPhone("622 12 34 56", "Tchad")).isEqualTo("622123456");
+        // An explicit international form is still checked and stored as E.164.
+        assertThat(PhoneNumbers.normalizeFacilityPhone("+235 62 12 34 56", "Tchad")).isEqualTo("+23562123456");
+        assertThat(PhoneNumbers.normalizeFacilityPhone("00235 62 12 34 56", "Tchad")).isEqualTo("+23562123456");
+        // With no country at all, the deployment default (Burkina Faso) still applies.
+        assertThat(PhoneNumbers.normalizeFacilityPhone("62 12 34 56", null)).isEqualTo("+22662123456");
+        assertThat(PhoneNumbers.normalizeFacilityPhone("62 12 34 56", " ")).isEqualTo("+22662123456");
+    }
+
+    @Test
+    @DisplayName("QA D833: a number one digit short, or not a number, is refused rather than stored")
+    void facilityPhoneIsRefused() {
+        assertThat(PhoneNumbers.normalizeFacilityPhone("+226 25 36 12 4", "Burkina Faso")).isNull();
+        assertThat(PhoneNumbers.normalizeFacilityPhone("25 36 12 4", "Burkina Faso")).isNull();
+        assertThat(PhoneNumbers.normalizeFacilityPhone("+226 25 36 12 4", "US")).isNull();
+        assertThat(PhoneNumbers.normalizeFacilityPhone("appelez-nous", "US")).isNull();
+        assertThat(PhoneNumbers.normalizeFacilityPhone("   ", "Burkina Faso")).isNull();
+    }
 }

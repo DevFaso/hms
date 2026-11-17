@@ -14,8 +14,11 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Provider decision on a medication refill request (approve or reject).")
 public class RefillDecisionRequestDTO {
 
+    /** QA D1315 (round 29): required to deny or hold (the patient is told why); optional to approve. */
+    @jakarta.validation.constraints.NotBlank(groups = com.example.hms.validation.OnRefusal.class,
+            message = "{patient.refill.decision.reasonRequired}")
     @Size(max = 1000)
-    @Schema(description = "Optional provider notes shown to the patient (e.g. reason for denial).",
+    @Schema(description = "Provider notes shown to the patient; required to deny or hold shown to the patient (e.g. reason for denial).",
             example = "Approved — please pick up at preferred pharmacy by Friday.")
     private String providerNotes;
 }

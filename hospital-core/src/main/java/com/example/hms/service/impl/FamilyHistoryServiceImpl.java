@@ -26,11 +26,13 @@ import java.util.UUID;
 @Slf4j
 @Transactional
 public class FamilyHistoryServiceImpl implements FamilyHistoryService {
-    private static final String FAMILY_HISTORY_NOT_FOUND_PREFIX = "Family history not found with id: ";
+    private static final String FAMILY_HISTORY_NOT_FOUND_KEY = "familyHistory.notFound";
+
 
 
     private final FamilyHistoryRepository familyHistoryRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final FamilyHistoryMapper familyHistoryMapper;
@@ -42,14 +44,15 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         Patient patient = patientRepository.findById(requestDTO.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", requestDTO.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(requestDTO.getHospitalId())
+        Hospital hospital = hospitalRepository.findClinicalById(requestDTO.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
+        // QA r5 tenancy sweep: the row is written at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", requestDTO.getHospitalId());
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
-        Staff recordedBy = null;
-        if (requestDTO.getRecordedByStaffId() != null) {
-            recordedBy = staffRepository.findById(requestDTO.getRecordedByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getRecordedByStaffId()));
-        }
+        // QA D503 class: the recorder is the caller, not a colleague named in the body.
+        Staff recordedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getRecordedByStaffId(), hospital.getId());
 
         PatientFamilyHistory familyHistory = familyHistoryMapper.toEntity(requestDTO, patient, hospital, recordedBy);
         PatientFamilyHistory savedHistory = familyHistoryRepository.save(familyHistory);
@@ -64,7 +67,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         log.debug("Fetching family history with id: {}", id);
         
         PatientFamilyHistory familyHistory = familyHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_KEY, id));
 
         return familyHistoryMapper.toResponseDTO(familyHistory);
     }
@@ -141,14 +144,15 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         log.info("Updating family history with id: {}", id);
 
         PatientFamilyHistory existingHistory = familyHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingHistory.getHospital(), FAMILY_HISTORY_NOT_FOUND_KEY, id);
 
         // Update staff if changed
         if (requestDTO.getRecordedByStaffId() != null && 
             (existingHistory.getRecordedBy() == null || 
              !existingHistory.getRecordedBy().getId().equals(requestDTO.getRecordedByStaffId()))) {
-            Staff recordedBy = staffRepository.findById(requestDTO.getRecordedByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getRecordedByStaffId()));
+            Staff recordedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getRecordedByStaffId(),
+                    com.example.hms.security.CallerIdentity.hospitalIdOf(existingHistory.getHospital()));
             existingHistory.setRecordedBy(recordedBy);
         }
 
@@ -164,8 +168,13 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         log.info("Deleting family history with id: {}", id);
 
         PatientFamilyHistory familyHistory = familyHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_PREFIX + id));
+                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(familyHistory.getHospital(), FAMILY_HISTORY_NOT_FOUND_KEY, id);
 
+        // QA D1242 class (round 25): a removed entry stays removed; a repeat is refused.
+        if (Boolean.FALSE.equals(familyHistory.getActive())) {
+            throw new com.example.hms.exception.BusinessException("medicalHistory.r25.alreadyRemoved");
+        }
         familyHistory.setActive(false);
         familyHistoryRepository.save(familyHistory);
 

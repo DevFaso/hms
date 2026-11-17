@@ -9,12 +9,20 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { Subject, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
 import { LabResultPage, LabResultResponse, LabService } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
+import { shortOrderCode } from '../../shared/lab/order-code';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { labSeverityFlag, labReleaseNeedsReview } from '../shared/lab-severity';
+import { LabValuePipe } from '../shared/lab-value.pipe';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 /**
  * Release worklist (B14).
@@ -43,14 +51,25 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-lab-release-worklist',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [
+    LabCorrectionBadgeComponent,
+    ModalDialogDirective,
+    ServerTimePipe,
+    EnumLabelPipe,
+    LabValuePipe,
+    CommonModule,
+    TranslateModule,
+  ],
   templateUrl: './lab-release-worklist.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './lab-release-worklist.scss',
 })
 export class LabReleaseWorklistComponent implements OnInit {
+  /** QA D227: a readable order code, not the raw id. */
+  readonly shortOrderCode = shortOrderCode;
   private readonly labService = inject(LabService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -82,6 +101,8 @@ export class LabReleaseWorklistComponent implements OnInit {
   releasingId = signal<string | null>(null);
   /** Why the last release attempt failed — shown in the dialog, which stays open. */
   releaseError = signal<string | null>(null);
+  /** Id of the row the API answered 409 for: its release must be confirmed as a self-release. */
+  selfReleaseRequiredId = signal<string | null>(null);
   /** What the last successful release was, so the screen says what happened. */
   justReleased = signal<{ patient: string; test: string } | null>(null);
 
@@ -216,6 +237,21 @@ export class LabReleaseWorklistComponent implements OnInit {
     }
     this.releaseTarget.set(null);
     this.releaseError.set(null);
+    this.selfReleaseRequiredId.set(null);
+  }
+
+  /**
+   * D58: the target was entered by the reader. Many laboratories here are one
+   * technician, so a self-release is allowed — but it is said out loud in the
+   * dialog, sent as such, and recorded as one. Also true once the API refused
+   * the release as an unconfirmed self-release (409), whatever the token says.
+   */
+  isSelfRelease(r: LabResultResponse): boolean {
+    if (this.selfReleaseRequiredId() === r.id) {
+      return true;
+    }
+    const me = this.auth.getUserId();
+    return !!me && !!r.enteredByUserId && r.enteredByUserId === me;
   }
 
   confirmRelease(): void {
@@ -227,10 +263,14 @@ export class LabReleaseWorklistComponent implements OnInit {
     // after the dispatch guards nothing (the #443 lesson).
     this.releasingId.set(target.id);
     this.releaseError.set(null);
-    this.labService.releaseResult(target.id).subscribe({
+    const selfRelease = this.isSelfRelease(target);
+    // QA D1092: the dialog shows the "not graded" warning for such a result,
+    // so confirming it is the reviewed release the API asks for.
+    this.labService.releaseResult(target.id, selfRelease, labReleaseNeedsReview(target)).subscribe({
       next: () => {
         this.releasingId.set(null);
         this.releaseTarget.set(null);
+        this.selfReleaseRequiredId.set(null);
         this.justReleased.set({ patient: target.patientFullName, test: target.labTestName });
         this.toast.success(this.translate.instant('LAB_RELEASE.RELEASED'));
         // Re-read rather than splice the row out locally: the row leaves the
@@ -248,6 +288,12 @@ export class LabReleaseWorklistComponent implements OnInit {
         // how a fully-translated screen stops being one. The detail is
         // logged, where a developer can read it and a biologist need not.
         console.error('Release refused for lab result', err);
+        if (!selfRelease && (err as { status?: number } | null)?.status === 409) {
+          // The reader entered this result: keep the dialog open and ask
+          // again, this time as an explicit self-release.
+          this.selfReleaseRequiredId.set(target.id);
+          return;
+        }
         const message = this.translate.instant('LAB_RELEASE.RELEASE_ERROR');
         this.releaseError.set(message);
         this.toast.error(message);
@@ -287,15 +333,54 @@ export class LabReleaseWorklistComponent implements OnInit {
     }
   }
 
-  /** LOW / HIGH / NORMAL / UNSPECIFIED, as LabResultMapper.determineSeverityFlag emits them. */
+  /**
+   * The grade as LabResultMapper emits it (QA D212: CRITICAL used to fall
+   * through to "not flagged"; QA D969: so did ABNORMAL, a positive
+   * qualitative answer), or UNIT_MISMATCH when no configured range is in the
+   * result's unit. The one reading /lab-results uses too (lab-severity.ts).
+   */
   severityKey(r: LabResultResponse): string {
-    const flag = (r.severityFlag ?? '').toUpperCase();
-    return flag === 'LOW' || flag === 'HIGH' || flag === 'NORMAL' ? flag : 'UNSPECIFIED';
+    return labSeverityFlag(r);
+  }
+
+  /** QA D963: a STAT or URGENT order is flagged on the queue, which lists them first. */
+  isUrgentPriority(r: LabResultResponse): boolean {
+    return r.orderPriority === 'STAT' || r.orderPriority === 'URGENT';
   }
 
   severityClass(r: LabResultResponse): string {
     const key = this.severityKey(r);
     return `flag-badge flag-${key.toLowerCase()}`;
+  }
+
+  /**
+   * Where the number came from. Every row on this queue is unreleased, so
+   * `released` cannot tell a reader anything here; the HL7 message id can:
+   * an analyzer's result carries one, a typed result never does.
+   */
+  isInstrumentResult(r: LabResultResponse): boolean {
+    return !!r.sourceMessageControlId;
+  }
+
+  /**
+   * OBX-11 as a label key, or null when there is nothing to say (a typed row,
+   * or an analyzer that did not send one). F / P / C are named; any other
+   * table-0085 code is shown as the code itself rather than guessed at.
+   */
+  resultStatusKey(r: LabResultResponse): string | null {
+    const code = (r.observationResultStatus ?? '').trim().toUpperCase();
+    switch (code) {
+      case '':
+        return null;
+      case 'F':
+        return 'LAB_RELEASE.STATUS_FINAL';
+      case 'P':
+        return 'LAB_RELEASE.STATUS_PRELIMINARY';
+      case 'C':
+        return 'LAB_RELEASE.STATUS_CORRECTED';
+      default:
+        return 'LAB_RELEASE.STATUS_OTHER';
+    }
   }
 
   /** A critical result on this queue is the one a reader must release first. */

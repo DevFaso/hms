@@ -4,7 +4,12 @@
 -->
 <app-skip-link target="#main-content" [label]="'A11Y.SKIP_TO_MAIN' | translate" />
 
-<div class="shell" [class.collapsed]="sidebarCollapsed()">
+<div
+  class="shell"
+  [class.collapsed]="sidebarCollapsed()"
+  [class.sidebar-resizing]="sidebarResizing()"
+  [style.--sidebar-expanded-width]="sidebarWidth() + 'px'"
+>
   <!--
     Sidebar.
     The accessible name belongs on the inner <nav> (the navigation
@@ -14,7 +19,19 @@
     unlabeled; it remains a `complementary` landmark by default, which
     is the correct ARIA role for a non-primary side region.
   -->
-  <aside class="sidebar">
+  <!--
+    QA D1153 / D1125: on a phone the open drawer is a modal over the page
+    (appDrawerDialog: role and aria-modal, focus in, Tab kept inside, Escape
+    from anywhere - the Menu button included - and focus back to Menu). On a
+    wide screen it stays a landmark.
+  -->
+  <aside
+    class="sidebar"
+    tabindex="-1"
+    [appDrawerDialog]="phoneDrawerOpen()"
+    [attr.aria-label]="phoneDrawerOpen() ? ('SHELL.MENU' | translate) : null"
+    (drawerClose)="closeSidebarFromKeyboard()"
+  >
     <div class="sidebar-header">
       <div class="logo-area">
         <app-brand-mark [size]="30" tone="onDark" />
@@ -24,10 +41,14 @@
       </div>
       <button
         class="toggle-btn"
+        type="button"
+        data-testid="sidebar-toggle"
+        [attr.aria-expanded]="!sidebarCollapsed()"
+        aria-controls="primary-navigation"
         (click)="toggleSidebar()"
         [attr.aria-label]="'SHELL.TOGGLE_SIDEBAR' | translate"
       >
-        <span class="material-symbols-outlined">
+        <span class="material-symbols-outlined" aria-hidden="true">
           {{ sidebarCollapsed() ? 'chevron_right' : 'chevron_left' }}
         </span>
       </button>
@@ -69,7 +90,11 @@
       </div>
     }
 
-    <nav class="sidebar-nav" [attr.aria-label]="'SHELL.PRIMARY_NAV_ARIA' | translate">
+    <nav
+      id="primary-navigation"
+      class="sidebar-nav"
+      [attr.aria-label]="'SHELL.PRIMARY_NAV_ARIA' | translate"
+    >
       @for (group of navGroups(); track group.id) {
         <!--
           role="group" + aria-labelledby so the heading names the set for a
@@ -96,6 +121,11 @@
               draggable="true"
               [attr.aria-grabbed]="dragIndex() === entry.flatIndex"
               aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+              [attr.aria-label]="
+                entry.item.translationKey
+                  ? (entry.item.translationKey | translate)
+                  : entry.item.label
+              "
               (click)="closeOverlays()"
               (keydown)="onNavKeydown($event, entry.flatIndex)"
               (dragstart)="onDragStart($event, entry.flatIndex)"
@@ -110,7 +140,9 @@
                 aria-hidden="true"
                 >drag_indicator</span
               >
-              <span class="material-symbols-outlined nav-icon">{{ entry.item.icon }}</span>
+              <span class="material-symbols-outlined nav-icon" aria-hidden="true">{{
+                entry.item.icon
+              }}</span>
               @if (!sidebarCollapsed()) {
                 <span class="nav-label">{{
                   entry.item.translationKey
@@ -147,13 +179,54 @@
             <span class="user-name-mini">{{ userName() }}</span>
             <span class="user-role-mini">{{ userRole() | roleLabel }}</span>
           </div>
+          <!--
+            D812: on a phone the drawer is the menu, so sign-out lives here
+            too. The topbar's profile menu stays the desktop path.
+          -->
+          <button
+            type="button"
+            class="sidebar-logout"
+            data-testid="sidebar-logout"
+            (click)="logout()"
+            [attr.aria-label]="'SHELL.SIGN_OUT' | translate"
+            [title]="'SHELL.SIGN_OUT' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+          </button>
         </div>
       }
     </div>
+    @if (!sidebarCollapsed()) {
+      <div
+        class="sidebar-resize-handle"
+        role="separator"
+        tabindex="0"
+        aria-orientation="vertical"
+        [attr.aria-label]="'SHELL.RESIZE_SIDEBAR' | translate"
+        [title]="'SHELL.RESIZE_SIDEBAR_HINT' | translate"
+        [attr.aria-valuemin]="sidebarMinWidth"
+        [attr.aria-valuemax]="sidebarMaxWidth"
+        [attr.aria-valuenow]="sidebarWidth()"
+        data-testid="sidebar-resize-handle"
+        (pointerdown)="startSidebarResize($event)"
+        (pointermove)="moveSidebarResize($event)"
+        (pointerup)="endSidebarResize($event)"
+        (pointercancel)="endSidebarResize($event, true)"
+        (lostpointercapture)="endSidebarResize($event, true)"
+        (keydown)="resizeSidebarWithKey($event)"
+        (dblclick)="resetSidebarWidth()"
+      ></div>
+    }
   </aside>
 
+  @if (!sidebarCollapsed()) {
+    <!-- Phones only (shell.scss): the drawer's backdrop closes it on a tap. -->
+    <div class="sidebar-backdrop" aria-hidden="true" (click)="closeSidebar()"></div>
+  }
+
   <!-- Main Content -->
-  <div class="main-area">
+  <!-- QA D1153: the page behind the open phone drawer is out of reach (Tab, clicks, readers). -->
+  <div class="main-area" [attr.inert]="phoneDrawerOpen() ? '' : null">
     <!-- Header -->
     <header class="topbar" role="banner">
       <div class="topbar-left">
@@ -162,13 +235,29 @@
           (click)="toggleSidebar()"
           [attr.aria-label]="'SHELL.MENU' | translate"
         >
-          <span class="material-symbols-outlined">menu</span>
+          <span class="material-symbols-outlined" aria-hidden="true">menu</span>
         </button>
         <h2 class="page-title">{{ 'SHELL.PAGE_TITLE' | translate }}</h2>
       </div>
 
       <div class="topbar-right">
-        <!-- Language Switcher -->
+        <!--
+          Language Switcher. D812: a narrow topbar (a phone) swaps the three
+          buttons for one select, so the profile button stays on screen.
+          Container queries in shell.scss pick which one shows.
+        -->
+        <label class="sr-only" for="topbar-lang-select">{{ 'SHELL.LANGUAGE' | translate }}</label>
+        <select
+          id="topbar-lang-select"
+          class="lang-select"
+          data-testid="lang-select"
+          [value]="currentLang()"
+          (change)="onLangSelect($event)"
+        >
+          <option value="fr">FR</option>
+          <option value="en">EN</option>
+          <option value="es">ES</option>
+        </select>
         <div class="lang-switcher">
           <button
             class="lang-btn"
@@ -207,9 +296,9 @@
           (click)="closeOverlays()"
           [attr.aria-label]="translate.instant('NAV.MESSAGES_ARIA', { count: chatUnread() })"
         >
-          <span class="material-symbols-outlined">chat</span>
+          <span class="material-symbols-outlined" aria-hidden="true">chat</span>
           @if (chatUnread() > 0) {
-            <span class="badge">{{ chatUnread() > 99 ? '99+' : chatUnread() }}</span>
+            {{ ' ' }}<span class="badge">{{ chatUnread() > 99 ? '99+' : chatUnread() }}</span>
           }
         </a>
 
@@ -221,23 +310,29 @@
           (click)="closeOverlays()"
           [attr.aria-label]="translate.instant('NAV.ANNOUNCEMENTS')"
         >
-          <span class="material-symbols-outlined">campaign</span>
+          <span class="material-symbols-outlined" aria-hidden="true">campaign</span>
         </a>
 
         <!-- Notifications -->
         <button
           class="icon-btn"
+          data-testid="shell-bell"
           (click)="toggleNotifications()"
           [attr.aria-label]="translate.instant('NAV.NOTIFICATIONS_ARIA', { count: unreadCount() })"
         >
-          <span class="material-symbols-outlined">notifications</span>
+          <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
           @if (unreadCount() > 0) {
-            <span class="badge">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</span>
+            {{ ' ' }}<span class="badge">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</span>
           }
         </button>
 
         <!-- Profile -->
-        <button class="profile-btn" (click)="toggleProfileMenu()">
+        <button
+          class="profile-btn"
+          data-testid="shell-profile-btn"
+          (click)="toggleProfileMenu()"
+          [attr.aria-label]="userName() ? null : ('SHELL.MY_PROFILE' | translate)"
+        >
           <div class="avatar">
             @if (userAvatarUrl()) {
               <img
@@ -252,30 +347,42 @@
           @if (userName()) {
             <span class="profile-name">{{ userName() }}</span>
           }
-          <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+          <span class="material-symbols-outlined dropdown-arrow" aria-hidden="true"
+            >expand_more</span
+          >
         </button>
       </div>
     </header>
 
     <!-- Notification Panel -->
     @if (notifPanelOpen()) {
+      <div class="overlay-backdrop" aria-hidden="true" (click)="closeOverlays()"></div>
+      <!-- QA D1125: focus in, Escape, focus back to the bell (appModalDialog). -->
       <div
-        class="overlay-backdrop"
-        aria-hidden="true"
-        (click)="closeOverlays()"
-        (keydown.escape)="closeOverlays()"
-      ></div>
-      <div class="notif-panel">
+        class="notif-panel"
+        appModalDialog
+        aria-labelledby="shell-notif-panel-title"
+        data-testid="shell-notif-panel"
+        (escaped)="closeOverlays()"
+      >
         <div class="panel-header">
-          <h3>{{ 'SHELL.NOTIFICATIONS' | translate }}</h3>
+          <h3 id="shell-notif-panel-title">{{ 'SHELL.NOTIFICATIONS' | translate }}</h3>
           <div class="panel-header-actions">
             @if (unreadCount() > 0) {
-              <button class="mark-all-btn" (click)="markAllNotificationsRead()">
-                <span class="material-symbols-outlined">done_all</span>
+              <button
+                class="mark-all-btn"
+                (click)="markAllNotificationsRead()"
+                [attr.aria-label]="'NOTIFICATIONS.MARK_ALL_READ' | translate"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">done_all</span>
               </button>
             }
-            <button class="close-panel" (click)="toggleNotifications()">
-              <span class="material-symbols-outlined">close</span>
+            <button
+              class="close-panel"
+              (click)="toggleNotifications()"
+              [attr.aria-label]="'COMMON.CLOSE' | translate"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
             </button>
           </div>
         </div>
@@ -290,14 +397,18 @@
               (click)="onNotifItemClick(n)"
               type="button"
             >
-              <span class="material-symbols-outlined notif-icon">
-                {{
-                  n.type === 'ALERT' ? 'warning' : n.type === 'SUCCESS' ? 'check_circle' : 'info'
-                }}
-              </span>
+              <span
+                class="material-symbols-outlined notif-icon"
+                [class.notif-icon-critical]="isCriticalNotification(n.type)"
+                aria-hidden="true"
+                [textContent]="notificationIcon(n.type)"
+              ></span>
+              @if (isCriticalNotification(n.type)) {
+                <span class="sr-only">{{ 'NOTIFICATIONS.CRITICAL_ALERT' | translate }}</span>
+              }
               <div class="notif-content">
                 <p class="notif-msg">{{ n.message }}</p>
-                <span class="notif-time">{{ n.createdAt | date: 'MMM d, h:mm a' }}</span>
+                <span class="notif-time">{{ n.createdAt | serverTime | date: 'short' }}</span>
               </div>
               @if (!n.read) {
                 <span class="notif-unread-dot"></span>
@@ -317,13 +428,15 @@
 
     <!-- Profile Menu -->
     @if (profileMenuOpen()) {
+      <div class="overlay-backdrop" aria-hidden="true" (click)="closeOverlays()"></div>
+      <!-- QA D1125: focus in, Escape, focus back to the avatar (appModalDialog). -->
       <div
-        class="overlay-backdrop"
-        aria-hidden="true"
-        (click)="closeOverlays()"
-        (keydown.escape)="closeOverlays()"
-      ></div>
-      <div class="profile-menu">
+        class="profile-menu"
+        appModalDialog
+        [attr.aria-label]="'SHELL.MY_PROFILE' | translate"
+        data-testid="shell-profile-menu"
+        (escaped)="closeOverlays()"
+      >
         <div class="profile-menu-header">
           <div class="avatar-lg">
             @if (userAvatarUrl()) {
@@ -343,21 +456,24 @@
         </div>
         <hr />
         <a class="pm-item" routerLink="/profile" (click)="closeOverlays()">
-          <span class="material-symbols-outlined">person</span> {{ 'SHELL.MY_PROFILE' | translate }}
+          <span class="material-symbols-outlined" aria-hidden="true">person</span>
+          {{ 'SHELL.MY_PROFILE' | translate }}
         </a>
         <a class="pm-item" routerLink="/settings" (click)="closeOverlays()">
-          <span class="material-symbols-outlined">settings</span> {{ 'SHELL.SETTINGS' | translate }}
+          <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+          {{ 'SHELL.SETTINGS' | translate }}
         </a>
         <hr />
         <button class="pm-item logout" (click)="logout()">
-          <span class="material-symbols-outlined">logout</span> {{ 'SHELL.SIGN_OUT' | translate }}
+          <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+          {{ 'SHELL.SIGN_OUT' | translate }}
         </button>
       </div>
     }
 
     <!--
       Page Content.
-      v1.0 row 11: id + tabindex="-1" make this the landing target for
+      v1.0 row 11: id + tabindex make this the landing target for
       the skip-link (docs/ui/accessibility.md §6.9) AND the programmatic
       focus destination on every NavigationEnd (see shell.ts
       ngAfterViewInit). aria-label gives screen-reader users a stable
@@ -367,7 +483,7 @@
       #mainContent
       id="main-content"
       class="content"
-      tabindex="-1"
+      tabindex="0"
       role="main"
       [attr.aria-label]="'SHELL.MAIN_CONTENT_ARIA' | translate"
     >
@@ -378,20 +494,25 @@
       <app-emergency-broadcast-banner />
       <!-- P3 #23a — persistent read-only banner; not dismissible by design. -->
       <app-downtime-banner />
-      @if (scopeGate.blocked()) {
+      @if (scopeGate.showNetworkDirectory()) {
+        <app-hospital-network-workspace [moduleTitleKey]="networkModuleTitleKey()" />
+      } @else if (scopeGate.blocked()) {
         <!-- Route-level hospital scope gate (HospitalScopeGateService): a route
              flagged requiresHospitalScope is one facility's page. Until a
              hospital is pinned the page is not created, so it never fires a
              scoped request into global view; the chip is the way in. -->
         <section class="scope-gate" data-testid="scope-gate">
           <h1 class="scope-gate__title">{{ 'HOSPITAL_SCOPE.GATE_TITLE' | translate }}</h1>
-          <app-hospital-scope-chip [preserveScope]="true" />
+          <span class="material-symbols-outlined scope-gate__icon" aria-hidden="true"
+            >local_hospital</span
+          >
+          <app-hospital-scope-chip [preserveScope]="true" [hospitalRequired]="true" />
           <app-hospital-scope-hint />
         </section>
       } @else {
         @if (scopeGate.showChip()) {
           <div class="scope-bar" data-testid="scope-bar">
-            <app-hospital-scope-chip [preserveScope]="true" />
+            <app-hospital-scope-chip [preserveScope]="true" [hospitalRequired]="false" />
           </div>
         }
         <!-- The key advances on a scope change while the route is gated, so the
@@ -435,5 +556,9 @@
 
 <!-- Lock Screen — shown when idle timeout triggers -->
 @if (idle.locked()) {
-  <app-lock-screen (signedOut)="onLockScreenSignOut()" (switchedUser)="onSwitchUser()" />
+  <app-lock-screen
+    (signedOut)="onLockScreenSignOut()"
+    (switchedUser)="onSwitchUser()"
+    (lockedOut)="onLockScreenLockedOut()"
+  />
 }

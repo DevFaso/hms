@@ -1,3 +1,4 @@
+import { RoleContextService } from './role-context.service';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 
@@ -24,6 +25,7 @@ const BACKEND_PERMISSION_ALIASES: Record<string, string[]> = {
 export class PermissionService {
   private readonly auth = inject(AuthService);
   private readonly http = inject(HttpClient);
+  private readonly roleContext = inject(RoleContextService);
 
   /**
    * Permissions granted by the backend for the signed-in user
@@ -46,6 +48,9 @@ export class PermissionService {
    * UNIONED with this map, so a role missing here still gets its server-side
    * permissions instead of a gutted sidebar.
    */
+  // 'Register Patients' is held by exactly the roles POST /patients and
+  // POST /users/admin-register admit (receptionist, nurse, midwife, hospital
+  // admin, super-admin). A doctor offered the form got a 403 (QA D55).
   private readonly ROLE_PERMISSIONS: Record<string, string[]> = {
     ROLE_SUPER_ADMIN: ['*'],
     ROLE_HOSPITAL_ADMIN: [
@@ -106,7 +111,6 @@ export class PermissionService {
       'Schedule Appointments',
       'View Patient Records',
       'Update Patient Records',
-      'Register Patients',
       // Clinical — gates nav items
       'Create Encounters',
       'Admit Patients',
@@ -139,7 +143,6 @@ export class PermissionService {
       'Schedule Appointments',
       'View Patient Records',
       'Update Patient Records',
-      'Register Patients',
       'Create Encounters',
       'Admit Patients',
       'Create Prescriptions',
@@ -163,7 +166,6 @@ export class PermissionService {
       'Schedule Appointments',
       'View Patient Records',
       'Update Patient Records',
-      'Register Patients',
       'Create Encounters',
       'Admit Patients',
       'Create Prescriptions',
@@ -477,7 +479,14 @@ export class PermissionService {
     // operations (users, front desk oversight, patient lookup, audit
     // trail), NOT platform config and NOT clinical surfaces. Mirrors
     // DashboardConfigService's ROLE_ADMIN defaults.
-    ROLE_ADMIN: ['View Dashboard', 'View Patient Records', 'View Audit Logs', 'View Notifications'],
+    ROLE_ADMIN: [
+      'View Dashboard',
+      'View Patient Records',
+      'View Audit Logs',
+      'View Notifications',
+      // User decision 2026-11-14: read-only Imagerie (orders, released reports).
+      'View Imaging Studies',
+    ],
   };
 
   /**
@@ -531,6 +540,40 @@ export class PermissionService {
       }
     }
     return false;
+  }
+
+  /**
+   * QA D997: whether the role the user is ACTING in grants `permission`.
+   * {@link hasPermission} unions every role the account holds (and the
+   * backend's merged grants do too), so a lab director who is also a doctor
+   * was offered "Start a consultation" while acting as lab director, and the
+   * click ended on the 403 page. Use this for actions offered on screen.
+   * Falls back to {@link hasPermission} before a role is chosen.
+   */
+  hasActivePermission(permission: string): boolean {
+    const active = this.roleContext.activeRole;
+    const roles = active ? [active] : this.roleContext.activeRoles;
+    if (roles.length === 0) {
+      return this.hasPermission(permission);
+    }
+    const grants = (role: string) => {
+      const perms = this.ROLE_PERMISSIONS[role];
+      return !!perms && (perms.includes('*') || perms.includes(permission));
+    };
+    if (roles.some(grants)) {
+      return true;
+    }
+    // A grant the acting role's static map does not list (one the backend's
+    // merged permissions carry) still counts, unless another role the user
+    // holds is what grants it: that is the union this check exists to narrow.
+    // QA D997 (round 17): the other roles are the ones the user HOLDS (chosen
+    // from at login), not only the token's: a token scoped to the acting role
+    // carries ROLE_LAB_DIRECTOR alone, while the backend's merged grants still
+    // carry the doctor's "Create Encounters", so the lab director was offered
+    // "Démarrer une Consultation" again.
+    const held = [...new Set([...this.auth.getRoles(), ...this.roleContext.heldRoles])];
+    const otherRoles = held.filter((r) => !roles.includes(r));
+    return this.hasPermission(permission) && !otherRoles.some(grants);
   }
 
   hasAnyPermission(...permissions: string[]): boolean {

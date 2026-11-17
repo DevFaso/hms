@@ -24,8 +24,14 @@ enum PatientDocumentType: String, CaseIterable, Identifiable {
     /// shown as-is rather than hidden.
     static func label(for raw: String?) -> String? {
         guard let raw else { return nil }
+        // QA D961: a certificate the doctor issued is listed with its own
+        // label; it is not an upload choice, so it is not a case above.
+        if raw == medicalCertificate { return "document_type_medical_certificate".localized }
         return PatientDocumentType(rawValue: raw)?.label ?? raw
     }
+
+    /// QA D961: issued by a doctor; the server refuses its deletion by the patient.
+    static let medicalCertificate = "MEDICAL_CERTIFICATE"
 }
 
 // MARK: - Upload rules (mirrors FileUploadService.validatePatientDocumentFile)
@@ -146,12 +152,15 @@ struct DocumentsView: View {
                     }
                     .disabled(vm.openingId != nil || vm.deletingId != nil)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            vm.deleteCandidate = doc
-                        } label: {
-                            Label("delete".localized, systemImage: "trash")
+                        // QA D961: a doctor-issued certificate stays in the record.
+                        if doc.documentType != PatientDocumentType.medicalCertificate {
+                            Button(role: .destructive) {
+                                vm.deleteCandidate = doc
+                            } label: {
+                                Label("delete".localized, systemImage: "trash")
+                            }
+                            .disabled(vm.deletingId != nil)
                         }
-                        .disabled(vm.deletingId != nil)
                     }
                 }
                 .listStyle(.insetGrouped)

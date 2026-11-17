@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -22,7 +23,9 @@ import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.MfaService;
 import com.example.hms.service.OrganizationLifecycleStatusService;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.Set;
@@ -34,6 +37,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -51,6 +55,13 @@ class OrganizationLifecycleServiceImplTest {
 
     @Mock
     private MfaService mfaService;
+
+    /**
+     * Fixed instant, deliberately in the future: a time that is past on the
+     * injected clock but not on the system clock proves which one is read.
+     */
+    private static final Instant NOW = Instant.parse("2099-03-01T03:00:00Z");
+    @Spy private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @InjectMocks
     private OrganizationLifecycleServiceImpl service;
@@ -109,12 +120,12 @@ class OrganizationLifecycleServiceImplTest {
 
     @Test
     void suspendRequiresAReason() {
-        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
-
+        // QA round 29 (assertion changed): refused on "reason" before the organization is read.
         TenantLifecycleActionRequestDTO blank = withReason("  ");
         assertThatThrownBy(() -> service.suspend(orgId, blank, null))
-            .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("reason is required");
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("reason"))
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("organization.r7.reasonRequired"));
         verify(organizationRepository, never()).save(any());
     }
 
@@ -126,7 +137,7 @@ class OrganizationLifecycleServiceImplTest {
 
         assertThatThrownBy(() -> service.suspend(orgId, req, null))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("Cannot suspend");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("organization.r7.transitionRefused"));
     }
 
     // ── restore ────────────────────────────────────────────────────────
@@ -134,7 +145,7 @@ class OrganizationLifecycleServiceImplTest {
     @Test
     void restoreSuspendedOrgReturnsToActive() {
         org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
-        org.setSuspendedAt(Instant.now());
+        org.setSuspendedAt(NOW);
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -208,7 +219,7 @@ class OrganizationLifecycleServiceImplTest {
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Instant before = Instant.now();
+        Instant before = NOW;
         TenantLifecycleResponseDTO result = service.schedulePurge(orgId, withReason("retention policy"), null);
 
         assertThat(result.getLifecycleState()).isEqualTo(OrganizationLifecycleState.PENDING_PURGE);
@@ -222,7 +233,7 @@ class OrganizationLifecycleServiceImplTest {
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Instant explicit = Instant.now().plus(7, ChronoUnit.DAYS);
+        Instant explicit = NOW.plus(7, ChronoUnit.DAYS);
         TenantLifecycleActionRequestDTO req = TenantLifecycleActionRequestDTO.builder()
             .reason("custom window").purgeScheduledFor(explicit).build();
 
@@ -232,16 +243,18 @@ class OrganizationLifecycleServiceImplTest {
     }
 
     @Test
-    void schedulePurgeRejectsPastTime() {
+    void schedulePurgeRejectsPastTime_beforeTheStepUpCanSpendACode() {
+        ReflectionTestUtils.setField(service, "requireMfa", true);
         org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
 
         TenantLifecycleActionRequestDTO req = TenantLifecycleActionRequestDTO.builder()
-            .reason("oops").purgeScheduledFor(Instant.now().minus(1, ChronoUnit.DAYS)).build();
+            .reason("oops").purgeScheduledFor(NOW.minus(1, ChronoUnit.DAYS)).build();
 
-        assertThatThrownBy(() -> service.schedulePurge(orgId, req, null))
+        assertThatThrownBy(() -> service.schedulePurge(orgId, req, "12345678"))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("past");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("organization.r7.purgeInPast"));
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -258,7 +271,7 @@ class OrganizationLifecycleServiceImplTest {
     @Test
     void cancelPurgeReturnsToArchivedAndClearsScheduling() {
         org.setLifecycleState(OrganizationLifecycleState.PENDING_PURGE);
-        org.setPurgeScheduledFor(Instant.now().plus(10, ChronoUnit.DAYS));
+        org.setPurgeScheduledFor(NOW.plus(10, ChronoUnit.DAYS));
         org.setPurgeReason("scheduled");
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -302,39 +315,26 @@ class OrganizationLifecycleServiceImplTest {
         verify(organizationRepository, times(1)).save(any());
     }
 
-    // ── MFA step-up ────────────────────────────────────────────────────
+    // ── MFA step-up (the shared MfaService#requireStepUp; its branches are in MfaServiceTest) ──
 
     @Test
-    void suspendRejectsWhenMfaRequiredAndActorIsEnrolledButTokenIsMissing() {
+    void suspendStopsWhenTheSharedStepUpRefuses() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
-        TenantLifecycleActionRequestDTO req = withReason("non-payment");
-
-        assertThatThrownBy(() -> service.suspend(orgId, req, null))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("mfa_required");
-        verify(organizationRepository, never()).save(any());
-    }
-
-    @Test
-    void suspendRejectsWhenMfaRequiredAndTokenIsInvalid() {
-        ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(mfaService.verifyCode(actorId, "000000")).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, "000000", "organization suspend", false))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.INVALID));
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         TenantLifecycleActionRequestDTO req = withReason("non-payment");
 
         assertThatThrownBy(() -> service.suspend(orgId, req, "000000"))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class);
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
         verify(organizationRepository, never()).save(any());
     }
 
     @Test
-    void suspendPassesWhenMfaRequiredAndTokenIsValid() {
+    void suspendPassesWhenTheSharedStepUpVerifies() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(mfaService.verifyCode(actorId, "123456")).thenReturn(true);
+        when(mfaService.requireStepUp(actorId, "123456", "organization suspend", false)).thenReturn(true);
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -347,7 +347,7 @@ class OrganizationLifecycleServiceImplTest {
     void suspendAllowsUnenrolledActorAndAuditsTheBypassInNonStrictMode() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         ReflectionTestUtils.setField(service, "requireMfaStrict", false);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "organization suspend", false)).thenReturn(false);
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -356,25 +356,24 @@ class OrganizationLifecycleServiceImplTest {
         assertThat(result.getLifecycleState()).isEqualTo(OrganizationLifecycleState.SUSPENDED);
         ArgumentCaptor<AuditEventRequestDTO> auditCap = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService, times(2)).logEvent(auditCap.capture());
-        // First audit is the SECURITY_ALERT_TRIGGERED bypass record; second is the
-        // TENANT_SUSPENDED record. The order is irrelevant; what matters is that
-        // both fired.
+        // The SECURITY_ALERT_TRIGGERED bypass record and the TENANT_SUSPENDED record.
         assertThat(auditCap.getAllValues()).extracting(AuditEventRequestDTO::getEventType)
             .containsExactlyInAnyOrder(
                 AuditEventType.SECURITY_ALERT_TRIGGERED, AuditEventType.TENANT_SUSPENDED);
     }
 
     @Test
-    void suspendRejectsUnenrolledActorInStrictMode() {
+    void suspendPassesStrictModeToTheSharedStepUp() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         ReflectionTestUtils.setField(service, "requireMfaStrict", true);
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "organization suspend", true))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.NOT_ENROLLED));
         when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
         TenantLifecycleActionRequestDTO req = withReason("non-payment");
 
         assertThatThrownBy(() -> service.suspend(orgId, req, null))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("must enrol MFA");
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
         verify(organizationRepository, never()).save(any());
     }
 
@@ -391,7 +390,28 @@ class OrganizationLifecycleServiceImplTest {
 
         assertThat(result.getLifecycleState()).isEqualTo(OrganizationLifecycleState.ACTIVE);
         // Crucially, MfaService is never consulted on a non-destructive path.
-        verify(mfaService, never()).isMfaEnabled(any());
-        verify(mfaService, never()).verifyCode(any(), any());
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void schedulePurgeMeasuresTheGraceWindowAndThePastFromTheInjectedClock() {
+        org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
+        when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.schedulePurge(orgId, withReason("retention policy"), null).getPurgeScheduledFor())
+            .isEqualTo(NOW.plus(30, ChronoUnit.DAYS));
+
+        org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
+        TenantLifecycleActionRequestDTO atNow = TenantLifecycleActionRequestDTO.builder()
+            .reason("exactly now").purgeScheduledFor(NOW).build();
+        assertThat(service.schedulePurge(orgId, atNow, null).getPurgeScheduledFor()).isEqualTo(NOW);
+
+        org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
+        TenantLifecycleActionRequestDTO justPast = TenantLifecycleActionRequestDTO.builder()
+            .reason("a nanosecond ago").purgeScheduledFor(NOW.minusNanos(1)).build();
+        assertThatThrownBy(() -> service.schedulePurge(orgId, justPast, null))
+            .isInstanceOf(BusinessRuleException.class)
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("organization.r7.purgeInPast"));
     }
 }

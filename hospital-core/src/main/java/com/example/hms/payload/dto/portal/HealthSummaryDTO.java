@@ -38,4 +38,19 @@ public class HealthSummaryDTO {
     private List<String> allergies;
 
     private List<String> chronicConditions;
+
+    /**
+     * QA D1362 (round 31, the D1347 class): how many CURRENT lab results the
+     * patient has in all - the same rows {@code /me/patient/lab-results}
+     * pages through - so a card that shows a few can say how many more there
+     * are. {@link #recentLabResults} is only the newest few.
+     */
+    private Long labResultTotal;
+
+    /**
+     * QA D1362: how many medications (issued prescriptions, every status) the
+     * patient has in all; {@link #currentMedications} holds only the running
+     * courses.
+     */
+    private Long medicationTotal;
 }

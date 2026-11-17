@@ -39,6 +39,9 @@ class PatientVitalSignControllerTest {
     @Mock
     private ControllerAuthUtils authUtils;
 
+    @Mock
+    private com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheld;
+
     @InjectMocks
     private PatientVitalSignController controller;
 

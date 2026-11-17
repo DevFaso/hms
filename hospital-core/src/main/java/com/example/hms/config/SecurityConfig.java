@@ -6,6 +6,11 @@ import com.example.hms.security.RoleExpansion;
 import com.example.hms.security.HospitalUserDetailsService;
 import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
 import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.security.provider.ProviderConfinementPolicy;
+import com.example.hms.security.provider.ProviderFacilityConfinementFilter;
+import com.example.hms.security.provider.ProviderMfaGate;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +24,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -31,6 +38,8 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -39,6 +48,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
@@ -58,6 +70,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_PHYSIOTHERAPIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RADIOLOGIST;
 import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
+import static com.example.hms.config.SecurityConstants.ROLE_SURGEON;
 import static com.example.hms.config.SecurityConstants.ROLE_BILLING_SPECIALIST;
 import static com.example.hms.config.SecurityConstants.ROLE_ACCOUNTANT;
 import static com.example.hms.config.SecurityConstants.ROLE_ADMIN;
@@ -74,6 +87,8 @@ public class SecurityConfig {
     // Path constants — context-path is /api, so Spring Security sees paths
     // *after* the context-path is stripped. All matchers are relative.
     // -----------------------------------------------------------------------
+    private static final String API_AUTH_LOGOUT = "/auth/logout";
+
     private static final String API_FEATURE_FLAGS = "/feature-flags";
     private static final String API_FEATURE_FLAGS_PATTERN = API_FEATURE_FLAGS + "/**";
 
@@ -102,6 +117,18 @@ public class SecurityConfig {
     };
 
     /**
+     * QA D1224 (round 24): the roles that pass the edge on a WRITE (PUT, PATCH,
+     * DELETE) of a chart sub-resource. The clinicians who chart; each
+     * controller's {@code @PreAuthorize} is the precise gate.
+     */
+    static final String[] CHART_WRITE_AUTHORITIES = {
+        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_PHARMACIST
+    };
+
+    /** QA D1224: the patient photo (its own WRITE_ROLES, not the whole-patient delete). */
+    static final String API_PATIENT_PHOTO = "/patients/*/photo";
+
+    /**
      * E8 #52 — the patient's own sharing opt-out: the one /patients/* surface a
      * PATIENT reaches. Matched per verb ahead of the chart patterns and the
      * /patients/** blanket, which lists no patient role (see the block below and
@@ -118,6 +145,64 @@ public class SecurityConfig {
      * admin to the hospital they are acting in.
      */
     static final String API_HOSPITAL_POSTURE = "/hospitals/*/record-access-posture";
+
+    /**
+     * The HAPI FHIR servlet ({@code FhirConfig}, mounted at {@code /fhir/*}).
+     * It answers with the whole chart — Encounter, Condition,
+     * MedicationRequest, Immunization, Observation, DiagnosticReport,
+     * DocumentReference — so a READ admits the roles that read the chart
+     * elsewhere: {@code EncounterController.ENCOUNTER_LIST_ROLES}
+     * ({@code SecurityConfigFhirMatcherTest} keeps the two equal).
+     *
+     * <p>Until these matchers existed {@code /fhir/**} fell through to
+     * {@code anyRequest().authenticated()}, so a patient's mobile-app bearer
+     * token, a receptionist or a billing clerk reached every provider.
+     *
+     * <p>What this does NOT do: a path matcher sees the union of the caller's
+     * authorities across every hospital they work at, so a DOCTOR at A who is
+     * a RECEPTIONIST at B passes while acting at B; and it says nothing about
+     * which hospital's rows an admitted caller sees. Both belong to the FHIR
+     * tenant boundary, which must bind the request to one hospital AND check
+     * the role held there.
+     *
+     * <p>No machine role is admitted. {@code ROLE_FHIR_CLIENT} (named by
+     * {@code IdleSessionGate}) is refused because nothing can grant it today:
+     * no migration, realm role or service-account client provisions it. It
+     * comes back with a real way to provision it. (The Keycloak converter
+     * reads realm roles only, so a client role named {@code fhir_client}
+     * could not grant it either.)
+     *
+     * <p>{@code ROLE_PHYSICIAN} and {@code ROLE_SURGEON} are named on top, and
+     * are now redundant, not required: {@code RoleExpansion} grants them
+     * {@code ROLE_DOCTOR} on both auth paths ({@code JwtTokenProvider} and
+     * {@code KeycloakJwtAuthenticationConverter}). They were added while the
+     * Keycloak converter did not expand; removing them is a later cleanup.
+     */
+    static final String[] FHIR_READER_AUTHORITIES = {
+        ROLE_DOCTOR, RoleExpansion.ROLE_PHYSICIAN, ROLE_SURGEON, ROLE_NURSE, ROLE_MIDWIFE,
+        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN
+    };
+
+    /**
+     * FHIR writes (PUT Patient / Encounter / Observation, the conditional
+     * POST Patient — all behind {@code app.fhir.write.enabled}) and every
+     * other method that is not a read. The write services check only the
+     * tenant, so the role gate is here: the charting clinicians, without the
+     * consulting clinicians, who read the chart and write only within their
+     * own specialty surface ({@code CONSULTING_CLINICIANS_AUTHORITIES}).
+     */
+    static final String[] FHIR_WRITER_AUTHORITIES = {
+        ROLE_DOCTOR, RoleExpansion.ROLE_PHYSICIAN, ROLE_SURGEON, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN
+    };
+
+    /**
+     * {@code $export} (system and Patient level) is a POST, and its service
+     * ({@code FhirBulkExportService.requireBulkExportRole}) and the status
+     * controller admit SUPER_ADMIN and HOSPITAL_ADMIN. The matcher carries the
+     * same pair, ahead of the other {@code /fhir/**} matchers, so the hospital
+     * admin keeps the export and gains no clinical read.
+     */
+    static final String[] FHIR_BULK_EXPORT_PATHS = {"/fhir/$export", "/fhir/Patient/$export"};
 
     private static final String API_REGISTRATIONS = "/registrations";
     private static final String API_REGISTRATIONS_PATTERN = API_REGISTRATIONS + "/**";
@@ -191,6 +276,31 @@ public class SecurityConfig {
      */
     private final ObjectProvider<com.example.hms.service.apikey.ApiKeyService> apiKeyServiceProvider;
 
+    /**
+     * Provider confinement (provider plan §6.4). ObjectProvider for the same
+     * reason as above: in a {@code @WebMvcTest} slice there is no policy bean
+     * and the filter passes every request through.
+     */
+    private final ObjectProvider<ProviderConfinementPolicy> providerConfinementPolicyProvider;
+    private final ObjectProvider<ProviderCallerResolver> providerCallerResolverProvider;
+    private final ObjectProvider<ActingScopeResolver> actingScopeResolverProvider;
+    /** The provider MFA gate (AC-13), carried by the confinement filter; same slice reason. */
+    private final ObjectProvider<ProviderMfaGate> providerMfaGateProvider;
+
+    /**
+     * Shared secret that authorizes a Prometheus scrape of {@code /actuator/prometheus}.
+     *
+     * <p>Blank (the default) means the endpoint is closed to everyone — which is the correct
+     * production posture here, because Railway publishes the management port on the same public
+     * hostname as the API and metrics carry the whole endpoint inventory. Prod/dev export metrics
+     * by push instead (OTEL Java agent -> Grafana Cloud OTLP gateway).
+     *
+     * <p>Set {@code METRICS_SCRAPE_TOKEN} only where something must genuinely pull, e.g. the local
+     * docker-compose Alloy collector or a Grafana Cloud hosted-Prometheus scrape job.
+     */
+    @Value("${app.observability.metrics.scrape-token:}")
+    private String metricsScrapeToken;
+
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
 
@@ -234,7 +344,20 @@ public class SecurityConfig {
         var provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         provider.setAuthoritiesMapper(authoritiesMapper());
+        checkPasswordBeforeAccountStatus(provider);
         return provider;
+    }
+
+    /**
+     * QA D168: by default the provider checks enabled/locked BEFORE the password, so
+     * "account inactive" answered a wrong password too and told anyone that the
+     * username exists and is inactive. The status is checked only once the password
+     * matched; a wrong password is a plain bad-credentials answer for every account.
+     */
+    static void checkPasswordBeforeAccountStatus(DaoAuthenticationProvider provider) {
+        provider.setPreAuthenticationChecks(user -> { });
+        provider.setPostAuthenticationChecks(
+            new org.springframework.security.authentication.AccountStatusUserDetailsChecker());
     }
 
     /**
@@ -293,13 +416,69 @@ public class SecurityConfig {
         // TRACE is intentionally excluded (should be denied/disabled)
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         cfg.setAllowedHeaders(List.of("*"));
-        cfg.setExposedHeaders(List.of("Authorization", "Content-Type"));
+        // QA D1009: the browser keeps the document name the server gives.
+        cfg.setExposedHeaders(List.of("Authorization", "Content-Type", "Content-Disposition", "X-Records-Withheld"));
         cfg.setAllowCredentials(true);
         cfg.setMaxAge(3600L);
 
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
         return source;
+    }
+
+    /**
+     * Authorizes {@code GET /actuator/prometheus} against the configured scrape token.
+     *
+     * <p>Deliberately an {@link AuthorizationManager} rather than a servlet {@code Filter}: adding a
+     * filter bean with dependencies to this context breaks every {@code @WebMvcTest} controller
+     * slice, which has already cost this codebase a 257-failure run (PR #536).
+     *
+     * <p>The token may arrive as {@code Authorization: Bearer <token>} (what Prometheus, Alloy and
+     * Grafana Cloud all emit natively) or as {@code X-Metrics-Token}. Comparison is constant-time so
+     * the endpoint cannot be used as a timing oracle for the token.
+     */
+    private AuthorizationManager<RequestAuthorizationContext> metricsScrapeAuthorization() {
+        return (authentication, context) -> {
+            if (metricsScrapeToken == null || metricsScrapeToken.isBlank()) {
+                return new AuthorizationDecision(false);
+            }
+            // Trim the configured value as well as the presented one. Railway's UI happily
+            // stores a trailing newline on a pasted secret, and an untrimmed comparison would
+            // then reject every correct scrape with a 403 nothing in the logs explains.
+            byte[] expected = metricsScrapeToken.trim().getBytes(StandardCharsets.UTF_8);
+            for (String presented : presentedScrapeTokens(context.getRequest())) {
+                if (MessageDigest.isEqual(presented.getBytes(StandardCharsets.UTF_8), expected)) {
+                    return new AuthorizationDecision(true);
+                }
+            }
+            return new AuthorizationDecision(false);
+        };
+    }
+
+    /**
+     * Extracts the presented scrape credentials, most specific first.
+     *
+     * <p>Returns every candidate rather than the first one found. A scraper behind a proxy that
+     * injects its own {@code Authorization: Bearer <jwt>} would otherwise have that unrelated JWT
+     * shadow a perfectly good {@code X-Metrics-Token}, and the scrape would 403 for a reason
+     * nothing in the logs explains.
+     */
+    private static List<String> presentedScrapeTokens(HttpServletRequest request) {
+        List<String> candidates = new ArrayList<>(2);
+
+        String headerToken = request.getHeader("X-Metrics-Token");
+        if (headerToken != null && !headerToken.isBlank()) {
+            candidates.add(headerToken.trim());
+        }
+
+        String authorization = request.getHeader("Authorization");
+        if (authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            String bearer = authorization.substring(7).trim();
+            if (!bearer.isEmpty()) {
+                candidates.add(bearer);
+            }
+        }
+        return candidates;
     }
 
     @Bean
@@ -331,7 +510,32 @@ public class SecurityConfig {
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/register"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/bootstrap-signup"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/token/refresh"),
+                    // Logout from the native apps (Bearer + body refresh token, no
+                    // XSRF dance). A forged cross-site logout cannot carry the
+                    // SameSite=Strict refresh cookie, so it revokes nothing.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, API_AUTH_LOGOUT),
+                    // MFA login step: authenticated by the one-time mfaToken in
+                    // the body, never by a cookie session.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/mfa/verify"),
+                    // Change own password and the push-device registry: the
+                    // access token is read ONLY from the Authorization header
+                    // (JwtAuthenticationFilter.getJwtFromRequest, and the OIDC
+                    // resolver's default header-only delegate), never from a
+                    // cookie, so a cross-site request cannot carry credentials
+                    // and CSRF has nothing to protect. The native apps send no
+                    // XSRF header, which made these unreachable for them.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/me/change-password"),
+                    // The WebSocket ticket exchange: same header-only bearer
+                    // auth, mints no cookie and changes no state. A stale
+                    // XSRF cookie after login rotation made it answer 403
+                    // (QA D35), leaving every socket unauthenticated.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/ws-ticket"),
+                    PathPatternRequestMatcher.withDefaults().matcher("/me/push-devices/**"),
                     PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
+                    // Anonymous legacy recovery: like /auth/password/**, these use
+                    // a one-time reset token, never a cookie-authenticated session.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/request-reset"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/reset-password"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
                     // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs
                     // that bypass Angular's HttpClient and therefore carry no XSRF token)
@@ -360,7 +564,7 @@ public class SecurityConfig {
             )
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(unauthorizedHandler)
-                .accessDeniedHandler((req, res, e) -> res.sendError(HttpServletResponse.SC_FORBIDDEN))
+                .accessDeniedHandler(new com.example.hms.security.JsonAccessDeniedHandler())
             )
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
@@ -377,7 +581,12 @@ public class SecurityConfig {
                 // Refresh is public (access token may be expired)
                 .requestMatchers(HttpMethod.POST, "/auth/token/refresh").permitAll()
                 .requestMatchers("/auth/token/**").authenticated()
-                .requestMatchers("/auth/logout").authenticated()
+                // Logout is public: an idle client's access token has expired
+                // by the time it signs out, and it must still be able to hand
+                // back its refresh token for revocation. The endpoint only ever
+                // revokes the tokens presented to it (AuthController.logout).
+                .requestMatchers(HttpMethod.POST, API_AUTH_LOGOUT).permitAll()
+                .requestMatchers(API_AUTH_LOGOUT).authenticated()
                 .requestMatchers("/auth/verify-password").authenticated()
                 .requestMatchers("/auth/me/**").authenticated()
                 .requestMatchers("/auth/session/bootstrap").authenticated()
@@ -392,13 +601,34 @@ public class SecurityConfig {
 
                 // -------------------- Public / Health --------------------
                 .requestMatchers("/error").permitAll()
-                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                // Metrics scrape is NOT public: the series expose the full URI inventory,
+                // JVM/DB internals and business counters. Production ships metrics by PUSH
+                // (OTEL agent -> Grafana Cloud OTLP), so this endpoint stays closed unless a
+                // scrape token is configured. See docs/GRAFANA_CLOUD_SETUP.md.
+                .requestMatchers("/actuator/prometheus").access(metricsScrapeAuthorization())
+                // Default-deny for the rest of the actuator surface. Without this, anything
+                // added to management.endpoints.web.exposure.include falls through to
+                // anyRequest().authenticated() and is readable by ANY valid token, including
+                // a patient app's — which is exactly how /actuator/metrics came to expose the
+                // URI inventory and business counters. Exposing a new endpoint should be a
+                // deliberate act, not an accidental one.
+                .requestMatchers("/actuator/**").hasAuthority(ROLE_SUPER_ADMIN)
                 .requestMatchers("/.well-known/jwks.json").permitAll()
                 // FHIR conformance discovery — public per HL7 FHIR R4 spec
                 // (clients query /fhir/metadata before authenticating)
                 .requestMatchers(HttpMethod.GET, "/fhir/metadata").permitAll()
                 // SMART-on-FHIR App Launch 1.0 discovery — public per spec.
                 .requestMatchers(HttpMethod.GET, "/fhir/.well-known/smart-configuration").permitAll()
+                // Everything else on the FHIR servlet, first match wins:
+                // $export (its own admin pair), then reads — GET, and the
+                // POST form of a search — for the chart readers, then every
+                // other method for the charting clinicians only.
+                .requestMatchers(HttpMethod.POST, FHIR_BULK_EXPORT_PATHS)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .requestMatchers(HttpMethod.GET, "/fhir/**").hasAnyAuthority(FHIR_READER_AUTHORITIES)
+                .requestMatchers(HttpMethod.POST, "/fhir/*/_search").hasAnyAuthority(FHIR_READER_AUTHORITIES)
+                .requestMatchers("/fhir/**").hasAnyAuthority(FHIR_WRITER_AUTHORITIES)
                 // CDS Hooks discovery — public per HL7 CDS Hooks 1.0 spec
                 // (decision-support clients enumerate services before auth).
                 .requestMatchers(HttpMethod.GET, "/cds-services").permitAll()
@@ -444,10 +674,32 @@ public class SecurityConfig {
                 // /patients/** blanket below, which HOSPITAL_ADMIN and ADMIN keep
                 // for demographics. Same list as the blanket minus those two.
                 .requestMatchers(HttpMethod.GET, API_PATIENT_CHART_PATTERNS)
-                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
                         ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
+
+                // QA D1224 (round 24): the WRITES on a chart sub-resource reach
+                // their own @PreAuthorize. The blanket DELETE /patients/** below
+                // (HOSPITAL_ADMIN, SUPER_ADMIN - deleting a whole patient) refused
+                // every clinician deactivating an allergy or removing a diagnosis
+                // with a reason, and PUT /patients/** refused the pharmacist the
+                // allergy edit its annotation admits. The clinical roles pass the
+                // edge; the controller annotation decides per surface, and
+                // PreAuthorizeMatcherPairingTest holds every pair. Whole-patient
+                // deletion is not a chart sub-resource and stays admin-only.
+                .requestMatchers(HttpMethod.DELETE, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                .requestMatchers(HttpMethod.PUT, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                .requestMatchers(HttpMethod.PATCH, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                // QA D1224 class: removing the photo is the photo controller's
+                // WRITE_ROLES (who uploads a photo also replaces or removes it),
+                // not the whole-patient delete rule.
+                .requestMatchers(HttpMethod.DELETE, API_PATIENT_PHOTO)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR,
+                        ROLE_SUPER_ADMIN)
 
                 // -------------------- Patients --------------------
                 // PHARMACIST: the shared patient picker (/patients/search, /patients/lookup)
@@ -462,6 +714,22 @@ public class SecurityConfig {
                 // matcher rejected the picker call, so both pages had a dead
                 // search box — 2026-08-23 role audit, D4. Chart list/detail
                 // stays narrower at the controller.
+                // QA D92: the invoice form picks its patient with the shared
+                // picker, so the two billing roles reach the picker's two
+                // reads, and only those; the rest of /patients stays closed to them.
+                .requestMatchers(HttpMethod.POST, API_PATIENTS + "/national-unique-id/search")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                    ROLE_LAB_SCIENTIST, ROLE_PHARMACIST, ROLE_RADIOLOGIST, ROLE_PHYSIOTHERAPIST,
+                    ROLE_SUPER_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+                .requestMatchers(HttpMethod.POST, API_PATIENTS + "/national-unique-id/check",
+                    API_PATIENTS + "/national-unique-id/*/reveal")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.GET, API_PATIENTS + "/search", API_PATIENTS + "/lookup")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
+                        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN,
+                        ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
@@ -508,17 +776,21 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
                 // Allow all clinical staff to register users via admin-register
+                // The same lists as UserController's admin-register annotation:
+                // the patient registrars plus the provider registrar (provider
+                // plan §6.3); what each may GRANT is UserAccountAccess.requireMayGrant.
                 .requestMatchers(HttpMethod.POST, "/users/admin-register")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.ADMIN_REGISTER_AUTHORITIES))
 
                 // -------------------- Hospitals (tenant-safe) --------------------
-                // /me/hospital and /me/hospitals return only the caller's assigned hospital(s).
+                // /me/hospital and /me/hospitals return only the caller's assigned hospital(s):
+                // the controller answers from the caller's OWN acting scope, so there is
+                // nothing a role list here protects. Every authenticated page resolves its
+                // hospital scope through it, and a role list kept drifting behind the roles
+                // that exist (role audit D7 added three; QA D33: the pharmacist was still
+                // missing and the pharmacy registry went to /error/403).
                 .requestMatchers(HttpMethod.GET, "/me/hospital", "/me/hospitals")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        // Role audit D7: every authenticated page resolves its
-                        // hospital scope here, so the chart 403s without it.
-                        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST)
+                .authenticated()
 
                 // Global hospital directory (read): open to clinical staff so they can
                 // pick destination hospitals in referral / consultation workflows.
@@ -538,6 +810,24 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.PATCH, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.DELETE, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
+
+                // External provider onboarding (D5): super-admin only; the
+                // service then requires a verified (live) super-admin.
+                .requestMatchers("/super-admin/providers", "/super-admin/providers/**")
+                .hasAuthority(ROLE_SUPER_ADMIN)
+
+                // The provider directory (D5, plan section 6.5): the same list as
+                // ProviderDirectoryController's annotation; the service then
+                // requires a hospital acting scope and the role held there, live.
+                .requestMatchers(HttpMethod.GET, "/provider-directory")
+                .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.PROVIDER_DIRECTORY_AUTHORITIES))
+
+                // A provider facility's own pages (D5, plan section 6.5): any
+                // authenticated caller reaches the handler, which decides from
+                // the caller's LIVE assignments at the facility and answers
+                // everyone else exactly as an unmapped path. A role matcher
+                // here would answer a hospital user 403, telling them it exists.
+                .requestMatchers("/provider/**").authenticated()
 
                 // Organizations and security management
                 .requestMatchers("/organizations/**")
@@ -571,6 +861,13 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_STAFF)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
+                // QA D846: a lab director sets a lab staff member's lab role
+                // (StaffController#updateLabRole admits them, the service holds
+                // it to the caller's hospital). Narrow matcher FIRST: the blanket
+                // PUT /staff/** below refused them before the annotation ran.
+                .requestMatchers(HttpMethod.PUT, API_STAFF + "/*/lab-role")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_LAB_DIRECTOR)
+
                 .requestMatchers(HttpMethod.PUT, API_STAFF_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
@@ -602,6 +899,12 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 // -------------------- Billing --------------------
+                // QA D538: the pharmacy checkout. Mirrors the controller's
+                // @PreAuthorize so a role it refuses gets the 403 here, before
+                // the body is validated (a nurse saw 400 field errors first).
+                .requestMatchers(HttpMethod.POST, "/pharmacy/payments")
+                .hasAnyAuthority(ROLE_PHARMACIST, ROLE_BILLING_SPECIALIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
                 .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST, ROLE_DOCTOR)
 
@@ -624,8 +927,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
+                // QA D973: the receptionist who opens an invoice reads its lines.
                 .requestMatchers(HttpMethod.GET, API_INVOICE_ITEMS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST)
 
                 .requestMatchers(HttpMethod.POST, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
@@ -634,7 +938,7 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
                 .requestMatchers(HttpMethod.DELETE, API_INVOICE_ITEMS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
                 .requestMatchers("/invoices/*/email", "/invoices/*/send-to")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
@@ -733,10 +1037,6 @@ public class SecurityConfig {
                         ROLE_QUALITY_MANAGER, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_SUPER_ADMIN)
 
-                .requestMatchers(HttpMethod.PATCH, API_LAB_ORDERS_PATTERN, API_LAB_RESULTS_PATTERN)
-                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_SUPER_ADMIN)
-
                 // ---- Specimen endpoints (POST /lab-orders/{id}/specimens has its own matcher above) ----
                 .requestMatchers(HttpMethod.GET,  API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
@@ -813,6 +1113,17 @@ public class SecurityConfig {
                 // /chat/attachments/{id}/download).
                 .requestMatchers(HttpMethod.GET, "/uploads/profile-images/**").permitAll()
 
+                // QA round 33: a caller who may not prescribe is answered 403 at the
+                // edge. Spring validates a @Valid body BEFORE a method's @PreAuthorize,
+                // so a receptionist's refused body read a 400 about the frequency: the
+                // answer told her why the order was wrong, not that it is not hers to
+                // write. The same roles as the two handlers' annotations
+                // (PreAuthorizeMatcherPairingTest holds the pair).
+                .requestMatchers(HttpMethod.POST, "/prescriptions")
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .requestMatchers(HttpMethod.PUT, "/prescriptions/*")
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())
@@ -836,6 +1147,15 @@ public class SecurityConfig {
                     }
                 }
             }, UsernamePasswordAuthenticationFilter.class);
+
+        // Provider confinement: after both context filters (the legacy one
+        // above, the Keycloak one after BearerTokenAuthenticationFilter) and
+        // before AuthorizationFilter, so a confined caller gets the unmapped
+        // path's 404 for a hospital endpoint, never a URL matcher's 403.
+        http.addFilterBefore(
+            new ProviderFacilityConfinementFilter(providerConfinementPolicyProvider,
+                providerCallerResolverProvider, actingScopeResolverProvider, providerMfaGateProvider),
+            AuthorizationFilter.class);
 
         // ── Hardened HTTP response headers ──────────────────────────────────
         http.headers(headers -> headers

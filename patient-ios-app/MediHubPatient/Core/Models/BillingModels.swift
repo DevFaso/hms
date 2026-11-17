@@ -84,9 +84,13 @@ struct PharmacyPaymentDTO: Codable, Identifiable, Hashable {
     let notes: String?
     let createdAt: String?
     let updatedAt: String?
+    var status: String? = nil
+
+    /// QA D404: a payment voided with its cancelled dispense is not money paid.
+    var countsTowardPaid: Bool { status?.uppercased() != "VOIDED" }
 
     var displayMethod: String {
-        (paymentMethod ?? "Payment").replacingOccurrences(of: "_", with: " ").capitalized
+        EnumLabel.label(.paymentMethod, paymentMethod) ?? "payment".localized
     }
 
     var displayCurrency: String { currency ?? "XOF" }
@@ -109,8 +113,13 @@ struct PharmacyClaimDTO: Codable, Identifiable, Hashable {
     let updatedAt: String?
 
     var displayStatus: String {
-        (claimStatus ?? "Pending").replacingOccurrences(of: "_", with: " ").capitalized
+        EnumLabel.text(.claimStatus, claimStatus ?? "SUBMITTED")
     }
 
     var displayCurrency: String { currency ?? "XOF" }
+}
+
+extension Array where Element == PharmacyPaymentDTO {
+    /// QA D404: what the patient has paid at the pharmacy, voided payments left out.
+    var paidTotal: Double { filter(\.countsTowardPaid).reduce(0) { $0 + ($1.amount ?? 0) } }
 }

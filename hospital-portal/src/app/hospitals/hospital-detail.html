@@ -9,7 +9,9 @@
         }
       </h1>
       @if (hospital(); as h) {
-        <p class="page-subtitle">{{ h.code }} · {{ h.organizationName }}</p>
+        <p class="page-subtitle">
+          {{ h.code }} · {{ h.organizationName | orgText: h.organizationCode }}
+        </p>
       }
     </div>
     <a class="back-link" routerLink="/hospitals">
@@ -46,7 +48,7 @@
           [style.background]="stateColor(state()) + '14'"
           [style.color]="stateColor(state())"
         >
-          {{ 'HOSPITAL_LIFECYCLE.STATE.' + lc.state | translate }}
+          {{ 'HOSPITAL_LIFECYCLE.STATE.' + lc.lifecycleState | translate }}
         </span>
       </header>
 
@@ -54,7 +56,12 @@
         @if (lc.suspendedAt) {
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.SUSPENDED_AT' | translate }}</dt>
-            <dd>{{ lc.suspendedAt | date: 'medium' }} — {{ lc.suspendedBy }}</dd>
+            <dd>
+              {{ lc.suspendedAt | serverTime | dateTime }}
+              @if (lc.suspendedByName) {
+                — {{ lc.suspendedByName }}
+              }
+            </dd>
           </div>
           @if (lc.suspensionReason) {
             <div>
@@ -66,19 +73,24 @@
         @if (lc.archivedAt) {
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.ARCHIVED_AT' | translate }}</dt>
-            <dd>{{ lc.archivedAt | date: 'medium' }} — {{ lc.archivedBy }}</dd>
+            <dd>
+              {{ lc.archivedAt | serverTime | dateTime }}
+              @if (lc.archivedByName) {
+                — {{ lc.archivedByName }}
+              }
+            </dd>
           </div>
         }
         @if (lc.purgeScheduledFor) {
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.PURGE_SCHEDULED_FOR' | translate }}</dt>
-            <dd>{{ lc.purgeScheduledFor | date: 'medium' }}</dd>
+            <dd>{{ lc.purgeScheduledFor | serverTime | dateTime }}</dd>
           </div>
         }
         @if (lc.purgedAt) {
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.PURGED_AT' | translate }}</dt>
-            <dd>{{ lc.purgedAt | date: 'medium' }}</dd>
+            <dd>{{ lc.purgedAt | serverTime | dateTime }}</dd>
           </div>
         }
       </dl>
@@ -139,12 +151,19 @@
 
     @if (dialog(); as state) {
       <div class="dialog-backdrop" data-test="dialog-backdrop">
-        <div class="dialog">
-          <h2>{{ 'HOSPITAL_LIFECYCLE.DIALOG.' + state.kind.toUpperCase() | translate }}</h2>
+        <div
+          class="dialog"
+          appModalDialog
+          aria-labelledby="hospital-detail-dialog-1-title"
+          (escaped)="!state.busy && closeDialog()"
+        >
+          <h2 id="hospital-detail-dialog-1-title">
+            {{ 'HOSPITAL_LIFECYCLE.DIALOG.' + state.kind.toUpperCase() | translate }}
+          </h2>
           <p class="dialog-confirm">
             {{ 'HOSPITAL_LIFECYCLE.DIALOG.CONFIRM_PREFIX' | translate }}
             <strong>{{ hospital()?.name }}</strong
-            >?
+            >{{ 'COMMON.QUESTION_MARK' | translate }}
           </p>
 
           @if (needsReason(state.kind)) {
@@ -164,14 +183,33 @@
               <span>{{ 'HOSPITAL_LIFECYCLE.DIALOG.SCHEDULED_FOR' | translate }}</span>
               <input
                 type="date"
+                [min]="minPurgeDate"
                 [ngModel]="state.scheduledFor"
                 (ngModelChange)="patchDialog('scheduledFor', $event)"
               />
             </label>
           }
 
+          @if (needsStepUp(state.kind)) {
+            <label class="field">
+              <span>{{ 'HOSPITAL_LIFECYCLE.DIALOG.MFA_CODE' | translate }}</span>
+              <input
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="32"
+                data-test="dialog-mfa-code"
+                [ngModel]="state.mfaCode"
+                (ngModelChange)="patchDialog('mfaCode', $event)"
+              />
+              <small>{{ 'HOSPITAL_LIFECYCLE.DIALOG.MFA_CODE_HELP' | translate }}</small>
+            </label>
+          }
+
           @if (state.errorKey) {
-            <p class="form-error">{{ state.errorKey | translate }}</p>
+            <p class="form-error" role="alert">
+              {{ state.errorKey | translate }}
+            </p>
           }
 
           <div class="dialog-actions">
@@ -187,7 +225,8 @@
               type="button"
               class="confirm-btn"
               data-test="dialog-confirm"
-              [disabled]="state.busy || !isReasonValid(state)"
+              [disabled]="state.busy"
+              [appSubmitGuard]="!isReasonValid(state) || !isPurgeDateValid(state)"
               (click)="submitDialog()"
             >
               @if (state.busy) {

@@ -70,6 +70,19 @@ public class PartnerSmsTemplates {
         return partner("sms.partner.superseded", refToken);
     }
 
+    /**
+     * Outbound: the prescriber withdrew the order — do not dispense. Reference
+     * token only, like the other notices about an existing offer.
+     */
+    public String withdrawn(String refToken) {
+        return partner("sms.partner.withdrawn", refToken);
+    }
+
+    /** The order is held for a prescriber's review: do not dispense it. */
+    public String heldForReview(String refToken) {
+        return partner("sms.partner.heldForReview", refToken);
+    }
+
     /** Outbound to patient: partner accepted the prescription. */
     public String patientAccepted(String pharmacyName, Locale patientLocale) {
         return messageSource.getMessage("sms.partner.patientAccepted",

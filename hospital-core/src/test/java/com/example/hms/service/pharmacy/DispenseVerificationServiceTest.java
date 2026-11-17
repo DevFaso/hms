@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
  * <p>Fixed clock throughout: an expiry check that reads the wall clock is a
  * test that passes until the date it was written stops being true.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class DispenseVerificationServiceTest {
 
     private static final ZoneId ZONE = ZoneId.of("Africa/Ouagadougou");
@@ -89,13 +90,22 @@ class DispenseVerificationServiceTest {
     }
 
     @Test
-    void aLotExpiringTodayIsStillDispensable() {
-        // Medicines are labelled "use before end of", so the expiry date
-        // itself is the last good day. Off-by-one here would quietly bin
-        // a day of stock at every site.
+    void aLotExpiringTodayIsRefused() {
+        // QA D710: the expiry report showed this lot as EXPIRE while the
+        // receipt, the picker and this check let it through. One rule now:
+        // a lot is expired ON its expiry date.
         StockLot expiringToday = lotOf("AMOX500", "Amoxicillin", TODAY);
 
         DispenseVerificationResult result = service.verify(prescription, expiringToday, null, null);
+
+        assertThat(result.getOutcomes()).containsEntry(DispenseCheck.EXPIRY, false);
+    }
+
+    @Test
+    void aLotExpiringTomorrowIsDispensable() {
+        StockLot expiringTomorrow = lotOf("AMOX500", "Amoxicillin", TODAY.plusDays(1));
+
+        DispenseVerificationResult result = service.verify(prescription, expiringTomorrow, null, null);
 
         assertThat(result.failedChecks()).isEmpty();
         assertThat(result.getOutcomes()).containsEntry(DispenseCheck.EXPIRY, true);
@@ -113,6 +123,46 @@ class DispenseVerificationServiceTest {
         assertThat(result.failureSummary())
             .contains("Methotrexate")
             .contains("Amoxicillin");
+    }
+
+    @Test
+    void qaD1492AFreeTextCitedBrandIsDispensableFromALotOfItsGeneric() {
+        StockLot paracetamol = lotOf(null, "Paracetamol", TODAY.plusMonths(6));
+        MedicationCatalogItem item = paracetamol.getInventoryItem().getMedicationCatalogItem();
+        prescription.setMedicationCode(null);
+        prescription.setMedicationCatalogItemId(null);
+
+        for (String brand : java.util.List.of("Efferalgan", "Tylenol 500 mg")) {
+            prescription.setMedicationName(brand);
+            assertThat(service.matchesPrescribedDrug(prescription, item)).as(brand).isTrue();
+        }
+        // A brand with no mapping stays refused, as today.
+        prescription.setMedicationName("Dafalgan");
+        assertThat(service.matchesPrescribedDrug(prescription, item)).isFalse();
+        // A combination brand is not filled from one of its ingredients.
+        prescription.setMedicationName("Augmentin");
+        assertThat(service.matchesPrescribedDrug(prescription,
+            lotOf(null, "Amoxicilline", TODAY.plusMonths(6)).getInventoryItem().getMedicationCatalogItem())).isFalse();
+    }
+
+    @Test
+    void qaD899TheCatalogItemPickedAtOrderTimeIsTheDrugWhateverItsName() {
+        // A UI-created catalog item has no code; the order names it by brand.
+        StockLot picked = lotOf(null, "Amoxicilline", TODAY.plusMonths(6));
+        MedicationCatalogItem item = picked.getInventoryItem().getMedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        prescription.setMedicationCode(null);
+        prescription.setMedicationName("Clamoxyl");
+        prescription.setMedicationCatalogItemId(item.getId());
+
+        assertThat(service.matchesPrescribedDrug(prescription, item)).isTrue();
+        assertThat(service.verify(prescription, picked, null, null).failedChecks()).isEmpty();
+
+        // Another item is still judged on code and name, as before.
+        MedicationCatalogItem other = lotOf(null, "Methotrexate", TODAY.plusMonths(6))
+            .getInventoryItem().getMedicationCatalogItem();
+        other.setId(UUID.randomUUID());
+        assertThat(service.matchesPrescribedDrug(prescription, other)).isFalse();
     }
 
     @Test
@@ -254,6 +304,29 @@ class DispenseVerificationServiceTest {
         DispenseVerificationResult result = service.verify(prescription, lot, null, null);
 
         assertThat(result.failedChecks()).isEmpty();
+    }
+
+    /** QA D138: the free text a prescriber types names the catalogue drug plus strength and form. */
+    @Test
+    void aFreeTextPrescriptionWithAccentsStrengthAndFormMatchesItsCatalogueDrug() {
+        prescription.setMedicationCode(null);
+        prescription.setMedicationName("Paracétamol 500 mg comprimé");
+        StockLot lot = lotOf(null, "paracetamol", TODAY.plusMonths(3));
+
+        DispenseVerificationResult result = service.verify(prescription, lot, null, null);
+
+        assertThat(result.failedChecks()).isEmpty();
+    }
+
+    @Test
+    void aFreeTextNameThatOnlyStartsWithTheCatalogueWordIsNotTheSameDrug() {
+        prescription.setMedicationCode(null);
+        prescription.setMedicationName("Paracetamolcodeine 500 mg");
+        StockLot lot = lotOf(null, "Paracetamol", TODAY.plusMonths(3));
+
+        DispenseVerificationResult result = service.verify(prescription, lot, null, null);
+
+        assertThat(result.failedChecks()).contains(DispenseCheck.DRUG);
     }
 
     @Test

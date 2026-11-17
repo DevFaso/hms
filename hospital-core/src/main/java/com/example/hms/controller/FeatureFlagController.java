@@ -65,6 +65,10 @@ public class FeatureFlagController {
         Authentication authentication
     ) {
         Locale locale = LocaleContextHolder.getLocale();
+        if (!featureFlagService.isKnownFlagKey(flagKey)) {
+            // D245: a PUT used to create a row for any key, typos included.
+            throw new com.example.hms.exception.BusinessException("featureFlag.unknownKey");
+        }
         boolean enabled = Boolean.TRUE.equals(request.enabled());
         String description = request.description();
         String updatedBy = authentication != null ? authentication.getName() : "system";

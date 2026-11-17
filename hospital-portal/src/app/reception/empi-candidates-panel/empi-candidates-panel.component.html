@@ -1,0 +1,330 @@
+<section class="empi-panel" data-testid="empi-candidates-panel">
+  <header class="empi-panel__header">
+    <span class="eyebrow">{{ 'EMPI.WORKSPACE.EYEBROW' | translate }}</span>
+    <h1>{{ 'EMPI.TITLE' | translate }}</h1>
+    <p class="empi-panel__subtitle">{{ 'EMPI.SUBTITLE' | translate }}</p>
+  </header>
+
+  <div class="identity-workspace">
+    <form class="empi-panel__form" (submit)="search($event)" novalidate data-testid="empi-form">
+      <div class="section-heading">
+        <span class="step-number" aria-hidden="true">01</span>
+        <div>
+          <h2>{{ 'EMPI.WORKSPACE.IDENTITY' | translate }}</h2>
+          <p>{{ 'EMPI.WORKSPACE.IDENTITY_HINT' | translate }}</p>
+        </div>
+      </div>
+      <fieldset [disabled]="searching() || merging()">
+        <div class="form-grid">
+          <div class="form-row">
+            <label for="empi-first">{{ 'EMPI.FIELD.FIRST_NAME' | translate }}</label>
+            <input
+              id="empi-first"
+              name="firstName"
+              type="text"
+              autocomplete="off"
+              [(ngModel)]="form.firstName"
+              data-testid="empi-firstName"
+            />
+          </div>
+          <div class="form-row">
+            <label for="empi-last">{{ 'EMPI.FIELD.LAST_NAME' | translate }}</label>
+            <input
+              id="empi-last"
+              name="lastName"
+              type="text"
+              autocomplete="off"
+              [(ngModel)]="form.lastName"
+              data-testid="empi-lastName"
+            />
+          </div>
+          <div class="form-row">
+            <label for="empi-dob">{{ 'EMPI.FIELD.DATE_OF_BIRTH' | translate }}</label>
+            <input
+              id="empi-dob"
+              name="dateOfBirth"
+              type="date"
+              [(ngModel)]="form.dateOfBirth"
+              data-testid="empi-dob"
+            />
+          </div>
+          <div class="form-row">
+            <label for="empi-sex">{{ 'EMPI.FIELD.SEX' | translate }}</label>
+            <select id="empi-sex" name="sex" [(ngModel)]="form.sex" data-testid="empi-sex">
+              <option value="">{{ 'EMPI.FIELD.SEX_PLACEHOLDER' | translate }}</option>
+              @for (opt of sexOptions; track opt) {
+                <option [value]="opt">{{ sexLabels[opt] | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-row form-row--span-2">
+            <label for="empi-national-id">{{ 'EMPI.FIELD.NATIONAL_ID' | translate }}</label>
+            <input
+              id="empi-national-id"
+              name="nationalId"
+              type="text"
+              autocomplete="off"
+              [(ngModel)]="form.nationalId"
+              data-testid="empi-nationalId"
+            />
+          </div>
+        </div>
+      </fieldset>
+      <div class="form-actions">
+        <button
+          type="submit"
+          class="btn-primary"
+          [disabled]="searching() || merging()"
+          data-testid="empi-search"
+        >
+          {{ searching() ? ('EMPI.SEARCHING' | translate) : ('EMPI.SEARCH' | translate) }}
+        </button>
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="merging()"
+          (click)="reset()"
+          data-testid="empi-reset"
+        >
+          {{ 'COMMON.CLEAR' | translate }}
+        </button>
+      </div>
+    </form>
+    <aside class="identity-guide">
+      <span class="material-symbols-outlined guide-icon" aria-hidden="true">person_search</span>
+      <h2>{{ 'EMPI.WORKSPACE.GUIDE_TITLE' | translate }}</h2>
+      <p>{{ 'EMPI.WORKSPACE.GUIDE_TEXT' | translate }}</p>
+      <div class="guide-rule">
+        <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
+        <p>{{ 'EMPI.WORKSPACE.SCORE_HINT' | translate }}</p>
+      </div>
+    </aside>
+  </div>
+  <section class="candidate-workspace" [attr.aria-busy]="searching()">
+    <div class="section-heading">
+      <span class="step-number" aria-hidden="true">02</span>
+      <div>
+        <h2>{{ 'EMPI.WORKSPACE.CANDIDATES' | translate }}</h2>
+        <p>{{ 'EMPI.WORKSPACE.CANDIDATES_HINT' | translate }}</p>
+      </div>
+      @if (searched() && !error() && !disabled()) {
+        <span class="result-count">{{
+          'EMPI.WORKSPACE.RESULT_COUNT' | translate: { count: results().length }
+        }}</span>
+      }
+    </div>
+    @if (searching()) {
+      <div class="state-panel" role="status">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <p>{{ 'EMPI.SEARCHING' | translate }}</p>
+      </div>
+    }
+    @if (!searched() && !searching()) {
+      <div class="state-panel">
+        <span class="material-symbols-outlined" aria-hidden="true">manage_search</span>
+        <h3>{{ 'EMPI.WORKSPACE.READY_TITLE' | translate }}</h3>
+        <p>{{ 'EMPI.WORKSPACE.READY_HINT' | translate }}</p>
+      </div>
+    }
+
+    @if (disabled()) {
+      <p class="empi-panel__error" role="status" data-testid="empi-disabled">
+        {{ 'EMPI.DISABLED' | translate }}
+      </p>
+    }
+
+    @if (error()) {
+      <p class="empi-panel__error" role="alert" data-testid="empi-error">
+        {{ 'EMPI.ERROR' | translate }}
+      </p>
+    }
+
+    @if (!error() && !disabled() && searched()) {
+      @if (results().length === 0) {
+        <p class="empi-panel__empty state-panel" role="status" data-testid="empi-empty">
+          {{ 'EMPI.NO_MATCHES' | translate }}
+        </p>
+      }
+      @if (results().length > 0) {
+        <div
+          class="results-scroll"
+          tabindex="0"
+          role="region"
+          [attr.aria-label]="'EMPI.WORKSPACE.CANDIDATES' | translate"
+        >
+          <table class="data-table" data-testid="empi-results">
+            <thead>
+              <tr>
+                <th scope="col">{{ 'EMPI.COL_PATIENT' | translate }}</th>
+                <th scope="col">{{ 'EMPI.COL_SCORE' | translate }}</th>
+                <th scope="col">{{ 'EMPI.COL_BREAKDOWN' | translate }}</th>
+                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (match of results(); track trackByPatientId($index, match)) {
+                <tr [attr.data-patient-id]="match.patientId">
+                  <td class="patient-name">
+                    <span class="patient-avatar" aria-hidden="true">{{
+                      match.displayName.slice(0, 1)
+                    }}</span
+                    ><strong>{{ match.displayName }}</strong>
+                  </td>
+                  <td>
+                    <span
+                      class="empi-panel__score"
+                      [class.empi-panel__score--high]="match.score >= 0.85"
+                      [class.empi-panel__score--medium]="match.score >= 0.7 && match.score < 0.85"
+                      [class.empi-panel__score--low]="match.score < 0.7"
+                    >
+                      {{ match.score * 100 | measure: '%' }}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      class="empi-panel__chip"
+                      [class.empi-panel__chip--match]="match.nameMatched"
+                      [class.empi-panel__chip--miss]="!match.nameMatched"
+                      ><span class="material-symbols-outlined" aria-hidden="true">{{
+                        match.nameMatched ? 'check' : 'remove'
+                      }}</span
+                      ><span class="sr-only"
+                        >{{
+                          (match.nameMatched
+                            ? 'EMPI.WORKSPACE.AGREES'
+                            : 'EMPI.WORKSPACE.NOT_AGREED'
+                          ) | translate
+                        }}{{ 'COMMON.COLON' | translate }}
+                      </span>
+                      {{ 'EMPI.BREAKDOWN.NAME' | translate }}
+                    </span>
+                    <span
+                      class="empi-panel__chip"
+                      [class.empi-panel__chip--match]="match.dobMatched"
+                      [class.empi-panel__chip--miss]="!match.dobMatched"
+                      ><span class="material-symbols-outlined" aria-hidden="true">{{
+                        match.dobMatched ? 'check' : 'remove'
+                      }}</span
+                      ><span class="sr-only"
+                        >{{
+                          (match.dobMatched ? 'EMPI.WORKSPACE.AGREES' : 'EMPI.WORKSPACE.NOT_AGREED')
+                            | translate
+                        }}{{ 'COMMON.COLON' | translate }}
+                      </span>
+                      {{ 'EMPI.BREAKDOWN.DOB' | translate }}
+                    </span>
+                    <span
+                      class="empi-panel__chip"
+                      [class.empi-panel__chip--match]="match.sexMatched"
+                      [class.empi-panel__chip--miss]="!match.sexMatched"
+                      ><span class="material-symbols-outlined" aria-hidden="true">{{
+                        match.sexMatched ? 'check' : 'remove'
+                      }}</span
+                      ><span class="sr-only"
+                        >{{
+                          (match.sexMatched ? 'EMPI.WORKSPACE.AGREES' : 'EMPI.WORKSPACE.NOT_AGREED')
+                            | translate
+                        }}{{ 'COMMON.COLON' | translate }}
+                      </span>
+                      {{ 'EMPI.BREAKDOWN.SEX' | translate }}
+                    </span>
+                    <span
+                      class="empi-panel__chip"
+                      [class.empi-panel__chip--match]="match.nationalIdMatched"
+                      [class.empi-panel__chip--miss]="!match.nationalIdMatched"
+                      ><span class="material-symbols-outlined" aria-hidden="true">{{
+                        match.nationalIdMatched ? 'check' : 'remove'
+                      }}</span
+                      ><span class="sr-only"
+                        >{{
+                          (match.nationalIdMatched
+                            ? 'EMPI.WORKSPACE.AGREES'
+                            : 'EMPI.WORKSPACE.NOT_AGREED'
+                          ) | translate
+                        }}{{ 'COMMON.COLON' | translate }}
+                      </span>
+                      {{ 'EMPI.BREAKDOWN.NATIONAL_ID' | translate }}
+                    </span>
+                  </td>
+                  <td class="actions">
+                    <button
+                      type="button"
+                      class="btn-primary"
+                      (click)="confirmMatch(match)"
+                      [disabled]="merging()"
+                      [attr.data-testid]="'empi-confirm-' + match.patientId"
+                    >
+                      {{ 'EMPI.CONFIRM_MATCH' | translate }}
+                    </button>
+                    @if (isAdmin) {
+                      <button
+                        type="button"
+                        class="btn-secondary"
+                        (click)="toggleMergeSelection(match)"
+                        [disabled]="merging()"
+                        [attr.aria-pressed]="isSelectedForMerge(match.patientId)"
+                        [attr.data-testid]="'empi-select-' + match.patientId"
+                      >
+                        {{
+                          (isSelectedForMerge(match.patientId)
+                            ? 'EMPI.MERGE_DESELECT'
+                            : 'EMPI.MERGE_SELECT'
+                          ) | translate
+                        }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (isAdmin && mergeSelection().length === 2) {
+        <div class="empi-panel__merge-bar" data-testid="empi-merge-bar">
+          <h3>{{ 'EMPI.WORKSPACE.MERGE_TITLE' | translate }}</h3>
+          <p>
+            {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
+            <strong>{{ mergeSelection()[0].displayName }}</strong>
+            · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ mergeSelection()[1].displayName }}
+          </p>
+          <div class="actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              (click)="swapMergeSelection()"
+              [disabled]="merging()"
+            >
+              {{ 'EMPI.MERGE_SWAP' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              (click)="executeMerge()"
+              [disabled]="merging()"
+              data-testid="empi-merge"
+            >
+              {{ (mergeArmed() ? 'EMPI.MERGE_CONFIRM_BUTTON' : 'EMPI.MERGE_BUTTON') | translate }}
+            </button>
+          </div>
+          <p class="empi-panel__merge-hint">{{ 'EMPI.MERGE_HINT' | translate }}</p>
+        </div>
+      }
+      @if (results().length > 0) {
+        <div class="empi-panel__new-patient">
+          <p>{{ 'EMPI.NOT_THIS_ONE' | translate }}</p>
+          <button
+            type="button"
+            class="btn-secondary"
+            (click)="newPatientFromForm()"
+            [disabled]="merging()"
+            data-testid="empi-new-patient"
+          >
+            {{ 'EMPI.CREATE_NEW_PATIENT' | translate }}
+          </button>
+        </div>
+      }
+    }
+  </section>
+</section>

@@ -11,11 +11,11 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
-    primary = BrandBlue,
+    primary = BrandPrimary,
     onPrimary = androidx.compose.ui.graphics.Color.White,
-    primaryContainer = BrandLightBlue,
-    onPrimaryContainer = BrandDarkBlue,
-    secondary = BrandDarkBlue,
+    primaryContainer = BrandSoft,
+    onPrimaryContainer = BrandPrimaryDark,
+    secondary = BrandPrimaryDark,
     onSecondary = androidx.compose.ui.graphics.Color.White,
     background = androidx.compose.ui.graphics.Color.White,
     surface = SurfaceGrey,
@@ -25,11 +25,11 @@ private val LightColorScheme = lightColorScheme(
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = BrandBlueDark,
+    primary = BrandPrimaryOnDark,
     onPrimary = androidx.compose.ui.graphics.Color.Black,
-    primaryContainer = BrandDarkBlue,
-    onPrimaryContainer = BrandLightBlue,
-    secondary = BrandDarkBlueDark,
+    primaryContainer = BrandPrimaryDark,
+    onPrimaryContainer = BrandSoft,
+    secondary = BrandSecondaryOnDark,
     onSecondary = androidx.compose.ui.graphics.Color.Black,
     background = androidx.compose.ui.graphics.Color(0xFF1C1B1F),
     surface = androidx.compose.ui.graphics.Color(0xFF2C2C2E),
@@ -48,8 +48,11 @@ fun MediHubTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            // Every screen's top bar is BrandPrimary in both themes, so the
+            // status bar matches it with light icons. It used to ask for dark
+            // icons in the light theme, i.e. dark glyphs on the brand colour.
+            window.statusBarColor = BrandPrimary.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
         }
     }
 

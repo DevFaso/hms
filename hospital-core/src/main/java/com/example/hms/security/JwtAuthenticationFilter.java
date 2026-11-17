@@ -2,10 +2,8 @@ package com.example.hms.security;
 
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import com.example.hms.security.context.HospitalContextRequestOverrides;
 import com.example.hms.security.context.ImpersonationContextHolder;
-import com.example.hms.service.HospitalLifecycleStatusService;
-import com.example.hms.service.OrganizationLifecycleStatusService;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,12 +21,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.Instant;
-import java.util.Date;
 import java.util.Deque;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
@@ -43,8 +39,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final TokenBlacklistService tokenBlacklistService;
     private final WsTicketService wsTicketService;
     private final HospitalUserDetailsService hospitalUserDetailsService;
-    private final OrganizationLifecycleStatusService lifecycleStatusService;
-    private final HospitalLifecycleStatusService hospitalLifecycleStatusService;
+    private final TenantLifecycleGate tenantLifecycleGate;
+    private final ActingScopeResolver actingScopeResolver;
     private final GlobalSessionRevocationService globalSessionRevocationService;
     private final IdleSessionGate idleSessionGate;
 
@@ -160,16 +156,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * call already guarded structural validity).
      */
     private boolean isRevokedByGlobalIat(String jwt) {
-        Instant minIat = globalSessionRevocationService.getGlobalMinTokenIat();
-        if (minIat == null || minIat.equals(Instant.EPOCH)) {
-            return false;
-        }
+        // The one rule, shared with the MFA challenge and refresh paths.
         try {
-            Date issuedAt = tokenProvider.getIssuedAt(jwt);
-            if (issuedAt == null) {
-                return false;
-            }
-            return issuedAt.toInstant().isBefore(minIat);
+            return globalSessionRevocationService.revokes(tokenProvider.getIssuedAt(jwt));
         } catch (RuntimeException ex) {
             return false;
         }
@@ -218,6 +207,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Reject tokens that have been explicitly revoked (logout / refresh rotation)
         String jti = tokenProvider.getJtiFromToken(jwt);
         if (jti != null && tokenBlacklistService.isBlacklisted(jti)) {
+            // DEBUG, not WARN. "Fires only on a rejection" is not the same as "fires rarely":
+            // a stale browser tab polling with a revoked token hits this once per REQUEST, which
+            // on a SockJS poll cycle is thousands of lines a day from one client. Making it WARN
+            // would have clawed back a slice of the volume reduction this change exists for, and
+            // the trigger is client-controlled. The gap this leaves on dev — a blacklist
+            // rejection with no line at INFO — is real and recorded in tasklist.md; the fix is a
+            // warn-once-per-jti path like isKnownMissingPrincipal's, not a blanket level change.
             log.debug("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
             respondUnauthorized(response, extractedSubject);
             return false;
@@ -244,6 +240,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
+        // ── MFA challenge token (MfaChallengeScope) ─────────────────────
+        // It proves the password and nothing more, so outside the MFA step
+        // it is no authentication at all: the request goes on as if no token
+        // had been sent, and an endpoint that needs a caller answers 401.
+        boolean challenge = MfaChallengeScope.isChallengeSession(authentication);
+        if (challenge && leaveChallengeAnonymous(request, path)) {
+            return true;
+        }
+
         // ── Idle session timeout gate (v1.0 row 7) ───────────────────────
         // Reject requests where the user has gone idle past the configured
         // window. Service-to-server clients (FHIR / HL7 / CDS / DHIS2 /
@@ -251,7 +256,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Sits AFTER applyAuthentication so we have a stable userId UUID,
         // and BEFORE the tenant-lifecycle gate so an idle clinician sees
         // an idle 401 (not a 423 tenant-blocked) when both apply.
-        if (idleSessionGate.shouldReject(context.getPrincipalUserId(),
+        // The challenge is no session either: its token lives five minutes
+        // and the login that minted it touched no idle window, so it is
+        // neither held to one nor allowed to extend one.
+        if (!challenge && idleSessionGate.shouldReject(context.getPrincipalUserId(),
             authentication == null ? null : authentication.getAuthorities())) {
             log.warn("[JWT] Refusing request on path={} — user has been idle past the configured window", path);
             SecurityContextHolder.clearContext();
@@ -266,33 +274,51 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // requests whose user is attached to an org in a non-active state
         // (SUSPENDED / ARCHIVED / PENDING_PURGE / PURGED). Super admins
         // bypass — they need cross-tenant access to manage these orgs.
-        if (isBlockedByTenantLifecycle(context)) {
+        if (tenantLifecycleGate.isBlocked(context)) {
             log.warn("[JWT] Refusing request on path={} — user's organization is blocked by tenant lifecycle", path);
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
             ImpersonationContextHolder.clear();
-            respondTenantBlocked(response);
+            HospitalScopeResponses.writeTenantBlocked(response);
+            return false;
+        }
+
+        // ── Refused X-Hospital-Id (design Q3, option A) ─────────────────
+        // A hospital the caller may not act at, named explicitly, is refused
+        // before any controller runs — never silently replaced by another
+        // hospital. The refusal is audited (hourly per actor, hospital and
+        // reason) and the 403 carries the reason, so the portal re-reads its
+        // scope on a stale chip (NO_LONGER_PERMITTED).
+        if (actingScopeResolver.answerRefusedHeader(context, response)) {
+            ImpersonationContextHolder.clear();
             return false;
         }
 
         // Touch the idle window only after every other gate has passed —
         // a rejected request must not extend the user's session.
-        idleSessionGate.touchIfHuman(context.getPrincipalUserId(),
-            authentication == null ? null : authentication.getAuthorities());
+        if (!challenge) {
+            idleSessionGate.touchIfHuman(context.getPrincipalUserId(),
+                authentication == null ? null : authentication.getAuthorities());
+        }
         return true;
     }
 
     /**
-     * Delegates to the shared
-     * {@link HospitalContextRequestOverrides#applyRequestOverrides} so the
-     * legacy bearer path and the OIDC path
-     * ({@code KeycloakHospitalContextFilter}) honour the
-     * {@code X-Hospital-Id} header identically. Behaviour is unchanged
-     * vs. the inline implementation; the only difference is log-line
-     * prefix ({@code [AUTH]} now, was {@code [JWT]}).
+     * A challenge session outside the MFA step ({@link MfaChallengeScope#admits})
+     * is dropped, and the request goes on unauthenticated. Returns whether it
+     * was dropped.
      */
-    private HospitalContext applyRequestOverrides(HospitalContext context, HttpServletRequest request) {
-        return HospitalContextRequestOverrides.applyRequestOverrides(context, request);
+    private boolean leaveChallengeAnonymous(HttpServletRequest request, String path) {
+        if (MfaChallengeScope.admits(request)) {
+            return false;
+        }
+        // DEBUG for the same reason as the blacklist rejection above: a client holding a
+        // challenge-scoped token can repeat this on every request.
+        log.debug("[JWT] MFA challenge token outside the MFA step on path={}; request left anonymous", path);
+        SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
+        ImpersonationContextHolder.clear();
+        return true;
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {
@@ -309,12 +335,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private boolean applyAuthentication(String jwt, HttpServletRequest request, String extractedSubject) {
         try {
             Authentication authentication = tokenProvider.getAuthenticationFromJwt(jwt);
+            // The one live computation (ActingScopeResolver), then the header.
+            HospitalContext context = tokenProvider.extractHospitalContext(jwt, authentication);
+            context = actingScopeResolver.withHeader(context, request);
+            // Q10, option A: a token still asserting ROLE_SUPER_ADMIN for a
+            // caller with no live SUPER_ADMIN assignment loses it, and the
+            // roles it inherited, on this request — not at refresh.
+            authentication = SuperAdminAuthorities.reconcile(authentication, context);
             log.debug("[JWT] Setting authentication for principal={} authorities={}",
                 authentication.getName(), authentication.getAuthorities());
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            HospitalContext context = tokenProvider.extractHospitalContext(jwt, authentication);
-            context = applyRequestOverrides(context, request);
             HospitalContextHolder.setContext(context);
             tokenProvider.extractImpersonationContext(jwt)
                 .ifPresent(ImpersonationContextHolder::set);
@@ -336,6 +367,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // (the message is already generic; the subject is PII). Operators who
             // need to investigate can correlate via the JTI from the request log.
             log.warn("[JWT] Rejecting token for a disabled/unverified principal.");
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
+            return false;
+        } catch (org.springframework.security.authentication.CredentialsExpiredException beforePasswordChange) {
+            // QA D114: issued before the account's last password change.
+            log.warn("[JWT] Rejecting a token issued before the last password change.");
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
+            return false;
+        } catch (BadCredentialsException notAnAccessToken) {
+            // A refresh token presented as a bearer (TokenUse): 401, it is no session.
+            log.warn("[JWT] Rejecting a refresh token presented as an access token.");
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
             ImpersonationContextHolder.clear();
@@ -443,79 +488,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
-    /**
-     * Returns {@code true} when the authenticated user is attached to a
-     * blocked organization OR a blocked hospital and is not a super admin.
-     * Super admins always pass — they need cross-tenant access to manage
-     * blocked tenants.
-     *
-     * <p>Hospital-level lifecycle (MVP-c batch) layers on top of the org
-     * gate so a single hospital can be suspended without taking down the
-     * whole organization, and the JWT filter enforces it at login time.
-     */
-    private boolean isBlockedByTenantLifecycle(HospitalContext context) {
-        if (context.isSuperAdmin()) {
-            return false;
-        }
-        return isBlockedByOrgLifecycle(context) || isBlockedByHospitalLifecycle(context);
-    }
-
-    private boolean isBlockedByOrgLifecycle(HospitalContext context) {
-        Set<UUID> permitted = context.getPermittedOrganizationIds();
-        UUID active = context.getActiveOrganizationId();
-        if (permitted.isEmpty() && active == null) {
-            return false;
-        }
-        Set<UUID> blocked = lifecycleStatusService.getBlockedOrganizationIds();
-        return !blocked.isEmpty()
-            && (containsAny(blocked, permitted) || (active != null && blocked.contains(active)));
-    }
-
-    private boolean isBlockedByHospitalLifecycle(HospitalContext context) {
-        Set<UUID> permitted = context.getPermittedHospitalIds();
-        UUID active = context.getActiveHospitalId();
-        if (permitted.isEmpty() && active == null) {
-            return false;
-        }
-        Set<UUID> blocked = hospitalLifecycleStatusService.getBlockedHospitalIds();
-        return !blocked.isEmpty()
-            && (containsAny(blocked, permitted) || (active != null && blocked.contains(active)));
-    }
-
-    private static boolean containsAny(Set<UUID> haystack, Set<UUID> needles) {
-        for (UUID id : needles) {
-            if (haystack.contains(id)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** 423 LOCKED with a clear, non-PII JSON body so the portal can surface
-     *  an actionable message. The frontend interceptor only special-cases
-     *  401/403 today, so a bare 423 with no body would render as a generic
-     *  request failure with no explanation. */
-    private void respondTenantBlocked(HttpServletResponse response) {
-        if (response.isCommitted()) {
-            return;
-        }
-        response.setStatus(423); // LOCKED — RFC 4918
-        response.setHeader("X-Block-Reason", "tenant-lifecycle");
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        try {
-            response.getWriter().write(
-                "{\"error\":\"tenant_blocked\","
-                    + "\"message\":\"Access to this organization is currently unavailable due to its lifecycle status. "
-                    + "Contact your super-admin if this is unexpected.\","
-                    + "\"status\":423,"
-                    + "\"blockReason\":\"tenant-lifecycle\"}"
-            );
-        } catch (IOException ex) {
-            log.warn("[JWT] Failed to write 423 tenant-blocked response body", ex);
-        }
-    }
-
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String uri = request.getRequestURI();
@@ -524,6 +496,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         if (EXACT_SKIP_PATHS.contains(uri)) {
+            return true;
+        }
+
+        // Logout reads the bearer itself and only ever revokes what it is
+        // handed. Running this filter first would answer a valid-but-refused
+        // bearer (idle window passed, tenant suspended, already blacklisted,
+        // revoked by a global IAT) with a 401/423 before the controller runs,
+        // and the refresh token the client hands back would never be revoked.
+        if ("POST".equalsIgnoreCase(request.getMethod())
+                && uri.equals(request.getContextPath() + "/auth/logout")) {
             return true;
         }
 

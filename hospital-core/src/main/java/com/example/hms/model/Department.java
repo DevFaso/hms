@@ -77,7 +77,8 @@ public class Department extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
-    @Column(length = 255, nullable = false)
+    /** Optional (QA D93, V194): the form never required it. */
+    @Column(length = 255)
     private String email;
 
     @Column(nullable = false, length = 255)

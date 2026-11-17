@@ -9,7 +9,8 @@ import { MicroCultureResponse, MicroService } from '../services/micro.service';
 import { LabService } from '../services/lab.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 describe('MicrobiologyComponent', () => {
   const EVERY_ROLE = [
@@ -28,7 +29,7 @@ describe('MicrobiologyComponent', () => {
   let microServiceSpy: jasmine.SpyObj<MicroService>;
   let labServiceSpy: jasmine.SpyObj<LabService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
-  let scope: RoleContextStubState;
+  let scope: RoleContextStub;
 
   const culture = (overrides: Partial<MicroCultureResponse>): MicroCultureResponse => ({
     id: 'c1',
@@ -80,7 +81,7 @@ describe('MicrobiologyComponent', () => {
     labServiceSpy = jasmine.createSpyObj('LabService', ['listOrders']);
     labServiceSpy.listOrders.and.returnValue(of([]));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
-    scope = { superAdmin: false, hospitalId: 'h1', roles: [...EVERY_ROLE] };
+    scope = roleContextStub({ superAdmin: false, hospitalId: 'h1', roles: EVERY_ROLE });
 
     await TestBed.configureTestingModule({
       imports: [MicrobiologyComponent, TranslateModule.forRoot()],
@@ -91,7 +92,7 @@ describe('MicrobiologyComponent', () => {
         { provide: MicroService, useValue: microServiceSpy },
         { provide: LabService, useValue: labServiceSpy },
         { provide: ToastService, useValue: toastSpy },
-        { provide: RoleContextService, useValue: roleContextStub(scope) },
+        { provide: RoleContextService, useValue: scope },
       ],
     }).compileComponents();
 
@@ -112,7 +113,7 @@ describe('MicrobiologyComponent', () => {
   });
 
   it('hides the resulting controls without a backend-authorized role', () => {
-    scope.roles = [];
+    scope.set({ roles: [] });
     microServiceSpy.list.and.returnValue(of(page([culture({})])));
     fixture.detectChanges();
 
@@ -121,7 +122,7 @@ describe('MicrobiologyComponent', () => {
 
   it('shows finalize only on preliminary reports and only to the finalize tier', () => {
     // Finalize tier excludes LAB_TECHNICIAN: mirror by refusing its role list.
-    scope.roles = ['ROLE_LAB_TECHNICIAN'];
+    scope.set({ roles: ['ROLE_LAB_TECHNICIAN'] });
     microServiceSpy.list.and.returnValue(of(page([culture({})])));
     fixture.detectChanges();
     component.select(component.cultures()[0]);
@@ -219,5 +220,148 @@ describe('MicrobiologyComponent', () => {
     expect(toastSpy.error).toHaveBeenCalledWith(
       'A growth result is required before the report can be finalized.',
     );
+  });
+
+  it('QA CX-010: removing an isolate or a susceptibility asks first; the reason is not the question', async () => {
+    microServiceSpy.list.and.returnValue(of(page([culture({})])));
+    fixture.detectChanges();
+    component.select(component.cultures()[0]);
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+
+    await component.deleteIsolate('i1');
+    await component.deleteSusceptibility('i1', 's1');
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(microServiceSpy.deleteIsolate).not.toHaveBeenCalled();
+    expect(microServiceSpy.deleteSusceptibility).not.toHaveBeenCalled();
+
+    ask.and.resolveTo(true);
+    microServiceSpy.deleteIsolate.and.returnValue(of(culture({})));
+    microServiceSpy.deleteSusceptibility.and.returnValue(of(culture({})));
+    await component.deleteIsolate('i1');
+    await component.deleteSusceptibility('i1', 's1');
+    expect(microServiceSpy.deleteIsolate).toHaveBeenCalledTimes(1);
+    expect(microServiceSpy.deleteSusceptibility).toHaveBeenCalledTimes(1);
+  });
+
+  describe('QA CX-009: correcting a validated report to no growth', () => {
+    const isolate = {
+      id: 'i1',
+      isolateNumber: 1,
+      organismName: 'Escherichia coli',
+      susceptibilities: [],
+    } as unknown as MicroCultureResponse['isolates'][number];
+    const validated = () =>
+      culture({ status: 'FINAL', growthResult: 'GROWTH', isolates: [isolate] });
+
+    const open = (report: MicroCultureResponse) => {
+      microServiceSpy.list.and.returnValue(of(page([report])));
+      fixture.detectChanges();
+      component.select(report);
+      component.correctionReason.set('Contamination');
+      component.editGrowthResult.set('NO_GROWTH');
+    };
+
+    it('asks first, says what leaves, and only then sends the removal', () => {
+      open(validated());
+      component.saveCulture();
+      expect(microServiceSpy.update).not.toHaveBeenCalled();
+      expect(component.confirmingNoGrowth()).toBeTrue();
+
+      microServiceSpy.update.and.returnValue(
+        of(culture({ status: 'CORRECTED', growthResult: 'NO_GROWTH', isolates: [] })),
+      );
+      component.confirmNoGrowth();
+      expect(microServiceSpy.update.calls.mostRecent().args[1]).toEqual(
+        jasmine.objectContaining({ growthResult: 'NO_GROWTH', removeIsolates: true }),
+      );
+      expect(component.confirmingNoGrowth()).toBeFalse();
+    });
+
+    it('no organism on it: nothing to confirm, no removal asked', () => {
+      open(culture({ status: 'FINAL', growthResult: 'GROWTH', isolates: [] }));
+      microServiceSpy.update.and.returnValue(of(culture({ status: 'CORRECTED' })));
+      component.saveCulture();
+      expect(component.confirmingNoGrowth()).toBeFalse();
+      expect(microServiceSpy.update.calls.mostRecent().args[1].removeIsolates).toBeUndefined();
+    });
+
+    it('a preliminary report saves as it always did: the server refuses, its reason is shown', () => {
+      open(culture({ isolates: [isolate] }));
+      microServiceSpy.update.and.returnValue(
+        throwError(() => ({ error: { message: 'Retirez les isolats' } })),
+      );
+      component.saveCulture();
+      expect(component.confirmingNoGrowth()).toBeFalse();
+      expect(microServiceSpy.update.calls.mostRecent().args[1].removeIsolates).toBeUndefined();
+      expect(toastSpy.error).toHaveBeenCalledWith('Retirez les isolats');
+    });
+
+    it('a refused last-isolate removal shows the server reason through the existing path', async () => {
+      open(validated());
+      component.correctionReason.set('Erreur');
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      microServiceSpy.deleteIsolate.and.returnValue(
+        throwError(() => ({ error: { message: 'Seul germe' } })),
+      );
+      await component.deleteIsolate('i1');
+      expect(toastSpy.error).toHaveBeenCalledWith('Seul germe');
+    });
+
+    it('after an organism turned the report to growth, the next save does not offer to remove it', () => {
+      open(culture({ status: 'FINAL', growthResult: 'NO_GROWTH', isolates: [] }));
+      component.editGrowthResult.set('NO_GROWTH');
+      microServiceSpy.addIsolate.and.returnValue(
+        of(culture({ status: 'CORRECTED', growthResult: 'GROWTH', isolates: [isolate] })),
+      );
+      component.isoOrganism.set('Escherichia coli');
+      component.submitIsolate();
+      expect(component.editGrowthResult()).toBe('GROWTH');
+
+      component.correctionReason.set('Note');
+      microServiceSpy.update.and.returnValue(of(culture({ status: 'CORRECTED' })));
+      component.saveCulture();
+      expect(component.confirmingNoGrowth()).toBeFalse();
+      expect(microServiceSpy.update.calls.mostRecent().args[1].growthResult).toBe('GROWTH');
+    });
+
+    it('adding an organism keeps what the lab typed and has not saved', () => {
+      const preliminary = culture({ isolates: [] });
+      microServiceSpy.list.and.returnValue(of(page([preliminary])));
+      fixture.detectChanges();
+      component.select(preliminary);
+      component.editGrowthResult.set('GROWTH');
+      component.editNotes.set('Pas encore enregistre');
+      microServiceSpy.addIsolate.and.returnValue(of(culture({ isolates: [isolate] })));
+      component.isoOrganism.set('Escherichia coli');
+      component.submitIsolate();
+      expect(component.editGrowthResult()).toBe('GROWTH');
+      expect(component.editNotes()).toBe('Pas encore enregistre');
+    });
+
+    it('shows what the report said before each correction', () => {
+      const corrected = culture({
+        status: 'CORRECTED',
+        growthResult: 'NO_GROWTH',
+        isolates: [],
+        corrections: [
+          {
+            id: 'k1',
+            correctedAt: '2026-11-06T10:00:00',
+            correctedByName: null,
+            reason: 'Contamination',
+            statusBefore: 'FINAL',
+            growthBefore: 'GROWTH',
+            gramStainBefore: null,
+            notesBefore: null,
+            isolatesBefore: '#1 Escherichia coli',
+          },
+        ],
+      });
+      open(corrected);
+      fixture.detectChanges();
+      const history = fixture.nativeElement.querySelector('[data-testid="correction-history"]');
+      expect(history).toBeTruthy();
+      expect(history.textContent).toContain('Escherichia coli');
+    });
   });
 });

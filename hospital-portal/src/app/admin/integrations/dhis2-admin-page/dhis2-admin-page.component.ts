@@ -16,7 +16,10 @@ import { RoleContextService } from '../../../core/role-context.service';
 import { ToastService } from '../../../core/toast.service';
 import { Dhis2ExportPanelComponent } from '../dhis2-export-panel/dhis2-export-panel.component';
 import { Dhis2MappingEditorComponent } from '../dhis2-mapping-editor/dhis2-mapping-editor.component';
+import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
+import { refusalReason } from '../../../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 type Tab = 'config' | 'mappings' | 'exports';
 
 /**
@@ -31,6 +34,8 @@ type Tab = 'config' | 'mappings' | 'exports';
   selector: 'app-dhis2-admin-page',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -95,7 +100,7 @@ type Tab = 'config' | 'mappings' | 'exports';
           data-testid="dhis2-config-form"
         >
           <label>
-            {{ 'DHIS2.CONFIG.BASE_URL' | translate }}
+            {{ 'DHIS2.CONFIG.BASE_URL' | translate }} *
             <input
               type="url"
               data-testid="dhis2-config-base-url"
@@ -111,12 +116,12 @@ type Tab = 'config' | 'mappings' | 'exports';
               [(ngModel)]="configForm.authMode"
               name="authMode"
             >
-              <option value="PAT">PAT</option>
-              <option value="BASIC">BASIC</option>
+              <option value="PAT">{{ 'DHIS2.AUTH_MODE.PAT' | translate }}</option>
+              <option value="BASIC">{{ 'DHIS2.AUTH_MODE.BASIC' | translate }}</option>
             </select>
           </label>
           <label>
-            {{ 'DHIS2.CONFIG.AUTH_SECRET_ENV_VAR' | translate }}
+            {{ 'DHIS2.CONFIG.AUTH_SECRET_ENV_VAR' | translate }} *
             <input
               type="text"
               data-testid="dhis2-config-auth-env-var"
@@ -133,9 +138,10 @@ type Tab = 'config' | 'mappings' | 'exports';
               [(ngModel)]="configForm.defaultPeriodType"
               name="defaultPeriodType"
             >
-              <option value="MONTHLY">MONTHLY</option>
-              <option value="WEEKLY">WEEKLY</option>
-              <option value="YEARLY">YEARLY</option>
+              <!-- QA D875: the period in words, like the other two tabs. -->
+              <option value="MONTHLY">{{ 'DHIS2.PERIOD.MONTHLY' | translate }}</option>
+              <option value="WEEKLY">{{ 'DHIS2.PERIOD.WEEKLY' | translate }}</option>
+              <option value="YEARLY">{{ 'DHIS2.PERIOD.YEARLY' | translate }}</option>
             </select>
           </label>
           <label>
@@ -158,21 +164,28 @@ type Tab = 'config' | 'mappings' | 'exports';
             />
             {{ 'DHIS2.CONFIG.ACTIVE' | translate }}
           </label>
+          @if (saveError(); as reason) {
+            <p class="dhis2-admin__error" role="alert" data-testid="dhis2-config-error">
+              {{ reason }}
+            </p>
+          }
           <button
             type="submit"
             class="btn-primary"
             data-testid="dhis2-config-save"
-            [disabled]="!canSaveConfig() || saving()"
+            [disabled]="saving()"
+            [appSubmitGuard]="!canSaveConfig()"
+            submitGuardRequired
           >
             {{ 'COMMON.SAVE' | translate }}
           </button>
 
           @if (loadedConfig(); as cfg) {
             <p class="dhis2-admin__last-export" data-testid="dhis2-config-last-export">
-              {{ 'DHIS2.CONFIG.LAST_EXPORT' | translate }}:
-              {{ cfg.lastExportAt ? (cfg.lastExportAt | date: 'short') : '—' }}
+              {{ 'DHIS2.CONFIG.LAST_EXPORT' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ cfg.lastExportAt ? (cfg.lastExportAt | serverTime | date: 'short') : '—' }}
               ·
-              {{ 'DHIS2.CONFIG.SECRET_CONFIGURED' | translate }}:
+              {{ 'DHIS2.CONFIG.SECRET_CONFIGURED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ cfg.authSecretConfigured ? '✓' : '✗' }}
             </p>
           }
@@ -239,6 +252,11 @@ type Tab = 'config' | 'mappings' | 'exports';
         align-items: center;
         gap: 0.5rem;
       }
+      .dhis2-admin__error {
+        flex-basis: 100%;
+        margin: 0;
+        color: var(--danger, #b00020);
+      }
       .dhis2-admin__last-export {
         flex-basis: 100%;
         font-size: 0.875rem;
@@ -251,6 +269,11 @@ export class Dhis2AdminPageComponent implements OnInit {
   protected readonly activeTab = signal<Tab>('config');
   protected readonly loadedConfig = signal<Dhis2FacilityConfig | null>(null);
   protected readonly saving = signal(false);
+  /**
+   * QA D875: the last refused save, under the form. It replaces the error
+   * toast, which outlived a later successful save; a new attempt clears it.
+   */
+  protected readonly saveError = signal<string | null>(null);
 
   protected configForm: Dhis2FacilityConfigRequest = {
     baseUrl: '',
@@ -301,15 +324,20 @@ export class Dhis2AdminPageComponent implements OnInit {
     const hospitalId = this.roleContext.activeHospitalId;
     if (!hospitalId || !this.canSaveConfig() || this.saving()) return;
     this.saving.set(true);
+    this.saveError.set(null);
     this.dhis2.upsertFacilityConfig(hospitalId, this.configForm).subscribe({
       next: (cfg) => {
         this.loadedConfig.set(cfg);
         this.saving.set(false);
         this.toast.success(this.translate.instant('DHIS2.CONFIG.SAVED'));
       },
-      error: () => {
+      error: (err) => {
         this.saving.set(false);
-        this.toast.error(this.translate.instant('DHIS2.CONFIG.SAVE_FAILED'));
+        // QA D875: the server's field reason ("must start with http(s)://")
+        // says what to fix; the generic text is only the fallback.
+        this.saveError.set(
+          refusalReason(err) ?? this.translate.instant('DHIS2.CONFIG.SAVE_FAILED'),
+        );
       },
     });
   }

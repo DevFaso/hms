@@ -70,10 +70,10 @@ export class PermissionMatrixService {
     return this.http.post<MatrixSnapshot>(`${this.baseUrl}/snapshots`, req);
   }
 
-  /** 404 when the environment has no snapshot yet. */
-  latestSnapshot(environment: MatrixEnvironment): Observable<MatrixSnapshot> {
+  /** null (204) when the environment has no snapshot yet. */
+  latestSnapshot(environment: MatrixEnvironment): Observable<MatrixSnapshot | null> {
     const params = new HttpParams().set('environment', environment);
-    return this.http.get<MatrixSnapshot>(`${this.baseUrl}/snapshots/latest`, { params });
+    return this.http.get<MatrixSnapshot | null>(`${this.baseUrl}/snapshots/latest`, { params });
   }
 
   listSnapshots(environment?: MatrixEnvironment): Observable<MatrixSnapshot[]> {

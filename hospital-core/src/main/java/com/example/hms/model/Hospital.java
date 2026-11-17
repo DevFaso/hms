@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.HospitalLifecycleState;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
@@ -89,7 +90,7 @@ public class Hospital extends BaseEntity {
     @Size(max = 50)  @Column(length = 50)  private String poBox;
     @Size(max = 30)  @Column(length = 30)  private String phoneNumber;
 
-    @Email
+    @Email(message = "{validation.email.invalid}")
     @Size(max = 255)
     @Column(length = 255)
     private String email;
@@ -124,6 +125,16 @@ public class Hospital extends BaseEntity {
     @Builder.Default
     @Column(nullable = false)
     private boolean active = true;
+
+    /**
+     * What kind of facility this row is (V180). HOSPITAL for every clinical
+     * tenant; PHARMACY or LABORATORY for an external provider, which is
+     * onboarded by a super-admin and fenced off from clinical use (plan D-A).
+     */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "facility_type", nullable = false, length = 20)
+    private FacilityType facilityType = FacilityType.HOSPITAL;
 
     // ── Hospital lifecycle (MVP-c batch) ─────────────────────────────
     // Mirrors Organization.lifecycleState. `active` continues to gate
@@ -260,6 +271,11 @@ public class Hospital extends BaseEntity {
         if (website != null) website = website.trim();
         if (city != null) city = city.trim();
         if (country != null) country = country.trim();
+    }
+
+    /** True for an external provider (a PHARMACY or LABORATORY row), false for a hospital. */
+    public boolean isProvider() {
+        return FacilityType.orHospital(facilityType).isProvider();
     }
 
     public void addDepartment(Department d) {

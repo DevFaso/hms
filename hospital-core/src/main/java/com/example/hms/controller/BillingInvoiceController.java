@@ -52,12 +52,15 @@ public class BillingInvoiceController {
     private final BillingInvoiceService invoiceService;
     private final MessageSource messageSource;
     private final InvoiceEmailService invoiceEmailService;
+    private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
 
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
     @Operation(summary = "Create Billing Invoice")
     public ResponseEntity<BillingInvoiceResponseDTO> createInvoice(
-        @Valid @RequestBody BillingInvoiceRequestDTO dto,
+        // QA D1300: the create-only patient is checked with the other fields, in one refusal.
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnCreate.class}) @RequestBody BillingInvoiceRequestDTO dto,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         return new ResponseEntity<>(invoiceService.createInvoice(dto, locale), HttpStatus.CREATED);
     }
@@ -140,12 +143,36 @@ public class BillingInvoiceController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         invoiceService.deleteInvoice(id, locale);
         String rawMessage = messageSource.getMessage("billinginvoice.deleted", new Object[]{id}, locale);
-        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMessage);
     }
 
+    @GetMapping("/summary")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Billing KPIs over every invoice in scope")
+    public ResponseEntity<com.example.hms.payload.dto.BillingSummaryDTO> summary(
+        @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+        @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+        // QA D1059: the tiles follow the list's date filter; no filter, every invoice in scope.
+        if (fromDate == null && toDate == null) {
+            return ResponseEntity.ok(invoiceService.summarize(locale));
+        }
+        return ResponseEntity.ok(invoiceService.summarize(fromDate, toDate, locale));
+    }
+
+    @GetMapping("/cash-closing")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "The signed-in cashier's daily cash closing (QA D1059)")
+    public ResponseEntity<com.example.hms.payload.dto.CashClosingDTO> cashClosing(
+        @RequestParam(name = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+        return ResponseEntity.ok(invoiceService.cashClosing(date, locale));
+    }
+
+    @com.example.hms.security.ReadsOnly("a filtered search of invoices, under POST for its body")
     @PostMapping("/search")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Search Billing Invoices")
@@ -162,8 +189,117 @@ public class BillingInvoiceController {
     public ResponseEntity<BillingInvoiceResponseDTO> recordStaffPayment(
         @PathVariable UUID invoiceId,
         @Valid @RequestBody com.example.hms.payload.dto.StaffPaymentRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID recordedBy = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.recordStaffPayment(invoiceId, request, recordedBy, locale));
+    }
+
+    /** QA D974: billing lowers an issued invoice with a reason; the front desk cannot. */
+    @PostMapping("/{invoiceId}/adjustments")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
+    @Operation(summary = "Discount, waive or credit part of an issued invoice")
+    public ResponseEntity<BillingInvoiceResponseDTO> addAdjustment(
+        @PathVariable UUID invoiceId,
+        @Valid @RequestBody com.example.hms.payload.dto.InvoiceAdjustmentRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.addAdjustment(invoiceId, request, staffId, locale));
+    }
+
+    /**
+     * QA D1105: billing undoes a mistaken discount, waiver or credit note,
+     * with a reason; the money received (a folded copay) stays as it is.
+     */
+    @PostMapping("/{invoiceId}/adjustments/{adjustmentId}/reverse")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
+    @Operation(summary = "Reverse a discount, waiver or credit note of an invoice")
+    public ResponseEntity<BillingInvoiceResponseDTO> reverseAdjustment(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID adjustmentId,
+        @Valid @RequestBody com.example.hms.payload.dto.AdjustmentReversalRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.reverseAdjustment(invoiceId, adjustmentId, request.reason(), staffId,
+            locale));
+    }
+
+    @GetMapping("/{invoiceId}/adjustments")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "List the discounts, waivers and credit notes of an invoice")
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO>> listAdjustments(
+        @PathVariable UUID invoiceId) {
+        return ResponseEntity.ok(invoiceService.listAdjustments(invoiceId));
+    }
+
+    @GetMapping("/{invoiceId}/payments")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "List the payments recorded on an invoice")
+    public ResponseEntity<List<com.example.hms.payload.dto.PaymentTransactionResponseDTO>> listPayments(
+        @PathVariable UUID invoiceId) {
+        return ResponseEntity.ok(invoiceService.listPayments(invoiceId));
+    }
+
+    /** QA D140: a cashier confirms a payment a patient declared; only then is it counted. */
+    @PostMapping("/{invoiceId}/payments/{paymentId}/confirm")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Confirm a pending payment")
+    public ResponseEntity<BillingInvoiceResponseDTO> confirmPayment(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID paymentId,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.confirmPayment(invoiceId, paymentId, staffId, locale));
+    }
+
+    /** QA D140: a cashier refuses a payment a patient declared, with a reason. */
+    @PostMapping("/{invoiceId}/payments/{paymentId}/reject")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Reject a pending payment")
+    public ResponseEntity<BillingInvoiceResponseDTO> rejectPayment(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID paymentId,
+        @Valid @RequestBody com.example.hms.payload.dto.PaymentReasonRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.rejectPayment(invoiceId, paymentId, request.reason(), staffId, locale));
+    }
+
+    /** QA D142: billing staff reverse (refund) a confirmed payment, with a reason. */
+    @PostMapping("/{invoiceId}/payments/{paymentId}/reverse")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
+    @Operation(summary = "Reverse a confirmed payment")
+    public ResponseEntity<BillingInvoiceResponseDTO> reversePayment(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID paymentId,
+        @Valid @RequestBody com.example.hms.payload.dto.PaymentReasonRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.reversePayment(invoiceId, paymentId, request.reason(), staffId, locale));
+    }
+
+    /** QA D141: a receipt for one confirmed payment. */
+    @GetMapping("/{invoiceId}/payments/{paymentId}/receipt")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Download a payment receipt as PDF")
+    public ResponseEntity<byte[]> downloadReceiptPdf(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID paymentId,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(invoiceService.recordStaffPayment(invoiceId, request.getAmount(), locale));
+        var pdf = invoiceService.getPaymentReceiptPdf(invoiceId, paymentId, locale);
+        byte[] content = pdf.content();
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_PDF)
+            .cacheControl(CacheControl.noCache())
+            .header(HttpHeaders.CONTENT_DISPOSITION,
+                ContentDisposition.attachment().filename(pdf.suggestedFilename() + ".pdf").build().toString())
+            .contentLength(content.length)
+            .body(content);
     }
 
     @PostMapping("/{id}/email")
@@ -179,9 +315,8 @@ public class BillingInvoiceController {
         } catch (org.springframework.mail.MailException ex) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(Map.of(STATUS, "FAILED", "error", "Mail service unavailable"));
-        } catch (Exception ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of(STATUS, "FAILED", "error", "Failed to send email"));
         }
+        // QA D755: a 404 (unknown or another hospital's invoice) or a refused
+        // draft goes to the global handler; it was turned into a 500 here.
     }
 }

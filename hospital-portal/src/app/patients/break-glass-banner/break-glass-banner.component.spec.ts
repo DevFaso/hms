@@ -1,11 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { BreakGlassBannerComponent } from './break-glass-banner.component';
 import { BreakGlassService, BreakGlassSession } from '../../services/break-glass.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 const liveSession: BreakGlassSession = {
   id: 's1',
@@ -71,6 +72,26 @@ describe('BreakGlassBannerComponent', () => {
     expect(fixture.nativeElement.querySelector('.bg-banner')).toBeNull();
   });
 
+  it('QA D436: a role the /me endpoint refuses does not call it on chart load', () => {
+    for (const role of ['ROLE_LAB_SCIENTIST', 'ROLE_PHARMACIST', 'ROLE_BILLING_SPECIALIST']) {
+      TestBed.resetTestingModule();
+      init([role]);
+      bgSpy.findMyLiveSession.and.returnValue(of(null));
+      setInputs('p1');
+      expect(bgSpy.findMyLiveSession).not.toHaveBeenCalled();
+    }
+  });
+
+  it('QA D436: the clinical roles and the front desk still ask for their session', () => {
+    for (const role of ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_RECEPTIONIST']) {
+      TestBed.resetTestingModule();
+      init([role]);
+      bgSpy.findMyLiveSession.and.returnValue(of(null));
+      setInputs('p1');
+      expect(bgSpy.findMyLiveSession).toHaveBeenCalledWith('p1');
+    }
+  });
+
   it('keeps an idle declaration accessible in compact mode and highlights a live session', () => {
     init(['ROLE_DOCTOR']);
     fixture.componentRef.setInput('compactWhenIdle', true);
@@ -81,6 +102,21 @@ describe('BreakGlassBannerComponent', () => {
     bgSpy.findMyLiveSession.and.returnValue(of(liveSession));
     setInputs('p2');
     expect(fixture.nativeElement.querySelector('.bg-active')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
+  });
+
+  it('keeps loading and failed session lookups prominent in compact mode', () => {
+    init(['ROLE_DOCTOR']);
+    fixture.componentRef.setInput('compactWhenIdle', true);
+    const lookup = new Subject<BreakGlassSession | null>();
+    bgSpy.findMyLiveSession.and.returnValue(lookup);
+    setInputs('p1');
+    expect(fixture.nativeElement.querySelector('.bg-banner')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
+
+    lookup.error(new Error('network'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.bg-banner')).toBeTruthy();
     expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
   });
 
@@ -142,10 +178,44 @@ describe('BreakGlassBannerComponent', () => {
     expect(toast.error).toHaveBeenCalledWith('BREAK_GLASS.NEED_HOSPITAL');
   });
 
+  it('QA D532: a zone-less expiry is read as UTC, so the countdown ignores the browser offset', () => {
+    init();
+    // 90 minutes ahead in UTC, written the way the API used to send it: no zone.
+    const naive = new Date(Date.now() + 90 * 60 * 1000).toISOString().slice(0, 19);
+    bgSpy.findMyLiveSession.and.returnValue(of({ ...liveSession, expiresAt: naive }));
+    setInputs('p1');
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toMatch(/1h (29|30)m/);
+  });
+
+  it('QA D532: an expiry with an offset counts down to that instant', () => {
+    init();
+    const at = new Date(Date.now() + 45 * 60 * 1000);
+    const lagos = new Date(at.getTime() + 60 * 60 * 1000).toISOString().slice(0, 19) + '+01:00';
+    bgSpy.findMyLiveSession.and.returnValue(of({ ...liveSession, expiresAt: lagos }));
+    setInputs('p1');
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toMatch(/(44|45)m/);
+    expect(text).not.toMatch(/\dh \d+m/);
+  });
+
   it('does not call the API when patientId is missing', () => {
     init(['ROLE_DOCTOR']);
     bgSpy.findMyLiveSession.and.returnValue(of(null));
     setInputs(null);
     expect(bgSpy.findMyLiveSession).not.toHaveBeenCalled();
+  });
+
+  it('QA CX-010: ending the emergency access asks first; a no sends nothing', async () => {
+    init(['ROLE_DOCTOR']);
+    bgSpy.findMyLiveSession.and.returnValue(of(liveSession));
+    setInputs('p1');
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    const banner = fixture.componentInstance as unknown as { revoke(): Promise<void> };
+    await banner.revoke();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(bgSpy.revoke).not.toHaveBeenCalled();
   });
 });

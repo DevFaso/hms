@@ -47,6 +47,24 @@ public class MicroCultureResponseDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<Isolate> isolates;
+    /** What the report said before each correction, newest first (QA CX-009). */
+    private List<Correction> corrections;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Correction {
+        private UUID id;
+        private LocalDateTime correctedAt;
+        private String correctedByName;
+        private String reason;
+        private MicroCultureStatus statusBefore;
+        private MicroGrowthResult growthBefore;
+        private String gramStainBefore;
+        private String notesBefore;
+        private String isolatesBefore;
+    }
 
     @Data
     @Builder

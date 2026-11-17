@@ -19,14 +19,15 @@
       <div class="header-info">
         <h1>{{ dept.name }}</h1>
         <div class="header-meta">
-          <span class="meta-tag code">{{ dept.code }}</span>
+          <span class="meta-tag code">{{ dept.departmentCode }}</span>
           @if (dept.hospitalName) {
             <span class="meta-tag">
               <span class="material-symbols-outlined">local_hospital</span>
               {{ dept.hospitalName }}
             </span>
           }
-          <span class="status-badge" [class.active]="dept.active" [class.inactive]="!dept.active">
+          {{ ' '
+          }}<span class="status-badge" [class.active]="dept.active" [class.inactive]="!dept.active">
             {{ dept.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
           </span>
         </div>
@@ -62,7 +63,7 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'DEPARTMENTS.CODE' | translate }}</span
-              ><span class="value">{{ dept.code }}</span>
+              ><span class="value">{{ dept.departmentCode }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'DEPARTMENTS.DESCRIPTION' | translate }}</span
@@ -143,29 +144,15 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+                <th>{{ 'STAFF.FULL_NAME' | translate }}</th>
                 <th>{{ 'STAFF.JOB_TITLE' | translate }}</th>
-                <th>{{ 'PATIENTS.EMAIL' | translate }}</th>
-                <th>{{ 'COMMON.STATUS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
               @for (s of staff(); track s.id) {
                 <tr>
-                  <td class="name-cell">{{ s.name }}</td>
-                  <td>{{ s.jobTitle ?? '—' }}</td>
-                  <td>{{ s.email ?? '—' }}</td>
-                  <td>
-                    <span
-                      class="status-badge"
-                      [class.active]="s.active"
-                      [class.inactive]="!s.active"
-                    >
-                      {{
-                        s.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
-                      }}
-                    </span>
-                  </td>
+                  <td class="name-cell">{{ s.fullName || '—' }}</td>
+                  <td>{{ s.jobTitle ? (s.jobTitle | enumLabel: 'jobTitle') : '—' }}</td>
                 </tr>
               }
             </tbody>

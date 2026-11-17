@@ -3,8 +3,8 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.dashboard.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.dashboard.LabDirectorDashboardDTO;
 import com.example.hms.payload.dto.dashboard.QualityManagerDashboardDTO;
-import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import com.example.hms.service.DashboardConfigurationService;
 import com.example.hms.service.HospitalAdminDashboardService;
 import com.example.hms.service.LabDirectorDashboardService;
@@ -16,8 +16,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -26,7 +24,6 @@ import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -51,19 +48,15 @@ class DashboardControllerTest {
     @InjectMocks private DashboardController controller;
 
     private static final UUID HOSPITAL_ID = UUID.randomUUID();
-    private MockedStatic<HospitalContextHolder> contextHolderMock;
-
+    /** The context the auth filter leaves for staff holding one hospital: pinned to it. */
     @BeforeEach
     void setupHospitalContext() {
-        contextHolderMock = Mockito.mockStatic(HospitalContextHolder.class);
-        HospitalContext ctx = Mockito.mock(HospitalContext.class);
-        when(ctx.getActiveHospitalId()).thenReturn(HOSPITAL_ID);
-        contextHolderMock.when(HospitalContextHolder::getContext).thenReturn(Optional.of(ctx));
+        ActingScopeTestSupport.actingAt(UUID.randomUUID(), HOSPITAL_ID);
     }
 
     @AfterEach
     void tearDownContext() {
-        contextHolderMock.close();
+        HospitalContextHolder.clear();
     }
 
     // ── /dashboard/me ─────────────────────────────────────────────────────────
@@ -138,7 +131,7 @@ class DashboardControllerTest {
     @Test
     @DisplayName("getLabDirectorSummary throws when no hospital context")
     void labDirectorSummaryThrowsWithoutContext() {
-        contextHolderMock.when(HospitalContextHolder::getContext).thenReturn(Optional.empty());
+        HospitalContextHolder.clear();
 
         assertThrows(IllegalStateException.class, () -> controller.getLabDirectorSummary());
     }
@@ -170,7 +163,7 @@ class DashboardControllerTest {
     @Test
     @DisplayName("getQualityManagerSummary throws when no hospital context")
     void qualityManagerSummaryThrowsWithoutContext() {
-        contextHolderMock.when(HospitalContextHolder::getContext).thenReturn(Optional.empty());
+        HospitalContextHolder.clear();
 
         assertThrows(IllegalStateException.class, () -> controller.getQualityManagerSummary());
     }

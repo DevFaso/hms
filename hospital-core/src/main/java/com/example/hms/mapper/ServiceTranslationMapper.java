@@ -29,6 +29,8 @@ public class ServiceTranslationMapper {
         return ServiceTranslationResponseDTO.builder()
                 .id(translation.getId())
                 .treatmentId(translation.getTreatment().getId())
+                // QA D1058 class: a response that names the id names the record too.
+                .treatmentName(translation.getTreatment().getName())
                 .languageCode(translation.getLanguageCode())
                 .name(translation.getName())
                 .description(translation.getDescription())

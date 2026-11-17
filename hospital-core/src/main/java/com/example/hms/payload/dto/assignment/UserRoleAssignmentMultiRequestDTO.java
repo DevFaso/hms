@@ -51,7 +51,7 @@ public class UserRoleAssignmentMultiRequestDTO {
     @Schema(description = "Optional start date for created assignments")
     private LocalDate startDate;
 
-    @Schema(description = "Registrar user ID (defaults to authenticated principal when absent)")
+    @Schema(description = "Ignored: the registrar is always the authenticated caller", deprecated = true)
     private UUID registeredByUserId;
 
     @Builder.Default
@@ -62,11 +62,13 @@ public class UserRoleAssignmentMultiRequestDTO {
     @Schema(description = "Skip conflicting assignments instead of failing the entire batch")
     private boolean skipConflicts = true;
 
+    @com.example.hms.validation.ReportedOn("userIdentifier")
     @AssertTrue(message = "{userRoleAssignment.userReference.required}")
     public boolean isUserProvided() {
         return userId != null || (userIdentifier != null && !userIdentifier.isBlank());
     }
 
+    @com.example.hms.validation.ReportedOn("roleId")
     @AssertTrue(message = "{userRoleAssignment.roleReference.invalid}")
     public boolean isValidRoleIdentifier() {
         boolean hasId = roleId != null;

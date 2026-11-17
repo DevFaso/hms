@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.appointments
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -196,7 +197,7 @@ class AppointmentsViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _bookingOptions.update {
-                    it.copy(isBooking = false, bookingError = AppointmentOutcome(R.string.booking_failed, e.message))
+                    it.copy(isBooking = false, bookingError = AppointmentOutcome(R.string.booking_failed, FailureText.of(e)))
                 }
             }
         }
@@ -226,7 +227,7 @@ class AppointmentsViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                _actionResult.value = AppointmentOutcome(R.string.cancel_failed, e.message)
+                _actionResult.value = AppointmentOutcome(R.string.cancel_failed, FailureText.of(e))
             }
         }
     }
@@ -252,7 +253,7 @@ class AppointmentsViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                _actionResult.value = AppointmentOutcome(R.string.reschedule_failed, e.message)
+                _actionResult.value = AppointmentOutcome(R.string.reschedule_failed, FailureText.of(e))
             }
         }
     }

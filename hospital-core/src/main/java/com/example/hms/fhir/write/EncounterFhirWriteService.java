@@ -1,5 +1,6 @@
 package com.example.hms.fhir.write;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.PreconditionFailedException;
@@ -136,7 +137,7 @@ public class EncounterFhirWriteService {
         String ifMatchHeader
     ) {
         ensureEnabled();
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
             throw forbidden(
                 "FHIR PUT /Encounter requires an active hospital scope; supply X-Hospital-Id "
@@ -148,6 +149,10 @@ public class EncounterFhirWriteService {
                 "Encounter/" + encounterId + " not found at the active hospital scope.",
                 OperationOutcome.IssueType.NOTFOUND
             ));
+        // QA D1428 class: a closed visit's record is protected on this path too.
+        if (existing.getStatus() != null && existing.getStatus().isClosed()) {
+            throw forbidden("Encounter " + encounterId + " is closed: its record can no longer be changed.");
+        }
 
         // Defence-in-depth: the repository scope already filters by hospital,
         // but if the loaded entity disagrees with the context (which would

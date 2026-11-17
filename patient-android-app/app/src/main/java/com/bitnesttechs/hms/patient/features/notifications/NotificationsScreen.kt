@@ -1,5 +1,8 @@
 package com.bitnesttechs.hms.patient.features.notifications
 
+import com.bitnesttechs.hms.patient.features.messages.ChatTime
+import com.bitnesttechs.hms.patient.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,8 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.models.NotificationDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,19 +33,19 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Notifications") },
+                title = { Text(stringResource(R.string.notifications)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue, titleContentColor = Color.White
+                    containerColor = BrandPrimary, titleContentColor = Color.White
                 ),
                 actions = {
                     if (unreadCount > 0L) {
                         TextButton(onClick = { viewModel.markAllRead() }) {
-                            Text("Mark all read", color = Color.White,
+                            Text(stringResource(R.string.mark_all_read), color = Color.White,
                                 style = MaterialTheme.typography.labelMedium)
                         }
                     }
@@ -52,7 +55,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
     ) { padding ->
         if (isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandBlue)
+                CircularProgressIndicator(color = BrandPrimary)
             }
             return@Scaffold
         }
@@ -63,7 +66,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
                     Icon(Icons.Default.Notifications, null, tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(48.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text("No notifications", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.no_notifications), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             return@Scaffold
@@ -88,7 +91,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
                 Icon(
                     imageVector = notificationIcon(notif.type),
                     contentDescription = null,
-                    tint = BrandBlue,
+                    tint = BrandPrimary,
                     modifier = Modifier.size(28.dp)
                 )
             },
@@ -98,7 +101,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
                     Text(notif.message, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        notif.createdAt.take(16).replace("T", " at "),
+                        ChatTime.bubbleLabel(notif.createdAt, java.time.LocalDateTime.now(), java.util.Locale.getDefault()) ?: "",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -106,7 +109,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
             },
             confirmButton = {
                 TextButton(onClick = { selectedNotification = null }) {
-                    Text("Close")
+                    Text(stringResource(R.string.close))
                 }
             }
         )
@@ -115,7 +118,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
 
 @Composable
 private fun NotificationRow(notif: NotificationDto, onTap: () -> Unit) {
-    val bgColor = if (notif.isRead) Color.Transparent else BrandLightBlue
+    val bgColor = if (notif.isRead) Color.Transparent else BrandSoft
 
     Surface(color = bgColor) {
         Row(
@@ -128,7 +131,7 @@ private fun NotificationRow(notif: NotificationDto, onTap: () -> Unit) {
         ) {
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = if (notif.isRead) MaterialTheme.colorScheme.surfaceVariant else BrandBlue,
+                color = if (notif.isRead) MaterialTheme.colorScheme.surfaceVariant else BrandPrimary,
                 modifier = Modifier.size(40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -152,7 +155,7 @@ private fun NotificationRow(notif: NotificationDto, onTap: () -> Unit) {
             }
             if (!notif.isRead) {
                 Box(Modifier.size(8.dp).padding(top = 6.dp)) {
-                    Surface(shape = RoundedCornerShape(50), color = BrandBlue,
+                    Surface(shape = RoundedCornerShape(50), color = BrandPrimary,
                         modifier = Modifier.size(8.dp)) {}
                 }
             }

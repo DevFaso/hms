@@ -32,4 +32,30 @@ public class SuperAdminUserForcePasswordResetRequestDTO {
 
     @Size(max = 255)
     private String reason;
+
+    // A JSON body that omits a list (or sends null) must mean "no targets of this kind",
+    // not a NullPointerException in the service (D32).
+    public List<UUID> getUserIds() {
+        return userIds == null ? new ArrayList<>() : userIds;
+    }
+
+    public List<String> getEmails() {
+        return emails == null ? new ArrayList<>() : emails;
+    }
+
+    public List<String> getUsernames() {
+        return usernames == null ? new ArrayList<>() : usernames;
+    }
+
+    /**
+     * QA round 29 sweep: an empty body answered 200 and reset nobody. At least
+     * one user is named, by id, e-mail or username; the refusal marks the picker.
+     */
+    @jakarta.validation.constraints.AssertTrue(message = "{superadmin.forceReset.noTarget}")
+    @com.example.hms.validation.ReportedOn("userIds")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isAnyTargetGiven() {
+        return !getUserIds().isEmpty() || getEmails().stream().anyMatch(e -> e != null && !e.isBlank())
+            || getUsernames().stream().anyMatch(u -> u != null && !u.isBlank());
+    }
 }

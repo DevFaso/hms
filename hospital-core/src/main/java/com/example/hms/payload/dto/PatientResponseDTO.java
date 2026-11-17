@@ -21,6 +21,8 @@ public class PatientResponseDTO {
     public static final UUID ZERO = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     private UUID id;
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private String nationalUniqueIdMasked;
     private String firstName;
     private String lastName;
     private String middleName;
@@ -45,6 +47,16 @@ public class PatientResponseDTO {
     private String emergencyContactRelationship;
     private String bloodType;
     private String allergies;
+    /** QA D504: the patient opted out of sharing and other hospitals' allergy rows are withheld here. */
+    private boolean allergiesWithheld;
+
+    /**
+     * QA D504: the patient opted out of record sharing and nothing here
+     * overrides it, so every clinical list on this read (problems, medications,
+     * labs, vitals, notes, encounters, imaging) holds this hospital's rows
+     * only. Says nothing about whether other rows exist.
+     */
+    private boolean recordsWithheld;
     private String medicalHistorySummary;
     private String preferredPharmacy;
     private String careTeamNotes;
@@ -102,6 +114,13 @@ public class PatientResponseDTO {
     private LocalDate registrationDate   = LocalDate.of(1970, 1, 1);
 
     private boolean active;
+    /** QA D1488: set when a death is on record. {@code active} is the administrative flag, not this. */
+    private boolean deceased;
+    private LocalDateTime deceasedAt;
+    /** A doctor has disputed the death at the acting hospital: care is permitted here pending review. */
+    private boolean deathDisputed;
+    /** The one rule ({@code DeceasedPatientGuard.careBlocked}), for the screens. */
+    private boolean careBlockedByDeath;
     /** E8 #54 — every read of this chart needs a live break-the-glass session. */
     private boolean chartRestricted;
     private String chartRestrictionReason;

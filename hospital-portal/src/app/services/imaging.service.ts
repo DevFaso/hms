@@ -1,3 +1,4 @@
+import { allHospitalsRequestOptions } from '../core/request-scope';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -27,6 +28,9 @@ export type ImagingPriority = 'ROUTINE' | 'URGENT' | 'STAT';
 export type ImagingLaterality = 'LEFT' | 'RIGHT' | 'BILATERAL' | 'MIDLINE' | 'NOT_APPLICABLE';
 
 export interface ImagingOrderResponse {
+  /** QA D1081: the user the server's author check compares with (shared/authorship.service). */
+  authorUserId?: string | null;
+
   id: string;
   patientId: string;
   patientDisplayName: string;
@@ -42,12 +46,62 @@ export interface ImagingOrderResponse {
   clinicalQuestion: string;
   orderingProviderId: string;
   orderingProviderName: string;
+  /** QA D611: the ordering clinician's user id; only they may edit an unsigned order. */
+  orderingProviderUserId?: string | null;
+  /** QA D611: set once the order is signed; a signed order is immutable. */
+  providerSignedAt?: string | null;
   orderedAt: string;
   scheduledDate: string;
   scheduledTime: string;
-  completedAt: string;
+  /** When the study was completed (r44, V294); null while it is not. */
+  completedAt: string | null;
+  /** QA D1922 (r53): contrast, the patient's contrast allergy, where, and the pre-authorisation. */
+  contrastRequired?: boolean | null;
+  contrastType?: string | null;
+  hasContrastAllergy?: boolean | null;
+  contrastAllergyDetails?: string | null;
+  appointmentLocation?: string | null;
+  workflowNotes?: string | null;
+  requiresAuthorization?: boolean | null;
+  authorizationNumber?: string | null;
+  /** QA D1921 (r53): the server found a recent order of the same study when this one was placed. */
+  duplicateOfRecentOrder?: boolean | null;
+  duplicateReferenceOrderId?: string | null;
+  duplicateMatches?: ImagingDuplicateMatch[] | null;
+  /** Provisional rule 2 (2026-11-15): placed with « Commander quand même », and why. */
+  duplicateOverride?: boolean | null;
+  duplicateOverrideReason?: ImagingDuplicateOverrideReason | null;
+  duplicateOverrideNote?: string | null;
+  duplicateOverrideByName?: string | null;
+  duplicateOverrideAt?: string | null;
+  /** Provisional rule 1 (2026-11-15): the study was done without its pre-authorisation number. */
+  authorizationPending?: boolean | null;
+  authorizationPendingSince?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Provisional rule 2 (2026-11-15): why an order was placed despite the duplicate warning. */
+export type ImagingDuplicateOverrideReason =
+  'CLINICAL_CHANGE' | 'PRIOR_INADEQUATE_OR_UNAVAILABLE' | 'DIFFERENT_REGION_OR_QUESTION' | 'OTHER';
+
+export const IMAGING_DUPLICATE_OVERRIDE_REASONS: readonly ImagingDuplicateOverrideReason[] = [
+  'CLINICAL_CHANGE',
+  'PRIOR_INADEQUATE_OR_UNAVAILABLE',
+  'DIFFERENT_REGION_OR_QUESTION',
+  'OTHER',
+];
+
+/** A recent order of the same study for the patient here (GET …/duplicates, QA D1920 scope). */
+export interface ImagingDuplicateMatch {
+  orderId: string;
+  modality: ImagingModality;
+  bodyRegion?: string | null;
+  studyType?: string | null;
+  priority?: ImagingPriority | null;
+  status: ImagingOrderStatus;
+  orderedAt?: string | null;
+  scheduledAt?: string | null;
 }
 
 export interface ImagingOrderRequest {
@@ -60,6 +114,22 @@ export interface ImagingOrderRequest {
   priority: ImagingPriority;
   laterality?: ImagingLaterality;
   clinicalQuestion?: string;
+  /** QA D1922 (r53): the fields the API has always stored and the form never sent. */
+  contrastRequired?: boolean;
+  contrastType?: string;
+  hasContrastAllergy?: boolean;
+  contrastAllergyDetails?: string;
+  /** yyyy-MM-dd, the clinic's calendar day. */
+  scheduledDate?: string;
+  /** HH:mm, the clinic's wall time. */
+  scheduledTime?: string;
+  appointmentLocation?: string;
+  requiresAuthorization?: boolean;
+  authorizationNumber?: string;
+  /** Provisional rule 2: « Commander quand même » carries its reason (and a note with OTHER). */
+  duplicateOverride?: boolean;
+  duplicateOverrideReason?: ImagingDuplicateOverrideReason;
+  duplicateOverrideNote?: string;
 }
 
 export type ImagingReportStatus =
@@ -79,9 +149,15 @@ export interface ImagingReportMeasurement {
   notes: string;
 }
 
+/** r44: the history rows the server writes itself (ImagingReportHistoryEvent). */
+export type ImagingReportHistoryEvent = 'AUTHORED' | 'SIGNED' | 'CRITICAL_ACKNOWLEDGED';
+
 export interface ImagingReportStatusEntry {
   id: string;
   status: ImagingReportStatus;
+  /** Set when the server wrote the row: shown translated, never as `statusReason`. */
+  eventCode?: ImagingReportHistoryEvent | null;
+  /** A reason a person typed (a void), or the server's English for an event. */
   statusReason: string;
   changedAt: string;
   changedByName: string;
@@ -91,6 +167,10 @@ export interface ImagingReportStatusEntry {
 export interface ImagingReportResponse {
   id: string;
   imagingOrderId: string;
+  /** QA D1923 (r53): whose report it is, with the MRN of the report's hospital. */
+  patientId?: string | null;
+  patientDisplayName?: string | null;
+  patientMrn?: string | null;
   hospitalId: string;
   reportNumber: string;
   reportStatus: ImagingReportStatus;
@@ -105,6 +185,7 @@ export interface ImagingReportResponse {
   recommendations: string;
   comparisonStudies: string;
   contrastAdministered: boolean | null;
+  contrastDetails?: string | null;
   performedByName: string;
   interpretingProviderName: string;
   signedByName: string;
@@ -213,6 +294,16 @@ export class ImagingService {
     );
   }
 
+  /** Provisional rule 1: the pre-authorisation number obtained after an urgent study. */
+  recordAuthorization(
+    orderId: string,
+    authorizationNumber: string,
+  ): Observable<ImagingOrderResponse> {
+    return this.http.put<ImagingOrderResponse>(`${this.baseUrl}/orders/${orderId}/authorization`, {
+      authorizationNumber,
+    });
+  }
+
   getOrder(orderId: string): Observable<ImagingOrderResponse> {
     return this.http.get<ImagingOrderResponse>(`${this.baseUrl}/orders/${orderId}`);
   }
@@ -232,10 +323,17 @@ export class ImagingService {
     });
   }
 
-  getAllOrders(params?: { status?: string }): Observable<ImagingOrderResponse[]> {
+  /** `allHospitals`: a super-admin's « Tous les hôpitaux » read, sent without the chip's hospital. */
+  getAllOrders(
+    params?: { status?: string },
+    opts?: { allHospitals?: boolean },
+  ): Observable<ImagingOrderResponse[]> {
     let httpParams = new HttpParams();
     if (params?.status) httpParams = httpParams.set('status', params.status);
-    return this.http.get<ImagingOrderResponse[]>(`${this.baseUrl}/orders`, { params: httpParams });
+    return this.http.get<ImagingOrderResponse[]>(`${this.baseUrl}/orders`, {
+      params: httpParams,
+      ...(opts?.allHospitals ? allHospitalsRequestOptions() : {}),
+    });
   }
 
   signOrder(orderId: string, signature: Record<string, unknown>): Observable<ImagingOrderResponse> {
@@ -245,9 +343,20 @@ export class ImagingService {
     );
   }
 
-  checkDuplicates(patientId: string): Observable<ImagingOrderResponse[]> {
-    return this.http.get<ImagingOrderResponse[]>(
+  /**
+   * QA D1921 (r53): the patient's recent orders of the same modality (and
+   * region) at the caller's hospital, scoped server-side (QA D1920).
+   */
+  checkDuplicates(
+    patientId: string,
+    modality: ImagingModality,
+    bodyRegion?: string,
+  ): Observable<ImagingDuplicateMatch[]> {
+    let params = new HttpParams().set('modality', modality);
+    if (bodyRegion?.trim()) params = params.set('bodyRegion', bodyRegion.trim());
+    return this.http.get<ImagingDuplicateMatch[]>(
       `${this.baseUrl}/orders/patient/${patientId}/duplicates`,
+      { params },
     );
   }
 

@@ -94,11 +94,11 @@ class LabTestDefinitionSearchNullKeywordTest {
         // getRecentLabTestDefinitions and that the frontend lab-test-config
         // page makes on first paint (search() with everything null).
         assertThatCode(() ->
-            repository.search(null, null, null, null, null, PageRequest.of(0, 20))
+            repository.search(null, null, null, null, null, true, null, PageRequest.of(0, 20))
         ).doesNotThrowAnyException();
 
         Page<LabTestDefinition> page =
-            repository.search(null, null, null, null, null, PageRequest.of(0, 20));
+            repository.search(null, null, null, null, null, true, null, PageRequest.of(0, 20));
 
         assertThat(page.getContent())
             .as("with all parameters null the WHERE clause must short-circuit "
@@ -132,7 +132,7 @@ class LabTestDefinitionSearchNullKeywordTest {
         entityManager.flush();
 
         Page<LabTestDefinition> hit = repository.search(
-            "blood", null, null, null, null, PageRequest.of(0, 20));
+            "blood", null, null, null, null, true, null, PageRequest.of(0, 20));
 
         // "blood" matches CBC via the .name path only —
         // name="Complete Blood Count" contains "Blood".
@@ -154,10 +154,54 @@ class LabTestDefinitionSearchNullKeywordTest {
         // Same CAST applied to :unit / :category — exercise both with
         // mixed-case input to confirm LOWER() applied on both sides.
         Page<LabTestDefinition> hit = repository.search(
-            null, "CELLS/MM3", null, null, null, PageRequest.of(0, 20));
+            null, "CELLS/MM3", null, null, null, true, null, PageRequest.of(0, 20));
 
         assertThat(hit.getContent())
             .extracting(LabTestDefinition::getTestCode)
             .containsExactly("CBC");
+    }
+
+    /**
+     * QA D836: "Hématologie" was saved and shown as "HÉMATOLOGIE", and
+     * "Sang total (EDTA)" came back "Sang total (edta)" (upper-cased on save,
+     * then title-cased by the label pipe). Labels are kept as typed; only the
+     * test code is normalised, and the category filter still ignores case.
+     */
+    @Test
+    void d836_categoryAndSampleTypeAreSavedAsTyped() {
+        LabTestDefinition nfs = entityManager.persist(LabTestDefinition.builder()
+            .testCode(" nfs ").name("Numération formule sanguine").category(" Hématologie ")
+            .unit("g/dL").sampleType("Sang total (EDTA)").active(false).build());
+        entityManager.flush();
+        entityManager.clear();
+
+        LabTestDefinition saved = repository.findById(nfs.getId()).orElseThrow();
+        assertThat(saved.getCategory()).isEqualTo("Hématologie");
+        assertThat(saved.getSampleType()).isEqualTo("Sang total (EDTA)");
+        assertThat(saved.getTestCode()).isEqualTo("NFS");
+        assertThat(repository.search(null, null, "hématologie", null, null, true, null, PageRequest.of(0, 20))
+            .getContent()).extracting(LabTestDefinition::getTestCode).containsExactly("NFS");
+    }
+
+    /**
+     * D30: a scoped read (not every hospital) still parses with a null or an
+     * unknown hospital id and returns the global catalog, never an error.
+     */
+    @Test
+    void scopedReads_returnTheGlobalCatalogForAnyHospital() {
+        entityManager.persist(LabTestDefinition.builder()
+            .testCode("CBC").name("Complete Blood Count").category("HEMATOLOGY")
+            .unit("cells/mm3").sampleType("BLOOD").active(true).build());
+        entityManager.flush();
+        java.util.UUID someHospital = java.util.UUID.randomUUID();
+
+        assertThat(repository.search(null, null, null, null, null, false, someHospital, PageRequest.of(0, 20))
+            .getContent()).extracting(LabTestDefinition::getTestCode).containsExactly("CBC");
+        assertThat(repository.search(null, null, null, null, null, false, null, PageRequest.of(0, 20))
+            .getContent()).extracting(LabTestDefinition::getTestCode).containsExactly("CBC");
+        assertThat(repository.findVisibleAt(someHospital))
+            .extracting(LabTestDefinition::getTestCode).containsExactly("CBC");
+        assertThat(repository.findVisibleAt(null))
+            .extracting(LabTestDefinition::getTestCode).containsExactly("CBC");
     }
 }

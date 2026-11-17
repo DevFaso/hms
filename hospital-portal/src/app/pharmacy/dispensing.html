@@ -1,22 +1,40 @@
 <div class="page-container">
   <div class="page-header">
     <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">medication</span
+        ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+      </p>
       <h1 class="page-title">{{ 'PHARMACY.DISPENSING_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.DISPENSING_SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
-      <select
-        class="pharmacy-select"
-        [(ngModel)]="selectedPharmacyId"
-        (ngModelChange)="onPharmacyChange()"
-      >
-        @for (p of pharmacies(); track p.id) {
-          <option [value]="p.id">{{ p.name }}</option>
-        }
-      </select>
+      @if (pharmaciesLoaded() && pharmacies().length === 0) {
+        <p class="pharmacy-empty-hint" role="status" data-testid="no-pharmacy-hint">
+          {{ 'PHARMACY.NO_PHARMACY_HINT' | translate }}
+        </p>
+      } @else {
+        <select
+          class="pharmacy-select"
+          [attr.aria-label]="'PHARMACY.SELECT_PHARMACY' | translate"
+          [(ngModel)]="selectedPharmacyId"
+          (ngModelChange)="onPharmacyChange()"
+        >
+          @for (p of pharmacies(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
+      }
     </div>
   </div>
 
+  <div class="workspace-strip">
+    <p>
+      <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong
+      ><span>{{ 'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate }}</span>
+    </p>
+    <p>{{ 'PHARMACY_WORKSPACE.DISPENSE_HINT' | translate }}</p>
+  </div>
   <!-- Roadmap row 4 / T-68 — offline-queue banner. Renders only when the
        user has dispenses waiting to sync, so it stays out of the way during
        normal online use. The "Sync now" button is a manual escape hatch for
@@ -49,30 +67,63 @@
     </output>
   }
 
-  <!-- Dispensing Form (slide-in when a prescription is selected) -->
+  <!-- Dispensing Form (slide-in when a prescription is selected)
+       QA D1335 (round 29; the D1307 class): opened from a queue row's
+       "Dispenser", above the queue — it takes the keyboard (its first field),
+       keeps Escape to itself (asking first over typed text) and gives focus
+       back to the row's button when it closes. -->
   @if (showForm()) {
-    <div class="form-card form-card-accent">
+    <div
+      class="form-card form-card-accent"
+      data-testid="dispense-form"
+      appInlineSubForm
+      #dispenseForm="inlineSubForm"
+      (dismissed)="closeForm()"
+    >
       <div class="form-header">
         <h3>
           <span class="material-symbols-outlined">medication</span>
           {{ 'PHARMACY.DISPENSE_MEDICATION' | translate }}
         </h3>
-        <button class="btn-text" (click)="closeForm()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="btn-text"
+          (click)="closeForm()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
 
       <div class="rx-summary">
-        <span class="rx-label">{{ 'PHARMACY.PRESCRIPTION' | translate }}:</span>
+        <span class="rx-label"
+          >{{ 'PHARMACY.PRESCRIPTION' | translate }}{{ 'COMMON.COLON' | translate }}</span
+        >
         <strong>{{ selectedPrescription?.medicationName }}</strong>
-        <span class="rx-meta">
+        {{ ' '
+        }}<span class="rx-meta">
           {{ selectedPrescription?.dosage }} · {{ selectedPrescription?.frequency }}
         </span>
-        <span class="rx-meta">
-          {{ 'PHARMACY.PATIENT' | translate }}: {{ selectedPrescription?.patient?.firstName }}
-          {{ selectedPrescription?.patient?.lastName }}
+        {{ ' '
+        }}<span class="rx-meta">
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ selectedPrescription?.patient | personName }}
         </span>
       </div>
+
+      <!-- QA D1555: the order's allergy cards against the patient's current allergies. -->
+      @if (selectedPrescription?.allergyAlerts?.length) {
+        <section
+          class="field full-width"
+          role="alert"
+          [attr.aria-label]="'PHARMACY.ALLERGY_ALERTS_TITLE' | translate"
+          data-testid="dispense-allergy-alerts"
+        >
+          <h4>{{ 'PHARMACY.ALLERGY_ALERTS_TITLE' | translate }}</h4>
+          <app-cds-card-list [cards]="selectedPrescription!.allergyAlerts!" />
+          <!-- QA D1584: reviewed or not, and the prescriber's plan to verify and dispense it under. -->
+          <app-allergy-review-state [review]="selectedPrescription!.allergyReview" />
+        </section>
+      }
 
       <form (ngSubmit)="submitDispense()">
         <div class="form-row">
@@ -101,12 +152,16 @@
             />
           </div>
           <div class="field">
-            <label for="unit">{{ 'PHARMACY.UNIT' | translate }}</label>
+            <!-- QA D1141: prefilled from the order's unit, and required (the
+                 server refuses a fill without one too). -->
+            <label for="unit">{{ 'PHARMACY.UNIT' | translate }} *</label>
             <input
               id="unit"
               type="text"
+              maxlength="60"
               [(ngModel)]="form.unit"
               name="unit"
+              required
               [placeholder]="'PHARMACY.UNIT_PLACEHOLDER' | translate"
             />
           </div>
@@ -125,15 +180,135 @@
               @for (lot of dispensableLots(); track lot.id) {
                 <option [value]="lot.id">
                   {{ lot.lotNumber }} · {{ 'PHARMACY.EXP_SHORT' | translate }}
-                  {{ lot.expiryDate | date: 'MMM yyyy' }} ({{ lot.remainingQuantity }})
+                  {{ lot.expiryDate | serverTime | date: 'MMM yyyy' }} ({{ lot.remainingQuantity }})
                 </option>
               }
             </select>
+            @if (otherFormLots() > 0) {
+              <!-- QA D1163: lots of another form than the order are not offered. -->
+              <small class="field-hint" data-testid="other-form-lots">{{
+                'PHARMACY.LOTS_OTHER_FORM'
+                  | translate: { count: otherFormLots(), unit: orderUnit() ?? '' }
+              }}</small>
+            }
           </div>
+          <!-- QA D964: first expired, first out. Taking a later-dated lot while a
+               shorter-dated one could serve the fill needs a reason. -->
+          @if (earlierLot(); as earlier) {
+            <div class="field fefo-field" data-testid="fefo-warning">
+              <label for="fefoReason">{{ 'PHARMACY.FEFO_REASON' | translate }} *</label>
+              {{ ' '
+              }}<small class="field-hint" role="alert">{{
+                'PHARMACY.FEFO_WARNING'
+                  | translate
+                    : {
+                        lot: earlier.lotNumber,
+                        date: (earlier.expiryDate | serverTime | date: 'mediumDate'),
+                        left: earlier.remainingQuantity,
+                      }
+              }}</small>
+              <input
+                id="fefoReason"
+                type="text"
+                maxlength="300"
+                data-testid="fefo-reason"
+                [(ngModel)]="form.fefoOverrideReason"
+                name="fefoOverrideReason"
+                required
+              />
+            </div>
+          }
+          <!-- QA D1029: a fill larger than the shortest-dated lot empties it
+               first and takes the rest from the next lot, one fill per lot. -->
+          @if (fefoSplit(); as split) {
+            @if (split.length > 1) {
+              <div class="field full-width" data-testid="fefo-split">
+                <small class="field-hint" role="status">
+                  {{ 'PHARMACY.FEFO_SPLIT_HINT' | translate }}
+                  @for (part of split; track part.lot.id; let last = $last) {
+                    {{
+                      'PHARMACY.FEFO_SPLIT_PART'
+                        | translate
+                          : {
+                              quantity: part.quantity,
+                              lot: part.lot.lotNumber,
+                              date: (part.lot.expiryDate | serverTime | date: 'MMM yyyy'),
+                            }
+                    }}{{ last ? '' : ', ' }}
+                  }
+                </small>
+              </div>
+            }
+          }
+          <!-- QA D654: a controlled substance leaves the shelf in front of a witness -->
+          @if (lotIsControlled()) {
+            <div class="field">
+              <label for="dispWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+              <select
+                id="dispWitness"
+                data-server-field="witnessedBy"
+                [(ngModel)]="form.witnessedBy"
+                name="dispWitness"
+                required
+              >
+                <option [ngValue]="undefined">
+                  {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+                </option>
+                @for (w of witnessCandidates(); track w.userId) {
+                  <option [ngValue]="w.userId">{{ w.displayName }}</option>
+                }
+              </select>
+              @if (witnessCandidates().length === 0) {
+                <small class="field-hint">{{ 'PHARMACY.NO_WITNESS_HINT' | translate }}</small>
+              }
+            </div>
+          }
           <div class="field checkbox-field">
             <label>
               <input type="checkbox" [(ngModel)]="form.substitution" name="substitution" />
               {{ 'PHARMACY.SUBSTITUTION' | translate }}
+            </label>
+          </div>
+          <!-- QA D1102 class: a serious interaction stops the fill until the
+               pharmacist gives the reason to dispense anyway. -->
+          @if (cdsAlerts().length > 0) {
+            <div class="field full-width" data-testid="cds-override">
+              <label for="cdsOverrideReason"
+                >{{ 'PHARMACY.CDS_OVERRIDE.LABEL' | translate }} *</label
+              >
+              <ul class="field-hint" role="alert">
+                @for (alert of cdsAlerts(); track $index) {
+                  <li>{{ alert }}</li>
+                }
+              </ul>
+              <input
+                id="cdsOverrideReason"
+                type="text"
+                maxlength="500"
+                data-testid="cds-override-reason"
+                [(ngModel)]="form.cdsOverrideReason"
+                name="cdsOverrideReason"
+                required
+              />
+              @if (cdsOverrideMissing()) {
+                <small class="field-hint">{{ 'PHARMACY.CDS_OVERRIDE.HINT' | translate }}</small>
+              }
+            </div>
+          }
+          <!-- QA D512: every fill is verified by a pharmacist; the dispensing
+               pharmacist attests it here, recorded under their own name. -->
+          <div class="field checkbox-field">
+            <label>
+              <input
+                id="verifyAttest"
+                type="checkbox"
+                required
+                data-testid="verify-attest"
+                [ngModel]="verifyAttested()"
+                (ngModelChange)="verifyAttested.set($event)"
+                name="verifyAttested"
+              />
+              {{ 'PHARMACY.VERIFY_ATTEST' | translate }} *
             </label>
           </div>
         </div>
@@ -210,6 +385,7 @@
           </div>
         </div>
 
+        <app-inline-discard-ask [form]="dispenseForm" />
         <div class="form-actions">
           <button type="button" class="btn-secondary" (click)="closeForm()">
             {{ 'COMMON.CANCEL' | translate }}
@@ -217,24 +393,241 @@
           <button
             type="submit"
             class="btn-primary"
-            [disabled]="saving() || form.quantityDispensed <= 0"
+            data-testid="dispense-submit"
+            [disabled]="saving()"
+            [appSubmitGuard]="dispenseBlockReason(false)"
+            submitGuardRequired
+            [submitGuardFields]="['qtyDispensed', 'unit', 'verifyAttest']"
           >
             @if (saving()) {
               <span class="spinner"></span>
             }
             {{ 'PHARMACY.DISPENSE' | translate }}
           </button>
+          <!-- G15: prepare the fill and tell the patient it is ready. Shown
+               only when the server says the feature is on. -->
+          @if (readyForCollectionEnabled()) {
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="mark-ready"
+              [disabled]="saving()"
+              [appSubmitGuard]="dispenseBlockReason(true)"
+              submitGuardRequired
+              [submitGuardFields]="['qtyDispensed', 'unit', 'verifyAttest']"
+              (click)="submitReady()"
+            >
+              {{ 'PHARMACY.MARK_READY' | translate }}
+            </button>
+          }
         </div>
       </form>
     </div>
   }
 
+  <!-- G15: hand over a prepared fill, or cancel the preparation -->
+  <!-- QA D1555 / Policy 4: held for an authorized prescriber's review. -->
+  @if (allergyHold(); as hold) {
+    <app-allergy-hold-dialog [refusal]="hold" (closed)="allergyHold.set(null)" />
+  }
+  @if (readyAction(); as action) {
+    <!-- QA D1307 class (round 28): opened from a queue row, the form takes the
+         keyboard (its first field), keeps Escape to itself and gives focus back
+         to the row's button when it closes. -->
+    <div
+      class="form-card form-card-accent"
+      data-testid="ready-action"
+      appInlineSubForm
+      #readyForm="inlineSubForm"
+      (dismissed)="closeReadyAction()"
+    >
+      <div class="form-header">
+        <h3>
+          @if (action.kind === 'handOver') {
+            <span class="material-symbols-outlined" aria-hidden="true">how_to_reg</span>
+            {{ 'PHARMACY.HAND_OVER' | translate }}
+          } @else {
+            <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
+            {{ 'PHARMACY.CANCEL_READY' | translate }}
+          }
+        </h3>
+        <button
+          type="button"
+          class="btn-text"
+          [attr.aria-label]="'COMMON.CANCEL' | translate"
+          (click)="closeReadyAction()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="rx-summary">
+        <strong>{{ action.rx.medicationName }}</strong>
+        {{ ' '
+        }}<span class="rx-meta">
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ action.rx.patient | personName }}
+        </span>
+      </div>
+      @if (action.kind === 'handOver') {
+        <!-- QA D1584: the hand-over shows the allergy cards and the prescriber's review too. -->
+        @if (action.rx.allergyAlerts?.length) {
+          <section
+            role="alert"
+            [attr.aria-label]="'PHARMACY.ALLERGY_ALERTS_TITLE' | translate"
+            data-testid="hand-over-allergy-alerts"
+          >
+            <app-cds-card-list [cards]="action.rx.allergyAlerts!" />
+            <app-allergy-review-state [review]="action.rx.allergyReview" />
+          </section>
+        }
+        <p>{{ 'PHARMACY.HAND_OVER_CONFIRM' | translate }}</p>
+        <div class="form-row">
+          <div class="field full-width">
+            <label for="handOverScan">{{ 'PHARMACY.PATIENT_SCAN' | translate }}</label>
+            <input
+              id="handOverScan"
+              type="text"
+              name="handOverScan"
+              autocomplete="off"
+              [(ngModel)]="handOverScan"
+            />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="closeReadyAction()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="confirm-hand-over"
+            [disabled]="readyActionSaving()"
+            (click)="confirmHandOver()"
+          >
+            {{ 'PHARMACY.HAND_OVER' | translate }}
+          </button>
+        </div>
+      } @else {
+        <p>{{ 'PHARMACY.CANCEL_READY_CONFIRM' | translate }}</p>
+        <div class="form-row">
+          <div class="field full-width">
+            <label for="cancelReadyReason">{{
+              'PHARMACY.CANCEL_READY_REASON_LABEL' | translate
+            }}</label>
+            <select id="cancelReadyReason" name="cancelReadyReason" [(ngModel)]="cancelReason">
+              @for (reason of readyCancelReasons; track reason) {
+                <option [value]="reason">
+                  {{ 'PHARMACY.CANCEL_READY_REASON.' + reason | translate }}
+                </option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="closeReadyAction()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="confirm-cancel-ready"
+            [disabled]="readyActionSaving()"
+            (click)="confirmCancelReady()"
+          >
+            {{ 'PHARMACY.CANCEL_READY' | translate }}
+          </button>
+        </div>
+      }
+      <app-inline-discard-ask [form]="readyForm" />
+    </div>
+  }
+
+  <!-- G13: take a colleague's work-queue claim over (from Take over,
+       Dispense or Route on a row someone else is preparing) -->
+  @if (claimAction(); as action) {
+    <div
+      class="form-card form-card-accent"
+      role="alertdialog"
+      aria-modal="true"
+      appDialogFocus
+      (dialogDismiss)="cancelClaimAction()"
+      aria-labelledby="claim-take-over-title"
+      aria-describedby="claim-take-over-text"
+      data-testid="claim-take-over"
+    >
+      <div class="form-header">
+        <h3 id="claim-take-over-title">
+          <span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span>
+          {{ 'PHARMACY.QUEUE_CLAIM.TAKE_OVER' | translate }}
+        </h3>
+      </div>
+      <div class="rx-summary">
+        <strong>{{ action.rx.medicationName }}</strong>
+        {{ ' '
+        }}<span class="rx-meta">
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ action.rx.patient | personName }}
+        </span>
+      </div>
+      <p id="claim-take-over-text" data-testid="claim-take-over-text">
+        {{
+          'PHARMACY.QUEUE_CLAIM.TAKE_OVER_CONFIRM'
+            | translate
+              : {
+                  name: claimShownFor(action.rx)?.claimedByName ?? '',
+                  time:
+                    (claimShownFor(action.rx)?.claimedAt | serverTime | date: 'shortTime') ?? '',
+                }
+        }}
+      </p>
+      <div class="form-actions">
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="claim-take-over-cancel"
+          (click)="cancelClaimAction()"
+        >
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="claim-take-over-confirm"
+          [disabled]="claimSaving()"
+          (click)="confirmTakeOver()"
+        >
+          {{ 'PHARMACY.QUEUE_CLAIM.TAKE_OVER' | translate }}
+        </button>
+      </div>
+    </div>
+  }
+
   <!-- Work Queue -->
   <div class="section-card">
-    <h2 class="section-title">
-      <span class="material-symbols-outlined">assignment</span>
+    <h2 class="section-title" id="dispensing-queue-title">
+      <span class="material-symbols-outlined" aria-hidden="true">assignment</span>
       {{ 'PHARMACY.WORK_QUEUE' | translate }}
     </h2>
+
+    <!-- G13: show every row, only mine, or only the rows nobody is preparing -->
+    @if (queueClaimEnabled()) {
+      <fieldset class="claim-filter" data-testid="claim-filter">
+        <legend>{{ 'PHARMACY.QUEUE_CLAIM.FILTER_LABEL' | translate }}</legend>
+        @for (option of claimFilters; track option.value) {
+          <label class="claim-filter__option">
+            <input
+              type="radio"
+              name="claimFilter"
+              [value]="option.value"
+              [checked]="claimFilter() === option.value"
+              [attr.data-testid]="'claim-filter-' + option.value"
+              (change)="setClaimFilter(option.value)"
+            />
+            {{ option.labelKey | translate }}
+          </label>
+        }
+      </fieldset>
+    }
 
     @if (queueLoading()) {
       <div class="loading-bar"></div>
@@ -244,7 +637,12 @@
         <p>{{ 'PHARMACY.NO_PENDING_RX' | translate }}</p>
       </div>
     } @else {
-      <div class="table-responsive">
+      <div
+        class="table-responsive"
+        tabindex="0"
+        role="region"
+        aria-labelledby="dispensing-queue-title"
+      >
         <table class="data-table">
           <thead>
             <tr>
@@ -261,14 +659,106 @@
           <tbody>
             @for (rx of workQueue(); track rx.id) {
               <tr>
-                <td>{{ rx.patient?.firstName }} {{ rx.patient?.lastName }}</td>
-                <td>{{ rx.medicationName }}</td>
+                <td>{{ rx.patient | personName }}</td>
+                <td>
+                  {{ rx.medicationName }}
+                  @if (rx.heldForReview) {
+                    <span class="review-hold-flag" data-testid="queue-review-hold">{{
+                      'ORDER_REVIEW.HELD_FLAG' | translate
+                    }}</span>
+                  }
+                  @if (rx.alertOverridden) {
+                    {{ ' '
+                    }}<span class="cell-sub" [attr.data-testid]="'rx-alert-overridden-' + rx.id">{{
+                      'PHARMACY.ALERT_OVERRIDDEN' | translate
+                    }}</span>
+                  }
+                </td>
                 <td>{{ rx.dosage }}</td>
-                <td>{{ rx.quantity }} {{ rx.quantityUnit }}</td>
+                <td>
+                  {{ rx.quantity }} {{ rx.quantityUnit }}
+                  <!-- QA D1001: a partly filled order says what is still owed -->
+                  @if (isPartlyDispensed(rx)) {
+                    <span class="cell-sub" [attr.data-testid]="'rx-remaining-' + rx.id">{{
+                      'PHARMACY.QTY_REMAINING' | translate: { qty: rx.remainingQuantity }
+                    }}</span>
+                  }
+                </td>
                 <td>
                   <span class="badge badge-info">{{
                     rx.status | enumLabel: 'prescriptionStatus'
                   }}</span>
+                  <!-- Gap G3 — the row says why it is not a plain fill. The
+                       backend had reported `needsAttention` since the queue
+                       gained it and no template read it, so a back order, a
+                       partner's refusal and an order sitting with a partner
+                       all looked like ordinary rows. -->
+                  @if (attentionKey(rx); as reasonKey) {
+                    <span class="attention-note" [attr.data-testid]="'rx-attention-' + rx.id">
+                      <span class="material-symbols-outlined" aria-hidden="true"
+                        >priority_high</span
+                      >
+                      {{ reasonKey | translate: attentionParams(rx) }}
+                    </span>
+                  }
+                  <!-- G15: a fill prepared and waiting at the counter. -->
+                  @if (rx.readyForCollection; as ready) {
+                    {{ ' '
+                    }}<span
+                      class="badge badge-success"
+                      [attr.data-testid]="'rx-ready-' + rx.id"
+                      [title]="
+                        'PHARMACY.PREPARED_BY' | translate: { name: ready.preparedByName ?? '' }
+                      "
+                      >{{ 'PHARMACY.READY_FOR_COLLECTION' | translate }}</span
+                    >
+                    <span class="refill-note">{{
+                      'PHARMACY.READY_SINCE'
+                        | translate: { date: (ready.readyAt | serverTime | date: 'short') }
+                    }}</span>
+                  }
+                  <!-- G13: who is preparing this order (advisory) -->
+                  @if (queueClaimEnabled() && rx.claim; as claim) {
+                    <span
+                      class="claim-note"
+                      [class.claim-note--mine]="claim.mine"
+                      [attr.data-testid]="'rx-claim-' + rx.id"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">person_pin</span>
+                      @if (claim.mine) {
+                        {{ 'PHARMACY.QUEUE_CLAIM.MINE' | translate }}
+                      } @else {
+                        {{
+                          'PHARMACY.QUEUE_CLAIM.BEING_PREPARED_BY'
+                            | translate: { name: claim.claimedByName ?? '' }
+                        }}
+                      }
+                      ·
+                      {{
+                        'PHARMACY.QUEUE_CLAIM.SINCE'
+                          | translate: { time: (claim.claimedAt | serverTime | date: 'shortTime') }
+                      }}
+                    </span>
+                  }
+                  <!-- Gap G5 — and separately, whether the prescriber has
+                       answered. Separate because resolving a clarification
+                       restores the status the question was asked from, so on
+                       a PENDING_STOCK or PARTNER_REJECTED order the single
+                       attention reason reports that status and the answer had
+                       no cue on the row at all. Suppressed when the reason
+                       above is the clarification itself, which already says
+                       so. -->
+                  @if (showsAnswerCue(rx)) {
+                    <span
+                      class="attention-note attention-note--answered"
+                      [attr.data-testid]="'rx-answered-' + rx.id"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true"
+                        >mark_chat_read</span
+                      >
+                      {{ 'PHARMACY.ATTENTION.PRESCRIBER_ANSWERED' | translate }}
+                    </span>
+                  }
                 </td>
                 <td class="refill-cell">
                   @if (rx.refill; as refill) {
@@ -297,32 +787,116 @@
                     <span class="refill-note">{{ 'PHARMACY.REFILL_NONE' | translate }}</span>
                   }
                 </td>
-                <td>{{ rx.staff?.user?.firstName }} {{ rx.staff?.user?.lastName }}</td>
+                <td>{{ rx.staff?.user | personName }}</td>
                 <td>
-                  <button class="btn-action" (click)="selectPrescription(rx)">
-                    <span class="material-symbols-outlined">medication</span>
-                    {{ 'PHARMACY.DISPENSE' | translate }}
-                  </button>
-                  <button
-                    class="btn-action"
-                    type="button"
-                    (click)="routeFromQueue(rx)"
-                    [title]="'PHARMACY.ROUTE_HINT' | translate"
-                  >
-                    <span class="material-symbols-outlined">alt_route</span>
-                    {{ 'PHARMACY.ROUTE' | translate }}
-                  </button>
+                  @if (rx.readyForCollection) {
+                    <!-- G15: a prepared fill is handed over or its preparation
+                         cancelled; it is never dispensed again or routed. -->
+                    <button
+                      class="btn-action"
+                      type="button"
+                      [attr.data-testid]="'rx-hand-over-' + rx.id"
+                      (click)="openHandOver(rx)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">how_to_reg</span>
+                      {{ 'PHARMACY.HAND_OVER' | translate }}
+                    </button>
+                    <button
+                      class="btn-action danger"
+                      type="button"
+                      [attr.data-testid]="'rx-cancel-ready-' + rx.id"
+                      (click)="openCancelReady(rx)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
+                      {{ 'PHARMACY.CANCEL_READY' | translate }}
+                    </button>
+                  } @else {
+                    <!-- G13: claim, release one's own, or take a colleague's over -->
+                    @if (queueClaimEnabled()) {
+                      @if (!rx.claim) {
+                        <button
+                          class="btn-action"
+                          type="button"
+                          [attr.data-testid]="'rx-claim-btn-' + rx.id"
+                          [attr.aria-label]="
+                            ('PHARMACY.QUEUE_CLAIM.CLAIM' | translate) + ' — ' + rx.medicationName
+                          "
+                          (click)="claimRow(rx)"
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true"
+                            >back_hand</span
+                          >
+                          {{ 'PHARMACY.QUEUE_CLAIM.CLAIM' | translate }}
+                        </button>
+                      } @else if (rx.claim.mine) {
+                        <button
+                          class="btn-action"
+                          type="button"
+                          [attr.data-testid]="'rx-release-btn-' + rx.id"
+                          [attr.aria-label]="
+                            ('PHARMACY.QUEUE_CLAIM.RELEASE' | translate) + ' — ' + rx.medicationName
+                          "
+                          (click)="releaseRow(rx)"
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true"
+                            >do_not_touch</span
+                          >
+                          {{ 'PHARMACY.QUEUE_CLAIM.RELEASE' | translate }}
+                        </button>
+                      } @else {
+                        <button
+                          class="btn-action"
+                          type="button"
+                          [attr.data-testid]="'rx-take-over-btn-' + rx.id"
+                          [attr.aria-label]="
+                            ('PHARMACY.QUEUE_CLAIM.TAKE_OVER' | translate) +
+                            ' — ' +
+                            rx.medicationName
+                          "
+                          (click)="requestTakeOver(rx)"
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true"
+                            >swap_horiz</span
+                          >
+                          {{ 'PHARMACY.QUEUE_CLAIM.TAKE_OVER' | translate }}
+                        </button>
+                      }
+                    }
+                    <button
+                      class="btn-action"
+                      [attr.data-testid]="'rx-dispense-' + rx.id"
+                      (click)="selectPrescription(rx)"
+                    >
+                      <span class="material-symbols-outlined">medication</span>
+                      {{ 'PHARMACY.DISPENSE' | translate }}
+                    </button>
+                    <button
+                      class="btn-action"
+                      type="button"
+                      [attr.data-testid]="'rx-route-' + rx.id"
+                      (click)="routeFromQueue(rx)"
+                      [title]="'PHARMACY.ROUTE_HINT' | translate"
+                    >
+                      <span class="material-symbols-outlined">alt_route</span>
+                      {{ 'PHARMACY.ROUTE' | translate }}
+                    </button>
+                  }
                   <!-- Gap G5 — send the order back to its prescriber with a
                        question, and read the answer when the row returns
-                       flagged CLARIFICATION_RESOLVED. -->
-                  <app-prescription-clarification
-                    mode="PHARMACY"
-                    [prescriptionId]="rx.id"
-                    [status]="rx.status"
-                    [medicationLabel]="rx.medicationName"
-                    [attentionReason]="rx.attentionReason ?? null"
-                    (changed)="loadWorkQueue()"
-                  />
+                       flagged CLARIFICATION_RESOLVED. Not on a prepared row
+                       (G15): the server refuses a question while a fill is
+                       waiting, so the control would only lead to a 409. -->
+                  @if (!rx.readyForCollection) {
+                    <app-prescription-clarification
+                      mode="PHARMACY"
+                      [prescriptionId]="rx.id"
+                      [status]="rx.status"
+                      [medicationLabel]="rx.medicationName"
+                      [attentionReason]="rx.attentionReason ?? null"
+                      [clarificationResolvedAt]="rx.clarificationResolvedAt ?? null"
+                      (changed)="loadWorkQueue()"
+                    />
+                  }
                 </td>
               </tr>
             }
@@ -332,23 +906,85 @@
 
       <!-- Pagination -->
       <div class="pagination">
-        <button class="btn-text" [disabled]="queuePage === 0" (click)="prevPage()">
+        <button
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
+          class="btn-text"
+          [disabled]="queuePage === 0"
+          (click)="prevPage()"
+        >
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <span class="page-info">{{ queuePage + 1 }} / {{ queueTotalPages || 1 }}</span>
-        <button class="btn-text" [disabled]="queuePage >= queueTotalPages - 1" (click)="nextPage()">
+        <button
+          [attr.aria-label]="'COMMON.NEXT' | translate"
+          class="btn-text"
+          [disabled]="queuePage >= queueTotalPages - 1"
+          (click)="nextPage()"
+        >
           <span class="material-symbols-outlined">chevron_right</span>
         </button>
       </div>
     }
   </div>
 
-  <!-- Recent Dispenses -->
-  <div class="section-card">
-    <h2 class="section-title">
-      <span class="material-symbols-outlined">history</span>
+  <!-- Recent Dispenses
+       QA D1336 (round 29): after a cancel, focus waits on this section's
+       heading (never on a look-alike row of the queue above). -->
+  <div class="section-card" data-focus-return="#recent-dispenses-title">
+    <h2 class="section-title" id="recent-dispenses-title" tabindex="-1">
+      <span class="material-symbols-outlined" aria-hidden="true">history</span>
       {{ 'PHARMACY.RECENT_DISPENSES' | translate }}
     </h2>
+
+    <!-- QA D1069: every cancel says why; QA D654: a controlled fill goes back in front of a witness -->
+    <!-- QA D1307 (round 28): the row's cancel button opened this form above the
+         table and kept the focus, so a keyboard or screen-reader user never
+         reached the reason. The form takes the keyboard (the reason field),
+         keeps Escape to itself, and gives focus back to the row on close. -->
+    @if (cancelWitnessFor()) {
+      <div
+        class="form-row"
+        data-testid="cancel-witness"
+        appInlineSubForm
+        #cancelForm="inlineSubForm"
+        (dismissed)="cancelWitnessFor.set(null)"
+      >
+        <div class="field">
+          <label for="dispenseCancelReason">{{ 'PHARMACY.CANCEL_REASON' | translate }} *</label>
+          <textarea
+            id="dispenseCancelReason"
+            rows="2"
+            maxlength="500"
+            [(ngModel)]="dispenseCancelReason"
+            name="dispenseCancelReason"
+            required
+          ></textarea>
+          <small class="field-hint">{{ 'PHARMACY.CANCEL_DISPENSE_CONFIRM' | translate }}</small>
+        </div>
+        @if (cancelNeedsWitness()) {
+          <div class="field">
+            <label for="cancelWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+            <select id="cancelWitness" [(ngModel)]="cancelWitnessId" name="cancelWitness" required>
+              <option [ngValue]="undefined">
+                {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+              </option>
+              @for (w of witnessCandidates(); track w.userId) {
+                <option [ngValue]="w.userId">{{ w.displayName }}</option>
+              }
+            </select>
+          </div>
+        }
+        <div class="field">
+          <button type="button" class="btn btn-secondary" (click)="cancelWitnessFor.set(null)">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="button" class="btn btn-primary" (click)="confirmWitnessedCancel()">
+            {{ 'COMMON.CONFIRM' | translate }}
+          </button>
+        </div>
+        <app-inline-discard-ask [form]="cancelForm" />
+      </div>
+    }
 
     @if (dispensesLoading()) {
       <div class="loading-bar"></div>
@@ -358,10 +994,18 @@
         <p>{{ 'PHARMACY.NO_DISPENSES_YET' | translate }}</p>
       </div>
     } @else {
-      <div class="table-responsive">
+      <div
+        class="table-responsive"
+        tabindex="0"
+        role="region"
+        aria-labelledby="recent-dispenses-title"
+      >
         <table class="data-table">
           <thead>
             <tr>
+              <!-- QA D1128: newest first (the server's order), with the patient, so
+                   a wrong fill made today is found and cancelled here. -->
+              <th>{{ 'PHARMACY.PATIENT' | translate }}</th>
               <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
               <th>{{ 'PHARMACY.QTY_DISPENSED' | translate }}</th>
               <th>{{ 'PHARMACY.STATUS' | translate }}</th>
@@ -374,6 +1018,7 @@
           <tbody>
             @for (d of recentDispenses(); track d.id) {
               <tr>
+                <td data-testid="recent-dispense-patient">{{ d.patientName || '—' }}</td>
                 <td>{{ d.medicationName }}</td>
                 <td>{{ d.quantityDispensed }} {{ d.unit }}</td>
                 <td>
@@ -402,14 +1047,23 @@
                       }
                     </span>
                   } @else {
-                    <span class="badge badge-muted">{{ 'PHARMACY.NOT_SCANNED' | translate }}</span>
+                    {{ ' '
+                    }}<span class="badge badge-muted">{{
+                      'PHARMACY.NOT_SCANNED' | translate
+                    }}</span>
                   }
                 </td>
                 <td>{{ d.dispensedByName }}</td>
-                <td>{{ d.dispensedAt | date: 'short' }}</td>
+                <td>{{ d.dispensedAt ? (d.dispensedAt | serverTime | date: 'short') : '—' }}</td>
                 <td>
-                  @if (d.status !== 'CANCELLED') {
-                    <button class="btn-action danger" (click)="cancelDispense(d.id)">
+                  <!-- G15: a PENDING row is a prepared fill; it is cancelled
+                       from the work queue (stock back, patient told). -->
+                  @if (d.status !== 'CANCELLED' && d.status !== 'PENDING') {
+                    <button
+                      [attr.aria-label]="'PHARMACY.CANCEL_DISPENSE' | translate"
+                      class="btn-action danger"
+                      (click)="cancelDispense(d.id)"
+                    >
                       <span class="material-symbols-outlined">cancel</span>
                     </button>
                   }

@@ -89,7 +89,7 @@ class FileUploadServiceChatAttachmentTest {
         MockMultipartFile file = new MockMultipartFile("file", "x.jpg", "image/jpeg", huge);
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> service.uploadChatAttachment(file, ChatAttachmentKind.PHOTO, UPLOADER));
-        assertTrue(ex.getMessage().contains("10MB"));
+        assertTrue(ex.getMessage().contains("photo"), ex.getMessage());
     }
 
     @Test
@@ -98,7 +98,7 @@ class FileUploadServiceChatAttachmentTest {
         MockMultipartFile file = new MockMultipartFile("file", "x.ogg", "audio/ogg", huge);
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> service.uploadChatAttachment(file, ChatAttachmentKind.AUDIO, UPLOADER));
-        assertTrue(ex.getMessage().contains("5MB"));
+        assertTrue(ex.getMessage().contains("voice"), ex.getMessage());
     }
 
     @Test

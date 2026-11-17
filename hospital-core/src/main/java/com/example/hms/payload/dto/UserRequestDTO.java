@@ -37,5 +37,6 @@ public class UserRequestDTO extends BaseUserDTO {
 
     @Pattern(regexp = "^[+\\d][\\d\\-()\\s]{6,20}$",
         message = "{user.emergencyContactPhone.pattern}")
+    @com.example.hms.validation.PhoneNumber
     private String emergencyContactPhone;
 }

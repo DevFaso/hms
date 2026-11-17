@@ -38,9 +38,15 @@ public class DispenseMapper {
             .id(entity.getId())
             .prescriptionId(entity.getPrescription() != null ? entity.getPrescription().getId() : null)
             .patientId(entity.getPatient() != null ? entity.getPatient().getId() : null)
+            // QA D1058 (round 18): the name is mapped here, for every read. Only
+            // GET /dispenses/{id} used to add it, so the pharmacy checkout picker
+            // (the pharmacy's list) read "Non renseigné" on every row.
+            .patientName(patientNameOf(entity.getPatient()))
             .pharmacyId(entity.getPharmacy() != null ? entity.getPharmacy().getId() : null)
+            .pharmacyName(pharmacyNameOf(entity.getPharmacy()))
             .stockLotId(entity.getStockLot() != null ? entity.getStockLot().getId() : null)
             .dispensedBy(entity.getDispensedByUser() != null ? entity.getDispensedByUser().getId() : null)
+            .dispensedByName(displayNameOf(entity.getDispensedByUser()))
             .verifiedBy(entity.getVerifiedByUser() != null ? entity.getVerifiedByUser().getId() : null)
             .medicationCatalogItemId(entity.getMedicationCatalogItem() != null
                 ? entity.getMedicationCatalogItem().getId() : null)
@@ -58,9 +64,63 @@ public class DispenseMapper {
             .scanVerifiedAt(entity.getScanVerifiedAt())
             .verificationOverrides(parseOverrides(entity.getVerificationOverrides()))
             .verificationOverrideReason(entity.getVerificationOverrideReason())
+            .preparedBy(entity.getPreparedByUser() != null ? entity.getPreparedByUser().getId() : null)
+            .preparedByName(displayNameOf(entity.getPreparedByUser()))
+            .readyAt(entity.getPreparedByUser() != null ? entity.getCreatedAt() : null)
+            .cancelReason(entity.getCancelReason() != null ? entity.getCancelReason().name() : null)
+            .cancelNote(entity.getCancelNote())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
             .build();
+    }
+
+    /**
+     * First and last name, or null. The user is a LAZY association: inside
+     * the service's transaction reading it loads the row; on the idempotency
+     * replay path the entity is mapped outside any transaction, and a display
+     * name is not worth failing a dispense response over, so a detached proxy
+     * answers null there rather than throwing.
+     */
+    public static String displayNameOf(User user) {
+        if (user == null) {
+            return null;
+        }
+        try {
+            String first = user.getFirstName() != null ? user.getFirstName().trim() : "";
+            String last = user.getLastName() != null ? user.getLastName().trim() : "";
+            String full = (first + " " + last).trim();
+            return full.isEmpty() ? null : full;
+        } catch (org.hibernate.LazyInitializationException detached) {
+            return null;
+        }
+    }
+
+    /**
+     * The patient's full name (middle name included), or null. A LAZY
+     * association: a detached proxy on the idempotency replay path answers
+     * null rather than failing the response, as {@link #displayNameOf} does.
+     */
+    static String patientNameOf(Patient patient) {
+        if (patient == null) {
+            return null;
+        }
+        try {
+            return patient.getFullName();
+        } catch (org.hibernate.LazyInitializationException detached) {
+            return null;
+        }
+    }
+
+    /** The pharmacy's name, or null; a detached proxy answers null. */
+    static String pharmacyNameOf(Pharmacy pharmacy) {
+        if (pharmacy == null) {
+            return null;
+        }
+        try {
+            return pharmacy.getName();
+        } catch (org.hibernate.LazyInitializationException detached) {
+            return null;
+        }
     }
 
     /**
@@ -99,6 +159,9 @@ public class DispenseMapper {
             .unit(dto.getUnit())
             .substitution(Boolean.TRUE.equals(dto.getSubstitution()))
             .substitutionReason(dto.getSubstitutionReason())
+            // COMPLETED or PARTIAL only: DispenseServiceImpl refuses PENDING and
+            // CANCELLED before mapping (AC-15), and the ready path sets PENDING
+            // itself after mapping.
             .status(dto.getStatus() != null ? dto.getStatus() : DispenseStatus.COMPLETED)
             .notes(dto.getNotes())
             // Roadmap row 4 / T-68: blank → null so the partial UNIQUE

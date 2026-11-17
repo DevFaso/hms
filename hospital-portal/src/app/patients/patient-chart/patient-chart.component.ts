@@ -1,3 +1,6 @@
+import { LabValuePipe, LabRangePipe } from '../../shared/pipes/lab-value.pipe';
+import { MaternityService } from '../../services/maternity.service';
+import { ongoingPregnancy } from '../../maternity/pregnancy-dates';
 import {
   Component,
   Input,
@@ -7,6 +10,7 @@ import {
   computed,
   effect,
   inject,
+  untracked,
   output,
   signal,
   ChangeDetectionStrategy,
@@ -31,32 +35,65 @@ import {
   PatientTimeline,
   PatientLabResult,
   TimelineEntry,
+  WithheldResult,
 } from '../../services/patient.service';
+import { Observable, defer, map } from 'rxjs';
+import { allRows, PageSlice } from '../../shared/all-pages';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { CHART_ROLES } from './chart-access';
+import { actionRoles } from '../../core/action-permissions';
+import { RegistrationService } from '../../services/registration.service';
 import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { RangePagerComponent } from '../../shared/range-pager/range-pager.component';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
+import { shortOrderCode } from '../../shared/lab/order-code';
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
+import { refusalReason } from '../../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 
 /** How many lab rows the section asks for; the backend caps `limit` at 100. */
 const LAB_PAGE_SIZE = 25;
 
-/** Cache key for "no hospital scope at all"; never a real hospital id. */
-const GLOBAL_SCOPE_KEY = 'GLOBAL';
+/**
+ * Cache key for "no hospital scope at all"; never a real hospital id. Nothing
+ * is read under it — `labsScoped()` refuses — but it keeps the key total, so
+ * gaining a scope always reads as a change.
+ */
+const UNSCOPED_KEY = 'UNSCOPED';
 
 @Component({
   selector: 'app-patient-chart',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
+  imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    LabValuePipe,
+    LabRangePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RestrictedRowsComponent,
+    DialogFocusDirective,
+    LabCorrectionBadgeComponent,
+    RangePagerComponent,
+  ],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-chart.component.scss',
 })
 export class PatientChartComponent implements OnInit, OnChanges {
+  /** QA D227: a readable order code, not the raw id. */
+  readonly shortOrderCode = shortOrderCode;
   @Input({ required: true }) patientId = '';
   /**
    * E9 #64 — bumped by the host when a break-the-glass session is declared
@@ -64,6 +101,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * sections re-read on their next visit.
    */
   @Input() refreshToken = 0;
+  /** QA D1005 review: the pregnancy line is asked for only when the patient may be pregnant. */
+  @Input() patientGender: string | null | undefined = undefined;
 
   /** E9 #64 — "Ouvrir avec motif" on a restricted line; the host opens the declaration. */
   readonly openRestricted = output<void>();
@@ -74,6 +113,38 @@ export class PatientChartComponent implements OnInit, OnChanges {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly registrations = inject(RegistrationService);
+  private readonly maternity = inject(MaternityService);
+
+  /**
+   * QA D1005: the ongoing pregnancy (gestational age today and due date) on
+   * the chart, read from the patient's current maternal history the way the
+   * maternity list reads it; null when there is none or it is over.
+   */
+  readonly pregnancy = signal<{ weeks: number; days: number; dueDate: string } | null>(null);
+
+  private loadPregnancy(): void {
+    this.pregnancy.set(null);
+    const gender = (this.patientGender ?? '').toUpperCase();
+    if (
+      !this.patientId ||
+      (gender !== 'FEMALE' && gender !== 'F') ||
+      // rbac-inline-ok: a read, not a write button: only the roles GET /maternal-history/patient/{id}/current admits ask for it (no 403 for everyone else).
+      !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'])
+    ) {
+      return;
+    }
+    const asked = this.patientId;
+    this.maternity.currentForPatient(asked).subscribe({
+      next: (history) => {
+        if (asked !== this.patientId) return;
+        // QA D1067: a delivered woman has no pregnancy in progress; QA D1082:
+        // no history at all answers 204 (null), not a 404.
+        this.pregnancy.set(ongoingPregnancy(history));
+      },
+      error: () => this.pregnancy.set(null),
+    });
+  }
 
   section = signal<ChartSection>('allergies');
 
@@ -89,7 +160,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewAllergies]),
   );
   readonly canEditAllergies = computed(() =>
-    this.roleContext.hasAnyActiveRole([...CHART_ROLES.editAllergies]),
+    this.roleContext.hasAnyActiveRole(actionRoles('allergyCreate')),
+  );
+  /**
+   * QA D527: an allergy is written in the acting hospital, and the API refuses
+   * it when the patient is not registered there (a doctor of hospital B reading
+   * a hospital-A patient was offered "Add" and got a refusal). Null while
+   * unknown, or for a role that cannot read registrations (the pharmacist):
+   * the role gate alone then decides, as before.
+   */
+  readonly registeredHere = signal<boolean | null>(null);
+  readonly canAddAllergy = computed(
+    () => this.canEditAllergies() && this.registeredHere() !== false,
   );
   readonly canViewProblems = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewProblems]),
@@ -97,6 +179,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
   readonly canEditProblems = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.editProblems]),
   );
+  /** QA D1224: removing a diagnosis (with a reason) is wider than recording one. */
+  readonly canRemoveProblems = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('diagnosisRemove')),
+  );
+  readonly showProblemActions = computed(() => this.canEditProblems() || this.canRemoveProblems());
   readonly canViewUpdates = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewUpdates]),
   );
@@ -120,6 +207,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /* ── Allergies ── */
   allergies = signal<PatientAllergy[]>([]);
   allergiesLoading = signal(false);
+  /** QA D504 — other hospitals' allergies are held back by the patient's opt-out. */
+  allergiesWithheld = signal(false);
   showAllergyModal = signal(false);
   editingAllergyId = signal<string | null>(null);
   allergySaving = signal(false);
@@ -146,6 +235,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /* ── Problems ── */
   problems = signal<PatientProblem[]>([]);
   problemsLoading = signal(false);
+  /** QA D504 — other hospitals' problems are held back by the patient's opt-out. */
+  problemsWithheld = signal(false);
   includeHistorical = signal(false);
   showProblemModal = signal(false);
   editingProblemId = signal<string | null>(null);
@@ -165,8 +256,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
   ];
 
   /* ── Chart updates ── */
+
   updates = signal<ChartUpdate[]>([]);
   updatesLoading = signal(false);
+  /** QA D504 — other hospitals' chart updates are held back by the patient's opt-out. */
+  updatesWithheld = signal(false);
   expandedUpdateId = signal<string | null>(null);
   showUpdateModal = signal(false);
   updateSaving = signal(false);
@@ -197,6 +291,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   labResults = signal<PatientLabResult[]>([]);
   labResultsLoading = signal(false);
   labResultsError = signal(false);
+  /** QA D504 — other hospitals' lab results are held back by the patient's opt-out. */
+  labResultsWithheld = signal(false);
   labOrders = signal<LabOrderResponse[]>([]);
   labOrdersLoading = signal(false);
   labOrdersError = signal(false);
@@ -281,10 +377,22 @@ export class PatientChartComponent implements OnInit, OnChanges {
     const previous = this.watchedLabScope;
     this.watchedLabScope = key;
     if (previous === undefined || previous === key) return;
-    this.labResults.set([]);
-    this.labOrders.set([]);
-    this.labsLoadedFor.set(null);
-    if (this.section() === 'labs' && this.canViewLabs()) this.loadLabs();
+    // Only the labs section: it is the one keyed on this scope. The other
+    // three read `hospitalId()`, the primary assignment, which no chip moves.
+    //
+    // `untracked` because the work below reads signals it also writes
+    // (`labResults`, `labOrders`, and `section()` inside `loadLabs`). Without
+    // it those reads become dependencies of this effect and it re-runs on its
+    // own writes — held off only by the early return above, which is a
+    // coincidence rather than a guarantee.
+    untracked(() => {
+      this.labResults.set([]);
+      this.labOrders.set([]);
+      this.labResultsError.set(false);
+      this.labOrdersError.set(false);
+      this.labsLoadedFor.set(null);
+      if (this.section() === 'labs' && this.canViewLabs()) this.loadLabs();
+    });
   });
 
   /** undefined until the watcher has run once; then the last scope seen. */
@@ -293,6 +401,60 @@ export class PatientChartComponent implements OnInit, OnChanges {
   ngOnInit(): void {
     this.section.set(this.firstVisibleSection());
     this.loadCurrentSection();
+    this.loadRegistrationHere();
+    this.loadPregnancy();
+  }
+
+  /**
+   * Whether the patient is registered in the hospital the allergy write acts
+   * in (`hospitalId()`). Asked for that ONE hospital, not read off the first
+   * page of every registration, and re-asked on every access refresh: a stale
+   * answer offered Add the API refuses, or hid it from someone now entitled.
+   * A reply that lands after a newer question is dropped.
+   */
+  private loadRegistrationHere(): void {
+    const seq = ++this.registrationSeq;
+    this.registeredHere.set(null);
+    const scope = this.hospitalId();
+    if (!scope || !this.roleContext.hasAnyActiveRole([...CHART_ROLES.checkRegistrationHere])) {
+      return;
+    }
+    this.registrations
+      .list({ patientId: this.patientId, hospitalId: scope, active: true })
+      .subscribe({
+        next: (rows) => {
+          if (seq !== this.registrationSeq) return;
+          this.registeredHere.set((rows ?? []).some((r) => r.hospitalId === scope && r.active));
+        },
+        error: () => {
+          if (seq === this.registrationSeq) this.registeredHere.set(null);
+        },
+      });
+  }
+
+  private registrationSeq = 0;
+
+  /**
+   * The acting hospital (and the role reading it) can move with no navigation
+   * — a scope or role switch — and nothing else re-asks the question then.
+   * Skips its first run: ngOnInit has just asked.
+   */
+  private readonly registrationScopeWatcher = effect(() => {
+    const key =
+      this.hospitalId() +
+      '|' +
+      this.roleContext.hasAnyActiveRole([...CHART_ROLES.checkRegistrationHere]);
+    const previous = this.watchedRegistrationKey;
+    this.watchedRegistrationKey = key;
+    if (previous === undefined || previous === key) return;
+    untracked(() => this.loadRegistrationHere());
+  });
+
+  private watchedRegistrationKey: string | undefined = undefined;
+
+  /** QA D527: an allergy recorded at another hospital is edited there, not here. */
+  canChangeAllergy(row: { hospitalId?: string }): boolean {
+    return this.canEditAllergies() && !this.isForeignRow(row);
   }
 
   /**
@@ -316,6 +478,34 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.refreshAfterAccessChange();
   }
 
+  /**
+   * The scope EVERY read and write on this chart works in.
+   *
+   * The PRIMARY assignment, and deliberately NOT `labHospitalId()`.
+   *
+   * Pointing it at the effective scope was tried in #731 and backed out: an
+   * account in global view then sent no hospital at all on allergies,
+   * problems and updates, and all three of those backends refuse a null scope
+   * outright (`BusinessException("Hospital context is required")`), so three
+   * sections that used to work started answering 400. Aligning them means
+   * giving those sections their own unscoped empty states, which is a change
+   * to them, not a one-line substitution made from the labs section.
+   *
+   * It can still return `''`, for a session that holds no hospital anywhere.
+   * What each caller does with that follows its DTO, not a blanket rule:
+   *
+   *  - the READS pass `|| undefined`, so the param is simply omitted;
+   *  - the ALLERGY write does too, because `PatientAllergyRequestDTO` marks
+   *    the field nullable and defaults to the authenticated hospital;
+   *  - the DIAGNOSIS and CHART-UPDATE writes send it as-is, and must:
+   *    both DTOs mark `hospitalId` `@NotNull` behind a `@Valid` body, so
+   *    omitting it is rejected by bean validation before
+   *    `resolveHospitalScope` is ever reached. Those two forms fail for a
+   *    truly unscoped account either way, and the fix is a scope, not a
+   *    serialization trick.
+   *
+   * `isForeignRow` reads this raw, and is safe because `!!mine` rejects `''`.
+   */
   private hospitalId(): string {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
   }
@@ -352,16 +542,27 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   /**
-   * True when the lab reads carry no hospital scope at all.
+   * The labs section needs a hospital scope, and REFUSES to read without one.
    *
-   * Keyed on `labHospitalId()`, not on `globalView()`: a super-admin in
-   * global view is the usual case, but a clinical account whose assignments
-   * have all been deactivated resolves to no scope too, and then the hint
-   * claimed "this hospital's" while `isForeignLabRow` marked nothing. The
-   * hint and the marker have to agree with the reads by construction, so all
-   * three read the same value.
+   * With no scope the client sends neither `hospitalId` nor `X-Hospital-Id`;
+   * `ControllerAuthUtils.resolveHospitalScope` then hands
+   * `PatientLabResultServiceImpl.getLabResults` a null. That used to fall
+   * through to a patient-only query — every tenant's rows, bypassing
+   * `RecordAccessPolicy.readableHospitalIds` — and to skip
+   * `reachRecorder.recordReach` entirely, because that is guarded on a
+   * non-null hospital. The service now refuses a staff read with no scope
+   * (404 `patient.notFound`), and the patient-only finder no longer exists.
+   * `/lab-orders` read with no predicate at all as well. So
+   * an account HOLDING ROLE_SUPER_ADMIN and acting as its inherited clinical
+   * role (the chart gate asks `hasAnyActiveRole`, which passes) could read a
+   * patient's labs across every hospital with no cross-hospital reach row,
+   * while every other read on the same chart is accounted.
+   *
+   * Rather than account for it from the client, the section declines to read
+   * and says so. It names no control: there is no hospital selector on this
+   * route — see the template comment on that branch.
    */
-  readonly globalScope = computed(() => this.labHospitalId() == null);
+  readonly labsScoped = this.roleContext.hasHospitalScope;
 
   /**
    * The cache key for the labs section. A UUID can never be the sentinel, so
@@ -370,7 +571,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * between them left cross-tenant orders on screen and re-read nothing.
    */
   private labsScopeKey(): string {
-    return this.labHospitalId() ?? GLOBAL_SCOPE_KEY;
+    return this.labHospitalId() ?? UNSCOPED_KEY;
   }
 
   /**
@@ -387,9 +588,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
     // now is only correct because the watcher happens to clear them in the
     // same pass. Reading the stored key makes the invariant structural — a
     // row can never be compared against a scope it was not fetched under,
-    // which is what inverted the marker before.
+    // which is what inverted the marker before. The key is either null or a
+    // real hospital id: `loadLabs()` returns before writing it when unscoped,
+    // so the sentinel never reaches this comparison.
     const scope = this.labsLoadedFor();
-    return !!row.hospitalId && !!scope && scope !== GLOBAL_SCOPE_KEY && row.hospitalId !== scope;
+    return !!row.hospitalId && !!scope && row.hospitalId !== scope;
   }
 
   setSection(section: ChartSection): void {
@@ -423,8 +626,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
   loadAllergies(): void {
     this.allergiesLoading.set(true);
     this.patientService.listAllergies(this.patientId, this.hospitalId() || undefined).subscribe({
-      next: (list) => {
-        this.allergies.set(list ?? []);
+      next: (result) => {
+        this.allergies.set(result?.items ?? []);
+        this.allergiesWithheld.set(result?.withheld ?? false);
         this.allergiesLoading.set(false);
       },
       error: () => {
@@ -497,8 +701,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
         this.closeAllergyModal();
         this.loadAllergies();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CHART.ALLERGY_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.ALLERGY_SAVE_ERROR'));
         this.allergySaving.set(false);
       },
     });
@@ -529,7 +733,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeDeactivateAllergy();
           this.loadAllergies();
         },
-        error: () => this.toast.error(this.translate.instant('CHART.ALLERGY_SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CHART.ALLERGY_SAVE_ERROR'),
+          ),
       });
   }
 
@@ -543,8 +750,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
         includeHistorical: this.includeHistorical(),
       })
       .subscribe({
-        next: (list) => {
-          this.problems.set(list ?? []);
+        next: (result) => {
+          this.problems.set(result?.items ?? []);
+          this.problemsWithheld.set(result?.withheld ?? false);
           this.problemsLoading.set(false);
         },
         error: () => {
@@ -623,8 +831,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
         this.closeProblemModal();
         this.loadProblems();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CHART.PROBLEM_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.PROBLEM_SAVE_ERROR'));
         this.problemSaving.set(false);
       },
     });
@@ -655,7 +863,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeDeleteProblem();
           this.loadProblems();
         },
-        error: () => this.toast.error(this.translate.instant('CHART.PROBLEM_SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CHART.PROBLEM_SAVE_ERROR'),
+          ),
       });
   }
 
@@ -663,18 +874,33 @@ export class PatientChartComponent implements OnInit, OnChanges {
 
   loadUpdates(): void {
     this.updatesLoading.set(true);
-    this.patientService
-      .listChartUpdates(this.patientId, { hospitalId: this.hospitalId() || undefined, size: 20 })
-      .subscribe({
-        next: (page) => {
-          this.updates.set(page?.content ?? []);
-          this.updatesLoading.set(false);
-        },
-        error: () => {
-          this.toast.error(this.translate.instant('CHART.UPDATES_LOAD_ERROR'));
-          this.updatesLoading.set(false);
-        },
-      });
+    // QA D1347: every version (all pages), not the 20 newest.
+    this.allChartUpdates(this.hospitalId() || undefined).subscribe({
+      next: (result) => {
+        this.updates.set(result?.items ?? []);
+        this.updatesWithheld.set(result?.withheld ?? false);
+        this.updatesLoading.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('CHART.UPDATES_LOAD_ERROR'));
+        this.updatesLoading.set(false);
+      },
+    });
+  }
+
+  /** Every chart update (all pages), withheld when any page says so (QA D1347). */
+  private allChartUpdates(hospitalId?: string): Observable<WithheldResult<ChartUpdate[]>> {
+    return defer(() => {
+      let withheld = false;
+      return allRows((page, size) =>
+        this.patientService.listChartUpdates(this.patientId, { hospitalId, page, size }).pipe(
+          map((res) => {
+            withheld = withheld || res.withheld;
+            return res.items as PageSlice<ChartUpdate>;
+          }),
+        ),
+      ).pipe(map((items) => ({ items, withheld })));
+    });
   }
 
   toggleUpdate(update: ChartUpdate): void {
@@ -717,8 +943,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeUpdateModal();
           this.loadUpdates();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CHART.UPDATE_SAVE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.UPDATE_SAVE_ERROR'));
           this.updateSaving.set(false);
         },
       });
@@ -742,6 +968,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * Retry rather than being retried silently on every visit.
    */
   private loadStaleLabs(): void {
+    if (!this.labsScoped()) return;
     if (this.labsLoadedFor() !== this.labsScopeKey()) {
       this.loadLabs();
       return;
@@ -751,6 +978,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   loadLabs(): void {
+    if (!this.labsScoped()) return;
     this.labsLoadedFor.set(this.labsScopeKey());
     if (this.canViewLabResults()) this.fetchLabResults();
     if (this.canViewLabOrders()) this.fetchLabOrders();
@@ -793,9 +1021,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
         limit: LAB_PAGE_SIZE,
       })
       .subscribe({
-        next: (list) => {
+        next: (result) => {
           if (!isCurrent()) return;
-          this.labResults.set(list ?? []);
+          this.labResults.set(result?.items ?? []);
+          this.labResultsWithheld.set(result?.withheld ?? false);
           this.labResultsLoading.set(false);
         },
         error: () => {
@@ -838,9 +1067,24 @@ export class PatientChartComponent implements OnInit, OnChanges {
     return !result.released;
   }
 
+  /**
+   * A released row no configured range could grade (every range is in another
+   * unit) and that carries no abnormal flag of its own. Its NORMAL status means
+   * only "nothing flagged", so it reads "not graded: units differ", never
+   * "Normal". A row the analyser flagged keeps that flag.
+   */
+  isUngradedResult(result: PatientLabResult): boolean {
+    const status = result.status ?? 'NORMAL';
+    return (
+      (result.unitMismatch === true || result.gradeUnknown === true) &&
+      (status === 'NORMAL' || status === 'UNKNOWN')
+    );
+  }
+
   /** Colour class for a RELEASED row only; a pending row gets none. */
   labStatusClass(result: PatientLabResult): string {
     if (this.isPendingResult(result)) return 'lab-badge lab-pending';
+    if (this.isUngradedResult(result)) return 'lab-badge lab-ungraded';
     switch (result.status) {
       case 'CRITICAL':
         return 'lab-badge lab-critical';
@@ -850,6 +1094,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'lab-badge lab-abnormal';
       case 'NORMAL':
         return 'lab-badge lab-normal';
+      case 'UNKNOWN':
+        // D31: released, but no range applied and no flag was recorded.
+        return 'lab-badge lab-ungraded';
       default:
         return 'lab-badge';
     }
@@ -862,6 +1109,12 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   labStatusKey(result: PatientLabResult): string {
     if (this.isPendingResult(result)) return 'CHART.LAB_STATUS_PENDING';
+    if (this.isUngradedResult(result)) {
+      // QA D1394: a comparator that settles no grade is not a question of units.
+      return result.gradeUnknown === true && result.unitMismatch !== true
+        ? 'CHART.LAB_STATUS_GRADE_UNKNOWN'
+        : 'CHART.LAB_STATUS_NOT_GRADED_UNITS';
+    }
     switch (result.status) {
       case 'NORMAL':
       case 'ABNORMAL':
@@ -870,6 +1123,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
       case 'CRITICAL':
       case 'PENDING':
         return 'CHART.LAB_STATUS_' + result.status;
+      case 'UNKNOWN':
+        return 'CHART.LAB_STATUS_NOT_INTERPRETED';
+      // QA D240: a released non-numeric answer ("Positif").
+      case 'QUALITATIVE':
+        return 'CHART.LAB_STATUS_QUALITATIVE';
       default:
         return 'CHART.LAB_STATUS_UNKNOWN';
     }
@@ -895,9 +1153,15 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.loadTimeline(this.timelineReason.trim());
   }
 
-  private loadTimeline(reason: string): void {
+  /** QA D1380: another page of the timeline, read with the reason already stated. */
+  loadTimelinePage(page: number): void {
+    const reason = this.timeline()?.accessReason?.trim();
+    if (reason) this.loadTimeline(reason, page);
+  }
+
+  private loadTimeline(reason: string, page = 0): void {
     this.timelineLoading.set(true);
-    this.patientService.getDoctorTimeline(this.patientId, reason).subscribe({
+    this.patientService.getDoctorTimeline(this.patientId, reason, page).subscribe({
       next: (timeline) => {
         this.timeline.set(timeline);
         this.timelineLoading.set(false);
@@ -924,6 +1188,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.labResults.set([]);
     this.labOrders.set([]);
     this.labsLoadedFor.set(null);
+    this.labResultsError.set(false);
+    this.labOrdersError.set(false);
+    this.loadRegistrationHere();
     if (this.section() !== 'timeline') this.loadCurrentSection();
   }
 
@@ -935,11 +1202,62 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'medication';
       case 'LAB_RESULT':
         return 'science';
+      case 'LAB_ORDER':
+        return 'biotech';
       case 'ALLERGY':
         return 'warning';
+      case 'DIAGNOSIS':
+        return 'diagnosis';
+      case 'IMAGING':
+        return 'radiology';
+      case 'NOTE':
+        return 'description';
+      case 'REFERRAL':
+        return 'forward_to_inbox';
+      // QA D959 (round 18): surgical history had no icon of its own.
+      case 'PROCEDURE':
+        return 'medical_services';
+      // QA D959 (round 17): the visit's other documents.
+      case 'TREATMENT_PLAN':
+        return 'assignment';
+      case 'CONSULTATION':
+        return 'group';
+      case 'DISCHARGE_SUMMARY':
+        return 'logout';
+      case 'DOCUMENT':
+        return 'verified';
+      // QA D959 (round 18): transfusions, procedure orders, OB/GYN referrals,
+      // nursing notes, vaccinations and deliveries.
+      case 'TRANSFUSION':
+        return 'bloodtype';
+      case 'PROCEDURE_ORDER':
+        return 'healing';
+      case 'OBGYN_REFERRAL':
+        return 'pregnant_woman';
+      case 'NURSING_NOTE':
+        return 'clinical_notes';
+      case 'IMMUNIZATION':
+        return 'vaccines';
+      case 'DELIVERY':
+        return 'child_care';
+      case 'DEATH':
+        return 'deceased';
+      case 'MICRO_CULTURE':
+        return 'microbiology';
       default:
         return 'event_note';
     }
+  }
+
+  /**
+   * QA D996: what kind of row it is. A visit reads its own type
+   * ("Hospitalisation", "Urgence") instead of "Consultation" for every one.
+   */
+  timelineKind(e: TimelineEntry): { domain: string; value: string } {
+    const type = e.category === 'ENCOUNTER' ? e.metadata?.['encounterType'] : null;
+    return typeof type === 'string' && type
+      ? { domain: 'encounterType', value: type }
+      : { domain: 'timelineCategory', value: e.category };
   }
 
   /**
@@ -952,6 +1270,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   entryHospital(entry: TimelineEntry): string | null {
     return entry.metadata?.sourceHospitalName ?? null;
+  }
+
+  /**
+   * QA D1113: a dose transcribed from a vaccination card or another
+   * facility's record names the hospital that RECORDED it; the server sends
+   * no source hospital for it, because it was not given there.
+   */
+  entryRecordedAt(entry: TimelineEntry): string | null {
+    const recordedAt = entry.metadata?.['recordedAtHospitalName'];
+    return entry.metadata?.['transcribed'] === true && typeof recordedAt === 'string' && recordedAt
+      ? recordedAt
+      : null;
   }
 
   /** Attending, prescriber, or the clinician who ORDERED the result. */

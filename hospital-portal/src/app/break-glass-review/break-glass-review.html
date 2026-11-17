@@ -23,7 +23,12 @@
       >
         {{ 'BREAK_GLASS_REVIEW.FILTER_ALL' | translate }}
       </button>
-      <button type="button" class="btn-secondary" (click)="reload()" [disabled]="!scopeReady()">
+      <button
+        type="button"
+        class="btn-secondary"
+        (click)="reload()"
+        [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
+      >
         {{ 'COMMON.REFRESH' | translate }}
       </button>
     </div>
@@ -65,14 +70,34 @@
           @for (s of sessions(); track s.id) {
             <tr [attr.data-testid]="'session-' + s.id" [class.unreviewed]="!s.reviewed">
               <td>
-                {{ s.startedAt | date: 'short' }}
+                {{ s.startedAt | serverTime | date: 'short' }}
                 <div class="muted">
-                  {{ 'BREAK_GLASS_REVIEW.EXPIRES' | translate }} {{ s.expiresAt | date: 'short' }}
+                  {{ 'BREAK_GLASS_REVIEW.EXPIRES' | translate }}
+                  {{ s.expiresAt | serverTime | date: 'short' }}
                 </div>
               </td>
-              <td>{{ s.userName }}</td>
-              <td>
-                <a [routerLink]="['/patients', s.patientId]">{{ s.patientId | slice: 0 : 8 }}…</a>
+              <!-- QA D839: the declarer's name and the patient's name with this
+                   hospital's MRN; the username and a short id only as a fallback. -->
+              <td data-testid="declarer">
+                {{ s.userDisplayName || s.userName }}
+                @if (s.userDisplayName && s.userName) {
+                  <div class="muted">{{ s.userName }}</div>
+                }
+              </td>
+              <td data-testid="patient">
+                <a [routerLink]="['/patients', s.patientId]">
+                  @if (s.patientName) {
+                    {{ s.patientName }}
+                  } @else {
+                    <!-- QA D992 class: the MRN below identifies the patient; never a slice of the id. -->
+                    {{ 'BREAK_GLASS_REVIEW.PATIENT_UNNAMED' | translate }}
+                  }
+                </a>
+                @if (s.patientMrn) {
+                  <div class="muted">
+                    {{ 'BREAK_GLASS_REVIEW.MRN' | translate }} {{ s.patientMrn }}
+                  </div>
+                }
               </td>
               <td class="reason">{{ s.reason }}</td>
               <td>
@@ -81,7 +106,8 @@
                 } @else if (s.revokedAt) {
                   <span class="chip revoked">{{ 'BREAK_GLASS_REVIEW.REVOKED' | translate }}</span>
                 } @else {
-                  <span class="chip expired">{{ 'BREAK_GLASS_REVIEW.EXPIRED' | translate }}</span>
+                  {{ ' '
+                  }}<span class="chip expired">{{ 'BREAK_GLASS_REVIEW.EXPIRED' | translate }}</span>
                 }
               </td>
               <td class="num">{{ s.auditCount }}</td>
@@ -127,7 +153,7 @@
                     'BREAK_GLASS_REVIEW.OUTCOME_' + s.reviewOutcome | translate
                   }}</span>
                   <div class="muted">
-                    {{ s.reviewedByUserName }} · {{ s.reviewedAt | date: 'short' }}
+                    {{ s.reviewedByUserName }} · {{ s.reviewedAt | serverTime | date: 'short' }}
                   </div>
                   @if (s.reviewNote) {
                     <div class="muted note">{{ s.reviewNote }}</div>

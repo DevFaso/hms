@@ -7,9 +7,16 @@
   (keydown.enter)="panelClosed.emit()"
   (keydown.escape)="panelClosed.emit()"
 ></div>
-<div class="drawer-panel">
+<!-- QA D1125: a labelled modal; focus moves in, Escape closes, focus goes back to the opener. -->
+<div
+  class="drawer-panel"
+  appModalDialog
+  aria-labelledby="reception-snapshot-drawer-title"
+  data-testid="reception-snapshot-drawer"
+  (escaped)="panelClosed.emit()"
+>
   <div class="drawer-header">
-    <h2>{{ 'RECEPTION.PATIENT_SNAPSHOT' | translate }}</h2>
+    <h2 id="reception-snapshot-drawer-title">{{ 'RECEPTION.PATIENT_SNAPSHOT' | translate }}</h2>
     <button
       class="btn-icon-close"
       (click)="panelClosed.emit()"
@@ -43,16 +50,24 @@
             }}</span>
           }
           @if (s.alerts.missingInsurance) {
-            <span class="alert-chip danger">{{ 'RECEPTION.NO_INSURANCE' | translate }}</span>
+            {{ ' '
+            }}<span class="alert-chip danger">{{ 'RECEPTION.NO_INSURANCE' | translate }}</span>
           }
           @if (s.alerts.expiredInsurance) {
-            <span class="alert-chip danger">{{ 'RECEPTION.EXPIRED_INSURANCE' | translate }}</span>
+            {{ ' '
+            }}<span class="alert-chip danger">{{ 'RECEPTION.EXPIRED_INSURANCE' | translate }}</span>
           }
           @if (s.alerts.noPrimaryInsurance) {
-            <span class="alert-chip warn">{{ 'RECEPTION.NO_PRIMARY_INSURANCE' | translate }}</span>
+            {{ ' '
+            }}<span class="alert-chip warn">{{
+              'RECEPTION.NO_PRIMARY_INSURANCE' | translate
+            }}</span>
           }
           @if (s.alerts.outstandingBalance) {
-            <span class="alert-chip danger">{{ 'RECEPTION.OUTSTANDING_BALANCE' | translate }}</span>
+            {{ ' '
+            }}<span class="alert-chip danger">{{
+              'RECEPTION.OUTSTANDING_BALANCE' | translate
+            }}</span>
           }
         </div>
       }
@@ -76,7 +91,7 @@
         @if (s.dob) {
           <div class="snap-field">
             <span class="field-label">{{ 'PATIENTS.DATE_OF_BIRTH' | translate }}</span>
-            <span class="field-val">{{ s.dob | date: 'mediumDate' }}</span>
+            <span class="field-val">{{ s.dob | serverTime | date: 'mediumDate' }}</span>
           </div>
         }
         @if (s.phone) {
@@ -107,7 +122,13 @@
         </div>
         @if (s.insurance.primaryPayer) {
           <div class="snap-field">
-            <span class="field-label">{{ 'RECEPTION.PRIMARY_PAYER' | translate }}</span>
+            <!-- QA D1038 / D986: with no primary policy the payer shown is the
+                 first linked one, so it is named as an insurer, never as the
+                 "primary payer" right under "No primary insurance". -->
+            <span class="field-label">{{
+              (s.insurance.hasPrimary ? 'RECEPTION.PRIMARY_PAYER' : 'RECEPTION.INSURANCE_PROVIDER')
+                | translate
+            }}</span>
             <span class="field-val">{{ s.insurance.primaryPayer }}</span>
           </div>
         }
@@ -121,7 +142,7 @@
           <div class="snap-field">
             <span class="field-label">{{ 'RECEPTION.EXPIRES' | translate }}</span>
             <span class="field-val" [class.expired-val]="s.insurance.expired">
-              {{ s.insurance.expiresOn | date: 'mediumDate' }}
+              {{ s.insurance.expiresOn | serverTime | date: 'mediumDate' }}
               @if (s.insurance.expired) {
                 <span class="alert-chip danger small">{{ 'RECEPTION.EXPIRED' | translate }}</span>
               }
@@ -143,9 +164,11 @@
         @if (s.insurance.verifiedAt) {
           <div class="snap-field">
             <span class="field-label">{{ 'RECEPTION.ELIGIBILITY_VERIFIED' | translate }}</span>
-            <span class="field-val attested-chip">
+            {{ ' '
+            }}<span class="field-val attested-chip">
               <span class="material-symbols-outlined small">verified</span>
-              {{ s.insurance.verifiedBy }} · {{ s.insurance.verifiedAt | date: 'mediumDate' }}
+              {{ s.insurance.verifiedBy }} ·
+              {{ s.insurance.verifiedAt | serverTime | date: 'mediumDate' }}
             </span>
           </div>
         }
@@ -176,7 +199,7 @@
         <div class="snap-field">
           <span class="field-label">{{ 'RECEPTION.TOTAL_BALANCE_DUE' | translate }}</span>
           <span class="field-val" [class.balance-due]="s.billing.totalBalanceDue > 0">
-            {{ s.billing.totalBalanceDue | number: '1.2-2' }}
+            {{ s.billing.totalBalanceDue | cfa }}
           </span>
         </div>
       </div>
@@ -196,9 +219,9 @@
   ></div>
   <div
     class="attest-modal"
-    role="dialog"
-    aria-modal="true"
     [attr.aria-label]="'RECEPTION.ATTEST_ELIGIBILITY' | translate"
+    appModalDialog
+    (escaped)="showAttestModal.set(false)"
   >
     <div class="attest-header">
       <h3>{{ 'RECEPTION.ATTEST_ELIGIBILITY' | translate }}</h3>

@@ -65,7 +65,7 @@ class OrderSignRulesCdsServiceTest {
             medRequestWithCoding("Amoxicillin", "AMOX", "500 mg")));
 
         assertThat(response.cards()).isEmpty();
-        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any());
+        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -90,7 +90,7 @@ class OrderSignRulesCdsServiceTest {
 
         CdsCard card = new CdsCard("test", null, CdsCard.Indicator.WARNING,
             new Source("t", null, null), null, null, null, "u");
-        when(engine.evaluateProposedPrescription(any(), eq(hospitalId), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), eq(hospitalId), any(), any(), any(), any()))
             .thenReturn(List.of(card));
 
         CdsHookResponse response = service.evaluate(signRequest(patientId,
@@ -99,7 +99,7 @@ class OrderSignRulesCdsServiceTest {
         assertThat(response.cards()).containsExactly(card);
         verify(engine).evaluateProposedPrescription(
             patient, hospitalId,
-            "Amoxicillin 500 mg", "AMOX-500", "500 mg PO BID");
+            "Amoxicillin 500 mg", "AMOX-500", "500 mg PO BID", null);
     }
 
     @Test
@@ -116,7 +116,7 @@ class OrderSignRulesCdsServiceTest {
 
         CdsHookResponse response = service.evaluate(signRequest(patientId, nonMed));
         assertThat(response.cards()).isEmpty();
-        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any());
+        verify(engine, never()).evaluateProposedPrescription(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -125,7 +125,7 @@ class OrderSignRulesCdsServiceTest {
         Patient patient = Patient.builder().build();
         patient.setId(patientId);
         when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of());
 
         Map<String, Object> mr = Map.of(
@@ -138,6 +138,23 @@ class OrderSignRulesCdsServiceTest {
         service.evaluate(signRequest(patientId, mr));
 
         verify(engine).evaluateProposedPrescription(
-            any(), any(), eq("Amoxicillin"), any(), eq("500 mg"));
+            any(), any(), eq("Amoxicillin"), any(), eq("500 mg"), any());
+    }
+
+    /** CR-01: the route the draft states reaches the rules, through its text or a coding. */
+    @Test
+    void theDraftsRouteReachesTheRules() {
+        UUID patientId = UUID.randomUUID();
+        when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(Patient.builder().build()));
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any())).thenReturn(List.of());
+
+        service.evaluate(signRequest(patientId, Map.of(
+            "resourceType", "MedicationRequest",
+            "medicationCodeableConcept", Map.of("text", "Paracetamol"),
+            "dosageInstruction", List.of(Map.of("text", "1 g", "route", Map.of("coding", List.of(
+                Map.of("code", "47625008", "display", "Intravenous"))))))));
+
+        verify(engine).evaluateProposedPrescription(
+            any(), any(), eq("Paracetamol"), any(), eq("1 g"), eq("Intravenous"));
     }
 }

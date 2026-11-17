@@ -1,7 +1,7 @@
 ### Assign ROLE_RADIOLOGIST to user 06e0fcf7-200c-4f1b-8796-5ff7e9ffeef6 at hospital 06f8a0cf-09ab-4423-8aa8-1804a99f6f6c
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1NjUyNTkxLCJleHAiOjE3NTU3Mzg5OTF9.X93QUsclWvNz5uYOINmayOYtCFSwzAg4-sNpfp3XY84
+Authorization: Bearer {{token}}
 
 {
   "userId": "43df4420-e3a1-45c2-87f0-3aa1b09e02f6",
@@ -11,7 +11,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvb
 
 ### assign admin to yalgado hospital
 POST http://localhost:8081/api/assignments
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ2MjM0MzAsImV4cCI6MTc1NDcwOTgzMH0.wgFZSgldTkVg3H7cFQtOJBL3UcbN0m2E-aBxszjCqUp77GF7FB4lIO55UO1nYRYyiBVCNerxdXKnX-KdPX_GCw
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -23,7 +23,7 @@ Content-Type: application/json
 ### Assign ROLE_NURSE to user 2f35b406-1458-4516-89af-f73317391e36 at hospital 29c97a6f-7eba-4281-a3a1-f5b0dc47a7e3
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "2f35b406-1458-4516-89af-f73317391e36",
@@ -36,7 +36,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_DOCTOR to user c474f07b-7080-4284-8263-c3d7a965c59f at hospital dfa8ef8a-9a18-4685-acdc-f2d6db8cc7f7
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ1MzM4MDMsImV4cCI6MTc1NDYyMDIwM30.zxulzQBrtwBRFRX2sBLLz_2-JM4QllmvA4oMsXT61TARoIP7JZxbj5EOSLSFM_tXJQGxwx_aqrRrgoTlqsXl_w
+Authorization: Bearer {{token}}
 
 {
   "userId": "d9812876-a82c-4348-8cb7-23f7d843597a",
@@ -48,7 +48,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiU
 ### Assign ROLE_PATIENT to user 3f4b2c1d-5e6f-4a7b-8c9d-0e1f2a3b4c5d at hospital e0473800-2853-4515-b712-2c9fe7221e85
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "6127e264-1acc-4273-8208-b0af01d77abf",
@@ -59,7 +59,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### complain "message":   "message": "An unexpected error occurred: Role already assigned to this user for this hospital.",
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
@@ -70,7 +70,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_DOCTOR
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
@@ -81,7 +81,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_NURSE
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
@@ -92,7 +92,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_RECEPTIONIST
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTIzMTgwODgsImV4cCI6MTc1MjQwNDQ4OH0.O-U6yJ5wxda28rSiYounin_zsHydzqqT0FzRrwh3DYeGiyQs8XnQda81k8w_z_GDhtff1y29HuFYQJwTk4YeRQ
+Authorization: Bearer {{token}}
 
 {
   "userId": "10d65215-0721-40f1-8af3-6102171417cb",
@@ -103,7 +103,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_LAB_TECHNICIAN
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
@@ -114,7 +114,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_ACCOUNTANT
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
@@ -125,7 +125,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_RADIOLOGIST
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "06e0fcf7-200c-4f1b-8796-5ff7e9ffeef6",
@@ -136,7 +136,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_SURGEON
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
@@ -147,7 +147,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_DENTIST
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
@@ -158,7 +158,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### "roleName": "ROLE_PHYSICIAN" to user 886973fc-0a4c-4389-87a8-64fa81974afe at hospital 06f8a0cf-09ab-4423-8aa8-1804a99f6f6c
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
@@ -169,7 +169,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_NURSE (Existing user)
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+Authorization: Bearer {{token}}
 
 {
   "userId": "2f35b406-1458-4516-89af-f73317391e36",
@@ -180,7 +180,7 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZ
 ### Assign ROLE_DOCTOR (Existing user)
 POST http://localhost:8081/api/assignments
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ1MzM4MDMsImV4cCI6MTc1NDYyMDIwM30.zxulzQBrtwBRFRX2sBLLz_2-JM4QllmvA4oMsXT61TARoIP7JZxbj5EOSLSFM_tXJQGxwx_aqrRrgoTlqsXl_w
+Authorization: Bearer {{token}}
 
 {
   "userId": "5e881a13-5030-4571-a823-7220fdb00d6c",

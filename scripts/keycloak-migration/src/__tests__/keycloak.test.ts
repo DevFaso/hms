@@ -65,6 +65,14 @@ describe('KeycloakAdminClient.findUserIdByUsername', () => {
     assert.equal((calls[1]!.init.headers as Headers).get('Authorization'), 'Bearer tok');
   });
 
+  it('matches a mixed-case HMS username to the lower-case one Keycloak stores', async () => {
+    const { fetch } = createFetchMock([
+      () => json(200, { access_token: 'tok', expires_in: 300 }),
+      () => json(200, [{ id: 'uuid-j', username: 'jdoe' }]),
+    ]);
+    assert.equal(await newClient(fetch).findUserIdByUsername('JDoe'), 'uuid-j');
+  });
+
   it('returns null when the user does not exist', async () => {
     const { fetch } = createFetchMock([
       () => json(200, { access_token: 'tok', expires_in: 300 }),

@@ -43,6 +43,11 @@ import java.time.LocalDateTime;
 @ToString(exclude = {"patient", "hospital", "encounter", "bloodGroup", "requestedBy"})
 public class TransfusionRequest extends BaseEntity {
 
+    /** QA order review: a reconfirmation names the version it read. */
+    @jakarta.persistence.Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "patient_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_transfusion_req_patient"))

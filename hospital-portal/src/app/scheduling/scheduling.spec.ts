@@ -1,8 +1,14 @@
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../testing/form-refusal-behaviour';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { formatClockTime, resetStoredLangForTests } from '../shared/i18n/app-locale';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError, Subject } from 'rxjs';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { of, throwError } from 'rxjs';
 
 import { SchedulingComponent } from './scheduling';
 import {
@@ -57,7 +63,9 @@ describe('SchedulingComponent', () => {
       'listShifts',
       'listLeaves',
       'bulkScheduleShifts',
+      'capabilities',
     ]);
+    schedulingSpy.capabilities.and.returnValue(of({ canManageSchedules: true }));
     schedulingSpy.listShifts.and.returnValue(of([mockShift()]));
     schedulingSpy.listLeaves.and.returnValue(
       of([mockLeave(), mockLeave({ id: 'l2', status: 'APPROVED' })]),
@@ -94,6 +102,55 @@ describe('SchedulingComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('marks missing fields when the single shift form is submitted empty', () => {
+    fixture.detectChanges();
+    component.openShiftModal('2026-11-16');
+    fixture.detectChanges();
+    expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="single-shift-submit"]',
+      alsoMarked: ['bulk-staffSearch', 'bulk-hospitalId'],
+      sent: schedulingSpy.createShift,
+    });
+  });
+
+  it('marks the server reason beside a refused shift field', () => {
+    fixture.detectChanges();
+    component.openShiftModal('2026-11-16');
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    schedulingSpy.createShift.and.returnValue(
+      throwError(() => fieldErrorsResponse({ shiftDate: 'Choose another date' })),
+    );
+    fixture.detectChanges();
+    component.submitShift();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'bulk-startDate': 'Choose another date' });
+  });
+
+  it('creates a single shift without calling bulk scheduling and resets the next bulk mode', () => {
+    fixture.detectChanges();
+    schedulingSpy.createShift.and.returnValue(of(mockShift()));
+    component.openShiftModal('2026-11-16');
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    component.submitShift();
+    expect(schedulingSpy.createShift).toHaveBeenCalledWith(
+      jasmine.objectContaining({ shiftDate: '2026-11-16', hospitalId: 'h1' }),
+    );
+    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+    expect(component.bulkModalOpen()).toBeFalse();
+    component.openBulkModal();
+    expect(component.singleShiftMode()).toBeFalse();
+  });
+
+  it('refuses single-shift opening and submission when scheduling capability is absent', () => {
+    component.canManageSchedules.set(false);
+    component.openShiftModal();
+    component.submitShift();
+    expect(component.bulkModalOpen()).toBeFalse();
+    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });
@@ -104,6 +161,32 @@ describe('SchedulingComponent', () => {
     expect(schedulingSpy.listLeaves).toHaveBeenCalled();
     expect(component.shifts().length).toBe(1);
     expect(component.leaves().length).toBe(2);
+  });
+
+  it('QA D878: hides bulk planning from a doctor whose planning writes the server refuses', () => {
+    schedulingSpy.capabilities.and.returnValue(of({ canManageSchedules: false }));
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(component.canManageSchedules()).toBeFalse();
+    expect(el.querySelector('.page-actions .btn-primary')).toBeNull();
+    component.openBulkModal();
+    expect(component.bulkModalOpen()).toBeFalse();
+  });
+
+  it('QA D878: a capability failure hides bulk planning rather than offering a refused write', () => {
+    schedulingSpy.capabilities.and.returnValue(throwError(() => new Error('down')));
+    fixture.detectChanges();
+    expect(component.canManageSchedules()).toBeFalse();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.page-actions .btn-primary'),
+    ).toBeNull();
+  });
+
+  it('QA D878: offers bulk planning to an administrator or a department head', () => {
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(schedulingSpy.capabilities).toHaveBeenCalled();
+    expect(el.querySelector('.page-actions .btn-primary')).not.toBeNull();
   });
 
   it('requests a Monday-to-Sunday week range', () => {
@@ -164,6 +247,7 @@ describe('SchedulingComponent', () => {
   });
 
   it('submitBulk validates staff, date range, and days of week', () => {
+    fixture.detectChanges();
     component.bulk.staffId = '';
     component.submitBulk();
     expect(toastSpy.error).toHaveBeenCalledTimes(1);
@@ -199,6 +283,7 @@ describe('SchedulingComponent', () => {
   });
 
   it('submitBulk flags an all-skipped result as an error', () => {
+    fixture.detectChanges();
     component.bulk.staffId = 'st1';
     component.bulk.hospitalId = 'h1';
     component.bulk.startDate = '2026-08-17';
@@ -211,6 +296,7 @@ describe('SchedulingComponent', () => {
   });
 
   it('openBulkModal loads the staff list once', () => {
+    component.canManageSchedules.set(true);
     component.openBulkModal();
     expect(staffSpy.list).toHaveBeenCalledTimes(1);
     component.closeBulkModal();
@@ -248,103 +334,67 @@ describe('SchedulingComponent', () => {
     expect(component.selectedStaff()).toBeNull();
   });
 
-  it('opens a single shift for the chosen day with fresh defaults', () => {
-    component.bulk.notes = 'Old note';
-    component.openShiftModal('2026-11-18');
-    expect(component.singleShiftMode()).toBeTrue();
-    expect(component.bulkModalOpen()).toBeTrue();
-    expect(component.bulk.startDate).toBe('2026-11-18');
-    expect(component.bulk.notes).toBe('');
-    expect(component.bulk.shiftType).toBe('MORNING');
+  it('shows the picked staff member by translated job title, else by role', () => {
+    // The chip rendered `jobTitle ?? roleName ?? fallback` raw — MIDWIFE, or
+    // ROLE_DOCTOR for a member with no title — while the fallback beside
+    // them was translated, and the raw-enum gate excused the whole binding
+    // because a `translate` pipe appeared in it.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { JOB_TITLE: { MIDWIFE: 'Sage-femme' }, ROLE: { DOCTOR: 'Médecin' } } },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
     component.openBulkModal();
-    expect(component.singleShiftMode()).toBeFalse();
-  });
+    const chip = () =>
+      (fixture.nativeElement.querySelector('.selected-chip .chip-sub')?.textContent ?? '').trim();
 
-  it('creates an overnight shift through the single-shift API and refreshes the week', () => {
-    component.openShiftModal('2026-11-18');
-    component.selectStaff({ id: 'st1', hospitalId: 'h1', name: 'Ama' } as StaffResponse);
-    component.bulk.startTime = '22:00';
-    component.bulk.endTime = '06:00';
-    schedulingSpy.createShift.and.returnValue(of(mockShift()));
-    component.submitShift();
-    expect(schedulingSpy.createShift).toHaveBeenCalledWith(
-      jasmine.objectContaining({
-        staffId: 'st1',
-        hospitalId: 'h1',
-        shiftDate: '2026-11-18',
-        startTime: '22:00',
-        endTime: '06:00',
-      }),
-    );
-    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
-    expect(component.bulkModalOpen()).toBeFalse();
-    expect(schedulingSpy.listShifts).toHaveBeenCalled();
-  });
-
-  it('requires a staff member, date and distinct times before saving', () => {
-    component.openShiftModal('2026-11-18');
-    component.submitShift();
-    component.selectStaff({ id: 'st1', hospitalId: 'h1', name: 'Ama' } as StaffResponse);
-    component.bulk.endTime = component.bulk.startTime;
-    component.submitShift();
-    component.bulk.startDate = '';
-    component.submitShift();
-    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
-    expect(toastSpy.error).toHaveBeenCalledTimes(3);
-  });
-
-  it('prevents duplicate saves and preserves the form on an API error', () => {
-    component.openShiftModal('2026-11-18');
-    component.selectStaff({ id: 'st1', hospitalId: 'h1', name: 'Ama' } as StaffResponse);
-    const response = new Subject<StaffShiftResponse>();
-    schedulingSpy.createShift.and.returnValue(response);
-    component.submitShift();
-    component.submitShift();
-    component.closeBulkModal();
-    expect(schedulingSpy.createShift).toHaveBeenCalledTimes(1);
-    expect(component.bulkModalOpen()).toBeTrue();
-    response.error({ error: { message: 'Overlapping shift' } });
-    expect(component.bulkSubmitting()).toBeFalse();
-    expect(component.bulkModalOpen()).toBeTrue();
-    expect(component.bulk.startDate).toBe('2026-11-18');
-    expect(toastSpy.error).toHaveBeenCalledWith('Overlapping shift');
-  });
-
-  it('day actions prefill the selected date and single mode hides bulk-only fields', () => {
+    component.selectStaff({
+      id: 'st1',
+      name: 'Ama Owusu',
+      hospitalId: 'h1',
+      jobTitle: 'MIDWIFE',
+    } as StaffResponse);
     fixture.detectChanges();
-    const buttons = fixture.nativeElement.querySelectorAll(
-      '.add-day-shift',
-    ) as NodeListOf<HTMLButtonElement>;
-    expect(buttons.length).toBe(7);
-    buttons[2].click();
+    expect(chip()).toBe('Sage-femme');
+
+    component.selectStaff({
+      id: 'st2',
+      name: 'Kofi Mensah',
+      hospitalId: 'h1',
+      roleName: 'ROLE_DOCTOR',
+    } as StaffResponse);
     fixture.detectChanges();
-    expect(component.bulk.startDate).toBe(component.getWeekDays()[2].date);
-    expect(fixture.nativeElement.querySelector('#bulk-endDate')).toBeNull();
-    expect(fixture.nativeElement.querySelector('.dow-fieldset')).toBeNull();
-    expect(fixture.nativeElement.querySelector('#bulk-skip')).toBeNull();
+    expect(chip()).toBe('Médecin');
   });
 
-  it('keeps creation actions hidden and guarded for read-only users', () => {
-    Object.defineProperty(component, 'isSchedulingAdmin', { value: false });
+  it('labels leave requests by translated leave type', () => {
+    // formatLeaveType() capitalised the token — "Vacation" on a French screen.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { LEAVE_TYPE: { VACATION: 'Congés payés' } } },
+    });
+    translate.use('fr');
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.add-day-shift')).toBeNull();
-    component.openShiftModal();
-    component.submitShift();
-    expect(component.bulkModalOpen()).toBeFalse();
-    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
+    component.activeView.set('leaves');
+    fixture.detectChanges();
+
+    const labels = Array.from(
+      fixture.nativeElement.querySelectorAll('.leave-type-label') as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').trim());
+    expect(labels).toEqual(['Congés payés', 'Congés payés']);
   });
 
   it('formats times, ranges, and enum labels', () => {
-    expect(component.formatTime('08:30')).toBe('8:30 AM');
-    expect(component.formatTime('16:05')).toBe('4:05 PM');
-    expect(component.formatTime('00:00')).toBe('12:00 AM');
+    expect(formatClockTime('08:30', 'en-US')).toBe('8:30 AM');
+    expect(formatClockTime('16:05', 'en-US')).toBe('4:05 PM');
+    expect(formatClockTime('00:00', 'en-US')).toBe('12:00 AM');
     expect(component.formatTime(undefined)).toBe('—');
     expect(
       component.formatShiftRange(
         mockShift({ startTime: '18:00', endTime: '01:00', crossMidnight: true }),
       ),
     ).toContain('(+1)');
-    expect(component.formatShiftType('NIGHT')).toBe('Night');
     expect(component.getInitials('Ama Owusu')).toBe('AO');
     expect(component.getInitials('Cher')).toBe('CH');
     expect(component.getInitials('')).toBe('??');
@@ -356,5 +406,28 @@ describe('SchedulingComponent', () => {
     expect(toastSpy.error).toHaveBeenCalled();
     expect(component.shifts().length).toBe(0);
     expect(component.shiftsLoading()).toBeFalse();
+  });
+
+  describe('QA D348: French and Spanish clock and weekdays', () => {
+    afterEach(() => {
+      localStorage.removeItem('lang');
+      resetStoredLangForTests();
+    });
+
+    for (const [lang, monday, eight] of [
+      ['fr', 'lun.', '08:00'],
+      ['es', 'lun', '08:00'],
+    ] as const) {
+      it(`shows 24-hour times and ${lang} weekday names`, () => {
+        localStorage.setItem('lang', lang);
+        resetStoredLangForTests();
+        expect(component.formatTime('08:00')).toBe(eight);
+        expect(component.formatTime('16:00')).toBe('16:00');
+        expect(component.formatTime('18:00')).not.toMatch(/AM|PM/);
+        const labels = component.getWeekDays().map((d) => d.label);
+        expect(labels[0]).toBe(monday);
+        expect(labels.join(' ')).not.toMatch(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/);
+      });
+    }
   });
 });

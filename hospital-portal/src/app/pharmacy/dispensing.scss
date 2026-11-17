@@ -1,3 +1,4 @@
+@use './operations-workspace' as operations;
 @use '../shared/styles/page-common';
 
 .header-actions {
@@ -167,6 +168,27 @@
   font-size: 0.75rem;
   color: #6b7280;
   line-height: 1.3;
+}
+
+/* Why this row is not a plain fill. Amber, the same cue as the prescriber's
+   own attention note in prescriptions.scss — 7.19:1 on white. */
+.attention-note {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #92400e;
+  .material-symbols-outlined {
+    font-size: 1rem;
+  }
+}
+
+/* The prescriber has answered: a different thing from a problem, so the
+   brand teal rather than the amber warning. 5.98:1 on white. */
+.attention-note--answered {
+  color: var(--primary-deep);
 }
 
 .refill-note--quote {
@@ -348,3 +370,62 @@
   background-color: var(--surface-subtle, #f1f3f5);
   color: var(--text-muted, #6b7280);
 }
+
+// G13: who is preparing a work-queue row, and the All / Mine / Unclaimed filter.
+.claim-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+
+  .material-symbols-outlined {
+    font-size: 16px;
+  }
+
+  &--mine {
+    color: var(--primary);
+    font-weight: 600;
+  }
+}
+
+.claim-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+
+  legend {
+    float: left;
+    margin-right: 8px;
+    padding: 0;
+    font-weight: 600;
+  }
+
+  &__option {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+}
+
+.pharmacy-empty-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #5b6472);
+}
+
+// QA D1001: the remainder under the prescribed quantity in the queue.
+.cell-sub {
+  display: block;
+  font-size: 0.75rem;
+  color: #4b5563;
+}
+
+@include operations.workspace;

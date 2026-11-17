@@ -1,3 +1,4 @@
+@use './operations-workspace' as operations;
 @use '../shared/styles/page-common';
 
 // Local accent variant — see dispensing.scss for the shared rationale.
@@ -264,3 +265,73 @@ textarea.form-control {
     transform: rotate(360deg);
   }
 }
+
+// A routing decision's details stack: the translated no-show flag first, then
+// whatever free text was typed.
+.no-show-flag {
+  display: block;
+  font-weight: 600;
+  color: #92400e; // amber, 7.19:1 on white
+}
+
+.cell-sub {
+  display: block;
+  font-size: 0.75rem;
+  color: #4b5563;
+}
+
+// The routing history could not be loaded — said out loud, never rendered as
+// an empty history.
+.history-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+// QA D888: the orders matching the search, picked instead of typed.
+.rx-matches {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-width: 560px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  overflow: hidden;
+
+  li + li {
+    border-top: 1px solid var(--border, #e2e8f0);
+  }
+}
+
+.rx-match {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--primary-soft);
+  }
+}
+
+.rx-patient {
+  font-weight: 600;
+}
+
+.rx-selected {
+  margin: 10px 0 0;
+}
+
+@include operations.workspace;

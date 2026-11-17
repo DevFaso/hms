@@ -35,16 +35,33 @@ public class PlatformServiceMapper {
         return OrganizationPlatformService.builder()
             .organization(organization)
             .serviceType(request.getServiceType())
-            .provider(trim(request.getProvider()))
-            .baseUrl(trim(request.getBaseUrl()))
-            .documentationUrl(trim(request.getDocumentationUrl()))
-            .apiKeyReference(trim(request.getApiKeyReference()))
+            .provider(trimToNull(request.getProvider()))
+            .baseUrl(trimToNull(request.getBaseUrl()))
+            .documentationUrl(trimToNull(request.getDocumentationUrl()))
+            .apiKeyReference(trimToNull(request.getApiKeyReference()))
             .managedByPlatform(managedByPlatform)
             .ownership(toOwnership(request.getOwnership()))
             .metadata(toMetadata(request.getMetadata()))
             .build();
     }
 
+    /**
+     * Applies a partial update. The contract, field by field (D4/D5):
+     * <ul>
+     *   <li>absent / {@code null} — the field is left unchanged;</li>
+     *   <li>blank ({@code ""} or whitespace) — the field is cleared to {@code null};</li>
+     *   <li>anything else — replaces the stored value (trimmed).</li>
+     * </ul>
+     * Ownership and metadata are merged field by field under the same rule,
+     * so a request that names only {@code metadata.integrationNotes} no
+     * longer wipes {@code ehrSystem}, {@code billingSystem} and
+     * {@code inventorySystem}.
+     *
+     * <p>The API-key reference is the exception: it is write-only (item 45),
+     * so the portal never holds its value and a blank field means "keep".
+     * Clearing it is the explicit {@code clearApiKeyReference} flag; the
+     * service refuses a request that both sets and clears it.
+     */
     public void updateOrganizationServiceFromDto(PlatformServiceUpdateRequestDTO request, OrganizationPlatformService entity) {
         if (request == null || entity == null) {
             return;
@@ -53,27 +70,51 @@ public class PlatformServiceMapper {
         if (request.getStatus() != null) {
             entity.setStatus(request.getStatus());
         }
-        if (request.getProvider() != null) {
-            entity.setProvider(trim(request.getProvider()));
-        }
-        if (request.getBaseUrl() != null) {
-            entity.setBaseUrl(trim(request.getBaseUrl()));
-        }
-        if (request.getDocumentationUrl() != null) {
-            entity.setDocumentationUrl(trim(request.getDocumentationUrl()));
-        }
-        if (request.getApiKeyReference() != null) {
-            entity.setApiKeyReference(trim(request.getApiKeyReference()));
+        entity.setProvider(merged(entity.getProvider(), request.getProvider()));
+        entity.setBaseUrl(merged(entity.getBaseUrl(), request.getBaseUrl()));
+        entity.setDocumentationUrl(merged(entity.getDocumentationUrl(), request.getDocumentationUrl()));
+        if (Boolean.TRUE.equals(request.getClearApiKeyReference())) {
+            entity.setApiKeyReference(null);
+        } else if (request.getApiKeyReference() != null && !request.getApiKeyReference().isBlank()) {
+            entity.setApiKeyReference(request.getApiKeyReference().trim());
         }
         if (request.getManagedByPlatform() != null) {
             entity.setManagedByPlatform(request.getManagedByPlatform());
         }
         if (request.getOwnership() != null) {
-            entity.setOwnership(toOwnership(request.getOwnership()));
+            entity.setOwnership(mergeOwnership(entity.getOwnership(), request.getOwnership()));
         }
         if (request.getMetadata() != null) {
-            entity.setMetadata(toMetadata(request.getMetadata()));
+            entity.setMetadata(mergeMetadata(entity.getMetadata(), request.getMetadata()));
         }
+    }
+
+    private PlatformOwnership mergeOwnership(PlatformOwnership current, PlatformOwnershipDTO dto) {
+        PlatformOwnership base = current != null ? current : PlatformOwnership.empty();
+        return PlatformOwnership.builder()
+            .ownerTeam(merged(base.getOwnerTeam(), dto.getOwnerTeam()))
+            .ownerContactEmail(merged(base.getOwnerContactEmail(), dto.getOwnerContactEmail()))
+            .dataSteward(merged(base.getDataSteward(), dto.getDataSteward()))
+            .serviceLevel(merged(base.getServiceLevel(), dto.getServiceLevel()))
+            .build();
+    }
+
+    private PlatformServiceMetadata mergeMetadata(PlatformServiceMetadata current, PlatformServiceMetadataDTO dto) {
+        PlatformServiceMetadata base = current != null ? current : PlatformServiceMetadata.empty();
+        return PlatformServiceMetadata.builder()
+            .ehrSystem(merged(base.getEhrSystem(), dto.getEhrSystem()))
+            .billingSystem(merged(base.getBillingSystem(), dto.getBillingSystem()))
+            .inventorySystem(merged(base.getInventorySystem(), dto.getInventorySystem()))
+            .integrationNotes(merged(base.getIntegrationNotes(), dto.getIntegrationNotes()))
+            .build();
+    }
+
+    /** {@code null} keeps {@code current}; blank clears; otherwise the trimmed value. */
+    private String merged(String current, String incoming) {
+        if (incoming == null) {
+            return current;
+        }
+        return trimToNull(incoming);
     }
 
     public PlatformServiceResponseDTO toPlatformServiceResponse(OrganizationPlatformService entity) {
@@ -126,8 +167,8 @@ public class PlatformServiceMapper {
     private void applyLinkRequest(PlatformServiceLinkRequestDTO request, HospitalPlatformServiceLink link) {
         if (request != null) {
             link.setEnabled(request.getEnabled() == null || request.getEnabled());
-            link.setCredentialsReference(trim(request.getCredentialsReference()));
-            link.setOverrideEndpoint(trim(request.getOverrideEndpoint()));
+            link.setCredentialsReference(trimToNull(request.getCredentialsReference()));
+            link.setOverrideEndpoint(trimToNull(request.getOverrideEndpoint()));
             if (request.getOwnership() != null) {
                 link.setOwnership(toOwnership(request.getOwnership()));
             }
@@ -140,8 +181,8 @@ public class PlatformServiceMapper {
     private void applyLinkRequest(PlatformServiceLinkRequestDTO request, DepartmentPlatformServiceLink link) {
         if (request != null) {
             link.setEnabled(request.getEnabled() == null || request.getEnabled());
-            link.setCredentialsReference(trim(request.getCredentialsReference()));
-            link.setOverrideEndpoint(trim(request.getOverrideEndpoint()));
+            link.setCredentialsReference(trimToNull(request.getCredentialsReference()));
+            link.setOverrideEndpoint(trimToNull(request.getOverrideEndpoint()));
             if (request.getOwnership() != null) {
                 link.setOwnership(toOwnership(request.getOwnership()));
             }
@@ -203,10 +244,10 @@ public class PlatformServiceMapper {
         }
 
         return PlatformOwnership.builder()
-            .ownerTeam(trim(dto.getOwnerTeam()))
-            .ownerContactEmail(trim(dto.getOwnerContactEmail()))
-            .dataSteward(trim(dto.getDataSteward()))
-            .serviceLevel(trim(dto.getServiceLevel()))
+            .ownerTeam(trimToNull(dto.getOwnerTeam()))
+            .ownerContactEmail(trimToNull(dto.getOwnerContactEmail()))
+            .dataSteward(trimToNull(dto.getDataSteward()))
+            .serviceLevel(trimToNull(dto.getServiceLevel()))
             .build();
     }
 
@@ -229,10 +270,10 @@ public class PlatformServiceMapper {
         }
 
         return PlatformServiceMetadata.builder()
-            .ehrSystem(trim(dto.getEhrSystem()))
-            .billingSystem(trim(dto.getBillingSystem()))
-            .inventorySystem(trim(dto.getInventorySystem()))
-            .integrationNotes(trim(dto.getIntegrationNotes()))
+            .ehrSystem(trimToNull(dto.getEhrSystem()))
+            .billingSystem(trimToNull(dto.getBillingSystem()))
+            .inventorySystem(trimToNull(dto.getInventorySystem()))
+            .integrationNotes(trimToNull(dto.getIntegrationNotes()))
             .build();
     }
 
@@ -249,7 +290,12 @@ public class PlatformServiceMapper {
             .build();
     }
 
-    private String trim(String value) {
-        return value == null ? null : value.trim();
+    /** Blank and null both mean "no value": an empty string is never stored. */
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

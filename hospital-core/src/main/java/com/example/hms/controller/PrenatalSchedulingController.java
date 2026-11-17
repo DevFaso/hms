@@ -30,6 +30,7 @@ public class PrenatalSchedulingController {
 
     private final PrenatalSchedulingService prenatalSchedulingService;
 
+    @com.example.hms.security.ReadsOnly("calculates the visit cadence and maps existing appointments; creates nothing")
     @PostMapping("/schedule")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')")
     @Operation(summary = "Generate prenatal appointment plan", description = "Calculates recommended prenatal visit cadence and maps existing appointments.")

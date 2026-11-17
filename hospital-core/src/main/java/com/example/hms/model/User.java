@@ -40,7 +40,10 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class User extends BaseEntity {
 
-    @Column(nullable = false, unique = true, length = 50)
+    /** The one username length limit: the column, every DTO and the generator share it (D37). */
+    public static final int USERNAME_MAX_LENGTH = 50;
+
+    @Column(nullable = false, unique = true, length = USERNAME_MAX_LENGTH)
     private String username;
 
     @Column(name = "password_hash", nullable = false, length = 255)
@@ -57,7 +60,12 @@ public class User extends BaseEntity {
     @Column(length = 100)
     private String lastName;
 
-    @Column(name = "phone_number", length = 20, nullable = false, unique = true)
+    /**
+     * The login phone. QA D1061 (V249): null for a dependant registered under
+     * a guardian's number, which stays the contact on the patient record; the
+     * unique index ignores NULLs.
+     */
+    @Column(name = "phone_number", length = 20, unique = true)
     private String phoneNumber;
 
     @Column(name = "profile_image_url", length = 500)
@@ -70,6 +78,25 @@ public class User extends BaseEntity {
     @Builder.Default
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
+
+    /**
+     * When an administrator switched this account off (V184): user update
+     * with active=false, or a soft delete. Cleared only by an administrator
+     * turning it back on. While set, a provider admin cannot re-invite the
+     * account and an invitation code cannot activate it, so a disable is
+     * never undone from below. {@code null}: never disabled by an admin
+     * (an inactive account is then simply not activated yet).
+     */
+    @Column(name = "deactivated_by_admin_at")
+    private LocalDateTime deactivatedByAdminAt;
+
+    /**
+     * Set by a soft delete: whether the account was activated at that moment
+     * (active, signed in, or an assignment confirmed). The restore puts it
+     * back and clears it. {@code null}: not deleted, or deleted before V187.
+     */
+    @Column(name = "activated_before_delete")
+    private Boolean activatedBeforeDelete;
 
     private LocalDateTime lastLoginAt;
 

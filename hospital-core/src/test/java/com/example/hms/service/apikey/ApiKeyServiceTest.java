@@ -128,7 +128,7 @@ class ApiKeyServiceTest {
 
         assertThatThrownBy(() -> service.issue(dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("future");
+            .extracting("messageKey").isEqualTo("apiKey.expiryInPast");
         verify(apiKeyRepository, never()).save(any());
     }
 
@@ -224,7 +224,9 @@ class ApiKeyServiceTest {
 
         assertThat(foreignT).isInstanceOf(ResourceNotFoundException.class);
         assertThat(unknownT).isInstanceOf(ResourceNotFoundException.class);
-        assertThat(foreignT.getMessage()).isEqualTo(unknownT.getMessage());
+        // Each renders the id it was asked for; with the ids masked the two are identical.
+        assertThat(foreignT.getMessage().replace(foreignId.toString(), "<id>"))
+            .isEqualTo(unknownT.getMessage().replace(unknownId.toString(), "<id>"));
     }
 
     @Test

@@ -3,7 +3,10 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.LabOrderStatus;
+import com.example.hms.security.audit.WriteAuditInterceptor;
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.service.LabOrderService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,7 +54,8 @@ public class LabOrderController {
      * Doctors, Nurses, Staff, and Admins can create.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
+    @WriteAudited(entity = "LAB_ORDER", eventType = AuditEventType.LAB_ORDER_CREATED)
     @Operation(summary = "Create Lab Order", description = "Creates a new lab order capturing ICD-10 diagnosis, order channel, documentation, and signature metadata")
     @ApiResponse(responseCode = "201", description = "Lab order created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request")
@@ -61,6 +65,8 @@ public class LabOrderController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         LabOrderResponseDTO created = labOrderService.createLabOrder(requestDTO, locale);
+        WriteAuditInterceptor.describeWrite(created.getId(), created.getPatientId());
+        auditLabOrder(com.example.hms.enums.AuditEventType.LAB_ORDER_CREATED, created);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
     }
 
@@ -69,12 +75,34 @@ public class LabOrderController {
      * {@code /{id}} in reading order only; Spring matches the literal path first.
      */
     @GetMapping("/performing-labs")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
     @Operation(summary = "List performing laboratories",
                description = "Active hospitals other than the caller's own whose laboratory can perform an order")
     @ApiResponse(responseCode = "200", description = "Candidate laboratories retrieved successfully")
     public ResponseEntity<ApiResponseWrapper<java.util.List<com.example.hms.payload.dto.PerformingLabOptionDTO>>> listPerformingLabs() {
         return ResponseEntity.ok(ApiResponseWrapper.success(labOrderService.listPerformingLabs()));
+    }
+
+    /**
+     * The duplicate-order warning before submitting: the patient's active
+     * orders of the same test at this hospital, placed recently. A literal
+     * path, matched before {@code /{id}}. Empty when there is none, or when
+     * the caller may not order tests at that hospital.
+     */
+    @GetMapping("/duplicates")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
+    @Operation(summary = "Preview potential duplicate lab orders before submission",
+               description = "Active orders (not yet resulted, cancelled or voided) of the same test for the same "
+                   + "patient at the same hospital within the duplicate window. Ordering anyway is allowed: send "
+                   + "the ids returned here as acknowledgedDuplicateOrderIds on the create request; it is recorded "
+                   + "as acknowledged only when they cover every duplicate found when the order is placed.")
+    @ApiResponse(responseCode = "200", description = "Possible duplicates (possibly none)")
+    public ResponseEntity<ApiResponseWrapper<java.util.List<com.example.hms.payload.dto.LabOrderDuplicateMatchDTO>>> previewDuplicates(
+        @RequestParam UUID patientId,
+        @RequestParam UUID labTestDefinitionId,
+        @RequestParam(required = false) UUID hospitalId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+            labOrderService.previewDuplicates(patientId, hospitalId, labTestDefinitionId)));
     }
 
     /**
@@ -100,8 +128,14 @@ public class LabOrderController {
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'STAFF', 'SUPER_ADMIN')")
-    @Operation(summary = "List Lab Orders", description = "Retrieves paginated list of lab orders")
+    @Operation(summary = "List Lab Orders",
+               description = "Retrieves a paginated list of lab orders. Filtering by patientId requires a hospital "
+                   + "scope: a caller with none — a super-admin in global view — is refused rather than served that "
+                   + "patient's orders from every hospital, because a cross-hospital disclosure cannot be recorded "
+                   + "without an acting hospital to record it against. The unfiltered worklist is unaffected.")
     @ApiResponse(responseCode = "200", description = "Lab orders retrieved successfully")
+    @ApiResponse(responseCode = "404",
+                 description = "patientId was supplied and no hospital scope could be established")
     public ResponseEntity<ApiResponseWrapper<Page<LabOrderResponseDTO>>> getAllLabOrders(
         @PageableDefault(size = 20) Pageable pageable,
         @RequestParam(required = false) UUID patientId,
@@ -118,7 +152,7 @@ public class LabOrderController {
      * Doctors, Nurses, Staff, and Admins can update.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
     @Operation(summary = "Update Lab Order", description = "Updates a lab order by ID, including diagnosis, order-channel, and standing-order attestations")
     @ApiResponse(responseCode = "200", description = "Lab order updated successfully")
     @ApiResponse(responseCode = "404", description = "Lab order not found")
@@ -128,6 +162,7 @@ public class LabOrderController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         LabOrderResponseDTO updated = labOrderService.updateLabOrder(id, requestDTO, locale);
+        auditLabOrder(com.example.hms.enums.AuditEventType.LAB_ORDER_UPDATED, updated);
         return ResponseEntity.ok(ApiResponseWrapper.success(updated));
     }
 
@@ -167,24 +202,75 @@ public class LabOrderController {
 
         String rawStatus = request == null ? null : request.getStatus();
         if (rawStatus == null || rawStatus.isBlank()) {
-            throw new com.example.hms.exception.BusinessException("Request body must include a 'status' field.");
+            throw new com.example.hms.exception.FieldBusinessException("status", "lab.order.statusFieldRequired");
         }
         LabOrderStatus toStatus;
         try {
             toStatus = LabOrderStatus.valueOf(rawStatus.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new com.example.hms.exception.BusinessException("Unknown lab order status: " + rawStatus);
+            throw new com.example.hms.exception.FieldBusinessException("status", "lab.order.unknownStatus", rawStatus);
         }
-        LabOrderResponseDTO result = labOrderService.transitionLabOrderStatus(id, toStatus, locale);
+        LabOrderResponseDTO result = labOrderService.transitionLabOrderStatus(id, toStatus, request.getReason(), locale);
+        // QA D673: a cancel is its own audit event, not a generic update.
+        auditLabOrder(toStatus == LabOrderStatus.CANCELLED
+            ? com.example.hms.enums.AuditEventType.LAB_ORDER_CANCELLED
+            : com.example.hms.enums.AuditEventType.LAB_ORDER_UPDATED, result);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
+    }
+
+    /**
+     * QA D820: void an order entered in error (the wrong patient, the wrong
+     * test), from any state including COMPLETED, with a stated reason. Never a
+     * delete: the order and its results are kept, the results stop loading,
+     * and the order reads ENTERED_IN_ERROR. The service admits the ordering
+     * hospital's lab manager or lab director, or a super-admin, as for a cancel.
+     */
+    @PostMapping("/{id}/void")
+    @PreAuthorize("hasAnyRole('LAB_MANAGER', 'LAB_DIRECTOR', 'SUPER_ADMIN')")
+    @Operation(summary = "Void Lab Order (entered in error)",
+               description = "Marks the lab order and every result on it as entered in error, with a required "
+                   + "reason. The rows are kept; the results no longer appear in any clinical view.")
+    @ApiResponse(responseCode = "200", description = "Lab order voided")
+    @ApiResponse(responseCode = "400", description = "Reason missing, or the order is already voided")
+    @ApiResponse(responseCode = "404", description = "Lab order not found")
+    public ResponseEntity<ApiResponseWrapper<LabOrderResponseDTO>> voidLabOrder(
+        @PathVariable UUID id,
+        @RequestBody(required = false) VoidLabOrderRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+
+        LabOrderResponseDTO result = labOrderService.voidLabOrder(id,
+            request == null ? null : request.getReason(), locale);
+        auditLabOrder(AuditEventType.LAB_ORDER_ENTERED_IN_ERROR, result);
+        return ResponseEntity.ok(ApiResponseWrapper.success(result));
+    }
+
+    /** QA D820: the body of a void. The reason is required (checked by the service, localised). */
+    private static class VoidLabOrderRequestDTO {
+        private String reason;
+
+        public String getReason() { return reason; }
+        public void setReason(String reason) { this.reason = reason; }
     }
 
     /** Request DTO for transitioning a lab order's status. */
     private static class TransitionLabOrderStatusRequestDTO {
-        @NotBlank(message = "Request body must include a 'status' field.")
+        // QA D1350 (round 30): the reason in the reader's language, not an English literal.
+        @NotBlank(message = "{lab.order.statusFieldRequired}")
         private String status;
+
+        /** QA D673: required when the target status is CANCELLED. */
+        private String reason;
 
         public String getStatus() { return status; }
         public void setStatus(String status) { this.status = status; }
+        public String getReason() { return reason; }
+        public void setReason(String reason) { this.reason = reason; }
+    }
+
+    /** QA D429: the lab audit row names the event, the order and its patient. Ids only. */
+    private static void auditLabOrder(com.example.hms.enums.AuditEventType type, LabOrderResponseDTO order) {
+        if (order != null) {
+            com.example.hms.security.audit.WriteAuditDetail.describe(type, order.getId(), order.getPatientId());
+        }
     }
 }

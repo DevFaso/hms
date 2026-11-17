@@ -131,6 +131,36 @@ class IkoddiGatewayImplTest {
     }
 
     @Test
+    @DisplayName("QA D1034: a refused SMS still fails with the status, and its body is logged without numbers")
+    void aRefusedSmsKeepsItsStatus() {
+        server.expect(requestTo("https://ikoddi.test/api/v1/groups/org-1/sms"))
+            .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+                .withBadRequest()
+                .body("{\"message\":\"Sender HMS is not approved\",\"sentTo\":[\"22670000101\"]}")
+                .contentType(MediaType.APPLICATION_JSON));
+
+        List<String> recipients = List.of("+22670000101");
+        assertThatThrownBy(() -> gateway.sendSms(recipients, "code 123456", null))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("400")
+            .hasMessageNotContaining("22670000101");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("QA D1034: the logged gateway body masks numbers and addresses and is capped")
+    void theLoggedBodyCarriesNoPhi() {
+        String logged = IkoddiGatewayImpl.safeGatewayBody(
+            "{\"error\":\"Sender not approved\",\"to\":\"+226 70 00 01 01\",\"mail\":\"awa.kabore@example.test\"}");
+        assertThat(logged).contains("Sender not approved").contains("[number]").contains("[email]")
+            .doesNotContain("70 00 01 01").doesNotContain("awa.kabore");
+        assertThat(IkoddiGatewayImpl.safeGatewayBody("x".repeat(1000))).hasSizeLessThanOrEqualTo(301);
+        assertThat(IkoddiGatewayImpl.safeGatewayBody(null)).isEqualTo("<empty>");
+        // A short code of a few digits is kept: it is the reason, not a number.
+        assertThat(IkoddiGatewayImpl.safeGatewayBody("{\"code\":4012}")).contains("4012");
+    }
+
+    @Test
     @DisplayName("credentials present but the switch left off still counts as unavailable")
     void enabledFlagIsRequired() {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://ikoddi.test/api/v1");
@@ -142,5 +172,40 @@ class IkoddiGatewayImplTest {
         assertThat(offSwitch.isConfigured()).isFalse();
         assertThatThrownBy(() -> offSwitch.sendOtp("+22670707070", IkoddiGateway.OtpChannel.SMS))
             .isInstanceOf(NotificationTransportUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("recipient allowlist: IKODDI sends neither an SMS nor a remote code to an unlisted number")
+    void allowlistRefusesUnlisted() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ikoddi.test/api/v1");
+        MockRestServiceServer noCalls = MockRestServiceServer.bindTo(builder).build();
+        IkoddiGatewayImpl restricted = new IkoddiGatewayImpl(builder.build(), true, "key-123", "org-1", "otp-app-1",
+            "HMS", "BF", "226", SmsRecipientAllowlist.parse("+22670707070", "IKODDI"));
+
+        assertThatThrownBy(() -> restricted.sendSms(List.of("+22670707071"), "Bonjour", null))
+            .isInstanceOf(SmsRecipientNotAllowedException.class)
+            .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+        assertThatThrownBy(() -> restricted.sendOtp("70 70 70 71", IkoddiGateway.OtpChannel.SMS))
+            .isInstanceOf(SmsRecipientNotAllowedException.class)
+            .hasMessage(SmsRecipientAllowlist.KEY_NOT_ALLOWLISTED);
+        noCalls.verify();
+    }
+
+    @Test
+    @DisplayName("recipient allowlist: IKODDI keeps only the listed numbers of a batch and reports the rest")
+    void allowlistFiltersBatch() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ikoddi.test/api/v1");
+        MockRestServiceServer one = MockRestServiceServer.bindTo(builder).build();
+        one.expect(requestTo("https://ikoddi.test/api/v1/groups/org-1/sms"))
+            .andExpect(jsonPath("$.sentTo.length()").value(1))
+            .andExpect(jsonPath("$.sentTo[0]").value("22670707070"))
+            .andRespond(withSuccess("{\"status\":0}", MediaType.APPLICATION_JSON));
+        IkoddiGatewayImpl restricted = new IkoddiGatewayImpl(builder.build(), true, "key-123", "org-1", "otp-app-1",
+            "HMS", "BF", "226", SmsRecipientAllowlist.parse("+22670707070", "IKODDI"));
+
+        IkoddiGateway.SmsDispatch dispatch = restricted.sendSms(List.of("+22670707070", "+22670707071"), "a", null);
+
+        assertThat(dispatch.delivered()).isFalse();
+        one.verify();
     }
 }

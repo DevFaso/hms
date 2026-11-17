@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.StrictQueryParams;
 import com.example.hms.enums.PermissionMatrixAuditAction;
 import com.example.hms.enums.PermissionMatrixEnvironment;
 import com.example.hms.payload.dto.PermissionMatrixAuditEventRequestDTO;
@@ -54,7 +55,11 @@ public class PermissionMatrixController {
         @RequestParam PermissionMatrixEnvironment environment,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale
     ) {
-        return ResponseEntity.ok(permissionMatrixService.getLatestSnapshot(environment, locale));
+        // D248: an environment with no snapshot yet is an empty state, not a
+        // missing page — 204, which the governance matrix tab shows as such.
+        return permissionMatrixService.findLatestSnapshot(environment, locale)
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @GetMapping("/snapshots")
@@ -94,6 +99,7 @@ public class PermissionMatrixController {
     }
 
     @GetMapping("/audit")
+    @StrictQueryParams
     @Operation(summary = "List recent audit events")
     public ResponseEntity<List<PermissionMatrixAuditEventResponseDTO>> listAuditEvents(
         @RequestParam(required = false) PermissionMatrixAuditAction action

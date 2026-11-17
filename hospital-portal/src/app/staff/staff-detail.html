@@ -28,12 +28,16 @@
       <div class="header-info">
         <h1>{{ s.name }}</h1>
         <div class="header-meta">
-          <span class="role-badge">{{ formatJobTitle(s.jobTitle) }}</span>
-          <span class="status-badge" [class.active]="s.active" [class.inactive]="!s.active">
+          <span class="role-badge">{{
+            (s.jobTitle | enumLabel: 'jobTitle') || ('STAFF.TITLE' | translate)
+          }}</span>
+          {{ ' '
+          }}<span class="status-badge" [class.active]="s.active" [class.inactive]="!s.active">
             {{ s.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
           </span>
           @if (s.headOfDepartment) {
-            <span class="hod-badge">
+            {{ ' '
+            }}<span class="hod-badge">
               <span class="material-symbols-outlined">star</span>
               {{ 'STAFF.HEAD_OF_DEPARTMENT' | translate }}
             </span>
@@ -148,15 +152,21 @@
           <div class="info-rows">
             <div class="info-row">
               <span class="label">{{ 'STAFF.JOB_TITLE' | translate }}</span>
-              <span class="value">{{ formatJobTitle(s.jobTitle) }}</span>
+              <span class="value">{{
+                (s.jobTitle | enumLabel: 'jobTitle') || ('STAFF.TITLE' | translate)
+              }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'STAFF.EMPLOYMENT_TYPE' | translate }}</span>
-              <span class="value">{{ formatEmploymentType(s.employmentType) }}</span>
+              <span class="value">{{
+                (s.employmentType | enumLabel: 'employmentType') || '—'
+              }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'STAFF.SPECIALIZATION' | translate }}</span>
-              <span class="value">{{ s.specialization ?? '—' }}</span>
+              <span class="value">{{
+                s.specialization ? (s.specialization | enumLabel: 'specialization') : '—'
+              }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'STAFF.LICENSE_NUMBER' | translate }}</span>
@@ -334,11 +344,15 @@
                       <div class="shift-info">
                         <span class="shift-time">{{ formatShiftRange(shift) }}</span>
                         @if (shift.crossMidnight && shift.shiftEndDate === day.date) {
-                          <span class="cross-midnight-badge">{{
+                          {{ ' '
+                          }}<span class="cross-midnight-badge">{{
                             'STAFF.SHIFT_CONTINUED_BADGE' | translate
                           }}</span>
                         }
-                        <span class="shift-meta">{{ formatShiftType(shift.shiftType) }}</span>
+                        {{ ' '
+                        }}<span class="shift-meta">{{
+                          shift.shiftType | enumLabel: 'shiftType'
+                        }}</span>
                       </div>
                       <span
                         class="shift-status-dot"
@@ -386,8 +400,11 @@
                 </div>
                 <div class="leave-details">
                   <div class="leave-title">
-                    <span class="leave-type-label">{{ formatLeaveType(leave.leaveType) }}</span>
-                    <span class="leave-status-badge" [attr.data-status]="leave.status">
+                    <span class="leave-type-label">{{
+                      leave.leaveType | enumLabel: 'leaveType'
+                    }}</span>
+                    {{ ' '
+                    }}<span class="leave-status-badge" [attr.data-status]="leave.status">
                       {{ leave.status | enumLabel: 'leaveStatus' }}
                     </span>
                   </div>

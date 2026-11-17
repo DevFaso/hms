@@ -28,10 +28,11 @@
             </strong>
             @if (card.median) {
               <span class="kpi-cards__median">
-                {{ 'ANALYTICS.KPI.MEDIAN_LABEL' | translate }}: {{ card.median }}
+                {{ 'ANALYTICS.KPI.MEDIAN_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ card.median }}
               </span>
             }
-            <span class="kpi-cards__sub">{{ card.sub }}</span>
+            <span class="kpi-cards__sub">{{ card.sub.key | translate: card.sub.params }}</span>
             @if (card.series.length > 0) {
               <app-kpi-sparkline
                 class="kpi-cards__sparkline"

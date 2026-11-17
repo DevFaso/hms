@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -79,10 +80,97 @@ class PatientControllerTest {
         // E9 #55: the controller no longer resolves scope itself — one resolver.
         when(authUtils.resolveHospitalScope(auth, null, true)).thenReturn(hospitalId);
 
-        ResponseEntity<List<PatientResponseDTO>> response = controller.getAllPatients(null, null, null, null, auth);
+        ResponseEntity<List<PatientResponseDTO>> response = controller.getAllPatients(null, null, null, null, null, auth);
 
         assertEquals(expected, response.getBody());
         verify(patientService).getAllPatients(eq(hospitalId), any(Locale.class));
+    }
+
+    /** RCPT-CLIN: the desk corrects demographics by PATCH, and cannot overwrite clinical text it cannot read. */
+    @org.junit.jupiter.api.Nested
+    class ClinicalTextAtTheDesk {
+        private final UUID patientId = UUID.randomUUID();
+
+        private org.springframework.security.core.Authentication signedInAs(String... roles) {
+            var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("someone", "n/a",
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList(roles));
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+            return auth;
+        }
+
+        @org.junit.jupiter.api.AfterEach
+        void signOut() {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+
+        @Test
+        void aReceptionistCannotPatchCareTeamNotesOrChronicConditions() {
+            var auth = signedInAs(ROLE_RECEPTIONIST_CODE);
+            var notes = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            notes.setCareTeamNotes("");
+            var conditions = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            conditions.setChronicConditions(List.of());
+
+            org.junit.jupiter.api.Assertions.assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> controller.patchPatient(patientId, notes, null, auth));
+            org.junit.jupiter.api.Assertions.assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> controller.patchPatient(patientId, conditions, null, auth));
+            org.mockito.Mockito.verifyNoInteractions(patientService);
+        }
+
+        @Test
+        void aReceptionistStillCorrectsDemographicsAndNoLongerABloodType() {
+            var auth = signedInAs(ROLE_RECEPTIONIST_CODE);
+            var body = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            body.setFirstName("Awa");
+
+            controller.patchPatient(patientId, body, null, auth);
+
+            verify(patientService).patchPatient(eq(patientId), eq(body), any(), any(Locale.class));
+
+            // User decision 2026-11-06: the desk does not read it, so it does not write it.
+            var bloodType = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            bloodType.setBloodType("O+");
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.patchPatient(patientId, bloodType, null, auth))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        }
+
+        @Test
+        void aDoctorStillWritesThem() {
+            var auth = signedInAs("ROLE_DOCTOR", ROLE_RECEPTIONIST_CODE);
+            var body = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            body.setCareTeamNotes("Vu en consultation");
+
+            controller.patchPatient(patientId, body, null, auth);
+
+            verify(patientService).patchPatient(eq(patientId), eq(body), any(), any(Locale.class));
+        }
+    }
+
+    @Test
+    void theSearchParameterFiltersInsteadOfBeingDropped() {
+        // QA D79: the admission typeahead sends ?search=, which used to be
+        // ignored, so the first patients of the hospital were offered.
+        UUID hospitalId = UUID.randomUUID();
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "none")
+            .claim("sub", UUID.randomUUID().toString()).build();
+        JwtAuthenticationToken auth = new JwtAuthenticationToken(jwt,
+            List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST_CODE)));
+        when(authUtils.resolveHospitalScope(auth, null, true)).thenReturn(hospitalId);
+        List<PatientResponseDTO> expected = List.of(PatientResponseDTO.builder().id(UUID.randomUUID()).build());
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.PatientSearchCriteria> criteria =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.PatientSearchCriteria.class);
+        when(patientService.searchPatients(criteria.capture(), eq(0), org.mockito.ArgumentMatchers.anyInt(),
+            any(Locale.class))).thenReturn(expected);
+
+        ResponseEntity<List<PatientResponseDTO>> response =
+            controller.getAllPatients(null, null, null, " QAH5769 ", null, auth);
+
+        assertEquals(expected, response.getBody());
+        assertEquals("QAH5769", criteria.getValue().getName());
+        assertEquals(hospitalId, criteria.getValue().getHospitalId());
+        org.junit.jupiter.api.Assertions.assertTrue(criteria.getValue().isIncludeInactive());
+        verify(patientService, never()).getAllPatients(any(), any());
     }
 
     @Test
@@ -99,6 +187,92 @@ class PatientControllerTest {
         when(authUtils.resolveHospitalScope(auth, null, true))
             .thenThrow(new BusinessException("Receptionist must be affiliated with a hospital."));
 
-        assertThrows(BusinessException.class, () -> controller.getAllPatients(null, null, null, null, auth));
+        assertThrows(BusinessException.class, () -> controller.getAllPatients(null, null, null, null, null, auth));
+    }
+
+    // QA D504: an allergy list narrowed by the patient's sharing opt-out says so in a header;
+    // without it the chart shows a silent, complete-looking list.
+    private JwtAuthenticationToken clinician(UUID userId) {
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "none")
+            .claim("sub", userId.toString()).build();
+        return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_DOCTOR")));
+    }
+
+    @Test
+    void allergyListNarrowedByAnOptOutCarriesTheWithheldHeader() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        JwtAuthenticationToken auth = clinician(userId);
+        when(authUtils.resolveUserId(auth)).thenReturn(java.util.Optional.of(userId));
+        when(authUtils.resolveHospitalScope(auth, null, false)).thenReturn(hospitalId);
+        when(patientService.getPatientAllergies(patientId, hospitalId, userId)).thenReturn(List.of());
+        when(patientService.foreignAllergiesWithheld(patientId, hospitalId, userId)).thenReturn(true);
+
+        ResponseEntity<List<com.example.hms.payload.dto.PatientAllergyResponseDTO>> response =
+            controller.getPatientAllergies(patientId, null, auth);
+
+        assertEquals(PatientController.RECORDS_WITHHELD_OTHER_HOSPITALS,
+            response.getHeaders().getFirst(PatientController.RECORDS_WITHHELD_HEADER));
+    }
+
+    @Test
+    void allergyListUnderBreakGlassHasNoWithheldHeader() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        JwtAuthenticationToken auth = clinician(userId);
+        when(authUtils.resolveUserId(auth)).thenReturn(java.util.Optional.of(userId));
+        when(authUtils.resolveHospitalScope(auth, null, false)).thenReturn(hospitalId);
+        when(patientService.getPatientAllergies(patientId, hospitalId, userId)).thenReturn(List.of());
+        when(patientService.foreignAllergiesWithheld(patientId, hospitalId, userId)).thenReturn(false);
+
+        ResponseEntity<List<com.example.hms.payload.dto.PatientAllergyResponseDTO>> response =
+            controller.getPatientAllergies(patientId, null, auth);
+
+        org.junit.jupiter.api.Assertions.assertNull(
+            response.getHeaders().getFirst(PatientController.RECORDS_WITHHELD_HEADER));
+    }
+
+    // QA D504 (round 3): every clinical list, not just allergies, says when the opt-out narrowed it.
+    @Test
+    void diagnosisListNarrowedByAnOptOutCarriesTheWithheldHeader() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        JwtAuthenticationToken auth = clinician(userId);
+        when(authUtils.resolveUserId(auth)).thenReturn(java.util.Optional.of(userId));
+        when(authUtils.resolveHospitalScope(auth, null, false)).thenReturn(hospitalId);
+        when(patientService.listPatientDiagnoses(patientId, hospitalId, false)).thenReturn(List.of());
+        when(patientService.foreignRecordsWithheld(patientId, hospitalId, userId)).thenReturn(true);
+
+        assertEquals(PatientController.RECORDS_WITHHELD_OTHER_HOSPITALS,
+            controller.listPatientDiagnoses(patientId, null, false, auth)
+                .getHeaders().getFirst(PatientController.RECORDS_WITHHELD_HEADER));
+
+        when(patientService.foreignRecordsWithheld(patientId, hospitalId, userId)).thenReturn(false);
+        org.junit.jupiter.api.Assertions.assertNull(controller.listPatientDiagnoses(patientId, null, false, auth)
+            .getHeaders().getFirst(PatientController.RECORDS_WITHHELD_HEADER));
+    }
+
+    @Test
+    void chartUpdateListNarrowedByAnOptOutCarriesTheWithheldHeader() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        JwtAuthenticationToken auth = clinician(userId);
+        when(authUtils.resolveUserId(auth)).thenReturn(java.util.Optional.of(userId));
+        when(authUtils.resolveHospitalScope(auth, null, false)).thenReturn(hospitalId);
+        when(assignmentRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            eq(userId), eq(hospitalId), any()))
+            .thenReturn(java.util.Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(patientChartUpdateService.listPatientChartUpdates(patientId, hospitalId, pageable))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+        when(patientService.foreignRecordsWithheld(patientId, hospitalId, userId)).thenReturn(true);
+
+        assertEquals(PatientController.RECORDS_WITHHELD_OTHER_HOSPITALS,
+            controller.listPatientChartUpdates(patientId, null, pageable, auth)
+                .getHeaders().getFirst(PatientController.RECORDS_WITHHELD_HEADER));
     }
 }

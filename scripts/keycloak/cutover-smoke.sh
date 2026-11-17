@@ -20,7 +20,8 @@
 #   2 — invocation error (missing curl/jq, missing required env)
 #
 # Required env:
-#   API_BASE_URL   e.g. https://api.dev.e-keneya.com (no trailing slash)
+#   API_BASE_URL   e.g. https://dev.e-keneya.com/api (includes the /api
+#                  context path; no trailing slash)
 #
 # Optional env:
 #   ISSUER_URI     e.g. https://keycloak.example.com/realms/hms
@@ -32,7 +33,7 @@
 #                  before authentication.
 #
 # Usage:
-#   API_BASE_URL=https://api.dev.e-keneya.com \
+#   API_BASE_URL=https://dev.e-keneya.com/api \
 #   ISSUER_URI=https://keycloak.example.com/realms/hms \
 #     scripts/keycloak/cutover-smoke.sh
 #
@@ -47,7 +48,7 @@ for tool in curl jq; do
 done
 
 if [[ -z "${API_BASE_URL:-}" ]]; then
-  echo "ERROR: API_BASE_URL must be set (e.g. https://api.dev.e-keneya.com)" >&2
+  echo "ERROR: API_BASE_URL must be set (e.g. https://dev.e-keneya.com/api)" >&2
   exit 2
 fi
 API_BASE_URL="${API_BASE_URL%/}"

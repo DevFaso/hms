@@ -56,8 +56,20 @@ class OrganizationControllerIT extends BaseIT {
     @Autowired
     private DepartmentRepository departmentRepository;
 
+    /**
+     * QA D845: the organisation reads now ask for a VERIFIED super-admin (the
+     * live context), not just the authority on the mock user, so this suite
+     * acts with that context, as the real filters would build it.
+     */
+    @org.junit.jupiter.api.AfterEach
+    void clearScope() {
+        com.example.hms.security.context.HospitalContextHolder.clear();
+    }
+
     @BeforeEach
-    void cleanDatabase() {
+    void cleanDatabaseAndActAsVerifiedSuperAdmin() {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().superAdmin(true).build());
         departmentRepository.deleteAll();
         assignmentRepository.deleteAll();
         securityRuleRepository.deleteAll();
@@ -94,6 +106,54 @@ class OrganizationControllerIT extends BaseIT {
             .extracting(OrganizationSecurityPolicy::getCode)
             .contains(OrganizationSecurityConstants.DEFAULT_PASSWORD_POLICY,
                 OrganizationSecurityConstants.DEFAULT_SESSION_POLICY);
+    }
+
+    private Organization storedTwin(String code) {
+        // Saved straight through the repository: duplicate names stored before the D435 guard.
+        Organization org = new Organization();
+        org.setName("Twin Health");
+        org.setCode(code);
+        org.setType(com.example.hms.enums.OrganizationType.valueOf("GOVERNMENT_AGENCY"));
+        org.setActive(true);
+        return organizationRepository.save(org);
+    }
+
+    @Test
+    @DisplayName("QA D435: two stored organisations with one name stay editable, and the name is refused to a third")
+    void duplicateNamesStoredBeforeTheGuardDoNotBreakCreateOrUpdate() throws Exception {
+        Organization first = storedTwin("TWIN01");
+        storedTwin("TWIN02");
+
+        mockMvc.perform(put(API_CONTEXT + "/organizations/{id}", first.getId()).contextPath(API_CONTEXT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "name", "twin health ",
+                    "code", "TWIN01",
+                    "description", "Edited",
+                    "type", "GOVERNMENT_AGENCY",
+                    "active", true))))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post(API_CONTEXT + "/organizations").contextPath(API_CONTEXT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "name", "TWIN HEALTH",
+                    "code", "TWIN03",
+                    "type", "GOVERNMENT_AGENCY",
+                    "active", true))))
+            .andExpect(status().isBadRequest());
+
+        Organization other = storedTwin("TWIN04");
+        other.setName("Other Health");
+        organizationRepository.save(other);
+        mockMvc.perform(put(API_CONTEXT + "/organizations/{id}", other.getId()).contextPath(API_CONTEXT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "name", "Twin Health",
+                    "code", "TWIN04",
+                    "type", "GOVERNMENT_AGENCY",
+                    "active", true))))
+            .andExpect(status().isBadRequest());
     }
 
     @Test

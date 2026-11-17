@@ -22,7 +22,10 @@ import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.HospitalLifecycleStatusService;
 import com.example.hms.service.MfaService;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -33,16 +36,28 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class HospitalLifecycleServiceImplTest {
 
     @Mock private HospitalRepository hospitalRepository;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private HospitalLifecycleStatusService lifecycleStatusService;
     @Mock private MfaService mfaService;
+    @Mock private com.example.hms.repository.provider.ProviderVerificationRepository providerVerificationRepository;
+
+    /**
+     * Fixed instant, deliberately in the future: a time that is past on the
+     * injected clock but not on the system clock proves which one is read.
+     */
+    private static final Instant NOW = Instant.parse("2099-03-01T03:00:00Z");
+    @Spy private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+
+    @Mock private com.example.hms.repository.UserRepository userRepository;
 
     @InjectMocks private HospitalLifecycleServiceImpl service;
 
@@ -83,7 +98,7 @@ class HospitalLifecycleServiceImplTest {
 
     @Test
     void suspendTransitionsActiveHospitalAndEmitsAudit() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
         HospitalLifecycleResponseDTO result = service.suspend(hospitalId, withReason("ops review"), null);
@@ -104,30 +119,32 @@ class HospitalLifecycleServiceImplTest {
 
     @Test
     void suspendRequiresAReason() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        // QA round 29 (assertion changed): refused on "reason" before the hospital is locked.
         TenantLifecycleActionRequestDTO blank = withReason("  ");
         assertThatThrownBy(() -> service.suspend(hospitalId, blank, null))
-            .isInstanceOf(BusinessRuleException.class)
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("reason"))
             .hasMessageContaining("reason is required");
+        verify(hospitalRepository, never()).findByIdForUpdate(any());
         verify(hospitalRepository, never()).save(any());
     }
 
     @Test
     void suspendRejectsAlreadySuspendedHospital() {
         hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         TenantLifecycleActionRequestDTO req = withReason("ops");
         assertThatThrownBy(() -> service.suspend(hospitalId, req, null))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("Cannot suspend");
+            .hasMessageContaining("Suspension is not allowed");
     }
 
     @Test
     void restoreTransitionsSuspendedToActive() {
         hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
         hospital.setActive(false);
-        hospital.setSuspendedAt(Instant.now());
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        hospital.setSuspendedAt(NOW);
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
         HospitalLifecycleResponseDTO result = service.restore(hospitalId, null);
@@ -135,11 +152,28 @@ class HospitalLifecycleServiceImplTest {
         assertThat(result.getLifecycleState()).isEqualTo(HospitalLifecycleState.ACTIVE);
         assertThat(hospital.isActive()).isTrue();
         verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
+        // D246: no stale suspension block once the hospital is back
+        assertThat(result.getSuspendedAt()).isNull();
+        assertThat(result.getSuspendedBy()).isNull();
+    }
+
+    @Test
+    void namesTheActorInsteadOfAnId_D246() {
+        hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
+        hospital.setSuspendedAt(NOW);
+        hospital.setSuspendedBy(actorId);
+        com.example.hms.model.User actor = new com.example.hms.model.User();
+        actor.setFirstName("Awa");
+        actor.setLastName("Traore");
+        when(userRepository.findById(actorId)).thenReturn(Optional.of(actor));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThat(service.getLifecycle(hospitalId).getSuspendedByName()).isEqualTo("Awa Traore");
     }
 
     @Test
     void archiveTransitionsActiveAndCanLaterSchedulePurge() {
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.archive(hospitalId, withReason("offboarded"), null);
@@ -148,25 +182,25 @@ class HospitalLifecycleServiceImplTest {
         HospitalLifecycleResponseDTO result = service.schedulePurge(
             hospitalId, withReason("retention expired"), null);
         assertThat(result.getLifecycleState()).isEqualTo(HospitalLifecycleState.PENDING_PURGE);
-        assertThat(result.getPurgeScheduledFor()).isAfter(Instant.now());
+        assertThat(result.getPurgeScheduledFor()).isAfter(NOW);
         assertThat(result.getPurgeReason()).isEqualTo("retention expired");
     }
 
     @Test
     void schedulePurgeOnlyValidFromArchived() {
         // ACTIVE → schedule-purge is rejected.
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         TenantLifecycleActionRequestDTO req = withReason("nope");
         assertThatThrownBy(() -> service.schedulePurge(hospitalId, req, null))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("Cannot schedule purge");
+            .hasMessageContaining("Scheduling the purge is not allowed");
     }
 
     @Test
     void cancelPurgeRevertsToArchived() {
         hospital.setLifecycleState(HospitalLifecycleState.PENDING_PURGE);
-        hospital.setPurgeScheduledFor(Instant.now().plusSeconds(3600));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        hospital.setPurgeScheduledFor(NOW.plusSeconds(3600));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
 
         HospitalLifecycleResponseDTO result = service.cancelPurge(hospitalId, null);
@@ -189,39 +223,27 @@ class HospitalLifecycleServiceImplTest {
             .satisfies(e -> assertThat(e.getMessageKey()).isEqualTo("hospital.notFound"));
     }
 
-    // ── MFA step-up branches (mirrors OrganizationLifecycleServiceImplTest) ──
+    // ── MFA step-up (the shared MfaService#requireStepUp; its branches are in MfaServiceTest) ──
 
     @Test
-    void enrolledActorWithoutTokenIsRejected() {
+    void refusedStepUpStopsTheTransition() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
+        when(mfaService.requireStepUp(actorId, "000000", "hospital suspend", false))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.INVALID));
 
-        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), null))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("mfa_required");
+        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), "000000"))
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
         verify(hospitalRepository, never()).save(any());
     }
 
     @Test
-    void enrolledActorWithInvalidCodeIsRejected() {
+    void verifiedStepUpPassesAndPersists() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(mfaService.verifyCode(actorId, "000000")).thenReturn(false);
-
-        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), "000000"))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("invalid or missing");
-    }
-
-    @Test
-    void enrolledActorWithValidCodePassesAndPersists() {
-        ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
-        when(mfaService.verifyCode(actorId, "123456")).thenReturn(true);
+        when(mfaService.requireStepUp(actorId, "123456", "hospital suspend", false)).thenReturn(true);
 
         service.suspend(hospitalId, withReason("ops"), "123456");
         assertThat(hospital.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
@@ -231,9 +253,9 @@ class HospitalLifecycleServiceImplTest {
     void unenrolledActorInNonStrictModeAuditsAndProceeds() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         ReflectionTestUtils.setField(service, "requireMfaStrict", false);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(mfaService.requireStepUp(actorId, null, "hospital suspend", false)).thenReturn(false);
 
         service.suspend(hospitalId, withReason("ops"), null);
 
@@ -244,26 +266,70 @@ class HospitalLifecycleServiceImplTest {
     }
 
     @Test
-    void unenrolledActorInStrictModeIsRejected() {
+    void strictModeIsPassedToTheSharedStepUp() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
         ReflectionTestUtils.setField(service, "requireMfaStrict", true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
+        when(mfaService.requireStepUp(actorId, null, "hospital suspend", true))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.NOT_ENROLLED));
 
         assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), null))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("must enrol MFA");
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
         verify(hospitalRepository, never()).save(any());
     }
 
     @Test
-    void mfaEnrollmentLookupFailureFailsClosed() {
+    void schedulePurgeInThePast_isRefusedBeforeTheStepUpCanSpendACode() {
         ReflectionTestUtils.setField(service, "requireMfa", true);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mfaService.isMfaEnabled(actorId)).thenThrow(new RuntimeException("MFA service down"));
+        hospital.setLifecycleState(HospitalLifecycleState.ARCHIVED);
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
+        TenantLifecycleActionRequestDTO req = TenantLifecycleActionRequestDTO.builder()
+            .reason("oops").purgeScheduledFor(NOW.minus(1, java.time.temporal.ChronoUnit.DAYS)).build();
 
-        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), "123456"))
-            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
-            .hasMessageContaining("enrollment lookup unavailable");
+        assertThatThrownBy(() -> service.schedulePurge(hospitalId, req, "12345678"))
+            .isInstanceOf(com.example.hms.exception.BusinessRuleException.class)
+            .hasMessageContaining("past");
+        verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void archiveAndDefaultPurgeDateComeFromTheInjectedClock() {
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.archive(hospitalId, withReason("offboarded"), null);
+        assertThat(hospital.getArchivedAt()).isEqualTo(NOW);
+
+        HospitalLifecycleResponseDTO result = service.schedulePurge(hospitalId, withReason("retention"), null);
+        assertThat(result.getPurgeScheduledFor()).isEqualTo(NOW.plus(30, ChronoUnit.DAYS));
+    }
+
+    @Test
+    void anExplicitPurgeDateIsHonoured_notReplacedByTheDefault() {
+        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+        service.archive(hospitalId, withReason("offboarded"), null);
+        Instant picked = NOW.plus(90, ChronoUnit.DAYS);
+
+        HospitalLifecycleResponseDTO result = service.schedulePurge(hospitalId,
+            TenantLifecycleActionRequestDTO.builder().reason("retention").purgeScheduledFor(picked).build(), null);
+
+        assertThat(result.getPurgeScheduledFor()).isEqualTo(picked);
+    }
+
+    @Test
+    void thePortalsPurgeBody_bindsToPurgeScheduledFor() throws Exception {
+        // The hospital dialog once sent `scheduledFor`, which Jackson ignored:
+        // the picked day was dropped and the 30-day default used.
+        var mapper = tools.jackson.databind.json.JsonMapper.builder()
+            .disable(tools.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .build();
+
+        TenantLifecycleActionRequestDTO bound = mapper.readValue(
+            "{\"reason\":\"retention\",\"purgeScheduledFor\":\"2099-06-01T00:00:00Z\"}",
+            TenantLifecycleActionRequestDTO.class);
+
+        assertThat(bound.getPurgeScheduledFor()).isEqualTo(Instant.parse("2099-06-01T00:00:00Z"));
     }
 }

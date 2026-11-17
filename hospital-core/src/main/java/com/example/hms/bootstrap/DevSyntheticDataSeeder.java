@@ -414,7 +414,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         UUID organizationId = fromHospital.getOrganization() != null ? fromHospital.getOrganization().getId() : null;
         List<Hospital> candidates = (organizationId != null)
             ? hospitalRepository.findByOrganizationIdOrderByNameAsc(organizationId)
-            : hospitalRepository.findAll();
+            : hospitalRepository.findAllHospitals();
 
         return candidates.stream()
             .filter(h -> h.getId() != null && !h.getId().equals(fromHospital.getId()))
@@ -747,7 +747,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .providerName("Blue Shield Insurance")
             .policyNumber(policyNumber)
             .groupNumber("HMO-PLATINUM")
-            .subscriberName(patient.getFirstName() + " " + patient.getLastName())
+            .subscriberName(patient.getFullName())
             .subscriberRelationship("SELF")
             .effectiveDate(LocalDate.now(SEED_ZONE).minusYears(1))
             .expirationDate(LocalDate.now(SEED_ZONE).plusYears(1))
@@ -1225,6 +1225,8 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
                     .unit(seed.unit())
                     .turnaroundTimeMinutes(seed.turnaroundMinutes())
                     .active(true)
+                    // Seeded catalog is orderable (D48: only ACTIVE definitions are).
+                    .approvalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE)
                     .build();
             } else {
                 definition.setTestCode(seed.code());

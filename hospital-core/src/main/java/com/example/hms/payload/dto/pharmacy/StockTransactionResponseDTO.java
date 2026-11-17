@@ -28,6 +28,12 @@ public class StockTransactionResponseDTO {
     private String reason;
     private UUID referenceId;
     private UUID performedBy;
+    /** QA D158: who did it, as a name the ledger can show. */
+    private String performedByName;
+    private UUID witnessedBy;
+    private String witnessedByName;
+    /** QA D158: the lot's number, so the ledger never shows its id. */
+    private String stockLotNumber;
     private LocalDateTime createdAt;
 
     // ── FU-2 (P-06 backend): first-class RECEIPT fields ──

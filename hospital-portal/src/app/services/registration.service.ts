@@ -34,6 +34,8 @@ export interface HospitalRegistration {
   hospitalAddress?: string;
   registrationDate?: string;
   active: boolean;
+  /** QA D1430: why the registration was deactivated. */
+  deactivationReason?: string | null;
   stayStatus?: PatientStayStatus;
   stayStatusUpdatedAt?: string;
   currentRoom?: string;
@@ -51,6 +53,8 @@ export interface RegistrationRequest {
   patientId?: string;
   hospitalId?: string;
   active?: boolean;
+  /** QA D1430: required by the server when `active` goes to false. */
+  deactivationReason?: string;
   currentRoom?: string;
   currentBed?: string;
   attendingPhysicianName?: string;

@@ -144,7 +144,7 @@ class WebhookEndpointServiceTest {
 
         assertThatThrownBy(() -> service.register(dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("PING");
+            .hasMessageContaining("webhook.event.pingNotSubscribable");
         verify(endpointRepository, never()).save(any());
     }
 
@@ -225,7 +225,9 @@ class WebhookEndpointServiceTest {
 
         assertThat(foreignT).isInstanceOf(ResourceNotFoundException.class);
         assertThat(unknownT).isInstanceOf(ResourceNotFoundException.class);
-        assertThat(foreignT.getMessage()).isEqualTo(unknownT.getMessage());
+        // Each renders the id it was asked for; with the ids masked the two are identical.
+        assertThat(foreignT.getMessage().replace(foreignId.toString(), "<id>"))
+            .isEqualTo(unknownT.getMessage().replace(unknownId.toString(), "<id>"));
     }
 
     // ── ping ────────────────────────────────────────────────────────────
@@ -257,6 +259,6 @@ class WebhookEndpointServiceTest {
 
         assertThatThrownBy(() -> service.ping(id))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("ACTIVE");
+            .hasFieldOrPropertyWithValue("messageKey", "webhook.endpoint.pingInactive");
     }
 }

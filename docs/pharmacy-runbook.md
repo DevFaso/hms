@@ -113,6 +113,7 @@ Les événements suivants sont émis pour la pharmacie (enum `AuditEventType`) :
 | `PRESCRIPTION_ROUTED_EXTERNAL`, `PRESCRIPTION_SENT_TO_PARTNER`, `PRESCRIPTION_PRINTED`, `PRESCRIPTION_BACKORDER` | `StockOutRoutingService` |
 | `CLAIM_SUBMITTED` | `PharmacyClaimService` (toutes transitions) |
 | `PRESCRIPTION_CREATED/UPDATED/DISCONTINUED` | `PrescriptionService` |
+| `PRESCRIPTION_QUEUE_CLAIMED`, `PRESCRIPTION_QUEUE_CLAIM_RELEASED`, `PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER`, `PRESCRIPTION_QUEUE_CLAIM_EXPIRED` | `PrescriptionQueueClaimService` (G13, voir § 10) |
 
 ## 7. Sécurité — revue synthétique (T-70)
 
@@ -137,3 +138,49 @@ Les événements suivants sont émis pour la pharmacie (enum `AuditEventType`) :
 | `pharmacy.partner.webhook.secret` | (vide → 401) | Secret pour le webhook SMS partenaire |
 | `pharmacy.partner.scheduler.interval-ms` | `900000` (15 min) | Fréquence du planificateur de relance |
 | `pharmacy.partner.scheduler.initial-delay-ms` | `60000` | Délai initial au démarrage |
+
+## 10. Prise en charge d'une ordonnance dans la file de travail (G13)
+
+Un pharmacien peut **prendre en charge** une ligne de la file de délivrance
+(« En préparation par … »), la **libérer**, ou **reprendre** celle d'un
+collègue. Ouvrir le formulaire de délivrance prend la ligne en charge ; le
+fermer sans délivrer la libère. Les filtres **Toutes / Les miennes / Non
+prises en charge** sont au-dessus de la file, qui se recharge toutes les
+minutes tant que l'onglet est visible.
+
+La prise en charge est **indicative** : aucune délivrance, préparation,
+orientation, question au prescripteur, annulation ou envoi SMS n'est jamais
+refusé à cause d'elle. Seule une *prise en charge* simple d'une ligne déjà
+tenue par un collègue est refusée (409) : il faut la **reprendre**, ce qui
+est audité.
+
+| Variable | Défaut | Effet |
+|---|---|---|
+| `PHARMACY_WORK_QUEUE_CLAIM_ENABLED` (`pharmacy.work-queue.claim.enabled`) | `true` | Interrupteur. À `false` : les trois points d'accès de prise en charge répondent 404, la file n'affiche plus rien de la prise en charge et ignore `claim=` ; les libérations automatiques continuent (aucune prise en charge ne « revient » quand on rallume). |
+| `PHARMACY_WORK_QUEUE_CLAIM_TTL` (`pharmacy.work-queue.claim.ttl`) | `PT15M` | Durée d'une prise en charge non renouvelée. Calculée à la lecture (aucune tâche planifiée) ; la durée n'est pas stockée par ligne, un changement s'applique donc aussitôt aux prises en charge existantes. Reprendre en charge sa propre ligne (rouvrir le formulaire) renouvelle le délai. |
+
+**Ce qui met fin à une prise en charge** : la délivrance (`DISPENSED`), la
+préparation pour retrait (`PREPARED`), l'orientation vers un partenaire ou
+l'impression (`ROUTED`), la mise en commande (`BACK_ORDERED`), la question au
+prescripteur (`CLARIFICATION_REQUESTED`), l'envoi SMS réussi (`DISPATCHED`),
+l'annulation ou la modification par le prescripteur (`WITHDRAWN` /
+`CHANGED`). Un envoi SMS échoué (TRANSMISSION_FAILED) et la non-présentation
+chez le partenaire la conservent.
+
+**Lire les quatre événements d'audit** (entité `PRESCRIPTION`, `resourceId` =
+l'ordonnance ; descriptions avec identifiants, horodatages et codes
+seulement, jamais de nom) :
+
+| Événement | Signification |
+|---|---|
+| `PRESCRIPTION_QUEUE_CLAIMED` | L'acteur a pris la ligne en charge. |
+| `PRESCRIPTION_QUEUE_CLAIM_RELEASED` | La prise en charge a pris fin : libérée par son titulaire (`RELEASED`), ou le travail sur l'ordonnance s'est terminé (code de motif ci-dessus). Un prescripteur, ou un envoi SMS par un rôle non pharmacie, apparaît ici, jamais en reprise. |
+| `PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER` | Un autre utilisateur de la file a repris la ligne : explicitement (bouton Reprendre) ou en agissant dessus (« by DISPENSED », etc.). La description donne l'identifiant du titulaire précédent et l'heure de sa prise en charge. |
+| `PRESCRIPTION_QUEUE_CLAIM_EXPIRED` | Une écriture ultérieure a trouvé une prise en charge échue et l'a remplacée ou supprimée. Une prise en charge échue que personne ne touche ne laisse pas d'événement EXPIRED : l'événement CLAIMED et la durée suffisent à prouver qu'elle a expiré. |
+
+Tous ces événements sont écrits **après la validation** de la transaction :
+une action annulée (rollback) ne laisse aucune trace de prise en charge.
+
+Après le déploiement de V179, vérifier sur prod que
+`\dp clinical.prescription_queue_claims` montre `hms_app` ; sinon, accorder
+les droits à la main (`R__prod_role_grants.sql`).

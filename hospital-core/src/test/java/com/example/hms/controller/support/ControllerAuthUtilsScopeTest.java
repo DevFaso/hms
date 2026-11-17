@@ -1,18 +1,16 @@
 package com.example.hms.controller.support;
 
 import com.example.hms.exception.BusinessException;
-import com.example.hms.model.Hospital;
-import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.exception.HospitalScopeRefusedException;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,27 +22,32 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
- * E9 #55 — the controller-side scope resolver reads the request context the
- * security layer built (live permitted set + {@code X-Hospital-Id}), so it
- * answers the same as {@code RoleValidator.requireActiveHospitalId()}. The
- * assignment table is consulted only when no context was populated.
+ * {@link ControllerAuthUtils}' scope methods are thin adapters over the one
+ * tenant resolver (docs/security/tenant-resolution.md §4.1): they answer
+ * exactly what {@code RoleValidator.requireActiveHospitalId()} answers, a
+ * requested hospital narrows the scope (and is refused, for receptionists
+ * too, when the caller does not hold it), and nothing falls back to a
+ * "newest" assignment.
  */
-@ExtendWith(MockitoExtension.class)
 class ControllerAuthUtilsScopeTest {
 
     private static final UUID USER_ID = UUID.randomUUID();
     private static final UUID HOSPITAL_A = UUID.randomUUID();
     private static final UUID HOSPITAL_B = UUID.randomUUID();
 
-    @Mock
-    private UserRoleHospitalAssignmentRepository assignmentRepository;
-
-    @InjectMocks
+    private final UserRoleHospitalAssignmentRepository assignmentRepository =
+        mock(UserRoleHospitalAssignmentRepository.class);
     private ControllerAuthUtils authUtils;
+
+    @BeforeEach
+    void setUp() {
+        authUtils = new ControllerAuthUtils(ActingScopeTestSupport.resolver(assignmentRepository, null));
+    }
 
     @AfterEach
     void clearContext() {
@@ -52,100 +55,111 @@ class ControllerAuthUtilsScopeTest {
     }
 
     @Test
-    @DisplayName("a clinician's scope is the context's active hospital — no assignment query")
+    @DisplayName("a clinician's scope is the hospital the request acts at — no assignment query")
     void clinicianTakesTheContextHospital() {
-        context(HOSPITAL_B, false, false);
+        context(Set.of(HOSPITAL_B), HOSPITAL_B, false, false);
 
-        UUID resolved = authUtils.resolveHospitalScope(auth("ROLE_NURSE"), null, false);
-
-        assertThat(resolved).isEqualTo(HOSPITAL_B);
-        verifyNoInteractions(assignmentRepository);
+        assertThat(authUtils.resolveHospitalScope(auth("ROLE_NURSE"), null, false)).isEqualTo(HOSPITAL_B);
+        verify(assignmentRepository, never()).findAllDetailedByUserId(USER_ID);
     }
 
     @Test
-    @DisplayName("a requested hospital is a claim: validated against the caller's assignments")
+    @DisplayName("a requested hospital the caller does not hold is refused with 403, not a 400")
     void requestedHospitalIsValidated() {
-        context(HOSPITAL_A, false, false);
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(USER_ID, HOSPITAL_B)).thenReturn(false);
-
+        context(Set.of(HOSPITAL_A), HOSPITAL_A, false, false);
         Authentication doctor = auth("ROLE_DOCTOR");
 
         assertThatThrownBy(() -> authUtils.resolveHospitalScope(doctor, HOSPITAL_B, false))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(HospitalScopeRefusedException.class);
     }
 
     @Test
-    @DisplayName("with no context populated the resolver falls back to the assignment table")
-    void fallsBackToAssignmentsWithoutContext() {
-        Hospital hospital = new Hospital();
-        hospital.setId(HOSPITAL_A);
-        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
-        assignment.setHospital(hospital);
-        assignment.setActive(true);
-        when(assignmentRepository.findAllDetailedByUserId(USER_ID)).thenReturn(List.of(assignment));
+    @DisplayName("with no hospital at all: null when not required; there is no assignment-table fallback")
+    void noFallbackToTheAssignmentTable() {
+        assertThat(authUtils.resolveHospitalScope(auth("ROLE_NURSE"), null, false)).isNull();
+        verify(assignmentRepository, never()).findAllDetailedByUserId(USER_ID);
+    }
 
-        UUID resolved = authUtils.resolveHospitalScope(auth("ROLE_NURSE"), null, false);
+    @Test
+    @DisplayName("several hospitals and none named: refused, never the newest (Q2 A)")
+    void ambiguousIsRefused() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(USER_ID)
+            .permittedHospitalIds(Set.of(HOSPITAL_A, HOSPITAL_B))
+            .scopeRefusal(ActingScope.Reason.AMBIGUOUS)
+            .build());
+        Authentication nurse = auth("ROLE_NURSE");
 
-        assertThat(resolved).isEqualTo(HOSPITAL_A);
+        assertThatThrownBy(() -> authUtils.resolveHospitalScope(nurse, null, false))
+            .isInstanceOf(BusinessException.class);
     }
 
     @Test
     @DisplayName("a super-admin in global view resolves to null, header-scoped to the header")
     void superAdminGlobalUnlessHeaderScoped() {
-        context(HOSPITAL_A, true, false);
+        context(Set.of(), null, true, false);
         assertThat(authUtils.currentHospitalId(auth("ROLE_SUPER_ADMIN"))).isNull();
         assertThat(authUtils.resolveHospitalScope(auth("ROLE_SUPER_ADMIN"), null, false)).isNull();
 
-        context(HOSPITAL_A, true, true);
+        context(Set.of(), HOSPITAL_A, true, true);
         assertThat(authUtils.currentHospitalId(auth("ROLE_SUPER_ADMIN"))).isEqualTo(HOSPITAL_A);
-        verifyNoInteractions(assignmentRepository);
+        assertThat(authUtils.resolveHospitalScope(auth("ROLE_SUPER_ADMIN"), null, false))
+            .as("the header scopes resolveHospitalScope too (D1)")
+            .isEqualTo(HOSPITAL_A);
     }
 
     @Test
-    @DisplayName("a receptionist follows the context, and may name another hospital they are assigned to")
-    void receptionistFollowsContextOrAnAssignedRequest() {
-        context(HOSPITAL_A, false, false);
-
+    @DisplayName("a receptionist follows the request's hospital, and may name another they hold")
+    void receptionistFollowsContextOrAHeldRequest() {
+        context(Set.of(HOSPITAL_A, HOSPITAL_B), HOSPITAL_A, false, true);
         assertThat(authUtils.resolveHospitalScope(auth("ROLE_RECEPTIONIST"), null, true)).isEqualTo(HOSPITAL_A);
 
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(USER_ID, HOSPITAL_B)).thenReturn(true);
+        context(Set.of(HOSPITAL_A, HOSPITAL_B), HOSPITAL_A, false, true);
         assertThat(authUtils.resolveHospitalScope(auth("ROLE_RECEPTIONIST"), HOSPITAL_B, true)).isEqualTo(HOSPITAL_B);
     }
 
     @Test
-    @DisplayName("a receptionist naming a hospital they are NOT assigned to keeps the context hospital")
-    void receptionistUnassignedRequestFallsBackToContext() {
-        context(HOSPITAL_A, false, false);
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(USER_ID, HOSPITAL_B)).thenReturn(false);
+    @DisplayName("a receptionist naming a hospital they do not hold is refused — no silent substitution (D12)")
+    void receptionistUnassignedRequestIsRefused() {
+        context(Set.of(HOSPITAL_A), HOSPITAL_A, false, false);
+        Authentication receptionist = auth("ROLE_RECEPTIONIST");
 
-        assertThat(authUtils.resolveHospitalScope(auth("ROLE_RECEPTIONIST"), HOSPITAL_B, true)).isEqualTo(HOSPITAL_A);
+        assertThatThrownBy(() -> authUtils.resolveHospitalScope(receptionist, HOSPITAL_B, true))
+            .isInstanceOf(HospitalScopeRefusedException.class);
     }
 
     @Test
-    @DisplayName("a receptionist with neither context nor assignment is refused when scope is required")
+    @DisplayName("a receptionist with no hospital is refused when scope is required")
     void receptionistWithoutAnyScopeIsRefused() {
-        when(assignmentRepository.findAllDetailedByUserId(USER_ID)).thenReturn(List.of());
-
         Authentication receptionist = auth("ROLE_RECEPTIONIST");
 
         assertThatThrownBy(() -> authUtils.resolveHospitalScope(receptionist, null, true))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Receptionist must be affiliated");
     }
 
-    private static void context(UUID active, boolean superAdmin, boolean headerOverridden) {
+    @Test
+    @DisplayName("the query parameter wins over the body")
+    void queryParameterWinsOverBody() {
+        context(Set.of(HOSPITAL_A, HOSPITAL_B), HOSPITAL_A, false, true);
+        assertThat(authUtils.resolveHospitalScope(auth("ROLE_NURSE"), HOSPITAL_B, HOSPITAL_A, false))
+            .isEqualTo(HOSPITAL_B);
+    }
+
+    private static void context(Set<UUID> permitted, UUID active, boolean superAdmin, boolean explicit) {
         HospitalContextHolder.setContext(HospitalContext.builder()
             .principalUserId(USER_ID)
             .activeHospitalId(active)
-            .permittedHospitalIds(Set.of(active))
+            .permittedHospitalIds(permitted)
             .superAdmin(superAdmin)
-            .headerOverridden(headerOverridden)
+            .headerOverridden(explicit)
             .build());
     }
 
     private static Authentication auth(String role) {
         Jwt jwt = Jwt.withTokenValue("token")
             .header("alg", "none")
-            .claim("uid", USER_ID.toString())
+            .claim("appUserId", USER_ID.toString())
             .build();
         return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority(role)));
     }

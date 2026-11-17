@@ -13,11 +13,11 @@ import java.time.Period;
 @Setter
 public abstract class BaseUserDTO {
     @NotBlank(message = "{user.username.required}")
-    @Size(min = 3, max = 20)
+    @Size(min = 3, max = com.example.hms.model.User.USERNAME_MAX_LENGTH)
     private String username;
 
     @NotBlank(message = "{user.email.required}")
-    @Email
+    @Email(message = "{validation.email.invalid}")
     private String email;
 
     @NotBlank(message = "{user.firstName.required}")
@@ -27,6 +27,7 @@ public abstract class BaseUserDTO {
     private String lastName;
 
     @NotBlank(message = "{user.phoneNumber.required}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     private LocalDate dateOfBirth;

@@ -1,4 +1,5 @@
 import { CommonModule, DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   OnInit,
@@ -18,6 +19,11 @@ import {
   IntegrationMessagePage,
   IntegrationMessageStatus,
 } from '../../services/integration-messages.model';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../../shared/date-utils';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
 
 const DEFAULT_PAGE_SIZE = 25;
 const STATUS_OPTIONS: IntegrationMessageStatus[] = ['SENT', 'RECEIVED', 'FAILED', 'REPLAYED'];
@@ -36,7 +42,17 @@ interface ReplayState {
 @Component({
   selector: 'app-super-admin-integration-messages',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
+  imports: [
+    DashPipe,
+    KeyLabelPipe,
+    DateTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    DatePipe,
+  ],
   templateUrl: './integration-messages.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './integration-messages.scss',
@@ -62,6 +78,11 @@ export class IntegrationMessagesComponent implements OnInit {
   readonly totalElements = computed(() => this.page()?.totalElements ?? 0);
   readonly totalPages = computed(() => this.page()?.totalPages ?? 0);
   readonly deadLetterCount = computed(() => this.page()?.deadLetterCount ?? 0);
+  /** True only when the server says the sweep is actually running (not just configured). */
+  readonly retentionActive = computed(() => this.page()?.retentionActive === true);
+  readonly retentionOff = computed(() => this.page()?.retentionActive === false);
+  readonly retentionDays = computed(() => this.page()?.payloadRetentionDays ?? null);
+  readonly unresolvedMaxDays = computed(() => this.page()?.payloadUnresolvedMaxDays ?? null);
   readonly hasPrev = computed(() => this.pageNumber() > 0);
   readonly hasNext = computed(() => this.pageNumber() < this.totalPages() - 1);
 
@@ -82,8 +103,9 @@ export class IntegrationMessagesComponent implements OnInit {
         integrationId: this.integrationId().trim() || undefined,
         organizationId: this.organizationId().trim() || undefined,
         status: this.status() || undefined,
-        fromDate: this.fromDate() || undefined,
-        toDate: this.toDate() || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        fromDate: this.fromDate() ? toServerDateTime(this.fromDate()) : undefined,
+        toDate: this.toDate() ? toServerDateTime(this.toDate()) : undefined,
         page: this.pageNumber(),
         size: DEFAULT_PAGE_SIZE,
       })
@@ -124,7 +146,16 @@ export class IntegrationMessagesComponent implements OnInit {
     this.search();
   }
 
+  /** Retention erased this row's content: it is shown as purged and cannot be replayed. */
+  isPurged(row: IntegrationMessageEvent): boolean {
+    return !!row.payloadPurgedAt;
+  }
+
   replay(messageId: string): void {
+    const row = this.rows().find((r) => r.id === messageId);
+    if (row && this.isPurged(row)) {
+      return;
+    }
     this.replayState.update((map) => {
       const next = new Map(map);
       next.set(messageId, { messageId, busy: true, errorKey: null });
@@ -134,16 +165,27 @@ export class IntegrationMessagesComponent implements OnInit {
     this.service
       .replay(messageId)
       .pipe(
-        catchError(() => {
+        catchError((err: unknown) => {
+          // 409 on a FAILED row means retention erased its content after
+          // this page was loaded (the server re-checks under a row lock).
+          // Say so, and reload so the row shows as purged and its Replay
+          // button disables. Anything else keeps the generic error and the
+          // row where the operator can see it.
+          const purged = err instanceof HttpErrorResponse && err.status === 409;
           this.replayState.update((map) => {
             const next = new Map(map);
             next.set(messageId, {
               messageId,
               busy: false,
-              errorKey: 'INTEGRATION_MESSAGES.ERROR.REPLAY_FAILED',
+              errorKey: purged
+                ? 'INTEGRATION_MESSAGES.CONTENT_PURGED'
+                : 'INTEGRATION_MESSAGES.ERROR.REPLAY_FAILED',
             });
             return next;
           });
+          if (purged) {
+            this.search();
+          }
           return of(null);
         }),
       )

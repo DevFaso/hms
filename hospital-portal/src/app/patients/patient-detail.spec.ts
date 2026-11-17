@@ -1,8 +1,9 @@
+import { resetStoredLangForTests } from '../shared/i18n/app-locale';
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { PatientDetailComponent } from './patient-detail';
 import { PatientService } from '../services/patient.service';
@@ -15,7 +16,17 @@ import { RoleContextService } from '../core/role-context.service';
 import { BpaService } from '../services/bpa.service';
 import { CdsAcknowledgementService } from '../services/cds-acknowledgement.service';
 import { StoryboardService } from '../services/storyboard.service';
+import {
+  CHART_REVIEW_VIEW_ROLES,
+  STORYBOARD_VIEW_ROLES,
+  VOIDED_CLOSURES_VIEW_ROLES,
+} from './patient-chart/chart-access';
 import { BreakGlassService } from '../services/break-glass.service';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../testing/form-refusal-behaviour';
 import { AuthService } from '../auth/auth.service';
 import { FluidBalanceService } from '../services/fluid-balance.service';
 import { MicroService } from '../services/micro.service';
@@ -49,7 +60,7 @@ describe('PatientDetailComponent', () => {
       'downloadRecordPdf',
     ]);
     vitalServiceSpy = jasmine.createSpyObj('VitalSignService', ['getRecent', 'getGrowthChart']);
-    encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['list']);
+    encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['list', 'listForPatient']);
     appointmentServiceSpy = jasmine.createSpyObj('AppointmentService', ['list']);
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warn']);
     permissionSpy = jasmine.createSpyObj('PermissionService', [
@@ -61,6 +72,8 @@ describe('PatientDetailComponent', () => {
       ['isSuperAdmin', 'hasAnyActiveRole', 'effectiveHospitalIdForRequest'],
       {
         activeHospitalId: 'h1',
+        activeRole: null,
+        activeRoles: [] as string[],
       },
     );
     // The scope the page's requests actually carry. On the real service this is
@@ -105,11 +118,12 @@ describe('PatientDetailComponent', () => {
     microSpy.listForPatient.and.returnValue(of([]));
 
     patientServiceSpy.getById.and.returnValue(of(mockPatient));
-    vitalServiceSpy.getRecent.and.returnValue(of([]));
+    vitalServiceSpy.getRecent.and.returnValue(of({ items: [], withheld: false }));
     vitalServiceSpy.getGrowthChart.and.returnValue(
       of({ patientId: 'p1', dateOfBirth: '1998-01-01', gender: 'MALE', points: [] }),
     );
     encounterServiceSpy.list.and.returnValue(of([] as any));
+    encounterServiceSpy.listForPatient.and.returnValue(of({ items: [], withheld: false }));
     appointmentServiceSpy.list.and.returnValue(of([] as any));
     permissionSpy.hasPermission.and.returnValue(true);
     permissionSpy.hasAnyPermission.and.returnValue(true);
@@ -162,6 +176,122 @@ describe('PatientDetailComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('QA D998: a chart that does not open here is explained on the page, not a toast and a bounce to the list', () => {
+    patientServiceSpy.getById.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 404, statusText: 'Not Found' })),
+    );
+    const router = TestBed.inject(Router);
+    spyOn(router, 'navigate');
+
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(component.unavailable()).toBeTrue();
+    expect(el.querySelector('[data-testid="chart-unavailable"]')?.textContent).toContain(
+      'REFERRALS.CHART_UNAVAILABLE',
+    );
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(toastSpy.error).not.toHaveBeenCalled();
+  });
+
+  it('D61: the age reads in the active language, not a hard-coded "years"', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'fr',
+      { PATIENTS: { AGE_YEARS: '{{count}} ans', AGE_YEAR: '{{count}} an' } },
+      true,
+    );
+    translate.use('fr');
+    const dob = new Date();
+    dob.setFullYear(dob.getFullYear() - 41);
+    dob.setDate(dob.getDate() - 1);
+
+    expect(component.getAge(dob.toISOString().slice(0, 10))).toBe('41 ans');
+  });
+
+  /** Pin the caller's roles on the spy (a single role becomes the active role, as the real service does). */
+  function holdRoles(roles: string[]): void {
+    (
+      Object.getOwnPropertyDescriptor(roleContextSpy, 'activeRoles')!.get as jasmine.Spy
+    ).and.returnValue(roles);
+    (
+      Object.getOwnPropertyDescriptor(roleContextSpy, 'activeRole')!.get as jasmine.Spy
+    ).and.returnValue(roles.length === 1 ? roles[0] : null);
+    // QA D1524: the role-list gates read the same roles (was left false, which no gate before needed).
+    roleContextSpy.hasAnyActiveRole.and.callFake((asked: string[]) =>
+      asked.some((role) => roles.includes(role)),
+    );
+  }
+
+  describe('Best-Practice Advisory panel (POST /cds-services is clinicians only)', () => {
+    it('a receptionist opens the chart with no panel and no CDS request', () => {
+      holdRoles(['ROLE_RECEPTIONIST']);
+      fixture.detectChanges();
+
+      expect(component.patient()).toEqual(mockPatient);
+      expect(fixture.nativeElement.querySelector('app-bpa-panel')).toBeNull();
+      expect(bpaServiceSpy.evaluate).not.toHaveBeenCalled();
+    });
+
+    it('a doctor gets the panel, which evaluates the patient', () => {
+      holdRoles(['ROLE_DOCTOR']);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-bpa-panel')).not.toBeNull();
+      expect(bpaServiceSpy.evaluate).toHaveBeenCalledOnceWith('p1', undefined);
+    });
+
+    // QA D1516: what a death entered in error had closed is on a clinician's chart, beside the advisories.
+    it("a doctor's chart carries the notice of what a voided death closed", () => {
+      holdRoles(['ROLE_DOCTOR']);
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('app-voided-death-closures-banner'),
+      ).not.toBeNull();
+    });
+
+    it('reception gets no notice of what a voided death closed', () => {
+      holdRoles(['ROLE_RECEPTIONIST']);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-voided-death-closures-banner')).toBeNull();
+    });
+
+    // QA D1524: the pharmacist keeps the advisories, but GET .../voided-closures refuses the role,
+    // so the notice is neither rendered nor asked for, and its 403 can never take the chart.
+    it("the pharmacist's chart has the advisories and no voided-death notice", () => {
+      holdRoles(['ROLE_PHARMACIST']);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-bpa-panel')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('app-voided-death-closures-banner')).toBeNull();
+    });
+
+    it('every side panel renders only for the roles its endpoint admits', () => {
+      for (const role of ['ROLE_PHARMACIST', 'ROLE_RECEPTIONIST', 'ROLE_BILLING_SPECIALIST']) {
+        expect(VOIDED_CLOSURES_VIEW_ROLES).withContext(role).not.toContain(role);
+      }
+      expect(STORYBOARD_VIEW_ROLES).not.toContain('ROLE_HOSPITAL_ADMIN');
+      expect(VOIDED_CLOSURES_VIEW_ROLES).toContain('ROLE_HOSPITAL_ADMIN');
+      holdRoles(['ROLE_HOSPITAL_ADMIN']);
+      fixture.detectChanges();
+      const page = fixture.nativeElement as HTMLElement;
+      expect(page.querySelector('app-storyboard-banner')).toBeNull();
+      expect(page.querySelector('app-voided-death-closures-banner')).not.toBeNull();
+    });
+
+    it('a multi-role user pinned to reception gets no panel', () => {
+      (
+        Object.getOwnPropertyDescriptor(roleContextSpy, 'activeRoles')!.get as jasmine.Spy
+      ).and.returnValue(['ROLE_RECEPTIONIST', 'ROLE_NURSE']);
+      (
+        Object.getOwnPropertyDescriptor(roleContextSpy, 'activeRole')!.get as jasmine.Spy
+      ).and.returnValue('ROLE_RECEPTIONIST');
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-bpa-panel')).toBeNull();
+      expect(bpaServiceSpy.evaluate).not.toHaveBeenCalled();
+    });
+  });
+
   it('groups navigation without fetching clinical lists on overview', () => {
     roleContextSpy.hasAnyActiveRole.and.returnValue(true);
     fixture.detectChanges();
@@ -183,14 +313,62 @@ describe('PatientDetailComponent', () => {
     component.setSection('administration');
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="restriction-card"]')).toBeTruthy();
+    // QA D1124: the button stays pressable; the guard says why it refuses.
     const apply = fixture.nativeElement.querySelector('[data-testid="apply-restriction"]');
-    expect(apply.disabled).toBeTrue();
-    component.restrictionReason.set('   ');
-    fixture.detectChanges();
-    expect(apply.disabled).toBeTrue();
-    component.restrictionReason.set('Documented confidentiality reason');
-    fixture.detectChanges();
     expect(apply.disabled).toBeFalse();
+  });
+
+  it('QA D1245 / D1272: an empty restriction reason is refused on the field, and nothing is sent', () => {
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    const send = jasmine.createSpy('setChartRestriction');
+    (patientServiceSpy as unknown as Record<string, unknown>)['setChartRestriction'] = send;
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    component.setSection('administration');
+    fixture.detectChanges();
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="apply-restriction"]',
+      sent: send,
+    });
+
+    expect(marked).toEqual(['restriction-reason']);
+    (fixture.nativeElement as HTMLElement).remove();
+  });
+
+  it('marks the reason with the reason a 400 gives for it', () => {
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    (patientServiceSpy as unknown as Record<string, unknown>)['setChartRestriction'] = jasmine
+      .createSpy('setChartRestriction')
+      .and.returnValue(
+        throwError(() => fieldErrorsResponse({ reason: 'Le motif est trop court.' })),
+      );
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    component.setSection('administration');
+    fixture.detectChanges();
+    component.restrictionReason.set('Motif documenté');
+    fixture.detectChanges();
+    component.setChartRestriction(true);
+    fixture.detectChanges();
+
+    expectFieldsMarked(fixture, { 'restriction-reason': 'Le motif est trop court.' });
+    (fixture.nativeElement as HTMLElement).remove();
+  });
+
+  it('keeps restriction controls hidden for a non-manager in summary and Administration', () => {
+    fixture.detectChanges();
+    expect(component.canManageRestriction()).toBeFalse();
+    const privacy = fixture.nativeElement.querySelector('.privacy-card');
+    expect(privacy).toBeTruthy();
+    expect(privacy.querySelector('button')).toBeNull();
+
+    component.setSection('administration');
+    fixture.detectChanges();
+    expect(component.activeTab()).toBe('administration');
+    expect(fixture.nativeElement.querySelector('[data-testid="restriction-card"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="apply-restriction"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="lift-restriction"]')).toBeNull();
   });
 
   it('does not expose restricted clinical subtabs through grouped navigation', () => {
@@ -202,6 +380,7 @@ describe('PatientDetailComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="micro-tab-button"]')).toBeNull();
     component.setSection('care');
     expect(component.activeTab()).toBe('medical');
+    component.setTab('appointments');
     expect(appointmentServiceSpy.list).not.toHaveBeenCalled();
   });
 
@@ -220,8 +399,37 @@ describe('PatientDetailComponent', () => {
     expect(contact.querySelector('a').getAttribute('href')).toBe('tel:+22600000000');
     component.patient.set({ ...mockPatient });
     fixture.detectChanges();
+    // QA D926: no guardian at all reads as one "none recorded" line, not three blanks.
+    expect(contact.textContent).toContain('PATIENTS.EC_NONE');
+    expect(contact.querySelector('a')).toBeNull();
+    component.patient.set({ ...mockPatient, emergencyContactName: 'Cdx Guardian' });
+    fixture.detectChanges();
     expect(contact.textContent).toContain('PATIENTS.NOT_DOCUMENTED');
     expect(contact.querySelector('a')).toBeNull();
+  });
+
+  it('explains narrowed records without hiding the documented global history summary', () => {
+    patientServiceSpy.getById.and.returnValue(
+      of({
+        ...mockPatient,
+        recordsWithheld: true,
+        allergiesWithheld: true,
+        allergies: '',
+        medicalHistorySummary: 'Documented history',
+      }),
+    );
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="overview-records-withheld"]').textContent,
+    ).toContain('CHART.LIST_WITHHELD');
+    expect(fixture.nativeElement.querySelector('.essentials-card').textContent).toContain(
+      'Documented history',
+    );
+    component.setTab('medical');
+    fixture.detectChanges();
+    const medical = fixture.nativeElement.querySelector('.info-grid');
+    expect(medical.textContent).toContain('CHART.ALLERGIES_WITHHELD');
+    expect(medical.textContent).not.toContain('PATIENTS.NOT_DOCUMENTED');
   });
 
   it('should load patient on init', () => {
@@ -256,6 +464,70 @@ describe('PatientDetailComponent', () => {
     component.setTab('vitals');
     expect(component.activeTab()).toBe('vitals');
     expect(vitalServiceSpy.getRecent).toHaveBeenCalledWith('p1');
+  });
+
+  it('QA D504: says the vitals and encounters lists are incomplete when the opt-out withholds rows', () => {
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    vitalServiceSpy.getRecent.and.returnValue(of({ items: [], withheld: true }));
+    encounterServiceSpy.listForPatient.and.returnValue(of({ items: [], withheld: true }));
+    fixture.detectChanges();
+
+    component.setTab('vitals');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="vitals-withheld"]')).not.toBeNull();
+
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(encounterServiceSpy.listForPatient).toHaveBeenCalledWith('p1');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="encounters-withheld"]'),
+    ).not.toBeNull();
+  });
+
+  it('QA D927: the chart shows the nursing care notes to the roles that may read them', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    fixture.detectChanges();
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="nursing-notes-panel"]'),
+    ).not.toBeNull();
+  });
+
+  it('QA D927: a radiologist (encounters yes, GET /nurse/notes no) gets no nursing notes panel', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_RADIOLOGIST'),
+    );
+    fixture.detectChanges();
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="nursing-notes-panel"]')).toBeNull();
+  });
+
+  it('QA D504: a complete vitals or encounters list shows no withheld note', () => {
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    fixture.detectChanges();
+    component.setTab('vitals');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="vitals-withheld"]')).toBeNull();
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="encounters-withheld"]')).toBeNull();
+  });
+
+  it('does not read vitals without a hospital scope, and says why', () => {
+    // A super-admin in global view: the staff vitals read now refuses an
+    // unscoped request instead of answering across every tenant.
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    roleContextSpy.effectiveHospitalIdForRequest.and.returnValue(null);
+    fixture.detectChanges();
+
+    component.setTab('vitals');
+    fixture.detectChanges();
+
+    expect(vitalServiceSpy.getRecent).not.toHaveBeenCalled();
+    const hint = fixture.nativeElement.querySelector('[data-testid="vitals-no-hospital"]');
+    expect(hint).not.toBeNull();
   });
 
   // ── Read tabs must not be gated on write permissions (audit D5/D6/D7) ──
@@ -300,6 +572,46 @@ describe('PatientDetailComponent', () => {
       roles.includes('ROLE_RECEPTIONIST'),
     );
     expect(component.canViewAppointments()).toBeTrue();
+  });
+
+  it('RCPT-CLIN: the front desk has no chart review and no clinical summary, and the storyboard is not asked for', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_RECEPTIONIST'),
+    );
+    expect(component.canViewChartReview()).toBeFalse();
+    expect(component.isFrontDeskOnly()).toBeTrue();
+    expect(CHART_REVIEW_VIEW_ROLES).not.toContain('ROLE_RECEPTIONIST');
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+    expect(page.querySelector('app-storyboard-banner')).toBeNull();
+    // The redesigned summary's clinical essentials (blood type, history) are clinical too.
+    expect(page.querySelector('.essentials-card')).toBeNull();
+    expect(page.querySelector('[data-testid="guardian-card"]')).not.toBeNull();
+
+    // A second clinical or administrative role lifts it, as on the server.
+    for (const role of ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN']) {
+      roleContextSpy.hasAnyActiveRole.and.callFake(
+        (roles: string[]) => roles.includes('ROLE_RECEPTIONIST') || roles.includes(role),
+      );
+      expect(component.isFrontDeskOnly()).withContext(role).toBeFalse();
+    }
+  });
+
+  it('hides the Documents tab from the pharmacy, and gives the front desk the insurance-only view (QA D112, D1599)', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_PHARMACIST'),
+    );
+    expect(component.canViewDocuments()).toBeFalse();
+    for (const role of ['ROLE_RECEPTIONIST']) {
+      roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) => roles.includes(role));
+      expect(component.canViewDocuments()).withContext(role).toBeTrue();
+      expect(component.documentsInsuranceOnly()).withContext(role).toBeTrue();
+    }
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_DOCTOR'),
+    );
+    expect(component.canViewDocuments()).toBeTrue();
+    expect(component.documentsInsuranceOnly()).toBeFalse();
   });
 
   it('routes consulting clinicians to Chart Review for labs and imaging', () => {
@@ -396,7 +708,9 @@ describe('PatientDetailComponent', () => {
     };
 
     it('should show no-metrics placeholder when vital has only notes', () => {
-      vitalServiceSpy.getRecent.and.returnValue(of([vitalWithOnlyNotes]));
+      vitalServiceSpy.getRecent.and.returnValue(
+        of({ items: [vitalWithOnlyNotes], withheld: false }),
+      );
       fixture.detectChanges();
       component.setTab('vitals');
       fixture.detectChanges();
@@ -414,7 +728,7 @@ describe('PatientDetailComponent', () => {
     });
 
     it('should NOT show no-metrics placeholder when vital has numeric metrics', () => {
-      vitalServiceSpy.getRecent.and.returnValue(of([vitalWithMetrics]));
+      vitalServiceSpy.getRecent.and.returnValue(of({ items: [vitalWithMetrics], withheld: false }));
       fixture.detectChanges();
       component.setTab('vitals');
       fixture.detectChanges();
@@ -430,8 +744,37 @@ describe('PatientDetailComponent', () => {
       expect(metrics.length).toBeGreaterThan(0);
     });
 
+    // QA D1166 (round 21): the chart showed SpO2 "97%" in French and Spanish.
+    for (const [lang, expected] of [
+      ['fr', '98 %'],
+      ['es', '98 %'],
+      ['en', '98%'],
+    ]) {
+      it(`shows SpO2 with the ${lang} percent spacing ("${expected}")`, () => {
+        const saved = localStorage.getItem('lang');
+        localStorage.setItem('lang', lang);
+        resetStoredLangForTests();
+        try {
+          vitalServiceSpy.getRecent.and.returnValue(
+            of({ items: [vitalWithMetrics], withheld: false }),
+          );
+          fixture.detectChanges();
+          component.setTab('vitals');
+          fixture.detectChanges();
+          const strongs = Array.from(
+            (fixture.nativeElement as HTMLElement).querySelectorAll('.vital-metric strong'),
+          ).map((s) => s.textContent!.replace(/\s+/g, ' ').trim());
+          expect(strongs).toContain(expected);
+        } finally {
+          if (saved === null) localStorage.removeItem('lang');
+          else localStorage.setItem('lang', saved);
+          resetStoredLangForTests();
+        }
+      });
+    }
+
     it('should show empty state when no vitals exist', () => {
-      vitalServiceSpy.getRecent.and.returnValue(of([]));
+      vitalServiceSpy.getRecent.and.returnValue(of({ items: [], withheld: false }));
       fixture.detectChanges();
       component.setTab('vitals');
       fixture.detectChanges();

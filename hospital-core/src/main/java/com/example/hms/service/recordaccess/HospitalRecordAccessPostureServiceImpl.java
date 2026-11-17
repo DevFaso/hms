@@ -71,7 +71,7 @@ public class HospitalRecordAccessPostureServiceImpl implements HospitalRecordAcc
     }
 
     private Hospital require(UUID hospitalId) {
-        return hospitalRepository.findById(hospitalId)
+        return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND, hospitalId));
     }
 

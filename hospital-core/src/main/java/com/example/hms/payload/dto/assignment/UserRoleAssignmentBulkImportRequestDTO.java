@@ -41,7 +41,7 @@ public class UserRoleAssignmentBulkImportRequestDTO {
     @Schema(description = "Default active flag when not specified per row")
     private Boolean defaultActive;
 
-    @Schema(description = "Registrar user ID applied to imported assignments")
+    @Schema(description = "Ignored: the registrar is always the authenticated caller", deprecated = true)
     private UUID registeredByUserId;
 
     @Builder.Default

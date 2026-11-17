@@ -18,9 +18,12 @@ import java.util.UUID;
  * Imaging / Procedures with a unified timeline). All sections are sourced
  * from existing clinical tables; no schema changes are introduced.
  *
- * <p>Each section is capped (default 20, configurable via the
+ * <p>Each section answers one page (default 20 rows, configurable via the
  * {@code limit} query parameter) so the response stays small on the
- * metered 3G/4G links typical of the West-Africa deployments.
+ * metered 3G/4G links typical of the West-Africa deployments. QA D1380
+ * (D1347 class): the page is never presented as the whole section —
+ * {@link #totals} carries the server's count of every row of each section,
+ * and {@code page} / {@code section} read the rest.
  */
 @Getter
 @Setter
@@ -35,8 +38,24 @@ public class ChartReviewDTO {
     private UUID hospitalId;
     private String hospitalName;
 
-    /** Maximum rows requested per section (echo of the request, after clamping). */
+    /** Rows per section page (echo of the request, after clamping). */
     private int limit;
+
+    /** QA D1380: the 0-based page of each section returned. */
+    private int page;
+
+    /** QA D1380: the one section asked for, or {@code null} when every section's page is returned. */
+    private String section;
+
+    /** QA D1380: the server's count of every row of each section (never the page's length). */
+    private Totals totals;
+
+    /**
+     * QA D1380: the encounter, note and imaging rows the timeline page names,
+     * so a timeline page past the first labels its rows from them (QA D829)
+     * even when they are not on the current page of their own tab.
+     */
+    private TimelineRefs timelineRefs;
 
     private List<EncounterEntryDTO> encounters;
     private List<NoteEntryDTO> notes;
@@ -46,8 +65,8 @@ public class ChartReviewDTO {
     private List<ProcedureEntryDTO> procedures;
 
     /**
-     * Unified timeline merged across all six sections, sorted most-recent-first
-     * and capped at {@code limit}. Lets the UI render a chronological view
+     * Unified timeline merged across all six sections, sorted most-recent-first;
+     * one page of {@code limit} events ({@link Totals#getTimeline()} counts them all). Lets the UI render a chronological view
      * without re-merging on the client.
      */
     private List<TimelineEventDTO> timeline;
@@ -55,6 +74,35 @@ public class ChartReviewDTO {
     private LocalDateTime generatedAt;
 
     /* ------------------------------------------------------------------ */
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @Schema(description = "QA D1380: the count of every row of each chart-review section.")
+    public static class Totals {
+        private int timeline;
+        private int encounters;
+        private int notes;
+        private int results;
+        private int medications;
+        private int imaging;
+        private int procedures;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "QA D1380: the rows the timeline page refers to, for its labels.")
+    public static class TimelineRefs {
+        private List<EncounterEntryDTO> encounters;
+        private List<NoteEntryDTO> notes;
+        private List<ImagingEntryDTO> imaging;
+    }
 
     @Getter
     @Setter
@@ -87,6 +135,8 @@ public class ChartReviewDTO {
         private UUID encounterId;
         private String encounterCode;
         private String template;
+        /** QA D1107: the title the author gave the note (a nursing note's), when there is one. */
+        private String title;
         private String authorName;
         private String authorCredentials;
         private LocalDateTime documentedAt;
@@ -98,6 +148,8 @@ public class ChartReviewDTO {
         private LocalDateTime cosignedAt;
         /** Short preview (first ~280 chars) of the most-relevant body field. */
         private String preview;
+        /** QA D1076: {@code ENCOUNTER} (the visit's clinical note) or {@code NURSING} (a ward nursing note). */
+        private String source;
     }
 
     @Getter
@@ -122,6 +174,8 @@ public class ChartReviewDTO {
         private String orderingStaffName;
         private boolean acknowledged;
         private boolean released;
+        /** QA D1016: the result corrects a released value the reader may already have acted on. */
+        private boolean corrected;
     }
 
     @Getter
@@ -163,11 +217,46 @@ public class ChartReviewDTO {
         private String status;
         private LocalDateTime orderedAt;
         private LocalDateTime scheduledFor;
+        /**
+         * QA D1926 (r53): the appointment time as the orderer typed it
+         * ("10:00"), set only when one was; {@link #scheduledFor} then carries
+         * it too. Absent, the appointment is a day with no time.
+         */
+        private String scheduledTime;
         private String clinicalQuestion;
-        /** Latest report status if any (PRELIMINARY / FINAL / AMENDED). */
+        /**
+         * The report the study's conclusion comes from: the latest signed
+         * report that is not an addendum (QA D1924), else the latest report.
+         */
         private String reportStatus;
-        /** Latest report impression preview (first ~280 chars). */
+        /** That report's conclusion (first ~280 chars). */
         private String reportImpression;
+        /**
+         * QA D1924 (r53): the signed conclusion and every addendum, oldest
+         * first. An addendum hid the conclusion it adds to. Without any signed
+         * report, the latest report alone.
+         */
+        private List<ImagingReportEntryDTO> reports;
+        /** Provisional rule 1 (V297): the study was done without its required pre-authorisation number. */
+        private Boolean authorizationPending;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "One version of an imaging study's report, as the chart shows it.")
+    public static class ImagingReportEntryDTO {
+        private UUID id;
+        private String reportStatus;
+        private Integer reportVersion;
+        /** The version's conclusion (first ~280 chars). */
+        private String impression;
+        private LocalDateTime signedAt;
+        private String signedByName;
+        private LocalDateTime createdAt;
     }
 
     @Getter
@@ -208,5 +297,7 @@ public class ChartReviewDTO {
         private String title;
         private String summary;
         private String status;
+        /** QA D1016/D931 (round 18): a RESULT event whose value replaces a released one. */
+        private boolean corrected;
     }
 }

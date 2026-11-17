@@ -27,6 +27,7 @@ public class PreCheckInRequestDTO {
     private UUID appointmentId;
 
     // ── Demographics updates (optional — only override if provided) ──────
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
     private String email;
     private String addressLine1;
@@ -38,12 +39,16 @@ public class PreCheckInRequestDTO {
 
     // ── Emergency contact (optional) ─────────────────────────────────────
     private String emergencyContactName;
+    @com.example.hms.validation.PhoneNumber
     private String emergencyContactPhone;
     private String emergencyContactRelationship;
 
-    // ── Insurance (optional) ─────────────────────────────────────────────
+    // ── Insurance (optional; QA D1590: recorded as the patient's coverage) ──
+    @jakarta.validation.constraints.Size(max = 150, message = "{portal.precheckin.insuranceProvider.size}")
     private String insuranceProvider;
+    @jakarta.validation.constraints.Size(max = 100, message = "{portal.precheckin.insuranceMemberId.size}")
     private String insuranceMemberId;
+    @jakarta.validation.constraints.Size(max = 100, message = "{portal.precheckin.insurancePlan.size}")
     private String insurancePlan;
 
     // ── Questionnaire responses ──────────────────────────────────────────

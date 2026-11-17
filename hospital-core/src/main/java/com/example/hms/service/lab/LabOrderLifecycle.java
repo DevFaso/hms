@@ -27,7 +27,7 @@ public final class LabOrderLifecycle {
 
     /** States the workflow never leaves on its own. */
     private static final Set<LabOrderStatus> TERMINAL =
-        EnumSet.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED);
+        EnumSet.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED, LabOrderStatus.ENTERED_IN_ERROR);
 
     /**
      * How far through the workflow each state is.
@@ -53,7 +53,9 @@ public final class LabOrderLifecycle {
             LabOrderStatus.RESULTED, 5,
             LabOrderStatus.VERIFIED, 6,
             LabOrderStatus.COMPLETED, 7,
-            LabOrderStatus.CANCELLED, 7));
+            LabOrderStatus.CANCELLED, 7,
+            // QA D820: terminal like CANCELLED, and never re-opened by a result.
+            LabOrderStatus.ENTERED_IN_ERROR, 7));
 
     /** The workflow position of {@code status}; visible for the coverage test. */
     static Integer rankOf(LabOrderStatus status) {
@@ -102,7 +104,8 @@ public final class LabOrderLifecycle {
      * means the row is gone, which is not this path's business to repair.
      */
     public static LabOrderStatus statusAfterNewResult(LabOrderStatus current) {
-        if (current == null || current == LabOrderStatus.CANCELLED) {
+        if (current == null || current == LabOrderStatus.CANCELLED
+                || current == LabOrderStatus.ENTERED_IN_ERROR) {
             return null;
         }
         if (REOPENABLE.contains(current)) {
@@ -149,7 +152,8 @@ public final class LabOrderLifecycle {
      *         side effect of a specimen or a result)
      */
     public static LabOrderStatus statusAfterForwardStep(LabOrderStatus current, LabOrderStatus target) {
-        if (target == null || target == LabOrderStatus.CANCELLED) {
+        if (target == null || target == LabOrderStatus.CANCELLED
+                || target == LabOrderStatus.ENTERED_IN_ERROR) {
             return null;
         }
         Integer targetRank = RANK.get(target);
@@ -167,5 +171,64 @@ public final class LabOrderLifecycle {
             return null;
         }
         return target;
+    }
+
+    /**
+     * States a specimen rejection sends back to awaiting collection (QA D962):
+     * the specimen is on its way or in the laboratory, and no result exists.
+     */
+    private static final Set<LabOrderStatus> RECOLLECTABLE = EnumSet.of(
+        // Not PENDING: that is "acknowledged, awaiting collection" already, and
+        // moving it back to ORDERED would un-acknowledge it (review of #975).
+        LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS);
+
+    /**
+     * Whether an order at {@code current} may have a specimen rejected: not
+     * once a result exists (RESULTED, VERIFIED, COMPLETED), since a result
+     * from the specimen is corrected, not un-sampled; not on a void; not on a
+     * cancelled order (review of #975: nobody wants a new sample for it, and
+     * the rejection would page the clinician for one).
+     */
+    public static boolean acceptsSpecimenRejection(LabOrderStatus current) {
+        return current != null && current != LabOrderStatus.ENTERED_IN_ERROR
+            && current != LabOrderStatus.CANCELLED
+            && current != LabOrderStatus.RESULTED && current != LabOrderStatus.VERIFIED
+            && current != LabOrderStatus.COMPLETED;
+    }
+
+    /**
+     * QA D1109: whether an order at {@code current} takes a NEW specimen.
+     * Only while it awaits or is in analysis (ORDERED to IN_PROGRESS): once a
+     * result exists (RESULTED, VERIFIED, COMPLETED) the order is answered - a
+     * repeat analysis is a new order, a wrong value a correction - and a
+     * cancelled or voided order takes nothing. A collection on a released
+     * order left a dangling tube with an accession number nobody would run.
+     */
+    public static boolean acceptsNewSpecimen(LabOrderStatus current) {
+        // A null status is an order not yet stamped (@PrePersist makes it
+        // ORDERED); there is nothing to refuse it on.
+        return current == null || (!TERMINAL.contains(current)
+            && current != LabOrderStatus.RESULTED && current != LabOrderStatus.VERIFIED);
+    }
+
+    /**
+     * QA D1109: whether a specimen already collected for an order at
+     * {@code current} may still be received: not on a cancelled or voided
+     * order (the receipt queues an analyser work order for it).
+     */
+    public static boolean acceptsSpecimenReceipt(LabOrderStatus current) {
+        return current != LabOrderStatus.CANCELLED && current != LabOrderStatus.ENTERED_IN_ERROR;
+    }
+
+    /**
+     * QA D962: what the rejection of the order's last live specimen moves
+     * {@code current} to — back to ORDERED, awaiting a new collection — or
+     * {@code null} when it should not move (already awaiting collection,
+     * cancelled, or past the point a rejection can undo). The ONE backward
+     * step the workflow takes, and it is a verdict like the others, written by
+     * the caller's compare-and-set statement.
+     */
+    public static LabOrderStatus statusAfterSpecimenRejected(LabOrderStatus current) {
+        return current != null && RECOLLECTABLE.contains(current) ? LabOrderStatus.ORDERED : null;
     }
 }

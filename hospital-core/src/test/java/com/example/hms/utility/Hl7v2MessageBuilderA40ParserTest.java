@@ -97,4 +97,41 @@ class Hl7v2MessageBuilderA40ParserTest {
         assertThat(parsed.survivingMrn()).isEqualTo("MRN-A");
         assertThat(parsed.priorMrn()).isEqualTo("MRN-B");
     }
+
+    private static String a40With(String survivingMrn, String priorMrn) {
+        return "MSH|^~\\&|LIS|HOSP1|HMS|HOSP1|20260826120000||ADT^A40|MSG-W|P|2.5\r"
+            + "PID|1||" + survivingMrn + "^^^HOSP1^MR||Traore^Awa||19900101|F\r"
+            + "MRG|" + priorMrn + "^^^HOSP1^MR\r";
+    }
+
+    @Test
+    void bothIdentifiersAtTheAliasWidthAreReadVerbatim() {
+        String surviving = "S".repeat(Hl7FieldBounds.MRN_MAX);
+        String prior = "P".repeat(Hl7FieldBounds.MRN_MAX);
+
+        ParsedMergeMessage parsed = builder.parseAdtA40(a40With(surviving, prior));
+
+        assertThat(parsed).isNotNull();
+        assertThat(parsed.survivingMrn()).isEqualTo(surviving);
+        assertThat(parsed.priorMrn()).isEqualTo(prior);
+    }
+
+    @Test
+    void identifiersAreBoundedAsTheyAreMatchedTrimmed() {
+        // The merge service trims both before resolving, so padding that the
+        // match ignores must not turn a resolvable merge into a refused one.
+        String surviving = "S".repeat(Hl7FieldBounds.MRN_MAX);
+
+        assertThat(builder.parseAdtA40(a40With(surviving + "   ", "MRN-RETIRED"))).isNotNull();
+    }
+
+    @Test
+    void anOverWidthIdentifierOnEitherSideIsRefusedNotTruncated() {
+        // Truncated, either side could resolve to a different patient - and
+        // on an A40 that is a merge nobody can undo.
+        String over = "X".repeat(Hl7FieldBounds.MRN_MAX + 1);
+
+        assertThat(builder.parseAdtA40(a40With(over, "MRN-RETIRED"))).isNull();
+        assertThat(builder.parseAdtA40(a40With("MRN-SURVIVOR", over))).isNull();
+    }
 }

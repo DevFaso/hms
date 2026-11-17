@@ -3,6 +3,9 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.CriticalValueReadBackRequestDTO;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.service.lab.LabResultAuthority;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.security.audit.WriteAuditInterceptor;
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.LabResultComparisonDTO;
 import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
@@ -10,6 +13,7 @@ import com.example.hms.payload.dto.LabResultSignatureRequestDTO;
 import com.example.hms.service.CriticalValueNotificationService;
 import com.example.hms.service.LabResultService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -75,11 +79,14 @@ public class LabResultController {
     // before the test is loaded. LabResultEntryGuard makes that call in the
     // service. This stays broad on purpose.
     @PreAuthorize(LabResultAuthority.ENTRY_EXPRESSION)
+    @WriteAudited(entity = "LAB_RESULT", eventType = AuditEventType.LAB_RESULT_CREATED)
     @Operation(summary = "Create Lab Result", description = "Creates a new lab result.")
     public ResponseEntity<LabResultResponseDTO> createLabResult(
             @Valid @RequestBody LabResultRequestDTO requestDTO,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         LabResultResponseDTO created = labResultService.createLabResult(requestDTO, locale);
+        WriteAuditInterceptor.describeWrite(created.getId(), created.getPatientId());
+        auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_CREATED, created);
         return new ResponseEntity<>(created, HttpStatus.CREATED);
     }
 
@@ -88,8 +95,10 @@ public class LabResultController {
     @Operation(summary = "Get Lab Result by ID", description = "Fetches a lab result by its ID.")
     public ResponseEntity<LabResultResponseDTO> getLabResultById(
             @PathVariable UUID id,
-            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.getLabResultById(id, locale));
+            @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+            org.springframework.security.core.Authentication auth) {
+        return ResponseEntity.ok(labResultService.getLabResultById(id, locale,
+            PatientLabResultController.isLaboratoryStaff(auth)));
     }
 
     @GetMapping
@@ -97,8 +106,14 @@ public class LabResultController {
     @Operation(summary = "Get All Lab Results", description = "Retrieves a paginated list of lab results. Hospital-scoped for tenant roles; SUPER_ADMIN sees results across all hospitals.")
     public ResponseEntity<ApiResponseWrapper<Page<LabResultResponseDTO>>> getAllLabResults(
             @PageableDefault(size = 20) Pageable pageable,
-            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(ApiResponseWrapper.success(labResultService.getLabResultsPage(pageable, locale)));
+            @RequestParam(name = "patientId", required = false) UUID patientId,
+            @RequestParam(name = "labOrderId", required = false) UUID labOrderId,
+            @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+            org.springframework.security.core.Authentication auth) {
+        // QA D211: the patientId filter was ignored, and a non-laboratory
+        // reader saw unreleased values here (D160 only fixed the per-patient read).
+        return ResponseEntity.ok(ApiResponseWrapper.success(labResultService.getLabResultsPage(
+            pageable, locale, patientId, labOrderId, PatientLabResultController.isLaboratoryStaff(auth))));
     }
 
     @GetMapping("/pending-release")
@@ -121,7 +136,8 @@ public class LabResultController {
             @PathVariable UUID id,
             @Valid @RequestBody LabResultRequestDTO requestDTO,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.updateLabResult(id, requestDTO, locale));
+        return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_UPDATED,
+            labResultService.updateLabResult(id, requestDTO, locale)));
     }
 
     // Releasing is the laboratory attesting that a number is correct and may
@@ -138,8 +154,15 @@ public class LabResultController {
             + "Laboratory staff only — mirrors microbiology's finalize authority.")
     public ResponseEntity<LabResultResponseDTO> releaseLabResult(
             @PathVariable UUID id,
+            @Parameter(description = "D58: true confirms that the caller, who entered this result, releases it "
+                + "without a second reviewer. Without it a self-release answers 409.")
+            @RequestParam(name = "selfRelease", defaultValue = "false") boolean selfRelease,
+            @Parameter(description = "QA D1092: true confirms that the caller reviewed a result no reference "
+                + "range can grade (its unit matches none). Without it such a release answers 409.")
+            @RequestParam(name = "ungradedConfirmed", defaultValue = "false") boolean ungradedConfirmed,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.releaseLabResult(id, locale));
+        return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_RELEASED,
+            labResultService.releaseLabResult(id, selfRelease, ungradedConfirmed, locale)));
     }
 
     @PostMapping("/{id}/sign")
@@ -149,7 +172,8 @@ public class LabResultController {
             @PathVariable UUID id,
             @RequestBody(required = false) LabResultSignatureRequestDTO request,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.signLabResult(id, request, locale));
+        return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_UPDATED,
+            labResultService.signLabResult(id, request, locale)));
     }
 
     @PostMapping("/{id}/acknowledge")
@@ -182,7 +206,8 @@ public class LabResultController {
             @PathVariable UUID id,
             @Valid @RequestBody CriticalValueReadBackRequestDTO request,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.recordCriticalReadBack(id, request, locale));
+        return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_ACKNOWLEDGED,
+            labResultService.recordCriticalReadBack(id, request, locale)));
     }
 
     @DeleteMapping("/{id}")
@@ -193,9 +218,9 @@ public class LabResultController {
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         labResultService.deleteLabResult(id, locale);
         String rawMessage = messageSource.getMessage("labresult.deleted", new Object[]{id}, locale);
-        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMessage);
     }
 
@@ -206,8 +231,11 @@ public class LabResultController {
     @Operation(summary = "Compare Lab Result with Previous", description = "Compares current lab result with the previous measurement to identify trends and significant changes.")
     public ResponseEntity<LabResultComparisonDTO> compareLabResult(
             @PathVariable UUID id,
-            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.compareLabResults(id, locale));
+            @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+            org.springframework.security.core.Authentication auth) {
+        // QA D211: the same released-only rule as GET /{id}.
+        return ResponseEntity.ok(labResultService.compareLabResults(id, locale,
+            PatientLabResultController.isLaboratoryStaff(auth)));
     }
 
     @GetMapping("/patient/{patientId}/test/{testDefinitionId}/compare-sequential")
@@ -216,8 +244,10 @@ public class LabResultController {
     public ResponseEntity<List<LabResultComparisonDTO>> compareSequentialResults(
             @PathVariable UUID patientId,
             @PathVariable UUID testDefinitionId,
-            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.compareSequentialResults(patientId, testDefinitionId, locale));
+            @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+            org.springframework.security.core.Authentication auth) {
+        return ResponseEntity.ok(labResultService.compareSequentialResults(patientId, testDefinitionId, locale,
+            PatientLabResultController.isLaboratoryStaff(auth)));
     }
 
     @GetMapping("/hospital/{hospitalId}/critical")
@@ -239,5 +269,14 @@ public class LabResultController {
             @PathVariable UUID hospitalId,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         return ResponseEntity.ok(labResultService.getCriticalResultsRequiringAcknowledgment(hospitalId, locale));
+    }
+
+    /** QA D429: the lab audit row names the event, the result and its patient. Ids only. */
+    private static LabResultResponseDTO auditLabResult(com.example.hms.enums.AuditEventType type,
+                                                       LabResultResponseDTO result) {
+        if (result != null) {
+            com.example.hms.security.audit.WriteAuditDetail.describe(type, result.getId(), result.getPatientId());
+        }
+        return result;
     }
 }

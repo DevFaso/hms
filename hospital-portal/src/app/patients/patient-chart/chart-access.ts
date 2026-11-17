@@ -1,18 +1,32 @@
-import { DOCTOR_EQUIVALENT_ROLES } from '../../core/role-equivalence';
+import {
+  DOCTOR_EQUIVALENT_ROLES,
+  expandRoleEquivalents,
+  roleSatisfies,
+} from '../../core/role-equivalence';
 
 /**
  * ROLE_DOCTOR and the authorities the BACKEND expands into it (role audit
  * decision C2, mirrored by JwtTokenProvider / SecurityConfig's authorities
  * mapper): a physician and a surgeon are doctors to every endpoint below.
  *
- * Spelled out in the lists rather than left to `roleSatisfies`, because these
- * lists are read through `RoleContextService.hasAnyActiveRole`, which compares
- * raw strings and does NOT expand — so a list naming only ROLE_DOCTOR is
- * narrower than the endpoint it claims to mirror, and hides the chart from a
- * surgeon the backend admits. B7's in-basket category routes exactly that
- * surgeon here.
+ * Spelled out in the lists as well: they were written when
+ * `RoleContextService.hasAnyActiveRole` compared raw strings and did not
+ * expand, so a list naming only ROLE_DOCTOR hid the chart from a surgeon the
+ * backend admits (B7's in-basket category routes exactly that surgeon here).
+ * The service now applies the equivalence itself; the explicit names are
+ * harmless and keep each list a literal mirror of its endpoint.
  */
 const DOCTOR_ROLES: string[] = ['ROLE_DOCTOR', ...DOCTOR_EQUIVALENT_ROLES];
+
+/** Same authority set as the patient identity PATCH and audited IU disclosure. */
+export const PATIENT_IDENTITY_EDIT_ROLES = [
+  'ROLE_HOSPITAL_ADMIN',
+  'ROLE_RECEPTIONIST',
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  ...DOCTOR_ROLES,
+  'ROLE_SUPER_ADMIN',
+];
 
 /*
  * Every list in this file that names a doctor uses DOCTOR_ROLES. Leaving any
@@ -30,6 +44,99 @@ const DOCTOR_ROLES: string[] = ['ROLE_DOCTOR', ...DOCTOR_EQUIVALENT_ROLES];
  * Single source of truth for PatientChartComponent and the Chart tab gate in
  * PatientDetailComponent — update here when the backend gates change.
  */
+/**
+ * Mirrors the backend `CdsAcknowledgementController.CLINICIAN_ROLES`, which
+ * gates BOTH `POST /cds-services/{id}` (the BPA panel's evaluate call) and
+ * `/cds-acknowledgements`: the roles that may dismiss a card are the roles
+ * that receive one. Every other role that opens a patient page — reception,
+ * hospital admin, the lab bench, the consulting clinicians — is refused with
+ * 403, so the panel must not render (nor call) for them. Physicians and
+ * surgeons are admitted through `roleSatisfies` / `expandRoleEquivalents`,
+ * as the backend's RoleExpansion admits them.
+ */
+export const CDS_CLINICIAN_ROLES: readonly string[] = [
+  'ROLE_DOCTOR',
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_PHARMACIST',
+  'ROLE_SUPER_ADMIN',
+];
+
+/*
+ * QA D1524 (class: a chart side panel shown to a role its endpoint refuses, whose 403 then
+ * sent the whole chart to /error/403). Each list below mirrors the @PreAuthorize of the one
+ * read its panel makes on chart load; the panel renders (and calls) only for these roles,
+ * and its read is a background request, so a future drift costs the panel, never the page.
+ * ChartSidePanelRoleGuardTest (hospital-core) compares every list with its endpoint.
+ */
+
+/** MortalityController READER: GET /mortality/patients/{id}/voided-closures (the voided-death banner). */
+export const VOIDED_CLOSURES_VIEW_ROLES: string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+  'ROLE_ADMIN',
+  ...DOCTOR_ROLES,
+  'ROLE_MIDWIFE',
+  'ROLE_NURSE',
+  'ROLE_QUALITY_MANAGER',
+];
+
+/** PatientStoryboardController#getStoryboard: GET /patients/{id}/storyboard (the storyboard banner). */
+export const STORYBOARD_VIEW_ROLES: string[] = [
+  ...DOCTOR_ROLES,
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_PHARMACIST',
+  'ROLE_LAB_SCIENTIST',
+  'ROLE_LAB_TECHNICIAN',
+  'ROLE_LAB_MANAGER',
+  'ROLE_LAB_DIRECTOR',
+  'ROLE_QUALITY_MANAGER',
+  'ROLE_SUPER_ADMIN',
+];
+
+/**
+ * r53 (provisional rule 2026-11-14): SafeguardingReviewController READERS, GET /safeguarding/patients/{id}/reviews
+ * (the child-protection vigilance banner): the treating clinical team and the hospital administrator only. Never
+ * reception, billing, the lab or the pharmacy; the server also requires the role at the acting hospital.
+ */
+export const SAFEGUARDING_VIEW_ROLES: string[] = [
+  ...DOCTOR_ROLES,
+  'ROLE_MIDWIFE',
+  'ROLE_NURSE',
+  'ROLE_HOSPITAL_ADMIN',
+];
+
+/** SafeguardingReviewController RECORDERS: the responsible clinician records the documented review. */
+export const SAFEGUARDING_RECORD_ROLES: string[] = [...DOCTOR_ROLES];
+
+/** OrderReviewHoldController (class gate): GET /order-review-holds/patient/{id} (the held-orders panel). */
+export const ORDER_REVIEW_VIEW_ROLES: string[] = [
+  ...DOCTOR_ROLES,
+  'ROLE_MIDWIFE',
+  'ROLE_NURSE',
+  'ROLE_PHARMACIST',
+];
+
+/**
+ * True when the caller may invoke a CDS service. The single active role
+ * decides when one is pinned (a multi-role user scoped to reception gets no
+ * panel); otherwise any held role does.
+ */
+export function canInvokeCds(roleContext: {
+  activeRole: string | null;
+  activeRoles: string[];
+}): boolean {
+  const required = [...CDS_CLINICIAN_ROLES];
+  const active = roleContext.activeRole;
+  if (active) {
+    return roleSatisfies(required, active);
+  }
+  return expandRoleEquivalents(roleContext.activeRoles ?? []).some((role) =>
+    required.includes(role),
+  );
+}
+
 export const CHART_ROLES = {
   // E9 #69: every clinical role reads allergies (contrast, induction, therapy).
   viewAllergies: [
@@ -41,13 +148,19 @@ export const CHART_ROLES = {
     'ROLE_ANESTHESIOLOGIST',
     'ROLE_PHYSIOTHERAPIST',
   ],
-  editAllergies: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+  // editAllergies moved to core/action-permissions (allergyCreate/Update/Deactivate), QA D527.
   // E9 #69: the pharmacist reads the problem list to verify a prescription.
   viewProblems: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
   editProblems: [...DOCTOR_ROLES],
   viewUpdates: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   createUpdates: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   viewTimeline: [...DOCTOR_ROLES],
+  /**
+   * QA D527: the allergy writers who may also read GET /registrations (whose
+   * annotation names receptionists and admins too, but not the pharmacist), so
+   * the chart can tell whether the patient is registered where they act.
+   */
+  checkRegistrationHere: ['ROLE_DOCTOR', 'ROLE_NURSE'],
   /**
    * B6 — the Labs section reads TWO backends, and they do not admit the same
    * roles, so each read carries its own list instead of one combined flag: a
@@ -184,11 +297,22 @@ export const ENCOUNTER_VIEW_ROLES: string[] = [
  * /imaging, which are order-entry workbenches owned by the teams that work
  * those queues.
  */
+/**
+ * RCPT-CLIN (user decision 2026-11-06): the active roles hold the receptionist and
+ * nothing that reads clinical content. Mirrors ReceptionistResponseShaping on the
+ * server: a second clinical or administrative role lifts it.
+ */
+export function isFrontDeskOnly(hasAnyActiveRole: (roles: string[]) => boolean): boolean {
+  return (
+    hasAnyActiveRole(['ROLE_RECEPTIONIST']) &&
+    !hasAnyActiveRole([...CHART_REVIEW_VIEW_ROLES, 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN'])
+  );
+}
+
 export const CHART_REVIEW_VIEW_ROLES: string[] = [
   ...DOCTOR_ROLES,
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
-  'ROLE_RECEPTIONIST',
   'ROLE_PHARMACIST',
   'ROLE_LAB_SCIENTIST',
   'ROLE_LAB_TECHNICIAN',

@@ -45,6 +45,12 @@ public class AdmissionResponseDTO {
      */
     private UUID currentEncounterId;
 
+    /** The stay's own INPATIENT encounter, open or closed (QA D135, V193). */
+    private UUID encounterId;
+
+    /** QA D219: that encounter's code, which an invoice is linked by. */
+    private String encounterCode;
+
     private UUID departmentId;
     private String departmentName;
 
@@ -60,6 +66,10 @@ public class AdmissionResponseDTO {
     private LocalDateTime admissionDateTime;
     private LocalDateTime expectedDischargeDateTime;
     private LocalDateTime actualDischargeDateTime;
+
+    /** QA D1381 (round 32): why the stay was cancelled, and when; null unless cancelled. */
+    private String cancellationReason;
+    private LocalDateTime cancelledAt;
 
     private String chiefComplaint;
     private String primaryDiagnosisCode;
@@ -82,6 +92,12 @@ public class AdmissionResponseDTO {
 
     // Discharge info
     private DischargeDisposition dischargeDisposition;
+    /**
+     * QA D803: the diagnosis at discharge. The discharge stores it on the
+     * stay's encounter (QA D218), which the after-visit summary reads; the
+     * admission response never carried it. Diagnoses joined with "; ".
+     */
+    private String dischargeDiagnosis;
     private String dischargeSummary;
     private String dischargeInstructions;
     

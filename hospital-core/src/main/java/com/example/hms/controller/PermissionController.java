@@ -13,6 +13,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -87,9 +88,9 @@ public class PermissionController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         permissionService.deletePermission(id, locale);
         String rawMessage = messageSource.getMessage("permission.deleted", new Object[]{id}, locale);
-        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMessage);
     }
 
@@ -110,7 +111,8 @@ public class PermissionController {
         @RequestParam(defaultValue = "10") int size,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         PermissionFilterDTO filter = new PermissionFilterDTO(assignmentId, name);
-        Pageable pageable = PageRequest.of(page, size);
+        // QA D1295 class: pages of an unordered query repeat or skip rows; by name.
+        Pageable pageable = PageRequest.of(page, size, Sort.by("name", "id"));
         return ResponseEntity.ok(permissionService.getPermissions(filter, pageable, locale));
     }
 }

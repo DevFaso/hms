@@ -73,15 +73,13 @@ struct EncounterRowView: View {
     let encounter: EncounterDTO
     
     private var statusText: String {
-        (encounter.status ?? "—")
-            .replacingOccurrences(of: "_", with: " ")
-            .capitalized
+        EnumLabel.text(.encounterStatus, encounter.status)
     }
     
     private var statusColor: String {
         switch encounter.status?.uppercased() {
         case "COMPLETED": return "green"
-        case "CANCELLED": return "red"
+        case "CANCELLED", "LEFT_WITHOUT_BEING_SEEN": return "red"
         case "IN_PROGRESS", "TRIAGE", "WAITING_FOR_PHYSICIAN": return "blue"
         default: return "gray"
         }
@@ -91,10 +89,10 @@ struct EncounterRowView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 if let type = encounter.type {
-                    Text(type.capitalized).font(.caption).bold()
+                    Text(type).font(.caption).bold()
                         .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.accentColor.opacity(0.1))
-                        .foregroundColor(.accentColor)
+                        .background(Color("BrandPrimary").opacity(0.1))
+                        .foregroundColor(Color("BrandPrimaryText"))
                         .cornerRadius(4)
                 }
                 Spacer()

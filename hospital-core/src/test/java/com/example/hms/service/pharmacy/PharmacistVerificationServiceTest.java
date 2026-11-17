@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.mock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -56,7 +57,7 @@ class PharmacistVerificationServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         service = new PharmacistVerificationService(
-            prescriptionRepository, userRepository, roleValidator, clock);
+            prescriptionRepository, userRepository, roleValidator, clock, new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class)));
 
         hospitalId = UUID.randomUUID();
         pharmacistId = UUID.randomUUID();
@@ -144,6 +145,43 @@ class PharmacistVerificationServiceTest {
     }
 
     @Test
+    void policy4_anOrderThePatientsCurrentAllergiesStopIsVerifiedOnlyUnderThePrescribersReview() {
+        // QA D1555: a SEVERE morphine allergy recorded after the signature.
+        callerIsPharmacist();
+        com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID());
+        rx.setPatient(patient);
+        com.example.hms.model.PatientAllergy allergy = new com.example.hms.model.PatientAllergy();
+        allergy.setId(UUID.randomUUID());
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Morphine");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        com.example.hms.repository.PatientAllergyRepository allergies =
+            mock(com.example.hms.repository.PatientAllergyRepository.class);
+        when(allergies.findByPatient_Id(patient.getId())).thenReturn(java.util.List.of(allergy));
+        var check = new com.example.hms.service.allergy.CurrentAllergyRecheck(allergies, null, null);
+        service.setAllergyRecheck(check);
+        UUID id = rx.getId();
+
+        com.example.hms.cdshooks.CdsCriticalBlockException refused = org.junit.jupiter.api.Assertions.assertThrows(
+            com.example.hms.cdshooks.CdsCriticalBlockException.class, () -> service.verify(id, null));
+        assertThat(refused.getField()).isEqualTo(com.example.hms.service.allergy.CurrentAllergyRecheck.HOLD_FIELD);
+        verify(prescriptionRepository, never()).save(any());
+
+        // Policy 4: the pharmacist's own reason releases nothing; the prescriber's CONTINUE review does.
+        com.example.hms.model.User reviewer = new com.example.hms.model.User();
+        reviewer.setId(UUID.randomUUID());
+        rx.setAllergyReviewDecision(com.example.hms.enums.AllergyReviewDecision.CONTINUE);
+        rx.setAllergyReviewToken(check.currentConflict(rx).orElseThrow().reviewToken());
+        rx.setAllergyReviewedBy(reviewer);
+        rx.setAllergyReviewedAt(NOW);
+        Prescription saved = service.verify(id, null);
+        assertThat(saved.getPharmacistVerifiedAt()).isEqualTo(NOW);
+        // The line is a message key here (no bundle in this unit test); NurseTaskServiceImplTest reads the text.
+        assertThat(saved.getPharmacistVerificationNote()).isNotBlank();
+    }
+
+    @Test
     void aBlankNoteIsStoredAsNullRatherThanWhitespace() {
         callerIsPharmacist();
 
@@ -166,7 +204,26 @@ class PharmacistVerificationServiceTest {
 
         assertThatThrownBy(() -> service.verify(id, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot be verified by the clinician who prescribed it");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.r7.selfVerification"));
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d757_aWardOrderOfAnEndedStayCannotBeVerified() {
+        // The QA call: POST /prescriptions/{id}/pharmacist-verify on a SIGNED
+        // ward order after its stay was discharged answered 200.
+        com.example.hms.model.Encounter stayEncounter = new com.example.hms.model.Encounter();
+        stayEncounter.setAdmissionId(UUID.randomUUID());
+        stayEncounter.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        rx.setEncounter(stayEncounter);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        UUID id = rx.getId();
+
+        assertThatThrownBy(() -> service.verify(id, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -182,7 +239,29 @@ class PharmacistVerificationServiceTest {
 
         assertThatThrownBy(() -> service.verify(id, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Only a signed prescription");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.r7.onlySignedVerifiable"));
+    }
+
+    /**
+     * QA D607: prescription f5843c2b was filled with the pharmacist's own
+     * attestation (verifiedBy = themselves, D512), which stamps the
+     * verification and moves the order to DISPENSED. The later
+     * pharmacist-verify answered "only a signed prescription can be
+     * validated", so the order read as filled unverified. It is verified:
+     * the answer says so.
+     */
+    @Test
+    void aFillVerifiedAtTheCounterAnswersAlreadyVerifiedNotUnsigned() {
+        rx.setStatus(PrescriptionStatus.DISPENSED);
+        rx.setPharmacistVerifiedAt(NOW.minusMinutes(5));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        UUID id = rx.getId();
+
+        assertThatThrownBy(() -> service.verify(id, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.r7.alreadyVerified"));
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test
@@ -194,7 +273,7 @@ class PharmacistVerificationServiceTest {
 
         assertThatThrownBy(() -> service.verify(id, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already been verified");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.r7.alreadyVerified"));
     }
 
     @Test

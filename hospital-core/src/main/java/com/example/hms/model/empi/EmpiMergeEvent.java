@@ -1,11 +1,14 @@
 package com.example.hms.model.empi;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.enums.empi.EmpiMergeType;
 import com.example.hms.model.BaseEntity;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.TenantEntityListener;
 import com.example.hms.security.tenant.TenantScoped;
+import com.example.hms.security.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.EntityListeners;
@@ -75,7 +78,15 @@ public class EmpiMergeEvent extends BaseEntity implements TenantScoped {
     @Column(name = "resolution", length = 50)
     private String resolution;
 
+    /**
+     * Encrypted at rest. An inbound HL7 A40 writes both MRNs and the sender's
+     * provenance here - the only provenance a merge with no principal has -
+     * and an operator's manual merge note is free text; either is PHI.
+     * Legacy plaintext rows are encrypted at startup by
+     * {@code PhiTextEncryptionBackfill}.
+     */
     @Column(name = "notes", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String notes;
 
     @Column(name = "undo_token", length = 100)
@@ -117,8 +128,8 @@ public class EmpiMergeEvent extends BaseEntity implements TenantScoped {
         if (organizationId == null && context.getActiveOrganizationId() != null) {
             organizationId = context.getActiveOrganizationId();
         }
-        if (hospitalId == null && context.getActiveHospitalId() != null) {
-            hospitalId = context.getActiveHospitalId();
+        if (hospitalId == null && ActingScopeResolver.pinnedHospitalIdOf(context) != null) {
+            hospitalId = ActingScopeResolver.pinnedHospitalIdOf(context);
         }
         if (departmentId == null && !context.getPermittedDepartmentIds().isEmpty()) {
             departmentId = context.getPermittedDepartmentIds().iterator().next();

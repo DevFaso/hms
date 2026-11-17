@@ -1,5 +1,6 @@
 package com.example.hms.service.recordaccess;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.enums.RecordAccessDenialReason;
 import com.example.hms.enums.RecordAccessPosture;
 import com.example.hms.enums.TenantIsolationMode;
@@ -7,6 +8,7 @@ import com.example.hms.enums.TreatmentRelationshipKind;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRecordSharingOptOutRepository;
@@ -84,6 +86,12 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
     @Transactional(readOnly = true)
     public Set<UUID> readableHospitalIds(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
         Set<UUID> readable = new LinkedHashSet<>();
+        // A provider facility reads no chart rows at all, not even its own
+        // id's (provider plan section 3.3, AC-9): the same PROVIDER_FACILITY
+        // gate as decide, so the readable set is empty.
+        if (actingHospitalId != null && actsAtProvider(actorUserId, actingHospitalId)) {
+            return readable;
+        }
         if (actingHospitalId != null) {
             // The acting hospital is always readable — that does not depend
             // on the posture or a treatment relationship. E9 #58 removed the
@@ -106,6 +114,36 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
         return readable;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean foreignRowsWithheld(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
+        if (patientId == null || actingHospitalId == null
+            || !optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)) {
+            return false;
+        }
+        return !cachedDecision(actorUserId, patientId, actingHospitalId).permitted();
+    }
+
+    /**
+     * The acting facility passed in is a pharmacy or a laboratory. The
+     * facility decides, never the ambient confinement: a provider user who is
+     * also a patient, reading at a clinical acting hospital, is not acting at
+     * a provider. The type is read from the actor's own live context when it
+     * carries that facility (no query); any other facility (a context built by
+     * hand, another actor's context, a super-admin or an unconfined caller
+     * naming another facility, no request context) is looked up.
+     */
+    private boolean actsAtProvider(UUID actorUserId, UUID actingHospitalId) {
+        FacilityType known = HospitalContextHolder.getContext()
+            .filter(context -> actorUserId != null && actorUserId.equals(context.getPrincipalUserId()))
+            .map(context -> context.getHospitalFacilityTypes().get(actingHospitalId))
+            .orElse(null);
+        if (known != null) {
+            return known.isProvider();
+        }
+        return hospitalRepository.findById(actingHospitalId).map(Hospital::isProvider).orElse(false);
+    }
+
     /**
      * Whether this hospital lets its own records be read on the treatment
      * presumption. A {@code SCHEMA}-isolated tenant never does, by
@@ -113,8 +151,10 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
      * even when the reader's hospital presumes treatment.
      */
     private static boolean disclosesOnTreatmentPresumption(Hospital source) {
-        if (source == null || source.getId() == null
+        if (source == null || source.getId() == null || source.isProvider()
             || source.getIsolationMode() == TenantIsolationMode.SCHEMA) {
+            // A provider facility keeps no chart (AC-9): a registration there
+            // (legacy, or planted) adds nothing to the readable set.
             return false;
         }
         RecordAccessPosture posture = source.getRecordAccessPosture();
@@ -132,6 +172,15 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
                 RecordAccessDenialReason.HOSPITAL_UNKNOWN, null);
         }
         Hospital h = hospital.get();
+        // A provider facility (pharmacy, laboratory) never reads a chart here:
+        // first, before the posture, the opt-out, the staff row, a
+        // registration (even one planted by SQL), the carriers and
+        // break-the-glass (provider plan §3.3, AC-9). Its work reaches
+        // patient data only through the order-bound grant (P2).
+        if (h.isProvider()) {
+            return RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
+                RecordAccessDenialReason.PROVIDER_FACILITY, null);
+        }
         RecordAccessPosture posture = h.getRecordAccessPosture() != null
             ? h.getRecordAccessPosture() : RecordAccessPosture.TREATMENT_PRESUMED;
 
@@ -149,14 +198,27 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
         // has withdrawn from sharing gets the same answer whether or not they
         // are on this hospital's schedule, so the refusal itself discloses
         // nothing about their movements.
-        if (optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)) {
+        boolean optedOut = optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId);
+        if (optedOut && !isActiveStaffAt(actorUserId, hospitalId)) {
             return RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.PATIENT_OPTED_OUT, posture);
         }
-        boolean staffHere = actorUserId != null
-            && staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)
-                .map(s -> s.isActive())
-                .orElse(false);
+        if (optedOut) {
+            // QA D410: the patient portal promises that after an opt-out "an
+            // emergency access stays possible, recorded, and shown to you". A
+            // live break-the-glass session the actor declared for this patient
+            // here is that emergency access: it overrides the opt-out, every
+            // read under it is a BREAK_GLASS disclosure, and the declaration
+            // notified the patient (BreakGlassPatientNotifier). Without one the
+            // opt-out answer is unchanged.
+            return breakGlassGate.liveSession(actorUserId, patientId, hospitalId)
+                .map(s -> new TreatmentRelationship(TreatmentRelationshipKind.BREAK_GLASS, s.getId(),
+                    hospitalId, patientId, s.getStartedAt(), s.getExpiresAt(), true))
+                .map(rel -> RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, rel, posture))
+                .orElseGet(() -> RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
+                    RecordAccessDenialReason.PATIENT_OPTED_OUT, posture));
+        }
+        boolean staffHere = isActiveStaffAt(actorUserId, hospitalId);
         if (!staffHere) {
             return RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.NOT_STAFF_AT_HOSPITAL, posture);
@@ -192,6 +254,13 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
             .map(rel -> RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, rel, posture))
             .orElseGet(() -> RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.NO_TREATMENT_RELATIONSHIP, posture));
+    }
+
+    private boolean isActiveStaffAt(UUID actorUserId, UUID hospitalId) {
+        return actorUserId != null
+            && staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)
+                .map(s -> s.isActive())
+                .orElse(false);
     }
 
     /**

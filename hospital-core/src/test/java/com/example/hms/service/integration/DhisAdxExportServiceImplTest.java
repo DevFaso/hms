@@ -57,7 +57,7 @@ class DhisAdxExportServiceImplTest {
         hospital.setDhis2OrgUnitUid("OU000000001");
         config = Dhis2FacilityConfig.builder()
             .hospital(hospital)
-            .baseUrl("https://dhis2.example.org")
+            .baseUrl("https://93.184.216.34") // IP literal: no DNS in CI
             .authMode(Dhis2AuthMode.PAT)
             .authSecretEnvVar("DHIS2_TOKEN")
             .defaultPeriodType(Dhis2PeriodType.MONTHLY)
@@ -117,6 +117,30 @@ class DhisAdxExportServiceImplTest {
             hospitalId, datasetUid, Dhis2PeriodType.MONTHLY, "202604", null);
 
         assertThat(result.getStatus()).isEqualTo(Dhis2ExportStatus.SUCCESS);
+        verify(httpClient, never()).postDataValueSet(any(), any(), any(), any(), any());
+        verify(persistence, never()).finalizeReconciled(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("QA D898: a base URL saved before the check is re-checked at push time -> FAILED, no HTTP call")
+    void internalBaseUrlRefusedAtPushTime() {
+        wireConfigAndAggregation();
+        when(xmlWriter.build(any(), any(), any(), any(), any())).thenReturn("<adx/>");
+        when(persistence.persistPending(any(), any(), any(), any(), any())).thenReturn(pendingRun);
+        Dhis2ExportRun failed = withStatus(Dhis2ExportStatus.FAILED);
+        when(persistence.finalizeFailed(eq(pendingRun), eq(0), anyString())).thenReturn(failed);
+        String[] internals = {
+            "https://169.254.169.254/latest", "https://localhost/dhis",
+            "https://10.0.0.5/dhis", "https://[::1]/dhis", "http://93.184.216.34"};
+        for (String internal : internals) {
+            config.setBaseUrl(internal);
+
+            Dhis2ExportRun result = service.triggerImmunizationsExport(
+                hospitalId, datasetUid, Dhis2PeriodType.MONTHLY, "202604", null);
+
+            assertThat(result.getStatus()).as(internal).isEqualTo(Dhis2ExportStatus.FAILED);
+        }
+        verify(persistence, times(internals.length)).finalizeFailed(eq(pendingRun), eq(0), anyString());
         verify(httpClient, never()).postDataValueSet(any(), any(), any(), any(), any());
         verify(persistence, never()).finalizeReconciled(any(), any(), any());
     }

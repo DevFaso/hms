@@ -31,7 +31,7 @@ public class DepartmentRequestDTO {
 
     @NotBlank(message = "{department.name.required}")
     @Size(min = 2, max = 100, message = "{department.name.size}")
-    @Pattern(regexp = "^[a-zA-Z0-9 \\-]+$", message = "{department.name.pattern}")
+    @Pattern(regexp = "^[\\p{L}\\p{M}\\p{N} '’.\\-]+$", message = "{department.name.pattern}")
     private String name;
 
     @Size(max = 500, message = "{department.description.size}")
@@ -41,6 +41,7 @@ public class DepartmentRequestDTO {
 
     @Size(max = 20, message = "{department.phone.size}")
     @Pattern(regexp = "^[\\d\\s\\-()+]*$", message = "{department.phone.pattern}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     @Email(message = "{department.email.invalid}")
@@ -61,10 +62,12 @@ public class DepartmentRequestDTO {
 
     private Integer floorNumber;
     private String wing;
+    @jakarta.validation.constraints.Min(value = 0, message = "{department.bedCapacity.min}")
     private Integer bedCapacity;
 
     // Emergency contact information
     @Size(max = 20)
+    @com.example.hms.validation.PhoneNumber
     private String emergencyPhone;
 
     // Operational hours

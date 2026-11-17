@@ -65,6 +65,28 @@ public class PharmacistVerificationService {
     private final UserRepository userRepository;
     private final RoleValidator roleValidator;
     private final Clock clock;
+    /** QA D792: whether an order ended with a stay, whatever its shape (the V233 rule). */
+    private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
+
+    /**
+     * QA D678: prescriber tick OR hospital catalog item controlled. Optional so
+     * a hand-built instance in unit tests still works (then the tick alone).
+     */
+    private PrescriptionControlledResolver controlledResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setControlledResolver(PrescriptionControlledResolver controlledResolver) {
+        this.controlledResolver = controlledResolver;
+    }
+
+    private boolean controlled(com.example.hms.model.Prescription p) {
+        return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
+    }
+
+    /** QA D922: the same controlled answer, for the MAR row's "controlled substance" flag. */
+    public boolean isControlledSubstance(Prescription prescription) {
+        return prescription != null && controlled(prescription);
+    }
 
     /**
      * Whether this prescription may not be administered until a pharmacist
@@ -76,8 +98,12 @@ public class PharmacistVerificationService {
      * the gate once it is in.
      */
     public boolean requiresVerification(Prescription prescription) {
-        return prescription != null
-            && (prescription.isControlledSubstance() || prescription.isRequiresCosign());
+        return prescription != null && requiresVerification(prescription, controlled(prescription));
+    }
+
+    /** The same rule for a caller that already resolved {@code controlled} (the MAR row shows it too). */
+    public boolean requiresVerification(Prescription prescription, boolean controlled) {
+        return prescription != null && (controlled || prescription.isRequiresCosign());
     }
 
     /** Whether a pharmacist has verified the CURRENT version of this prescription. */
@@ -117,9 +143,41 @@ public class PharmacistVerificationService {
      * The verification ceremony. Server identity, server clock — a client
      * cannot assert who verified or when, the same stance the signing and
      * co-signing ceremonies take.
+     *
+     * <p>Policy 4: an allergy conflict is released only by the prescriber's review on the order,
+     * never by anything the pharmacist sends.
      */
     @Transactional
     public Prescription verify(UUID prescriptionId, String note) {
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescriptionId, "prescriptionId");
+        return verifyInTransaction(prescriptionId, note);
+    }
+
+    /**
+     * QA D1555: the one allergy re-check after the signature. A required setter: the application
+     * always wires it; only a service built by hand in a unit test has none.
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAllergyRecheck(com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck) {
+        this.allergyRecheck = allergyRecheck;
+    }
+
+    /**
+     * QA D1555: a drug the patient's CURRENT allergies stop is verified only with the pharmacist's
+     * acknowledgement of that allergy and a reason (AllergyRecheckGuardTest).
+     */
+    private com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement requireAllergyAcknowledged(Prescription prescription) {
+        if (allergyRecheck == null) {
+            return null;
+        }
+        return allergyRecheck.requirePrescriberReview(com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.PHARMACIST_VERIFICATION, prescription,
+            prescription.getMedicationName());
+    }
+
+    /** Shared ceremony; both public entry points establish the transaction before delegating. */
+    private Prescription verifyInTransaction(UUID prescriptionId, String note) {
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
             .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 
@@ -135,14 +193,21 @@ public class PharmacistVerificationService {
         // Verifying a draft would be verifying something the prescriber can
         // still freely rewrite, and the invalidation rule would clear it the
         // moment they did.
-        PrescriptionStatus status = prescription.getStatus();
-        if (status != PrescriptionStatus.SIGNED && status != PrescriptionStatus.TRANSMITTED) {
-            throw new BusinessException(
-                "Only a signed prescription can be verified; this one is " + status + ".");
+        // QA D607: checked before the status. A fill attested at the counter
+        // (D512) stamps the verification and moves the order to DISPENSED, so
+        // the status check answered "only a signed prescription can be
+        // validated" and the order read as never verified.
+        if (isVerified(prescription)) {
+            throw new BusinessException("pharmacy.r7.alreadyVerified");
         }
 
-        if (isVerified(prescription)) {
-            throw new BusinessException("This prescription has already been verified.");
+        PrescriptionStatus status = prescription.getStatus();
+        if (status != PrescriptionStatus.SIGNED && status != PrescriptionStatus.TRANSMITTED) {
+            throw new BusinessException("pharmacy.r7.onlySignedVerifiable");
+        }
+        // QA D757: nor is a ward order of a stay that has ended.
+        if (endedStayOrders.endedWithAStay(prescription)) {
+            throw new BusinessException("pharmacy.prescription.stayEnded");
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -158,13 +223,44 @@ public class PharmacistVerificationService {
                 && prescription.getStaff().getUser() != null
                 && currentUserId.equals(prescription.getStaff().getUser().getId())) {
             throw new BusinessException(
-                "A prescription cannot be verified by the clinician who prescribed it.");
+                "pharmacy.r7.selfVerification");
         }
+
+        // QA D1555: the order's drug against the patient's CURRENT allergies, before the stamp.
+        com.example.hms.service.allergy.CurrentAllergyRecheck.Acknowledgement allergyAck = requireAllergyAcknowledged(prescription);
 
         prescription.setPharmacistVerifiedAt(LocalDateTime.now(clock));
         prescription.setPharmacistVerifiedBy(verifier);
-        prescription.setPharmacistVerificationNote(trimToNull(note));
-        return prescriptionRepository.save(prescription);
+        prescription.setPharmacistVerificationNote(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(trimToNull(note), allergyAck, 1000, "note"));
+        Prescription saved = prescriptionRepository.save(prescription);
+        if (allergyAck != null) {
+            allergyRecheck.auditAfterCommit(allergyAck, currentUserId,
+                prescription.getHospital() != null ? prescription.getHospital().getId() : null,
+                prescription.getPatient() != null ? prescription.getPatient().getId() : null, prescription.getId());
+        }
+        return saved;
+    }
+
+    /**
+     * QA D512: the verification a dispensing pharmacist attests at the
+     * counter, in the dispense request itself. Same server clock and the same
+     * self-verification refusal as {@link #verify}; the caller has already
+     * established that {@code verifier} is the session user and holds the
+     * prescription row lock, and persists it with the fill.
+     */
+    public void verifyAtCounter(Prescription prescription, User verifier) {
+        if (prescription == null || verifier == null || isVerified(prescription)) {
+            return;
+        }
+        if (prescription.getStaff() != null
+                && prescription.getStaff().getUser() != null
+                && verifier.getId() != null
+                && verifier.getId().equals(prescription.getStaff().getUser().getId())) {
+            throw new BusinessException("pharmacy.r7.selfVerification");
+        }
+        prescription.setPharmacistVerifiedAt(LocalDateTime.now(clock));
+        prescription.setPharmacistVerifiedBy(verifier);
+        prescription.setPharmacistVerificationNote(null);
     }
 
     private static String trimToNull(String value) {

@@ -52,9 +52,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import org.mockito.Spy;
 import org.springframework.context.MessageSource;
 import com.example.hms.i18n.TestMessageSources;
@@ -80,9 +83,21 @@ class ResultReviewServiceImplTest {
     @Mock private com.example.hms.repository.NotificationRepository notificationRepository;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+    /** QA D1286: real, over the real bundles, so a keyed item is rendered for the reader. */
+    @Spy private com.example.hms.service.i18n.NotificationLocalizer notificationLocalizer =
+            new com.example.hms.service.i18n.NotificationLocalizer(TestMessageSources.bundles());
+    /** QA D178: the queue grades a result the way the lab-results screen does. */
+    @Mock private com.example.hms.mapper.LabResultMapper labResultMapper;
 
     @InjectMocks
     private ResultReviewServiceImpl service;
+
+    /**
+     * The hospital MeController resolved for the caller. It is an argument now,
+     * not something the service looks up, so the queue and the patient snapshot
+     * on the same page cannot disagree about it.
+     */
+    private static final UUID ACTING_HOSPITAL_ID = UUID.randomUUID();
 
     // Inbox labels follow the request locale; pin English so the literal
     // assertions below are independent of the JVM default.
@@ -130,6 +145,7 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFullName()).thenReturn("Awa Traore"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Awa");
         lenient().when(patient.getLastName()).thenReturn("Traore");
 
@@ -145,10 +161,10 @@ class ResultReviewServiceImplTest {
             lenient().when(released.getId()).thenReturn(UUID.randomUUID());
             lenient().when(released.isReleased()).thenReturn(true);
 
-            when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+            when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
             when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(released));
 
-            List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+            List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
             assertEquals(1, queue.size(), "queue for order status " + status);
             seen.addAll(queue);
         }
@@ -167,9 +183,9 @@ class ResultReviewServiceImplTest {
 
         LabOrder collected = mock(LabOrder.class);
         when(collected.getStatus()).thenReturn(LabOrderStatus.COLLECTED);
-        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(collected));
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(collected));
 
-        assertEquals(0, service.getResultReviewQueue(userId).size());
+        assertEquals(0, service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID).size());
     }
 
     @Test
@@ -185,6 +201,7 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFullName()).thenReturn("Awa Traore"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Awa");
         lenient().when(patient.getLastName()).thenReturn("Traore");
         UUID orderId = UUID.randomUUID();
@@ -200,10 +217,10 @@ class ResultReviewServiceImplTest {
         lenient().when(pending.getId()).thenReturn(UUID.randomUUID());
         lenient().when(pending.isReleased()).thenReturn(false);
 
-        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(released, pending));
 
-        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(1, queue.size());
         assertEquals(released.getId(), queue.get(0).getId());
@@ -214,10 +231,94 @@ class ResultReviewServiceImplTest {
         UUID userId = UUID.randomUUID();
         givenNoStaffFor(userId);
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
+    }
+
+    // -- No hospital scope: the review queue refuses rather than unions tenants --
+
+    /**
+     * The queue is one clinician's order history. Read with no hospital scope
+     * it used to return every hospital's orders for that staff id — a
+     * clinician has ONE Staff row platform-wide, and nothing binds the ordering
+     * staff to the order's hospital, so the rows span every hospital they are
+     * (or once were) assigned to, with every patient name and released value on
+     * them, and no acting hospital for a disclosure to be recorded against.
+     */
+    @Test
+    void reviewQueueWithNoHospitalScopeRefusesInsteadOfReadingEveryTenant() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+        LabOrder foreign = mock(LabOrder.class);
+        lenient().when(foreign.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(foreign.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
+        lenient().when(foreign.getPatient()).thenReturn(mock(Patient.class));
+        // Both finders, and the scoped one stubbed on isNull() — which is the
+        // argument the service would actually pass with the guard reverted.
+        // Stubbing it on some other hospital id, as an earlier draft did, left
+        // the reverted call unstubbed and returning [], so the test could only
+        // ever falsify the missing throw and the "would see the leak" claim was
+        // untrue. It is true now: revert the guard and this foreign order is
+        // read and mapped.
+        lenient().when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(foreign));
+        lenient().when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(eq(staffId), isNull()))
+                .thenReturn(List.of(foreign));
+
+        // The key, not the resolved message: getMessage() is already resolved,
+        // so only getMessageKey() pins that the refusal is indistinguishable
+        // from a staff id this service will not resolve, and that it stays a
+        // resolvable key rather than prose.
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> service.getResultReviewQueue(userId, null))
+                .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class)
+                .extracting(thrown ->
+                        ((com.example.hms.exception.ResourceNotFoundException) thrown).getMessageKey())
+                .isEqualTo("staff.notfound");
+
+        verify(labOrderRepository, never()).findByOrderingStaff_Id(any());
+        verify(labOrderRepository, never()).findByOrderingStaff_IdAndHospital_Id(any(), any());
+        verify(labResultRepository, never()).findByLabOrder_Id(any());
+    }
+
+    /**
+     * The scoped read is the only read: the acting hospital's orders come back,
+     * and the platform-wide finder is not touched.
+     */
+    @Test
+    void reviewQueueWithAnActingHospitalReadsOnlyThatHospitalsOrders() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFullName()).thenReturn("Awa Traore"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Awa");
+        lenient().when(patient.getLastName()).thenReturn("Traore");
+
+        LabOrder order = mock(LabOrder.class);
+        when(order.getId()).thenReturn(orderId);
+        when(order.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
+        when(order.getPatient()).thenReturn(patient);
+
+        LabResult released = mock(LabResult.class);
+        UUID resultId = UUID.randomUUID();
+        when(released.getId()).thenReturn(resultId);
+        when(released.isReleased()).thenReturn(true);
+
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID))
+                .thenReturn(List.of(order));
+        when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(released));
+
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
+
+        assertEquals(1, queue.size());
+        assertEquals(resultId, queue.get(0).getId());
+        verify(labOrderRepository, never()).findByOrderingStaff_Id(any());
     }
 
     @Test
@@ -229,8 +330,9 @@ class ResultReviewServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
 
         LabTestDefinition testDef = mock(LabTestDefinition.class);
         when(testDef.getName()).thenReturn("CBC");
@@ -252,10 +354,10 @@ class ResultReviewServiceImplTest {
         when(labResult.getAbnormalFlag()).thenReturn(AbnormalFlag.ABNORMAL_HIGH);
         when(labResult.getResultDate()).thenReturn(LocalDateTime.now().minusHours(2));
 
-        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(labResult));
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(1, result.size());
         DoctorResultQueueItemDTO item = result.get(0);
@@ -276,8 +378,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Bob");
-        when(patient.getLastName()).thenReturn("Smith");
+        lenient().when(patient.getFullName()).thenReturn("Bob Smith"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Bob");
+        lenient().when(patient.getLastName()).thenReturn("Smith");
 
         LabOrder order = mock(LabOrder.class);
         UUID orderId = UUID.randomUUID();
@@ -292,15 +395,17 @@ class ResultReviewServiceImplTest {
         when(labResult.getId()).thenReturn(UUID.randomUUID());
         when(labResult.getResultValue()).thenReturn("Normal");
         when(labResult.getResultDate()).thenReturn(LocalDateTime.now());
-        when(labResult.isAcknowledged()).thenReturn(true);
+        lenient().when(labResult.isAcknowledged()).thenReturn(true);
+        when(labResultMapper.severityFlagOf(labResult)).thenReturn("NORMAL");
 
-        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(labResult));
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals("NORMAL", result.get(0).getAbnormalFlag());
-        assertEquals("Lab test", result.get(0).getTestName()); // fallback when testDef is null
+        // QA D648: the doctor dashboard tile names a deleted test as every lab screen does.
+        assertEquals("Deleted test", result.get(0).getTestName());
     }
 
     @Test
@@ -312,9 +417,9 @@ class ResultReviewServiceImplTest {
         LabOrder pendingOrder = mock(LabOrder.class);
         when(pendingOrder.getStatus()).thenReturn(LabOrderStatus.PENDING);
 
-        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(pendingOrder));
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(pendingOrder));
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertTrue(result.isEmpty());
     }
@@ -329,9 +434,9 @@ class ResultReviewServiceImplTest {
         when(order.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
         when(order.getPatient()).thenReturn(null);
 
-        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertTrue(result.isEmpty());
     }
@@ -344,8 +449,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Jane");
-        when(patient.getLastName()).thenReturn("Doe");
+        lenient().when(patient.getFullName()).thenReturn("Jane Doe"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Jane");
+        lenient().when(patient.getLastName()).thenReturn("Doe");
 
         UUID orderId = UUID.randomUUID();
         LabOrder order = mock(LabOrder.class);
@@ -370,10 +476,10 @@ class ResultReviewServiceImplTest {
         when(abnormalResult.getAbnormalFlag()).thenReturn(AbnormalFlag.ABNORMAL);
         when(abnormalResult.getResultDate()).thenReturn(LocalDateTime.now().minusHours(1));
 
-        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(normalResult, abnormalResult));
 
-        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(2, result.size());
         assertEquals("ABNORMAL", result.get(0).getAbnormalFlag(), "Abnormal should sort first");
@@ -415,6 +521,34 @@ class ResultReviewServiceImplTest {
         assertEquals(fill.getMessage(), item.getSubject());
         assertEquals("REVIEW", item.getActionType());
         assertEquals("NORMAL", item.getUrgency());
+    }
+
+    /** QA D1286: a keyed notification is read in the reader's language, not its stored French copy. */
+    @Test
+    void getInboxItems_keyedPharmacyEventIsRenderedInTheReadersLanguage() {
+        UUID userId = UUID.randomUUID();
+        Staff staff = stubStaff(UUID.randomUUID());
+        User account = mock(User.class);
+        when(account.getUsername()).thenReturn("dr.awa");
+        when(staff.getUser()).thenReturn(account);
+        givenStaffFor(userId, staff);
+        com.example.hms.model.Notification keyed = com.example.hms.model.Notification.builder()
+                .id(UUID.randomUUID())
+                .message("Score NEWS2 7 (ÉLEVÉ) pour Drissa Konaté")
+                .messageKey("news2.escalation.high")
+                .messageArgs(List.of(7, "Drissa Konaté", 15))
+                .type("PHARMACY_EVENT")
+                .createdAt(LocalDateTime.now())
+                .recipientUsername("dr.awa")
+                .build();
+        when(notificationRepository.findByRecipientUsernameAndTypeAndReadFalseOrderByCreatedAtDesc(
+                "dr.awa", "PHARMACY_EVENT")).thenReturn(List.of(keyed));
+
+        ClinicalInboxItemDTO item = service.getInboxItems(userId).stream()
+                .filter(i -> "PHARMACY_EVENT".equals(i.getCategory())).findFirst().orElseThrow();
+
+        org.assertj.core.api.Assertions.assertThat(item.getSubject()).startsWith("NEWS2 score 7")
+                .doesNotContain("ÉLEVÉ");
     }
 
     @Test
@@ -486,8 +620,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
 
         Staff requestingDoc = mock(Staff.class);
         when(requestingDoc.getFullName()).thenReturn("Dr. Smith");
@@ -558,8 +693,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Bob");
-        when(patient.getLastName()).thenReturn("Lee");
+        lenient().when(patient.getFullName()).thenReturn("Bob Lee"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Bob");
+        lenient().when(patient.getLastName()).thenReturn("Lee");
 
         Encounter enc = mock(Encounter.class);
         when(enc.getId()).thenReturn(UUID.randomUUID());
@@ -610,6 +746,7 @@ class ResultReviewServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(patientId);
+        lenient().when(patient.getFullName()).thenReturn("Carla Diaz"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Carla");
         lenient().when(patient.getLastName()).thenReturn("Diaz");
 
@@ -803,8 +940,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("R");
-        when(patient.getLastName()).thenReturn("P");
+        lenient().when(patient.getFullName()).thenReturn("R P"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("R");
+        lenient().when(patient.getLastName()).thenReturn("P");
 
         Staff reqDoc = mock(Staff.class);
         when(reqDoc.getFullName()).thenReturn("Dr. Routine");
@@ -946,8 +1084,9 @@ class ResultReviewServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("T");
-        when(patient.getLastName()).thenReturn("P");
+        lenient().when(patient.getFullName()).thenReturn("T P"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("T");
+        lenient().when(patient.getLastName()).thenReturn("P");
 
         UUID orderId = UUID.randomUUID();
         LabOrder order = mock(LabOrder.class);
@@ -971,10 +1110,10 @@ class ResultReviewServiceImplTest {
         when(result2.getResultValue()).thenReturn("10");
         when(result2.getResultDate()).thenReturn(LocalDateTime.now());
 
-        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(result1, result2));
 
-        List<DoctorResultQueueItemDTO> results = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> results = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(2, results.size());
         // result with date should come first, null date last
@@ -1030,8 +1169,9 @@ class ResultReviewServiceImplTest {
 
         LabOrder order = mock(LabOrder.class);
         Patient p = mock(Patient.class);
-        when(p.getFirstName()).thenReturn("Test");
-        when(p.getLastName()).thenReturn("Pat");
+        lenient().when(p.getFullName()).thenReturn("Test Pat"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Test");
+        lenient().when(p.getLastName()).thenReturn("Pat");
         when(p.getId()).thenReturn(UUID.randomUUID());
         when(order.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
         when(order.getPatient()).thenReturn(p);
@@ -1044,18 +1184,53 @@ class ResultReviewServiceImplTest {
 
         lenient().when(result.isReleased()).thenReturn(true);
         when(result.getId()).thenReturn(UUID.randomUUID());
-        when(result.getAbnormalFlag()).thenReturn(null);
-        when(result.isAcknowledged()).thenReturn(false);
+        lenient().when(result.getAbnormalFlag()).thenReturn(null);
+        lenient().when(result.isAcknowledged()).thenReturn(false);
         when(result.getResultValue()).thenReturn("5.0");
         when(result.getResultDate()).thenReturn(LocalDateTime.now());
+        // QA D178: a 5.0 glucose inside its range reads NORMAL, as on the
+        // lab-results screen, not "Anormal" because nobody acknowledged it.
+        when(labResultMapper.severityFlagOf(result)).thenReturn("NORMAL");
 
-        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
 
-        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(1, queue.size());
-        assertEquals("ABNORMAL", queue.get(0).getAbnormalFlag());
+        assertEquals("NORMAL", queue.get(0).getAbnormalFlag());
+    }
+
+    @Test
+    void getResultReviewQueue_qaD178_anUngradedResultIsNotGradedAbnormal() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        LabOrder order = mock(LabOrder.class);
+        Patient p = mock(Patient.class);
+        lenient().when(p.getFullName()).thenReturn("Test Pat"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Test");
+        lenient().when(p.getLastName()).thenReturn("Pat");
+        when(p.getId()).thenReturn(UUID.randomUUID());
+        when(order.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
+        when(order.getPatient()).thenReturn(p);
+        when(order.getId()).thenReturn(UUID.randomUUID());
+
+        LabResult result = mock(LabResult.class);
+        lenient().when(result.isReleased()).thenReturn(true);
+        when(result.getId()).thenReturn(UUID.randomUUID());
+        when(result.getAbnormalFlag()).thenReturn(null);
+        when(result.getResultValue()).thenReturn("14.2");
+        when(result.getResultDate()).thenReturn(LocalDateTime.now());
+        when(labResultMapper.severityFlagOf(result)).thenReturn("UNSPECIFIED");
+
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
+
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
+
+        assertEquals("UNSPECIFIED", queue.get(0).getAbnormalFlag());
     }
 
     @Test
@@ -1162,6 +1337,7 @@ class ResultReviewServiceImplTest {
         givenStaffFor(userId, stubStaff(staffId));
 
         Patient p = mock(Patient.class);
+        lenient().when(p.getFullName()).thenReturn("Sort Test"); // QA D1036: the whole name
         lenient().when(p.getFirstName()).thenReturn("Sort");
         lenient().when(p.getLastName()).thenReturn("Test");
         lenient().when(p.getId()).thenReturn(UUID.randomUUID());
@@ -1185,10 +1361,10 @@ class ResultReviewServiceImplTest {
         when(normal.getAbnormalFlag()).thenReturn(AbnormalFlag.NORMAL);
         lenient().when(normal.getResultDate()).thenReturn(LocalDateTime.now());
 
-        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(normal, critical));
 
-        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId);
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(2, queue.size());
         assertEquals("CRITICAL", queue.get(0).getAbnormalFlag());
@@ -1227,6 +1403,7 @@ class ResultReviewServiceImplTest {
         EncounterNote note = stubPendingCosignNote(UUID.randomUUID(), "Resident A");
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFullName()).thenReturn("Awa Kaboré"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Awa");
         lenient().when(patient.getLastName()).thenReturn("Kaboré");
         lenient().when(note.getPatient()).thenReturn(patient);

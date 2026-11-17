@@ -85,6 +85,9 @@ class PatientRecordPdfServiceTest {
             return args == null || args.length == 0 ? key
                 : key + " " + Arrays.stream(args).map(String::valueOf).collect(Collectors.joining(" "));
         });
+        // getOrCode: a stored code goes through the bundle too (D85), echoed as its key.
+        org.mockito.Mockito.lenient().when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
     }
 
     private List<Locale> localesAskedOfTheBundle() {
@@ -99,7 +102,7 @@ class PatientRecordPdfServiceTest {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(storyboard());
-        when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId))
             .thenReturn(chart());
         echoKeys();
     }
@@ -108,6 +111,40 @@ class PatientRecordPdfServiceTest {
         try (PDDocument doc = PDDocument.load(pdf)) {
             return new PDFTextStripper().getText(doc);
         }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"en", "fr", "es"})
+    void exportedImagingHistoryKeepsRevisionIdentityAndLongConclusions(String language) throws Exception {
+        Locale locale = Locale.forLanguageTag(language);
+        LocaleContextHolder.setLocale(locale);
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(storyboard());
+        var chart = chart();
+        var signed = LocalDateTime.of(2026, 11, 15, 10, 20);
+        chart.setImaging(List.of(ChartReviewDTO.ImagingEntryDTO.builder().modality("CT").reports(List.of(
+            ChartReviewDTO.ImagingReportEntryDTO.builder().reportStatus("FINAL").reportVersion(1)
+                .signedAt(signed).impression("Original conclusion").build(),
+            ChartReviewDTO.ImagingReportEntryDTO.builder().reportStatus("CORRECTED").reportVersion(2)
+                .signedAt(signed.plusHours(1)).impression("Unchanged clinical wording ".repeat(100) + "END-OF-CONCLUSION").build()
+        )).build()));
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId)).thenReturn(chart);
+        var bundles = com.example.hms.i18n.TestMessageSources.bundles();
+        var realLabels = new PatientRecordPdfService(patientRepository, registrationRepository,
+            storyboardService, chartReviewService, auditEventLogService, userRepository, bundles);
+        String text = textOf(realLabels.render(patientId));
+        assertThat(text).contains("Original conclusion", "v1", "v2", "END-OF-CONCLUSION",
+            PdfLabels.of(bundles, locale).fmt(signed), PdfLabels.of(bundles, locale).fmt(signed.plusHours(1)))
+            .doesNotContain("pdf.record.");
+        assertThat(text.indexOf("Original conclusion")).isLessThan(text.indexOf("END-OF-CONCLUSION"));
+        assertThat(text).contains(switch (language) {
+            case "fr" -> "Corrigé";
+            case "es" -> "Corregido";
+            default -> "Corrected";
+        });
     }
 
     @Test
@@ -122,7 +159,7 @@ class PatientRecordPdfServiceTest {
             // Every label is a bundle key; dates are the request locale's (French here).
             assertThat(text)
                 .contains("pdf.record.title", "Hospital B", "Karim Porgo", "HBX4939", "28 janv. 1985",
-                    "pdf.record.field.ageYears 41", "Peanut butter", "Hypertension", "CONSULTATION",
+                    "pdf.record.field.ageYears 41", "Peanut butter", "Hypertension", "pdf.record.enum.CONSULTATION",
                     "8 mai 2026 23:10", "Haemoglobin", "Amoxicillin", "pdf.record.codeStatus.none",
                     "pdf.record.section.procedures", "pdf.record.none", "pdf.record.page 1")
                 .doesNotContain("Patient record", "Code status", "None recorded", "1985-01-28");
@@ -136,6 +173,8 @@ class PatientRecordPdfServiceTest {
         verify(auditEventLogService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.PATIENT_EXPORT);
         assertThat(audit.getValue().getResourceId()).isEqualTo(patientId.toString());
+        // QA D533: anchored at the exporting hospital so the row names it.
+        assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
         assertThat(audit.getValue().getEventDescription())
             .contains("Patient/" + patientId, "4 chart entries")
             .doesNotContain("Karim", "Porgo", "HBX4939");
@@ -156,7 +195,7 @@ class PatientRecordPdfServiceTest {
             e.setChiefComplaint("Visit " + i + " " + "x".repeat(140));
             return e;
         }).toList());
-        when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId))
             .thenReturn(chart);
         echoKeys();
 
@@ -241,7 +280,15 @@ class PatientRecordPdfServiceTest {
         chart.setImaging(List.of(ChartReviewDTO.ImagingEntryDTO.builder()
             .orderedAt(LocalDateTime.of(2026, 5, 10, 9, 30))
             .modality("CT").studyType("Head").bodyRegion("Cranium").status("FINAL")
-            .reportImpression("No acute intracranial abnormality").build()));
+            .reportImpression("No acute intracranial abnormality").build(),
+            // QA D1924 / D1926 (r53): the conclusion and its addendum; no "Sans objet" laterality.
+            ChartReviewDTO.ImagingEntryDTO.builder()
+                .orderedAt(LocalDateTime.of(2026, 5, 10, 10, 30))
+                .modality("CT").studyType("Abdomen").laterality("NOT_APPLICABLE").status("RESULTS_AVAILABLE")
+                .reportImpression("Appendicite").reports(List.of(
+                    ChartReviewDTO.ImagingReportEntryDTO.builder().reportStatus("FINAL").impression("Appendicite").build(),
+                    ChartReviewDTO.ImagingReportEntryDTO.builder().reportStatus("ADDENDUM").impression("Inchangé").build()))
+                .build()));
         chart.setProcedures(List.of(
             ChartReviewDTO.ProcedureEntryDTO.builder()
                 .orderedAt(LocalDateTime.of(2026, 5, 11, 8, 0))
@@ -253,20 +300,21 @@ class PatientRecordPdfServiceTest {
                 .procedureName("Paracentesis").procedureCategory("THERAPEUTIC")
                 .urgency("URGENT").status("ORDERED").orderingProviderName("DoctorBF DoctorBL")
                 .consentObtained(false).build()));
-        when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId))
             .thenReturn(chart);
 
         String text = textOf(service.render(patientId));
 
         assertThat(text)
             .contains("pdf.record.encounter.none",
-                "DNR", "LIVING_WILL", "pdf.record.directive.from", "No intubation",
+                "DNR", "LIVING_WILL", "pdf.record.directive.from", "intubation",
                 "CT", "pdf.record.imaging.impression",
+                "pdf.record.imaging.identifiedImpression", "Appendicite", "pdf.record.imaging.identifiedAddendum", "Inchangé",
                 "Lumbar puncture", "pdf.record.procedure.consentObtained",
                 "Paracentesis", "pdf.record.procedure.consentNotRecorded",
                 // The count only; never the withheld rows themselves.
                 "pdf.record.heldRows")
-            .doesNotContain("Maternity", "Hospital C");
+            .doesNotContain("Maternity", "Hospital C", "NOT_APPLICABLE");
     }
 
     @Test
@@ -281,7 +329,7 @@ class PatientRecordPdfServiceTest {
         PatientStoryboardDTO board = storyboard();
         board.getActiveEncounter().setChiefComplaint("Fièvre depuis trois jours");
         when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(board);
-        when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId))
             .thenReturn(chart());
 
         assertThat(textOf(service.render(patientId)))
@@ -326,6 +374,7 @@ class PatientRecordPdfServiceTest {
         r.setTestName("Haemoglobin");
         r.setTestCode("718-7");
         r.setResultValue("13.2");
+        r.setReleased(true);
         r.setResultUnit("g/dL");
         ChartReviewDTO.MedicationEntryDTO m = new ChartReviewDTO.MedicationEntryDTO();
         m.setCreatedAt(LocalDateTime.of(2026, 5, 9, 0, 13));
@@ -341,5 +390,83 @@ class PatientRecordPdfServiceTest {
         chart.setImaging(List.of());
         chart.setProcedures(null);
         return chart;
+    }
+
+    @Test
+    void anAllergyKnownOnlyAsTheRegistrationSummaryIsPrintedNotNone() throws Exception {
+        echoKeys();
+        PatientStoryboardDTO board = PatientStoryboardDTO.builder().allergies(List.of()).build();
+        ChartReviewDTO emptyChart = ChartReviewDTO.builder().build();
+        byte[] pdf = PatientRecordPdfService.write(board, emptyChart, "Penicillin",
+            PdfLabels.of(messageSource, Locale.FRENCH));
+        assertThat(textOf(pdf)).contains("pdf.record.allergies.summary Penicillin");
+    }
+
+    @Test
+    void aStoredCodeIsNeverPrintedRaw() {
+        PdfLabels t = PdfLabels.of(messageSource, Locale.FRENCH);
+        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class)))
+            .thenAnswer(inv -> inv.getArgument(2));
+        assertThat(PatientRecordPdfService.label(t, "WAITING_FOR_PHYSICIAN")).isEqualTo("waiting for physician");
+        assertThat(PatientRecordPdfService.label(t, null)).isNull();
+    }
+
+    /** QA D1168 (D1134 class): the allergy's severity is the feminine "gravité" word, as on the chart. */
+    @Test
+    void theAllergySeverityAgreesWithGraviteInEveryLocale_D1168() {
+        org.springframework.context.MessageSource real = com.example.hms.i18n.TestMessageSources.bundles();
+        assertThat(PatientRecordPdfService.severityLabel(PdfLabels.of(real, Locale.FRENCH), "MODERATE"))
+            .isEqualTo("modérée");
+        assertThat(PatientRecordPdfService.severityLabel(PdfLabels.of(real, Locale.forLanguageTag("es")), "MODERATE"))
+            .isEqualTo("moderada");
+        assertThat(PatientRecordPdfService.severityLabel(PdfLabels.of(real, Locale.FRENCH), null)).isNull();
+    }
+
+    @Test
+    void d740_anUnreleasedResultPrintsAsPendingWithNoValueOrFlag() throws Exception {
+        // Re-test D740: record.pdf printed "Kaliémie (KAL-A) - 1.8 mmol/L - Critique" before release.
+        echoKeys();
+        ChartReviewDTO.ResultEntryDTO r = new ChartReviewDTO.ResultEntryDTO();
+        r.setTestName("Kaliemie");
+        r.setTestCode("KAL-A");
+        r.setResultValue("1.8");
+        r.setResultUnit("mmol/L");
+        r.setAbnormalFlag("CRITICAL");
+        r.setReleased(false);
+        ChartReviewDTO chart = ChartReviewDTO.builder().results(List.of(r)).build();
+        String text = textOf(PatientRecordPdfService.write(PatientStoryboardDTO.builder().allergies(List.of()).build(),
+            chart, null, PdfLabels.of(messageSource, Locale.FRENCH)));
+        assertThat(text).contains("Kaliemie").contains("pdf.record.result.pending")
+            .doesNotContain("1.8").doesNotContain("mmol/L").doesNotContain("CRITICAL");
+    }
+
+    @Test
+    void qaD678AControlledMedicationFromTheChartIsMarkedInThePdf() throws Exception {
+        // The chart review now marks catalog-controlled orders (ChartReviewServiceImplTest); the PDF prints that flag.
+        echoKeys();
+        ChartReviewDTO.MedicationEntryDTO m = new ChartReviewDTO.MedicationEntryDTO();
+        m.setMedicationName("Morphine");
+        m.setControlledSubstance(true);
+        ChartReviewDTO chart = ChartReviewDTO.builder().medications(List.of(m)).build();
+        byte[] pdf = PatientRecordPdfService.write(PatientStoryboardDTO.builder().allergies(List.of()).build(),
+            chart, null, PdfLabels.of(messageSource, Locale.FRENCH));
+        assertThat(textOf(pdf)).contains("pdf.record.medication.controlled");
+    }
+    @Test
+    void qaD1106AReleasedLabValuePrintsWithTheReadersDecimalSeparator() throws Exception {
+        // Round 19: record.pdf printed "Kaliémie (K) - 2.5 mmol/L" in a French export.
+        echoKeys();
+        ChartReviewDTO.ResultEntryDTO r = new ChartReviewDTO.ResultEntryDTO();
+        r.setTestName("Kaliemie");
+        r.setTestCode("K");
+        r.setResultValue("2.5");
+        r.setResultUnit("mmol/L");
+        r.setReleased(true);
+        ChartReviewDTO chart = ChartReviewDTO.builder().results(List.of(r)).build();
+        PatientStoryboardDTO board = PatientStoryboardDTO.builder().allergies(List.of()).build();
+        assertThat(textOf(PatientRecordPdfService.write(board, chart, null, PdfLabels.of(messageSource, Locale.FRENCH))))
+            .contains("2,5 mmol/L").doesNotContain("2.5");
+        assertThat(textOf(PatientRecordPdfService.write(board, chart, null, PdfLabels.of(messageSource, Locale.ENGLISH))))
+            .contains("2.5 mmol/L");
     }
 }

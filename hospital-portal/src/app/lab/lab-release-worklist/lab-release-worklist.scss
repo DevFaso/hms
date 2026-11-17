@@ -1,3 +1,4 @@
+@use '../../shared/styles/diagnostics-workspace' as diagnostics;
 .release-worklist-container {
   padding: 1.5rem;
   max-width: 1200px;
@@ -133,6 +134,32 @@
     font-weight: 400;
   }
 
+  .source-tag,
+  .status-tag {
+    display: inline-block;
+    margin-right: 0.35rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: var(--color-surface-alt, #f3f4f6);
+    color: #374151;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  .status-tag.status-preliminary {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .control-id {
+    display: inline-block;
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+    white-space: nowrap;
+  }
+
   .critical-tag {
     margin-left: 0.4rem;
     padding: 0.1rem 0.45rem;
@@ -163,7 +190,18 @@
   background: var(--color-surface-alt, #f3f4f6);
   color: #374151;
 
+  &.flag-critical {
+    background: #991b1b;
+    color: #ffffff;
+  }
+
   &.flag-high {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  /* QA D969: a positive qualitative answer (a malaria rapid test). */
+  &.flag-abnormal {
     background: #fee2e2;
     color: #991b1b;
   }
@@ -176,6 +214,14 @@
   &.flag-normal {
     background: #d1fae5;
     color: #065f46;
+  }
+
+  /* Never graded: no configured range is in the result's unit. Amber, the
+     reviewer must look at it, and never the green of a normal row. */
+  &.flag-grade_unknown,
+  &.flag-unit_mismatch {
+    background: #fef3c7;
+    color: #92400e;
   }
 }
 
@@ -247,6 +293,14 @@
   font-size: 0.85rem;
 }
 
+.self-release-note {
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  background: #fef3c7;
+  color: #78350f;
+  font-size: 0.9rem;
+}
+
 .modal-error {
   padding: 0.5rem 0.7rem;
   border-radius: 6px;
@@ -280,3 +334,22 @@
     animation: none;
   }
 }
+
+/* QA D963: STAT and URGENT results are listed first and flagged. */
+.priority-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #fef3c7;
+  color: #92400e;
+
+  &.priority-stat {
+    background: #991b1b;
+    color: #ffffff;
+  }
+}
+
+@include diagnostics.workspace;

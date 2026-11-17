@@ -48,7 +48,10 @@ public class NewbornAssessmentController {
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(
         summary = "Document a newborn assessment",
-        description = "Records newborn adaptation details including Apgar scores, vitals, physical exam findings, follow-up actions, and parent education.",
+        description = "Records newborn adaptation details including Apgar scores, vitals, physical exam findings, follow-up actions, and parent education. "
+            + "Poor feeding, convulsions, severe chest indrawing and absent spontaneous movement are each PRESENT, ABSENT or NOT_ASSESSED (blank is not assessed, never absent); "
+            + "each one PRESENT raises its own urgent finding under the provisional WHO postnatal pathway, of which these are not all the signs. "
+            + "The support-initiated flags are stored as submitted: alerts recommend and request follow-up, and never set them.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponse(responseCode = "201", description = "Assessment recorded",

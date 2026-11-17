@@ -9,14 +9,20 @@ import {
   SuperAdminGovernanceService,
   UserBulkImportResponse,
 } from '../services/super-admin-governance.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import {
+  HospitalService,
+  HospitalResponse,
+  isOpenForAssignment,
+} from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** User governance: CSV import, forced password resets, rotation health. */
 @Component({
   selector: 'app-gov-users-tab',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule],
   templateUrl: './users-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -56,7 +62,8 @@ export class UsersTabComponent implements OnInit {
   ngOnInit(): void {
     this.loadRotation();
     this.hospitalService.list().subscribe({
-      next: (h) => this.hospitals.set(h),
+      // QA D818: the import's default hospital grants roles, so only open ones.
+      next: (h) => this.hospitals.set(h.filter(isOpenForAssignment)),
       error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.HOSPITALS_LOAD_ERROR')),
     });
   }

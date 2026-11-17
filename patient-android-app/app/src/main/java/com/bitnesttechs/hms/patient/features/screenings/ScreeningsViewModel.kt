@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.screenings
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -192,7 +193,7 @@ class ScreeningsViewModel @Inject constructor(
                     if (resp.code() in 400..499) load()
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(submitting = false, submitError = Outcome(R.string.screening_submit_failed, e.message)) }
+                _state.update { it.copy(submitting = false, submitError = Outcome(R.string.screening_submit_failed, FailureText.of(e))) }
             }
         }
     }

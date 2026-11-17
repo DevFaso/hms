@@ -1,3 +1,4 @@
+@use '../shared/styles/care-workspace' as care;
 @use '../shared/styles/page-common';
 
 .filter-bar {
@@ -288,6 +289,16 @@
 
   &.gtpal-row {
     grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  }
+}
+
+// QA D1803: each baby's outcome select takes a full row, so « Mort-né(e) (sans signe de vie) » is never cut.
+.baby-outcome-field {
+  grid-column: 1 / -1;
+  min-width: 0;
+  select {
+    width: 100%;
+    min-width: 0;
   }
 }
 
@@ -586,4 +597,73 @@
 .pro-citation {
   margin-top: 0.75rem;
   font-size: 0.78rem;
+}
+
+/* QA D826: the picked patient already has a maternal history. */
+.history-exists {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--primary);
+  border-radius: 6px;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
+
+  p {
+    margin: 0;
+  }
+}
+
+/* QA D1005: the gestational age under the due date. */
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #555);
+}
+
+@include care.workspace;
+
+.care-maternity-guide {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: #123341;
+  color: white;
+  border: 1px solid #123341;
+  border-radius: 16px;
+  padding: 26px;
+  margin-bottom: 24px;
+  > .material-symbols-outlined {
+    font-size: 32px;
+    padding: 14px;
+    background: #ffffff14;
+    border-radius: 14px;
+    color: #bcf0e3;
+  }
+  h2 {
+    margin: 0 0 8px;
+    font-size: 20px;
+    letter-spacing: -0.02em;
+  }
+  p {
+    color: #e1edf2;
+    font-size: 13px;
+    line-height: 1.8;
+    margin: 0;
+    max-width: 850px;
+  }
+}
+@media (max-width: 650px) {
+  .care-maternity-guide {
+    padding: 20px;
+    align-items: flex-start;
+    > .material-symbols-outlined {
+      display: none;
+    }
+  }
 }

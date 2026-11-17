@@ -9,6 +9,7 @@ import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.integration.message.MllpRecordingContext;
 import com.example.hms.service.platform.MllpAllowedSenderService;
+import com.example.hms.utility.Hl7SenderText;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
@@ -47,10 +48,11 @@ import java.util.UUID;
  *   <li>{@code ADT^A40} — patient merge (Tier 2 item 41). Parsed via
  *       {@link Hl7v2MessageBuilder#parseAdtA40} (PID-3 survives, MRG-1 is
  *       retired) and applied through {@link MllpInboundMergeService}, which
- *       enforces its own cross-tenant gate because the EMPI merge service's
- *       guards read the caller's hospital from a security context this
- *       thread does not have. Never auto-creates: both identifiers must
- *       already be known to EMPI.</li>
+ *       enforces its own cross-tenant gate and then hands EMPI the receiving
+ *       hospital explicitly, because the EMPI merge service otherwise reads
+ *       the caller's hospital from a security context this thread does not
+ *       have. Never auto-creates: both identifiers must already be known to
+ *       EMPI.</li>
  *   <li>Anything else — AR (Application Reject).</li>
  * </ul>
  *
@@ -62,7 +64,10 @@ import java.util.UUID;
  * allowlisted sender cannot probe another tenant's identifier space.
  * AR is left for the transport-level refusals the dispatcher itself
  * makes — an unparseable MSH, a sender that is not allowlisted at all,
- * an unsupported message type — none of which depend on tenant data.
+ * an unsupported message type — none of which depend on tenant data, and
+ * for one terminal domain answer, {@code REJECTED_NOT_OWNER}, which an
+ * inbound service may return only after it has established that the
+ * receiving hospital holds every patient the message names.
  */
 @Component
 public class Hl7MessageDispatcher {
@@ -113,6 +118,20 @@ public class Hl7MessageDispatcher {
             header = Hl7MessageInspector.parseHeader(hl7Body);
         } catch (MllpProtocolException ex) {
             log.warn("[MLLP {}] Rejecting message — invalid MSH: {}", remoteAddress, ex.getMessage());
+            // A refused sender field still leaves a readable MSH-10: answer on
+            // that header, so MSA-2 echoes it and the sender can match its
+            // own refusal instead of resending. Only an unreadable MSH, or an
+            // over-width MSH-10 itself, falls back to the anonymous envelope.
+            Hl7MessageHeader replyHeader = ex instanceof MllpFieldWidthException widthRefusal
+                ? widthRefusal.replyHeader()
+                : null;
+            // The row names the MSH-10 the AR echoes (quoted, like every
+            // dead-letter reason), so an operator can match it to the refusal
+            // the sender received.
+            String invalidMsh = "Invalid MSH: " + ex.getMessage();
+            String reason = replyHeader != null
+                ? MllpRecordingContext.withControlId(invalidMsh, replyHeader.messageControlId())
+                : invalidMsh;
             // No parsed header — record under a sentinel integration id
             // so the DLQ surface still shows the failure. The fallback
             // header is what we send back as the ACK envelope.
@@ -120,7 +139,7 @@ public class Hl7MessageDispatcher {
             // form, not a hand-written copy of it.
             recordReject(MllpRecordingContext.integrationId(null, null),
                 null, "UNKNOWN", hl7Body,
-                "Invalid MSH: " + ex.getMessage(), "invalid MSH",
+                reason, "invalid MSH",
                 // No scope, so no dedupe: a random id per row and every
                 // occurrence keeps its own counted entry and its own body.
                 //
@@ -133,10 +152,11 @@ public class Hl7MessageDispatcher {
                 // not-allowlisted path was fixed for. There is no sender to
                 // bound by when the header is the thing that would not parse.
                 null);
-            Hl7MessageHeader fallback = new Hl7MessageHeader(
-                "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5"
-            );
-            return Hl7AckBuilder.buildAck(fallback, Hl7AckBuilder.AckCode.AR, "Invalid MSH: " + ex.getMessage());
+            Hl7MessageHeader envelope = replyHeader != null
+                ? replyHeader
+                : new Hl7MessageHeader(
+                    "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5");
+            return Hl7AckBuilder.buildAck(envelope, Hl7AckBuilder.AckCode.AR, invalidMsh);
         }
 
         // Allowlist gate — runs before any domain work so unknown
@@ -149,7 +169,11 @@ public class Hl7MessageDispatcher {
                 header.messageType());
             recordReject(integrationIdFor(header), null,
                 header.messageType(), hl7Body,
-                "sender " + header.sendingApplication() + "/" + header.sendingFacility()
+                // The claimed pair is the sender's text, and not yet checked
+                // against anything: quoted, so it cannot end its slot and
+                // write a finding of its own into the reason.
+                "sender " + Hl7SenderText.quote(header.sendingApplication())
+                    + "/" + Hl7SenderText.quote(header.sendingFacility())
                     + " not allowlisted",
                 "sender not allowlisted",
                 // The claimed sender, normalised. This bounds the honest
@@ -192,7 +216,8 @@ public class Hl7MessageDispatcher {
             header.sendingApplication(), header.sendingFacility());
         recordReject(integrationIdFor(header), organizationIdOf(hospital.get()),
             header.messageType(), hl7Body,
-            "unsupported message type " + header.messageType(),
+            // MSH-9 is whatever the sender wrote: quoted in the reason.
+            "unsupported message type " + Hl7SenderText.quote(header.messageType()),
             // One row per sender for unsupported types, not one per type:
             // MSH-9 is sender-controlled, so keying on it would let anyone
             // mint entries. The cost is stated rather than hidden - a partner
@@ -232,12 +257,13 @@ public class Hl7MessageDispatcher {
                              String remoteAddress, Hospital hospital) {
         ParsedAdtMessage parsed = messageBuilder.parseAdtMessage(hl7Body, header.triggerEvent());
         if (parsed == null) {
-            log.warn("[MLLP {}] {} from {}/{} unparseable (missing PID-3 / segments)",
+            log.warn("[MLLP {}] {} from {}/{} unparseable (missing or over-width PID-3, or missing segments)",
                 remoteAddress, header.messageType(),
                 header.sendingApplication(), header.sendingFacility());
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 header.messageType(), hl7Body,
-                "unparseable " + header.messageType() + " — missing PID-3 or required segments",
+                "unparseable " + Hl7SenderText.quote(header.messageType())
+                    + " — missing or over-width PID-3 or required segments",
                 // The trigger belongs in the key: it is one of the five in
                 // ACCEPTED_ADT_EVENTS, checked before we got here, so it
                 // cannot be used to mint entries - and without it a malformed
@@ -247,7 +273,8 @@ public class Hl7MessageDispatcher {
                 // see whichever arrived last.
                 "unparseable ADT^" + header.triggerEvent(), senderScopeFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
-                "Unparseable " + header.messageType() + " — missing PID-3 or required segments");
+                "Unparseable " + header.messageType()
+                    + " — missing or over-width PID-3 or required segments");
         }
         MllpInboundOutcome outcome = inboundAdt.processAdt(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),
@@ -269,14 +296,14 @@ public class Hl7MessageDispatcher {
                                String remoteAddress, Hospital hospital) {
         Hl7v2MessageBuilder.ParsedMergeMessage parsed = messageBuilder.parseAdtA40(hl7Body);
         if (parsed == null) {
-            log.warn("[MLLP {}] ADT^A40 from {}/{} unparseable (missing PID-3 or MRG-1)",
+            log.warn("[MLLP {}] ADT^A40 from {}/{} unparseable (missing or over-width PID-3 or MRG-1)",
                 remoteAddress, header.sendingApplication(), header.sendingFacility());
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ADT^A40", hl7Body,
-                "unparseable ADT^A40 — missing PID-3 or MRG-1",
+                "unparseable ADT^A40 — missing or over-width PID-3 or MRG-1",
                 "unparseable ADT^A40", senderScopeFor(header));
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
-                "Unparseable ADT^A40 — missing PID-3 or MRG-1");
+                "Unparseable ADT^A40 — missing or over-width PID-3 or MRG-1");
         }
         MllpInboundOutcome outcome = inboundMerge.processMerge(
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),
@@ -307,7 +334,7 @@ public class Hl7MessageDispatcher {
      * id only stops the retries being <em>counted</em>, while
      * {@code recordMessage} still inserts on every call. Keying alone would
      * have left a vendor writing thousands of full copies of a message — PID
-     * and all — into a table with no retention, while the badge read 1. A
+     * and all — into a table that keeps each body for months, while the badge read 1. A
      * bounded badge over unbounded PHI is worse than the visible version,
      * because it claims the problem is handled.
      *
@@ -368,14 +395,6 @@ public class Hl7MessageDispatcher {
     }
 
     /**
-     * One spelling of the sender's id for the whole MLLP surface. The
-     * dispatcher's pre-service rejects and the inbound services' own rejects
-     * have to land under the same {@code integration_id}, or an operator
-     * reading the DLQ for a misconfigured sender sees half its messages. The
-     * truncation that used to live here lives in {@link MllpRecordingContext}
-     * with the reason it exists.
-     */
-    /**
      * The scope for a sender that claimed an identity we could not verify, or
      * null when it did not really claim one.
      *
@@ -401,6 +420,17 @@ public class Hl7MessageDispatcher {
             header.sendingApplication(), header.sendingFacility());
     }
 
+    /**
+     * One spelling of the sender's id for the whole MLLP surface. The
+     * dispatcher's pre-service rejects and the inbound services' own rejects
+     * have to land under the same {@code integration_id}, or an operator
+     * reading the DLQ for a misconfigured sender sees half its messages. The
+     * truncation that used to live here lives in {@link MllpRecordingContext}
+     * with the reason it exists.
+     *
+     * <p>This is the value that goes in the <b>column</b>. For a correlation
+     * scope use {@link #senderScopeFor} instead — see why there.
+     */
     private static String integrationIdFor(Hl7MessageHeader header) {
         return MllpRecordingContext.integrationId(
             header.sendingApplication(), header.sendingFacility());
@@ -424,6 +454,13 @@ public class Hl7MessageDispatcher {
             case REJECTED_INVALID ->
                 Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                     label + " invalid or missing required fields");
+            // Terminal, so AR: the message is valid and the patients are the
+            // hospital's own, and resending it cannot change the answer.
+            // Returned only after the registration gate has passed for every
+            // patient named, so it is not the cross-tenant oracle above.
+            case REJECTED_NOT_OWNER ->
+                Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
+                    label + " not applied: a patient identity is owned by another hospital");
         };
     }
 }

@@ -14,7 +14,7 @@ fr.PORTAL = {
     VALUE: 'Valeur',
     RECORDED: 'Enregistr\u00e9',
     SOURCE: 'Source',
-    NORMAL_RANGE: 'Plage normale'
+    NORMAL_RANGE: 'Plage normale',
   },
   APPOINTMENTS: {
     TITLE: 'Mes rendez-vous',
@@ -32,7 +32,7 @@ fr.PORTAL = {
     STATUS: 'Statut',
     NOT_ASSIGNED: 'Non assign\u00e9',
     GENERAL_VISIT: 'Visite g\u00e9n\u00e9rale',
-    GENERAL: 'G\u00e9n\u00e9ral'
+    GENERAL: 'G\u00e9n\u00e9ral',
   },
   MEDICATIONS: {
     TITLE: 'Mes m\u00e9dicaments',
@@ -51,7 +51,7 @@ fr.PORTAL = {
     PROVIDER: 'Praticien',
     REFILLS_REMAINING: 'Renouvellements restants',
     REFILLS_COUNT: '{{count}} renouvellements restants',
-    STARTED: 'D\u00e9but'
+    STARTED: 'D\u00e9but',
   },
   LAB_RESULTS: {
     TITLE: 'R\u00e9sultats d\u2019analyses',
@@ -67,7 +67,7 @@ fr.PORTAL = {
     ABNORMAL: 'Anormal',
     NORMAL_RESULT: 'Dans les limites normales',
     ABNORMAL_RESULT: 'Hors des limites normales \u2014 veuillez consulter votre m\u00e9decin',
-    NORMAL_PREFIX: 'Normal\u00a0:'
+    NORMAL_PREFIX: 'Normal\u00a0:',
   },
   VISITS: {
     TITLE: 'Historique des visites',
@@ -82,7 +82,7 @@ fr.PORTAL = {
     DIAGNOSIS: 'Diagnostic',
     STATUS: 'Statut',
     NOT_ASSIGNED: 'Non assign\u00e9',
-    GENERAL: 'G\u00e9n\u00e9ral'
+    GENERAL: 'G\u00e9n\u00e9ral',
   },
   BILLING: {
     TITLE: 'Facturation et paiements',
@@ -112,14 +112,14 @@ fr.PORTAL = {
     CARD: 'Carte de cr\u00e9dit / d\u00e9bit',
     BANK_TRANSFER: 'Virement bancaire',
     MOBILE_MONEY: 'Mobile Money',
-    CASH: 'Esp\u00e8ces'
+    CASH: 'Esp\u00e8ces',
   },
   CARE_TEAM: {
     TITLE: 'Mon \u00e9quipe soignante',
     LOADING: 'Chargement de l\u2019\u00e9quipe soignante\u2026',
     EMPTY_TITLE: 'Aucun membre de l\u2019\u00e9quipe',
     EMPTY_DESC: 'Les informations sur votre \u00e9quipe soignante appara\u00eetront ici.',
-    PRIMARY_PROVIDER: 'M\u00e9decin traitant'
+    PRIMARY_PROVIDER: 'M\u00e9decin traitant',
   },
   RECORDS: {
     TITLE: 'Mon dossier m\u00e9dical',
@@ -155,7 +155,7 @@ fr.PORTAL = {
     REF_PREFIX: 'R\u00e9f\u00a0:',
     DIAGNOSIS_PREFIX: 'Diagnostic\u00a0:',
     ADMINISTERED_BY: 'Administr\u00e9 par',
-    PRESCRIBED_BY: 'Prescrit par'
+    PRESCRIBED_BY: 'Prescrit par',
   },
   SHARING: {
     TITLE: 'Partage et confidentialit\u00e9',
@@ -164,7 +164,8 @@ fr.PORTAL = {
     LOADING_CONSENTS: 'Chargement des consentements\u2026',
     NO_CONSENTS_TITLE: 'Aucun consentement actif',
     NO_CONSENTS_DESC: "Vous n'avez partag\u00e9 votre dossier avec aucun autre h\u00f4pital.",
-    NO_CONSENTS_HINT: "Lorsqu'une orientation n\u00e9cessite le partage de votre dossier entre h\u00f4pitaux, vous pouvez g\u00e9rer ces consentements ici.",
+    NO_CONSENTS_HINT:
+      "Lorsqu'une orientation n\u00e9cessite le partage de votre dossier entre h\u00f4pitaux, vous pouvez g\u00e9rer ces consentements ici.",
     PURPOSE: 'Motif\u00a0:',
     TREATMENT: 'Traitement',
     GRANTED: 'Accord\u00e9',
@@ -174,7 +175,8 @@ fr.PORTAL = {
     CONSENT_REVOKE_FAILED: '\u00c9chec de la r\u00e9vocation du consentement',
     LOADING_LOG: "Chargement du journal d'acc\u00e8s\u2026",
     NO_ACCESS_TITLE: "Aucun enregistrement d'acc\u00e8s",
-    NO_ACCESS_DESC: "Personne n'a encore acc\u00e9d\u00e9 \u00e0 votre dossier, ou la journalisation vient de d\u00e9buter."
+    NO_ACCESS_DESC:
+      "Personne n'a encore acc\u00e9d\u00e9 \u00e0 votre dossier, ou la journalisation vient de d\u00e9buter.",
   },
   FAMILY: {
     TITLE: 'Acc\u00e8s famille et mandataire',
@@ -222,21 +224,22 @@ fr.PORTAL = {
     GRANT_FAILED: "\u00c9chec de l'attribution de l'acc\u00e8s mandataire",
     REVOKE_FAILED: "\u00c9chec de la r\u00e9vocation de l'acc\u00e8s mandataire",
     LOAD_FAILED: '\u00c9chec du chargement des mandats',
-    LOAD_ACCESS_FAILED: "\u00c9chec du chargement des acc\u00e8s mandataires",
-    REQUIRED_FIELDS: "Le nom d'utilisateur et le lien de parent\u00e9 sont requis"
+    LOAD_ACCESS_FAILED: '\u00c9chec du chargement des acc\u00e8s mandataires',
+    REQUIRED_FIELDS: "Le nom d'utilisateur et le lien de parent\u00e9 sont requis",
   },
   SUMMARIES: {
     TITLE: 'R\u00e9sum\u00e9s apr\u00e8s visite',
     LOADING: 'Chargement des r\u00e9sum\u00e9s\u2026',
     EMPTY_TITLE: 'Aucun r\u00e9sum\u00e9 de visite',
-    EMPTY_DESC: 'Apr\u00e8s vos consultations, les instructions de sortie et r\u00e9sum\u00e9s appara\u00eetront ici.',
+    EMPTY_DESC:
+      'Apr\u00e8s vos consultations, les instructions de sortie et r\u00e9sum\u00e9s appara\u00eetront ici.',
     DIAGNOSES: 'Diagnostics',
     TREATMENT_SUMMARY: 'R\u00e9sum\u00e9 du traitement',
     INSTRUCTIONS: 'Instructions',
     MEDICATIONS: 'M\u00e9dicaments',
     FOLLOW_UP: 'Suivi',
     SCHEDULED_FOR: 'Pr\u00e9vu pour le',
-    PRINT: 'Imprimer le r\u00e9sum\u00e9'
+    PRINT: 'Imprimer le r\u00e9sum\u00e9',
   },
   ENUM: {
     VITAL_TYPE: {
@@ -248,7 +251,7 @@ fr.PORTAL = {
       OXYGEN_SATURATION: 'Saturation en oxyg\u00e8ne (SpO\u2082)',
       RESPIRATORY_RATE: 'Fr\u00e9quence respiratoire',
       BMI: 'IMC',
-      BLOOD_GLUCOSE: 'Glyc\u00e9mie'
+      BLOOD_GLUCOSE: 'Glyc\u00e9mie',
     },
     VITAL_SOURCE: {
       NURSE_STATION: 'Poste infirmier',
@@ -256,7 +259,7 @@ fr.PORTAL = {
       HOME: 'Mesure \u00e0 domicile',
       SELF_REPORTED: 'Auto-d\u00e9clar\u00e9',
       DEVICE: 'Appareil connect\u00e9',
-      TRIAGE: 'Triage'
+      TRIAGE: 'Triage',
     },
     ENCOUNTER_TYPE: {
       CONSULTATION: 'Consultation',
@@ -271,7 +274,7 @@ fr.PORTAL = {
       DISCHARGE: 'Sortie',
       WALK_IN: 'Sans rendez-vous',
       TELEMEDICINE: 'T\u00e9l\u00e9m\u00e9decine',
-      REFERRAL: 'Orientation'
+      REFERRAL: 'Orientation',
     },
     STATUS: {
       SCHEDULED: 'Planifi\u00e9',
@@ -292,7 +295,7 @@ fr.PORTAL = {
       DRAFT: 'Brouillon',
       PARTIALLY_PAID: 'Partiellement pay\u00e9',
       REVOKED: 'R\u00e9voqu\u00e9',
-      EXPIRED: 'Expir\u00e9'
+      EXPIRED: 'Expir\u00e9',
     },
     ROLE: {
       DOCTOR: 'M\u00e9decin',
@@ -300,19 +303,19 @@ fr.PORTAL = {
       ADMIN: 'Administrateur',
       PHARMACIST: 'Pharmacien(ne)',
       LAB_TECHNICIAN: 'Technicien(ne) de laboratoire',
-      RECEPTIONIST: 'R\u00e9ceptionniste'
+      RECEPTIONIST: 'R\u00e9ceptionniste',
     },
     ACCESS_TYPE: {
       READ: 'Consult\u00e9',
       DOWNLOAD: 'T\u00e9l\u00e9charg\u00e9',
       PRINT: 'Imprim\u00e9',
       UPDATE: 'Mis \u00e0 jour',
-      CREATE: 'Cr\u00e9\u00e9'
+      CREATE: 'Cr\u00e9\u00e9',
     },
     GENDER: {
       MALE: 'Masculin',
       FEMALE: 'F\u00e9minin',
-      OTHER: 'Autre'
+      OTHER: 'Autre',
     },
     RELATIONSHIP: {
       PARENT: 'Parent',
@@ -321,7 +324,7 @@ fr.PORTAL = {
       CAREGIVER: 'Aidant(e)',
       LEGAL_GUARDIAN: 'Tuteur l\u00e9gal',
       SIBLING: 'Fr\u00e8re/S\u0153ur',
-      OTHER: 'Autre'
+      OTHER: 'Autre',
     },
     PERMISSIONS: {
       ALL: 'Acc\u00e8s complet',
@@ -329,19 +332,23 @@ fr.PORTAL = {
       LAB_RESULTS: 'R\u00e9sultats de laboratoire',
       MEDICATIONS: 'M\u00e9dicaments',
       VITALS: 'Signes vitaux',
-      BILLING: 'Facturation'
+      BILLING: 'Facturation',
     },
     PAYMENT_METHOD: {
       CARD: 'Carte de cr\u00e9dit / d\u00e9bit',
       BANK_TRANSFER: 'Virement bancaire',
       MOBILE_MONEY: 'Mobile Money',
-      CASH: 'Esp\u00e8ces'
-    }
-  }
+      CASH: 'Esp\u00e8ces',
+    },
+  },
 };
 
 // Sort top-level keys alphabetically
 const sorted = {};
-Object.keys(fr).sort().forEach(k => sorted[k] = fr[k]);
+Object.keys(fr)
+  .sort()
+  .forEach((k) => (sorted[k] = fr[k]));
 fs.writeFileSync(frPath, JSON.stringify(sorted, null, 2) + '\n');
-console.log('fr.json updated with PORTAL section (' + Object.keys(fr.PORTAL).length + ' subsections)');
+console.log(
+  'fr.json updated with PORTAL section (' + Object.keys(fr.PORTAL).length + ' subsections)',
+);

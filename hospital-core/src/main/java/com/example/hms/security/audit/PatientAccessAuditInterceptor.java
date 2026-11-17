@@ -3,8 +3,12 @@ package com.example.hms.security.audit;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.BreakGlassService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -14,6 +18,7 @@ import java.util.UUID;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -74,7 +79,6 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
     private static final String PATIENTS_PREFIX = "/patients/";
     private static final String PATIENT_ID_VAR = "patientId";
     private static final String ID_VAR = "id";
-    private static final String ROLE_PREFIX = "ROLE_";
     private static final String PATIENT_ROLE = "ROLE_PATIENT";
 
     /**
@@ -96,16 +100,38 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
      * way for the audit hook to be quietly absent.
      */
     private final PatientAccessDedupe dedupe;
+    private final ObjectProvider<UserRoleHospitalAssignmentRepository> assignmentRepositoryProvider;
+    /** QA D840: counts a read made under a live break-the-glass session. Lazy for the slices, like the rest. */
+    private final ObjectProvider<BreakGlassService> breakGlassServiceProvider;
 
     @Value("${hms.audit.patient-access.enabled:true}")
     private boolean enabled;
 
+    @Autowired
     public PatientAccessAuditInterceptor(
             ObjectProvider<AuditEventLogService> auditServiceProvider,
+            ObjectProvider<UserRoleHospitalAssignmentRepository> assignmentRepositoryProvider,
+            ObjectProvider<BreakGlassService> breakGlassServiceProvider,
             @Value("${hms.audit.patient-access.window-minutes:30}") long windowMinutes,
             @Value("${hms.audit.patient-access.max-tracked:50000}") int maxTracked) {
         this.auditServiceProvider = auditServiceProvider;
+        this.assignmentRepositoryProvider = assignmentRepositoryProvider;
+        this.breakGlassServiceProvider = breakGlassServiceProvider;
         this.dedupe = new PatientAccessDedupe(windowMinutes, maxTracked);
+    }
+
+    /** No break-the-glass counting. Kept for slices that wire the audit service and assignments only. */
+    public PatientAccessAuditInterceptor(
+            ObjectProvider<AuditEventLogService> auditServiceProvider,
+            ObjectProvider<UserRoleHospitalAssignmentRepository> assignmentRepositoryProvider,
+            long windowMinutes, int maxTracked) {
+        this(auditServiceProvider, assignmentRepositoryProvider, null, windowMinutes, maxTracked);
+    }
+
+    /** No assignment lookup: rows are global. Kept for slices that wire the audit service only. */
+    public PatientAccessAuditInterceptor(
+            ObjectProvider<AuditEventLogService> auditServiceProvider, long windowMinutes, int maxTracked) {
+        this(auditServiceProvider, null, null, windowMinutes, maxTracked);
     }
 
     @Override
@@ -152,6 +178,10 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
         }
 
         UUID actorId = principal.getUserId();
+        // QA D840: every read under a live break-the-glass session is counted
+        // on the session and audited as BREAK_GLASS_ACCESS, BEFORE the
+        // PATIENT_ACCESS dedupe below (which keeps one row per half hour).
+        recordBreakGlassRead(actorId, patientId, request);
         if (!dedupe.shouldRecord(actorId, patientId, System.currentTimeMillis())) {
             return;
         }
@@ -160,7 +190,13 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
         if (auditService == null) {
             return;
         }
+        // The hospital the read was made at (QA D187): the actor's active
+        // assignment at the pinned hospital, as the write-side interceptor
+        // does. Only its id crosses into the audit service, which derives the
+        // hospital name in its own transaction (no session here).
+        UserRoleHospitalAssignment assignment = resolveAssignment(actorId, auth);
         auditService.logEvent(AuditEventRequestDTO.builder()
+            .assignmentId(assignment != null ? assignment.getId() : null)
             .eventType(AuditEventType.PATIENT_ACCESS)
             .status(AuditStatus.SUCCESS)
             // "PATIENT" is what DisclosureCategory.classify folds into
@@ -172,10 +208,27 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
             .resourceId(patientId.toString())
             .userId(actorId)
             .userName(principal.getUsername())
-            .roleName(primaryRole(auth))
+            .roleName(roleNameOf(assignment, auth))
             .ipAddress(request.getRemoteAddr())
             .eventDescription("Patient record viewed")
             .build());
+    }
+
+    private void recordBreakGlassRead(UUID actorId, UUID patientId, HttpServletRequest request) {
+        BreakGlassService breakGlass = breakGlassServiceProvider == null ? null : breakGlassServiceProvider.getIfAvailable();
+        if (breakGlass == null || actorId == null) {
+            return;
+        }
+        // The route template, never the concrete URI: no id, no query string.
+        Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        try {
+            breakGlass.consumeReadIfLive(patientId, actorId, ActingScopeResolver.pinnedHospitalIdOrNull(),
+                "GET " + (pattern != null ? pattern : "(patient record)"));
+        } catch (RuntimeException failure) {
+            // Never at the cost of the ordinary PATIENT_ACCESS row written next.
+            log.warn("[PATIENT-ACCESS] Failed to count a break-the-glass read for {}: {}",
+                pattern, failure.getMessage());
+        }
     }
 
     private boolean isSuccessfulRead(HttpServletRequest request, HttpServletResponse response) {
@@ -242,15 +295,17 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
                 .anyMatch(authority::equals);
     }
 
-    private static String primaryRole(Authentication auth) {
-        if (auth.getAuthorities() == null) {
-            return null;
-        }
-        return auth.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .filter(a -> a.startsWith(ROLE_PREFIX))
-            .map(a -> a.substring(ROLE_PREFIX.length()))
-            .findFirst()
+    private UserRoleHospitalAssignment resolveAssignment(UUID actorId, Authentication auth) {
+        UserRoleHospitalAssignmentRepository repository =
+            assignmentRepositoryProvider == null ? null : assignmentRepositoryProvider.getIfAvailable();
+        // QA D1632: the assignment of the role the token acts under, not the first active one.
+        return ActingAssignments.resolve(repository, actorId, ActingScopeResolver.pinnedHospitalIdOrNull(), auth)
             .orElse(null);
+    }
+
+    /** The bare role CODE ({@code DOCTOR}), the one format every audit writer uses (QA D187). */
+    private static String roleNameOf(UserRoleHospitalAssignment assignment, Authentication auth) {
+        // QA D1632: the role the token acts under wins over the row's.
+        return ActingAssignments.roleName(assignment, ActingAssignments.actingRoles(auth));
     }
 }

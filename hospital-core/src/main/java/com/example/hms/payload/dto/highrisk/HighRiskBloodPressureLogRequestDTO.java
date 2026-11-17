@@ -36,4 +36,12 @@ public class HighRiskBloodPressureLogRequestDTO {
 
     @Size(max = 500)
     private String notes;
+
+    /** QA D1424 (D111): a diastolic at or above the systolic is a swapped entry. */
+    @com.example.hms.validation.ReportedOn("diastolic")
+    @jakarta.validation.constraints.AssertTrue(message = "{vitals.bloodPressure.invalid}")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isBloodPressureOrdered() {
+        return com.example.hms.payload.dto.VitalSignLimits.bloodPressureOrdered(systolic, diastolic);
+    }
 }

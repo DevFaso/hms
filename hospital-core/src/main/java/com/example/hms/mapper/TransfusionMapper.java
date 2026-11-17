@@ -2,6 +2,7 @@ package com.example.hms.mapper;
 
 import com.example.hms.enums.AboGroup;
 import com.example.hms.model.BloodUnit;
+import com.example.hms.model.EmergencyBloodRelease;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientBloodGroup;
 import com.example.hms.model.Staff;
@@ -9,8 +10,10 @@ import com.example.hms.model.TransfusionAdministration;
 import com.example.hms.model.TransfusionCrossmatch;
 import com.example.hms.model.TransfusionReaction;
 import com.example.hms.model.TransfusionRequest;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.transfusion.BloodUnitResponseDTO;
 import com.example.hms.payload.dto.transfusion.CrossmatchResponseDTO;
+import com.example.hms.payload.dto.transfusion.EmergencyBloodReleaseResponseDTO;
 import com.example.hms.payload.dto.transfusion.PatientBloodGroupResponseDTO;
 import com.example.hms.payload.dto.transfusion.TransfusionAdministrationResponseDTO;
 import com.example.hms.payload.dto.transfusion.TransfusionReactionResponseDTO;
@@ -63,6 +66,7 @@ public class TransfusionMapper {
             .superseded(group.getSuperseded())
             .screenCurrent(group.screenIsCurrent(LocalDateTime.now(clock)))
             .notes(group.getNotes())
+            .correctionReason(group.getCorrectionReason())
             .createdAt(group.getCreatedAt())
             .build();
     }
@@ -137,6 +141,41 @@ public class TransfusionMapper {
     public TransfusionRequestResponseDTO toDto(TransfusionRequest request,
                                                List<BloodUnit> units,
                                                List<TransfusionCrossmatch> crossmatches) {
+        return toDto(request, units, crossmatches, List.of());
+    }
+
+    public EmergencyBloodReleaseResponseDTO toDto(EmergencyBloodRelease release) {
+        BloodUnit unit = release.getBloodUnit();
+        return EmergencyBloodReleaseResponseDTO.builder()
+            .id(release.getId())
+            .bloodUnitId(unit != null ? unit.getId() : null)
+            .unitNumber(unit != null ? unit.getUnitNumber() : null)
+            .releaseType(release.getReleaseType())
+            .reason(release.getReason())
+            .authoriserName(userName(release.getAuthoriser()))
+            .issuedByName(userName(release.getIssuedBy()))
+            .issuedAt(release.getIssuedAt())
+            .antibodyWarning(Boolean.TRUE.equals(release.getAntibodyWarning()))
+            .negativeUnobtainableStated(Boolean.TRUE.equals(release.getNegativeUnobtainableStated()))
+            .negativeUnitsShown(release.getNegativeUnitsShown())
+            .build();
+    }
+
+    /** The name a colleague knows this person by; the sign-in name when no name is on record. */
+    public static String userName(User user) {
+        if (user == null) {
+            return null;
+        }
+        String first = user.getFirstName();
+        String last = user.getLastName();
+        String combined = ((first != null ? first.trim() : "") + " " + (last != null ? last.trim() : "")).trim();
+        return combined.isEmpty() ? user.getUsername() : combined;
+    }
+
+    public TransfusionRequestResponseDTO toDto(TransfusionRequest request,
+                                               List<BloodUnit> units,
+                                               List<TransfusionCrossmatch> crossmatches,
+                                               List<EmergencyBloodRelease> releases) {
         if (request == null) {
             return null;
         }
@@ -148,6 +187,8 @@ public class TransfusionMapper {
         UUID hospitalId = request.getHospital() != null ? request.getHospital().getId() : null;
         return TransfusionRequestResponseDTO.builder()
             .id(request.getId())
+            .authorUserId(request.getRequestedBy() != null && request.getRequestedBy().getUser() != null
+                ? request.getRequestedBy().getUser().getId() : null)
             .patientId(patient != null ? patient.getId() : null)
             .patientName(patientName(patient))
             .patientMrn(patient != null && hospitalId != null
@@ -171,12 +212,14 @@ public class TransfusionMapper {
             .units(units == null ? List.of() : units.stream().map(this::toDto).toList())
             .crossmatches(crossmatches == null ? List.of()
                 : crossmatches.stream().map(this::toDto).toList())
+            .emergencyReleases(releases == null ? List.of() : releases.stream().map(this::toDto).toList())
             .createdAt(request.getCreatedAt())
             .build();
     }
 
     public TransfusionAdministrationResponseDTO toDto(TransfusionAdministration administration,
-                                                      List<TransfusionReaction> reactions) {
+                                                      List<TransfusionReaction> reactions,
+                                                      TransfusionCrossmatch crossmatch) {
         if (administration == null) {
             return null;
         }
@@ -198,6 +241,7 @@ public class TransfusionMapper {
             .stopReason(administration.getStopReason())
             .notes(administration.getNotes())
             .reactions(reactions == null ? List.of() : reactions.stream().map(this::toDto).toList())
+            .crossmatch(toDto(crossmatch))
             .build();
     }
 

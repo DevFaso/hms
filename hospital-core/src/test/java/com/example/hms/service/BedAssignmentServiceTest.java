@@ -3,8 +3,10 @@ package com.example.hms.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.AdmissionStatus;
@@ -34,6 +36,7 @@ class BedAssignmentServiceTest {
 
     @Mock private BedRepository bedRepository;
     @Mock private AdmissionRepository admissionRepository;
+    @Mock private com.example.hms.repository.TransferOrderRepository transferOrderRepository;
 
     @InjectMocks private BedAssignmentService service;
 
@@ -77,6 +80,66 @@ class BedAssignmentServiceTest {
     }
 
     @Test
+    void aBedInAnotherDepartmentsWardMovesTheStayThere_D237() {
+        com.example.hms.model.Department surgery = new com.example.hms.model.Department();
+        surgery.setId(UUID.randomUUID());
+        Ward surgicalWard = Ward.builder().hospital(ward.getHospital()).name("Surgery").code("CHI01")
+            .department(surgery).build();
+        Bed bed = Bed.builder().ward(surgicalWard).bedNumber("C01").status(BedStatus.AVAILABLE).build();
+        bed.setId(UUID.randomUUID());
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        service.assignBed(admission, bed.getId());
+
+        assertThat(admission.getDepartment()).isSameAs(surgery);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void d804_aTransferToAnotherDepartmentsBedMovesTheStayEncounterToo() {
+        AdmissionStayEncounterService stayEncounters = mock(AdmissionStayEncounterService.class);
+        org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> provider =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.doAnswer(inv -> {
+            ((java.util.function.Consumer<AdmissionStayEncounterService>) inv.getArgument(0)).accept(stayEncounters);
+            return null;
+        }).when(provider).ifAvailable(org.mockito.ArgumentMatchers.any());
+        service.setStayEncounters(provider);
+        com.example.hms.model.Department cardiology = new com.example.hms.model.Department();
+        cardiology.setId(UUID.randomUUID());
+        Ward cardioWard = Ward.builder().hospital(ward.getHospital()).name("Cardio").code("CAR01")
+            .department(cardiology).build();
+        Bed bed = Bed.builder().ward(cardioWard).bedNumber("K01").status(BedStatus.RESERVED).build();
+        bed.setId(UUID.randomUUID());
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        // the transfer completion's call (TransferServiceImpl): a RESERVED destination
+        service.assignBed(admission, bed.getId(), java.util.Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
+
+        assertThat(admission.getDepartment()).isSameAs(cardiology);
+        verify(stayEncounters).followStayDepartment(admission);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void d804_aBedInAWardWithNoDepartmentLeavesTheEncounterAlone() {
+        AdmissionStayEncounterService stayEncounters = mock(AdmissionStayEncounterService.class);
+        org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> provider =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.lenient().doAnswer(inv -> {
+            ((java.util.function.Consumer<AdmissionStayEncounterService>) inv.getArgument(0)).accept(stayEncounters);
+            return null;
+        }).when(provider).ifAvailable(org.mockito.ArgumentMatchers.any());
+        service.setStayEncounters(provider);
+        Bed next = bed("B09", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(next.getId(), hospitalId)).thenReturn(Optional.of(next));
+
+        service.assignBed(admission, next.getId());
+
+        verifyNoInteractions(stayEncounters);
+    }
+
+    @Test
     void assignBedReleasesPreviousBed() {
         Bed previous = bed("B01", BedStatus.OCCUPIED);
         admission.setBed(previous);
@@ -100,7 +163,7 @@ class BedAssignmentServiceTest {
         UUID bedId = bed.getId();
         assertThatThrownBy(() -> service.assignBed(admission, bedId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not available");
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.r7.notAvailable"));
     }
 
     @Test
@@ -214,7 +277,7 @@ class BedAssignmentServiceTest {
 
         assertThatThrownBy(() -> service.reserveBed(bedId, hospitalId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not available");
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.r7.notAvailable"));
         assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
     }
 
@@ -254,8 +317,51 @@ class BedAssignmentServiceTest {
 
         assertThatThrownBy(() -> service.assignBed(admission, bedId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not available");
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.r7.notAvailable"));
         assertThat(bed.getStatus()).isEqualTo(BedStatus.RESERVED);
+    }
+
+    /**
+     * QA D1366 (round 31, dup31.js): an occupied bed picked in assign-bed or as
+     * a transfer destination answered 400 with fieldErrors null. The refusal
+     * is named on the picker's field; transfer completion (no bed in its
+     * request) still refuses without one.
+     */
+    @Test
+    void d1366_anOccupiedBedIsRefusedOnThePickersField() {
+        Bed bed = bed("B09", BedStatus.OCCUPIED);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+        UUID bedId = bed.getId();
+        Set<BedStatus> claimable = Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED);
+
+        assertThatThrownBy(() -> service.assignBed(admission, bedId))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", BedAssignmentService.FIELD_BED_ID)
+            .hasFieldOrPropertyWithValue("messageKey", "bed.r7.notAvailable");
+        assertThatThrownBy(() -> service.reserveBed(bedId, hospitalId))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", BedAssignmentService.FIELD_TO_BED_ID);
+        assertThatThrownBy(() -> service.assignBed(admission, bedId, claimable))
+            .isInstanceOf(BusinessException.class)
+            .isNotInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "bed.r7.notAvailable");
+    }
+
+    /** QA D1366 class: a bed whose ward does not fit the patient is refused on the picker's field too. */
+    @Test
+    void d1366_aWardThatDoesNotFitIsRefusedOnTheField() {
+        ward.setWardType(com.example.hms.enums.WardType.PEDIATRIC);
+        com.example.hms.model.Patient adult = new com.example.hms.model.Patient();
+        adult.setDateOfBirth(java.time.LocalDate.now().minusYears(40));
+        Bed bed = bed("P01", BedStatus.AVAILABLE);
+
+        assertThatThrownBy(() -> BedAssignmentService.requireWardFitsPatient(bed, adult, "toBedId"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "toBedId")
+            .hasFieldOrPropertyWithValue("messageKey", "bed.ward.pediatricMismatch");
+        assertThatThrownBy(() -> BedAssignmentService.requireWardFitsPatient(bed, adult))
+            .isNotInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "bed.ward.pediatricMismatch");
     }
 
     @Test
@@ -285,5 +391,152 @@ class BedAssignmentServiceTest {
         service.releaseReservation(null);
 
         verify(bedRepository, never()).save(any());
+    }
+
+    /* ── D431: the bed picker ignored sex and age ─────────────────────── */
+
+    private static com.example.hms.model.Patient patient(String gender, int years) {
+        com.example.hms.model.Patient p = new com.example.hms.model.Patient();
+        p.setGender(gender);
+        p.setDateOfBirth(java.time.LocalDate.now().minusYears(years).minusDays(1));
+        return p;
+    }
+
+    @Test
+    void d431_aChildIsRefusedAMaternityBed() {
+        admission.setPatient(patient("FEMALE", 5));
+        Bed bed = bed("B04", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        UUID bedId = bed.getId();
+        assertThatThrownBy(() -> service.assignBed(admission, bedId))
+            .isInstanceOf(BusinessException.class);
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+        verify(bedRepository, never()).save(any());
+    }
+
+    @Test
+    void d431_aManIsRefusedAMaternityBed() {
+        admission.setPatient(patient("MALE", 40));
+        Bed bed = bed("B05", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        UUID bedId = bed.getId();
+        assertThatThrownBy(() -> service.assignBed(admission, bedId))
+            .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void d431_aWomanTakesAMaternityBed() {
+        admission.setPatient(patient("FEMALE", 28));
+        Bed bed = bed("B06", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        service.assignBed(admission, bed.getId());
+
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+    }
+
+    @Test
+    void d431_anAdultIsRefusedAPaediatricBedAndAnyoneTakesAGeneralOne() {
+        ward.setWardType(WardType.PEDIATRIC);
+        admission.setPatient(patient("MALE", 40));
+        Bed paeds = bed("P01", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(paeds.getId(), hospitalId)).thenReturn(Optional.of(paeds));
+        UUID paedsId = paeds.getId();
+        assertThatThrownBy(() -> service.assignBed(admission, paedsId))
+            .isInstanceOf(BusinessException.class);
+
+        ward.setWardType(WardType.GENERAL);
+        service.assignBed(admission, paeds.getId());
+        assertThat(paeds.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+    }
+
+    @Test
+    void d431_aToddlerIsRefusedANicuBed() {
+        ward.setWardType(WardType.NICU);
+        admission.setPatient(patient("FEMALE", 2));
+        Bed cot = bed("N01", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(cot.getId(), hospitalId)).thenReturn(Optional.of(cot));
+        UUID cotId = cot.getId();
+
+        assertThatThrownBy(() -> service.assignBed(admission, cotId))
+            .isInstanceOf(BusinessException.class);
+        assertThat(cot.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+    }
+
+    /* ── QA D515: a discharge with a transfer still ordered ─────────────── */
+
+    private com.example.hms.model.TransferOrder pendingTransferTo(Bed destination) {
+        com.example.hms.model.TransferOrder order = new com.example.hms.model.TransferOrder();
+        order.setId(UUID.randomUUID());
+        order.setAdmission(admission);
+        order.setToBed(destination);
+        order.setStatus(com.example.hms.enums.TransferOrderStatus.REQUESTED);
+        return order;
+    }
+
+    @Test
+    void d515_dischargeCancelsThePendingTransferAndHandsItsBedBack() {
+        // QA D515: POST /admissions/{id}/discharge with a transfer REQUESTED
+        // left the order open and the destination bed RESERVED.
+        Bed current = bed("C1", BedStatus.OCCUPIED);
+        admission.setBed(current);
+        Bed destination = bed("C2", BedStatus.RESERVED);
+        com.example.hms.model.TransferOrder order = pendingTransferTo(destination);
+        when(transferOrderRepository.findPendingForAdmission(admission.getId())).thenReturn(Optional.of(order));
+
+        service.releaseBed(admission);
+
+        assertThat(order.getStatus()).isEqualTo(com.example.hms.enums.TransferOrderStatus.CANCELLED);
+        assertThat(order.getCancelledAt()).isNotNull();
+        assertThat(order.getCancellationReason()).isNotBlank();
+        assertThat(destination.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+        assertThat(current.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+        verify(transferOrderRepository).save(order);
+    }
+
+    @Test
+    void d515_theDischargeApprovalPathCancelsItToo() {
+        UUID patientId = UUID.randomUUID();
+        Bed destination = bed("C2", BedStatus.RESERVED);
+        com.example.hms.model.TransferOrder order = pendingTransferTo(destination);
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any()))
+            .thenReturn(List.of(admission));
+        when(transferOrderRepository.findPendingForAdmission(admission.getId())).thenReturn(Optional.of(order));
+
+        service.releaseBedsForPatient(patientId, hospitalId);
+
+        assertThat(order.getStatus()).isEqualTo(com.example.hms.enums.TransferOrderStatus.CANCELLED);
+        assertThat(destination.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+    }
+
+    @Test
+    void d515_aDestinationSomebodyElseNowLiesInIsNotFreed() {
+        Bed destination = bed("C2", BedStatus.OCCUPIED);
+        com.example.hms.model.TransferOrder order = pendingTransferTo(destination);
+        when(transferOrderRepository.findPendingForAdmission(admission.getId())).thenReturn(Optional.of(order));
+
+        service.releaseBed(admission);
+
+        assertThat(order.getStatus()).isEqualTo(com.example.hms.enums.TransferOrderStatus.CANCELLED);
+        assertThat(destination.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+    }
+
+    /** QA D1428: a closed stay's bed is history and may hold another patient by now. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.AdmissionStatus.class,
+        names = {"DISCHARGED", "CANCELLED", "TRANSFERRED", "DECEASED"})
+    void qaD1428_aClosedStayDoesNotFreeTheBedItOnceHeld(com.example.hms.enums.AdmissionStatus closed) {
+        Bed bed = bed("B07", BedStatus.OCCUPIED);
+        admission.setBed(bed);
+        admission.setRoomBed("MAT01/B07");
+        admission.setStatus(closed);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.unassignBed(admission))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+        assertThat(admission.getRoomBed()).isEqualTo("MAT01/B07");
     }
 }

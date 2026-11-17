@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.support.LinkedPatientLookup;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.PatientDocumentType;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -15,15 +16,20 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.model.PatientHospitalRegistration;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientUploadedDocumentRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.FileUploadService;
 import com.example.hms.service.PatientDocumentService;
+import com.example.hms.enums.TreatmentRelationshipKind;
+import com.example.hms.exception.ChartRestrictedException;
+import com.example.hms.enums.RecordAccessDenialReason;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.model.Hospital;
+import com.example.hms.service.recordaccess.RecordAccessDecision;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -43,7 +49,7 @@ import java.util.UUID;
 @Slf4j
 public class PatientDocumentServiceImpl implements PatientDocumentService {
 
-    private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
+    private static final String MSG_UNABLE_RESOLVE_USER = "document.user.unresolved";
 
     private final ControllerAuthUtils authUtils;
     private final PatientRepository patientRepository;
@@ -52,8 +58,52 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private final FileUploadService fileUploadService;
     private final PatientDocumentMapper documentMapper;
     private final PatientHospitalRegistrationRepository registrationRepository;
-    private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final HospitalRepository hospitalRepository;
+
+    /**
+     * What authorised a staff read: the hospital name the audit row carries,
+     * and the break-the-glass session when the read ran under one instead of
+     * a registration at the acting hospital (QA D504).
+     */
+    private record StaffReach(String hospitalName, UUID breakGlassSessionId) {
+    }
+
+    /**
+     * QA D1599: the roles that read every type of a patient's upload. Mirrors
+     * {@code PatientDocumentStaffController.READ_ROLES} minus the front desk (a test pins it).
+     * Any other staff caller the controller admits (reception, billing) reads the insurance
+     * type only; failing closed means a caller with none of these gets the narrow view.
+     */
+    public static final java.util.Set<String> CLINICAL_READERS = java.util.Set.of(
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
+
+    /** The only type the front desk may open (QA D1599). */
+    static final PatientDocumentType FRONT_DESK_TYPE = PatientDocumentType.INSURANCE_DOCUMENT;
+
+    private static boolean insuranceOnlyCaller() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return true;
+        }
+        return auth.getAuthorities().stream().noneMatch(a -> CLINICAL_READERS.contains(a.getAuthority()));
+    }
+
+    /** The patient's free-text note on an upload can say anything clinical: the desk never receives it. */
+    private static PatientDocumentResponseDTO forCaller(PatientDocumentResponseDTO dto) {
+        if (dto != null && insuranceOnlyCaller()) {
+            dto.setNotes(null);
+        }
+        return dto;
+    }
+
+    /** A type the front desk may not open reads as a missing document, never as forbidden. */
+    private static void requireTypeVisible(PatientUploadedDocument doc, UUID documentId) {
+        if (insuranceOnlyCaller() && doc.getDocumentType() != FRONT_DESK_TYPE) {
+            throw new ResourceNotFoundException("patientDocument.notFound", documentId);
+        }
+    }
 
     @Override
     // rollbackFor is load-bearing, not decoration. Spring rolls back on
@@ -68,7 +118,24 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         UUID userId = resolveUserId(auth);
         Patient patient = resolvePatient(userId);
         User uploader = resolveUser(userId);
+        if (request.getNotes() != null
+                && request.getNotes().length() > PatientDocumentRequestDTO.NOTES_MAX_LENGTH) {
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                    "documents.notes.tooLong", String.valueOf(PatientDocumentRequestDTO.NOTES_MAX_LENGTH)));
+        }
+        // QA D433: a document cannot have been collected in the future.
+        if (request.getCollectionDate() != null
+                && request.getCollectionDate().isAfter(java.time.LocalDate.now(java.time.ZoneId.systemDefault()))) {
+            throw new IllegalArgumentException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("portal.document.futureDate"));
+        }
 
+        // QA D961 review: a medical certificate is issued by a doctor from a
+        // visit; a patient upload labelled as one would pass for it.
+        if (request.getDocumentType() == com.example.hms.enums.PatientDocumentType.MEDICAL_CERTIFICATE) {
+            throw new IllegalArgumentException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("medicalCertificate.patientCannotUpload"));
+        }
         FileUploadService.StoredFileDescriptor descriptor = fileUploadService.uploadPatientDocument(file, userId);
 
         PatientUploadedDocument doc = PatientUploadedDocument.builder()
@@ -114,6 +181,12 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     public void deleteDocument(Authentication auth, UUID documentId) {
         UUID patientId = resolvePatientId(auth);
         PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
+        // QA D961: a certificate the doctor issued is part of the record; the
+        // patient downloads it but cannot remove it from the chart.
+        if (doc.getDocumentType() == com.example.hms.enums.PatientDocumentType.MEDICAL_CERTIFICATE) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("medicalCertificate.patientCannotDelete"));
+        }
         doc.setDeletedAt(LocalDateTime.now());
         documentRepository.save(doc);
         log.info("Patient {} soft-deleted document {}", patientId, documentId);
@@ -138,50 +211,111 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     @Transactional(readOnly = true)
     public Page<PatientDocumentResponseDTO> listForPatient(UUID hospitalId, UUID patientId,
                                                            PatientDocumentType documentType, Pageable pageable) {
-        requireRegisteredAt(hospitalId, patientId);
+        StaffReach reach = requireRegisteredAt(hospitalId, patientId);
+        auditBreakGlassRead(hospitalId, patientId, reach, null);
+        if (insuranceOnlyCaller()) {
+            // QA D1599: the front desk lists insurance documents only; asking for another type is an empty page.
+            if (documentType != null && documentType != FRONT_DESK_TYPE) {
+                return Page.empty(pageable);
+            }
+            return documentRepository.findForStaffByType(patientId, hospitalId, FRONT_DESK_TYPE, pageable)
+                    .map(d -> forCaller(documentMapper.toDto(d)));
+        }
+        // QA D961: another hospital's certificate is not listed here
+        // (requireRegisteredAt refuses a null hospital, so the scope is always set).
         Page<PatientUploadedDocument> page = documentType == null
-                ? documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable)
-                : documentRepository.findByPatient_IdAndDocumentTypeAndDeletedAtIsNull(patientId, documentType, pageable);
+                ? documentRepository.findForStaff(patientId, hospitalId, pageable)
+                : documentRepository.findForStaffByType(patientId, hospitalId, documentType, pageable);
         return page.map(documentMapper::toDto);
+    }
+
+    /** QA D961: a document another hospital issued reads as missing here. */
+    private static void requireIssuedHereOrUploaded(PatientUploadedDocument doc, UUID hospitalId, UUID documentId) {
+        if (doc.getIssuingHospital() != null
+                && !hospitalId.equals(doc.getIssuingHospital().getId())) {
+            throw new ResourceNotFoundException("patientDocument.notFound", documentId);
+        }
     }
 
     @Override
     @Transactional(readOnly = true)
     public PatientDocumentResponseDTO getForPatient(UUID hospitalId, UUID patientId, UUID documentId) {
-        requireRegisteredAt(hospitalId, patientId);
-        return documentMapper.toDto(requireOwnDocument(patientId, documentId));
+        StaffReach reach = requireRegisteredAt(hospitalId, patientId);
+        PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
+        requireIssuedHereOrUploaded(doc, hospitalId, documentId);
+        requireTypeVisible(doc, documentId);
+        auditBreakGlassRead(hospitalId, patientId, reach, doc);
+        return forCaller(documentMapper.toDto(doc));
     }
 
     @Override
     @Transactional(readOnly = true)
     public DocumentPayload downloadForPatient(UUID hospitalId, UUID patientId, UUID documentId) {
-        PatientHospitalRegistration registration = requireRegisteredAt(hospitalId, patientId);
+        StaffReach reach = requireRegisteredAt(hospitalId, patientId);
         PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
+        requireIssuedHereOrUploaded(doc, hospitalId, documentId);
+        requireTypeVisible(doc, documentId);
         java.nio.file.Path path = fileUploadService.resolveStoredFile(doc.getFilePath(), "patient-documents");
-        auditStaffDownload(hospitalId, registration, doc);
+        auditStaffDownload(hospitalId, patientId, reach, doc);
         String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";
         String displayName = doc.getDisplayName() != null ? doc.getDisplayName() : "document";
         return new DocumentPayload(path, contentType, displayName);
     }
 
     /**
-     * Staff see a patient's uploads only through a hospital the patient is
-     * registered at. No hospital (a super-admin in global view) is a 400 that
-     * says so; a patient not registered at the caller's hospital is a 404 —
-     * the same answer as a document that does not exist, so the endpoint
-     * does not confirm that a patient is known elsewhere.
+     * Staff see a patient's uploads through a hospital the patient is
+     * registered at, or (QA D504) under a live break-the-glass session the
+     * actor declared for this patient at the acting hospital: the same
+     * emergency access that opens the rest of the chart over an opt-out or a
+     * restriction. No hospital (a super-admin in global view) is a 400 that
+     * says so. A restricted chart is the loud 403 the chart itself answers,
+     * so the portal offers the declaration. Any other refusal (an opt-out
+     * without a session included) stays a 404, the same answer as a document
+     * that does not exist, so the endpoint never confirms that a patient is
+     * known elsewhere or has opted out.
      */
-    private PatientHospitalRegistration requireRegisteredAt(UUID hospitalId, UUID patientId) {
+    private StaffReach requireRegisteredAt(UUID hospitalId, UUID patientId) {
         if (hospitalId == null) {
-            throw new BusinessException(
-                    "An active hospital is required: patient documents are read through the hospital "
-                            + "the patient is registered at. Select a hospital first.");
+            throw new BusinessException("documents.hospitalRequired");
         }
         if (patientId == null) {
-            throw new ResourceNotFoundException("Patient not found: null");
+            // No id to name: "Patient not found with ID: null" helped nobody.
+            throw new ResourceNotFoundException("patient.notFoundUnspecified");
         }
-        return registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        java.util.Optional<PatientHospitalRegistration> registration =
+                registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId);
+        if (registration.isPresent()) {
+            Hospital hospital = registration.get().getHospital();
+            return new StaffReach(hospital != null ? hospital.getName() : null, null);
+        }
+        UUID actorId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
+                .orElse(null);
+        RecordAccessDecision decision = actorId == null ? null
+                : recordAccessPolicy.decide(actorId, patientId, hospitalId);
+        if (decision != null && decision.permitted() && decision.relationship() != null
+                && decision.relationship().kind() == TreatmentRelationshipKind.BREAK_GLASS) {
+            String hospitalName = hospitalRepository.findById(hospitalId).map(Hospital::getName).orElse(null);
+            return new StaffReach(hospitalName, decision.relationship().carrierId());
+        }
+        if (decision != null && decision.reason() == RecordAccessDenialReason.CHART_RESTRICTED) {
+            throw new ChartRestrictedException(patientId);
+        }
+        throw new ResourceNotFoundException("patient.notFound", patientId);
+    }
+
+    /**
+     * QA D504: a list or a view of the documents under break-the-glass is a
+     * disclosure the patient was promised to see; a registered read is not
+     * (the interceptor's PATIENT_ACCESS row covers it), so nothing is written.
+     * The description names the session and at most the document id and type.
+     */
+    private void auditBreakGlassRead(UUID hospitalId, UUID patientId, StaffReach reach, PatientUploadedDocument doc) {
+        if (reach.breakGlassSessionId() == null) {
+            return;
+        }
+        String what = doc == null ? "Staff list of patient-uploaded documents"
+                : "Staff view of patient-uploaded document " + doc.getId() + " (" + doc.getDocumentType() + ")";
+        emitDocumentAudit(hospitalId, patientId, reach, doc, what);
     }
 
     /**
@@ -198,32 +332,37 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
      * the per-hospital audit queries find it. The audit service derives no
      * assignment from {@code userId} alone.
      */
-    private void auditStaffDownload(UUID hospitalId, PatientHospitalRegistration registration,
+    private void auditStaffDownload(UUID hospitalId, UUID patientId, StaffReach reach,
                                     PatientUploadedDocument doc) {
+        emitDocumentAudit(hospitalId, patientId, reach, doc,
+                "Staff download of patient-uploaded document " + doc.getId() + " (" + doc.getDocumentType() + ")");
+    }
+
+    private void emitDocumentAudit(UUID hospitalId, UUID patientId, StaffReach reach,
+                                   PatientUploadedDocument doc, String what) {
         try {
-            UUID actorId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
-                    .orElse(null);
-            UserRoleHospitalAssignment assignment = actorId == null ? null
-                    : assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId)
-                            .orElse(null);
-            String hospitalName = registration.getHospital() != null ? registration.getHospital().getName() : null;
-            UUID patientId = registration.getPatient() != null ? registration.getPatient().getId() : null;
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            UUID actorId = authUtils.resolveUserId(auth).orElse(null);
+            // Resolve the assignment inside logEvent's REQUIRES_NEW transaction.
+            // A failed best-effort audit lookup must not poison this clinical read.
+            String description = reach.breakGlassSessionId() == null ? what
+                    : what + " under break-the-glass session " + reach.breakGlassSessionId();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userName(SecurityUtils.getCurrentUsername())
                     .userId(actorId)
-                    .assignmentId(assignment != null ? assignment.getId() : null)
-                    .roleName(assignment != null && assignment.getRole() != null ? assignment.getRole().getName() : null)
-                    .hospitalName(hospitalName)
+                    .hospitalId(hospitalId)
+                    .roleName(com.example.hms.security.audit.ActingAssignments.roleName(null,
+                            com.example.hms.security.audit.ActingAssignments.actingRoles(auth)))
+                    .hospitalName(reach.hospitalName())
                     .patientId(patientId)
                     .eventType(AuditEventType.DATA_ACCESS)
                     .entityType("PATIENT_UPLOADED_DOCUMENT")
-                    .resourceId(doc.getId() != null ? doc.getId().toString() : null)
-                    .eventDescription("Staff download of patient-uploaded document " + doc.getId()
-                            + " (" + doc.getDocumentType() + ")")
+                    .resourceId(doc != null && doc.getId() != null ? doc.getId().toString() : null)
+                    .eventDescription(description)
                     .status(AuditStatus.SUCCESS)
                     .build());
         } catch (RuntimeException ex) {
-            log.warn("Audit emit failed for staff document download {}: {}", doc.getId(), ex.getMessage());
+            log.warn("Audit emit failed for staff document read {}: {}", doc != null ? doc.getId() : null, ex.getMessage());
         }
     }
 
@@ -237,7 +376,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private PatientUploadedDocument requireOwnDocument(UUID patientId, UUID documentId) {
         return documentRepository
                 .findByIdAndPatient_IdAndDeletedAtIsNull(documentId, patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+                .orElseThrow(() -> new ResourceNotFoundException("patientDocument.notFound", documentId));
     }
 
     private UUID resolveUserId(Authentication auth) {
@@ -247,16 +386,14 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
 
     private UUID resolvePatientId(Authentication auth) {
         UUID userId = resolveUserId(auth);
-        return patientRepository.findByUserId(userId)
+        return LinkedPatientLookup.linkedPatient(patientRepository, userId)
                 .map(Patient::getId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No patient record linked to your account. Contact your care team."));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
     private Patient resolvePatient(UUID userId) {
-        return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "No patient record linked to your account. Contact your care team."));
+        return LinkedPatientLookup.linkedPatient(patientRepository, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
     private User resolveUser(UUID userId) {

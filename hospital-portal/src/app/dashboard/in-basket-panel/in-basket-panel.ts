@@ -1,38 +1,57 @@
+import { allRows } from '../../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
-  OnInit,
+  effect,
   inject,
   signal,
-  computed,
   input,
-  DestroyRef,
+  computed,
+  untracked,
 } from '@angular/core';
-import { forkJoin, finalize } from 'rxjs';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Router } from '@angular/router';
 import { InBasketService, InBasketItem, InBasketSummary } from '../../services/in-basket.service';
 import { ToastService } from '../../core/toast.service';
+import { RoleContextService } from '../../core/role-context.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { actionRoles } from '../../core/action-permissions';
+import { AllergyReviewDialogComponent } from '../../shared/allergy-acknowledgement/allergy-review-dialog.component';
+
+/** Policy 4: the notice of an allergy conflict awaiting the prescriber's review (its reference is the order). */
+export const ALLERGY_REVIEW_REFERENCE = 'PRESCRIPTION_ALLERGY_REVIEW';
+
+/**
+ * Provisional platform rule: a closed visit's note still waiting for its author's signature (its reference is
+ * the note). The item opens the visit, where the author signs; signing removes it.
+ */
+export const NOTE_TO_SIGN_REFERENCE = 'ENCOUNTER_NOTE_SIGNATURE';
+
+const SERVER_TIME = new ServerTimePipe();
 
 @Component({
   selector: 'app-in-basket-panel',
   standalone: true,
-  imports: [CommonModule, TranslateModule, RovingFocusDirective],
+  imports: [CommonModule, TranslateModule, RovingFocusDirective, AllergyReviewDialogComponent],
   templateUrl: './in-basket-panel.html',
   styleUrl: './in-basket-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class InBasketPanelComponent implements OnInit {
-  readonly showTitle = input(true);
-  private readonly destroyRef = inject(DestroyRef);
+export class InBasketPanelComponent {
   private readonly inBasketService = inject(InBasketService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly roleContext = inject(RoleContextService);
+  private readonly router = inject(Router);
+
+  /** Only the latest load may write: a response issued under the previous scope is dropped. */
+  private loadRequest = 0;
 
   /* ── state ── */
+  readonly showTitle = input(true);
   items = signal<InBasketItem[]>([]);
   summary = signal<InBasketSummary>({
     totalUnread: 0,
@@ -56,8 +75,59 @@ export class InBasketPanelComponent implements OnInit {
 
   badgeCount = computed(() => this.summary().totalUnread);
 
-  ngOnInit(): void {
+  /**
+   * Policy 4 (pending clinical approval): the order whose allergy conflict is reviewed from its notice.
+   * Offered to the roles POST /allergy-review admits; the server decides who may review.
+   */
+  readonly allergyReviewFor = signal<string | null>(null);
+  private readonly canReviewAllergy = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('prescriptionAllergyReview')),
+  );
+
+  isAllergyReview(item: InBasketItem): boolean {
+    return (
+      item.referenceType === ALLERGY_REVIEW_REFERENCE &&
+      !!item.referenceId &&
+      this.canReviewAllergy()
+    );
+  }
+
+  isNoteToSign(item: InBasketItem): boolean {
+    return item.referenceType === NOTE_TO_SIGN_REFERENCE && !!item.encounterId;
+  }
+
+  openVisit(item: InBasketItem): void {
+    this.router.navigate(['/encounters', item.encounterId]);
+  }
+
+  onAllergyReviewed(): void {
+    this.allergyReviewFor.set(null);
+    this.toast.success(this.translate.instant('ALLERGY_REVIEW.RECORDED'));
     this.loadData();
+  }
+
+  constructor() {
+    // The load follows the hospital scope, not the mount: the endpoints are
+    // hospital-scoped, and on /in-basket nothing rebuilds the panel when the
+    // picker moves, so a load-once panel kept the old hospital's items and
+    // unread badge beside a lab category showing the new one. The effect
+    // covers the first render too. The previous hospital's rows are dropped
+    // BEFORE the new read is issued, never shown under the new scope.
+    effect(() => {
+      this.roleContext.effectiveHospitalIdForRequest();
+      untracked(() => {
+        this.lastUpdated.set(null);
+        this.items.set([]);
+        this.summary.set({
+          totalUnread: 0,
+          resultUnread: 0,
+          orderUnread: 0,
+          messageUnread: 0,
+          taskUnread: 0,
+        });
+        this.loadData();
+      });
+    });
   }
 
   /* ── public API ── */
@@ -124,7 +194,9 @@ export class InBasketPanelComponent implements OnInit {
 
   formatDate(iso: string | null): string {
     if (!iso) return '';
-    const d = new Date(iso);
+    // QA D662 (D647): the server sends a zone-less UTC wall time; read raw,
+    // the browser took it for local time and showed the UTC clock.
+    const d = new Date(SERVER_TIME.transform(iso));
     // No hour12 override: the locale decides. Burkina Faso reads a 24-hour
     // clock; forcing 12-hour produced "15 juil., 10:00 AM" — French date,
     // American time.
@@ -141,35 +213,39 @@ export class InBasketPanelComponent implements OnInit {
   }
 
   private loadData(): void {
-    if (this.loading()) return;
+    const request = ++this.loadRequest;
     this.loading.set(true);
     this.loadError.set(false);
-    forkJoin({
-      page: this.inBasketService.getItems(),
-      summary: this.inBasketService.getSummary(),
-    })
-      .pipe(
-        takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.loading.set(false)),
-      )
-      .subscribe({
-        next: ({ page, summary }) => {
-          this.items.set(page.content);
-          this.summary.set(summary);
-          this.lastUpdated.set(new Date().toISOString());
-        },
-        error: () => this.loadError.set(true),
-      });
+    // QA D1347: every in-basket item (all pages), not the server's first 20.
+    allRows((page, size) =>
+      this.inBasketService.getItems(undefined, undefined, undefined, page, size),
+    ).subscribe({
+      next: (items) => {
+        if (request !== this.loadRequest) return;
+        this.items.set(items);
+        this.lastUpdated.set(new Date().toISOString());
+        this.loading.set(false);
+      },
+      error: () => {
+        if (request === this.loadRequest) {
+          this.loading.set(false);
+          this.loadError.set(true);
+        }
+      },
+    });
+    this.loadSummary();
   }
 
   private loadSummary(): void {
-    this.inBasketService
-      .getSummary()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (s) => this.summary.set(s),
-        error: () => this.toast.error(this.translate.instant('inBasket.summaryLoadFailed')),
-      });
+    const request = this.loadRequest;
+    this.inBasketService.getSummary().subscribe({
+      next: (s) => {
+        if (request === this.loadRequest) this.summary.set(s);
+      },
+      error: () => {
+        if (request === this.loadRequest) this.loadError.set(true);
+      },
+    });
   }
 
   private patchItem(updated: InBasketItem): void {

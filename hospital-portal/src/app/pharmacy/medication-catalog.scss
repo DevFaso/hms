@@ -1,3 +1,4 @@
+@use '../shared/styles/pharmacy-workspace' as pharmacy;
 @use '../shared/styles/page-common';
 
 .med-name {
@@ -25,6 +26,12 @@
 .badge-controlled {
   background: #fef3c7;
   color: #92400e;
+}
+
+/* Round 18 (QA D935): paediatric limits that are a default awaiting approval. */
+.badge-pending {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .code-chip {
@@ -69,3 +76,5 @@
   gap: 0.75rem;
   justify-content: center;
 }
+
+@include pharmacy.workspace;

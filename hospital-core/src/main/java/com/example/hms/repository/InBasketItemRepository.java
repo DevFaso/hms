@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -84,7 +85,88 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         @Param("status") InBasketItemStatus status,
         @Param("itemType") InBasketItemType itemType);
 
+    /**
+     * QA D605: the first acknowledgement of an item filed for a reference by
+     * anyone other than {@code excludedUserId} (the clinician who raised it).
+     */
+    @Query("""
+        SELECT i FROM InBasketItem i
+        WHERE i.referenceId = :referenceId AND i.referenceType = :referenceType
+          AND i.acknowledgedAt IS NOT NULL
+          AND (:excludedUserId IS NULL OR i.acknowledgedBy <> :excludedUserId)
+        ORDER BY i.acknowledgedAt ASC
+        """)
+    List<InBasketItem> findAcknowledgedForReference(
+        @Param("referenceId") UUID referenceId,
+        @Param("referenceType") String referenceType,
+        @Param("excludedUserId") UUID excludedUserId);
+
+    /**
+     * QA D931: deletes the items filed for a reference (every recipient)
+     * that nobody has acknowledged: opening one lands on a superseded result,
+     * which a clinician can no longer read (404) - the defect itself. An
+     * ACKNOWLEDGED item stays as the review record; that a clinician opened
+     * the old value is kept by the read audit, not by an item that no longer
+     * opens (review of #975, round 6: READ items are deleted again).
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+        DELETE FROM InBasketItem i
+        WHERE i.referenceId = :referenceId AND i.referenceType = :referenceType
+          AND i.status <> com.example.hms.enums.InBasketItemStatus.ACKNOWLEDGED
+        """)
+    int deleteOpenByReference(
+        @Param("referenceId") UUID referenceId,
+        @Param("referenceType") String referenceType);
+
+    /**
+     * Policy 4: deletes every item filed for a reference, acknowledged or not. For a notice whose record
+     * is kept elsewhere (an allergy conflict's review is recorded on the order and audited), so a later
+     * conflict on the same order can be told again (the one-item-per-reference-and-recipient rule).
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+        DELETE FROM InBasketItem i
+        WHERE i.referenceId = :referenceId AND i.referenceType = :referenceType
+        """)
+    int deleteAllByReference(
+        @Param("referenceId") UUID referenceId,
+        @Param("referenceType") String referenceType);
+
     /** Check if a duplicate in-basket item already exists for a reference. */
     boolean existsByReferenceIdAndReferenceTypeAndRecipientUser_Id(
         UUID referenceId, String referenceType, UUID recipientUserId);
+
+    /** A hospital administrator's in-basket: the dispute reviews addressed to them, and nothing else. */
+    @Query("""
+        SELECT i FROM InBasketItem i
+        WHERE i.recipientUser.id = :userId
+          AND i.referenceType = :referenceType
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
+          AND (:status IS NULL OR i.status = :status)
+        ORDER BY i.createdAt DESC
+        """)
+    Page<InBasketItem> findByRecipientAndReferenceType(
+        @Param("userId") UUID userId,
+        @Param("hospitalId") UUID hospitalId,
+        @Param("referenceType") String referenceType,
+        @Param("status") InBasketItemStatus status,
+        Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(i) FROM InBasketItem i
+        WHERE i.recipientUser.id = :userId
+          AND i.referenceType = :referenceType
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
+          AND i.status = :status
+        """)
+    long countByRecipientAndReferenceType(
+        @Param("userId") UUID userId,
+        @Param("hospitalId") UUID hospitalId,
+        @Param("referenceType") String referenceType,
+        @Param("status") InBasketItemStatus status);
+
+    /** The unsigned-note workflow's items still at their first notice, filed before {@code before}. */
+    List<InBasketItem> findByReferenceTypeAndTitleKeyAndCreatedAtBefore(
+        String referenceType, String titleKey, java.time.LocalDateTime before);
 }

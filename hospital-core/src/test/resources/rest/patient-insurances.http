@@ -36,7 +36,7 @@ Content-Type: application/json
 ### 1) CREATE insurance — REQUIRED: patientId (no hospital/assignment) staff token
 ### ===================================================================
 POST {{base}}/patient-insurances
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept: application/json
 Accept-Language: en
@@ -59,7 +59,7 @@ Accept-Language: en
 ### 2) GET by ID (owner or staff)
 ### ===================================================================
 GET {{base}}/patient-insurances/{{insuranceId}}
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Authorization: Bearer {{token}}
 Accept: application/json
 Accept-Language: en
 
@@ -67,7 +67,7 @@ Accept-Language: en
 ### 3) LIST all insurances for patient (owner or staff)
 ### ===================================================================
 GET {{base}}/patient-insurances/patient/{{patientId}}
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Authorization: Bearer {{token}}
 Accept: application/json
 Accept-Language: en
 
@@ -75,7 +75,7 @@ Accept-Language: en
 ### 4) UPDATE insurance (staff/admin) — still no hospital stamping here
 ### ===================================================================
 PUT {{base}}/patient-insurances/96be690d-3542-45f3-ab89-8d2730906b09
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept: application/json
 Accept-Language: en
@@ -97,7 +97,7 @@ Accept-Language: en
 ###     REQUIRES: staff has active URHA at @hospitalId
 ### ===================================================================
 PUT {{base}}/patient-insurances/96be690d-3542-45f3-ab89-8d2730906b09/link
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept: application/json
 Accept-Language: en
@@ -115,7 +115,7 @@ Accept-Language: en
 ### 6) NEGATIVE — PATIENT tries to link hospital (should be 403)
 ### ===================================================================
 PUT {{base}}/patient-insurances/96be690d-3542-45f3-ab89-8d2730906b09/link
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtaW5vcl9wYXRpZW50MSIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIiwiUk9MRV9QQVRJRU5UIl0sImlhdCI6MTc1NDg1MjA1MSwiZXhwIjoxNzU0OTM4NDUxfQ.zifmZoHBeH8dP2oESzNvEpmdex0phWd3nNQyY0lAIqw
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept: application/json
 Accept-Language: en
@@ -131,7 +131,7 @@ X-Act-As: PATIENT
 ### 7) PATIENT self-link (no hospital) — allowed
 ### ===================================================================
 PUT {{base}}/patient-insurances/96be690d-3542-45f3-ab89-8d2730906b09/link
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtaW5vcl9wYXRpZW50MSIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIiwiUk9MRV9QQVRJRU5UIl0sImlhdCI6MTc1NDg1MjA1MSwiZXhwIjoxNzU0OTM4NDUxfQ.zifmZoHBeH8dP2oESzNvEpmdex0phWd3nNQyY0lAIqw
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept: application/json
 Accept-Language: en
@@ -146,7 +146,7 @@ X-Act-As: PATIENT
 ### 8) CREATE a SECOND insurance (staff) — to test primary uniqueness
 ### ===================================================================
 POST {{base}}/patient-insurances
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept: application/json
 Accept-Language: en
@@ -171,7 +171,7 @@ Accept-Language: en
 ###     If not linked, uniqueness is per patient globally.
 ### ===================================================================
 PUT {{base}}/patient-insurances/96be690d-3542-45f3-ab89-8d2730906b09/link
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept: application/json
 Accept-Language: en

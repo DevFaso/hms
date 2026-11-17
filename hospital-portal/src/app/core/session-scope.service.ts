@@ -44,20 +44,46 @@ export class SessionScopeService {
       }),
       catchError(() => {
         this.applyStoredProfile();
+        // The server could not say: no provider confinement is assumed (the
+        // server still refuses a provider user the topic, so nothing opens
+        // for one), and never the previous user's flag.
+        this.roleContext.setProviderUser(false);
+        this.roleContext.markSessionResolved();
         return of(null);
       }),
     );
   }
 
   /**
-   * Apply an authoritative bootstrap: the roles, the permitted set exactly as
-   * the server states it (never collapsed by role), the active hospital, the
-   * super-admin global default, and the stored profile that later bootstraps
-   * fall back to.
+   * Apply the authoritative identity and hospital scope. Internal sessions
+   * retain their selected token roles; SSO retains live assignment roles.
+   * The permitted hospitals are never collapsed by role.
    */
   applyBootstrap(bootstrap: SessionBootstrapResponse, extras: ProfileExtras = {}): void {
-    const roles = bootstrap.roles?.length ? bootstrap.roles : this.auth.getRoles();
+    // Internal login narrows the token to the role selected by the user. The
+    // bootstrap lists account assignments, not permission to change that choice.
+    // SSO keeps its existing live-assignment hydration contract.
+    const tokenRoles = this.auth.getRoles();
+    if (
+      bootstrap.authSource === 'internal' &&
+      tokenRoles.some((role) => !bootstrap.roles?.includes(role))
+    ) {
+      // A selected role was revoked. End this session rather than promoting
+      // another assignment or leaving JWT-based guard fallbacks authorized.
+      this.auth.logout();
+      this.roleContext.setRoles([]);
+      this.applyScope([], null);
+      return;
+    }
+    const roles =
+      bootstrap.authSource === 'internal' && tokenRoles.length
+        ? tokenRoles
+        : bootstrap.roles?.length
+          ? bootstrap.roles
+          : tokenRoles;
     this.roleContext.setRoles(roles);
+    this.roleContext.setProviderUser(bootstrap.providerUser === true);
+    this.roleContext.markSessionResolved();
     const permitted = (bootstrap.permittedHospitalIds ?? []).filter((id) => !!id);
     this.applyScope(permitted, bootstrap.primaryHospitalId ?? null);
     this.roleContext.markSuperAdminGlobalDefaults();
@@ -103,6 +129,36 @@ export class SessionScopeService {
       profile?.primaryHospitalId ?? null,
     );
     this.roleContext.markSuperAdminGlobalDefaults();
+  }
+
+  /**
+   * The server refused `hospitalId` as no longer permitted: drop it from the
+   * active selection, the permitted set and the stored profile, so neither the
+   * next request nor a stored-profile fallback sends it again. The next
+   * bootstrap then states the real scope.
+   */
+  forgetHospital(hospitalId: string | null): void {
+    if (!hospitalId) {
+      return;
+    }
+    this.roleContext.setPermittedHospitalIds(
+      this.roleContext.permittedHospitalIds.filter((id) => id !== hospitalId),
+    );
+    if (this.roleContext.activeHospitalId === hospitalId) {
+      this.roleContext.activeHospitalId = null;
+    }
+    if (this.roleContext.selectedHospitalId() === hospitalId) {
+      this.roleContext.enableGlobalView();
+    }
+    const profile = this.auth.getUserProfile();
+    if (profile) {
+      this.auth.setUserProfile({
+        ...profile,
+        hospitalIds: (profile.hospitalIds ?? []).filter((id) => id !== hospitalId),
+        primaryHospitalId:
+          profile.primaryHospitalId === hospitalId ? undefined : profile.primaryHospitalId,
+      });
+    }
   }
 
   /**

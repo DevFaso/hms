@@ -3,6 +3,7 @@ package com.example.hms.service.scheduling;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.SlotStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Patient;
@@ -18,18 +19,27 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.scheduling.AppointmentSlotRepository;
 import com.example.hms.repository.scheduling.SessionTemplateRepository;
+import com.example.hms.service.AppointmentSlotRules;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -47,26 +57,37 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
 
     private static final int MAX_SEARCH_RESULTS = 200;
 
+    private static final String SLOT_UNAVAILABLE = "slot.unavailable";
+    private static final String SLOT_IN_PAST = "slot.inPast";
+
     private final SessionTemplateRepository templateRepository;
     private final AppointmentSlotRepository slotRepository;
     private final AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RoleValidator roleValidator;
+    /**
+     * The slot clock: it writes {@code heldUntil} and every availability check,
+     * the hold-reclaim sweep and the open-slot search read it back.
+     * {@code SlotFhirMapper} already reads {@code heldUntil} with the same bean.
+     */
+    private final Clock clock;
+    /** QA D1073: the person who booked from a slot (the desk, or the waitlist accept) is its creator. */
+    private final com.example.hms.repository.UserRepository userRepository;
 
     @Override
     @Transactional
     public SlotGenerationResultDTO generate(LocalDate from, LocalDate to) {
         UUID hospitalId = requireHospital();
-        LocalDate start = from != null ? from : LocalDate.now();
+        LocalDate start = from != null ? from : LocalDate.now(clock);
         LocalDate end = to != null ? to : start.plusWeeks(4);
 
         if (end.isBefore(start)) {
-            throw new BusinessException("The generation window ends before it starts.");
+            // QA D854: bundle keys, in the admin's language.
+            throw new FieldBusinessException("to", "slot.generation.windowInverted");
         }
         if (start.plusDays(MAX_GENERATION_DAYS).isBefore(end)) {
-            throw new BusinessException(
-                "Generate at most " + MAX_GENERATION_DAYS + " days at a time.");
+            throw new FieldBusinessException("to", "slot.generation.tooLong", MAX_GENERATION_DAYS);
         }
 
         List<SessionTemplate> templates = templateRepository.findByHospital_IdAndActiveTrue(hospitalId);
@@ -130,33 +151,114 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     @Transactional(readOnly = true)
     public List<AppointmentSlotDTO> searchOpen(UUID departmentId, UUID staffId, UUID visitTypeId,
                                                LocalDate from, LocalDate to, int limit) {
-        UUID hospitalId = requireHospital();
-        LocalDateTime now = LocalDateTime.now();
-        LocalDate start = from != null ? from : LocalDate.now();
+        LocalDate start = from != null ? from : LocalDate.now(clock);
         LocalDate end = to != null ? to : start.plusWeeks(2);
         int capped = limit <= 0 ? 50 : Math.min(limit, MAX_SEARCH_RESULTS);
+        // The window is now read whole before the cut, so it is bounded the
+        // same way as the paged search (refused, never cut).
+        requireSearchWindow(start, end);
+        // QA D1390: the limit is applied AFTER the booked-over filter, so a
+        // search for 200 answers 200 open slots when that many exist (it cut
+        // 200 rows first and filtered 18 of them away).
+        return openSlots(departmentId, staffId, visitTypeId, start, end).stream()
+            .limit(capped)
+            .map(this::toDto)
+            .toList();
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AppointmentSlotDTO> searchOpenPage(UUID departmentId, UUID staffId, UUID visitTypeId,
+                                                   LocalDate from, LocalDate to, int page, int size) {
+        LocalDate start = from != null ? from : LocalDate.now(clock);
+        LocalDate end = to != null ? to : start.plusWeeks(2);
+        requireSearchWindow(start, end);
+        PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, SEARCH_PAGE_MAX));
+        List<AppointmentSlot> open = openSlots(departmentId, staffId, visitTypeId, start, end);
+        List<AppointmentSlotDTO> rows = open.stream()
+            .skip(pageable.getOffset())
+            .limit(pageable.getPageSize())
+            .map(this::toDto)
+            .toList();
+        return new PageImpl<>(rows, pageable, open.size());
+    }
+
+    /** QA D1390: a search reads its whole window, so the window is bounded; refused, never cut. */
+    private static void requireSearchWindow(LocalDate start, LocalDate end) {
+        if (start.plusDays(MAX_SEARCH_DAYS).isBefore(end)) {
+            throw new FieldBusinessException("to", "slot.search.tooLong", MAX_SEARCH_DAYS);
+        }
+    }
+
+    /**
+     * Every slot of the window that can be offered now, earliest first (id
+     * breaks ties, so a page boundary is the same on every read). QA D1013:
+     * a desk, portal or referral booking takes the clinician's time without
+     * touching the slot rows, so a slot the clinician is already booked over
+     * is not offered (one read per clinician and day). QA D1390: read whole
+     * and filtered BEFORE any cut, so a count or a page covers every row.
+     */
+    private List<AppointmentSlot> openSlots(UUID departmentId, UUID staffId, UUID visitTypeId,
+                                            LocalDate start, LocalDate end) {
+        UUID hospitalId = requireHospital();
+        LocalDateTime now = LocalDateTime.now(clock);
+        Map<String, List<Appointment>> booked = new HashMap<>();
         return slotRepository.searchOpen(
                 hospitalId, departmentId, staffId, visitTypeId, start, end,
                 // Never offer a slot in the past, even on today's date.
-                now, now, PageRequest.of(0, capped))
+                now, now, Pageable.unpaged())
             .stream()
-            .map(this::toDto)
+            .filter(slot -> !clinicianBookedOver(slot, booked))
+            .sorted(Comparator.comparing(AppointmentSlot::getStartAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(AppointmentSlot::getId, Comparator.nullsLast(Comparator.naturalOrder())))
             .toList();
+    }
+
+    /**
+     * QA D1013: whether the slot's clinician already holds an appointment over
+     * the slot's time, made by any path (the desk, the patient portal, a
+     * referral, the check-out follow-up), other than the slot's own. The
+     * inventory used to know only about bookings made through it, so a
+     * waitlist offer sold a time the desk had already given away, and the
+     * clinician had two patients at 09:20.
+     */
+    private boolean clinicianBookedOver(AppointmentSlot slot, Map<String, List<Appointment>> cache) {
+        Staff staff = slot.getStaff();
+        if (staff == null || staff.getId() == null) {
+            return false;
+        }
+        List<Appointment> sameDay = cache.computeIfAbsent(staff.getId() + "|" + slot.getSlotDate(),
+            k -> appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), slot.getSlotDate()));
+        UUID own = slot.getAppointment() != null ? slot.getAppointment().getId() : null;
+        return AppointmentSlotRules.overlapsHeldSlot(sameDay, own, slot.getStartAt(), slot.getEndAt());
+    }
+
+    /** QA D1013: refuses a slot whose clinician is already booked over its time, in the desk's words. */
+    private void requireClinicianFree(AppointmentSlot slot) {
+        if (clinicianBookedOver(slot, new HashMap<>())) {
+            // QA D1367 class (round 31): the slot is named, as every other slot refusal is about it.
+            throw new com.example.hms.exception.FieldBusinessException("slotId", "appointment.staff.unavailable",
+                slot.getStaff().getId(),
+                DisplayDates.date(slot.getSlotDate()), DisplayDates.time(slot.getStartAt().toLocalTime()),
+                DisplayDates.time(slot.getEndAt().toLocalTime()));
+        }
     }
 
     @Override
     @Transactional
     public AppointmentSlotDTO hold(UUID slotId, int holdMinutes) {
         AppointmentSlot slot = loadScoped(slotId);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
 
         if (!slot.isOfferable(now)) {
-            throw new BusinessException("That slot is no longer available.");
+            throw new BusinessException(SLOT_UNAVAILABLE);
         }
         if (slot.getStartAt().isBefore(now)) {
-            throw new BusinessException("That slot is in the past.");
+            throw new BusinessException(SLOT_IN_PAST);
         }
+        // QA D1013: a waitlist offer holds the slot first; never hold a time
+        // the clinician is already booked over.
+        requireClinicianFree(slot);
 
         int minutes = holdMinutes > 0 ? holdMinutes : 10;
         slot.setStatus(SlotStatus.HELD);
@@ -172,8 +274,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         if (slot.getStatus() == SlotStatus.BOOKED) {
             // Releasing a booked slot would silently strand the appointment
             // pointing at it. Cancelling the appointment is the way back.
-            throw new BusinessException(
-                "That slot is booked. Cancel the appointment to free it.");
+            throw new BusinessException("slot.booked.release");
         }
         clearHold(slot);
         slot.setStatus(SlotStatus.OPEN);
@@ -185,8 +286,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     public AppointmentSlotDTO block(UUID slotId, String reason) {
         AppointmentSlot slot = loadScoped(slotId);
         if (slot.getStatus() == SlotStatus.BOOKED) {
-            throw new BusinessException(
-                "That slot is booked. Cancel the appointment before blocking the time.");
+            throw new BusinessException("slot.booked.block");
         }
         clearHold(slot);
         slot.setStatus(SlotStatus.BLOCKED);
@@ -198,7 +298,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     @Transactional
     public int reclaimExpiredHolds() {
         List<AppointmentSlot> expired =
-            slotRepository.findByStatusAndHeldUntilBefore(SlotStatus.HELD, LocalDateTime.now());
+            slotRepository.findByStatusAndHeldUntilBefore(SlotStatus.HELD, LocalDateTime.now(clock));
         for (AppointmentSlot slot : expired) {
             clearHold(slot);
             slot.setStatus(SlotStatus.OPEN);
@@ -214,7 +314,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     @Transactional
     public AppointmentSlotDTO book(UUID slotId, UUID patientId, String reason) {
         AppointmentSlot slot = loadScoped(slotId);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         UUID currentUserId = roleValidator.getCurrentUserId();
 
         // A live hold placed by the caller is exactly the state booking is
@@ -224,30 +324,33 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
             && slot.getHeldUntil().isAfter(now)
             && Objects.equals(slot.getHeldByUserId(), currentUserId);
         if (!slot.isOfferable(now) && !heldByCaller) {
-            throw new BusinessException("That slot is no longer available.");
+            throw new BusinessException(SLOT_UNAVAILABLE);
         }
         if (slot.getStartAt().isBefore(now)) {
-            throw new BusinessException("That slot is in the past.");
+            throw new BusinessException(SLOT_IN_PAST);
         }
+        // QA D1013: the same overlap rule as every other booking path, checked
+        // again at booking (an accepted waitlist offer books here), since the
+        // desk may have booked the clinician while the slot was held.
+        requireClinicianFree(slot);
 
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         UUID hospitalId = slot.getHospital().getId();
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("The patient is not registered at this hospital.");
+            throw new BusinessException("slot.patient.notRegistered");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
 
         Staff staff = slot.getStaff();
         if (staff.getUser() == null) {
-            throw new BusinessException(
-                "The slot's clinician has no user account, so an appointment cannot be created.");
+            throw new BusinessException("slot.clinician.noUser");
         }
         // Same contract as AppointmentServiceImpl: the assignment is mandatory,
         // and a missing one is a refusal, not a degraded appointment.
         UserRoleHospitalAssignment assignment = assignmentRepository
-            .findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId)
-            .orElseThrow(() -> new BusinessException(
-                "The clinician has no role assignment at this hospital."));
+            .findActiveStaffAssignment(staff.getUser().getId(), hospitalId)
+            .orElseThrow(() -> new BusinessException("slot.clinician.noAssignment"));
 
         Appointment appointment = appointmentRepository.save(Appointment.builder()
             .patient(patient)
@@ -260,6 +363,8 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
             .endTime(slot.getEndAt().toLocalTime())
             .status(AppointmentStatus.SCHEDULED)
             .reason(reason == null || reason.isBlank() ? defaultReason(slot) : reason)
+            // QA D1073: a slot or waitlist booking names who made it, as a desk booking does.
+            .createdBy(currentUserId != null ? userRepository.findById(currentUserId).orElse(null) : null)
             .build());
 
         clearHold(slot);
@@ -272,7 +377,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
             // rollback takes the appointment insert with it.
             return toDto(slotRepository.saveAndFlush(slot));
         } catch (OptimisticLockingFailureException e) {
-            throw new BusinessException("That slot was just taken. Pick another time.");
+            throw new BusinessException("slot.justTaken");
         }
     }
 
@@ -286,7 +391,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
                 clearHold(slot);
                 // A slot whose time has passed must not re-enter circulation:
                 // searchOpen would never return it, but OPEN would misstate it.
-                slot.setStatus(slot.getStartAt().isBefore(LocalDateTime.now())
+                slot.setStatus(slot.getStartAt().isBefore(LocalDateTime.now(clock))
                     ? SlotStatus.BLOCKED : SlotStatus.OPEN);
                 if (slot.getStatus() == SlotStatus.BLOCKED) {
                     slot.setBlockedReason("Appointment cancelled after the slot time passed");
@@ -317,18 +422,18 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         if (hospitalId == null) {
             // Slot inventory is inherently per-hospital: a super-admin has no
             // rota of their own, so there is nothing sensible to answer.
-            throw new BusinessException("An active hospital is required to work with slots.");
+            throw new BusinessException("slot.hospitalRequired");
         }
         return hospitalId;
     }
 
     private AppointmentSlot loadScoped(UUID slotId) {
         AppointmentSlot slot = slotRepository.findById(slotId)
-            .orElseThrow(() -> new ResourceNotFoundException("Slot not found with ID: " + slotId));
+            .orElseThrow(() -> new ResourceNotFoundException("slot.notFound", slotId));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null && (slot.getHospital() == null
             || !hospitalId.equals(slot.getHospital().getId()))) {
-            throw new ResourceNotFoundException("Slot not found with ID: " + slotId);
+            throw new ResourceNotFoundException("slot.notFound", slotId);
         }
         return slot;
     }

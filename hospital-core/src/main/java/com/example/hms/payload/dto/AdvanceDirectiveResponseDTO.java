@@ -35,4 +35,6 @@ public class AdvanceDirectiveResponseDTO {
     private String documentLocation;
     private String sourceSystem;
     private LocalDateTime lastReviewedAt;
+    /** QA D1148: why the directive was revoked. */
+    private String revocationReason;
 }

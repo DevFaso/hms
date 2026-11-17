@@ -5,6 +5,7 @@ import com.example.hms.model.PatientProblem;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,23 +28,47 @@ import java.util.UUID;
  *                                suppress advisories (e.g. don't suggest
  *                                a malaria workup if malaria is already
  *                                an active problem and being treated)
- * @param activePrescriptions     non-terminal prescriptions, used by the
+ * @param activePrescriptions     orders in force (QA D1515), used by the
  *                                malaria rule to avoid double-dispatching
  *                                an anti-malarial workup
+ * @param estimatedDueDate        the due date of the patient's current
+ *                                pregnancy (ultrasound date first, then the
+ *                                recorded one, then LMP + 280 days), or
+ *                                {@code null} when none is recorded (QA D971)
+ * @param postpartumBloodPressures the blood pressures of the postpartum
+ *                                observations in the engine's window, most
+ *                                recent first (QA D1890); they are not vital
+ *                                sets, so the other rules never see them
  */
 public record BpaRuleContext(
     Patient patient,
     UUID hospitalId,
     List<PatientVitalSign> recentVitals,
     List<PatientProblem> activeProblems,
-    List<Prescription> activePrescriptions
+    List<Prescription> activePrescriptions,
+    LocalDate estimatedDueDate,
+    List<com.example.hms.service.vitals.SevereHypertension.Reading> postpartumBloodPressures
 ) {
+
+    /** A context with no postpartum observation readings. */
+    public BpaRuleContext(Patient patient, UUID hospitalId, List<PatientVitalSign> recentVitals,
+                          List<PatientProblem> activeProblems, List<Prescription> activePrescriptions,
+                          LocalDate estimatedDueDate) {
+        this(patient, hospitalId, recentVitals, activeProblems, activePrescriptions, estimatedDueDate, List.of());
+    }
+
+    /** A context with no recorded pregnancy. */
+    public BpaRuleContext(Patient patient, UUID hospitalId, List<PatientVitalSign> recentVitals,
+                          List<PatientProblem> activeProblems, List<Prescription> activePrescriptions) {
+        this(patient, hospitalId, recentVitals, activeProblems, activePrescriptions, null);
+    }
 
     /** Defensive copies + null guards keep the record fully immutable. */
     public BpaRuleContext {
         recentVitals = recentVitals == null ? List.of() : List.copyOf(recentVitals);
         activeProblems = activeProblems == null ? List.of() : List.copyOf(activeProblems);
         activePrescriptions = activePrescriptions == null ? List.of() : List.copyOf(activePrescriptions);
+        postpartumBloodPressures = postpartumBloodPressures == null ? List.of() : List.copyOf(postpartumBloodPressures);
     }
 
     /** True when the patient context is fully populated. */

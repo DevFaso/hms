@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   Input,
   OnInit,
   computed,
@@ -18,10 +19,20 @@ import {
   IntakeOutputSummary,
   OUTPUT_ROUTES,
 } from '../../services/fluid-balance.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../../shared/date-utils';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 
 type WindowPreset = '24h' | '48h' | '7d';
 
 const WINDOW_HOURS: Record<WindowPreset, number> = { '24h': 24, '48h': 48, '7d': 168 };
+
+/** QA D1279: the two required fields of the entry dialog, in reading order. */
+const IO_ROUTE_ID = 'io-route';
+const IO_VOLUME_ID = 'io-volume';
+const IO_FIELDS = [IO_ROUTE_ID, IO_VOLUME_ID];
 
 /**
  * Fluid intake/output per patient (P3 #18, flowsheets/I&O) — the first
@@ -32,7 +43,14 @@ const WINDOW_HOURS: Record<WindowPreset, number> = { '24h': 24, '48h': 48, '7d':
 @Component({
   selector: 'app-fluid-balance-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [
+    ModalDialogDirective,
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './fluid-balance-tab.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './fluid-balance-tab.component.scss',
@@ -43,6 +61,7 @@ export class FluidBalanceTabComponent implements OnInit {
   private readonly fluidService = inject(FluidBalanceService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly intakeRoutes = INTAKE_ROUTES;
   readonly outputRoutes = OUTPUT_ROUTES;
@@ -70,7 +89,11 @@ export class FluidBalanceTabComponent implements OnInit {
     this.loading.set(true);
     this.error.set('');
     const hours = WINDOW_HOURS[this.windowPreset()];
-    const from = this.toLocalDateTimeString(new Date(Date.now() - hours * 3600 * 1000));
+    // #948 review: observation times are stored on the server's UTC clock
+    // (entered through toServerDateTime, read back through serverTime), so
+    // the window start is sent on that clock too. Sent as the local wall
+    // clock, a 24 h window covered 28 h in New York and 22 h east of UTC.
+    const from = new Date(Date.now() - hours * 3600 * 1000).toISOString().slice(0, 19);
     this.fluidService.getSummary(this.patientId, { from }).subscribe({
       next: (summary) => {
         this.summary.set(summary);
@@ -101,15 +124,47 @@ export class FluidBalanceTabComponent implements OnInit {
     this.showModal.set(false);
   }
 
+  /**
+   * QA D1279: a volume typed but not positive (0, -5) is not blank, so the
+   * guard's required check lets it through; this is its reason.
+   */
+  volumeRefusal(): string | null {
+    const volume = this.formVolume();
+    if (volume === null || (volume as unknown) === '' || volume > 0) return null;
+    return this.translate.instant('FLUID_BALANCE.VOLUME_REQUIRED');
+  }
+
   submit(): void {
     const route = this.formRoute();
     const volume = this.formVolume();
-    if (!route) {
-      this.toast.error(this.translate.instant('FLUID_BALANCE.ROUTE_REQUIRED'));
+    // QA D1279 (D1256 class): every blank required field is named and marked
+    // at once, never one per press (the guard on "Enregistrer" says the same
+    // before this runs; this holds for any other caller).
+    const blank = [
+      ...(route ? [] : [IO_ROUTE_ID]),
+      ...(volume === null || (volume as unknown) === '' ? [IO_VOLUME_ID] : []),
+    ];
+    if (!route || blank.length > 0) {
+      refuseFields(
+        this.host.nativeElement,
+        blank,
+        IO_FIELDS,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
+      const labels = blank.map((id) =>
+        this.translate.instant(
+          id === IO_ROUTE_ID ? 'FLUID_BALANCE.FIELD_ROUTE' : 'FLUID_BALANCE.FIELD_VOLUME',
+        ),
+      );
+      this.toast.error(
+        this.translate.instant('COMMON.MISSING_REQUIRED_FIELDS', { fields: labels.join(', ') }),
+      );
       return;
     }
     if (!volume || volume <= 0) {
-      this.toast.error(this.translate.instant('FLUID_BALANCE.VOLUME_REQUIRED'));
+      const message = this.translate.instant('FLUID_BALANCE.VOLUME_REQUIRED');
+      refuseFields(this.host.nativeElement, [IO_VOLUME_ID], IO_FIELDS, message);
+      this.toast.error(message);
       return;
     }
     if (this.saving()) return;
@@ -119,7 +174,8 @@ export class FluidBalanceTabComponent implements OnInit {
       .record(this.patientId, {
         route,
         volumeMl: volume,
-        observationTime: this.formTime() || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        observationTime: this.formTime() ? toServerDateTime(this.formTime()) : undefined,
         notes: this.formNotes() || undefined,
       })
       .subscribe({
@@ -141,15 +197,5 @@ export class FluidBalanceTabComponent implements OnInit {
 
   routeLabel(route: IntakeOutputRoute): string {
     return this.translate.instant(`FLUID_BALANCE.ROUTE_${route}`);
-  }
-
-  /** yyyy-MM-ddTHH:mm in LOCAL time — the backend field is a LocalDateTime,
-   *  so an ISO/UTC "Z" string would fail to parse (or worse, shift the day). */
-  private toLocalDateTimeString(date: Date): string {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return (
-      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-      `T${pad(date.getHours())}:${pad(date.getMinutes())}:00`
-    );
   }
 }

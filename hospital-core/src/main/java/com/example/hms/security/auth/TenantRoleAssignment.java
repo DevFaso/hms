@@ -1,5 +1,6 @@
 package com.example.hms.security.auth;
 
+import com.example.hms.enums.FacilityType;
 import java.util.UUID;
 
 /**
@@ -10,6 +11,21 @@ public record TenantRoleAssignment(
     UUID organizationId,
     String roleCode,
     String roleName,
-    boolean active
+    boolean active,
+    // The type of the assignment's facility (null for a global row), read from
+    // the hospital already fetched with the assignment: the provider
+    // confinement costs no query of its own (provider plan section 3.3).
+    FacilityType facilityType
 ) {
+
+    /**
+     * A row at a facility must say which kind of facility it is: an unknown
+     * type would read as "not a provider" and leave the caller unconfined
+     * (provider plan section 3.3), so it is refused here instead.
+     */
+    public TenantRoleAssignment {
+        if (hospitalId != null && facilityType == null) {
+            throw new IllegalArgumentException("An assignment at a facility needs its facility type");
+        }
+    }
 }

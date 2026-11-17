@@ -1,6 +1,7 @@
 package com.example.hms.model.pharmacy;
 
 import com.example.hms.enums.PharmacyPaymentMethod;
+import com.example.hms.enums.PharmacyPaymentStatus;
 import com.example.hms.model.BaseEntity;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -86,6 +87,15 @@ public class PharmacyPayment extends BaseEntity {
     @Column(name = "reference_number", length = 120)
     private String referenceNumber;
 
+    /**
+     * QA D1032: the readable receipt number ({@code CODE-PH-YYYY-000001}),
+     * allocated once when the payment is recorded and never recomputed, so a
+     * reprint shows the number first printed. Rows recorded before V246 were
+     * numbered by the migration in the order they were taken.
+     */
+    @Column(name = "receipt_number", length = 40)
+    private String receiptNumber;
+
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "received_by", nullable = false,
@@ -95,4 +105,21 @@ public class PharmacyPayment extends BaseEntity {
     @Size(max = 1000)
     @Column(name = "notes", length = 1000)
     private String notes;
+
+    /** QA D404: VOIDED once the dispense it paid for is cancelled (V213). */
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    @Builder.Default
+    private PharmacyPaymentStatus status = PharmacyPaymentStatus.POSTED;
+
+    @Column(name = "voided_at")
+    private java.time.LocalDateTime voidedAt;
+
+    @Column(name = "voided_by")
+    private java.util.UUID voidedBy;
+
+    @Size(max = 255)
+    @Column(name = "void_reason", length = 255)
+    private String voidReason;
 }

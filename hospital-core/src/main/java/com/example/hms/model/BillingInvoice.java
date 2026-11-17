@@ -27,7 +27,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.EqualsAndHashCode;
-import org.hibernate.annotations.Check;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
 
@@ -42,16 +41,15 @@ import java.util.Set;
     name = "billing_invoices",
     schema = "billing",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_bi_invoice_number", columnNames = "invoice_number")
+        @UniqueConstraint(name = "uk_bi_hospital_invoice_number", columnNames = {"hospital_id", "invoice_number"})
     },
     indexes = {
         @Index(name = "idx_bi_patient", columnList = "patient_id"),
         @Index(name = "idx_bi_hospital", columnList = "hospital_id")
     }
 )
-@Check(constraints = "amount_paid <= total_amount")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-@ToString(exclude = {"patient", "hospital", "encounter", "invoiceItems"})
+@ToString(exclude = {"patient", "hospital", "encounter", "invoiceItems", "creditedToInvoice", "createdByUser"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class BillingInvoice extends BaseEntity {
 
@@ -98,6 +96,18 @@ public class BillingInvoice extends BaseEntity {
     @Column(name = "notes", length = 2048)
     private String notes;
 
+    /**
+     * QA D1901: when the server wrote {@link #notes} (a checked-out visit's
+     * draft, a birth's charge), its message code and arguments (V301), so
+     * each reader sees it in their own language; {@link #notes} keeps the
+     * French copy. Null for notes a person typed, which are shown as typed.
+     */
+    @Column(name = "notes_code", length = 120)
+    private String notesCode;
+
+    @Column(name = "notes_args", columnDefinition = "TEXT")
+    private String notesArgs;
+
     @OneToMany(mappedBy = "billingInvoice",
         fetch = FetchType.LAZY,
         cascade = CascadeType.ALL,
@@ -115,6 +125,53 @@ public class BillingInvoice extends BaseEntity {
     @Column(name = "updated_by")
     private java.util.UUID updatedBy;
 
+    /**
+     * The key the portal sends with a create (QA D94): a retry or a double
+     * submit carrying the same key returns the invoice already created.
+     * Unique per hospital when present (V190).
+     */
+    @Column(name = "client_request_id")
+    private java.util.UUID clientRequestId;
+
+    /** QA D210: the paid copay taken at check-in, credited to the visit invoice once it is issued (V200). */
+    @Builder.Default
+    @Column(name = "check_in_copay", nullable = false)
+    private boolean checkInCopay = false;
+
+    /** QA D428: the visit invoice a folded check-in copay was credited to (V213). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "credited_to_invoice_id", foreignKey = @ForeignKey(name = "fk_bi_credited_to"))
+    private BillingInvoice creditedToInvoice;
+
+    /** QA D428: the user who created the invoice, read through {@link #createdBy}. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", insertable = false, updatable = false)
+    private User createdByUser;
+
+    /**
+     * QA D1069: why an issued invoice was cancelled, when and by whom (V251).
+     * A staff cancellation requires the reason; a check-in copay folded into
+     * its visit invoice is closed by {@link #creditedToInvoice} instead.
+     */
+    @Column(name = "cancel_reason", length = 500)
+    private String cancelReason;
+
+    /**
+     * QA D1901: the code and arguments of a reason the server wrote (a copay
+     * carried onto its visit invoice), V301; null for a reason a person typed.
+     */
+    @Column(name = "cancel_reason_code", length = 120)
+    private String cancelReasonCode;
+
+    @Column(name = "cancel_reason_args", columnDefinition = "TEXT")
+    private String cancelReasonArgs;
+
+    @Column(name = "cancelled_at")
+    private java.time.LocalDateTime cancelledAt;
+
+    @Column(name = "cancelled_by")
+    private java.util.UUID cancelledBy;
+
     /* ---------- Helpers ---------- */
 
     public void addItem(InvoiceItem item) {
@@ -129,13 +186,18 @@ public class BillingInvoice extends BaseEntity {
         recomputeTotals();
     }
 
+    /**
+     * Total = sum of the lines held in memory. Used only by {@link #addItem}
+     * and {@link #removeItem}; the service recomputes from the database
+     * ({@code BillingInvoiceService.recomputeAndPersistTotals}), and the
+     * lifecycle callbacks no longer call it (QA D72).
+     */
     private void recomputeTotals() {
         BigDecimal sum = invoiceItems.stream()
-            .map(it -> it.getTotalPrice() != null ? it.getTotalPrice() : BigDecimal.ZERO)
+            .map(BillingInvoice::lineTotal)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         totalAmount = sum.setScale(2, RoundingMode.HALF_UP);
         if (amountPaid == null) amountPaid = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        // Optional: auto-status adjustments
         if (amountPaid.compareTo(BigDecimal.ZERO) == 0 && totalAmount.compareTo(BigDecimal.ZERO) > 0) {
             status = InvoiceStatus.DRAFT;
         } else if (amountPaid.compareTo(totalAmount) >= 0 && totalAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -145,6 +207,14 @@ public class BillingInvoice extends BaseEntity {
         }
     }
 
+    private static BigDecimal lineTotal(InvoiceItem item) {
+        if (item.getTotalPrice() != null) return item.getTotalPrice();
+        if (item.getUnitPrice() != null && item.getQuantity() != null) {
+            return item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+        }
+        return BigDecimal.ZERO;
+    }
+
     @PrePersist
     public void prePersist() {
         if (invoiceDate == null) invoiceDate = LocalDate.now();
@@ -152,8 +222,9 @@ public class BillingInvoice extends BaseEntity {
         if (amountPaid == null) amountPaid = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         if (totalAmount == null) totalAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         if (status == null) status = InvoiceStatus.DRAFT;
-        // Safety: totals reflect items
-        recomputeTotals();
+        // QA D72: no recompute here. It summed the in-memory line collection,
+        // which is empty on a create and unloaded on an update, so it wrote
+        // 0.00 over every total. The service owns the total.
         if (dueDate.isBefore(invoiceDate)) {
             throw new IllegalStateException("dueDate cannot be before invoiceDate");
         }
@@ -161,7 +232,6 @@ public class BillingInvoice extends BaseEntity {
 
     @PreUpdate
     public void preUpdate() {
-        recomputeTotals();
         if (dueDate.isBefore(invoiceDate)) {
             throw new IllegalStateException("dueDate cannot be before invoiceDate");
         }

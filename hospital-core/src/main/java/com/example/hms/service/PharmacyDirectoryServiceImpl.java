@@ -38,20 +38,25 @@ public class PharmacyDirectoryServiceImpl implements PharmacyDirectoryService {
     @Transactional(readOnly = true)
     public List<PharmacyLocationResponseDTO> listPatientPharmacies(UUID patientId, UUID hospitalId) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required to load pharmacy options.");
+            throw new BusinessException("pharmacy.r7.optionsPatientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital context is required to load pharmacy options.");
+            throw new BusinessException("pharmacy.r7.optionsHospitalRequired");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("Patient is not registered in the requested hospital context.");
+            // QA D1870 (round 53): a patient not registered here is "not found", like GET /patients/{id};
+            // a distinct answer told a caller holding the id that the patient exists at another hospital.
+            throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseGet(patient::getPrimaryHospital);
+        // A clinical destination only: a provider's id (or an unknown one) is
+        // not found, exactly as at every other destination, never quietly
+        // replaced by the patient's primary hospital.
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         Map<UUID, PharmacyLocationResponseDTO> options = new LinkedHashMap<>();
         addPreferredPharmacy(options, patient);

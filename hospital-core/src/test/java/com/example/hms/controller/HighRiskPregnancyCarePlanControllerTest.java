@@ -65,9 +65,11 @@ class HighRiskPregnancyCarePlanControllerTest {
     void createPlanReturnsCreatedResponse() throws Exception {
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
+        // QA D1318 class (round 29, request changed): a plan with nothing planned is refused at the edge now.
         HighRiskPregnancyCarePlanRequestDTO request = HighRiskPregnancyCarePlanRequestDTO.builder()
             .patientId(patientId)
             .hospitalId(hospitalId)
+            .overallNotes("Suivi rapproché")
             .build();
 
         HighRiskPregnancyCarePlanResponseDTO response = HighRiskPregnancyCarePlanResponseDTO.builder()
@@ -139,9 +141,11 @@ class HighRiskPregnancyCarePlanControllerTest {
     @Test
     void updatePlanDelegatesToService() throws Exception {
         UUID planId = UUID.randomUUID();
+        // QA D1318 class (round 29, request changed): an edit with nothing to change is refused at the edge now.
         HighRiskPregnancyCarePlanRequestDTO request = HighRiskPregnancyCarePlanRequestDTO.builder()
             .patientId(UUID.randomUUID())
             .hospitalId(UUID.randomUUID())
+            .overallNotes("Suivi rapproché")
             .build();
 
         HighRiskPregnancyCarePlanResponseDTO response = HighRiskPregnancyCarePlanResponseDTO.builder()

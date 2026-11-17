@@ -116,7 +116,7 @@ class SmartPhraseServiceImplTest {
 
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("GLOBAL");
+                .extracting("messageKey").isEqualTo("smartPhrase.globalNoOwner");
             verify(repository, never()).save(any());
         }
 
@@ -129,7 +129,7 @@ class SmartPhraseServiceImplTest {
 
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("hospitalId");
+                .extracting("messageKey").isEqualTo("smartPhrase.hospitalRequired");
         }
 
         @Test
@@ -141,7 +141,7 @@ class SmartPhraseServiceImplTest {
 
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("ownerUserId");
+                .extracting("messageKey").isEqualTo("smartPhrase.ownerRequired");
         }
 
         @Test
@@ -329,7 +329,7 @@ class SmartPhraseServiceImplTest {
             when(repository.findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwnerIsNull(
                 ".new", SmartPhraseScope.HOSPITAL, hospitalId))
                 .thenReturn(Optional.empty());
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(repository.save(any(SmartPhrase.class))).thenAnswer(inv -> inv.getArgument(0));
 
             SmartPhraseRequestDTO req = SmartPhraseRequestDTO.builder()
@@ -464,13 +464,13 @@ class SmartPhraseServiceImplTest {
                 .scope(SmartPhraseScope.HOSPITAL).build();
             assertThatThrownBy(() -> service.create(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("hospitalId");
+                .extracting("messageKey").isEqualTo("smartPhrase.hospitalRequired");
         }
 
         @Test
         @DisplayName("HOSPITAL scope: hospital not found yields ResourceNotFoundException")
         void hospitalNotFound() {
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
             when(repository.findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwnerIsNull(
                 ".x", SmartPhraseScope.HOSPITAL, hospitalId))
                 .thenReturn(Optional.empty());

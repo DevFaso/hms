@@ -23,9 +23,12 @@ public interface EncounterRepository
     @org.springframework.data.jpa.repository.Query("""
         SELECT e FROM Encounter e
         JOIN FETCH e.patient p
-        JOIN FETCH p.user
+        JOIN FETCH p.user pu
+        LEFT JOIN FETCH pu.patientProfile
+        LEFT JOIN FETCH pu.staffProfile
         LEFT JOIN FETCH e.staff s
-        LEFT JOIN FETCH s.user
+        LEFT JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.hospital h
         LEFT JOIN FETCH e.appointment a
@@ -37,9 +40,12 @@ public interface EncounterRepository
     @org.springframework.data.jpa.repository.Query("""
         SELECT e FROM Encounter e
         JOIN FETCH e.patient p
-        JOIN FETCH p.user
+        JOIN FETCH p.user pu
+        LEFT JOIN FETCH pu.patientProfile
+        LEFT JOIN FETCH pu.staffProfile
         JOIN FETCH e.staff s
-        JOIN FETCH s.user
+        JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.hospital h
         LEFT JOIN FETCH e.appointment a
@@ -74,6 +80,9 @@ public interface EncounterRepository
 
     boolean existsById(UUID id);
 
+    /** Whether any encounter was recorded under this assignment (the attending's). */
+    boolean existsByAssignment_Id(UUID assignmentId);
+
     // Duplicate guards
     boolean existsByHospital_IdAndPatient_IdAndEncounterDate(
         UUID hospitalId, UUID patientId, LocalDateTime encounterDate
@@ -90,6 +99,24 @@ public interface EncounterRepository
     // Find active (in-progress) encounters for a specific doctor — used for "roomed patients"
     List<Encounter> findByStaff_IdAndStatus(UUID staffId, EncounterStatus status);
 
+    /**
+     * The patient's visits still open, with the clinician who holds each: the
+     * portal's care team and message recipients (QA D115). The patient's own
+     * chart across hospitals — ownership is the bound, not a hospital scope.
+     */
+    @Query("""
+        SELECT e FROM Encounter e
+        JOIN FETCH e.staff s
+        JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
+        LEFT JOIN FETCH e.hospital
+        WHERE e.patient.id = :patientId
+          AND e.status NOT IN :closed
+        ORDER BY e.encounterDate DESC
+    """)
+    List<Encounter> findOpenWithClinicianByPatientId(@Param("patientId") UUID patientId,
+                                                     @Param("closed") Collection<EncounterStatus> closed);
+
     // Find the most recent encounter for a patient at a hospital in a given status
     Optional<Encounter> findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
         UUID patientId, UUID hospitalId, EncounterStatus status);
@@ -97,25 +124,43 @@ public interface EncounterRepository
     @Query("SELECT e FROM Encounter e WHERE e.appointment.id IN :appointmentIds")
     List<Encounter> findByAppointmentIdIn(@Param("appointmentIds") List<UUID> appointmentIds);
 
-    @Query("SELECT e FROM Encounter e WHERE e.hospital.id = :hospitalId AND e.appointment IS NULL AND e.encounterDate >= :from AND e.encounterDate < :to")
+    /**
+     * The day's walk-ins: encounters with no appointment. QA D791: a
+     * prescription's anchor has no appointment either, and is not a walk-in.
+     */
+    @Query("SELECT e FROM Encounter e WHERE e.hospital.id = :hospitalId AND e.appointment IS NULL AND e.encounterDate >= :from AND e.encounterDate < :to AND " + NOT_PRESCRIPTION_ANCHOR)
     List<Encounter> findWalkInsForHospitalAndPeriod(@Param("hospitalId") UUID hospitalId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /**
+     * QA D1021: the visits of a hospital still open ({@code open}) that began
+     * before {@code before}, walk-ins and booked ones alike. A visit that
+     * arrived at 23:57 stays on the desk's queue after midnight until it is
+     * seen, closed or marked left-without-being-seen.
+     */
+    @Query("SELECT e FROM Encounter e WHERE e.hospital.id = :hospitalId AND e.encounterDate < :before"
+        + " AND e.status IN :open AND " + NOT_PRESCRIPTION_ANCHOR)
+    List<Encounter> findOpenStartedBefore(@Param("hospitalId") UUID hospitalId,
+                                          @Param("before") LocalDateTime before,
+                                          @Param("open") Collection<EncounterStatus> open);
 
     /**
      * Fetch all encounters for a hospital within a date range, eagerly loading
      * patient, staff (with user), department, and appointment to avoid N+1 (MVP 5 tracker board).
+     * QA D791: a prescription's anchor is not on the board (it read as a completed visit).
      */
     @Query("""
         SELECT DISTINCT e FROM Encounter e
         JOIN FETCH e.patient p
         LEFT JOIN FETCH p.hospitalRegistrations
         LEFT JOIN FETCH e.staff s
-        LEFT JOIN FETCH s.user
+        LEFT JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.appointment a
         WHERE e.hospital.id = :hospitalId
           AND e.encounterDate >= :from
           AND e.encounterDate < :to
-    """)
+          AND """ + NOT_PRESCRIPTION_ANCHOR)
     List<Encounter> findAllByHospitalAndDateRange(
             @Param("hospitalId") UUID hospitalId,
             @Param("from") LocalDateTime from,
@@ -131,7 +176,8 @@ public interface EncounterRepository
         JOIN FETCH e.patient p
         LEFT JOIN FETCH p.hospitalRegistrations
         LEFT JOIN FETCH e.staff s
-        LEFT JOIN FETCH s.user
+        LEFT JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.appointment a
         WHERE e.hospital.id = :hospitalId
@@ -150,6 +196,38 @@ public interface EncounterRepository
     List<Encounter> findByPatient_IdAndHospital_IdAndStatusNotIn(
             UUID patientId, UUID hospitalId, Collection<EncounterStatus> statuses);
 
+    /** An admission's own open encounters (QA D134): what its discharge closes. */
+    List<Encounter> findByAdmissionIdAndStatusNotIn(UUID admissionId, Collection<EncounterStatus> statuses);
+
+    /**
+     * The patient's open hospital stays at this hospital, latest first (QA
+     * D136, D414): what a new order with no encounter named is filed on. QA
+     * D1393: an encounter whose admission has ended ({@code endedStays}) is no
+     * open stay, whatever its own status says. Cancelled stays left their
+     * encounters IN_PROGRESS, so every later order landed on the stay that
+     * never happened and the pharmacy refused it. {@code admissionId} is a bare
+     * column with no key, so a missing admission row does not end a stay.
+     */
+    @Query("""
+        SELECT e FROM Encounter e
+        WHERE e.patient.id = :patientId
+          AND e.hospital.id = :hospitalId
+          AND e.admissionId IS NOT NULL
+          AND e.status NOT IN :closedStatuses
+          AND NOT EXISTS (
+              SELECT a.id FROM Admission a
+              WHERE a.id = e.admissionId AND a.status IN :endedStays)
+        ORDER BY e.encounterDate DESC, e.id DESC
+    """)
+    List<Encounter> findOpenStayEncounters(
+            @Param("patientId") UUID patientId,
+            @Param("hospitalId") UUID hospitalId,
+            @Param("closedStatuses") Collection<EncounterStatus> closedStatuses,
+            @Param("endedStays") Collection<com.example.hms.enums.AdmissionStatus> endedStays);
+
+    /** An admission's own encounter, most recent first (QA D135). */
+    Optional<Encounter> findFirstByAdmissionIdOrderByEncounterDateDesc(UUID admissionId);
+
     /**
      * Unpaged list of encounters for a patient at a specific hospital, eagerly fetching
      * associations to avoid N+1 (used by record sharing).
@@ -157,9 +235,12 @@ public interface EncounterRepository
     @Query("""
         SELECT e FROM Encounter e
         JOIN FETCH e.patient p
-        JOIN FETCH p.user
+        JOIN FETCH p.user pu
+        LEFT JOIN FETCH pu.patientProfile
+        LEFT JOIN FETCH pu.staffProfile
         LEFT JOIN FETCH e.staff s
-        LEFT JOIN FETCH s.user
+        LEFT JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.hospital h
         LEFT JOIN FETCH e.appointment a
@@ -176,44 +257,20 @@ public interface EncounterRepository
      * hospital) so we avoid N+1 lookups on the rendered rows. Sort + limit
      * are applied at the DB level via the {@link Pageable} argument.
      */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
-        "patient",
-        "staff",
-        "staff.user",
-        "department",
-        "hospital"
-    })
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
     Page<Encounter> findByPatient_IdOrderByEncounterDateDesc(UUID patientId, Pageable pageable);
 
     /** Hospital-scoped paged variant for the chart-review aggregator. */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
-        "patient",
-        "staff",
-        "staff.user",
-        "department",
-        "hospital"
-    })
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
     Page<Encounter> findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
         UUID patientId, UUID hospitalId, Pageable pageable);
 
     /** E9 #59e — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
-        "patient",
-        "staff",
-        "staff.user",
-        "department",
-        "hospital"
-    })
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
     List<Encounter> findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(UUID patientId, Collection<UUID> hospitalIds);
 
     /** E9 #60 — the paged sibling, for the chart review. */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
-        "patient",
-        "staff",
-        "staff.user",
-        "department",
-        "hospital"
-    })
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
     Page<Encounter> findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
         UUID patientId, Collection<UUID> hospitalIds, Pageable pageable);
 
@@ -254,6 +311,69 @@ public interface EncounterRepository
     /** Hospital-scoped tile count for the super-admin dashboard. */
     long countByHospital_Id(UUID hospitalId);
 
+    /**
+     * QA D759/D791: a prescription written outside any visit hangs on an
+     * encounter of its own ({@link Encounter#PRESCRIPTION_ANCHOR_NOTE}). It is
+     * bookkeeping, not a visit: everything that counts or lists visits leaves
+     * it out with this clause (the guard is {@code PrescriptionAnchorExclusionGuardTest}).
+     * A NULL note is a visit, so the clause is not a plain {@code <>}.
+     */
+    String NOT_PRESCRIPTION_ANCHOR =
+        "(e.notes IS NULL OR e.notes <> '" + Encounter.PRESCRIPTION_ANCHOR_NOTE + "')";
+
+    /** QA D791: the super-admin dashboard's visit count, platform-wide. */
+    @Query("SELECT COUNT(e) FROM Encounter e WHERE " + NOT_PRESCRIPTION_ANCHOR)
+    long countVisits();
+
+    /** QA D791: the super-admin dashboard's visit count at one hospital. */
+    @Query("SELECT COUNT(e) FROM Encounter e WHERE e.hospital.id = :hospitalId AND " + NOT_PRESCRIPTION_ANCHOR)
+    long countVisitsByHospitalId(@Param("hospitalId") UUID hospitalId);
+
+    /** QA D791: the encounter-activity report's rows, visits only. */
+    @Query(value = "SELECT e FROM Encounter e WHERE e.hospital.id = :hospitalId"
+            + " AND e.encounterDate BETWEEN :from AND :to AND " + NOT_PRESCRIPTION_ANCHOR,
+        countQuery = "SELECT COUNT(e) FROM Encounter e WHERE e.hospital.id = :hospitalId"
+            + " AND e.encounterDate BETWEEN :from AND :to AND " + NOT_PRESCRIPTION_ANCHOR)
+    Page<Encounter> findVisitsByHospitalAndDateBetween(@Param("hospitalId") UUID hospitalId,
+                                                       @Param("from") LocalDateTime from,
+                                                       @Param("to") LocalDateTime to,
+                                                       Pageable pageable);
+
+    /** QA D791: the chart review's Encounters tab ("Revue de dossier"), visits only, newest first. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
+    @Query(value = "SELECT e FROM Encounter e WHERE e.patient.id = :patientId AND " + NOT_PRESCRIPTION_ANCHOR
+            + " ORDER BY e.encounterDate DESC",
+        countQuery = "SELECT COUNT(e) FROM Encounter e WHERE e.patient.id = :patientId AND " + NOT_PRESCRIPTION_ANCHOR)
+    Page<Encounter> findVisitsByPatientId(@Param("patientId") UUID patientId, Pageable pageable);
+
+    /** QA D791: the same across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
+    @Query(value = "SELECT e FROM Encounter e WHERE e.patient.id = :patientId AND e.hospital.id IN :hospitalIds AND "
+            + NOT_PRESCRIPTION_ANCHOR + " ORDER BY e.encounterDate DESC",
+        countQuery = "SELECT COUNT(e) FROM Encounter e WHERE e.patient.id = :patientId AND e.hospital.id IN :hospitalIds AND "
+            + NOT_PRESCRIPTION_ANCHOR)
+    Page<Encounter> findVisitsByPatientIdAndHospitalIdIn(@Param("patientId") UUID patientId,
+                                                         @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                                         Pageable pageable);
+
     /** E8 #48 — every encounter of this patient here; the resolver applies the status/decay rule. */
     List<Encounter> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
+
+
+    /** QA CX-002: visits per department (the same definition as {@link #countVisits}). */
+    @Query("SELECT e.department.id AS ownerId, COUNT(e) AS total FROM Encounter e "
+        + "WHERE e.department IS NOT NULL AND " + NOT_PRESCRIPTION_ANCHOR + " GROUP BY e.department.id")
+    List<PlatformCountRows.IdCount> countVisitsPerDepartment();
+
+    /** QA CX-002: visits per status, platform-wide (the anchors stay out, QA D791). */
+    @Query("SELECT CAST(e.status AS string) AS label, COUNT(e) AS total FROM Encounter e WHERE "
+        + NOT_PRESCRIPTION_ANCHOR + " GROUP BY e.status")
+    List<PlatformCountRows.StatusCount> countVisitsPerStatus();
+
+    /** QA CX-002: visits per calendar day of a window, {@code from} included, {@code to} excluded. */
+    @Query("SELECT CAST(e.encounterDate AS LocalDate) AS day, COUNT(e) AS total FROM Encounter e "
+        + "WHERE e.encounterDate >= :from AND e.encounterDate < :to AND " + NOT_PRESCRIPTION_ANCHOR
+        + " GROUP BY CAST(e.encounterDate AS LocalDate)")
+    List<PlatformCountRows.DayCount> countVisitsPerDay(@Param("from") java.time.LocalDateTime from,
+                                                       @Param("to") java.time.LocalDateTime to);
 }

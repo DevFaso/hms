@@ -2,7 +2,14 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { LabResultSummary, PatientPortalService } from './patient-portal.service';
+import {
+  LabResultSummary,
+  PatientPortalService,
+  PortalInvoice,
+  formatTime,
+  mapPortalInvoice,
+  mergeDiagnoses,
+} from './patient-portal.service';
 
 /**
  * The portal used to decide whether a lab result was abnormal by parsing the
@@ -32,7 +39,7 @@ describe('PatientPortalService lab results', () => {
 
   function labResults(rows: unknown[]): LabResultSummary[] {
     let received: LabResultSummary[] = [];
-    service.getMyLabResults().subscribe((r) => (received = r));
+    service.getMyLabResults(20).subscribe((r) => (received = r));
     httpMock.expectOne((req) => req.url === '/me/patient/lab-results').flush({ data: rows });
     return received;
   }
@@ -99,6 +106,64 @@ describe('PatientPortalService lab results', () => {
     expect(lab.referenceRange).toBe('12 - 15.5 g/dL');
   });
 
+  it('maps a released row nothing graded (units differ) as ungraded, not normal', () => {
+    const [lab] = labResults([
+      {
+        id: 'l1',
+        testName: 'Glucose',
+        value: '5.4',
+        unit: 'mmol/L',
+        status: 'NORMAL',
+        unitMismatch: true,
+        released: true,
+      },
+    ]);
+
+    expect(lab.isUngraded).toBeTrue();
+    expect(lab.isAbnormal).toBeFalse();
+  });
+
+  it('D31: maps a released UNKNOWN row (no range, no flag) as not graded, never normal', () => {
+    const [lab] = labResults([
+      {
+        id: 'u1',
+        testName: 'Glucose',
+        value: '28.5',
+        unit: 'mmol/L',
+        status: 'UNKNOWN',
+        released: true,
+      },
+    ]);
+
+    expect(lab.isUngraded).toBeTrue();
+    expect(lab.isAbnormal).toBeFalse();
+  });
+
+  it('keeps an abnormal status abnormal, and a matching-unit normal graded, whatever unitMismatch says', () => {
+    const mapped = labResults([
+      {
+        id: 'a',
+        testName: 'K',
+        value: '7.8',
+        status: 'CRITICAL',
+        unitMismatch: true,
+        released: true,
+      },
+      {
+        id: 'b',
+        testName: 'K',
+        value: '4.1',
+        status: 'NORMAL',
+        unitMismatch: false,
+        released: true,
+      },
+      { id: 'c', testName: 'K', status: 'PENDING', unitMismatch: true, released: false },
+    ]);
+
+    expect(mapped.map((l) => l.isUngraded)).toEqual([false, false, false]);
+    expect(mapped.map((l) => l.isAbnormal)).toEqual([true, false, false]);
+  });
+
   it('does not call a value inside its range abnormal, nor one outside it normal', () => {
     // The old value-vs-range parsing decided both of these the other way:
     // it flagged the in-range row the analyser called high as normal, and
@@ -123,5 +188,549 @@ describe('PatientPortalService lab results', () => {
     ]);
 
     expect(mapped.map((l) => l.isAbnormal)).toEqual([true, true]);
+  });
+});
+
+/**
+ * GET /me/patient/care-team returns CareTeamDTO { primaryCare,
+ * primaryCareHistory }. The portal declared `{ members }` for it and swallowed
+ * every error as an empty team.
+ */
+describe('PatientPortalService appointments (QA D642)', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('returns my appointments in date and time order', () => {
+    let ids: string[] = [];
+    service.getMyAppointments().subscribe((a) => (ids = a.map((x) => x.id)));
+    httpMock
+      .expectOne((req) => req.url === '/me/patient/appointments')
+      .flush({
+        data: [
+          {
+            id: 'oct30',
+            appointmentDate: '2026-10-30',
+            startTime: '09:00:00',
+            status: 'SCHEDULED',
+          },
+          {
+            id: 'oct28b',
+            appointmentDate: '2026-10-28',
+            startTime: '14:00:00',
+            status: 'SCHEDULED',
+          },
+          {
+            id: 'oct28a',
+            appointmentDate: '2026-10-28',
+            startTime: '08:30:00',
+            status: 'SCHEDULED',
+          },
+        ],
+      });
+    expect(ids).toEqual(['oct28a', 'oct28b', 'oct30']);
+  });
+});
+
+describe('PatientPortalService care team', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('passes the backend shape through', () => {
+    const pcp = {
+      id: 'pcp-1',
+      hospitalId: 'h-1',
+      hospitalName: null,
+      doctorUserId: 'd-1',
+      doctorDisplay: 'Dr Awa Traoré',
+      startDate: '2026-01-15',
+      endDate: null,
+      current: true,
+    };
+    let received: unknown;
+    service.getMyCareTeam().subscribe((t) => (received = t));
+    httpMock
+      .expectOne('/me/patient/care-team')
+      .flush({ data: { primaryCare: pcp, primaryCareHistory: [pcp] } });
+    // An older server sends only `primaryCare`: it becomes the one current provider.
+    expect(received).toEqual({
+      primaryCare: pcp,
+      primaryCares: [pcp],
+      primaryCareHistory: [pcp],
+      visitClinicians: [],
+    });
+  });
+
+  it('QA D1850: keeps every current provider the server sends', () => {
+    const atA = { id: 'pa', hospitalId: 'h-a', doctorUserId: 'ua', current: true };
+    const atB = { id: 'pb', hospitalId: 'h-b', doctorUserId: 'ub', current: true };
+    let received: { primaryCares?: unknown[] } | undefined;
+    service.getMyCareTeam().subscribe((t) => (received = t));
+    httpMock.expectOne('/me/patient/care-team').flush({
+      data: { primaryCare: atA, primaryCares: [atA, atB], primaryCareHistory: [atA, atB] },
+    });
+    expect(received?.primaryCares).toEqual([atA, atB]);
+  });
+
+  it('normalises an absent current provider and history', () => {
+    let received: unknown;
+    service.getMyCareTeam().subscribe((t) => (received = t));
+    httpMock.expectOne('/me/patient/care-team').flush({ data: {} });
+    expect(received).toEqual({
+      primaryCare: null,
+      primaryCares: [],
+      primaryCareHistory: [],
+      visitClinicians: [],
+    });
+  });
+
+  it('lets a failure through instead of reporting an empty team', () => {
+    let failed = false;
+    service.getMyCareTeam().subscribe({ error: () => (failed = true) });
+    httpMock
+      .expectOne('/me/patient/care-team')
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+    expect(failed).toBeTrue();
+  });
+});
+
+/**
+ * The chat picker's two sources. `/me/patient/care-team` sends
+ * `{ primaryCare, primaryCareHistory }` (the `CareTeamDTO` `getMyCareTeam`
+ * returns), and only a user id can address a message — so
+ * the mapping reads `doctorUserId` / `staffUserId`, drops anything without
+ * one, and lets errors through so the picker can tell a failure from an
+ * empty list.
+ */
+describe('PatientPortalService chat recipients', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('maps the care team to its doctors’ user ids, current first, deduped', () => {
+    let ids: string[] = [];
+    service.getMyCareTeamClinicians().subscribe((r) => (ids = r.map((c) => c.userId)));
+    httpMock.expectOne('/me/patient/care-team').flush({
+      data: {
+        primaryCare: { id: 'p2', doctorUserId: 'u2', doctorDisplay: 'B', current: true },
+        primaryCareHistory: [
+          { id: 'p1', doctorUserId: 'u1', doctorDisplay: 'A', current: false },
+          { id: 'p2', doctorUserId: 'u2', doctorDisplay: 'B', current: true },
+          { id: 'p3', doctorUserId: null, doctorDisplay: 'C' },
+        ],
+      },
+    });
+    expect(ids).toEqual(['u2', 'u1']);
+  });
+
+  it('QA D1850: offers the current doctor of every hospital', () => {
+    let ids: string[] = [];
+    service.getMyCareTeamClinicians().subscribe((r) => (ids = r.map((c) => c.userId)));
+    httpMock.expectOne('/me/patient/care-team').flush({
+      data: {
+        primaryCare: { id: 'pa', doctorUserId: 'ua', doctorDisplay: 'A', current: true },
+        primaryCares: [
+          { id: 'pa', doctorUserId: 'ua', doctorDisplay: 'A', current: true },
+          { id: 'pb', doctorUserId: 'ub', doctorDisplay: 'B', current: true },
+        ],
+        primaryCareHistory: [],
+      },
+    });
+    expect(ids).toEqual(['ua', 'ub']);
+  });
+
+  it('adds the clinicians of open visits after the primary-care doctors, deduped (D115)', () => {
+    let ids: string[] = [];
+    service.getMyCareTeamClinicians().subscribe((r) => (ids = r.map((c) => c.userId)));
+    httpMock.expectOne('/me/patient/care-team').flush({
+      data: {
+        primaryCare: { id: 'p1', doctorUserId: 'u1', doctorDisplay: 'A', current: true },
+        primaryCareHistory: [],
+        visitClinicians: [
+          { userId: 'u3', displayName: 'C', hospitalName: 'H' },
+          { userId: 'u1', displayName: 'A', hospitalName: 'H' },
+        ],
+      },
+    });
+    expect(ids).toEqual(['u1', 'u3']);
+  });
+
+  it('reads an empty care team as no one', () => {
+    let result: unknown = null;
+    service.getMyCareTeamClinicians().subscribe((r) => (result = r));
+    httpMock.expectOne('/me/patient/care-team').flush({ data: {} });
+    expect(result).toEqual([]);
+  });
+
+  it('maps appointments to their clinicians’ user ids, deduped, named only', () => {
+    let result: unknown = null;
+    service.getMyAppointmentClinicians().subscribe((r) => (result = r));
+    httpMock.expectOne('/me/patient/appointments').flush({
+      data: [
+        { id: 'a1', staffId: 's1', staffUserId: 'u1', staffName: 'A', hospitalName: 'H' },
+        { id: 'a2', staffId: 's1', staffUserId: 'u1', staffName: 'A', hospitalName: 'H' },
+        { id: 'a3', staffId: 's2', staffUserId: null, staffName: 'No user' },
+        { id: 'a4', staffId: 's3', staffUserId: 'u3', staffName: '' },
+      ],
+    });
+    expect(result).toEqual([{ userId: 'u1', name: 'A', hospitalName: 'H' }]);
+  });
+
+  it('lets a failure through instead of reading it as an empty list', () => {
+    let failed = false;
+    service.getMyAppointmentClinicians().subscribe({ error: () => (failed = true) });
+    httpMock
+      .expectOne('/me/patient/appointments')
+      .flush({}, { status: 500, statusText: 'Server Error' });
+    expect(failed).toBeTrue();
+
+    failed = false;
+    service.getMyCareTeamClinicians().subscribe({ error: () => (failed = true) });
+    httpMock
+      .expectOne('/me/patient/care-team')
+      .flush({}, { status: 500, statusText: 'Server Error' });
+    expect(failed).toBeTrue();
+  });
+});
+
+/**
+ * QA D139: the billing page read `amount`, `balance` and `facility`, which
+ * the API never sends (it sends BillingInvoiceResponseDTO: totalAmount,
+ * balanceDue, hospitalName), so every invoice showed 0 and no Pay button.
+ */
+describe('PatientPortalService invoices', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('maps the wire invoice to the amounts, balance and hospital the page shows', () => {
+    let received: PortalInvoice[] = [];
+    service.getMyInvoices().subscribe((r) => (received = r));
+    // QA D1347: every page is read (here the only one).
+    httpMock
+      .expectOne((r) => r.url === '/me/patient/billing/invoices')
+      .flush({
+        success: true,
+        data: {
+          totalPages: 1,
+          number: 0,
+          content: [
+            {
+              id: 'i1',
+              invoiceNumber: 'HA-2026-000013',
+              invoiceDate: '2026-10-01',
+              dueDate: '2026-10-31',
+              totalAmount: 2500,
+              amountPaid: 1000,
+              balanceDue: 1500,
+              status: 'PARTIALLY_PAID',
+              hospitalName: 'Hôpital A',
+            },
+          ],
+        },
+      });
+    expect(received.length).toBe(1);
+    expect(received[0].amount).toBe(2500);
+    expect(received[0].paid).toBe(1000);
+    expect(received[0].balance).toBe(1500);
+    expect(received[0].facility).toBe('Hôpital A');
+    expect(received[0].date).toBe('2026-10-01');
+  });
+
+  it('derives the balance when the API leaves balanceDue out', () => {
+    expect(mapPortalInvoice({ id: 'x', totalAmount: 900, amountPaid: 300 }).balance).toBe(600);
+    // QA D202: a cancelled invoice owes nothing, whatever the API sent.
+    expect(
+      mapPortalInvoice({ id: 'y', totalAmount: 5000, balanceDue: 5000, status: 'CANCELLED' })
+        .balance,
+    ).toBe(0);
+  });
+});
+
+describe('mapPortalInvoice (QA D1421)', () => {
+  it('names the visit by type and day, and reads nothing else of the encounter', () => {
+    const planted = {
+      id: 'x',
+      encounterType: 'INPATIENT',
+      encounterDate: '2026-11-03T23:30:00',
+      encounterDescription: 'CLINICAL-SENTINEL',
+    };
+    const invoice = mapPortalInvoice(planted);
+    expect(invoice.visitType).toBe('INPATIENT');
+    expect(invoice.visitDate).toBe('2026-11-03T23:30:00');
+    expect(JSON.stringify(invoice)).not.toContain('CLINICAL-SENTINEL');
+  });
+});
+
+describe('formatTime (QA D255)', () => {
+  it('writes a French time on the 24-hour clock, never "AM/PM"', () => {
+    const fr = formatTime('09:00:00', 'fr-FR');
+    expect(fr).toBe('09:00');
+    expect(formatTime('14:30', 'fr-FR')).toBe('14:30');
+  });
+
+  it('keeps the 12-hour clock for English', () => {
+    expect(formatTime('14:30', 'en-US')).toMatch(/2:30\sPM/);
+  });
+
+  it('passes through what it cannot parse', () => {
+    expect(formatTime('', 'fr-FR')).toBe('');
+    expect(formatTime('later', 'fr-FR')).toBe('later');
+  });
+});
+
+/**
+ * QA D526 (D321/D426): the follow-up asked at checkout is written on the
+ * visit's discharge summary as a FollowUpAppointmentDTO (appointmentDate).
+ * The portal read a `scheduledDate` the API never sends, so the date the
+ * doctor gave never reached the patient.
+ */
+describe('PatientPortalService after-visit summaries (QA D526)', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  function summaries(rows: unknown[]): { followUpDate: string | null }[] {
+    let received: { followUpDate: string | null }[] = [];
+    service.getAfterVisitSummaries().subscribe((r) => (received = r));
+    httpMock.expectOne((req) => req.url.endsWith('/after-visit-summaries')).flush({ data: rows });
+    return received;
+  }
+
+  it('shows the follow-up date the checkout filed', () => {
+    const [s] = summaries([
+      {
+        id: 's1',
+        followUpAppointments: [
+          {
+            appointmentType: 'FOLLOW_UP',
+            appointmentDate: '2026-10-27',
+            purpose: 'Contrôle paludisme',
+          },
+        ],
+      },
+    ]);
+    expect(s.followUpDate).toBe('2026-10-27');
+  });
+
+  it('takes the earliest dated follow-up, and a time-only one by its day', () => {
+    const [s] = summaries([
+      {
+        id: 's2',
+        followUpAppointments: [
+          { appointmentType: 'LAB_RECHECK', appointmentDate: '2026-11-10' },
+          { appointmentType: 'WOUND_CHECK', appointmentTime: '2026-11-02T09:30:00' },
+        ],
+      },
+    ]);
+    expect(s.followUpDate).toBe('2026-11-02');
+  });
+
+  it('is null when there is no follow-up', () => {
+    const [s] = summaries([{ id: 's3', followUpAppointments: [] }]);
+    expect(s.followUpDate).toBeNull();
+  });
+});
+
+/** QA D981: the visit's reason is shown (an admission's too) and the assessment stays the assessment. */
+describe('PatientPortalService encounters (QA D981)', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('reads the reason for admission when the note has no complaint', () => {
+    let reason = '';
+    let assessment = '';
+    service.getMyEncounters().subscribe((list) => {
+      reason = list[0].chiefComplaint;
+      assessment = list[0].diagnosisSummary;
+    });
+    httpMock.expectOne('/me/patient/encounters').flush({
+      data: [
+        {
+          id: 'e1',
+          encounterDate: '2026-10-20T08:00:00',
+          encounterType: 'INPATIENT',
+          chiefComplaint: 'Paludisme grave, admis pour artésunate IV',
+          note: { assessment: 'Stable', signedAt: '2026-10-20T09:00:00' },
+        },
+      ],
+    });
+    expect(reason).toBe('Paludisme grave, admis pour artésunate IV');
+    expect(assessment).toBe('Stable');
+  });
+
+  it('QA D1910: never shows an unsigned note, and says the visit is not finalised', () => {
+    let first:
+      | { chiefComplaint: string; diagnosisSummary: string; notePendingSignature: boolean }
+      | undefined;
+    service.getMyEncounters().subscribe((list) => (first = list[0]));
+    httpMock.expectOne('/me/patient/encounters').flush({
+      data: [
+        {
+          id: 'e1',
+          encounterDate: '2026-11-14T08:00:00',
+          encounterType: 'CONSULTATION',
+          chiefComplaint: 'Soif, polyurie',
+          note: { chiefComplaint: 'NOTE-INTERNE', assessment: 'NOTE-INTERNE', signedAt: null },
+          notePendingSignature: true,
+        },
+      ],
+    });
+    expect(first?.diagnosisSummary).toBe('');
+    expect(first?.chiefComplaint).toBe('Soif, polyurie');
+    expect(first?.notePendingSignature).toBeTrue();
+  });
+});
+
+describe('PatientPortalService lab result pages (QA D1213)', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  const row = (i: number) => ({ id: `l${i}`, testName: 'K', status: 'NORMAL', released: true });
+
+  it('asks offset and one look-ahead row, shows the page and says whether there is more', () => {
+    let page: { items: unknown[]; hasMore: boolean } | undefined;
+    service.getMyLabResultsPage(20).subscribe((p) => (page = p));
+    const req = httpMock.expectOne((r) => r.url === '/me/patient/lab-results');
+    expect(req.request.params.get('offset')).toBe('20');
+    expect(req.request.params.get('limit')).toBe('21');
+    req.flush({ data: Array.from({ length: 21 }, (_, i) => row(i)) });
+    expect(page?.items.length).toBe(20);
+    expect(page?.hasMore).toBeTrue();
+  });
+
+  it('the last page has no more', () => {
+    let page: { items: unknown[]; hasMore: boolean } | undefined;
+    service.getMyLabResultsPage(0).subscribe((p) => (page = p));
+    httpMock
+      .expectOne((r) => r.url === '/me/patient/lab-results')
+      .flush({ data: [row(1), row(2)] });
+    expect(page?.items.length).toBe(2);
+    expect(page?.hasMore).toBeFalse();
+  });
+
+  it('does not swallow a failure (the page shows it, never an empty list)', () => {
+    let failed = false;
+    service.getMyLabResultsPage(0).subscribe({ error: () => (failed = true) });
+    httpMock
+      .expectOne((r) => r.url === '/me/patient/lab-results')
+      .flush({ message: 'x' }, { status: 403, statusText: 'Forbidden' });
+    expect(failed).toBeTrue();
+  });
+
+  it("the proxy's Labs tab reads the grantor's pages with the same contract", () => {
+    service.getProxyLabResultsPage('p-9', 40).subscribe();
+    const req = httpMock.expectOne((r) => r.url === '/me/patient/proxy-access/p-9/lab-results');
+    expect(req.request.params.get('offset')).toBe('40');
+    expect(req.request.params.get('limit')).toBe('21');
+    req.flush({ data: [] });
+  });
+});
+
+describe('mergeDiagnoses (QA D1214)', () => {
+  it('lists the active problems and the chronic conditions, each once, blanks dropped', () => {
+    expect(
+      mergeDiagnoses(
+        ['Paludisme à Plasmodium falciparum, simple', ' '],
+        ['Hypertension', 'paludisme à plasmodium falciparum, simple'],
+      ),
+    ).toEqual(['Paludisme à Plasmodium falciparum, simple', 'Hypertension']);
+  });
+
+  it('an empty active list no longer hides the chronic conditions (the round-23 shape)', () => {
+    expect(mergeDiagnoses([], ['Diabète de type 2'])).toEqual(['Diabète de type 2']);
+    expect(mergeDiagnoses(null, null)).toEqual([]);
+  });
+
+  it('reads a problem sent as an object, with its code', () => {
+    expect(
+      mergeDiagnoses([{ display: 'Paludisme simple', code: 'B50.9' }, { name: 'Asthme' }], []),
+    ).toEqual(['Paludisme simple (B50.9)', 'Asthme']);
+  });
+
+  it('the health summary carries the merged list to every patient surface', () => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    const service = TestBed.inject(PatientPortalService);
+    const httpMock = TestBed.inject(HttpTestingController);
+    let mine: string[] = [];
+    let proxy: string[] = [];
+    service.getHealthSummary().subscribe((s) => (mine = s.activeDiagnoses));
+    service.getProxyRecords('p-1').subscribe((s) => (proxy = s.activeDiagnoses));
+    const body = {
+      data: { activeDiagnoses: ['Paludisme simple'], chronicConditions: ['Hypertension'] },
+    };
+    httpMock.expectOne('/me/patient/health-summary').flush(body);
+    httpMock.expectOne('/me/patient/proxy-access/p-1/records').flush(body);
+    expect(mine).toEqual(['Paludisme simple', 'Hypertension']);
+    expect(proxy).toEqual(['Paludisme simple', 'Hypertension']);
+    httpMock.verify();
   });
 });

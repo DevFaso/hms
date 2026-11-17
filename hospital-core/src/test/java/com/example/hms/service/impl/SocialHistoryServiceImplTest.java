@@ -44,6 +44,9 @@ class SocialHistoryServiceImplTest {
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private RoleValidator roleValidator;
 
+    @org.mockito.Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @InjectMocks
     private SocialHistoryServiceImpl service;
 
@@ -67,6 +70,12 @@ class SocialHistoryServiceImplTest {
         hospital.setId(hospitalId);
         staff = new Staff();
         staff.setId(staffId);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test
@@ -76,13 +85,14 @@ class SocialHistoryServiceImplTest {
         dto.setHospitalId(hospitalId);
         dto.setRecordedByStaffId(staffId);
         dto.setActive(true);
+        dto.setTobaccoUse(false); // QA D1148: a version carries at least one answer
 
         PatientSocialHistory entity = new PatientSocialHistory();
         entity.setId(historyId);
         SocialHistoryResponseDTO responseDTO = new SocialHistoryResponseDTO();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(socialHistoryRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of());
         when(socialHistoryRepository.countByPatient_Id(patientId)).thenReturn(0L);
@@ -184,6 +194,7 @@ class SocialHistoryServiceImplTest {
     @Test
     void updateSocialHistory_success() {
         SocialHistoryRequestDTO dto = new SocialHistoryRequestDTO();
+        dto.setAlcoholUse(false); // QA D1148: a version carries at least one answer
         PatientSocialHistory existing = new PatientSocialHistory();
         existing.setId(historyId);
         SocialHistoryResponseDTO responseDTO = new SocialHistoryResponseDTO();
@@ -227,6 +238,7 @@ class SocialHistoryServiceImplTest {
         dto.setPatientId(patientId);
         dto.setHospitalId(hospitalId);
         dto.setActive(true);
+        dto.setTobaccoUse(false); // QA D1148: a version carries at least one answer
 
         PatientSocialHistory previousHistory = new PatientSocialHistory();
         previousHistory.setActive(true);
@@ -234,7 +246,7 @@ class SocialHistoryServiceImplTest {
         newEntity.setId(historyId);
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(socialHistoryRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(previousHistory));
         when(socialHistoryRepository.countByPatient_Id(patientId)).thenReturn(1L);
         when(socialHistoryMapper.toEntity(any(), eq(patient), eq(hospital), isNull())).thenReturn(newEntity);

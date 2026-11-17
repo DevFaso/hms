@@ -26,6 +26,8 @@ public enum AuditEventType {
     USER_DELETE,
     USER_DISABLE,
     USER_ENABLE,
+    /** A soft-deleted account put back (QA D51): its own event, not a generic DATA_UPDATE. */
+    USER_RESTORE,
     USER_BOOTSTRAP,
     ROLE_ASSIGNED,
     ROLE_REVOKED,
@@ -53,15 +55,35 @@ public enum AuditEventType {
     ADMISSION_AUTOCREATED,
     ADMISSION_DISCHARGED,
     ADMISSION_TRANSFERRED,
+    /** QA D1100: an inpatient's bed freed by hand ("Retirer le lit"), with its reason. */
+    ADMISSION_BED_RELEASED,
     ENCOUNTER_AUTOCREATED,
     ENCOUNTER_UPDATE,
     PRESCRIPTION_CREATED,
     PRESCRIPTION_UPDATED,
     PRESCRIPTION_DISCONTINUED,
     LAB_ORDER_CREATED,
+    /** QA D429: a lab order edited or moved through its lifecycle. */
+    LAB_ORDER_UPDATED,
+    /** QA D673: a lab order cancelled, with its stated reason on the order. */
+    LAB_ORDER_CANCELLED,
+    /** QA D820: a lab order voided as entered in error, with its stated reason on the order. */
+    LAB_ORDER_ENTERED_IN_ERROR,
+    /** A lab order placed while an active order of the same test was open (warned, never blocked). */
+    LAB_ORDER_DUPLICATE_PLACED,
+    /** QA D429: a specimen collected or received. */
+    LAB_SPECIMEN_UPDATED,
+    /** QA D429: a lab result entered. */
+    LAB_RESULT_CREATED,
+    /** QA D429: a lab result acknowledged or its critical value read back. */
+    LAB_RESULT_ACKNOWLEDGED,
     LAB_RESULT_UPDATED,
     LAB_RESULT_RELEASED,
+    /** QA D638: a result released by the person who entered it, without a second reviewer. */
+    LAB_RESULT_SELF_RELEASED,
     IMAGING_ORDER_CREATED,
+    /** An imaging order placed while a recent order of the same study exists (warned, never blocked; provisional rule 2026-11-15). */
+    IMAGING_ORDER_DUPLICATE_PLACED,
     IMAGING_RESULT_UPDATED,
     // Disease-programme registries (Tier 2 item 35). Care-management
     // writes, not disclosures: none is whitelisted in DisclosureCategory,
@@ -87,8 +109,15 @@ public enum AuditEventType {
     INVOICE_CREATED,
     INVOICE_UPDATED,
     PAYMENT_POSTED,
+    PAYMENT_REJECTED,
     REFUND_ISSUED,
     CLAIM_SUBMITTED,
+    /** Billing-money plan PR 2: a price-list item created, edited or deactivated (ids only). */
+    PRICE_LIST_ITEM_CREATED,
+    PRICE_LIST_ITEM_UPDATED,
+    PRICE_LIST_ITEM_DEACTIVATED,
+    /** Billing-money plan PR 2: a new price version of an item (item id, version id, effective date). */
+    PRICE_VERSION_ADDED,
 
     // Pharmacy & inventory
     STOCK_RECEIPT,
@@ -99,7 +128,29 @@ public enum AuditEventType {
     DISPENSE_CREATED,
     DISPENSE_CANCELLED,
     DISPENSE_SUBSTITUTED,
+    /** G15: a fill was prepared and the patient told it is ready for collection. */
+    DISPENSE_READY,
+    /** G15: a prepared fill was handed over to the patient. */
+    DISPENSE_HANDED_OVER,
+    /** G15: a prepared fill was cancelled, or voided by the prescriber's withdrawal or edit. */
+    DISPENSE_READY_CANCELLED,
+    /** G13: a pharmacist claimed a prescription on the work queue. */
+    PRESCRIPTION_QUEUE_CLAIMED,
+    /** G13: a work-queue claim ended (released, or the work on the order ended). */
+    PRESCRIPTION_QUEUE_CLAIM_RELEASED,
+    /** G13: another pharmacy-queue user took a claim over, explicitly or by acting on the order. */
+    PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER,
+    /** G13: a lapsed claim was found and removed by a later write. */
+    PRESCRIPTION_QUEUE_CLAIM_EXPIRED,
     MEDICATION_DEACTIVATED,
+    /** Round 18 (QA D935): the pharmacy set or approved an item's paediatric dose limits. */
+    MEDICATION_DOSE_LIMITS_UPDATED,
+    /** Round 18 (QA D935): a prescriber overrode a critical dose-check (CDS) alert, with a reason. */
+    PRESCRIPTION_CDS_OVERRIDDEN,
+    /** Round 18: the prescriber's re-authentication when signing a controlled-drug order (success or failure). */
+    PRESCRIPTION_SIGN_REAUTHENTICATION,
+    /** Round 19 (QA D1096): a pharmacist or physician recorded the paediatric dose review an order needed. */
+    PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED,
     PHARMACY_DEACTIVATED,
     MTM_REVIEW_STARTED,
     MTM_INTERVENTION_RECORDED,
@@ -111,6 +162,14 @@ public enum AuditEventType {
     PRESCRIPTION_CLARIFICATION_REQUESTED,
     /** The prescriber answered and the order returned to SIGNED (G5). */
     PRESCRIPTION_CLARIFICATION_RESOLVED,
+    /** D83: a prescriber overrode (or an edit cleared) an allergy hard stop. */
+    PRESCRIPTION_ALLERGY_OVERRIDDEN,
+    /** QA D1563: a GIVEN dose passed an allergy conflict (since Policy 4, only under a prescriber's review). */
+    MAR_ALLERGY_ACKNOWLEDGED,
+    /** QA D1555: a verification, fill or routing passed an allergy conflict (since Policy 4, only under a prescriber's review). */
+    DISPENSE_ALLERGY_ACKNOWLEDGED,
+    /** Policy 4: an authorized prescriber reviewed an allergy conflict on a signed order (CONTINUE or STOP). */
+    PRESCRIPTION_ALLERGY_REVIEWED,
 
     // Security & platform configuration
     SECURITY_POLICY_UPDATED,
@@ -189,6 +248,44 @@ public enum AuditEventType {
     PRO_INSTRUMENT_IMPORTED,
     PRO_RESPONSE_RECORDED,
     PRO_ALERT_ACKNOWLEDGED,
+
+    // External provider facilities (D5, provider plan §6.3). Past tense per
+    // the naming convention above. Rows carry the facility id, its type and
+    // the verification status only: never a business number or a name.
+    PROVIDER_CREATED,
+    PROVIDER_EVIDENCE_RESUBMITTED,
+    PROVIDER_VERIFIED,
+    PROVIDER_REJECTED,
+    PROVIDER_VERIFICATION_REVOKED,
+
+    // Blood bank. Past tense per the naming convention above. The row carries
+    // who released it, the unit id and the request id only.
+    EMERGENCY_BLOOD_RELEASED,
+
+    // QA D1538 (round 40): an obstetric order or referral placed as an emergency for a patient the
+    // obstetric rule would refuse (recorded male, or a child). The row carries the rule, the priority,
+    // the recorded sex and age at the time; the order itself is flagged for review.
+    OBSTETRIC_RULE_SKIPPED_EMERGENCY,
+    /** QA D1631: a labour episode refused because one is already active at another hospital. */
+    LABOR_EPISODE_START_REFUSED,
+    /** Labour transfer (provisional rule, 2026-11-12): the episode's hospital handed an active labour to another. */
+    LABOR_EPISODE_TRANSFERRED_OUT,
+    /** Labour transfer: the receiving hospital's new episode, with or without a handover. */
+    LABOR_EPISODE_TRANSFERRED_IN,
+    /** Labour transfer: she arrived at another hospital without a handover, which closed this episode. */
+    LABOR_EPISODE_LEFT_WITHOUT_HANDOVER,
+    /** QA r46 (provisional): a birth recorded as before her arrival, earlier than the receiving episode's start. */
+    LABOR_DELIVERY_BORN_BEFORE_ARRIVAL,
+    /** QA D1714: a fetal-death event created for a stillborn baby of a delivery (no patient account). */
+    FETAL_DEATH_EVENT_RECORDED,
+    /** QA D1714: a fetal-death event superseded by a correction of the baby's outcome (never deleted). */
+    FETAL_DEATH_EVENT_SUPERSEDED,
+    /** QA D1714: a baby's recorded outcome corrected (live to stillborn or back), with the reason. */
+    DELIVERY_BABY_OUTCOME_CORRECTED,
+    /** QA D1802 (provisional): a baby corrected to born alive while a death certificate declares its stillbirth. */
+    STILLBIRTH_CERTIFICATE_CONFLICT,
+    /** QA D1802 (provisional): that contradiction ended (certificate amended or voided, or outcome corrected back). */
+    STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED,
 
     OTHER
 }

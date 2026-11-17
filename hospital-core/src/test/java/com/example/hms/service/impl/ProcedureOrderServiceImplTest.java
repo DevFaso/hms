@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.ProcedureOrderStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -15,11 +16,13 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.service.PatientSubjectReadGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
@@ -30,7 +33,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -47,10 +52,21 @@ class ProcedureOrderServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     @InjectMocks private ProcedureOrderServiceImpl service;
+
+    /**
+     * The real subject guard. These tests set no authentication, so it waves
+     * every read through, as it does for any caller that is not patient-only;
+     * the patient cases are in PatientSubjectReadGuardTest and the
+     * per-service ownership tests.
+     */
+    @Spy
+    private PatientSubjectReadGuard subjectReadGuard =
+        new PatientSubjectReadGuard(mock(ControllerAuthUtils.class), mock(PatientRepository.class));
 
     private UUID patientId, hospitalId, staffId, orderId;
     private Patient patient;
@@ -81,7 +97,7 @@ class ProcedureOrderServiceImplTest {
         r.setPatientId(patientId); r.setHospitalId(hospitalId);
         r.setProcedureName("Appendectomy"); r.setProcedureCode("44970");
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
         ProcedureOrderResponseDTO result = service.createProcedureOrder(r, staffId);
@@ -95,6 +111,106 @@ class ProcedureOrderServiceImplTest {
         r.setPatientId(patientId); r.setHospitalId(hospitalId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createProcedureOrder(r, staffId)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test void createProcedureOrder_atAnotherHospital_answersAsAMissingHospital() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        assertThatThrownBy(() -> service.createProcedureOrder(r, staffId))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> {
+                assertThat(e.getMessageKey()).isEqualTo("hospital.notFound");
+                assertThat(e.getMessage()).isEqualTo(new ResourceNotFoundException("hospital.notFound", hospitalId).getMessage());
+            });
+        verify(patientRepository, never()).findById(any());
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void createProcedureOrder_forAPatientRegisteredElsewhere_answersAsAMissingPatient() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> service.createProcedureOrder(r, staffId))
+            .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> {
+                assertThat(e.getMessageKey()).isEqualTo("patient.notFound");
+                assertThat(e.getMessage()).isEqualTo(new ResourceNotFoundException("patient.notFound", patientId).getMessage());
+            });
+        verify(patientRepository, never()).findById(any());
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void createProcedureOrder_atTheActingHospital_forARegisteredPatient_proceeds() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        r.setProcedureName("Appendectomy");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
+        assertThat(service.createProcedureOrder(r, staffId).getHospitalId()).isEqualTo(hospitalId);
+    }
+
+    @Test void createProcedureOrder_againstAnotherHospitalsEncounter_answersAsAMissingEncounter() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setProcedureName("Appendectomy");
+        UUID encounterId = UUID.randomUUID();
+        r.setEncounterId(encounterId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        com.example.hms.model.Encounter foreign = new com.example.hms.model.Encounter();
+        foreign.setId(encounterId); foreign.setHospital(elsewhere); foreign.setPatient(patient);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
+        String missing = org.assertj.core.api.Assertions.catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.createProcedureOrder(r, staffId)).getMessage();
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(foreign));
+        String refused = org.assertj.core.api.Assertions.catchThrowableOfType(ResourceNotFoundException.class,
+            () -> service.createProcedureOrder(r, staffId)).getMessage();
+
+        assertThat(refused).isEqualTo(missing);
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void createProcedureOrder_againstThePatientsOwnEncounterHere_attachesIt() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setProcedureName("Appendectomy");
+        UUID encounterId = UUID.randomUUID();
+        r.setEncounterId(encounterId);
+        com.example.hms.model.Encounter own = new com.example.hms.model.Encounter();
+        own.setId(encounterId); own.setHospital(hospital); own.setPatient(patient);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(own));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
+
+        service.createProcedureOrder(r, staffId);
+        org.mockito.ArgumentCaptor<ProcedureOrder> saved = org.mockito.ArgumentCaptor.forClass(ProcedureOrder.class);
+        verify(procedureOrderRepository).save(saved.capture());
+        assertThat(saved.getValue().getEncounter()).isSameAs(own);
+    }
+
+    @Test void createProcedureOrder_resolvesTheOrderingClinicianFromTheirUserId() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setProcedureName("Appendectomy");
+        UUID callerUserId = UUID.randomUUID();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(callerUserId)).thenReturn(Optional.empty());
+        when(staffRepository.findByUserIdAndHospitalId(callerUserId, hospitalId)).thenReturn(Optional.of(staff));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
+
+        service.createProcedureOrder(r, callerUserId);
+
+        org.mockito.ArgumentCaptor<ProcedureOrder> saved = org.mockito.ArgumentCaptor.forClass(ProcedureOrder.class);
+        verify(procedureOrderRepository).save(saved.capture());
+        assertThat(saved.getValue().getOrderingProvider()).isSameAs(staff);
     }
 
     @Test void getProcedureOrder_success() {
@@ -161,6 +277,77 @@ class ProcedureOrderServiceImplTest {
         assertThat(r.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
     }
 
+    /**
+     * QA D857: DOCTOR_A rescheduled a consented order to 01/01/2020 09:00; the
+     * PUT answered 200, the order read "Planifié" for 2020 and offered
+     * "Débuter la procédure". A past date is refused and nothing changes.
+     */
+    @Test void d857_aRescheduleToAPastDateIsRefusedAndChangesNothing() {
+        ProcedureOrder consented = buildOrder(ProcedureOrderStatus.SCHEDULED);
+        consented.setConsentObtained(true);
+        LocalDateTime planned = LocalDateTime.now().plusDays(2);
+        consented.setScheduledDatetime(planned);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(consented));
+        ProcedureOrderUpdateDTO u = new ProcedureOrderUpdateDTO();
+        u.setScheduledDatetime(LocalDateTime.of(2020, 1, 1, 9, 0));
+
+        assertThatThrownBy(() -> service.updateProcedureOrder(orderId, u))
+            .isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getMessage()).isEqualTo(new BusinessException("procedureOrder.scheduledInPast").getMessage()));
+        assertThat(consented.getScheduledDatetime()).isEqualTo(planned);
+        assertThat(consented.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    /** QA D857: the same date re-sent with a consent update is not a reschedule, and passes. */
+    @Test void d857_anUnchangedPastDateDoesNotBlockAConsentUpdate() {
+        ProcedureOrder order = buildOrder(ProcedureOrderStatus.SCHEDULED);
+        LocalDateTime earlier = LocalDateTime.now().minusHours(3);
+        order.setScheduledDatetime(earlier);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        ProcedureOrderUpdateDTO u = new ProcedureOrderUpdateDTO();
+        u.setScheduledDatetime(earlier);
+        u.setSiteMarked(true);
+
+        ProcedureOrderResponseDTO r = service.updateProcedureOrder(orderId, u);
+
+        assertThat(r.getSiteMarked()).isTrue();
+    }
+
+    /** QA D857: an order placed with a past planned date is refused too. */
+    @Test void d857_anOrderPlacedForAPastDateIsRefused() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        r.setProcedureName("Appendectomy");
+        r.setScheduledDatetime(LocalDateTime.of(2020, 1, 1, 9, 0));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> service.createProcedureOrder(r, staffId)).isInstanceOf(BusinessException.class);
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    /**
+     * QA D880: a planned date given at creation left the order "Prescrit"
+     * (ORDERED); the same date set later by a reschedule makes it "Planifié".
+     */
+    @Test void d880_aPlannedDateAtCreationMakesTheOrderScheduled() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        r.setProcedureName("Appendectomy");
+        r.setScheduledDatetime(LocalDateTime.now().plusDays(1).withHour(9).withMinute(0));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
+
+        ProcedureOrderResponseDTO result = service.createProcedureOrder(r, staffId);
+
+        assertThat(result.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
+    }
+
     @Test void cancelProcedureOrder_success() {
         when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
         when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -177,6 +364,28 @@ class ProcedureOrderServiceImplTest {
     @Test void cancelProcedureOrder_alreadyCancelled_throws() {
         when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.CANCELLED)));
         assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, "r")).isInstanceOf(BusinessException.class);
+    }
+
+    /** QA D1098 (round 19): every cancel states why, on both cancel paths. */
+    @Test void cancelProcedureOrder_refusesABlankReason_D1098() {
+        ProcedureOrder order = buildOrder(ProcedureOrderStatus.ORDERED);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, " "))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(order.getStatus()).isEqualTo(ProcedureOrderStatus.ORDERED);
+    }
+
+    @Test void updateProcedureOrder_refusesACancelWithoutAReason_D1098() {
+        ProcedureOrder order = buildOrder(ProcedureOrderStatus.SCHEDULED);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        ProcedureOrderUpdateDTO u = new ProcedureOrderUpdateDTO();
+        u.setStatus(ProcedureOrderStatus.CANCELLED);
+        assertThatThrownBy(() -> service.updateProcedureOrder(orderId, u))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(order.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
+        verify(procedureOrderRepository, never()).save(any());
     }
 
     @Test void getPendingConsentOrders() {
@@ -265,5 +474,213 @@ class ProcedureOrderServiceImplTest {
         when(procedureOrderRepository.findByHospital_IdAndStatusAndConsentObtainedFalse(activeHospId, ProcedureOrderStatus.SCHEDULED)).thenReturn(List.of());
 
         assertThat(service.getPendingConsentOrders(hospitalId)).isEmpty();
+    }
+
+    // ── Product decision 2026-10-28: a procedure order belongs to the clinician who placed it ──
+
+    /** The ordering clinician: a staff record with its own user. */
+    private Staff orderer() {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(UUID.randomUUID());
+        staff.setUser(user);
+        staff.setHospital(hospital);
+        return staff;
+    }
+
+    /** Another clinician of the same hospital, signed in. */
+    private Staff signInAsColleague() {
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        com.example.hms.security.CallerIdentityTestSupport.actAs(colleague, hospital);
+        return colleague;
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void signOut() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
+        com.example.hms.security.context.HospitalContextHolder.clear();
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
+    @Test void decision20261028_theOrderingClinicianCancelsTheirOwnOrder() {
+        Staff author = orderer();
+        com.example.hms.security.CallerIdentityTestSupport.actAs(author, hospital);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.SCHEDULED)));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ProcedureOrderResponseDTO r = service.cancelProcedureOrder(orderId, "Patient declined");
+
+        assertThat(r.getStatus()).isEqualTo(ProcedureOrderStatus.CANCELLED);
+        assertThat(r.getCancelledAt()).isNotNull();
+        assertThat(r.getCancellationReason()).isEqualTo("Patient declined");
+    }
+
+    @Test void decision20261028_aColleagueDoctorCannotCancelAnotherDoctorsOrder() {
+        Staff author = orderer();
+        Staff colleague = signInAsColleague();
+        ProcedureOrder order = buildOrder(ProcedureOrderStatus.SCHEDULED);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.draftsForPhysicianSignature(author.getUser().getId(), hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, "r"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
+        assertThat(order.getCancelledAt()).isNull();
+        verify(procedureOrderRepository, never()).save(any());
+        verify(roleValidator, never()).isSigningPhysician(eq(colleague.getUser().getId()), any());
+    }
+
+    @Test void decision20261028_aPhysicianOfTheHospitalCancelsANursesOrMidwifesOrder() {
+        Staff author = orderer();
+        Staff physician = signInAsColleague();
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(roleValidator.draftsForPhysicianSignature(author.getUser().getId(), hospitalId)).thenReturn(true);
+        when(roleValidator.isSigningPhysician(physician.getUser().getId(), hospitalId)).thenReturn(true);
+
+        assertThat(service.cancelProcedureOrder(orderId, "Condition improved").getStatus())
+            .isEqualTo(ProcedureOrderStatus.CANCELLED);
+    }
+
+    @Test void decision20261028_aNurseCannotCancelAColleagueNursesOrder() {
+        Staff author = orderer();
+        Staff nurse = signInAsColleague();
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+        when(roleValidator.draftsForPhysicianSignature(author.getUser().getId(), hospitalId)).thenReturn(true);
+        when(roleValidator.isSigningPhysician(nurse.getUser().getId(), hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, "r"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void decision20261028_aSuperAdminInGlobalViewCancelsAnyOrder() {
+        orderer();
+        Staff admin = signInAsColleague();
+        com.example.hms.security.tenant.ActingScopeTestSupport.globalSuperAdmin(admin.getUser().getId());
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assertThat(service.cancelProcedureOrder(orderId, "Entered for the wrong patient").getStatus())
+            .isEqualTo(ProcedureOrderStatus.CANCELLED);
+    }
+
+    /** The refusal is a translated 403 in every locale the portal speaks, never the key or English in fr/es. */
+    @Test void decision20261028_theRefusalIsTranslated() {
+        Staff author = orderer();
+        signInAsColleague();
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+        when(roleValidator.draftsForPhysicianSignature(author.getUser().getId(), hospitalId)).thenReturn(false);
+        org.springframework.context.MessageSource bundles = com.example.hms.i18n.TestMessageSources.bundles();
+        com.example.hms.utility.MessageUtil.setMessageSource(bundles);
+        String english = bundles.getMessage("procedureOrder.cancelForbidden", null, java.util.Locale.ENGLISH);
+        for (String tag : List.of("en", "fr", "es")) {
+            java.util.Locale locale = java.util.Locale.forLanguageTag(tag);
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+            String expected = bundles.getMessage("procedureOrder.cancelForbidden", null, locale);
+            assertThat(expected).as(tag).doesNotContain("procedureOrder.");
+            if (!"en".equals(tag)) {
+                assertThat(expected).as(tag + " is not the English text").isNotEqualTo(english);
+            }
+            assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, "r"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                .hasMessage(expected);
+        }
+    }
+
+    /** CANCELLED sent through the update is the same decision as POST /cancel: refused for a colleague, nothing applied. */
+    @Test void decision20261028_aColleagueCannotCancelThroughTheUpdateEither() {
+        Staff author = orderer();
+        signInAsColleague();
+        ProcedureOrder order = buildOrder(ProcedureOrderStatus.SCHEDULED);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.draftsForPhysicianSignature(author.getUser().getId(), hospitalId)).thenReturn(false);
+        ProcedureOrderUpdateDTO u = new ProcedureOrderUpdateDTO();
+        u.setStatus(ProcedureOrderStatus.CANCELLED);
+        u.setSiteMarked(true);
+
+        assertThatThrownBy(() -> service.updateProcedureOrder(orderId, u))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
+        assertThat(order.getSiteMarked()).isFalse();
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void decision20261028_theAuthorsCancelThroughTheUpdateIsStampedLikePostCancel() {
+        Staff author = orderer();
+        com.example.hms.security.CallerIdentityTestSupport.actAs(author, hospital);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.SCHEDULED)));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        ProcedureOrderUpdateDTO u = new ProcedureOrderUpdateDTO();
+        u.setStatus(ProcedureOrderStatus.CANCELLED);
+        u.setCancellationReason("Patient declined");
+
+        ProcedureOrderResponseDTO r = service.updateProcedureOrder(orderId, u);
+
+        assertThat(r.getStatus()).isEqualTo(ProcedureOrderStatus.CANCELLED);
+        assertThat(r.getCancelledAt()).isNotNull();
+        assertThat(r.getCancellationReason()).isEqualTo("Patient declined");
+    }
+
+    /**
+     * The care team records execution on a colleague's order: plan it, start
+     * it, complete it, postpone it, capture consent, mark the site. No author
+     * check is consulted on any of these.
+     */
+    @Test void decision20261028_theCareTeamRecordsExecutionOnAColleaguesOrder() {
+        orderer();
+        signInAsColleague();
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        List<ProcedureOrderUpdateDTO> steps = List.of(
+            ProcedureOrderUpdateDTO.builder().scheduledDatetime(LocalDateTime.now().plusDays(1)).build(),
+            ProcedureOrderUpdateDTO.builder().consentObtained(true).consentObtainedBy("Witness")
+                .consentObtainedAt(LocalDateTime.now()).build(),
+            ProcedureOrderUpdateDTO.builder().siteMarked(true).build(),
+            ProcedureOrderUpdateDTO.builder().status(ProcedureOrderStatus.PRE_OP_CLEARANCE_PENDING).build(),
+            ProcedureOrderUpdateDTO.builder().status(ProcedureOrderStatus.READY_FOR_PROCEDURE).build(),
+            ProcedureOrderUpdateDTO.builder().status(ProcedureOrderStatus.IN_PROGRESS).build(),
+            ProcedureOrderUpdateDTO.builder().status(ProcedureOrderStatus.POSTPONED).build(),
+            ProcedureOrderUpdateDTO.builder().status(ProcedureOrderStatus.COMPLETED).build());
+        for (ProcedureOrderUpdateDTO step : steps) {
+            when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+            ProcedureOrderResponseDTO r = service.updateProcedureOrder(orderId, step);
+            assertThat(r).as(step.toString()).isNotNull();
+            if (step.getStatus() != null) {
+                assertThat(r.getStatus()).as(step.toString()).isEqualTo(step.getStatus());
+            }
+        }
+        // QA D1081: the response says whether the ORDER's author drafts for a physician's signature
+        // (authorIsPhysician); the cancel rule (the caller as signing physician) is still never asked.
+        verify(roleValidator, never()).isSigningPhysician(any(), any());
+    }
+
+    /**
+     * A cancelled order keeps its first cancellation stamp: re-cancelling is
+     * refused for everyone (its author included), and there is no way back
+     * out of CANCELLED through the update, so nobody can reopen it.
+     */
+    @Test void decision20261028_aCancelledOrderKeepsItsFirstStampAndCannotBeReopened() {
+        Staff author = orderer();
+        com.example.hms.security.CallerIdentityTestSupport.actAs(author, hospital);
+        ProcedureOrder cancelled = buildOrder(ProcedureOrderStatus.CANCELLED);
+        LocalDateTime firstStamp = LocalDateTime.now().minusDays(1);
+        cancelled.setCancelledAt(firstStamp);
+        cancelled.setCancellationReason("Patient declined");
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(cancelled));
+
+        assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, "Rewritten")).isInstanceOf(BusinessException.class);
+        ProcedureOrderUpdateDTO recancel = new ProcedureOrderUpdateDTO();
+        recancel.setStatus(ProcedureOrderStatus.CANCELLED);
+        recancel.setCancellationReason("Rewritten");
+        assertThatThrownBy(() -> service.updateProcedureOrder(orderId, recancel)).isInstanceOf(BusinessException.class);
+        ProcedureOrderUpdateDTO reopen = new ProcedureOrderUpdateDTO();
+        reopen.setStatus(ProcedureOrderStatus.SCHEDULED);
+        assertThatThrownBy(() -> service.updateProcedureOrder(orderId, reopen)).isInstanceOf(BusinessException.class);
+
+        assertThat(cancelled.getStatus()).isEqualTo(ProcedureOrderStatus.CANCELLED);
+        assertThat(cancelled.getCancelledAt()).isEqualTo(firstStamp);
+        assertThat(cancelled.getCancellationReason()).isEqualTo("Patient declined");
+        verify(procedureOrderRepository, never()).save(any());
     }
 }

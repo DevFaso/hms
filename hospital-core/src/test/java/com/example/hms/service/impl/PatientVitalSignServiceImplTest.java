@@ -43,6 +43,9 @@ import org.springframework.data.domain.PageRequest;
 class PatientVitalSignServiceImplTest {
 
     @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    @Mock
     private PatientRepository patientRepository;
 
     @Mock
@@ -60,9 +63,24 @@ class PatientVitalSignServiceImplTest {
     @Mock
     private PatientVitalSignRepository vitalSignRepository;
 
+    @Mock
+    private com.example.hms.service.support.PatientChartAccess patientChartAccess;
+
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+
+    @Mock
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+
     private PatientVitalSignServiceImpl service;
+    @org.mockito.Mock
+    private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
 
     private final PatientVitalSignMapper mapper = new PatientVitalSignMapper();
+    @Mock
+    private com.example.hms.repository.AdmissionRepository admissionRepository;
+    @Mock
+    private com.example.hms.repository.EncounterRepository encounterRepository;
 
     @BeforeEach
     void setUp() {
@@ -73,8 +91,24 @@ class PatientVitalSignServiceImplTest {
             staffRepository,
             assignmentRepository,
             vitalSignRepository,
-            mapper
-        );
+            mapper,
+            patientRegistrationGuard,
+            patientChartAccess,
+            recordAccessPolicy,
+            reachRecorder,
+            new com.example.hms.service.vitals.VitalSignJudgement(
+            org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
+            org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
+            com.example.hms.i18n.TestMessageSources.bundles(),
+            org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class),
+            com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(
+                org.mockito.Mockito.mock(com.example.hms.repository.DeliveryRecordRepository.class))),
+            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test
@@ -123,6 +157,53 @@ class PatientVitalSignServiceImplTest {
         assertThat(captor.getValue().getRecordedByAssignment()).isEqualTo(staffAssignment);
     }
 
+    /** QA D1077 (round 19): POST /patients/{id}/vitals stored 56 cm for a 67-year-old. */
+    @Test
+    void recordVital_refusesAHeadCircumferenceForAnAdult_D1077() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID recorderUserId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(67));
+        Hospital hospital = minimalHospital(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(minimalStaff(recorderUserId, hospital, minimalAssignment(hospital, true))));
+        PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
+            .hospitalId(hospitalId).recordedAt(LocalDateTime.now()).headCircumferenceCm(56.0).build();
+
+        assertThatThrownBy(() -> service.recordVital(patientId, request, recorderUserId))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("vitals.headCircumference.notApplicable");
+        verify(vitalSignRepository, never()).save(any());
+    }
+
+    @Test
+    void recordVital_keepsAChildsHeadCircumference_D1077() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID recorderUserId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(2));
+        Hospital hospital = minimalHospital(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(minimalStaff(recorderUserId, hospital, minimalAssignment(hospital, true))));
+        when(vitalSignRepository.save(any(PatientVitalSign.class))).thenAnswer(inv -> inv.getArgument(0));
+        PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
+            .hospitalId(hospitalId).recordedAt(LocalDateTime.now()).headCircumferenceCm(47.0).build();
+
+        service.recordVital(patientId, request, recorderUserId);
+
+        ArgumentCaptor<PatientVitalSign> captor = ArgumentCaptor.forClass(PatientVitalSign.class);
+        verify(vitalSignRepository).save(captor.capture());
+        assertThat(captor.getValue().getHeadCircumferenceCm()).isEqualTo(47.0);
+    }
+
     @Test
     void recordVitalThrowsWhenAssignmentHospitalMismatch() {
         UUID patientId = UUID.randomUUID();
@@ -150,7 +231,8 @@ class PatientVitalSignServiceImplTest {
 
         assertThatThrownBy(() -> service.recordVital(patientId, request, recorderUserId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("assignment is not associated");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.recorderAssignmentOtherHospital");
 
         verify(vitalSignRepository, never()).save(any());
     }
@@ -177,12 +259,14 @@ class PatientVitalSignServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(registration));
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, null);
         when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
 
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Recorder staff is not assigned");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.recorderStaffOtherHospital");
     }
 
     @Test
@@ -201,7 +285,7 @@ class PatientVitalSignServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.empty());
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         UUID randomId = UUID.randomUUID();
         assertThatExceptionOfType(ResourceNotFoundException.class)
@@ -218,7 +302,7 @@ class PatientVitalSignServiceImplTest {
 
         Patient patient = minimalPatient(patientId);
         patient.setHospitalId(UUID.randomUUID());
-        when(hospitalRepository.findById(patient.getHospitalId())).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalById(patient.getHospitalId())).thenReturn(Optional.empty());
 
         UserRoleHospitalAssignment assignment = minimalAssignment(minimalHospital(UUID.randomUUID()), true);
         Staff staff = minimalStaff(recorderUserId, assignment.getHospital(), assignment);
@@ -264,7 +348,8 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Registration does not belong");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.registrationOtherPatient");
     }
 
     @Test
@@ -295,7 +380,8 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Assignment is not active");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.assignmentInactive");
     }
 
     @Test
@@ -324,7 +410,7 @@ class PatientVitalSignServiceImplTest {
 
         assertThatThrownBy(() -> service.recordVital(patientId, request, recorderUserId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Assignment not found");
+            .hasFieldOrPropertyWithValue("messageKey", "roleAssignment.notFound");
     }
 
     @Test
@@ -351,7 +437,7 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Staff not found or inactive");
+            .hasFieldOrPropertyWithValue("messageKey", "staff.not.found.or.inactive");
     }
 
     @Test
@@ -372,49 +458,143 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Registration not found");
+            .hasFieldOrPropertyWithValue("messageKey", "registration.notFound");
     }
 
     @Test
-    void getRecentVitalsFallsBackToPatientOnlyWhenHospitalMissing() {
+    void getRecentVitals_staffWithNoHospitalScope_refusesInsteadOfReadingEveryHospital() {
         UUID patientId = UUID.randomUUID();
-        int limit = 0;
+        when(patientChartAccess.require(patientId, null)).thenReturn(minimalPatient(patientId));
+        // Stubbed so the test would SEE the leak if the fallback ever ran again.
+        org.mockito.Mockito.lenient().when(vitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(any(), any()))
+            .thenReturn(List.of(PatientVitalSign.builder().build()));
+
+        assertThatThrownBy(() -> service.getRecentVitals(patientId, null, 5))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
+            .isEqualTo("patient.notFound");
+
+        verify(vitalSignRepository, never()).findByPatient_IdOrderByRecordedAtDesc(any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder, recordAccessPolicy);
+    }
+
+    @Test
+    void getRecentVitals_staffRead_goesThroughTheChartGateFirst() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(patientChartAccess.require(patientId, hospitalId))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
+
+        assertThatThrownBy(() -> service.getRecentVitals(patientId, hospitalId, 5))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        org.mockito.Mockito.verifyNoInteractions(vitalSignRepository);
+    }
+
+    @Test
+    void getRecentVitals_readsTheReadableHospitalsAndAccountsTheForeignRows() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        PatientVitalSign local = PatientVitalSign.builder()
+            .patient(patient).hospital(minimalHospital(hospitalId)).recordedAt(LocalDateTime.now()).build();
+        local.setId(UUID.randomUUID());
+        PatientVitalSign foreign = PatientVitalSign.builder()
+            .patient(patient).hospital(minimalHospital(otherHospitalId)).recordedAt(LocalDateTime.now().minusHours(1)).build();
+        foreign.setId(UUID.randomUUID());
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(recordAccessPolicy.readableHospitalIds(any(), org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.eq(hospitalId))).thenReturn(java.util.Set.of(hospitalId, otherHospitalId));
+        when(vitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId,
+            java.util.Set.of(hospitalId, otherHospitalId), PageRequest.of(0, 3)))
+            .thenReturn(List.of(local, foreign));
+
+        List<PatientVitalSignResponseDTO> responses = service.getRecentVitals(patientId, hospitalId, 3);
+
+        assertThat(responses).extracting(PatientVitalSignResponseDTO::getHospitalId)
+            .containsExactly(hospitalId, otherHospitalId);
+        verify(reachRecorder).recordReach(org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.eq(hospitalId), any(), org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.eq(java.util.Map.of(otherHospitalId.toString(), 1L)),
+            org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void getRecentVitalsForPatientPortal_readsThePatientsOwnRows_withoutTheStaffGate() {
+        UUID patientId = UUID.randomUUID();
         PatientVitalSign vitalSign = PatientVitalSign.builder()
             .patient(minimalPatient(patientId))
             .recordedAt(LocalDateTime.now())
             .build();
         vitalSign.setId(UUID.randomUUID());
-
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(minimalPatient(patientId));
         when(vitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, 1)))
             .thenReturn(List.of(vitalSign));
 
-        List<PatientVitalSignResponseDTO> responses = service.getRecentVitals(patientId, null, limit);
+        List<PatientVitalSignResponseDTO> responses = service.getRecentVitalsForPatientPortal(patientId, 0);
 
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getPatientId()).isEqualTo(patientId);
+        verify(patientChartAccess, never()).require(any(), any());
+        org.mockito.Mockito.verifyNoInteractions(reachRecorder);
     }
 
     @Test
-    void getRecentVitalsFiltersByHospital() {
+    void getVitalsPageForPatientPortal_pagesTheWholeHistoryWithItsTotal_D1379() {
+        // QA D1379 (D1347 class): /my-vitals showed the 10 newest of 45 records.
         UUID patientId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-
-        Patient patient = minimalPatient(patientId);
-        Hospital hospital = minimalHospital(hospitalId);
         PatientVitalSign vitalSign = PatientVitalSign.builder()
-            .patient(patient)
-            .hospital(hospital)
+            .patient(minimalPatient(patientId))
             .recordedAt(LocalDateTime.now())
             .build();
         vitalSign.setId(UUID.randomUUID());
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(minimalPatient(patientId));
+        when(vitalSignRepository.findPageByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(4, 10)))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(vitalSign), PageRequest.of(4, 10), 41));
 
-        when(vitalSignRepository.findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId, PageRequest.of(0, 3)))
-            .thenReturn(List.of(vitalSign));
+        org.springframework.data.domain.Page<PatientVitalSignResponseDTO> page =
+            service.getVitalsPageForPatientPortal(patientId, 4, 10);
 
-        List<PatientVitalSignResponseDTO> responses = service.getRecentVitals(patientId, hospitalId, 3);
+        assertThat(page.getTotalElements()).isEqualTo(41);
+        assertThat(page.getContent()).singleElement()
+            .extracting(PatientVitalSignResponseDTO::getPatientId).isEqualTo(patientId);
+        verify(patientChartAccess, never()).require(any(), any());
+    }
 
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getHospitalId()).isEqualTo(hospitalId);
+    @Test
+    void getVitalsPageForPatientPortal_lowersAnOversizedPageAndANegativeIndex_D1379() {
+        UUID patientId = UUID.randomUUID();
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(minimalPatient(patientId));
+        when(vitalSignRepository.findPageByPatient_IdOrderByRecordedAtDesc(any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        service.getVitalsPageForPatientPortal(patientId, -3, 5000);
+
+        verify(vitalSignRepository).findPageByPatient_IdOrderByRecordedAtDesc(patientId,
+            PageRequest.of(0, com.example.hms.service.PatientVitalSignService.PORTAL_PAGE_MAX));
+    }
+
+    @Test
+    void getVitals_staffWithNoHospitalScope_refusesBeforeTheRangeQuery() {
+        UUID patientId = UUID.randomUUID();
+        when(patientChartAccess.require(patientId, null)).thenReturn(minimalPatient(patientId));
+
+        assertThatThrownBy(() -> service.getVitals(patientId, null, null, null, 0, 20))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(vitalSignRepository, never()).findWithinRange(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void getVitals_scopedRead_isGatedAndStaysAtTheCallersHospital() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(minimalPatient(patientId));
+        when(vitalSignRepository.findWithinRange(patientId, hospitalId, null, null, PageRequest.of(0, 20)))
+            .thenReturn(List.of());
+
+        assertThat(service.getVitals(patientId, hospitalId, null, null, 0, 20)).isEmpty();
     }
 
     @Test
@@ -451,6 +631,66 @@ class PatientVitalSignServiceImplTest {
 
         assertThat(snapshot).isPresent();
         assertThat(snapshot.get().getHeartRate()).isEqualTo(75);
+    }
+
+    private void dischargedWithAStaleVisit() {
+        LocalDateTime discharged = LocalDateTime.now().minusDays(1);
+        com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+        stay.setStatus(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+        stay.setActualDischargeDateTime(discharged);
+        org.mockito.Mockito.lenient().when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any()))
+            .thenReturn(List.of(stay));
+        com.example.hms.model.Encounter stale = new com.example.hms.model.Encounter();
+        stale.setEncounterDate(discharged.minusDays(5));
+        org.mockito.Mockito.lenient().when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(any(), any(), any()))
+            .thenReturn(List.of(stale));
+    }
+
+    @Test
+    void d525_theChartVitalsEndpointRefusesADischargedPatientWhoseOnlyOpenVisitPredatesTheDischarge() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseUserId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        Hospital hospital = minimalHospital(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
+        dischargedWithAStaleVisit();
+        PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
+            .hospitalId(hospitalId).recordedAt(LocalDateTime.now()).heartRateBpm(80).build();
+
+        assertThatThrownBy(() -> service.recordVital(patientId, request, nurseUserId))
+            .isInstanceOf(BusinessException.class)
+            .matches(e -> "nurse.vitals.patientDischarged".equals(((BusinessException) e).getMessageKey()));
+        verify(vitalSignRepository, never()).save(any());
+    }
+
+    @Test
+    void d525_aDischargedPatientMayStillReportAHomeReading() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientUserId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        User user = new User();
+        user.setId(patientUserId);
+        patient.setUser(user);
+        Hospital hospital = minimalHospital(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
+        dischargedWithAStaleVisit();
+        when(vitalSignRepository.save(any(PatientVitalSign.class))).thenAnswer(inv -> {
+            PatientVitalSign e = inv.getArgument(0);
+            e.setId(UUID.randomUUID());
+            return e;
+        });
+        PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
+            .hospitalId(hospitalId).source("PATIENT_REPORTED").recordedAt(LocalDateTime.now()).heartRateBpm(80).build();
+
+        service.recordVital(patientId, request, patientUserId);
+
+        verify(vitalSignRepository).save(any(PatientVitalSign.class));
     }
 
     private Patient minimalPatient(UUID id) {

@@ -25,10 +25,28 @@ public final class FillAccounting {
      * every refill an approval has released.
      */
     public static BigDecimal expectedLifetimeQuantity(Prescription prescription) {
-        BigDecimal perFill = prescription.getQuantity() != null
-                ? prescription.getQuantity() : BigDecimal.ZERO;
+        BigDecimal perFill = perFillQuantity(prescription);
+        if (perFill == null) {
+            perFill = BigDecimal.ZERO;
+        }
         int refillsUsed = prescription.getRefillsUsed() != null ? prescription.getRefillsUsed() : 0;
         return perFill.multiply(BigDecimal.valueOf(1L + refillsUsed));
+    }
+
+    /**
+     * The quantity one fill is entitled to: the stored quantity, or for a
+     * legacy prescription that predates the field, the cap read from its
+     * regimen (dose x frequency x duration) - the same ceiling the dispense
+     * service enforces (QA D706). QA D752: status transitions used only the
+     * stored quantity, so a partial dispense of 4 against a derived cap of 9
+     * closed the prescription as DISPENSED and the remaining 5 could never be
+     * handed over. Null when neither is known.
+     */
+    public static BigDecimal perFillQuantity(Prescription prescription) {
+        if (prescription.getQuantity() != null) {
+            return prescription.getQuantity();
+        }
+        return PrescribedQuantityEstimate.perFill(prescription);
     }
 
     /**
@@ -38,7 +56,7 @@ public final class FillAccounting {
      * Never negative: an over-dispense owes nothing.
      */
     public static BigDecimal remaining(Prescription prescription, BigDecimal dispensedToDate) {
-        if (prescription.getQuantity() == null) {
+        if (perFillQuantity(prescription) == null) {
             return null;
         }
         BigDecimal expected = expectedLifetimeQuantity(prescription);
@@ -50,13 +68,14 @@ public final class FillAccounting {
     /**
      * The remainder as a human reads it in an SMS or on a printed copy —
      * "6" or "6 comprimés" — with the trailing zeros of a NUMERIC(12,2)
-     * column stripped. Null when the remainder is unknown.
+     * column stripped, in the reader's decimal notation ("2,5 ml" in French,
+     * D1002 class). Null when the remainder is unknown.
      */
-    public static String remainingLabel(BigDecimal remaining, String quantityUnit) {
+    public static String remainingLabel(BigDecimal remaining, String quantityUnit, java.util.Locale locale) {
         if (remaining == null) {
             return null;
         }
-        String amount = remaining.stripTrailingZeros().toPlainString();
+        String amount = com.example.hms.utility.DisplayNumbers.quantity(remaining, locale);
         return quantityUnit != null && !quantityUnit.isBlank()
                 ? amount + " " + quantityUnit.trim()
                 : amount;

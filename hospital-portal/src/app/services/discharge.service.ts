@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, catchError, of } from 'rxjs';
+import { backgroundRequestOptions } from './ws-transport';
 
 /* ── Approvals ─────────────────────────────────────────────── */
 
@@ -18,6 +19,7 @@ export interface DischargeApprovalDecision {
   doctorAssignmentId: string;
   doctorNote?: string;
   rejectionReason?: string;
+  dischargeDiagnosis?: string;
 }
 
 export interface DischargeApproval {
@@ -29,6 +31,8 @@ export interface DischargeApproval {
   hospitalId: string;
   hospitalName: string;
   nurseStaffId: string;
+  /** QA D1081: the requesting nurse's user (shared/authorship.service). */
+  authorUserId?: string | null;
   nurseName: string;
   nurseAssignmentId: string;
   doctorStaffId?: string;
@@ -153,6 +157,8 @@ export interface DischargeSummary {
   providerSignature?: string;
   providerSignatureDateTime?: string;
   isFinalized: boolean;
+  /** Review of #971 (D930): whether the signed-in user may update or delete this draft, as the server decides. */
+  editableByCaller?: boolean | null;
   finalizedAt?: string;
   additionalNotes?: string;
   createdAt?: string;
@@ -252,6 +258,20 @@ export class DischargeService {
     return this.http.post<DischargeSummary>(`${this.summariesUrl}/${id}/finalize`, null, {
       params,
     });
+  }
+
+  /**
+   * QA D1596: the summary already written for an encounter (the stay's), or
+   * null when none is, or it cannot be read: the discharge dialog then asks
+   * for the diagnosis itself, and the server still enforces the one source.
+   */
+  summaryForEncounter(encounterId: string): Observable<DischargeSummary | null> {
+    return this.http
+      .get<DischargeSummary>(
+        `${this.summariesUrl}/encounter/${encodeURIComponent(encounterId)}`,
+        backgroundRequestOptions(),
+      )
+      .pipe(catchError(() => of(null)));
   }
 
   getSummary(id: string): Observable<DischargeSummary> {

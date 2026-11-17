@@ -34,4 +34,12 @@ public class MfaBackupCode extends BaseEntity {
 
     @Column(name = "used_at")
     private LocalDateTime usedAt;
+
+    /**
+     * Issued with a replacement authenticator that is not confirmed yet (V183):
+     * never accepted until it is, when these replace the current set.
+     */
+    @Builder.Default
+    @Column(name = "pending", nullable = false)
+    private boolean pending = false;
 }

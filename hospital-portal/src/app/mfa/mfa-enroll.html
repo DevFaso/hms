@@ -14,6 +14,11 @@
       <div class="error-banner" role="alert">
         <span>{{ error() }}</span>
       </div>
+      @if (stepUpRefused()) {
+        <button class="btn-secondary back-to-sign-in" type="button" (click)="finish()">
+          {{ 'MFA.BACK_TO_SIGN_IN' | translate }}
+        </button>
+      }
     }
 
     <!-- STEP: Start -->
@@ -53,10 +58,14 @@
     <!-- STEP: Verify -->
     @if (step() === 'verify') {
       <div class="step-content">
-        <p>{{ 'MFA.ENROLL_ENTER_CODE' | translate }}</p>
+        <p>
+          <label for="mfa-enroll-code">{{ 'MFA.ENROLL_ENTER_CODE' | translate }} *</label>
+        </p>
         <form (ngSubmit)="submitVerification()" class="verify-form">
           <input
+            id="mfa-enroll-code"
             type="text"
+            required
             [(ngModel)]="totpCode"
             name="totpCode"
             maxlength="6"

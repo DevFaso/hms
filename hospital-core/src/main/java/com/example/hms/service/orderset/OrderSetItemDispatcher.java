@@ -36,6 +36,10 @@ import java.util.UUID;
  * critical-block contract and {@code forceOverride} semantics from
  * P1 #3 without bespoke wiring here.
  *
+ * <p>QA D1396 (round 33): the item's quantity, unit and catalogue pick reach
+ * the order, so a catalogue-controlled drug can be applied (its quantity is
+ * required at save, {@link OrderSetItemQuantityRules}).
+ *
  * <p>Item types DIET / ACTIVITY / MONITORING are recognised but emit
  * a {@link DispatchResult#skipped(String)} with a reason — they have
  * no equivalent order entity yet and are captured separately as
@@ -120,11 +124,35 @@ public class OrderSetItemDispatcher {
         req.setEncounterId(ctx.encounterId());
         req.setMedicationName(name);
         req.setMedicationCode(string(item.get("medicationCode")));
+        req.setMedicationCatalogItemId(catalogItemId(item));
         req.setDosage(combineDose(item));
+        req.setQuantity(OrderSetItemQuantityRules.quantityOf(item));
+        req.setQuantityUnit(string(item.get(OrderSetItemQuantityRules.QUANTITY_UNIT_KEY)));
         req.setFrequency(string(item.get("frequency")));
+        // QA D1378 / D1382 (round 32): the item is as-needed because its
+        // author ticked it, and the order carries the item's interval. The
+        // apply checked every item first (OrderSetItemPrnRules), so an
+        // as-needed item without its interval is refused by name, never
+        // skipped, and createPrescription holds the order to the same rule.
+        boolean asNeeded = OrderSetItemPrnRules.asNeeded(item);
+        req.setAsNeeded(asNeeded);
+        if (asNeeded) {
+            req.setPrnMinIntervalHours(OrderSetItemPrnRules.intervalHours(item));
+        }
+        // QA D1419: the author's answer about a wording the MAR cannot schedule reaches the order.
+        req.setFrequencyConfirmed(OrderSetItemPrnRules.frequencyAnsweredAtApply(item));
         req.setDuration(string(item.get("duration")));
-        req.setNotes(NARRATIVE_PREFIX + ctx.orderSetName());
+        // QA D1396 class: what the editor writes reaches the order: the route
+        // (it reached only the dose text, so the MAR's route right saw none),
+        // when it is one the route reading knows, and the item's own notes.
+        String route = string(item.get("route"));
+        if (com.example.hms.service.emar.MedicationRoutes.canonical(route) != null) {
+            req.setRoute(route);
+        }
+        String notes = string(item.get("notes"));
+        req.setNotes(NARRATIVE_PREFIX + ctx.orderSetName() + (notes == null ? "" : " - " + notes));
         req.setForceOverride(ctx.forceOverride());
+        req.setOverrideReason(ctx.overrideReason());
 
         PrescriptionResponseDTO created = prescriptionService.createPrescription(req, locale);
         return DispatchResult.medication(created.getId(), created.getCdsAdvisories());
@@ -217,8 +245,21 @@ public class OrderSetItemDispatcher {
         return a != null ? a : b;
     }
 
+    /** The catalogue pick when the item carries a well-formed one. */
+    private static UUID catalogItemId(Map<String, Object> item) {
+        String pick = string(item.get(OrderSetItemQuantityRules.CATALOG_ITEM_KEY));
+        if (pick == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(pick.strip());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
     private static String combineDose(Map<String, Object> item) {
-        String dose = string(item.get("dose"));
+        String dose = OrderSetItemDoseRules.doseOf(item);
         String route = string(item.get("route"));
         if (dose == null && route == null) return null;
         if (dose == null) return route;

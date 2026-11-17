@@ -26,6 +26,7 @@ public class EmpiMapper {
         List<EmpiIdentityAliasDTO> aliasDtos = Optional.ofNullable(identity.getAliases())
             .orElseGet(Collections::emptySet)
             .stream()
+            .filter(alias -> !alias.isNationalUniqueIdAlias())
             .sorted(Comparator.comparing(EmpiIdentityAlias::getCreatedAt))
             .map(this::toAliasDto)
             .toList();
@@ -50,7 +51,7 @@ public class EmpiMapper {
     }
 
     public EmpiIdentityAliasDTO toAliasDto(EmpiIdentityAlias alias) {
-        if (alias == null) {
+        if (alias == null || alias.isNationalUniqueIdAlias()) {
             return null;
         }
         return EmpiIdentityAliasDTO.builder()
@@ -130,6 +131,7 @@ public class EmpiMapper {
         return Optional.ofNullable(aliases)
             .orElse(List.of())
             .stream()
+            .filter(alias -> !alias.isNationalUniqueIdAlias())
             .map(this::toAliasDto)
             .toList();
     }

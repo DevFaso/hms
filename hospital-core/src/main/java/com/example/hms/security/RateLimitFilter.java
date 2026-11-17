@@ -48,7 +48,35 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/auth/register",
             "/api/auth/token/refresh",
             "/api/auth/mfa/verify",
-            "/api/auth/password"
+            // D2001: the endpoints that check a signed-in user's own password
+            // (the lock screen, the current password of a change, the forced
+            // setup, the e-mail change). Each also counts in the account's
+            // sign-in bucket (LoginAttemptService#checkPassword).
+            "/api/auth/verify-password",
+            "/api/auth/me/change-password",
+            "/api/auth/me/complete-setup",
+            "/api/auth/me/change-email",
+            "/api/auth/password",
+            // The MFA step-up endpoints (a code in X-Mfa-Token): enrolment or
+            // replacement, and rewriting the MFA records. MfaService also locks
+            // the step-up per user after repeated wrong codes.
+            "/api/auth/mfa/enroll",
+            "/api/auth/credentials/mfa",
+            // D2000: the recovery-contact routes, whose send-code texts or mails a
+            // code (a paid SMS for a phone). The service adds a per-contact
+            // cooldown and an hourly cap per user on top of this bucket.
+            "/api/auth/credentials/recovery",
+            // Anonymous and able to send an SMS or an e-mail (QA D418): per IP
+            // here, per assignment in AuthController.
+            "/api/auth/resend-verification",
+            // The legacy reset pair (QA D787): the request sends an e-mail or an
+            // SMS to the named account; the confirm takes a token. The current
+            // ones are under /api/auth/password above.
+            "/api/auth/request-reset",
+            "/api/auth/reset-password",
+            // Anonymous and taking a one-time code (QA D1123): the assignment
+            // view, the code check by reference and the code check by phone.
+            "/api/assignments/public"
     );
 
     private final int requestsPerMinute;

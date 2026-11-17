@@ -63,7 +63,7 @@ class ObgynReferralStateMachineTest {
                 ObgynReferral r = newReferralIn(s);
                 assertThatThrownBy(() -> r.acknowledge("p", anyObgyn))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("acknowledge");
+                    .hasMessage("referral.r7.wrongStatus"); // QA D1086: a key, no longer the English "Cannot acknowledge …"
             }
         }
     }
@@ -87,7 +87,7 @@ class ObgynReferralStateMachineTest {
                 ObgynReferral r = newReferralIn(s);
                 assertThatThrownBy(r::start)
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("start");
+                    .hasMessage("referral.r7.wrongStatus"); // QA D1086: a key, no longer the English "Cannot start …"
             }
         }
     }
@@ -127,7 +127,7 @@ class ObgynReferralStateMachineTest {
                 ObgynReferral r = newReferralIn(s);
                 assertThatThrownBy(() -> r.complete("x", false))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("complete");
+                    .hasMessage("referral.r7.wrongStatus"); // QA D1086: a key, no longer the English "Cannot complete …"
             }
         }
     }
@@ -158,7 +158,7 @@ class ObgynReferralStateMachineTest {
                 ObgynReferral r = newReferralIn(s);
                 assertThatThrownBy(() -> r.cancel("x"))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("terminal status");
+                    .hasMessage("referral.r7.cannotCancelTerminal"); // QA D1086: a key, no longer "Cannot cancel … in terminal status"
             }
         }
     }

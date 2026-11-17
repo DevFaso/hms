@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -104,6 +105,122 @@ class PatientAccessAuditInterceptorTest {
     }
 
     // ── What must be recorded ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("QA D187: a read at a pinned hospital carries the actor's assignment there and the bare role code")
+    void recordsTheHospitalOfTheRead() throws Exception {
+        UUID hospitalId = UUID.randomUUID();
+        com.example.hms.repository.UserRoleHospitalAssignmentRepository repository =
+            mock(com.example.hms.repository.UserRoleHospitalAssignmentRepository.class);
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode("ROLE_DOCTOR");
+        role.setName("Médecin");
+        com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setRole(role);
+        when(repository.findAllByUser_IdAndHospital_IdAndActiveTrue(DOCTOR, hospitalId))
+            .thenReturn(java.util.List.of(assignment));
+        @SuppressWarnings("unchecked")
+        ObjectProvider<AuditEventLogService> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(auditService);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<com.example.hms.repository.UserRoleHospitalAssignmentRepository> repoProvider = mock(ObjectProvider.class);
+        when(repoProvider.getIfAvailable()).thenReturn(repository);
+        PatientAccessAuditInterceptor scoped = new PatientAccessAuditInterceptor(provider, repoProvider, 30, 1000);
+        ReflectionTestUtils.setField(scoped, "enabled", true);
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(DOCTOR).activeHospitalId(hospitalId).headerOverridden(true).build());
+        try {
+            scoped.afterCompletion(
+                get("/encounters/patient/{patientId}", Map.of("patientId", PATIENT.toString())),
+                ok(), handler("byConvention"), null);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+
+        AuditEventRequestDTO emitted = captureEmitted();
+        assertThat(emitted.getAssignmentId()).isEqualTo(assignment.getId());
+        assertThat(emitted.getRoleName()).isEqualTo("DOCTOR");
+    }
+
+    @Test
+    @DisplayName("QA D840: every chart read under break-the-glass is counted on the session, past the PATIENT_ACCESS dedupe")
+    void countsEveryReadUnderABreakGlassSession() throws Exception {
+        UUID hospitalB = UUID.randomUUID();
+        com.example.hms.service.BreakGlassService breakGlass = mock(com.example.hms.service.BreakGlassService.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<AuditEventLogService> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(auditService);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<com.example.hms.service.BreakGlassService> breakGlassProvider = mock(ObjectProvider.class);
+        when(breakGlassProvider.getIfAvailable()).thenReturn(breakGlass);
+        PatientAccessAuditInterceptor counting =
+            new PatientAccessAuditInterceptor(provider, null, breakGlassProvider, 30, 1000);
+        ReflectionTestUtils.setField(counting, "enabled", true);
+        // DOCTOR_B, pinned to hospital B, opens the chart three times.
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(DOCTOR).activeHospitalId(hospitalB)
+                .permittedHospitalIds(java.util.Set.of(hospitalB)).build());
+        try {
+            for (int read = 0; read < 3; read++) {
+                counting.afterCompletion(get("/patients/{id}", Map.of("id", PATIENT.toString())),
+                    ok(), handler("byConvention"), null);
+            }
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+
+        verify(breakGlass, times(3))
+            .consumeReadIfLive(PATIENT, DOCTOR, hospitalB, "GET /patients/{id}");
+        // The ordinary access row is still deduped to one.
+        verify(auditService, times(1)).logEvent(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("QA D840: a break-the-glass counting failure never costs the ordinary access row")
+    void aCountingFailureStillRecordsTheAccess() throws Exception {
+        com.example.hms.service.BreakGlassService breakGlass = mock(com.example.hms.service.BreakGlassService.class);
+        when(breakGlass.consumeReadIfLive(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new IllegalStateException("db down"));
+        @SuppressWarnings("unchecked")
+        ObjectProvider<AuditEventLogService> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(auditService);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<com.example.hms.service.BreakGlassService> breakGlassProvider = mock(ObjectProvider.class);
+        when(breakGlassProvider.getIfAvailable()).thenReturn(breakGlass);
+        PatientAccessAuditInterceptor counting =
+            new PatientAccessAuditInterceptor(provider, null, breakGlassProvider, 30, 1000);
+        ReflectionTestUtils.setField(counting, "enabled", true);
+
+        counting.afterCompletion(get("/patients/{id}", Map.of("id", PATIENT.toString())),
+            ok(), handler("byConvention"), null);
+
+        assertThat(captureEmitted().getEventType()).isEqualTo(AuditEventType.PATIENT_ACCESS);
+    }
+
+    @Test
+    @DisplayName("QA D840: a failed read counts nothing on a break-the-glass session")
+    void aRefusedReadCountsNothing() throws Exception {
+        com.example.hms.service.BreakGlassService breakGlass = mock(com.example.hms.service.BreakGlassService.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<AuditEventLogService> provider = mock(ObjectProvider.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<com.example.hms.service.BreakGlassService> breakGlassProvider = mock(ObjectProvider.class);
+        org.mockito.Mockito.lenient().when(breakGlassProvider.getIfAvailable()).thenReturn(breakGlass);
+        PatientAccessAuditInterceptor counting =
+            new PatientAccessAuditInterceptor(provider, null, breakGlassProvider, 30, 1000);
+        ReflectionTestUtils.setField(counting, "enabled", true);
+        MockHttpServletResponse forbidden = new MockHttpServletResponse();
+        forbidden.setStatus(403);
+
+        counting.afterCompletion(get("/patients/{id}", Map.of("id", PATIENT.toString())),
+            forbidden, handler("byConvention"), null);
+
+        org.mockito.Mockito.verifyNoInteractions(breakGlass);
+    }
 
     @Test
     @DisplayName("records a chart read, attributed to the right patient and clinician")

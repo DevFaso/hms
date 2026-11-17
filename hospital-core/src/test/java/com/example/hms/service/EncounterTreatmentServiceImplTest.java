@@ -63,6 +63,7 @@ class EncounterTreatmentServiceImplTest {
         encounter = new Encounter();
         treatment = new Treatment();
         staff = new Staff();
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, null);
 
         requestDTO = EncounterTreatmentRequestDTO.builder()
                 .encounterId(encounterId)
@@ -94,6 +95,11 @@ class EncounterTreatmentServiceImplTest {
     }
 
     // ── addTreatmentToEncounter ──────────────────────────────────────────────
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
+    }
 
     @Nested
     @DisplayName("addTreatmentToEncounter")
@@ -280,5 +286,21 @@ class EncounterTreatmentServiceImplTest {
             List<EncounterTreatmentResponseDTO> result = service.getTreatmentsByEncounter(encounterId);
             assertThat(result).isEmpty();
         }
+    }
+
+    /** QA D1428 class: a visit nobody saw has no treatment; a completed one takes a late entry. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.EncounterStatus.class,
+        names = {"CANCELLED", "LEFT_WITHOUT_BEING_SEEN"})
+    void qaD1428_aVisitClosedUnseenTakesNoTreatment(com.example.hms.enums.EncounterStatus closed) {
+        encounter.setStatus(closed);
+        org.mockito.Mockito.when(encounterRepository.findById(encounterId)).thenReturn(java.util.Optional.of(encounter));
+        org.mockito.Mockito.when(treatmentRepository.findById(treatmentId)).thenReturn(java.util.Optional.of(treatment));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.addTreatmentToEncounter(requestDTO))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("encounter.treatment.endedUnseen");
+        org.mockito.Mockito.verify(encounterTreatmentRepository, org.mockito.Mockito.never())
+            .save(org.mockito.ArgumentMatchers.any());
     }
 }

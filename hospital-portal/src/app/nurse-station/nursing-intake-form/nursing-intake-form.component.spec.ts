@@ -9,7 +9,9 @@ import {
   NursingIntakeResponse,
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
+import { PatientAllergy, PatientService } from '../../services/patient.service';
+import { PrescriptionResponse, PrescriptionService } from '../../services/prescription.service';
 
 describe('NursingIntakeFormComponent', () => {
   let component: NursingIntakeFormComponent;
@@ -54,12 +56,52 @@ describe('NursingIntakeFormComponent', () => {
     fixture.detectChanges();
   });
 
+  it('QA D1203: every allergy and medication control stays inside the dialog', () => {
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      component.addAllergy();
+      component.addMedication();
+      fixture.detectChanges();
+      const dialog = host.querySelector<HTMLElement>('.intake-dialog')!;
+      const right = dialog.getBoundingClientRect().right;
+      const controls = host.querySelectorAll<HTMLElement>(
+        '.allergy-row input, .allergy-row select, .allergy-row button, .medication-row input, .medication-row button, .medication-row label',
+      );
+      expect(controls.length).toBeGreaterThan(8);
+      controls.forEach((c) =>
+        expect(c.getBoundingClientRect().right)
+          .withContext(c.outerHTML.slice(0, 80))
+          .toBeLessThanOrEqual(right + 0.5),
+      );
+    } finally {
+      host.remove();
+    }
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });
 
   it('should allow submit when encounter is set and not saving', () => {
+    component.nursingAssessmentNotes.set('Alerte, orientée');
     expect(component.canSubmit).toBeTrue();
+  });
+
+  it('QA D1158: an intake with only the copied complaint is refused and says what it needs', () => {
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    submit.click();
+    fixture.detectChanges();
+    expect(mockEncounterService.submitNursingIntake).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="submit-guard-reason"]')?.textContent?.trim()).toBe(
+      'INTAKE.ASSESSMENT_REQUIRED',
+    );
+    expect(host.querySelector('#nursingNotes')?.getAttribute('aria-invalid')).toBe('true');
+    // A blank allergy row added and left empty is not an assessment either.
+    component.addAllergy();
+    expect(component.canSubmit).toBeFalse();
   });
 
   it('should not allow submit when saving is in progress', () => {
@@ -70,6 +112,28 @@ describe('NursingIntakeFormComponent', () => {
   it('should not allow submit when no encounter is set', () => {
     component.encounter = null;
     expect(component.canSubmit).toBeFalse();
+  });
+
+  it('QA D1124: with no encounter the submit stays clickable and says why it refuses', () => {
+    component.encounter = null;
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+    expect(submit?.disabled).withContext('never silently disabled (D1124)').toBeFalse();
+    submit?.click();
+    expect(mockEncounterService.submitNursingIntake).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="submit-guard-reason"]')?.textContent?.trim()).toBe(
+      'INTAKE.NO_ENCOUNTER',
+    );
+  });
+
+  it('QA D1124: only a request in flight disables the submit', () => {
+    component.saving.set(true);
+    fixture.detectChanges();
+    const submit = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button[type="submit"]',
+    );
+    expect(submit?.disabled).toBeTrue();
   });
 
   it('should add and remove allergies', () => {
@@ -131,9 +195,11 @@ describe('NursingIntakeFormComponent', () => {
   it('should show error toast on failure', () => {
     mockEncounterService.submitNursingIntake.and.returnValue(
       throwError(() => ({
+        status: 400,
         error: { message: 'Invalid encounter status' },
       })),
     );
+    component.nursingAssessmentNotes.set('Alerte, orientée');
 
     component.submit();
 
@@ -143,6 +209,7 @@ describe('NursingIntakeFormComponent', () => {
 
   it('should show generic error when no message in error response', () => {
     mockEncounterService.submitNursingIntake.and.returnValue(throwError(() => ({})));
+    component.nursingAssessmentNotes.set('Alerte, orientée');
 
     component.submit();
 
@@ -157,5 +224,148 @@ describe('NursingIntakeFormComponent', () => {
 
   it('should track items by index', () => {
     expect(component.trackByIndex(5)).toBe(5);
+  });
+});
+
+describe('NursingIntakeFormComponent — carried-in chart data (QA D951/D992)', () => {
+  let fixture: ComponentFixture<NursingIntakeFormComponent>;
+  let component: NursingIntakeFormComponent;
+  let patientService: jasmine.SpyObj<PatientService>;
+  let prescriptionService: jasmine.SpyObj<PrescriptionService>;
+
+  beforeEach(async () => {
+    patientService = jasmine.createSpyObj('PatientService', ['listAllergies']);
+    prescriptionService = jasmine.createSpyObj('PrescriptionService', ['list']);
+    patientService.listAllergies.and.returnValue(
+      of({
+        items: [
+          { id: 'a1', patientId: 'p1', allergenDisplay: 'Pénicilline', active: true },
+          { id: 'a2', patientId: 'p1', allergenDisplay: 'Old', active: false },
+        ] as PatientAllergy[],
+        withheld: false,
+      }),
+    );
+    prescriptionService.list.and.returnValue(
+      of([
+        {
+          id: 'rx1',
+          medicationName: 'Amoxicilline',
+          dosage: '500 mg',
+          frequency: '3x/j',
+          route: 'PO',
+        } as PrescriptionResponse,
+      ]),
+    );
+    await TestBed.configureTestingModule({
+      imports: [NursingIntakeFormComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PatientService, useValue: patientService },
+        { provide: PrescriptionService, useValue: prescriptionService },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(NursingIntakeFormComponent);
+    component = fixture.componentInstance;
+    component.encounter = {
+      id: 'enc-9',
+      code: 'ENC-20261027-51B828',
+      patientId: 'p1',
+      hospitalId: 'h1',
+      chiefComplaint: 'Douleur thoracique',
+    } as EncounterResponse;
+    fixture.detectChanges();
+  });
+
+  it('starts with the chief complaint given at check-in or triage', () => {
+    expect(component.chiefComplaint()).toBe('Douleur thoracique');
+  });
+
+  it("takes the next encounter's complaint when the form is reused (review of #971)", () => {
+    component.encounter = {
+      id: 'enc-10',
+      patientId: 'p2',
+      chiefComplaint: 'Toux',
+    } as EncounterResponse;
+    expect(component.chiefComplaint()).toBe('Toux');
+  });
+
+  it('never shows a late answer for the previous patient under the next one (review of #971)', () => {
+    const lateRx = new Subject<PrescriptionResponse[]>();
+    const lateAllergies = new Subject<{ items: PatientAllergy[]; withheld: boolean }>();
+    prescriptionService.list.and.returnValue(lateRx);
+    patientService.listAllergies.and.returnValue(lateAllergies);
+    component.encounter = { id: 'enc-a', patientId: 'pA' } as EncounterResponse;
+    prescriptionService.list.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    component.encounter = { id: 'enc-b', patientId: 'pB' } as EncounterResponse;
+
+    lateRx.next([{ id: 'rxA', medicationName: 'Medicine of A' } as PrescriptionResponse]);
+    lateAllergies.next({
+      items: [
+        { id: 'aA', patientId: 'pA', allergenDisplay: 'Allergy of A', active: true },
+      ] as PatientAllergy[],
+      withheld: false,
+    });
+
+    expect(component.documentedMedications()).toEqual([]);
+    expect(component.documentedAllergies()).toEqual([]);
+  });
+
+  it('lists the active documented allergies and the current prescriptions', () => {
+    expect(patientService.listAllergies).toHaveBeenCalledWith('p1', 'h1');
+    expect(component.documentedAllergies().map((a) => a.allergenDisplay)).toEqual(['Pénicilline']);
+    expect(component.documentedMedications().length).toBe(1);
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Pénicilline');
+    expect(text).toContain('Amoxicilline');
+  });
+
+  it('never re-sends a documented allergy, which the server would duplicate', () => {
+    expect(component.allergies().length).toBe(0);
+  });
+
+  it('copies a prescription into the reconciliation once', () => {
+    const rx = component.documentedMedications()[0];
+    component.reconcilePrescription(rx);
+    component.reconcilePrescription(rx);
+    expect(component.medications().length).toBe(1);
+    expect(component.medications()[0].medicationName).toBe('Amoxicilline');
+    expect(component.isReconciled(rx)).toBeTrue();
+  });
+
+  it('QA D1124: a reconciled row says so in words, never a disabled button', () => {
+    const host = fixture.nativeElement as HTMLElement;
+    const rx = component.documentedMedications()[0];
+    expect(host.querySelector('.documented__list button.btn-add--inline')).not.toBeNull();
+    expect(host.querySelector('[data-testid="reconciled-status"]')).toBeNull();
+    component.reconcilePrescription(rx);
+    fixture.detectChanges();
+    // The allergies list uses the same class: take the row of this medicine.
+    const row = [...host.querySelectorAll('.documented__list li')].find((li) =>
+      li.textContent?.includes('Amoxicilline'),
+    );
+    expect(row).withContext('the prescription row').toBeDefined();
+    expect(row?.querySelector('button')).withContext('no dead button on the row').toBeNull();
+    expect(row?.querySelector('[data-testid="reconciled-status"]')?.textContent?.trim()).toBe(
+      'INTAKE.RECONCILED',
+    );
+  });
+
+  it('names the encounter by its visit code, never a UUID fragment', () => {
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('ENC-20261027-51B828');
+    expect(text).not.toContain('enc-9');
+  });
+
+  it('is a labelled modal dialog', () => {
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector('.intake-dialog');
+    expect(dialog?.getAttribute('role')).toBe('dialog');
+    expect(dialog?.getAttribute('aria-modal')).toBe('true');
+    expect(dialog?.getAttribute('aria-labelledby')).toBe('intake-dialog-title');
   });
 });

@@ -42,7 +42,8 @@ public class HighRiskPregnancyCarePlanController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Create a high-risk pregnancy care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> createPlan(
-        @Valid @RequestBody HighRiskPregnancyCarePlanRequestDTO request,
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnCreate.class}) @RequestBody HighRiskPregnancyCarePlanRequestDTO request,
         Authentication authentication
     ) {
         HighRiskPregnancyCarePlanResponseDTO response = carePlanService.createPlan(request, authentication.getName());

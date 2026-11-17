@@ -120,4 +120,41 @@ describe('MyMedicalHistoryComponent', () => {
     expect(component.getNotes('surgical')).toBe('surgical note');
     expect(component.getNotes('unknown')).toBe('');
   });
+
+  // QA D1214 / round-23 item 7: A3's /me/patient/medical-history answers two
+  // ACTIVE B50.9 rows (a problem-list entry and a V14 diagnosis, distinct ids).
+  // The report said the page was empty; the tour log (r23 tour-A3.log, line 6)
+  // shows it rendered. This pins the shape the API returns: both rows shown.
+  it('QA D1214: two ACTIVE rows of the same diagnosis from the two stores are both listed', async () => {
+    const row = {
+      description: 'Paludisme à Plasmodium falciparum, simple',
+      icdCode: 'B50.9',
+      status: 'ACTIVE',
+      diagnosedByName: null,
+    };
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [MyMedicalHistoryComponent, TranslateModule.forRoot()],
+      providers: [
+        {
+          provide: PatientPortalService,
+          useValue: {
+            ...mockPortalService,
+            getMyMedicalHistory: () =>
+              of([
+                { ...row, id: 'problem-1', diagnosedAt: '2026-10-31T23:40:00Z' },
+                { ...row, id: 'diagnosis-1', diagnosedAt: '2026-10-31T23:41:00Z' },
+              ]),
+          },
+        },
+      ],
+    }).compileComponents();
+    const f = TestBed.createComponent(MyMedicalHistoryComponent);
+    f.detectChanges();
+    const rows = (f.nativeElement as HTMLElement).querySelectorAll(
+      '.history-section:first-of-type .history-table tbody tr',
+    );
+    expect(rows.length).toBe(2);
+    expect(rows[0].textContent).toContain('Paludisme');
+  });
 });

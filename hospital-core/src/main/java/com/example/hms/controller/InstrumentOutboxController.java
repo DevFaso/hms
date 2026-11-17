@@ -184,8 +184,7 @@ public class InstrumentOutboxController {
         java.util.List<Hl7v2MessageBuilder.ParsedObservation> parsed =
             hl7v2MessageBuilder.parseOruR01(hl7Message);
         if (parsed == null || parsed.isEmpty()) {
-            throw new com.example.hms.exception.BusinessException(
-                "Unable to parse the supplied HL7v2 message. Ensure it contains a valid MSH and OBX segment.");
+            throw new com.example.hms.exception.BusinessException("lab.instrument.hl7Unparseable");
         }
         return ResponseEntity.ok(ApiResponseWrapper.success(new ParsedObservationView(parsed.get(0))));
     }

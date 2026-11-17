@@ -12,6 +12,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ElapsedPipe } from '../../shared/pipes/elapsed.pipe';
 import { Subscription } from 'rxjs';
 import { DoctorWorklistItem } from '../../services/dashboard.service';
 
@@ -20,7 +21,7 @@ type WorklistTab = 'ALL' | 'WAITING' | 'IN_PROGRESS' | 'CONSULTS' | 'COMPLETED';
 @Component({
   selector: 'app-doctor-worklist',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule],
+  imports: [CommonModule, RouterLink, TranslateModule, ElapsedPipe],
   templateUrl: './doctor-worklist.html',
   styleUrl: './doctor-worklist.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

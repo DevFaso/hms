@@ -309,12 +309,8 @@ public class HighRiskPregnancyCarePlanMapper {
         if (patient == null) {
             return null;
         }
-        String first = safeTrim(patient.getFirstName());
-        String last = safeTrim(patient.getLastName());
-        String fullName = Stream.of(first, last)
-            .filter(part -> part != null && !part.isEmpty())
-            .collect(Collectors.joining(" "));
-        if (!fullName.isEmpty()) {
+        String fullName = patient.getFullName();
+        if (fullName != null) {
             return fullName;
         }
         String email = safeTrim(patient.getEmail());

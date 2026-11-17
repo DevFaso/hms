@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MyNotificationsComponent } from './my-notifications.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { Router, provideRouter } from '@angular/router';
 
 const makeNotification = (id: string, read: boolean) => ({
   id,
@@ -42,6 +43,7 @@ describe('MyNotificationsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [MyNotificationsComponent, TranslateModule.forRoot()],
       providers: [
+        provideRouter([]),
         { provide: PatientPortalService, useValue: portalService },
         { provide: ToastService, useValue: toastService },
       ],
@@ -56,11 +58,61 @@ describe('MyNotificationsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  describe('opening a notification (QA D983)', () => {
+    it('opens the conversation of a chat notification and marks it read', () => {
+      const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+      component.open({ ...makeNotification('c1', false), type: 'CHAT_MESSAGE' });
+      expect(portalService.markNotificationRead).toHaveBeenCalledWith('c1');
+      expect(navigate).toHaveBeenCalledWith(['/chat'], { queryParams: { open: 'unread' } });
+    });
+
+    it('opens the appointments for a reminder', () => {
+      const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+      component.open(makeNotification('n2', true));
+      expect(navigate).toHaveBeenCalledWith(['/my-appointments'], { queryParams: undefined });
+    });
+
+    it('QA D1110: a lab-result notification opens the patient results', () => {
+      const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+      component.open({ ...makeNotification('l1', false), type: 'LAB_RESULT' });
+      expect(portalService.markNotificationRead).toHaveBeenCalledWith('l1');
+      expect(navigate).toHaveBeenCalledWith(['/my-lab-results'], { queryParams: undefined });
+    });
+
+    it('stays on the page for a notification about nothing in particular', () => {
+      const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+      component.open({ ...makeNotification('a1', false), type: 'ANNOUNCEMENT' });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(portalService.markNotificationRead).toHaveBeenCalledWith('a1');
+    });
+  });
+
   it('should load notifications on init', () => {
     expect(portalService.getMyNotifications).toHaveBeenCalled();
     expect(component.notifications().length).toBe(2);
     expect(component.unreadCount()).toBe(1);
     expect(component.loading()).toBeFalse();
+  });
+
+  it('toasts in the patient language, never the raw key', () => {
+    // ToastService renders its message verbatim; the keys used to reach it.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: {
+        NOTIFICATIONS: {
+          LOAD_FAILED: 'Impossible de charger les notifications',
+          MARK_ALL_SUCCESS: 'Toutes les notifications sont lues',
+        },
+      },
+    });
+    translate.use('fr');
+
+    portalService.getMyNotifications.and.returnValue(throwError(() => new Error('fail')));
+    component.loadNotifications();
+    expect(toastService.error).toHaveBeenCalledWith('Impossible de charger les notifications');
+
+    component.markAllRead();
+    expect(toastService.success).toHaveBeenCalledWith('Toutes les notifications sont lues');
   });
 
   it('should show error toast when load fails', () => {
@@ -74,7 +126,7 @@ describe('MyNotificationsComponent', () => {
     portalService.getMyNotifications.calls.reset();
     component.switchTab('unread');
     expect(component.activeTab()).toBe('unread');
-    expect(portalService.getMyNotifications).toHaveBeenCalledWith(false, 0, 50);
+    expect(portalService.getMyNotifications).toHaveBeenCalledWith(false, 0, 200); // QA D1347: every page
   });
 
   it('should mark a notification as read and decrement unread count', () => {

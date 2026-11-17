@@ -1,4 +1,4 @@
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
@@ -10,6 +10,7 @@ import {
   ImpersonationStartRequest,
   ImpersonationStartResponse,
 } from './impersonation.model';
+import { stepUpRequestOptions } from './step-up';
 
 /**
  * MVP-4 — Support impersonation client.
@@ -93,9 +94,12 @@ export class ImpersonationService {
     request: ImpersonationStartRequest,
     mfaToken?: string,
   ): Observable<ImpersonationStartResponse> {
-    const headers = new HttpHeaders(mfaToken ? { 'X-Mfa-Token': mfaToken } : {});
     return this.http
-      .post<ImpersonationStartResponse>('/super-admin/impersonation/start', request, { headers })
+      .post<ImpersonationStartResponse>(
+        '/super-admin/impersonation/start',
+        request,
+        stepUpRequestOptions(mfaToken),
+      )
       .pipe(
         tap((response) => {
           // 1. Save original session state so stop() can restore it
@@ -260,8 +264,7 @@ export class ImpersonationService {
       try {
         const profile = JSON.parse(snapshot) as LoginUserProfile;
         this.auth.setUserProfile(profile);
-        this.roleContext.setRoles(profile.roles ?? []);
-        this.sessionScope.applyScope(profile.hospitalIds ?? [], profile.primaryHospitalId ?? null);
+        this.sessionScope.applyStoredProfile();
       } catch {
         // Snapshot corrupt — the stored profile and the token's roles stand in
         this.sessionScope.applyStoredProfile();

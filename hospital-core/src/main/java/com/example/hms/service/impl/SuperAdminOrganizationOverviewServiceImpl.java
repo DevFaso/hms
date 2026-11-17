@@ -24,10 +24,12 @@ import com.example.hms.service.OrganizationSecurityService;
 import com.example.hms.service.PatientService;
 import com.example.hms.service.SuperAdminOrganizationOverviewService;
 import com.example.hms.service.StaffService;
+import com.example.hms.security.provider.ClinicalHospitals;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +57,8 @@ import static java.util.function.Predicate.not;
 @Transactional(readOnly = true)
 public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrganizationOverviewService {
 
+    /** QA D1295 class: the capped staff and patient previews, oldest record first (stable across calls). */
+    public static final Sort OLDEST_FIRST = Sort.by("createdAt", "id");
     private static final int ALERT_DAYS_WARNING = 30;
     private static final int ALERT_DAYS_CRITICAL = 7;
     private static final String SEVERITY_CRITICAL = "critical";
@@ -66,6 +70,8 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
     private final OrganizationSecurityService organizationSecurityService;
     private final StaffService staffService;
     private final PatientService patientService;
+    /** QA D1212 (round 24) class: a failed compliance read must not roll back the overview. */
+    private final com.example.hms.service.support.IsolatedReads isolatedReads;
 
     @Override
     public SuperAdminOrganizationsSummaryDTO getOrganizationsSummary() {
@@ -155,8 +161,10 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
         boolean organizationMatches = context.normalizedSearch() == null
             || matchesOrganizationSearch(organization, context.normalizedSearch());
 
+        // Clinical hospitals only: a pharmacy or laboratory is neither listed
+        // nor counted as an organisation hospital (provider plan AC-11).
         List<HospitalHierarchyDTO> hospitals = organization.getHospitals().stream()
-            .filter(Objects::nonNull)
+            .filter(ClinicalHospitals::isClinical)
             .filter(hospital -> context.activeOnly() == null || hospital.isActive() == context.activeOnly())
             .sorted(Comparator.comparing(this::resolveHospitalSortKey, String.CASE_INSENSITIVE_ORDER))
             .map(hospital -> mapHospitalHierarchy(
@@ -202,7 +210,7 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
         List<StaffSummaryDTO> staffSummaries = List.of();
         long staffCount = 0L;
         if (context.includeStaff()) {
-            PageRequest staffPageRequest = PageRequest.of(0, context.staffLimit());
+            PageRequest staffPageRequest = PageRequest.of(0, context.staffLimit(), OLDEST_FIRST);
             Page<StaffResponseDTO> staffPage = Boolean.TRUE.equals(context.activeOnly())
                 ? staffService.getStaffByHospitalIdAndActiveTrue(hospital.getId(), staffPageRequest)
                 : staffService.getStaffByHospitalId(hospital.getId(), staffPageRequest);
@@ -215,7 +223,7 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
         List<PatientSummaryDTO> patientSummaries = List.of();
         long patientCount = 0L;
         if (context.includePatients()) {
-            PageRequest patientPageRequest = PageRequest.of(0, context.patientLimit());
+            PageRequest patientPageRequest = PageRequest.of(0, context.patientLimit(), OLDEST_FIRST);
             Page<PatientResponseDTO> patientPage = patientService.getPatientPageByHospital(
                 hospital.getId(),
                 context.activeOnly(),
@@ -403,13 +411,19 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
             .build();
     }
 
+    /**
+     * Best effort: an organisation whose compliance cannot be resolved reads
+     * as having no violations listed. QA D1212 (round 24) class: the read runs
+     * in its own transaction. A try/catch around the transactional call let a
+     * failure mark the overview's own transaction rollback-only, so the whole
+     * summary answered 500 at commit.
+     */
     private List<String> fetchComplianceViolations(UUID organizationId) {
-        try {
-            return organizationSecurityService.validateSecurityCompliance(organizationId);
-        } catch (RuntimeException ex) {
-            log.warn("Failed to resolve compliance violations for organization {}: {}", organizationId, ex.getMessage());
-            return List.of();
-        }
+        java.util.concurrent.atomic.AtomicReference<List<String>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(List.of());
+        isolatedReads.attempt("organization compliance violations",
+            () -> out.set(organizationSecurityService.validateSecurityCompliance(organizationId)));
+        return out.get();
     }
 
     private String resolveCompliancePosture(List<String> violations) {
@@ -536,7 +550,11 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
     }
 
     private LocalizationDefaultsDTO mapLocalizationDefaults(Organization organization) {
-        Hospital referenceHospital = organization.getHospitals().stream().findFirst().orElse(null);
+        // The reference hospital is a clinical one, never a provider facility (AC-11).
+        Hospital referenceHospital = organization.getHospitals().stream()
+            .filter(ClinicalHospitals::isClinical)
+            .findFirst()
+            .orElse(null);
 
         String countryCode = referenceHospital != null && referenceHospital.getCountry() != null && !referenceHospital.getCountry().isBlank()
             ? normalizeRegionCode(referenceHospital.getCountry())

@@ -1,0 +1,34 @@
+name: Require secrets
+description: >-
+  Fails unless every named secret is set, reporting ALL the missing ones in
+  one message, so a first-time environment setup costs one run rather than
+  one run per secret. Only names are printed. The logic is
+  scripts/mobile/require-env.sh, which the mobile script tests cover.
+
+  A composite action cannot read the secrets context, so the values come from
+  the calling step's env, under the names listed:
+
+    - uses: ./.github/actions/require-secrets
+      env:
+        APP_STORE_CONNECT_KEY_ID: <the secrets.APP_STORE_CONNECT_KEY_ID expression>
+      with:
+        names: APP_STORE_CONNECT_KEY_ID
+
+inputs:
+  names:
+    description: Secret names, whitespace-separated; each must also be in the step's env.
+    required: true
+  environment:
+    description: Where the secrets are configured, for the error message.
+    required: false
+    default: mobile-release
+
+runs:
+  using: composite
+  steps:
+    - name: Check the secrets are set
+      shell: bash
+      env:
+        REQUIRED_NAMES: ${{ inputs.names }}
+        ENVIRONMENT_LABEL: ${{ inputs.environment }}
+      run: bash "$GITHUB_ACTION_PATH/../../../scripts/mobile/require-env.sh"

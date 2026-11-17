@@ -23,11 +23,44 @@ import {
 import { StaffResponse, StaffService } from '../services/staff.service';
 import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
-import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { bareRole } from '../core/role-token';
+
+/**
+ * QA D1612 (round 44): the roles `PatientPanelController` lets write an
+ * empanelment (assign and end). The hospital admin opens `/panels` for the
+ * overview, but the server keeps that role off per-patient panels (E9 #67,
+ * decision D5), so the write buttons are shown to these roles only.
+ */
+export const PANEL_WRITE_ROLES: readonly string[] = [
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_DOCTOR',
+  'ROLE_SUPER_ADMIN',
+];
+
+/**
+ * QA D1614 (round 44): who may own a panel, mirroring `PanelService.PANEL_OWNER_ROLES`
+ * (doctors, physicians and surgeons, nurses, midwives). Bare codes, as `bareRole` reads them.
+ */
+export const PANEL_OWNER_ROLES: readonly string[] = [
+  'DOCTOR',
+  'PHYSICIAN',
+  'SURGEON',
+  'NURSE',
+  'MIDWIFE',
+];
+
+/** Whether a staff member may own a panel (the owner select offers only these). */
+export function canOwnPanel(staff: StaffResponse): boolean {
+  const code = bareRole(staff.roleCode)?.toUpperCase();
+  return !!code && PANEL_OWNER_ROLES.includes(code);
+}
 /**
  * Panel management (Tier 2 item 37).
  *
@@ -46,13 +79,14 @@ import { ToastService } from '../core/toast.service';
   selector: 'app-panel',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     RouterModule,
     TranslateModule,
     PatientPickerComponent,
-    HospitalScopeChipComponent,
-    HospitalScopeHintComponent,
   ],
   templateUrl: './panel.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -89,6 +123,18 @@ export class PanelComponent implements OnInit {
 
   /* ── admin overview ── */
   overviewRows = signal<PanelOverviewRow[]>([]);
+  readonly providerSearch = signal('');
+  readonly visibleOverviewRows = computed(() => {
+    const term = this.providerSearch().trim().toLocaleLowerCase();
+    return this.overviewRows().filter(
+      (row) => !term || row.providerName?.toLocaleLowerCase().includes(term),
+    );
+  });
+  readonly loadedProviders = computed(
+    () => new Set(this.overviewRows().map((row) => row.providerStaffId)).size,
+  );
+  overviewLoading = signal(false);
+  myPanelFailed = signal(false);
   overviewFailed = signal(false);
   drilldownProvider = signal<PanelOverviewRow | null>(null);
   drilldownRows = signal<PanelAssignment[]>([]);
@@ -104,16 +150,17 @@ export class PanelComponent implements OnInit {
   private dialogOpener: HTMLElement | null = null;
 
   readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
-  /** Null in a super-admin's global view — nothing hospital-pinned can load yet. */
-  readonly scopeReady = this.roleCtx.hasHospitalScope;
   readonly isAdmin = computed(() =>
     this.roleCtx.hasAnyActiveRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
   );
+  /** QA D1612: assign and end are offered only to the roles the server lets write them. */
+  readonly canEmpanel = computed(() => this.roleCtx.hasAnyActiveRole([...PANEL_WRITE_ROLES]));
 
   /** The staff select filtered client-side; see the ceiling note in openAssign. */
   readonly filteredStaff = computed(() => {
     const term = this.staffFilter().trim().toLowerCase();
-    const options = this.staffOptions();
+    // QA D1614: only clinical staff can own a panel; the server refuses the others.
+    const options = this.staffOptions().filter(canOwnPanel);
     if (!term) return options;
     return options.filter((s) => (s.name ?? '').toLowerCase().includes(term));
   });
@@ -122,28 +169,8 @@ export class PanelComponent implements OnInit {
   readonly drilldownTruncated = computed(() => this.drilldownTotal() > this.drilldownRows().length);
 
   ngOnInit(): void {
-    this.reloadForScope();
-  }
-
-  /** The chip pinned (or cleared) a hospital: all panel state belongs to the old scope. */
-  onScopeChange(_hospitalId: string | null): void {
-    this.reloadForScope();
-  }
-
-  private reloadForScope(): void {
-    this.drilldownProvider.set(null);
-    this.drilldownRows.set([]);
-    this.drilldownTotal.set(0);
-    this.overviewRows.set([]);
-    this.overviewFailed.set(false);
-    this.myPanelRows.set([]);
-    this.myPanelTotal.set(0);
-    this.noStaffProfile.set(false);
-    this.staffOptions.set([]);
-    if (!this.scopeReady()) {
-      // Global view: the backend refuses unpinned panel reads by design.
-      return;
-    }
+    // The route gate builds this page only with a hospital pinned, and
+    // rebuilds it on a scope change, so every load starts from empty state.
     this.loadMyPanel();
     if (this.isAdmin()) {
       this.loadOverview();
@@ -152,6 +179,7 @@ export class PanelComponent implements OnInit {
 
   loadMyPanel(): void {
     this.myPanelLoading.set(true);
+    this.myPanelFailed.set(false);
     this.panelService.myPanel(0, PanelComponent.PAGE_SIZE).subscribe({
       next: (page) => {
         this.myPanelLoading.set(false);
@@ -166,25 +194,32 @@ export class PanelComponent implements OnInit {
         if (err.status === 400) {
           this.noStaffProfile.set(true);
         } else {
-          this.toast.error(this.translate.instant('PANEL.LOAD_FAILED'));
+          this.myPanelFailed.set(true);
         }
       },
     });
   }
 
   loadOverview(): void {
+    this.overviewLoading.set(true);
+    this.overviewFailed.set(false);
     this.panelService.overview().subscribe({
       next: (rows) => {
+        this.overviewLoading.set(false);
         this.overviewRows.set(rows);
         this.overviewFailed.set(false);
       },
       // Unavailable, never "no panels": an outage must not read as an
       // empty hospital (same stance as the registries counts).
-      error: () => this.overviewFailed.set(true),
+      error: () => {
+        this.overviewLoading.set(false);
+        this.overviewFailed.set(true);
+      },
     });
   }
 
   openAssign(event?: Event): void {
+    if (!this.canEmpanel()) return;
     this.dialogOpener = (event?.currentTarget as HTMLElement) ?? null;
     this.showAssign.set(true);
     this.selectedPatient.set(null);
@@ -258,6 +293,7 @@ export class PanelComponent implements OnInit {
   }
 
   openEnd(assignment: PanelAssignment, event?: Event): void {
+    if (!this.canEmpanel()) return;
     this.dialogOpener = (event?.currentTarget as HTMLElement) ?? null;
     this.ending.set(assignment);
     this.endReason.set('');

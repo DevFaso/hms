@@ -28,7 +28,7 @@ import com.bitnesttechs.hms.patient.features.appointments.PreCheckInViewModel.An
 import com.bitnesttechs.hms.patient.features.appointments.PreCheckInViewModel.Demographics
 import com.bitnesttechs.hms.patient.features.appointments.PreCheckInViewModel.Step
 import com.bitnesttechs.hms.patient.features.appointments.PreCheckInViewModel.UiState
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 
 /**
@@ -62,7 +62,7 @@ fun PreCheckInScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue, titleContentColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandPrimary, titleContentColor = Color.White)
             )
         },
         bottomBar = { StepBar(state, viewModel, appointment.id) }
@@ -121,7 +121,7 @@ private fun StepIndicator(step: Step) {
                     stringResource(s.titleRes),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                    color = if (active) BrandBlue else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (active) BrandPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -371,7 +371,7 @@ private fun StepBar(state: UiState, viewModel: PreCheckInViewModel, appointmentI
                     Button(
                         onClick = { viewModel.submit(appointmentId) },
                         enabled = state.consentAcknowledged && !state.isSubmitting,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                     ) {
                         if (state.isSubmitting) {
                             CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
@@ -385,7 +385,7 @@ private fun StepBar(state: UiState, viewModel: PreCheckInViewModel, appointmentI
                     Button(
                         onClick = { viewModel.goTo(steps[index + 1]) },
                         enabled = questionnairesOk,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                     ) { Text(stringResource(R.string.next)) }
                 }
             }

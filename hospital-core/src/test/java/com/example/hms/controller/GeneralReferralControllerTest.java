@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -71,9 +72,32 @@ class GeneralReferralControllerTest {
     @Autowired
     private RoleValidator roleValidator;
 
+    @Autowired
+    private com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheldHeaders;
+
     @AfterEach
     void resetMocks() {
         Mockito.reset(referralService, referralExpiryService, roleValidator);
+        when(recordsWithheldHeaders.forRead(Mockito.any(), Mockito.any(), Mockito.any()))
+            .thenReturn(new org.springframework.http.HttpHeaders());
+    }
+
+    /** QA D610 (D504 part): GET /referrals/patient/{id} under an opt-out carries X-Records-Withheld. */
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void d610_referralsByPatient_carriesTheWithheldHeader() throws Exception {
+        UUID patientId = UUID.randomUUID();
+        org.springframework.http.HttpHeaders withheld = new org.springframework.http.HttpHeaders();
+        withheld.add(com.example.hms.controller.support.RecordsWithheldHeaders.HEADER,
+            com.example.hms.controller.support.RecordsWithheldHeaders.OTHER_HOSPITALS);
+        when(referralService.getReferralsByPatient(patientId)).thenReturn(java.util.List.of());
+        when(recordsWithheldHeaders.forRead(any(), Mockito.eq(patientId), any())).thenReturn(withheld);
+
+        mockMvc.perform(get("/referrals/patient/{id}", patientId))
+            .andExpect(status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .header().string("X-Records-Withheld", "OTHER_HOSPITALS"))
+            .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test
@@ -449,17 +473,26 @@ class GeneralReferralControllerTest {
     static class ControllerTestConfig {
         @Bean
         GeneralReferralService referralService() {
-            return Mockito.mock(GeneralReferralService.class);
+            return mock(GeneralReferralService.class);
         }
 
         @Bean
         ReferralExpiryService referralExpiryService() {
-            return Mockito.mock(ReferralExpiryService.class);
+            return mock(ReferralExpiryService.class);
         }
 
         @Bean
         RoleValidator roleValidator() {
-            return Mockito.mock(RoleValidator.class);
+            return mock(RoleValidator.class);
+        }
+
+        @Bean
+        com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheldHeaders() {
+            com.example.hms.controller.support.RecordsWithheldHeaders headers =
+                mock(com.example.hms.controller.support.RecordsWithheldHeaders.class);
+            when(headers.forRead(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(new org.springframework.http.HttpHeaders());
+            return headers;
         }
     }
 }

@@ -8,25 +8,22 @@
       </div>
     </div>
     <div class="header-right">
-      <app-hospital-scope-chip (scopeChange)="onScopeChange()" />
       @if (canManage()) {
-        <button
-          class="btn-primary"
-          (click)="openCreate()"
-          [disabled]="!scopeReady()"
-          data-testid="oncall-add"
-        >
+        <button class="btn-primary" (click)="openCreate()" data-testid="oncall-add">
           <span class="material-symbols-outlined">add</span>
           {{ 'ON_CALL.ADD' | translate }}
         </button>
       }
-      <button class="btn-refresh" (click)="load()" [disabled]="loading()">
+      <button
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+        class="btn-refresh"
+        (click)="load()"
+        [disabled]="loading()"
+      >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
     </div>
   </header>
-
-  <app-hospital-scope-hint />
 
   <div class="filter-bar">
     <label for="oncall-from"
@@ -35,9 +32,15 @@
     </label>
     <label for="oncall-to"
       >{{ 'ON_CALL.TO' | translate }}
-      <input id="oncall-to" type="date" [(ngModel)]="filterTo" (change)="load()" />
+      <input
+        id="oncall-to"
+        type="date"
+        [attr.min]="filterFrom || null"
+        [(ngModel)]="filterTo"
+        (change)="load()"
+      />
     </label>
-    <span class="filter-hint">{{ 'ON_CALL.DEFAULT_WINDOW' | translate }}</span>
+    {{ ' ' }}<span class="filter-hint">{{ 'ON_CALL.DEFAULT_WINDOW' | translate }}</span>
   </div>
 
   @if (loading()) {
@@ -84,8 +87,8 @@
                 }
               </td>
               <td>{{ entry.departmentName || ('ON_CALL.HOSPITAL_WIDE' | translate) }}</td>
-              <td>{{ entry.startTime | date: 'short' }}</td>
-              <td>{{ entry.endTime | date: 'short' }}</td>
+              <td>{{ entry.startTime | serverTime | date: 'short' }}</td>
+              <td>{{ entry.endTime | serverTime | date: 'short' }}</td>
               <td class="notes-cell" [title]="entry.notes ?? ''">{{ entry.notes || '—' }}</td>
               @if (canManage()) {
                 <td class="actions-cell">
@@ -126,20 +129,25 @@
       data-testid="oncall-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="on-call-panel-1-title"
+        (escaped)="closeModal()"
         class="form-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>{{ (editingId() ? 'ON_CALL.EDIT_TITLE' : 'ON_CALL.ADD_TITLE') | translate }}</h2>
+        <h2 id="on-call-panel-1-title">
+          {{ (editingId() ? 'ON_CALL.EDIT_TITLE' : 'ON_CALL.ADD_TITLE') | translate }}
+        </h2>
         <form (ngSubmit)="submit()">
           <label for="oncall-staff"
             >{{ 'ON_CALL.STAFF' | translate }} *
-            <select id="oncall-staff" [(ngModel)]="form.staffId" name="staffId">
+            <select required id="oncall-staff" [(ngModel)]="form.staffId" name="staffId">
               <option value="">{{ 'ON_CALL.SELECT_STAFF' | translate }}</option>
               @for (s of staffOptions(); track s.id) {
                 <option [value]="s.id">
-                  {{ s.name }}{{ s.jobTitle ? ' — ' + s.jobTitle : '' }}
+                  {{ s.name }}{{ s.jobTitle ? ' — ' + (s.jobTitle | enumLabel: 'jobTitle') : '' }}
                 </option>
               }
             </select>
@@ -157,6 +165,7 @@
             <label for="oncall-start"
               >{{ 'ON_CALL.START' | translate }} *
               <input
+                required
                 id="oncall-start"
                 type="datetime-local"
                 [(ngModel)]="form.startLocal"
@@ -166,6 +175,7 @@
             <label for="oncall-end"
               >{{ 'ON_CALL.END' | translate }} *
               <input
+                required
                 id="oncall-end"
                 type="datetime-local"
                 [(ngModel)]="form.endLocal"
@@ -189,6 +199,8 @@
               {{ 'COMMON.CANCEL' | translate }}
             </button>
             <button
+              appSubmitGuard
+              submitGuardRequired
               type="submit"
               class="btn-primary"
               [disabled]="saving()"
@@ -212,15 +224,19 @@
       data-testid="oncall-delete-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="on-call-panel-2-title"
+        (escaped)="cancelDelete()"
         class="form-card confirm-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>{{ 'ON_CALL.DELETE_TITLE' | translate }}</h2>
+        <h2 id="on-call-panel-2-title">{{ 'ON_CALL.DELETE_TITLE' | translate }}</h2>
         <p>
           <strong>{{ target.staffName || target.staffId }}</strong>
-          — {{ target.startTime | date: 'short' }} → {{ target.endTime | date: 'short' }}
+          — {{ target.startTime | serverTime | date: 'short' }} →
+          {{ target.endTime | serverTime | date: 'short' }}
         </p>
         <div class="modal-actions">
           <button type="button" class="btn-secondary" (click)="cancelDelete()">

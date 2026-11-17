@@ -10,6 +10,7 @@ import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.pharmacy.PrescriberPharmacyNotifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,10 +42,13 @@ class PartnerExchangeServiceBranchesTest {
 
     private static final String PARTNER_PHONE = "+22670000000";
 
+    @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
+
     @Mock private PrescriptionRoutingDecisionRepository routingDecisionRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PartnerNotificationChannel channel;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private PrescriberPharmacyNotifier prescriberNotifier;
 
     private final PartnerSmsReplyParser parser = new PartnerSmsReplyParser();
 
@@ -60,7 +64,8 @@ class PartnerExchangeServiceBranchesTest {
     void setUp() {
         service = new PartnerExchangeService(
                 routingDecisionRepository, prescriptionRepository,
-                channel, parser, auditEventLogService, "226");
+                channel, parser, auditEventLogService, prescriberNotifier,
+                new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService, prescriberNotifier), stayOrderDiscontinuation, "226");
 
         decisionId = UUID.randomUUID();
         token = decisionId.toString().substring(0, 8).toUpperCase();

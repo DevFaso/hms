@@ -126,6 +126,19 @@ class LabOrderLifecycleTest {
     }
 
     @Test
+    @DisplayName("QA D820: an order voided as entered in error is never moved, re-opened or completed")
+    void aVoidedOrderIsTerminal() {
+        assertThat(LabOrderLifecycle.statusAfterNewResult(LabOrderStatus.ENTERED_IN_ERROR)).isNull();
+        assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(LabOrderStatus.ENTERED_IN_ERROR)).isNull();
+        for (LabOrderStatus target : LabOrderStatus.values()) {
+            assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.ENTERED_IN_ERROR, target))
+                .as("from ENTERED_IN_ERROR to %s", target).isNull();
+            assertThat(LabOrderLifecycle.statusAfterForwardStep(target, LabOrderStatus.ENTERED_IN_ERROR))
+                .as("a workflow step never voids, from %s", target).isNull();
+        }
+    }
+
+    @Test
     @DisplayName("no verdict method moves an order whose status is absent")
     void nullsAreTolerated() {
         // Consistent across all three: a status the database does not hold
@@ -133,5 +146,41 @@ class LabOrderLifecycleTest {
         assertThat(LabOrderLifecycle.statusAfterForwardStep(null, LabOrderStatus.COLLECTED)).isNull();
         assertThat(LabOrderLifecycle.statusAfterNewResult(null)).isNull();
         assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("QA D962 — a specimen rejection sends a collected or received order back to ORDERED, never a resulted one")
+    void specimenRejectionVerdicts() {
+        for (LabOrderStatus status : new LabOrderStatus[] {
+            LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS}) {
+            assertThat(LabOrderLifecycle.statusAfterSpecimenRejected(status)).as(status.name())
+                .isEqualTo(LabOrderStatus.ORDERED);
+            assertThat(LabOrderLifecycle.acceptsSpecimenRejection(status)).as(status.name()).isTrue();
+        }
+        // Review of #975: PENDING is already awaiting collection; it stays where it is.
+        assertThat(LabOrderLifecycle.acceptsSpecimenRejection(LabOrderStatus.PENDING)).isTrue();
+        for (LabOrderStatus status : new LabOrderStatus[] {
+            LabOrderStatus.PENDING, LabOrderStatus.ORDERED, LabOrderStatus.CANCELLED, LabOrderStatus.RESULTED,
+            LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED, LabOrderStatus.ENTERED_IN_ERROR}) {
+            assertThat(LabOrderLifecycle.statusAfterSpecimenRejected(status)).as(status.name()).isNull();
+        }
+        for (LabOrderStatus status : new LabOrderStatus[] {
+            LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED,
+            LabOrderStatus.ENTERED_IN_ERROR, LabOrderStatus.CANCELLED}) {
+            assertThat(LabOrderLifecycle.acceptsSpecimenRejection(status)).as(status.name()).isFalse();
+        }
+        assertThat(LabOrderLifecycle.statusAfterSpecimenRejected(null)).isNull();
+        assertThat(LabOrderLifecycle.acceptsSpecimenRejection(null)).isFalse();
+    }
+
+    /** QA D1109: every status is decided - only an order awaiting or in analysis takes a new specimen. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(LabOrderStatus.class)
+    void d1109_everyStatusDecidesWhetherANewSpecimenIsTaken(LabOrderStatus status) {
+        boolean open = java.util.EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING,
+            LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS).contains(status);
+        assertThat(LabOrderLifecycle.acceptsNewSpecimen(status)).isEqualTo(open);
+        assertThat(LabOrderLifecycle.acceptsSpecimenReceipt(status))
+            .isEqualTo(status != LabOrderStatus.CANCELLED && status != LabOrderStatus.ENTERED_IN_ERROR);
     }
 }

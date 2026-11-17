@@ -25,6 +25,15 @@ public class CreateInBasketItemRequest {
     private InBasketPriority priority = InBasketPriority.NORMAL;
     private String title;
     private String body;
+    /**
+     * QA D1053: the message keys and arguments of the title and body, so the
+     * item is rendered in the reader's language. {@link #title} / {@link #body}
+     * stay the staff-language text, stored for old clients.
+     */
+    private String titleKey;
+    private Object[] titleArgs;
+    private String bodyKey;
+    private Object[] bodyArgs;
     private UUID referenceId;
     private String referenceType;
     private UUID encounterId;

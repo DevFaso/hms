@@ -36,6 +36,21 @@ public class PatientLabResultResponseDTO {
      * preliminary one, and this flag is what lets a UI label it as such.
      */
     private boolean released;
+    /**
+     * QA D1016: this result corrects one the laboratory had already released
+     * (the patient may have read the old value). The portal marks it.
+     */
+    private boolean corrected;
+    /**
+     * True when no configured reference range is in this result's unit, so
+     * nothing graded it against the hospital's range. A NORMAL status on such
+     * a row means only that no abnormal flag was recorded; a reader must not
+     * present it as "within normal range".
+     */
+    private boolean unitMismatch;
+
+    /** QA D1394: a range applies but the value does not settle a grade against it. */
+    private boolean gradeUnknown;
     private LocalDateTime collectedAt;
     private LocalDateTime resultedAt;
     private String orderedBy;

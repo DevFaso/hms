@@ -1,9 +1,14 @@
 package com.example.hms.repository;
 
 import com.example.hms.model.encounter.EncounterNote;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -11,7 +16,24 @@ import java.util.UUID;
 
 @Repository
 public interface EncounterNoteRepository extends JpaRepository<EncounterNote, UUID> {
-    Optional<EncounterNote> findByEncounter_Id(UUID encounterId);
+    /**
+     * QA D831: an encounter holds one row per note entry (an inpatient stay one
+     * per progress note), so "the" note is the current entry: the one created
+     * last. A single-result finder would fail on the second entry.
+     */
+    Optional<EncounterNote> findFirstByEncounter_IdOrderByCreatedAtDescIdDesc(UUID encounterId);
+
+    /** QA D831: every entry of the encounter, oldest first. */
+    List<EncounterNote> findByEncounter_IdOrderByCreatedAtAscIdAsc(UUID encounterId);
+
+    /** Serialize task filing with signature updates and other filing callbacks. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT n FROM EncounterNote n WHERE n.encounter.id = :encounterId ORDER BY n.createdAt ASC, n.id ASC")
+    List<EncounterNote> findForSignatureFollowUp(@Param("encounterId") UUID encounterId);
+
+    /** Whether the user wrote a note entry on the visit (TreatingClinician). */
+    boolean existsByEncounter_IdAndAuthor_Id(UUID encounterId, UUID authorUserId);
+
     boolean existsByEncounter_Id(UUID encounterId);
 
     /**
@@ -29,4 +51,21 @@ public interface EncounterNoteRepository extends JpaRepository<EncounterNote, UU
      */
     List<EncounterNote> findByHospital_IdAndRequiresCosignTrueAndCosignedAtIsNullAndSignedAtIsNotNullOrderBySignedAtAsc(
         UUID hospitalId);
+
+    /**
+     * The unsigned notes written at a hospital before {@code before}, oldest first, with their visit, patient and
+     * author (the administrator's list of notes left unsigned; a blank row is filtered out by the caller).
+     */
+    @Query("""
+        SELECT n FROM EncounterNote n
+        JOIN FETCH n.encounter
+        JOIN FETCH n.patient
+        JOIN FETCH n.author
+        WHERE n.hospital.id = :hospitalId
+          AND n.signedAt IS NULL
+          AND n.createdAt < :before
+        ORDER BY n.createdAt ASC
+        """)
+    List<EncounterNote> findUnsignedAtHospitalCreatedBefore(
+        @Param("hospitalId") UUID hospitalId, @Param("before") LocalDateTime before);
 }

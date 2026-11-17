@@ -25,6 +25,11 @@ import java.time.Instant;
 @Schema(description = "Body for tenant-lifecycle transitions on an organization.")
 public class TenantLifecycleActionRequestDTO {
 
+    // QA D1349 (round 30): suspend / archive / schedule-purge validate the
+    // OnRefusal group, so a blank reason is named at the edge with a malformed
+    // date; restore and cancel-purge do not (the reason is optional there).
+    @jakarta.validation.constraints.NotBlank(groups = com.example.hms.validation.OnRefusal.class,
+        message = "{tenant.lifecycle.reasonRequired}")
     @Size(max = 1000)
     @Schema(description = "Operator-supplied reason — required for suspend / archive / schedule-purge.",
             example = "Non-payment of Q1 invoice; verbally confirmed by ops 2026-05-02.")

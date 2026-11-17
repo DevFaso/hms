@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -26,6 +27,12 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder(toBuilder = true)
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
+/**
+ * {@link DynamicUpdate}: a save writes only the columns it changed, never a
+ * value read earlier (a secret, the last TOTP time-step) back over a newer
+ * one committed in between by a replacement or a sign-in.
+ */
+@DynamicUpdate
 @Entity
 @Table(name = "user_mfa_enrollments", schema = "\"security\"")
 public class UserMfaEnrollment extends BaseEntity {
@@ -59,10 +66,28 @@ public class UserMfaEnrollment extends BaseEntity {
     @Column(name = "totp_secret", length = 512)
     private String totpSecret;
 
+    /**
+     * A replacement authenticator that has been started but not confirmed
+     * (V183). {@link #totpSecret} stays the current one, and keeps verifying,
+     * until verify-enrollment confirms a code from this one and swaps them.
+     */
+    @Convert(converter = TotpSecretEncryptor.class)
+    @Column(name = "pending_totp_secret", length = 512)
+    private String pendingTotpSecret;
+
     @Builder.Default
     @Column(name = "verified", nullable = false)
     private boolean verified = false;
 
     @Column(name = "metadata_json")
     private String metadataJson;
+
+    /**
+     * The TOTP time-step (epoch seconds / 30) of the last code accepted from
+     * {@link #totpSecret} (V183). A code at or before it is refused, so one
+     * code signs in or authorises a step-up once, never again in its window.
+     * Written only by the repository's conditional claim.
+     */
+    @Column(name = "last_totp_step")
+    private Long lastTotpStep;
 }

@@ -57,7 +57,9 @@ public class InvoiceItemMapper {
             dto.setInvoiceNumber(item.getBillingInvoice().getInvoiceNumber());
         }
 
-        dto.setItemDescription(item.getItemDescription());
+        // QA D1901: a line the server worded, in the reader's language; a typed one as typed.
+        dto.setItemDescription(com.example.hms.service.billing.BillingTextRenderer.render(item.getTextCode(), item.getTextArgs(),
+            item.getItemDescription()));
         dto.setQuantity(item.getQuantity());
         dto.setUnitPrice(item.getUnitPrice());
         dto.setTotalPrice(item.getTotalPrice());

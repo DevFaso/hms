@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.model.ImagingOrder;
 import com.example.hms.model.ImagingReport;
 import com.example.hms.model.User;
@@ -24,7 +26,6 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
-import java.util.Locale;
 
 /**
  * Critical-imaging-finding notification loop (Tier 2 item 27).
@@ -134,9 +135,9 @@ public class ImagingCriticalNotificationService {
      * Stamping means the sweep still owns the row and round 1 retries it.
      */
     private void sendFirstAlertBestEffort(ImagingReport report, String username) {
-        String message = buildMessage(report, false);
+        NotificationText message = buildMessage(report, false);
         try {
-            notificationService.createNotification(message, username, NOTIFICATION_TYPE);
+            notificationService.createNotification(message.key(), message.args(), username, NOTIFICATION_TYPE);
         } catch (RuntimeException ex) {
             log.warn("Critical-imaging notification failed for report {}; stamping anyway so the "
                 + "escalation sweep still owns it: {}", report.getId(), ex.getMessage(), ex);
@@ -180,10 +181,10 @@ public class ImagingCriticalNotificationService {
 
     private void escalateOne(ImagingReport report) {
         int round = (report.getCriticalEscalationLevel() == null ? 0 : report.getCriticalEscalationLevel()) + 1;
-        String message = buildMessage(report, true);
+        NotificationText message = buildMessage(report, true);
 
         for (String recipient : escalationRecipients(report, round)) {
-            notificationService.createNotification(message, recipient, ESCALATION_TYPE);
+            notificationService.createNotification(message.key(), message.args(), recipient, ESCALATION_TYPE);
         }
         // SMS once per round, not once per recipient: the transport targets the
         // study's chart context, so fanning it out would send the same text
@@ -240,7 +241,7 @@ public class ImagingCriticalNotificationService {
         return resolveOrderingUser(report).map(User::getUsername).orElse(null);
     }
 
-    private void sendSmsBestEffort(ImagingReport report, String message) {
+    private void sendSmsBestEffort(ImagingReport report, NotificationText text) {
         if (!smsService.deliversRealSms()) {
             return; // mock transport would only log — never route clinical alerts there
         }
@@ -249,7 +250,8 @@ public class ImagingCriticalNotificationService {
             return;
         }
         try {
-            smsService.send(phone, message);
+            // An SMS is sent once, so it is rendered once, in the staff locale.
+            smsService.send(phone, text.render(messageSource, NotificationLocales.STAFF));
         } catch (RuntimeException ex) {
             log.warn("Critical-imaging SMS failed for report {}: {}", report.getId(), ex.getMessage());
         }
@@ -259,29 +261,25 @@ public class ImagingCriticalNotificationService {
      * The alert text. Names the study and the patient and says where to act; the
      * impression is truncated rather than sent whole, because this same string
      * goes down an SMS channel. Read by the ordering provider (and, on
-     * escalation, the desk's administrators) — never by the caller, and a sweep
-     * has no request locale anyway — so the body is in the staff locale.
+     * escalation, the desk's administrators), each in the language they read
+     * it in (QA D665); the SMS is rendered once, in the staff locale.
      */
-    private String buildMessage(ImagingReport report, boolean escalation) {
-        Locale locale = NotificationLocales.STAFF;
+    private NotificationText buildMessage(ImagingReport report, boolean escalation) {
         ImagingOrder order = report.getImagingOrder();
-        String study = studyLabel(report, order, locale);
-        String patientName = patientLabel(order, locale);
-        return messageSource.getMessage(
+        return NotificationText.of(
             escalation ? "imaging.critical.escalation" : "imaging.critical.notification",
-            new Object[]{study, patientName, impressionSnippet(report)},
-            locale);
+            studyLabel(report, order), patientLabel(order), impressionSnippet(report));
     }
 
     /** The report's own title if it has one, else the ordered study type. */
-    private String studyLabel(ImagingReport report, ImagingOrder order, Locale locale) {
+    private Object studyLabel(ImagingReport report, ImagingOrder order) {
         if (report.getReportTitle() != null && !report.getReportTitle().isBlank()) {
             return report.getReportTitle();
         }
         if (order != null && order.getStudyType() != null && !order.getStudyType().isBlank()) {
             return order.getStudyType();
         }
-        return messageSource.getMessage("imaging.critical.studyFallback", null, locale);
+        return NotificationLocalizer.key("imaging.critical.studyFallback");
     }
 
     /**
@@ -291,14 +289,14 @@ public class ImagingCriticalNotificationService {
      * recorded name rendered the literal string "null" into an alert a clinician
      * reads and an SMS that goes out of the building.
      */
-    private String patientLabel(ImagingOrder order, Locale locale) {
+    private Object patientLabel(ImagingOrder order) {
         if (order != null && order.getPatient() != null) {
             String fullName = order.getPatient().getFullName();
             if (fullName != null && !fullName.isBlank()) {
                 return fullName;
             }
         }
-        return messageSource.getMessage("patient.fallback.generic", null, locale);
+        return NotificationLocalizer.key("patient.fallback.generic");
     }
 
     private String impressionSnippet(ImagingReport report) {

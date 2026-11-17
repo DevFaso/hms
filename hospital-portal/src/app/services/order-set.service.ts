@@ -43,6 +43,21 @@ export interface OrderSetItem {
   doseRangeMin?: number;
   doseRangeMax?: number;
   doseUnit?: string;
+  /** QA round 30: the minimum hours between two doses of an as-needed (PRN) item. */
+  prnMinIntervalHours?: number | null;
+  /** QA D1378 (round 32): the author's explicit "as needed (PRN)" tick on a medication item. */
+  asNeeded?: boolean;
+  /** QA D1419: the author confirmed a wording the MAR cannot schedule (`orderItems[i].frequencyConfirmed`). */
+  frequencyConfirmed?: boolean;
+  /**
+   * QA D1396: the quantity to hand over per fill and what it counts. Required at
+   * save for a drug the hospital's catalogue marks controlled (the server names
+   * the item on `orderItems[i].quantity`).
+   */
+  quantity?: number | null;
+  /** QA D1396: the exact catalogue item, when several carry this name. */
+  medicationCatalogItemId?: string | null;
+  quantityUnit?: string | null;
   notes?: string;
   [key: string]: unknown;
 }
@@ -87,6 +102,8 @@ export interface ApplyOrderSetRequest {
   encounterId: string;
   orderingStaffId: string;
   forceOverride?: boolean;
+  /** Round 18: required with forceOverride when a critical alert is passed. */
+  overrideReason?: string;
 }
 
 export interface AppliedOrderSetSummary {
@@ -161,4 +178,16 @@ export class OrderSetService {
       request,
     );
   }
+}
+
+/** QA D1439: the orders an apply created, counted the same on the panel and in the toast. */
+export function appliedOrderCount(summary: AppliedOrderSetSummary): number {
+  return (
+    summary.prescriptionIds.length + summary.labOrderIds.length + summary.imagingOrderIds.length
+  );
+}
+
+/** QA D1439: the sentence that says so, singular for one. */
+export function appliedResultKey(count: number): string {
+  return count === 1 ? 'ORDER_SETS.APPLIED_RESULT_ONE' : 'ORDER_SETS.APPLIED_RESULT';
 }

@@ -115,7 +115,7 @@ class ReferenceCatalogServiceImplTest {
 
         assertThatThrownBy(() -> service.createCatalog(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("already exists");
+                .extracting("messageKey").isEqualTo("referenceCatalog.codeExists");
     }
 
     @Test
@@ -126,7 +126,7 @@ class ReferenceCatalogServiceImplTest {
 
         assertThatThrownBy(() -> service.createCatalog(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("cannot be blank");
+                .extracting("messageKey").isEqualTo("referenceCatalog.codeRequired");
     }
 
     @Test
@@ -245,7 +245,7 @@ class ReferenceCatalogServiceImplTest {
 
         assertThatThrownBy(() -> service.importCatalog(catalogId, file))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Catalog not found");
+                .hasFieldOrPropertyWithValue("messageKey", "referenceCatalog.notFound");
     }
 
     @Test
@@ -348,7 +348,7 @@ class ReferenceCatalogServiceImplTest {
 
         assertThatThrownBy(() -> service.schedulePublish(catalogId, req))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Catalog not found");
+                .hasFieldOrPropertyWithValue("messageKey", "referenceCatalog.notFound");
     }
 
     // ---- code normalization edge cases ----

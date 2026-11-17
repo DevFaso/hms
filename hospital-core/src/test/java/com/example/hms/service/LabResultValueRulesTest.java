@@ -1,0 +1,109 @@
+package com.example.hms.service;
+
+import com.example.hms.enums.AbnormalFlag;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.LabTestReferenceRange;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class LabResultValueRulesTest {
+
+    private static LabTestDefinition potassium() {
+        LabTestDefinition definition = new LabTestDefinition();
+        definition.setReferenceRanges(new ArrayList<>(List.of(
+            LabTestReferenceRange.builder().minValue(3.5).maxValue(5.0).unit("mmol/L").build())));
+        return definition;
+    }
+
+    /** QA D640: "7,9" (K, critical) is a number; it is stored with a point so grading reads it. */
+    @Test
+    void aDecimalCommaIsNormalisedAndAccepted() {
+        LabTestDefinition potassium = potassium();
+        String stored = LabResultValueRules.normalizeDecimalComma("7,9");
+        assertThat(stored).isEqualTo("7.9");
+        assertThatCode(() -> LabResultValueRules.requireValidValue(stored, potassium)).doesNotThrowAnyException();
+        assertThat(LabResultValueRules.normalizeDecimalComma("<0,5")).isEqualTo("<0.5");
+        assertThat(LabResultValueRules.normalizeDecimalComma(" 5,5 ")).isEqualTo("5.5");
+        // Not a decimal: left alone (a thousands list or free text keeps its meaning).
+        assertThat(LabResultValueRules.normalizeDecimalComma("1,2,3")).isEqualTo("1,2,3");
+        assertThat(LabResultValueRules.normalizeDecimalComma("Positif")).isEqualTo("Positif");
+        assertThat(LabResultValueRules.normalizeDecimalComma(null)).isNull();
+    }
+
+    /** QA D288: "abc" and -1 were stored on a numeric test. */
+    @Test
+    void aNumericTestRefusesTextAndANegativeValue() {
+        LabTestDefinition potassium = potassium();
+        // QA D1386 (round 32): each refusal names resultValue, so the dialog marks the field.
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("abc", potassium))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "lab.result.value.notNumeric")
+            .hasFieldOrPropertyWithValue("field", "resultValue");
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("mille", potassium))
+            .hasFieldOrPropertyWithValue("field", "resultValue");
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("-1", potassium))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "lab.result.value.negative")
+            .hasFieldOrPropertyWithValue("field", "resultValue");
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("NaN", potassium))
+            .isInstanceOf(BusinessException.class);
+        assertThatCode(() -> LabResultValueRules.requireValidValue("4.2", potassium)).doesNotThrowAnyException();
+    }
+
+    /** Review of #903: a censored value is a number with a comparator, not text. */
+    @Test
+    void aNumericTestTakesACensoredValue() {
+        LabTestDefinition potassium = potassium();
+        for (String censored : List.of("<0.5", ">200", "<20", "<= 0.1", ">=5", "≤0.5", "≥ 200")) {
+            assertThatCode(() -> LabResultValueRules.requireValidValue(censored, potassium))
+                .as(censored).doesNotThrowAnyException();
+        }
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("<abc", potassium))
+            .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("<-1", potassium))
+            .isInstanceOf(BusinessException.class).hasFieldOrPropertyWithValue("messageKey", "lab.result.value.negative");
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("<<5", potassium))
+            .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void aNegativeValueIsAllowedWhenTheTestHasANegativeLimit() {
+        LabTestDefinition baseExcess = new LabTestDefinition();
+        baseExcess.setReferenceRanges(new ArrayList<>(List.of(
+            LabTestReferenceRange.builder().criticalLow(-10.0).criticalHigh(10.0).build())));
+        assertThatCode(() -> LabResultValueRules.requireValidValue("-3", baseExcess)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void aTestWithNoNumericLimitsTakesAWordAnswer() {
+        assertThatCode(() -> LabResultValueRules.requireValidValue("Positif", new LabTestDefinition()))
+            .doesNotThrowAnyException();
+    }
+
+    /** QA D286: a positive malaria RDT read "not evaluated" and a green check. */
+    @Test
+    void aPositiveQualitativeAnswerIsAbnormal() {
+        assertThat(LabResultValueRules.flagFor("Positif", null, null)).isEqualTo(AbnormalFlag.ABNORMAL);
+        assertThat(LabResultValueRules.flagFor("POSITIVE (P. falciparum)", null, null)).isEqualTo(AbnormalFlag.ABNORMAL);
+        assertThat(LabResultValueRules.flagFor("Détecté", null, null)).isEqualTo(AbnormalFlag.ABNORMAL);
+        assertThat(LabResultValueRules.flagFor("+++", null, null)).isEqualTo(AbnormalFlag.ABNORMAL);
+        assertThat(LabResultValueRules.flagFor("Négatif", null, null)).isNull();
+        assertThat(LabResultValueRules.flagFor("A positif", null, null)).isNull();
+        assertThat(LabResultValueRules.flagFor("Positivity", null, null)).isNull();
+        assertThat(LabResultValueRules.flagFor("4.2", null, null)).isNull();
+    }
+
+    @Test
+    void amendingAPositiveToANegativeWithdrawsTheFlagThisRuleSet() {
+        assertThat(LabResultValueRules.flagFor("Négatif", "Positif", AbnormalFlag.ABNORMAL)).isNull();
+        assertThat(LabResultValueRules.flagFor("Négatif", "12", AbnormalFlag.ABNORMAL)).isEqualTo(AbnormalFlag.ABNORMAL);
+        assertThat(LabResultValueRules.flagFor("Positif", null, AbnormalFlag.CRITICAL)).isEqualTo(AbnormalFlag.CRITICAL);
+    }
+}

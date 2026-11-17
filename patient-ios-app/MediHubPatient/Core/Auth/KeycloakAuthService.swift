@@ -29,6 +29,9 @@ final class KeycloakAuthService: ObservableObject {
     /// True when a Keycloak session is active (used by APIClient).
     var hasActiveSession: Bool { authState?.isAuthorized == true }
 
+    /// The session's current refresh token, for revocation at sign-out.
+    var refreshToken: String? { authState?.refreshToken }
+
     /// Discover OIDC endpoints, then run the Authorization Code + PKCE flow
     /// via `SFSafariViewController` / `ASWebAuthenticationSession`.
     func login(presenting viewController: UIViewController) async throws {
@@ -150,10 +153,10 @@ enum KeycloakError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: "Keycloak SSO is not configured for this build."
-        case .invalidConfiguration: "Keycloak issuer/redirect URI is invalid."
-        case .discoveryFailed: "Unable to reach the Keycloak discovery endpoint."
-        case .unknown: "SSO login failed."
+        case .notConfigured: "error_sso_not_configured".localized
+        case .invalidConfiguration: "error_sso_invalid_configuration".localized
+        case .discoveryFailed: "error_sso_unreachable".localized
+        case .unknown: "error_sso_failed".localized
         }
     }
 }

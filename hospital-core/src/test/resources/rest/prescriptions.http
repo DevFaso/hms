@@ -2,7 +2,7 @@
 @host = http://localhost:8081/api/
 @accept = application/json
 @lang = en
-@ADMIN_TOKEN = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDcwMzMyNywiZXhwIjoxNzU0Nzg5NzI3fQ.0HRqMruJaf5U3jA_5bUwWzCyqz8ShR1xMur3gSHhBpY
+@ADMIN_TOKEN = {{token}}
 
 ###
 POST {{host}}/prescriptions

@@ -21,6 +21,10 @@ import {
   CdsAcknowledgementService,
 } from '../../services/cds-acknowledgement.service';
 import { ToastService } from '../../core/toast.service';
+import { RoleContextService } from '../../core/role-context.service';
+import { canInvokeCds } from '../patient-chart/chart-access';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 
 /**
  * Best-Practice Advisory panel rendered at the top of the patient
@@ -37,7 +41,7 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-bpa-panel',
   standalone: true,
-  imports: [FormsModule, TranslateModule, CdsCardListComponent],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule, CdsCardListComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './bpa-panel.component.html',
   styleUrls: ['./bpa-panel.component.scss'],
@@ -57,12 +61,20 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
   private readonly ackService = inject(CdsAcknowledgementService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly destroyed$ = new Subject<void>();
   private inFlight?: Subscription;
 
+  /**
+   * Defence in depth behind the host's `@if`: a role the backend refuses
+   * never issues the request (a 403 there would be a dead panel at best).
+   */
+  protected readonly permitted = signal(false);
+
   ngOnChanges(_changes: SimpleChanges): void {
+    this.permitted.set(canInvokeCds(this.roleContext));
     const id = this.patientId();
-    if (!id) {
+    if (!id || !this.permitted()) {
       this.cancelInFlight();
       this.cards.set([]);
       this.state.set('empty');
@@ -88,6 +100,16 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
       return;
     }
     this.submitDecision('OVERRIDDEN');
+  }
+
+  /**
+   * QA D1004: Escape reaches the critical modal (focus is inside it), but a
+   * critical advisory closes only through an acknowledgement or a documented
+   * override, like its two buttons: Escape keeps it open, and the directive
+   * stops the key there so nothing behind the modal reacts to it either.
+   */
+  protected refuseEscape(): void {
+    // Intentionally empty: see above.
   }
 
   protected dismissModal(): void {
@@ -120,9 +142,9 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
             this.state.set('empty');
           }
         },
-        error: () => {
+        error: (err: unknown) => {
           this.submitting.set(false);
-          this.toast.error(this.translate.instant('BPA.ACK_FAILED'));
+          this.toast.error(refusalReason(err) ?? this.translate.instant('BPA.ACK_FAILED'));
         },
       });
   }

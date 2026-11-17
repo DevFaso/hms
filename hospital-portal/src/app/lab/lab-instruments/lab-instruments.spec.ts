@@ -7,6 +7,8 @@ import { LabInstrumentsComponent } from './lab-instruments';
 import { AuthService } from '../../auth/auth.service';
 import { LabInstrumentResponse } from '../../services/lab-instrument.service';
 import { PagedResponse } from '../../services/staff.service';
+import { ToastService } from '../../core/toast.service';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 function mockInstrument(overrides: Partial<LabInstrumentResponse> = {}): LabInstrumentResponse {
   return {
@@ -174,6 +176,24 @@ describe('LabInstrumentsComponent', () => {
     expect(component.form.name).toBe('');
   });
 
+  // QA D1193 (round 22): an empty "Créer" posted and showed the server's raw
+  // "ne doit pas être vide" (instruments) or a generic toast (inventory).
+  it('QA D1193: an empty "Créer" sends nothing and names the missing fields', () => {
+    fixture.detectChanges();
+    flushInstruments();
+    component.openCreate();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    fixture.detectChanges();
+    httpMock.expectNone((r) => r.url.includes('/lab/instruments') && r.method === 'POST');
+    const reason = host.querySelector('[data-testid="submit-guard-reason"]')?.textContent ?? '';
+    expect(reason).toContain('COMMON.MISSING_REQUIRED_FIELDS');
+    host
+      .querySelectorAll('input[required]')
+      .forEach((f) => expect(f.getAttribute('aria-invalid')).toBe('true'));
+  });
+
   it('should save new instrument', () => {
     fixture.detectChanges();
     flushInstruments();
@@ -230,14 +250,58 @@ describe('LabInstrumentsComponent', () => {
     expect(component.saving()).toBeFalse();
   });
 
-  it('should deactivate instrument', () => {
+  it('QA D879: a duplicate serial shows the server message, not the generic toast', () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
     fixture.detectChanges();
     flushInstruments();
 
-    spyOn(globalThis, 'confirm').and.returnValue(true);
+    component.openCreate();
+    component.form.name = 'Analyseur QA';
+    component.form.serialNumber = 'QA-R13-SN-1001';
+    component.save();
+
+    const req = httpMock.expectOne((r) => r.method === 'POST');
+    req.flush(
+      { message: 'Un instrument porte déjà ce numéro de série dans cet établissement.' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'Un instrument porte déjà ce numéro de série dans cet établissement.',
+    );
+    expect(component.saving()).toBeFalse();
+  });
+
+  it('QA D879: a server failure keeps the generic toast, never a 5xx body', () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    fixture.detectChanges();
+    flushInstruments();
+
+    component.openCreate();
+    component.form.name = 'Analyseur QA';
+    component.form.serialNumber = 'QA-R13-SN-1002';
+    component.save();
+
+    httpMock
+      .expectOne((r) => r.method === 'POST')
+      .flush(
+        { message: 'NullPointerException at ...' },
+        { status: 500, statusText: 'Server Error' },
+      );
+
+    expect(toast.error).toHaveBeenCalledWith('LAB_INSTRUMENTS.SAVE_ERROR');
+  });
+
+  it('should deactivate instrument', async () => {
+    fixture.detectChanges();
+    flushInstruments();
+
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
 
     const inst = component.instruments()[0];
-    component.deactivate(inst);
+    await component.deactivate(inst);
 
     const req = httpMock.expectOne(
       (r) => r.url.includes('/lab/instruments/inst-1') && r.method === 'DELETE',
@@ -248,26 +312,26 @@ describe('LabInstrumentsComponent', () => {
     flushInstruments();
   });
 
-  it('should not deactivate if user cancels confirm', () => {
+  it('should not deactivate if user cancels confirm', async () => {
     fixture.detectChanges();
     flushInstruments();
 
-    spyOn(globalThis, 'confirm').and.returnValue(false);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
 
     const inst = component.instruments()[0];
-    component.deactivate(inst);
+    await component.deactivate(inst);
 
     // No HTTP request should fire
   });
 
-  it('should handle deactivate error', () => {
+  it('should handle deactivate error', async () => {
     fixture.detectChanges();
     flushInstruments();
 
-    spyOn(globalThis, 'confirm').and.returnValue(true);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
 
     const inst = component.instruments()[0];
-    component.deactivate(inst);
+    await component.deactivate(inst);
 
     const req = httpMock.expectOne((r) => r.method === 'DELETE');
     req.error(new ProgressEvent('error'));

@@ -57,7 +57,7 @@ class VisitTypeServiceImplTest {
         hospital.setId(hospitalId);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(visitTypeRepository.save(any(VisitType.class))).thenAnswer(i -> i.getArgument(0));
         when(visitTypeRepository.findByHospital_IdAndCodeIgnoreCase(any(), any()))
             .thenReturn(Optional.empty());
@@ -93,7 +93,7 @@ class VisitTypeServiceImplTest {
         VisitTypeRequestDTO request = valid();
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already exists");
+            .hasFieldOrPropertyWithValue("messageKey", "visitType.code.duplicate");
         verify(visitTypeRepository, never()).save(any());
     }
 
@@ -107,7 +107,7 @@ class VisitTypeServiceImplTest {
         VisitTypeRequestDTO request = valid();
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reactivate");
+            .hasFieldOrPropertyWithValue("messageKey", "visitType.code.retired");
     }
 
     @Test
@@ -119,7 +119,7 @@ class VisitTypeServiceImplTest {
         VisitTypeRequestDTO request = valid();
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital");
+            .hasFieldOrPropertyWithValue("messageKey", "visitType.hospitalRequired");
     }
 
     @Test

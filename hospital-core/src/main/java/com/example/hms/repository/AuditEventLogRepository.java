@@ -2,6 +2,7 @@ package com.example.hms.repository;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.model.AuditEventLog;
+import com.example.hms.payload.dto.provider.ProviderAuditEntryDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -19,6 +20,19 @@ import java.util.UUID;
 @Repository
 public interface AuditEventLogRepository
     extends JpaRepository<AuditEventLog, UUID>, JpaSpecificationExecutor<AuditEventLog> {
+
+    /** The FROM/WHERE of {@link #findProviderFacilityTrail}, shared by its page and count queries. */
+    String FACILITY_TRAIL_WHERE = "FROM AuditEventLog a LEFT JOIN a.assignment asg "
+        + "WHERE a.entityType IN :entityTypes "
+        + "AND a.patientId IS NULL "
+        + "AND (a.roleName IS NULL OR UPPER(a.roleName) NOT IN ('PATIENT', 'ROLE_PATIENT')) "
+        + "AND a.user.id IN (SELECT seat.user.id FROM UserRoleHospitalAssignment seat "
+        + "  WHERE seat.hospital.id = :facilityId "
+        + "  AND UPPER(seat.role.code) NOT IN ('PATIENT', 'ROLE_PATIENT')) "
+        + "AND (asg.hospital.id = :facilityId "
+        + "  OR (a.entityType = 'USER_ROLE_ASSIGNMENT' AND a.resourceId IN ("
+        + "    SELECT CAST(target.id AS String) FROM UserRoleHospitalAssignment target "
+        + "    WHERE target.hospital.id = :facilityId))) ";
 
     Page<AuditEventLog> findByUserId(UUID userId, Pageable pageable);
 
@@ -52,6 +66,20 @@ public interface AuditEventLogRepository
     /** Aggregate count of audit events grouped by event type (database-level). */
     @Query("SELECT a.eventType AS eventType, COUNT(a) AS cnt FROM AuditEventLog a GROUP BY a.eventType")
     List<Object[]> countByEventType();
+
+    /**
+     * The WHERE of every hospital-scoped audit read (QA D25, D786): a row is
+     * the hospital's when its assignment is there, or when it carries the
+     * hospital itself (a SYSTEM row: a migration or a job that acted on that
+     * hospital's data has no assignment). The LEFT join keeps those rows; an
+     * inner join through {@code a.assignment} dropped them.
+     */
+    String ANCHORED_AT_HOSPITALS = "(asg.hospital.id IN :hospitalIds OR a.hospitalId IN :hospitalIds)";
+
+    /** {@link #countByEventType()} restricted to rows anchored at one of the given hospitals (QA D25, D786). */
+    @Query("SELECT a.eventType AS eventType, COUNT(a) AS cnt FROM AuditEventLog a LEFT JOIN a.assignment asg "
+           + "WHERE " + ANCHORED_AT_HOSPITALS + " GROUP BY a.eventType")
+    List<Object[]> countByEventTypeForHospitals(@Param("hospitalIds") Collection<UUID> hospitalIds);
 
     /**
      * Per-hospital audit-event count over a date window. Roadmap row 44
@@ -100,13 +128,23 @@ public interface AuditEventLogRepository
     List<Object[]> countByHospitalIdBetween(@Param("from") LocalDateTime from,
                                             @Param("to") LocalDateTime to);
 
-    /** Hospital-scoped audit events, ordered by timestamp descending. */
-    Page<AuditEventLog> findByAssignment_Hospital_IdOrderByEventTimestampDesc(UUID hospitalId, Pageable pageable);
+    /**
+     * Hospital-scoped audit events, newest first: rows anchored at the
+     * hospital through their assignment or, for a SYSTEM row, through their
+     * own {@code hospitalId} (QA D786: a derived {@code findByAssignment_Hospital_Id}
+     * query inner-joined the assignment and dropped every SYSTEM row).
+     */
+    @Query(value = "SELECT a FROM AuditEventLog a LEFT JOIN a.assignment asg "
+           + "WHERE (asg.hospital.id = :hospitalId OR a.hospitalId = :hospitalId) "
+           + "ORDER BY a.eventTimestamp DESC",
+        countQuery = "SELECT COUNT(a) FROM AuditEventLog a LEFT JOIN a.assignment asg "
+           + "WHERE (asg.hospital.id = :hospitalId OR a.hospitalId = :hospitalId)")
+    Page<AuditEventLog> findAnchoredAtHospital(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
-    /** Daily audit event counts for a hospital within a date range. */
+    /** Daily audit event counts for a hospital within a date range (anchored as {@link #findAnchoredAtHospital}). */
     @Query("SELECT function('date', a.eventTimestamp) AS day, COUNT(a) " +
-           "FROM AuditEventLog a " +
-           "WHERE a.assignment.hospital.id = :hospitalId " +
+           "FROM AuditEventLog a LEFT JOIN a.assignment asg " +
+           "WHERE (asg.hospital.id = :hospitalId OR a.hospitalId = :hospitalId) " +
            "AND a.eventTimestamp >= :from " +
            "GROUP BY function('date', a.eventTimestamp) " +
            "ORDER BY function('date', a.eventTimestamp)")
@@ -192,6 +230,66 @@ public interface AuditEventLogRepository
                                                        @Param("eventTypes") Collection<AuditEventType> eventTypes,
                                                        @Param("fromDate") LocalDateTime fromDate,
                                                        @Param("toDate") LocalDateTime toDate);
+
+    /**
+     * A provider facility's OWN audit trail (provider plan §3.1,
+     * {@code GET /provider/audit}), newest first.
+     *
+     * <p>A row is shown when:
+     * <ul>
+     *   <li>it is ANCHORED at the facility: its assignment is there (a write
+     *       the interceptor recorded at the facility, a holder confirming their
+     *       own invitation), or it records a role assignment whose target
+     *       ({@code target_resource_id}) is an assignment there (a registration
+     *       at the facility: the audit service unlinks the registrar's row from
+     *       an assignment that is not theirs, so the target is the anchor);</li>
+     *   <li>its ACTOR holds a seat at the facility (any assignment of theirs
+     *       there): the facility's own staff and admin. A super-admin or a
+     *       support user with no seat there is never shown as a facility
+     *       actor, so their rows are excluded;</li>
+     *   <li>its entity type is in the {@code entityTypes} ALLOWLIST (facility
+     *       administration only: nothing clinical written at the facility can
+     *       ever appear), it names no patient, and it is not about the PATIENT
+     *       role.</li>
+     * </ul>
+     *
+     * <p>The projection carries ids and codes only (plan §6.9): no
+     * description, no details, no IP address. The role shown is the ACTOR's
+     * own STAFF role at the facility: never PATIENT (defence in depth: the
+     * facility guard refuses a PATIENT seat at a provider facility, but a row
+     * that names one must still never show it), and PROVIDER_ADMIN
+     * first when they hold it, otherwise the lowest other code, so an admin
+     * who also dispenses is shown acting as the admin. The role a
+     * role-assignment row assigned is its subject, a separate field.
+     * Under impersonation the row's actor is the impersonated member; the
+     * impersonator columns say who really acted (platform support).
+     *
+     * @param entityTypes the allowed entity types, exactly as the producers write them (upper-case)
+     */
+    @Query(value = "SELECT new com.example.hms.payload.dto.provider.ProviderAuditEntryDTO("
+           + "a.id, a.eventTimestamp, a.eventType, a.status, a.user.id, a.userName, "
+           + "COALESCE("
+           + "CASE WHEN a.entityType <> 'USER_ROLE_ASSIGNMENT' THEN a.roleName ELSE NULL END, "
+           + "(SELECT MIN(adminSeat.role.code) FROM UserRoleHospitalAssignment adminSeat "
+           + "  WHERE adminSeat.user.id = a.user.id AND adminSeat.hospital.id = :facilityId "
+           + "  AND adminSeat.active = true "
+           + "  AND UPPER(adminSeat.role.code) IN ('PROVIDER_ADMIN', 'ROLE_PROVIDER_ADMIN')), "
+           + "(SELECT MIN(seatRole.role.code) FROM UserRoleHospitalAssignment seatRole "
+           + "  WHERE seatRole.user.id = a.user.id AND seatRole.hospital.id = :facilityId "
+           + "  AND seatRole.active = true "
+           + "  AND UPPER(seatRole.role.code) NOT IN ('PATIENT', 'ROLE_PATIENT')), "
+           + "(SELECT MIN(anySeat.role.code) FROM UserRoleHospitalAssignment anySeat "
+           + "  WHERE anySeat.user.id = a.user.id AND anySeat.hospital.id = :facilityId "
+           + "  AND UPPER(anySeat.role.code) NOT IN ('PATIENT', 'ROLE_PATIENT'))), "
+           + "a.entityType, a.resourceId, "
+           + "CASE WHEN a.entityType = 'USER_ROLE_ASSIGNMENT' THEN a.roleName ELSE NULL END, "
+           + "a.impersonatorUserId, a.impersonatorUsername) "
+           + FACILITY_TRAIL_WHERE
+           + "ORDER BY a.eventTimestamp DESC, a.id DESC",
+        countQuery = "SELECT COUNT(a) " + FACILITY_TRAIL_WHERE)
+    Page<ProviderAuditEntryDTO> findProviderFacilityTrail(@Param("facilityId") UUID facilityId,
+                                                          @Param("entityTypes") Collection<String> entityTypes,
+                                                          Pageable pageable);
 
     /** Counterpart of {@link #findByDateRangeAndEventTypeIn} — everything not in the set. */
     @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +

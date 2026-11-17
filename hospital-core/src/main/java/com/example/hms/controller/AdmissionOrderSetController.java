@@ -93,7 +93,7 @@ public class AdmissionOrderSetController {
     public ResponseEntity<AdmissionOrderSetResponseDTO> deactivate(
         @PathVariable UUID id,
         @RequestParam @NotBlank String reason,
-        @RequestParam UUID actingStaffId
+        @RequestParam(required = false) UUID actingStaffId
     ) {
         return ResponseEntity.ok(service.deactivate(id, reason, actingStaffId));
     }

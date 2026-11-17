@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.LabSpecimenStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabSpecimenMapper;
 import com.example.hms.model.Hospital;
@@ -25,6 +26,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,6 +34,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabSpecimenServiceImplTest {
 
@@ -58,6 +61,12 @@ class LabSpecimenServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // Review of #975: the committed status read under the order lock is
+        // the entity's own (no concurrent write). The specimens here are built
+        // without an id and found under specimenId, so that is where it is read.
+        lenient().when(labSpecimenRepository.findStatusById(any()))
+            .thenAnswer(inv -> labSpecimenRepository.findById(specimenId)
+                .map(com.example.hms.model.LabSpecimen::getStatus).orElse(null));
         hospitalId  = UUID.randomUUID();
         labOrderId  = UUID.randomUUID();
         specimenId  = UUID.randomUUID();
@@ -101,13 +110,49 @@ class LabSpecimenServiceImplTest {
         verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
+    /** QA D637: collectedAt 48 h before the order is refused and nothing is saved. */
+    @Test
+    void createSpecimen_collectedBeforeOrder_isRefused() {
+        labOrder.setOrderDatetime(java.time.LocalDateTime.now());
+        LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder()
+            .labOrderId(labOrderId)
+            .specimenType("BLOOD")
+            .collectedAt(java.time.LocalDateTime.now().minusHours(48))
+            .build();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(labOrder));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createSpecimen(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("ordered");
+        verify(labSpecimenRepository, never()).save(any());
+    }
+
+    /** QA D820: an order voided as entered in error takes no specimen. */
+    @Test
+    void createSpecimen_onAVoidedOrder_isRefused() {
+        labOrder.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder()
+            .labOrderId(labOrderId)
+            .specimenType("BLOOD")
+            .build();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(labOrder));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createSpecimen(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.enteredInError"));
+        verify(labSpecimenRepository, never()).save(any());
+    }
+
     @Test
     void createSpecimen_noLabOrderId_throwsBusinessException() {
         LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder().build(); // labOrderId is null
 
         assertThatThrownBy(() -> service.createSpecimen(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("labOrderId");
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "labOrderId");
     }
 
     @Test
@@ -251,6 +296,51 @@ class LabSpecimenServiceImplTest {
         verify(instrumentOutboxService).enqueueSpecimenReceived(specimen);
     }
 
+    /**
+     * QA D820: a specimen collected, then its order voided as entered in error.
+     * Receiving it must save nothing and queue no OML^O21 work order.
+     */
+    @Test
+    void receiveSpecimen_onAVoidedOrder_isRefused() {
+        labOrder.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(labOrder)
+            .status(LabSpecimenStatus.COLLECTED)
+            .build();
+        when(labSpecimenRepository.findById(specimenId)).thenReturn(Optional.of(specimen));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.receiveSpecimen(specimenId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.enteredInError"));
+        assertThat(specimen.getStatus()).isEqualTo(LabSpecimenStatus.COLLECTED);
+        verify(labSpecimenRepository, never()).save(any());
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
+        verify(instrumentOutboxService, never()).enqueueSpecimenReceived(any());
+    }
+
+    /** QA D820: a void that commits after the check is seen under the order lock. */
+    @Test
+    void receiveSpecimen_whenTheOrderIsVoidedConcurrently_queuesNothing() {
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(labOrder)
+            .status(LabSpecimenStatus.COLLECTED)
+            .build();
+        when(labSpecimenRepository.findById(specimenId)).thenReturn(Optional.of(specimen));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(labSpecimenRepository.save(specimen)).thenReturn(specimen);
+        givenCommittedOrderStatus(LabOrderStatus.ENTERED_IN_ERROR);
+
+        assertThatThrownBy(() -> service.receiveSpecimen(specimenId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.enteredInError"));
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
+        verify(instrumentOutboxService, never()).enqueueSpecimenReceived(any());
+    }
+
     @Test
     void receiveSpecimen_neverMovesAResultedOrderBack() {
         labOrder.setStatus(LabOrderStatus.RESULTED);
@@ -328,5 +418,45 @@ class LabSpecimenServiceImplTest {
 
         assertThatThrownBy(() -> service.receiveSpecimen(specimenId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /**
+     * QA D1109: an order that already has a result, or is cancelled, takes no
+     * new specimen (the collection on a released order left a dangling tube
+     * with an accession number nobody would run).
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = LabOrderStatus.class,
+        names = {"RESULTED", "VERIFIED", "COMPLETED", "CANCELLED"})
+    void d1109_anAnsweredOrCancelledOrderTakesNoNewSpecimen(LabOrderStatus status) {
+        labOrder.setStatus(status);
+        LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder()
+            .labOrderId(labOrderId)
+            .specimenType("BLOOD")
+            .build();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(labOrder));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createSpecimen(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("new specimen");
+        verify(labSpecimenRepository, never()).save(any());
+    }
+
+    /** QA D1109: a tube collected before its order was cancelled is not received. */
+    @Test
+    void d1109_aSpecimenOfACancelledOrderIsNotReceived() {
+        labOrder.setStatus(LabOrderStatus.CANCELLED);
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(labOrder)
+            .status(LabSpecimenStatus.COLLECTED)
+            .build();
+        when(labSpecimenRepository.findById(specimenId)).thenReturn(Optional.of(specimen));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.receiveSpecimen(specimenId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("cancelled");
+        verify(labSpecimenRepository, never()).save(any());
     }
 }

@@ -128,6 +128,34 @@ class AnnouncementControllerTest {
         verify(announcementService).createAnnouncement("New policy effective Monday");
     }
 
+    @Test
+    @WithMockUser(roles = "HOSPITAL_ADMIN")
+    @DisplayName("QA D1615: POST /announcements with a blank text is a 400 naming the text field")
+    void createAnnouncement_blankTextIsRefusedNamingTheField() throws Exception {
+        when(announcementService.createAnnouncement(" "))
+            .thenThrow(new com.example.hms.exception.FieldBusinessException("text", "announcement.text.required"));
+
+        mockMvc.perform(post(BASE).param("text", " "))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.field").value("text"))
+            .andExpect(jsonPath("$.fieldErrors.text").exists());
+    }
+
+    @Test
+    @DisplayName("QA D1615: the blank-text refusal reads in English, French and Spanish")
+    void blankTextReasonIsTranslated() {
+        org.springframework.context.MessageSource bundles = com.example.hms.i18n.TestMessageSources.bundles();
+        org.assertj.core.api.Assertions.assertThat(
+                bundles.getMessage("announcement.text.required", null, java.util.Locale.ENGLISH))
+            .isEqualTo("Enter the text of the announcement.");
+        org.assertj.core.api.Assertions.assertThat(
+                bundles.getMessage("announcement.text.required", null, java.util.Locale.FRENCH))
+            .isEqualTo("Saisissez le texte de l'annonce.");
+        org.assertj.core.api.Assertions.assertThat(
+                bundles.getMessage("announcement.text.required", null, java.util.Locale.forLanguageTag("es")))
+            .isEqualTo("Escriba el texto del anuncio.");
+    }
+
     // ───────────── PUT /announcements/{id} ─────────────
 
     @Test

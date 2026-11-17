@@ -70,6 +70,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -111,6 +113,7 @@ class PatientPortalServiceImplPhase1Test {
     @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
     @Mock private com.example.hms.repository.DepartmentRepository departmentRepository;
     @Mock private com.example.hms.repository.StaffRepository staffRepository;
+    @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private com.example.hms.service.StaffAvailabilityService staffAvailabilityService;
     @Mock private com.example.hms.repository.PatientProxyRepository patientProxyRepository;
@@ -120,6 +123,13 @@ class PatientPortalServiceImplPhase1Test {
     @Mock private com.example.hms.repository.QuestionnaireRepository questionnaireRepository;
     @Mock private com.example.hms.repository.QuestionnaireResponseRepository questionnaireResponseRepository;
     @Mock private com.example.hms.mapper.QuestionnaireMapper questionnaireMapper;
+
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
+    /** QA D1212 (round 24): the summary's best-effort cards read through IsolatedReads. */
+    @org.mockito.Spy
+    private com.example.hms.service.support.IsolatedReads isolatedReads =
+        com.example.hms.service.support.IsolatedReadsTestSupport.inline();
 
     @InjectMocks
     private PatientPortalServiceImpl service;
@@ -188,7 +198,7 @@ class PatientPortalServiceImplPhase1Test {
             stubAuthNotResolvable();
             assertThatThrownBy(() -> service.resolvePatientId(auth))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Unable to resolve user");
+                    .extracting("messageKey").isEqualTo("patient.refill.decision.userUnresolved");
         }
 
         @Test
@@ -197,7 +207,7 @@ class PatientPortalServiceImplPhase1Test {
             stubPatientNotFound();
             assertThatThrownBy(() -> service.resolvePatientId(auth))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("No patient record");
+                    .hasFieldOrPropertyWithValue("messageKey", "patient.portal.noRecord");
         }
     }
 
@@ -225,6 +235,35 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result.getEmail()).isEqualTo("john@example.com");
             assertThat(result.getCity()).isEqualTo("Paris");
             assertThat(result.getUsername()).isEqualTo("patient.john");
+        }
+
+        @Test
+        @DisplayName("QA D244: a patient registered at two hospitals gets the current hospital's MRN and both records")
+        void getMyProfile_twoHospitals_carriesTheMrns() {
+            stubPatientResolution();
+            com.example.hms.model.Hospital a = new com.example.hms.model.Hospital();
+            a.setId(UUID.randomUUID());
+            a.setName("Hospital A");
+            com.example.hms.model.Hospital b = new com.example.hms.model.Hospital();
+            b.setId(UUID.randomUUID());
+            b.setName("Hospital B");
+            patient.setHospitalId(b.getId());
+            com.example.hms.model.PatientHospitalRegistration regA = new com.example.hms.model.PatientHospitalRegistration();
+            regA.setHospital(a);
+            regA.setMrn("MRN-A");
+            regA.setActive(true);
+            com.example.hms.model.PatientHospitalRegistration regB = new com.example.hms.model.PatientHospitalRegistration();
+            regB.setHospital(b);
+            regB.setMrn("MRN-B");
+            regB.setActive(true);
+            when(registrationRepository.findByPatientId(patientId)).thenReturn(java.util.List.of(regA, regB));
+
+            PatientProfileDTO result = service.getMyProfile(auth);
+
+            assertThat(result.getMrn()).isEqualTo("MRN-B");
+            assertThat(result.getHospitalRecords())
+                .extracting(PatientProfileDTO.HospitalRecord::getMrn)
+                .containsExactly("MRN-A", "MRN-B");
         }
 
         @Test
@@ -320,6 +359,69 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result.getEmergencyContactRelationship()).isEqualTo("Sister");
             assertThat(result.getPreferredPharmacy()).isEqualTo("Pharmacie Centrale");
         }
+
+        @Test
+        @DisplayName("D113 — a blank primary phone is a message, not a 500")
+        void updateMyProfile_blankPrimaryPhoneRefused() {
+            stubPatientResolution();
+            PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder().phoneNumberPrimary("  ").build();
+            assertThatThrownBy(() -> service.updateMyProfile(auth, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(patientRepository, never()).save(any(Patient.class));
+        }
+
+        @Test
+        @DisplayName("D113 — a phone that is not a number is refused; a local one is stored in E.164")
+        void updateMyProfile_phoneIsNormalised() {
+            stubPatientResolution();
+            assertThatThrownBy(() -> service.updateMyProfile(auth,
+                    PatientProfileUpdateDTO.builder().phoneNumberSecondary("call me maybe").build()))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+
+            when(patientRepository.save(any(Patient.class))).thenAnswer(inv -> inv.getArgument(0));
+            PatientProfileDTO result = service.updateMyProfile(auth,
+                    PatientProfileUpdateDTO.builder().phoneNumberSecondary("70 20 20 20").build());
+            assertThat(result.getPhoneNumberSecondary()).isEqualTo("+22670202020");
+        }
+
+        @Test
+        @DisplayName("D113 — another patient's e-mail is refused")
+        void updateMyProfile_emailOfAnotherPatientRefused() {
+            stubPatientResolution();
+            when(patientRepository.existsEmailOnOtherPatient("other@example.com", patientId)).thenReturn(true);
+            PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder().email(" other@example.com ").build();
+            assertThatThrownBy(() -> service.updateMyProfile(auth, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(patientRepository, never()).save(any(Patient.class));
+        }
+
+        @Test
+        @DisplayName("QA D926 review: saving one's own unchanged number is never refused, even when a child shares it")
+        void updateMyProfile_unchangedSharedPhoneIsKept() {
+            stubPatientResolution();
+            patient.setPhoneNumberPrimary("+22670202020");
+            PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder()
+                    .phoneNumberPrimary("70202020").build();
+            org.mockito.Mockito.lenient().when(patientRepository.existsByPhoneNumberPrimaryAndIdNot(
+                    org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+            org.mockito.Mockito.lenient().when(patientRepository.save(org.mockito.ArgumentMatchers.any()))
+                    .thenAnswer(inv -> inv.getArgument(0));
+            org.assertj.core.api.Assertions.assertThatCode(() -> service.updateMyProfile(auth, dto))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("D113 — another patient's primary phone is refused")
+        void updateMyProfile_phoneOfAnotherPatientRefused() {
+            stubPatientResolution();
+            // Never single-result: two records may already share a number (QA D926/D942).
+            when(patientRepository.existsByPhoneNumberPrimaryAndIdNot(
+                    org.mockito.ArgumentMatchers.eq("+22670202020"), org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(true);
+            PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder().phoneNumberPrimary("70202020").build();
+            assertThatThrownBy(() -> service.updateMyProfile(auth, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -337,11 +439,18 @@ class PatientPortalServiceImplPhase1Test {
 
             when(labResultService.getLabResultsForPatientPortal(eq(patientId), isNull(), eq(5)))
                     .thenReturn(List.of(new PatientLabResultResponseDTO()));
-            when(medicationService.getMedicationsForPatient(eq(patientId), isNull(), eq(10)))
-                    .thenReturn(List.of(new PatientMedicationResponseDTO()));
-            when(vitalSignService.getRecentVitals(eq(patientId), isNull(), eq(5)))
+            PatientMedicationResponseDTO running = new PatientMedicationResponseDTO();
+            running.setStatus("ACTIVE");
+            PatientMedicationResponseDTO finished = new PatientMedicationResponseDTO();
+            finished.setStatus("COMPLETED");
+            PatientMedicationResponseDTO stopped = new PatientMedicationResponseDTO();
+            stopped.setStatus("DISCONTINUED");
+            // QA D720: "current medications" are the running courses only.
+            when(medicationService.getMedicationsForPatientPortal(eq(patientId), isNull(), eq(100)))
+                    .thenReturn(List.of(finished, running, stopped));
+            when(vitalSignService.getRecentVitalsForPatientPortal(patientId, 5))
                     .thenReturn(List.of(new PatientVitalSignResponseDTO()));
-            when(immunizationService.getImmunizationsByPatientId(patientId))
+            when(immunizationService.getImmunizationsForPatientPortal(patientId))
                     .thenReturn(List.of(new ImmunizationResponseDTO()));
 
             HealthSummaryDTO result = service.getHealthSummary(auth, Locale.ENGLISH);
@@ -350,11 +459,78 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result.getProfile()).isNotNull();
             assertThat(result.getProfile().getId()).isEqualTo(patientId);
             assertThat(result.getRecentLabResults()).hasSize(1);
-            assertThat(result.getCurrentMedications()).hasSize(1);
+            assertThat(result.getCurrentMedications()).containsExactly(running);
             assertThat(result.getRecentVitals()).hasSize(1);
             assertThat(result.getImmunizations()).hasSize(1);
             assertThat(result.getAllergies()).containsExactly("Penicillin", "Aspirin");
             assertThat(result.getChronicConditions()).containsExactly("Hypertension", "Diabetes");
+        }
+
+        /** QA D1362 (round 31): the summary carries the server's totals, so a card counts every row. */
+        @Test
+        void getHealthSummary_carriesTheTotals() {
+            stubPatientResolution();
+            when(labResultService.countLabResultsForPatientPortal(patientId)).thenReturn(125L);
+            when(medicationService.countMedicationsForPatientPortal(patientId)).thenReturn(444L);
+
+            HealthSummaryDTO result = service.getHealthSummary(auth, Locale.FRENCH);
+
+            assertThat(result.getLabResultTotal()).isEqualTo(125L);
+            assertThat(result.getMedicationTotal()).isEqualTo(444L);
+        }
+
+        /** QA D1362: a total that cannot be read is absent (the page then shows no count), never a broken summary. */
+        @Test
+        void getHealthSummary_aTotalThatFailsIsAbsent() {
+            stubPatientResolution();
+            when(labResultService.countLabResultsForPatientPortal(patientId)).thenThrow(new IllegalStateException("db"));
+
+            HealthSummaryDTO result = service.getHealthSummary(auth, Locale.FRENCH);
+
+            assertThat(result.getLabResultTotal()).isNull();
+            assertThat(result.getProfile()).isNotNull();
+        }
+
+        /**
+         * QA D1214 (round 23): "Pathologies actives" was empty for every
+         * patient - the summary never set activeDiagnoses. The doctor's
+         * ACTIVE problems (and V14-era ACTIVE diagnoses) are listed, once
+         * each; a resolved problem and an inactive legacy row are not.
+         */
+        @Test
+        @DisplayName("QA D1214: the doctor's active diagnoses reach the patient's summary")
+        void getHealthSummary_listsActiveDiagnoses() {
+            stubPatientResolution();
+            com.example.hms.repository.PatientProblemRepository problems =
+                mock(com.example.hms.repository.PatientProblemRepository.class);
+            com.example.hms.repository.PatientDiagnosisRepository diagnoses =
+                mock(com.example.hms.repository.PatientDiagnosisRepository.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "patientProblemRepository", problems);
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "patientDiagnosisRepository", diagnoses);
+            com.example.hms.model.PatientProblem malaria = new com.example.hms.model.PatientProblem();
+            malaria.setProblemDisplay("Paludisme à Plasmodium falciparum, simple");
+            malaria.setProblemCode("B50.9");
+            com.example.hms.model.PatientProblem codeOnly = new com.example.hms.model.PatientProblem();
+            codeOnly.setProblemCode("I10");
+            when(problems.findByPatient_IdAndStatusOrderByCreatedAtDesc(patientId,
+                    com.example.hms.enums.ProblemStatus.ACTIVE)).thenReturn(List.of(malaria, codeOnly));
+            com.example.hms.model.PatientDiagnosis legacySame = new com.example.hms.model.PatientDiagnosis();
+            legacySame.setDescription("Paludisme à Plasmodium falciparum, simple");
+            legacySame.setStatus("ACTIVE");
+            com.example.hms.model.PatientDiagnosis legacyResolved = new com.example.hms.model.PatientDiagnosis();
+            legacyResolved.setDescription("Fracture ancienne");
+            legacyResolved.setStatus("RESOLVED");
+            when(diagnoses.findByPatient_IdOrderByDiagnosedAtDesc(patientId))
+                .thenReturn(List.of(legacySame, legacyResolved));
+            when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
+            when(medicationService.getMedicationsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
+            when(vitalSignService.getRecentVitalsForPatientPortal(any(), anyInt())).thenReturn(List.of());
+            when(immunizationService.getImmunizationsForPatientPortal(any())).thenReturn(List.of());
+
+            HealthSummaryDTO result = service.getHealthSummary(auth, Locale.FRENCH);
+
+            assertThat(result.getActiveDiagnoses())
+                .containsExactly("Paludisme à Plasmodium falciparum, simple", "I10");
         }
 
         @Test
@@ -364,11 +540,11 @@ class PatientPortalServiceImplPhase1Test {
 
             when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt()))
                     .thenThrow(new RuntimeException("lab service down"));
-            when(medicationService.getMedicationsForPatient(any(), any(), anyInt()))
+            when(medicationService.getMedicationsForPatientPortal(any(), any(), anyInt()))
                     .thenThrow(new RuntimeException("med service down"));
-            when(vitalSignService.getRecentVitals(any(), any(), anyInt()))
+            when(vitalSignService.getRecentVitalsForPatientPortal(any(), anyInt()))
                     .thenThrow(new RuntimeException("vital service down"));
-            when(immunizationService.getImmunizationsByPatientId(any()))
+            when(immunizationService.getImmunizationsForPatientPortal(any()))
                     .thenThrow(new RuntimeException("immunization service down"));
 
             HealthSummaryDTO result = service.getHealthSummary(auth, Locale.ENGLISH);
@@ -387,9 +563,9 @@ class PatientPortalServiceImplPhase1Test {
             stubPatientResolution();
 
             when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
-            when(medicationService.getMedicationsForPatient(any(), any(), anyInt())).thenReturn(List.of());
-            when(vitalSignService.getRecentVitals(any(), any(), anyInt())).thenReturn(List.of());
-            when(immunizationService.getImmunizationsByPatientId(any())).thenReturn(List.of());
+            when(medicationService.getMedicationsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
+            when(vitalSignService.getRecentVitalsForPatientPortal(any(), anyInt())).thenReturn(List.of());
+            when(immunizationService.getImmunizationsForPatientPortal(any())).thenReturn(List.of());
 
             HealthSummaryDTO result = service.getHealthSummary(auth, Locale.ENGLISH);
 
@@ -433,12 +609,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyMedications_delegates() {
             stubPatientResolution();
             List<PatientMedicationResponseDTO> expected = List.of(new PatientMedicationResponseDTO());
-            when(medicationService.getMedicationsForPatient(patientId, null, 20)).thenReturn(expected);
+            when(medicationService.getMedicationsForPatientPortal(patientId, null, 20)).thenReturn(expected);
 
             List<PatientMedicationResponseDTO> result = service.getMyMedications(auth, 20);
 
             assertThat(result).isEqualTo(expected);
-            verify(medicationService).getMedicationsForPatient(patientId, null, 20);
+            verify(medicationService).getMedicationsForPatientPortal(patientId, null, 20);
         }
     }
 
@@ -455,13 +631,13 @@ class PatientPortalServiceImplPhase1Test {
         void getMyPrescriptions_delegates() {
             stubPatientResolution();
             List<PrescriptionResponseDTO> expected = List.of(new PrescriptionResponseDTO());
-            when(prescriptionService.getPrescriptionsByPatientId(patientId, Locale.ENGLISH))
+            when(prescriptionService.getPrescriptionsForPortalPatient(patientId, Locale.ENGLISH))
                     .thenReturn(expected);
 
             List<PrescriptionResponseDTO> result = service.getMyPrescriptions(auth, Locale.ENGLISH);
 
             assertThat(result).isEqualTo(expected);
-            verify(prescriptionService).getPrescriptionsByPatientId(patientId, Locale.ENGLISH);
+            verify(prescriptionService).getPrescriptionsForPortalPatient(patientId, Locale.ENGLISH);
         }
     }
 
@@ -478,12 +654,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyVitals_delegates() {
             stubPatientResolution();
             List<PatientVitalSignResponseDTO> expected = List.of(new PatientVitalSignResponseDTO());
-            when(vitalSignService.getRecentVitals(patientId, null, 5)).thenReturn(expected);
+            when(vitalSignService.getRecentVitalsForPatientPortal(patientId, 5)).thenReturn(expected);
 
             List<PatientVitalSignResponseDTO> result = service.getMyVitals(auth, 5);
 
             assertThat(result).isEqualTo(expected);
-            verify(vitalSignService).getRecentVitals(patientId, null, 5);
+            verify(vitalSignService).getRecentVitalsForPatientPortal(patientId, 5);
         }
     }
 
@@ -500,13 +676,13 @@ class PatientPortalServiceImplPhase1Test {
         void getMyEncounters_delegates() {
             stubPatientResolution();
             List<EncounterResponseDTO> expected = List.of(new EncounterResponseDTO());
-            when(encounterService.getEncountersByPatientId(patientId, Locale.ENGLISH))
+            when(encounterService.getEncountersForPortalPatient(patientId))
                     .thenReturn(expected);
 
             List<EncounterResponseDTO> result = service.getMyEncounters(auth, Locale.ENGLISH);
 
             assertThat(result).isEqualTo(expected);
-            verify(encounterService).getEncountersByPatientId(patientId, Locale.ENGLISH);
+            verify(encounterService).getEncountersForPortalPatient(patientId);
         }
     }
 
@@ -532,6 +708,26 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result).isEqualTo(expected);
             verify(appointmentService).getAppointmentsByPatientId(patientId, Locale.ENGLISH, "patient.john");
         }
+
+        @Test
+        @DisplayName("QA D642: returns the appointments soonest first, by date then start time")
+        void getMyAppointments_inDateOrder() {
+            stubPatientResolution();
+            when(auth.getName()).thenReturn("patient.john");
+            AppointmentResponseDTO oct30 = new AppointmentResponseDTO();
+            oct30.setAppointmentDate(java.time.LocalDate.of(2026, 10, 30));
+            oct30.setStartTime(java.time.LocalTime.of(9, 0));
+            AppointmentResponseDTO oct28Late = new AppointmentResponseDTO();
+            oct28Late.setAppointmentDate(java.time.LocalDate.of(2026, 10, 28));
+            oct28Late.setStartTime(java.time.LocalTime.of(14, 0));
+            AppointmentResponseDTO oct28 = new AppointmentResponseDTO();
+            oct28.setAppointmentDate(java.time.LocalDate.of(2026, 10, 28));
+            oct28.setStartTime(java.time.LocalTime.of(8, 30));
+            when(appointmentService.getAppointmentsByPatientId(patientId, Locale.FRENCH, "patient.john"))
+                    .thenReturn(List.of(oct30, oct28Late, oct28));
+
+            assertThat(service.getMyAppointments(auth, Locale.FRENCH)).containsExactly(oct28, oct28Late, oct30);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -548,13 +744,13 @@ class PatientPortalServiceImplPhase1Test {
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 10);
             Page<BillingInvoiceResponseDTO> expected = new PageImpl<>(List.of(new BillingInvoiceResponseDTO()));
-            when(billingInvoiceService.getInvoicesByPatientId(patientId, pageable, Locale.ENGLISH))
+            when(billingInvoiceService.getInvoicesForPortalPatient(patientId, pageable, Locale.ENGLISH))
                     .thenReturn(expected);
 
             Page<BillingInvoiceResponseDTO> result = service.getMyInvoices(auth, pageable, Locale.ENGLISH);
 
             assertThat(result).isEqualTo(expected);
-            verify(billingInvoiceService).getInvoicesByPatientId(patientId, pageable, Locale.ENGLISH);
+            verify(billingInvoiceService).getInvoicesForPortalPatient(patientId, pageable, Locale.ENGLISH);
         }
     }
 
@@ -594,12 +790,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyImmunizations_delegates() {
             stubPatientResolution();
             List<ImmunizationResponseDTO> expected = List.of(new ImmunizationResponseDTO());
-            when(immunizationService.getImmunizationsByPatientId(patientId)).thenReturn(expected);
+            when(immunizationService.getImmunizationsForPatientPortal(patientId)).thenReturn(expected);
 
             List<ImmunizationResponseDTO> result = service.getMyImmunizations(auth);
 
             assertThat(result).isEqualTo(expected);
-            verify(immunizationService).getImmunizationsByPatientId(patientId);
+            verify(immunizationService).getImmunizationsForPatientPortal(patientId);
         }
     }
 
@@ -616,12 +812,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyConsultations_delegates() {
             stubPatientResolution();
             List<ConsultationResponseDTO> expected = List.of(new ConsultationResponseDTO());
-            when(consultationService.getConsultationsForPatient(patientId)).thenReturn(expected);
+            when(consultationService.getConsultationsForPortalPatient(patientId)).thenReturn(expected);
 
             List<ConsultationResponseDTO> result = service.getMyConsultations(auth);
 
             assertThat(result).isEqualTo(expected);
-            verify(consultationService).getConsultationsForPatient(patientId);
+            verify(consultationService).getConsultationsForPortalPatient(patientId);
         }
     }
 
@@ -639,12 +835,12 @@ class PatientPortalServiceImplPhase1Test {
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 10);
             Page<TreatmentPlanResponseDTO> expected = new PageImpl<>(List.of(new TreatmentPlanResponseDTO()));
-            when(treatmentPlanService.listByPatient(patientId, pageable)).thenReturn(expected);
+            when(treatmentPlanService.listForPortalPatient(patientId, pageable)).thenReturn(expected);
 
             Page<TreatmentPlanResponseDTO> result = service.getMyTreatmentPlans(auth, pageable);
 
             assertThat(result).isEqualTo(expected);
-            verify(treatmentPlanService).listByPatient(patientId, pageable);
+            verify(treatmentPlanService).listForPortalPatient(patientId, pageable);
         }
     }
 
@@ -661,12 +857,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyReferrals_delegates() {
             stubPatientResolution();
             List<GeneralReferralResponseDTO> expected = List.of(new GeneralReferralResponseDTO());
-            when(referralService.getReferralsByPatient(patientId)).thenReturn(expected);
+            when(referralService.getReferralsForPortalPatient(patientId)).thenReturn(expected);
 
             List<GeneralReferralResponseDTO> result = service.getMyReferrals(auth);
 
             assertThat(result).isEqualTo(expected);
-            verify(referralService).getReferralsByPatient(patientId);
+            verify(referralService).getReferralsForPortalPatient(patientId);
         }
     }
 
@@ -714,16 +910,13 @@ class PatientPortalServiceImplPhase1Test {
             historyEntry.setId(UUID.randomUUID());
             historyEntry.setCurrent(false);
 
-            when(primaryCareService.getCurrentPrimaryCare(patientId))
-                    .thenReturn(Optional.of(currentPcp));
-            when(primaryCareService.getPrimaryCareHistory(patientId))
-                    .thenReturn(List.of(historyEntry));
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of(currentPcp, historyEntry));
 
             CareTeamDTO result = service.getMyCareTeam(auth);
 
             assertThat(result.getPrimaryCare()).isNotNull();
             assertThat(result.getPrimaryCare().getId()).isEqualTo(currentPcp.getId());
-            assertThat(result.getPrimaryCareHistory()).hasSize(1);
+            assertThat(result.getPrimaryCareHistory()).hasSize(2);
         }
 
         @Test
@@ -731,10 +924,7 @@ class PatientPortalServiceImplPhase1Test {
         void getMyCareTeam_noPcp() {
             stubPatientResolution();
 
-            when(primaryCareService.getCurrentPrimaryCare(patientId))
-                    .thenReturn(Optional.empty());
-            when(primaryCareService.getPrimaryCareHistory(patientId))
-                    .thenReturn(List.of());
+            when(primaryCareService.getOwnPrimaryCareLinks(patientId)).thenReturn(List.of());
 
             CareTeamDTO result = service.getMyCareTeam(auth);
 
@@ -768,7 +958,7 @@ class PatientPortalServiceImplPhase1Test {
                     .timestamp(LocalDateTime.now())
                     .build();
 
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(new PageImpl<>(List.of(entry)));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);
@@ -778,6 +968,47 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(out.getActor()).isEqualTo("dr.martin");
             assertThat(out.getEventType()).isEqualTo("PATIENT_ACCESS");
             assertThat(out.getDescription()).isEqualTo("Doctor viewed patient record");
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D1471: contact name, city and e-mail on the profile")
+    class ProfileContactRules {
+
+        private void savable() {
+            stubPatientResolution();
+        }
+
+        @Test
+        @DisplayName("digits only and a@b are refused on their fields")
+        void refused() {
+            savable();
+            for (var bad : List.of(
+                    java.util.Map.entry("emergencyContactName", PatientProfileUpdateDTO.builder().emergencyContactName("12345").build()),
+                    java.util.Map.entry("city", PatientProfileUpdateDTO.builder().city("12345").build()),
+                    java.util.Map.entry("email", PatientProfileUpdateDTO.builder().email("a@b").build()))) {
+                assertThatThrownBy(() -> service.updateMyProfile(auth, bad.getValue()))
+                        .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                            refused -> assertThat(refused.getField()).isEqualTo(bad.getKey()));
+            }
+            verify(patientRepository, never()).save(any(Patient.class));
+        }
+
+        @Test
+        @DisplayName("a row stored before the rule stays editable on its other fields, resent whole")
+        void existingRowsStayEditable() {
+            savable();
+            patient.setCity("12345");
+            patient.setEmergencyContactName("12345");
+            patient.setEmail("a@b");
+            when(patientRepository.save(any(Patient.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            PatientProfileDTO saved = service.updateMyProfile(auth, PatientProfileUpdateDTO.builder()
+                    .city("12345").emergencyContactName("12345").email("a@b").addressLine1("Secteur 15").build());
+
+            assertThat(saved.getAddressLine1()).isEqualTo("Secteur 15");
+            assertThat(saved.getCity()).isEqualTo("12345");
+            assertThat(saved.getEmail()).isEqualTo("a@b");
         }
     }
 }

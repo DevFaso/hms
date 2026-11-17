@@ -1196,6 +1196,34 @@
   }
 }
 
+.link-item {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.link-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.link-state {
+  font-size: 0.75rem;
+  color: #64748b;
+
+  &.link-state-enabled {
+    color: #166534;
+  }
+
+  &.link-state-disabled {
+    color: #b45309;
+  }
+}
+
+.form-hint {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+}
+
 /* ═══════════════════════════════════════
    FORMS
    ═══════════════════════════════════════ */

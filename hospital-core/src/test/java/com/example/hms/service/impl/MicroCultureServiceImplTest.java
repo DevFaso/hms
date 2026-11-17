@@ -28,7 +28,6 @@ import com.example.hms.repository.MicroSusceptibilityRepository;
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -62,6 +61,14 @@ import com.example.hms.i18n.TestMessageSources;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class MicroCultureServiceImplTest {
 
+    // QA D1232 (round 24): the refusals are message keys now; the assertions
+    // read them in English through the real bundles (set up in setUp).
+    @org.junit.jupiter.api.AfterEach
+    void resetRefusalLocale() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock private MicroCultureResultRepository cultureRepository;
     @Mock private MicroIsolateRepository isolateRepository;
     @Mock private MicroSusceptibilityRepository susceptibilityRepository;
@@ -70,11 +77,12 @@ class MicroCultureServiceImplTest {
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRepository userRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
 
     private MicroCultureServiceImpl service;
 
     private UUID hospitalId;
+    @org.mockito.Mock private com.example.hms.repository.MicroCultureCorrectionRepository correctionRepository;
     private UUID orderId;
     private UUID cultureId;
     private Hospital hospital;
@@ -84,11 +92,13 @@ class MicroCultureServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         service = new MicroCultureServiceImpl(
-            cultureRepository, isolateRepository, susceptibilityRepository,
+            cultureRepository, isolateRepository, susceptibilityRepository, correctionRepository,
             labOrderRepository, specimenRepository, patientChartAccess,
             staffRepository, userRepository, notificationService,
-            TestMessageSources.bundles());
+            TestMessageSources.bundles(), java.time.Clock.systemDefaultZone());
 
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();
@@ -167,6 +177,15 @@ class MicroCultureServiceImplTest {
         assertThat(created.getPatientId()).isEqualTo(patient.getId());
     }
 
+    /** QA D291: the culture showed the order's UUID; its code is the readable order number. */
+    @Test
+    void theCultureCarriesTheOrdersReadableNumber() {
+        order.setOrderNumber("LAB-000042");
+        MicroCultureRequestDTO request = MicroCultureRequestDTO.builder().labOrderId(orderId).build();
+
+        assertThat(service.createCulture(hospitalId, null, request).getLabOrderCode()).isEqualTo("LAB-000042");
+    }
+
     @Test
     void createRefusesWithoutHospitalScope() {
         MicroCultureRequestDTO request = MicroCultureRequestDTO.builder().labOrderId(orderId).build();
@@ -184,7 +203,7 @@ class MicroCultureServiceImplTest {
         // 404-not-403: the message must not reveal the order exists elsewhere.
         assertThatThrownBy(() -> service.createCulture(foreignScope, null, request))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Lab order not found");
+            .hasFieldOrPropertyWithValue("messageKey", "labOrder.notFound");
     }
 
     @Test
@@ -195,6 +214,16 @@ class MicroCultureServiceImplTest {
         assertThatThrownBy(() -> service.createCulture(hospitalId, null, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("cancelled");
+    }
+
+    @Test
+    void createRefusesAnOrderVoidedAsEnteredInError() {
+        // QA D820.
+        order.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        MicroCultureRequestDTO request = MicroCultureRequestDTO.builder().labOrderId(orderId).build();
+
+        assertThatThrownBy(() -> service.createCulture(hospitalId, null, request))
+            .isInstanceOf(BusinessException.class);
     }
 
     /* ── lifecycle ─────────────────────────────────────────────────────── */
@@ -227,7 +256,7 @@ class MicroCultureServiceImplTest {
         assertThat(culture.getFinalizedAt()).isNotNull();
         assertThat(culture.getFinalizedByUserId()).isEqualTo(actor);
         // No growth — nobody is paged about a negative.
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -249,10 +278,40 @@ class MicroCultureServiceImplTest {
 
         service.finalizeCulture(cultureId, hospitalId, null);
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             org.mockito.ArgumentMatchers.contains("Escherichia coli"),
             eq("dr.traore"),
             eq("POSITIVE_CULTURE_RESULT"));
+    }
+
+    @Test
+    void aVoidedOrdersCultureTakesNoChangeAndNotifiesNobody() {
+        // QA D820, self-review of #960: the order was voided as entered in error
+        // after a PRELIMINARY growth culture was started. Already loaded in the
+        // persistence context, so the entity restriction does not stand between
+        // the request and the row: the service must refuse every change itself.
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        when(isolateRepository.countByCultureResult_Id(cultureId)).thenReturn(1L);
+        when(isolateRepository.findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(cultureId))
+            .thenReturn(List.of(storedIsolate()));
+        order.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        MicroCultureUpdateDTO update = MicroCultureUpdateDTO.builder().gramStain("GPC in clusters").build();
+        MicroIsolateRequestDTO isolate = MicroIsolateRequestDTO.builder().organismName("Klebsiella").build();
+
+        assertThatThrownBy(() -> service.finalizeCulture(cultureId, hospitalId, null))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.updateCulture(cultureId, hospitalId, update))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.addIsolate(cultureId, hospitalId, isolate))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getCulture(cultureId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        assertThat(culture.getStatus()).isEqualTo(MicroCultureStatus.PRELIMINARY);
+        assertThat(culture.getGramStain()).isNull();
+        verify(cultureRepository, never()).save(any(MicroCultureResult.class));
+        verify(isolateRepository, never()).save(any(MicroIsolate.class));
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -325,7 +384,7 @@ class MicroCultureServiceImplTest {
 
         assertThatThrownBy(() -> service.updateIsolate(cultureId, foreignIsolateId, hospitalId, request))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Isolate not found");
+            .hasFieldOrPropertyWithValue("messageKey", "microculture.isolate.notFound");
     }
 
     /* ── reads ─────────────────────────────────────────────────────────── */
@@ -336,7 +395,7 @@ class MicroCultureServiceImplTest {
 
         assertThatThrownBy(() -> service.getCulture(cultureId, foreignScope))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Culture report not found");
+            .hasFieldOrPropertyWithValue("messageKey", "microculture.culture.notFound");
     }
 
     @Test
@@ -497,7 +556,7 @@ class MicroCultureServiceImplTest {
 
         assertThatThrownBy(() -> service.deleteSusceptibility(cultureId, isolateId, rowId, hospitalId, null))
             .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Susceptibility not found");
+            .hasFieldOrPropertyWithValue("messageKey", "microculture.susceptibility.notFound");
     }
 
     @Test
@@ -623,6 +682,147 @@ class MicroCultureServiceImplTest {
         // Best-effort by policy: the clinical write must survive a
         // notification dead end.
         assertThat(finalized.getStatus()).isEqualTo(MicroCultureStatus.FINAL);
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
+    }
+
+    /* ── QA CX-009: a validated report says what its organisms say ─────── */
+
+    private MicroIsolate onlyIsolate() {
+        MicroIsolate isolate = MicroIsolate.builder().cultureResult(culture).isolateNumber(1)
+            .organismName("Escherichia coli").build();
+        isolate.setId(UUID.randomUUID());
+        when(isolateRepository.findById(isolate.getId())).thenReturn(Optional.of(isolate));
+        when(isolateRepository.findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(cultureId))
+            .thenReturn(List.of(isolate));
+        when(isolateRepository.countByCultureResult_Id(cultureId)).thenReturn(1L);
+        return isolate;
+    }
+
+    @Test
+    void removingTheLastIsolateOfAValidatedGrowthReportIsRefusedOnTheOutcome_CX009() {
+        culture.setStatus(MicroCultureStatus.CORRECTED);
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        UUID isolateId = onlyIsolate().getId();
+
+        assertThatThrownBy(() -> service.deleteIsolate(cultureId, isolateId, hospitalId, "Mauvais germe"))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refused -> assertThat(refused.getField()).isEqualTo("growthResult"))
+            .hasMessageContaining("only organism");
+        verify(isolateRepository, never()).delete(any(MicroIsolate.class));
+    }
+
+    @Test
+    void aPreliminaryReportStillRemovesItsLastIsolateFreely_CX009() {
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        MicroIsolate isolate = onlyIsolate();
+
+        service.deleteIsolate(cultureId, isolate.getId(), hospitalId, null);
+
+        verify(isolateRepository).delete(isolate);
+        verify(correctionRepository, never()).save(any());
+    }
+
+    @Test
+    void mixedFloraOrContaminatedNeedNoOrganism_CX009() {
+        for (MicroGrowthResult outcome : List.of(MicroGrowthResult.MIXED_FLORA, MicroGrowthResult.CONTAMINATED)) {
+            culture.setStatus(MicroCultureStatus.FINAL);
+            culture.setGrowthResult(outcome);
+            MicroIsolate isolate = onlyIsolate();
+
+            service.deleteIsolate(cultureId, isolate.getId(), hospitalId, "Correction");
+
+            verify(isolateRepository).delete(isolate);
+            org.mockito.Mockito.clearInvocations(isolateRepository);
+        }
+    }
+
+    @Test
+    void removingASusceptibilityOfTheOnlyIsolateIsNotRefused_CX009() {
+        culture.setStatus(MicroCultureStatus.FINAL);
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        MicroIsolate isolate = onlyIsolate();
+        MicroSusceptibility row = MicroSusceptibility.builder().isolate(isolate).antibioticName("Ciprofloxacin").build();
+        row.setId(UUID.randomUUID());
+        when(susceptibilityRepository.findById(row.getId())).thenReturn(Optional.of(row));
+
+        MicroCultureResponseDTO after =
+            service.deleteSusceptibility(cultureId, isolate.getId(), row.getId(), hospitalId, "Mauvaise ligne");
+
+        verify(susceptibilityRepository).delete(row);
+        assertThat(after.getStatus()).isEqualTo(MicroCultureStatus.CORRECTED);
+    }
+
+    @Test
+    void removeIsolatesIsAcceptedOnlyWithAValidatedNoGrowth_CX009() {
+        MicroCultureUpdateDTO onPreliminary = MicroCultureUpdateDTO.builder()
+            .growthResult(MicroGrowthResult.NO_GROWTH).removeIsolates(Boolean.TRUE).build();
+        assertThatThrownBy(() -> service.updateCulture(cultureId, hospitalId, onPreliminary))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+
+        culture.setStatus(MicroCultureStatus.FINAL);
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        MicroCultureUpdateDTO wrongOutcome = MicroCultureUpdateDTO.builder()
+            .growthResult(MicroGrowthResult.CONTAMINATED).removeIsolates(Boolean.TRUE).correctionReason("r").build();
+        assertThatThrownBy(() -> service.updateCulture(cultureId, hospitalId, wrongOutcome))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(isolateRepository, never()).delete(any(MicroIsolate.class));
+    }
+
+    @Test
+    void aCorrectionThatMakesAReportPositiveNotifiesTheOrderingProvider_CX009() {
+        culture.setStatus(MicroCultureStatus.FINAL);
+        culture.setGrowthResult(MicroGrowthResult.NO_GROWTH);
+
+        service.addIsolate(cultureId, hospitalId, MicroIsolateRequestDTO.builder()
+            .organismName("Escherichia coli").correctionReason("Pousse tardive").build());
+
+        assertThat(culture.getGrowthResult()).isEqualTo(MicroGrowthResult.GROWTH);
+        verify(notificationService).createNotification(eq("microculture.positive.notification"), any(),
+            eq("dr.traore"), eq("POSITIVE_CULTURE_RESULT"));
+    }
+
+    @Test
+    void aCorrectionThatWithdrawsAPositiveNotifiesTheOrderingProvider_CX009() {
+        culture.setStatus(MicroCultureStatus.FINAL);
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        onlyIsolate();
+
+        service.updateCulture(cultureId, hospitalId, MicroCultureUpdateDTO.builder()
+            .growthResult(MicroGrowthResult.NO_GROWTH).removeIsolates(Boolean.TRUE)
+            .correctionReason("Contamination").build());
+
+        verify(notificationService).createNotification(eq("microculture.corrected.notification"), any(),
+            eq("dr.traore"), eq("CORRECTED_CULTURE_RESULT"));
+    }
+
+    @Test
+    void anUnchangedOutcomeNotifiesNobody_CX009() {
+        culture.setStatus(MicroCultureStatus.FINAL);
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        onlyIsolate();
+
+        service.updateCulture(cultureId, hospitalId, MicroCultureUpdateDTO.builder()
+            .growthResult(MicroGrowthResult.GROWTH).notes("note").correctionReason("Note").build());
+
+        verify(notificationService, never()).createNotification(anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void everyCorrectionLeavesWhatTheReportSaidBefore_CX009() {
+        culture.setStatus(MicroCultureStatus.FINAL);
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        culture.setGramStain("BGN");
+        onlyIsolate();
+
+        service.updateCulture(cultureId, hospitalId, MicroCultureUpdateDTO.builder()
+            .gramStain("CGP").correctionReason("Relecture").build());
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.MicroCultureCorrection> row =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.MicroCultureCorrection.class);
+        verify(correctionRepository).save(row.capture());
+        assertThat(row.getValue().getStatusBefore()).isEqualTo(MicroCultureStatus.FINAL);
+        assertThat(row.getValue().getGramStainBefore()).isEqualTo("BGN");
+        assertThat(row.getValue().getIsolatesBefore()).contains("Escherichia coli");
+        assertThat(row.getValue().getReason()).isEqualTo("Relecture");
     }
 }

@@ -1,36 +1,40 @@
 package com.example.hms.controller.support;
 
 import com.example.hms.exception.BusinessException;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.CustomUserDetails;
+import com.example.hms.exception.HospitalScopeRefusedException;
+import com.example.hms.security.PrincipalUserIds;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Shared authentication and hospital-scope resolution utilities for REST controllers.
- * <p>
- * Extracted from the private helper methods that were duplicated across
- * PatientVitalSignController, PatientLabResultController, PatientMedicationController,
- * PostpartumCareController, NewbornAssessmentController, NurseTaskController,
- * PatientController, EncounterController, and PatientEducationController.
+ * Shared authentication and hospital-scope utilities for REST controllers.
+ *
+ * <p>The scope methods are thin adapters over the one tenant resolver,
+ * {@link ActingScopeResolver} (docs/security/tenant-resolution.md §4.1): a
+ * requested hospital narrows the request's scope once ({@code narrowTo}),
+ * otherwise the request's own scope is read. So a controller-resolved scope
+ * and a service-resolved scope ({@code RoleValidator.requireActiveHospitalId})
+ * are the same answer, including for a super-admin's {@code X-Hospital-Id},
+ * which this class used to ignore (D1), and nothing here falls back to a
+ * "newest" or "primary" assignment.
  */
 @Component
 @RequiredArgsConstructor
 public class ControllerAuthUtils {
 
-    private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
+    private static final String ROLE_RECEPTIONIST = "ROLE_RECEPTIONIST";
 
-    private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final ActingScopeResolver actingScopeResolver;
 
     /**
      * Require non-null authentication; throws {@link BusinessException} otherwise.
@@ -42,35 +46,12 @@ public class ControllerAuthUtils {
     }
 
     /**
-     * Resolve the user's UUID from {@link CustomUserDetails} or JWT claims
-     * ({@code uid}, {@code userId}, {@code id}, {@code sub}).
+     * The caller's local user id: {@link PrincipalUserIds}, the one rule for
+     * both auth paths (a Keycloak principal's {@code appUserId} claim, never
+     * its {@code sub}). Services call {@link PrincipalUserIds} directly.
      */
     public Optional<UUID> resolveUserId(Authentication auth) {
-        if (auth == null) {
-            return Optional.empty();
-        }
-        Object principal = auth.getPrincipal();
-        if (principal instanceof CustomUserDetails details) {
-            return Optional.ofNullable(details.getUserId());
-        }
-        if (auth instanceof JwtAuthenticationToken token) {
-            Jwt jwt = token.getToken();
-            // "appUserId" is what keycloak/realm-export.json maps from the user
-            // attribute app_user_id; it is the HMS user id. Without it the loop fell
-            // through to the Keycloak subject, which matches no users row, and every
-            // self-service surface would have refused its owner the day SSO went on.
-            for (String claim : List.of("appUserId", "uid", "userId", "id", "sub")) {
-                String raw = jwt.getClaimAsString(claim);
-                if (raw != null && !raw.isBlank()) {
-                    try {
-                        return Optional.of(UUID.fromString(raw));
-                    } catch (IllegalArgumentException ignored) {
-                        // try the next claim key
-                    }
-                }
-            }
-        }
-        return Optional.empty();
+        return PrincipalUserIds.of(auth);
     }
 
     /**
@@ -94,157 +75,79 @@ public class ControllerAuthUtils {
     }
 
     /**
-     * Return the requested hospital ID if it belongs to the user or if they are SUPER_ADMIN.
-     */
-    private Optional<UUID> validateAndPreferHospital(Authentication auth, UUID requestedHospitalId, UUID contextHospitalId) {
-        if (requestedHospitalId != null) {
-            if (hasAuthority(auth, ROLE_SUPER_ADMIN)) {
-                return Optional.of(requestedHospitalId);
-            }
-            UUID userId = resolveUserId(auth).orElseThrow(() -> new BusinessException("User ID not found in token."));
-            if (assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, requestedHospitalId)) {
-                return Optional.of(requestedHospitalId);
-            } else {
-                throw new com.example.hms.exception.BusinessException("Access Denied: You do not have an active role in the requested hospital.");
-            }
-        }
-        if (contextHospitalId != null) {
-            return Optional.of(contextHospitalId);
-        }
-        return Optional.empty();
-    }
-
-    /**
-     * Resolve hospital scope with a single requested hospital ID.
-     * <p>
-     * Rules:
+     * The hospital this request acts at, narrowed to {@code requestedHospitalId}
+     * when the controller received one.
      * <ul>
-     *   <li>SUPER_ADMIN: the requested hospital or {@code null} (global)</li>
-     *   <li>RECEPTIONIST: the requested hospital when assigned there, else the
-     *       active hospital of the request context, else the assignment
-     *       fallback; throw if required and none resolves</li>
-     *   <li>everyone else: requested (validated against the caller's
-     *       assignments) → active hospital of the request context →
-     *       assignment fallback</li>
+     *   <li>A requested hospital: a verified super-admin may name any; anyone
+     *       else, receptionists included (who used to be silently given their
+     *       context hospital instead, D12), only one they hold live. Otherwise
+     *       403 ({@link HospitalScopeRefusedException}), audited.</li>
+     *   <li>None requested: the request's scope, i.e. the {@code X-Hospital-Id}
+     *       hospital or the only one held; {@code null} for a super-admin in
+     *       global view.</li>
+     *   <li>A caller holding several hospitals who named none is refused with
+     *       {@link RoleValidator#HOSPITAL_CONTEXT_REQUIRED} (design Q2, option
+     *       A), never given the newest assignment.</li>
+     *   <li>No hospital at all: {@code null}, or for a receptionist when
+     *       {@code requiredForReceptionist}, a refusal.</li>
      * </ul>
-     * <p>
-     * "Active hospital of the request context" is {@link HospitalContextHolder}:
-     * the live permitted set recomputed by {@code JwtTokenProvider} on every
-     * request, with the {@code X-Hospital-Id} header applied. It is the SAME
-     * value {@code RoleValidator.requireActiveHospitalId()} returns, so a
-     * controller-resolved scope and a service-resolved scope can no longer
-     * disagree (E9 #55). The pre-#55 code read a claim off a
-     * {@code JwtAuthenticationToken} here, which the username/password login
-     * never produces, so that branch was dead and every caller silently took
-     * the first row of an unordered assignment query.
      *
      * @param auth                       current authentication
      * @param requestedHospitalId        the caller-supplied hospital ID (nullable)
      * @param requiredForReceptionist    whether the receptionist role requires a hospital context
-     * @return the resolved hospital ID, or {@code null} if not resolvable and not required
+     * @return the resolved hospital ID, or {@code null} for global view or when none is held and none is required
      */
     public UUID resolveHospitalScope(Authentication auth,
                                      UUID requestedHospitalId,
                                      boolean requiredForReceptionist) {
-        UUID contextHospitalId = contextHospitalId();
+        ActingScope scope = requestedHospitalId != null
+            ? actingScopeResolver.narrowTo(requestedHospitalId)
+            : actingScopeResolver.current();
+        return switch (scope) {
+            case ActingScope.Pinned pinned -> pinned.hospitalId();
+            case ActingScope.Global global -> null;
+            case ActingScope.Refused(ActingScope.Reason reason) -> refusedScope(auth, reason, requiredForReceptionist,
+                requestedHospitalId != null ? requestedHospitalId
+                    : HospitalContextHolder.getContextOrEmpty().getRefusedHospitalId());
+            case ActingScope.PatientOwned owned -> throw HospitalScopeRefusedException.patientOwned();
+        };
+    }
 
-        if (hasAuthority(auth, ROLE_SUPER_ADMIN)) {
-            // SUPER_ADMIN: only scope when explicitly requested.
-            // When no hospitalId is provided, return null = global/all.
-            return requestedHospitalId;
+    private UUID refusedScope(Authentication auth, ActingScope.Reason reason, boolean requiredForReceptionist,
+                              UUID refusedHospitalId) {
+        switch (reason) {
+            case NOT_PERMITTED, NO_LONGER_PERMITTED ->
+                throw new HospitalScopeRefusedException(reason, ActingScopeResolver.refusalMessage(reason),
+                    refusedHospitalId);
+            case AMBIGUOUS -> throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
+            default -> {
+                if (requiredForReceptionist && hasAuthority(auth, ROLE_RECEPTIONIST)) {
+                    throw new BusinessException(
+                        "Receptionist must be affiliated with a hospital (select an active hospital or provide hospitalId).");
+                }
+                return null;
+            }
         }
-
-        if (hasAuthority(auth, "ROLE_RECEPTIONIST")) {
-            return resolveReceptionistScope(auth, requestedHospitalId, contextHospitalId, requiredForReceptionist);
-        }
-
-        if (hasAuthority(auth, "ROLE_HOSPITAL_ADMIN")) {
-            return validateAndPreferHospital(auth, requestedHospitalId, contextHospitalId)
-                .or(() -> fallbackHospitalFromAssignments(auth))
-                .orElse(null);
-        }
-
-        return validateAndPreferHospital(auth, requestedHospitalId, contextHospitalId)
-            .or(() -> fallbackHospitalFromAssignments(auth))
-            .orElse(null);
     }
 
     /**
-     * Resolve hospital for RECEPTIONIST role.
-     * <p>
-     * A receptionist assigned to more than one hospital may name one
-     * explicitly (validated against their assignments — the value is a claim
-     * until checked); otherwise the active hospital of the request context
-     * wins, then the assignment fallback. Folds in the variant
-     * {@code PatientController} used to carry privately, so the front desk
-     * resolves scope the same way on every endpoint.
-     */
-    public UUID resolveReceptionistScope(Authentication auth,
-                                         UUID requestedHospitalId,
-                                         UUID contextHospitalId,
-                                         boolean required) {
-        if (requestedHospitalId != null && !requestedHospitalId.equals(contextHospitalId)) {
-            UUID userId = resolveUserId(auth).orElseThrow(() -> new BusinessException("User ID not found in token."));
-            if (assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, requestedHospitalId)) {
-                return requestedHospitalId;
-            }
-            if (contextHospitalId == null) {
-                throw new BusinessException("Access Denied: You do not have an active role in the requested hospital.");
-            }
-        }
-        if (contextHospitalId != null) {
-            return contextHospitalId;
-        }
-        Optional<UUID> assignmentHospital = fallbackHospitalFromAssignments(auth);
-        if (assignmentHospital.isPresent()) {
-            return assignmentHospital.get();
-        }
-        if (required) {
-            throw new BusinessException(
-                "Receptionist must be affiliated with a hospital (select an active hospital or provide hospitalId).");
-        }
-        return null;
-    }
-
-    /**
-     * The active hospital of the current request, as the security layer
-     * resolved it: live permitted set + {@code X-Hospital-Id} override. For a
-     * super-admin only an explicit header scope counts — without one they are
-     * global, and {@code null} is the right answer (mirrors
-     * {@code RoleValidator.requireActiveHospitalId()} step 1).
-     *
-     * @return the active hospital id, or {@code null} when the context carries
-     *         none (no filter ran, or a super-admin in global view)
+     * The hospital this request acts at, or {@code null} for a super-admin in
+     * global view or a caller with none: the resolver's answer, read without
+     * a requested hospital.
      */
     public UUID contextHospitalId() {
-        return HospitalContextHolder.getContextOrEmpty().pinnedHospitalId();
+        return actingScopeResolver.current() instanceof ActingScope.Pinned pinned ? pinned.hospitalId() : null;
     }
 
     /**
-     * {@link #contextHospitalId()} with the assignment fallback for callers
-     * that reach a controller without the JWT filter having populated the
-     * context (tests, edge entry points). Super-admins are never "fallen back"
-     * onto a hospital: global stays global.
+     * {@link #contextHospitalId()}. It used to add a "newest assignment"
+     * fallback for callers the filter had not reached; the resolver's
+     * {@code SOLE_ASSIGNMENT} rule replaces it, and a caller with several
+     * hospitals and none named has none.
      */
+    @SuppressWarnings("java:S1172") // kept for its callers: the scope no longer depends on the principal
     public UUID currentHospitalId(Authentication auth) {
-        UUID fromContext = contextHospitalId();
-        if (fromContext != null || hasAuthority(auth, ROLE_SUPER_ADMIN)) {
-            return fromContext;
-        }
-        return fallbackHospitalFromAssignments(auth).orElse(null);
-    }
-
-    /**
-     * Fallback: look up the user's most-recent active hospital assignment.
-     * Uses findAllDetailedByUserId which eagerly fetches hospital via JOIN FETCH.
-     */
-    public Optional<UUID> fallbackHospitalFromAssignments(Authentication auth) {
-        return resolveUserId(auth)
-            .flatMap(userId -> assignmentRepository.findAllDetailedByUserId(userId).stream()
-                .filter(a -> Boolean.TRUE.equals(a.getActive()))
-                .filter(a -> a.getHospital() != null)
-                .map(a -> a.getHospital().getId())
-                .findFirst());
+        return contextHospitalId();
     }
 
     /**

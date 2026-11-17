@@ -17,6 +17,16 @@ import java.util.UUID;
 
 @Repository
 public interface StaffRepository extends JpaRepository<Staff, UUID> {
+
+    /**
+     * QA D282: the staff row with a write lock held to the end of the
+     * transaction, so two shift submissions for the same person run one after
+     * the other and the second one's overlap check sees the first one's shift.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Staff s WHERE s.id = :id")
+    Optional<Staff> findLockedById(@Param("id") UUID id);
+
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
     @Query("SELECT s FROM Staff s WHERE s.user.isDeleted = false")
     List<Staff> findAllExcludingDeletedUsers();
@@ -24,7 +34,7 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     @Query("SELECT s FROM Staff s WHERE s.user.username = :identifier OR s.licenseNumber = :identifier OR s.assignment.role.code = :identifier")
     java.util.Optional<Staff> findByUsernameOrLicenseOrRoleCode(@Param("identifier") String identifier);
     // Lookup staff by user email (excludes deleted users)
-    @Query("SELECT s FROM Staff s WHERE LOWER(s.user.email) = LOWER(:email) AND s.user.isDeleted = false")
+    @Query("SELECT s FROM Staff s WHERE LOWER(s.user.email) = LOWER(CAST(:email AS string)) AND s.user.isDeleted = false")
     List<Staff> findByUserEmail(@Param("email") String email);
 
     // Lookup staff by user phone number (excludes deleted users)
@@ -33,6 +43,9 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
 
 
     List<Staff> findByUserId(UUID userId);
+
+    /** Is any staff row linked to this account? Answered without loading (and decrypting) a Staff row. */
+    boolean existsByUserId(UUID userId);
 
     @Query("select s.licenseNumber from Staff s where s.user.id = :userId order by s.createdAt asc")
     Optional<String> findAnyLicenseByUserId(@Param("userId") UUID userId);
@@ -50,7 +63,8 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     Page<Staff> findByHospitalIdExcludingDeletedUsers(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
-    @Query("SELECT s FROM Staff s WHERE s.hospital.id = :hospitalId AND s.active = true AND s.user.isDeleted = false")
+    // active staff = an active row of an activated, undeleted account (D221)
+    @Query("SELECT s FROM Staff s WHERE s.hospital.id = :hospitalId AND s.active = true AND s.user.isActive = true AND s.user.isDeleted = false")
     Page<Staff> findByHospitalIdAndActiveTrueExcludingDeletedUsers(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
@@ -63,7 +77,10 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
 
     boolean existsByAssignment_Id(UUID assignmentId);
 
-    @Query("select s.user.id from Staff s where lower(s.licenseNumber) = lower(:license)")
+    /** QA D907: the staff records an assignment stands for. */
+    List<Staff> findByAssignment_Id(UUID assignmentId);
+
+    @Query("select s.user.id from Staff s where lower(s.licenseNumber) = lower(CAST(:license AS string))")
     Optional<UUID> findUserIdByLicense(@Param("license") String license);
 
     /**
@@ -83,7 +100,7 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
           AND s.active = true
           AND u.isDeleted = false
           AND u.isActive = true
-          AND UPPER(r.code) = UPPER(:roleCode)
+          AND UPPER(r.code) = UPPER(CAST(:roleCode AS string))
     """)
     List<String> findActiveUsernamesByHospitalAndRole(@Param("hospitalId") UUID hospitalId,
                                                       @Param("roleCode") String roleCode);
@@ -96,12 +113,12 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
         WHERE s.hospital.id = :hospitalId
           AND s.active = true
           AND u.isDeleted = false
-          AND (:roleCode IS NULL OR UPPER(r.code) = UPPER(:roleCode))
+          AND (:roleCode IS NULL OR UPPER(r.code) = UPPER(CAST(:roleCode AS string)))
           AND (
-                LOWER(COALESCE(s.name, '')) = LOWER(:identifier)
-             OR LOWER(CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))) = LOWER(:identifier)
-             OR LOWER(u.username) = LOWER(:identifier)
-             OR LOWER(COALESCE(u.email, '')) = LOWER(:identifier)
+                LOWER(COALESCE(s.name, '')) = LOWER(CAST(:identifier AS string))
+             OR LOWER(CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))) = LOWER(CAST(:identifier AS string))
+             OR LOWER(u.username) = LOWER(CAST(:identifier AS string))
+             OR LOWER(COALESCE(u.email, '')) = LOWER(CAST(:identifier AS string))
           )
     """)
     List<Staff> findActiveByHospitalAndRoleAndIdentifier(@Param("hospitalId") UUID hospitalId,
@@ -161,12 +178,28 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
           AND s.department.id = :departmentId
           AND s.active = true
           AND s.user.isDeleted = false
-          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE')
+          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')
         ORDER BY s.name ASC
     """)
     List<Staff> findActiveProvidersByHospitalAndDepartment(
         @Param("hospitalId") UUID hospitalId,
         @Param("departmentId") UUID departmentId);
+
+    /**
+     * Departments of a hospital that have at least one bookable provider, with
+     * the same provider rule as {@link #findActiveProvidersByHospitalAndDepartment}
+     * (QA D169: the booking form offered departments nobody could be booked in,
+     * and a midwife was not bookable in maternity).
+     */
+    @Query("""
+        SELECT DISTINCT s.department.id FROM Staff s
+        WHERE s.hospital.id = :hospitalId
+          AND s.department IS NOT NULL
+          AND s.active = true
+          AND s.user.isDeleted = false
+          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')
+    """)
+    java.util.Set<UUID> findDepartmentIdsWithActiveProviders(@Param("hospitalId") UUID hospitalId);
 
     // ── MVP 3: Lab staff filtered by lab roles ──────────────────
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
@@ -183,5 +216,14 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
         @Param("roleCodes") Collection<String> roleCodes,
         Pageable pageable);
 
-}
 
+    /**
+     * QA CX-002: staff per hospital for the super-admin analytics, with the
+     * definition of {@code GET /staff/hospital/{id}}
+     * ({@link #findByHospitalIdExcludingDeletedUsers}): every staff row of an
+     * undeleted account, active or not.
+     */
+    @Query("SELECT s.hospital.id AS ownerId, COUNT(s) AS total FROM Staff s "
+        + "WHERE s.user.isDeleted = false GROUP BY s.hospital.id")
+    List<PlatformCountRows.IdCount> countPerHospitalExcludingDeletedUsers();
+}

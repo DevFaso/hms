@@ -51,9 +51,31 @@ export interface HospitalResponse {
    * Hospital DTO so the list view can render a state chip per row
    * without an N+1 lookup. Optional for backwards compatibility.
    */
-  lifecycleState?: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PURGE_SCHEDULED' | 'PURGED';
+  lifecycleState?: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PENDING_PURGE' | 'PURGED';
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * QA D818: the lifecycle states that take no new role assignment, mirroring
+ * the server's FacilityAssignmentGuard.CLOSED_STATES (which answers 409).
+ */
+const CLOSED_FOR_ASSIGNMENT: readonly string[] = ['ARCHIVED', 'PENDING_PURGE', 'PURGED'];
+
+/**
+ * QA D818: whether a hospital may be offered in a picker that grants a role
+ * there. An absent state (an older payload) is treated as open; the server
+ * still decides.
+ */
+export function isOpenForAssignment(hospital: { lifecycleState?: string | null }): boolean {
+  return !CLOSED_FOR_ASSIGNMENT.includes(hospital.lifecycleState ?? '');
+}
+
+/** One row of `GET /hospitals/directory`: no contact details. */
+export interface HospitalDirectoryEntry {
+  id: string;
+  name: string;
+  city: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -72,6 +94,15 @@ export class HospitalService {
     if (filters?.state) params = params.set('state', filters.state);
     if (filters?.unassignedOnly) params = params.set('unassignedOnly', 'true');
     return this.http.get<HospitalResponse[]>('/hospitals', { params });
+  }
+
+  /**
+   * QA D36: every active hospital as id, name and city, for the destination
+   * picker of cross-hospital workflows. `list()` returns only the caller's
+   * own hospitals unless they are a super-admin.
+   */
+  directory(): Observable<HospitalDirectoryEntry[]> {
+    return this.http.get<HospitalDirectoryEntry[]>('/hospitals/directory');
   }
 
   getById(id: string): Observable<HospitalResponse> {

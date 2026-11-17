@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.clinical;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -25,15 +26,23 @@ public class BirthPlanRequestDTO {
 
     private UUID hospitalId;
 
+    // QA D1369 (round 31): each section is validated with the request (@Valid),
+    // so a blank name or due date is named with the other fields, translated,
+    // instead of failing at persist time in Hibernate's English.
     @NotNull(message = "{birthPlan.introduction.required}")
+    @Valid
     private IntroductionDTO introduction;
 
+    @Valid
     private DeliveryPreferencesDTO deliveryPreferences;
 
+    @Valid
     private PainManagementDTO painManagement;
 
+    @Valid
     private DeliveryRoomEnvironmentDTO deliveryRoomEnvironment;
 
+    @Valid
     private PostpartumPreferencesDTO postpartumPreferences;
 
     private String additionalWishes;

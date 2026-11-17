@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FlowBoardComponent } from './flow-board.component';
 import { DragDropModule, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { ToastService } from '../../core/toast.service';
@@ -92,8 +92,36 @@ describe('FlowBoardComponent', () => {
     expect(component.localBoard.scheduled.length).toBe(1);
   });
 
-  it('should have 7 columns', () => {
-    expect(component.columns.length).toBe(7);
+  it('QA D1200: the wait time is a sentence of the reader language, not "706Attente min."', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', { RECEPTION: { WAIT_DURATION: 'Attente : {{minutes}} min' } });
+    translate.use('fr');
+    const board = {
+      scheduled: [],
+      confirmed: [],
+      arrived: [makeItem({ waitMinutes: 706 })],
+      inProgress: [],
+      completed: [],
+      noShow: [],
+      walkIn: [],
+    };
+    component.board = board;
+    component.ngOnChanges({
+      board: {
+        currentValue: board,
+        previousValue: null,
+        firstChange: true,
+        isFirstChange: () => true,
+      },
+    });
+    fixture.detectChanges();
+    const wait = (fixture.nativeElement as HTMLElement).querySelector('.card-wait');
+    expect(wait?.textContent?.trim()).toBe('Attente : 706 min');
+  });
+
+  // QA D1445: the walk-in column, which stayed empty, is gone.
+  it('should have 6 columns', () => {
+    expect(component.columns.length).toBe(6);
   });
 
   it('should emit patientClicked', () => {
@@ -148,6 +176,47 @@ describe('FlowBoardComponent', () => {
       expect(toastSpy.info).not.toHaveBeenCalled();
     });
 
+    it('QA D788: a never-seen ARRIVED card dropped on completed asks to close without consultation', () => {
+      spyOn(component.statusChanged, 'emit');
+      spyOn(component.closeUnseenRequested, 'emit');
+      const prev = [makeItem({ status: 'ARRIVED' })];
+      const dest: ReceptionQueueItem[] = [];
+
+      component.drop(makeDropEvent(prev, dest), 'completed');
+
+      expect(component.statusChanged.emit).not.toHaveBeenCalled();
+      expect(component.closeUnseenRequested.emit).toHaveBeenCalledWith({
+        encounterId: 'e1',
+        patientName: 'John',
+        outcome: 'LEFT_WITHOUT_BEING_SEEN',
+      });
+      // The card stays where it was until the visit is really closed.
+      expect(prev.length).toBe(1);
+      expect(dest.length).toBe(0);
+    });
+
+    it('QA D788: a never-seen walk-in dropped on no-show asks the same', () => {
+      spyOn(component.closeUnseenRequested, 'emit');
+      component.drop(makeDropEvent([makeItem({ status: 'WALK_IN' })], []), 'noShow');
+      expect(component.closeUnseenRequested.emit).toHaveBeenCalled();
+    });
+
+    it('QA D788: a seen card dropped on no-show is refused on the spot (no such encounter status)', () => {
+      spyOn(component.statusChanged, 'emit');
+      component.drop(makeDropEvent([makeItem({ status: 'IN_PROGRESS' })], []), 'noShow');
+      expect(component.statusChanged.emit).not.toHaveBeenCalled();
+      expect(toastSpy.info).toHaveBeenCalled();
+    });
+
+    it('QA D788: a seen card dropped on completed still goes to the server (which checks it out)', () => {
+      spyOn(component.statusChanged, 'emit');
+      component.drop(makeDropEvent([makeItem({ status: 'IN_PROGRESS' })], []), 'completed');
+      expect(component.statusChanged.emit).toHaveBeenCalledWith({
+        encounterId: 'e1',
+        newStatus: 'COMPLETED',
+      });
+    });
+
     it('should do nothing when dropping within the same container', () => {
       spyOn(component.statusChanged, 'emit');
       const item = makeItem();
@@ -157,6 +226,94 @@ describe('FlowBoardComponent', () => {
       component.drop(event, 'arrived');
 
       expect(component.statusChanged.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('QA D1023: keyboard and button paths (WCAG 2.1.1)', () => {
+    const board = (arrived: ReceptionQueueItem[], inProgress: ReceptionQueueItem[] = []) => ({
+      scheduled: [],
+      confirmed: [],
+      arrived,
+      inProgress,
+      completed: [],
+      noShow: [],
+      walkIn: [],
+    });
+
+    it('a never-seen card has a close-unseen button that opens the dialog request', () => {
+      spyOn(component.closeUnseenRequested, 'emit');
+      spyOn(component.patientClicked, 'emit');
+      component.board = board([makeItem({ patientName: 'Aïcha' })]);
+      component.ngOnChanges({ board: { currentValue: component.board } as never });
+      fixture.detectChanges();
+      const button = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="flow-close-unseen"]',
+      ) as HTMLButtonElement;
+      expect(button).withContext('the button is rendered').toBeTruthy();
+      expect(button.getAttribute('aria-label')).toContain('Aïcha');
+      expect(button.closest('[role="button"]')).withContext('not nested in the card').toBeNull();
+      button.click();
+      expect(component.closeUnseenRequested.emit).toHaveBeenCalledWith({
+        encounterId: 'e1',
+        patientName: 'Aïcha',
+        outcome: 'LEFT_WITHOUT_BEING_SEEN',
+      });
+      expect(component.patientClicked.emit).not.toHaveBeenCalled();
+    });
+
+    it('a seen card has no close-unseen button', () => {
+      component.board = board([], [makeItem({ status: 'IN_PROGRESS' })]);
+      component.ngOnChanges({ board: { currentValue: component.board } as never });
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="flow-close-unseen"]'),
+      ).toBeNull();
+    });
+
+    it('Alt+Right moves a card through the same rules as a drop', () => {
+      spyOn(component.statusChanged, 'emit');
+      const seen = makeItem({ status: 'IN_PROGRESS' });
+      component.board = board([], [seen]);
+      component.ngOnChanges({ board: { currentValue: component.board } as never });
+      component.moveCard(seen, 'inProgress', 1);
+      expect(component.statusChanged.emit).toHaveBeenCalledWith({
+        encounterId: 'e1',
+        newStatus: 'COMPLETED',
+      });
+      expect(component.localBoard.completed).toContain(seen);
+    });
+
+    it('Alt+Left from the first column does nothing', () => {
+      spyOn(component.statusChanged, 'emit');
+      const item = makeItem({ status: 'SCHEDULED' });
+      component.localBoard.scheduled = [item];
+      component.moveCard(item, 'scheduled', -1);
+      expect(component.statusChanged.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('QA D1445: no empty walk-in column', () => {
+    it('draws no walk-in column, and a card the server files apart is with the arrived ones', () => {
+      expect(component.columns.map((c) => c.key)).not.toContain('walkIn');
+      const card = makeItem({ status: 'WALK_IN', appointmentId: null });
+      component.board = {
+        scheduled: [],
+        confirmed: [],
+        arrived: [],
+        inProgress: [],
+        completed: [],
+        noShow: [],
+        walkIn: [card],
+      } as never;
+      component.ngOnChanges({ board: {} as never });
+      expect(component.localBoard.arrived).toEqual([card]);
+      expect(component.localBoard.walkIn).toEqual([]);
+    });
+
+    it('its card keeps its drop rule: to no-show it asks to close the unseen visit', () => {
+      spyOn(component.closeUnseenRequested, 'emit');
+      component.drop(makeDropEvent([makeItem({ status: 'WALK_IN' })], []), 'noShow');
+      expect(component.closeUnseenRequested.emit).toHaveBeenCalled();
     });
   });
 });

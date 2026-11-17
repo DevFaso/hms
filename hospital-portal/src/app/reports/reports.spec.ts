@@ -1,10 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { ReportsComponent } from './reports';
 import { ReportDefinitionResponse, ReportRunResponse, ReportsService } from './reports.service';
 import { ToastService } from '../core/toast.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 function definition(overrides: Partial<ReportDefinitionResponse> = {}): ReportDefinitionResponse {
   return {
@@ -129,15 +130,46 @@ describe('ReportsComponent', () => {
 
   it('surfaces the backend refusal verbatim on create failure', () => {
     mockService.create.and.returnValue(
-      throwError(() => ({ error: { message: "'nope' is not a valid email address." } })),
+      throwError(() => ({ status: 400, error: { message: 'Choisissez un hôpital.' } })),
     );
     component.openCreate();
     component.name.set('X');
-    component.recipients.set('nope');
+    component.recipients.set('a@example.org');
 
     component.submitCreate();
 
-    expect(mockToast.error).toHaveBeenCalledWith("'nope' is not a valid email address.");
+    expect(mockToast.error).toHaveBeenCalledWith('Choisissez un hôpital.');
+    expect(component.saving()).toBeFalse();
+  });
+
+  it('QA D855: a malformed recipient is refused on the field before any call', () => {
+    component.openCreate();
+    component.name.set('Activité');
+    component.recipients.set('a@example.org, accueil.clinique@@example');
+
+    component.submitCreate();
+
+    expect(mockService.create).not.toHaveBeenCalled();
+    expect(component.recipientsError()).toBe('REPORTS.RECIPIENT_INVALID');
+  });
+
+  it('QA D855: the server refusal on the recipients field is shown under it', () => {
+    mockService.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: 'Validation Failed',
+          fieldErrors: { recipients: "« x@exemple » n'est pas une adresse e-mail valide." },
+        },
+      })),
+    );
+    component.openCreate();
+    component.name.set('Activité');
+    component.recipients.set('a@example.org');
+
+    component.submitCreate();
+
+    expect(component.recipientsError()).toBe("« x@exemple » n'est pas une adresse e-mail valide.");
     expect(component.saving()).toBeFalse();
   });
 
@@ -147,6 +179,165 @@ describe('ReportsComponent', () => {
     expect(component.expandedId()).toBe('d1');
     expect(mockService.runs).toHaveBeenCalledWith('d1');
     expect(component.runs()).toHaveSize(1);
+  });
+
+  for (const [field, id] of [
+    ['name', 'rep-name'],
+    ['reportType', 'rep-type'],
+    ['period', 'rep-period'],
+    ['recipients', 'rep-recipients'],
+  ]) {
+    it(`names the server refusal at the ${field} control`, () => {
+      const reason = `cdx refused ${field}`;
+      mockService.create.and.returnValue(
+        throwError(() => ({ status: 400, error: { fieldErrors: { [field]: reason } } })),
+      );
+      component.openCreate();
+      component.name.set('cdx scheduled report');
+      component.recipients.set('cdx@example.invalid');
+      fixture.detectChanges();
+
+      component.submitCreate();
+      fixture.detectChanges();
+
+      const control = fixture.nativeElement.querySelector(`#${id}`) as HTMLElement;
+      expect(control.getAttribute('aria-invalid')).toBe('true');
+      const description = control.getAttribute('aria-describedby');
+      expect(description).toBeTruthy();
+      expect(fixture.nativeElement.querySelector(`#${description}`)?.textContent).toContain(reason);
+      expect(component.showCreate()).toBeTrue();
+      expect(component.saving()).toBeFalse();
+    });
+  }
+
+  it('shows simultaneous server field refusals and clears them before a corrected retry', () => {
+    const retry = new Subject<ReportDefinitionResponse>();
+    mockService.create.and.returnValues(
+      throwError(() => ({
+        status: 400,
+        error: { fieldErrors: { name: 'cdx name rejected', period: 'cdx period rejected' } },
+      })),
+      retry,
+    );
+    component.openCreate();
+    component.name.set('cdx scheduled report');
+    component.recipients.set('cdx@example.invalid');
+    fixture.detectChanges();
+    component.submitCreate();
+    fixture.detectChanges();
+    for (const id of ['rep-name', 'rep-period']) {
+      expect(fixture.nativeElement.querySelector(`#${id}`).getAttribute('aria-invalid')).toBe(
+        'true',
+      );
+    }
+    component.submitCreate();
+    fixture.detectChanges();
+    expect(mockService.create).toHaveBeenCalledTimes(2);
+    expect(component.showCreate()).toBeTrue();
+    for (const id of ['rep-name', 'rep-period']) {
+      expect(
+        fixture.nativeElement.querySelector(`#${id}`).hasAttribute('aria-invalid'),
+      ).toBeFalse();
+    }
+    retry.next(definition());
+    retry.complete();
+    fixture.detectChanges();
+    expect(component.showCreate()).toBeFalse();
+  });
+
+  it('shows an unmapped refusal alongside a mapped field error and focuses the mapped field', () => {
+    document.body.appendChild(fixture.nativeElement);
+    mockService.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          fieldErrors: { name: 'cdx name refused', schedule: 'cdx schedule refused' },
+        },
+      })),
+    );
+    component.openCreate();
+    component.name.set('cdx report');
+    component.recipients.set('cdx@example.invalid');
+    fixture.detectChanges();
+    component.submitCreate();
+    fixture.detectChanges();
+    const name = fixture.nativeElement.querySelector('#rep-name');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(name);
+    expect(mockToast.error).toHaveBeenCalledWith('cdx schedule refused');
+  });
+
+  it('falls back to the refusal message when the recipients reason is blank', () => {
+    mockService.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: 'cdx request refused',
+          fieldErrors: { recipients: '   ' },
+        },
+      })),
+    );
+    component.openCreate();
+    component.name.set('cdx report');
+    component.recipients.set('cdx@example.invalid');
+    fixture.detectChanges();
+    component.submitCreate();
+    fixture.detectChanges();
+    expect(component.recipientsError()).toBeNull();
+    expect(mockToast.error).toHaveBeenCalledWith('cdx request refused');
+    expect(
+      fixture.nativeElement.querySelector('#rep-recipients').hasAttribute('aria-invalid'),
+    ).toBeFalse();
+  });
+
+  it('clears the previous recipients error when a later response refuses only the name', () => {
+    mockService.create.and.returnValues(
+      throwError(() => ({
+        status: 400,
+        error: { fieldErrors: { recipients: 'cdx recipients refused' } },
+      })),
+      throwError(() => ({ status: 400, error: { fieldErrors: { name: 'cdx name refused' } } })),
+    );
+    component.openCreate();
+    component.name.set('cdx report');
+    component.recipients.set('cdx@example.invalid');
+    fixture.detectChanges();
+    component.submitCreate();
+    fixture.detectChanges();
+    expect(component.recipientsError()).toBe('cdx recipients refused');
+    component.submitCreate();
+    fixture.detectChanges();
+    expect(component.recipientsError()).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('#rep-recipients').hasAttribute('aria-invalid'),
+    ).toBeFalse();
+    expect(fixture.nativeElement.querySelector('#rep-name').getAttribute('aria-invalid')).toBe(
+      'true',
+    );
+  });
+
+  it('removes a corrected field refusal when the next response refuses a different field', () => {
+    mockService.create.and.returnValues(
+      throwError(() => ({ error: { fieldErrors: { name: 'cdx name refused' } } })),
+      throwError(() => ({ error: { fieldErrors: { period: 'cdx period refused' } } })),
+    );
+    component.openCreate();
+    component.name.set('cdx scheduled report');
+    component.recipients.set('cdx@example.invalid');
+    fixture.detectChanges();
+    component.submitCreate();
+    fixture.detectChanges();
+    component.name.set('cdx corrected report');
+    component.submitCreate();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('#rep-name').hasAttribute('aria-invalid'),
+    ).toBeFalse();
+    expect(fixture.nativeElement.querySelector('#rep-name-invalid-msg')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#rep-period').getAttribute('aria-invalid')).toBe(
+      'true',
+    );
   });
 
   it('runs a report now and reports a failed run as an error toast', () => {
@@ -166,11 +357,21 @@ describe('ReportsComponent', () => {
     expect(mockService.runNow).not.toHaveBeenCalled();
   });
 
-  it('toggles active state through the matching endpoint', () => {
-    component.toggleActive(definition({ active: true }));
+  it('toggles active state through the matching endpoint', async () => {
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    await component.toggleActive(definition({ active: true }));
     expect(mockService.deactivate).toHaveBeenCalledWith('d1');
+    expect(ask).toHaveBeenCalledTimes(1);
 
-    component.toggleActive(definition({ active: false }));
+    // QA CX-010: turning a report back on ends nothing, so it asks nothing.
+    await component.toggleActive(definition({ active: false }));
     expect(mockService.reactivate).toHaveBeenCalledWith('d1');
+    expect(ask).toHaveBeenCalledTimes(1);
+  });
+
+  it('QA CX-010: a no to deactivating sends nothing', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.toggleActive(definition({ active: true }));
+    expect(mockService.deactivate).not.toHaveBeenCalled();
   });
 });

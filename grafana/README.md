@@ -43,7 +43,7 @@ All dashboards live under the **HMS** folder in Grafana, are tagged with
 | `hms-api-endpoints`    | API Endpoint Deep Dive         | Drill into one URI/method.             |
 | `hms-postgres`         | PostgreSQL Deep Dive           | DB connections, locks, cache, IO.      |
 | `hms-host`             | Host Metrics                   | Node-exporter (CPU/mem/disk/net).      |
-| `hms-logs`             | Log Analytics (Loki)           | Errors, exceptions, free-text search.  |
+| `hms-logs`             | Log Analytics (Loki)           | Errors, exceptions, free-text search. Empty for a host-run backend — see the known gap below. |
 
 ### Dashboard conventions used everywhere
 
@@ -61,13 +61,49 @@ All dashboards live under the **HMS** folder in Grafana, are tagged with
 
 ## Local quickstart
 
-```bash
-# Bare minimum (backend + Prom + Loki + Grafana + Alloy):
-docker compose up -d hms-backend prometheus loki alloy grafana
+**The backend is not a compose service.** It runs on the host, and the collectors
+reach it through `host.docker.internal`. The previous version of this file told you
+to `docker compose up -d hms-backend`, which silently did nothing — and Alloy's
+`hms-backend:8081` target never resolved, so no backend series were ever collected.
 
-# Full observability profile (adds postgres-exporter, redis-exporter, node-exporter):
+`/api/actuator/prometheus` is token-gated (see
+[`docs/GRAFANA_CLOUD_SETUP.md`](../docs/GRAFANA_CLOUD_SETUP.md)), so the backend and
+Alloy have to agree on the token. The compose default is `local-dev-scrape-token`:
+
+```bash
+# 1. Backend on the host (local profile, port 8081)
+export METRICS_SCRAPE_TOKEN=local-dev-scrape-token
+./gradlew :hospital-core:bootRun --args="--spring.profiles.active=local"
+
+# 2. Collectors + UI (another shell)
+docker compose up -d prometheus loki alloy grafana
+
+# Full observability profile (adds postgres/redis/node/blackbox exporters):
 docker compose --profile observability up -d
 ```
+
+Confirm the scrape is actually landing — this should be non-empty within ~30s:
+
+```bash
+curl -s 'http://localhost:9090/api/v1/query?query=up{job="integrations/spring-boot"}'
+```
+
+### Known gap: backend logs, when the backend runs on the host
+
+Alloy sources logs from `discovery.docker` — container stdout. A backend started
+with `bootRun` is not a container, and `logback-spring.xml` has no file appender,
+so **its logs do not reach Loki** and the *Log Analytics* dashboard stays empty.
+Metrics and probes are unaffected; they go over HTTP to `host.docker.internal`.
+
+Your options, in increasing order of effort:
+
+- Read the backend's console directly — usually enough for local work.
+- Run the backend as a container on this compose network, and `discovery.docker`
+  picks it up with no further change.
+- Add a file appender and a `loki.source.file` block tailing a mounted path.
+
+None of this affects production, where the OTEL agent ships logs to Grafana Cloud
+directly and does not involve Alloy at all.
 
 Then:
 
@@ -78,19 +114,32 @@ Then:
 The `GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH` env makes the **SLO &
 Golden Signals** dashboard your home page.
 
-## Pointing Alloy at Grafana Cloud
+## Production: Grafana Cloud
 
-Override these on the `alloy` service:
+Production does **not** use this stack. Railway runs the OpenTelemetry Java agent,
+which pushes traces, metrics and logs straight to the Grafana Cloud OTLP gateway —
+nothing scrapes the backend, which is why the scrape endpoint stays closed there.
+
+Setup is one command per environment; see
+[`docs/GRAFANA_CLOUD_SETUP.md`](../docs/GRAFANA_CLOUD_SETUP.md):
+
+```bash
+# Each prompts for the token with echo off; it is never an argument.
+./scripts/grafana-cloud-setup.sh dev
+./scripts/grafana-cloud-setup.sh prod
+```
+
+If instead you want *this* Alloy to remote-write to Grafana Cloud (e.g. shipping
+from a self-hosted node), override these on the `alloy` service:
 
 ```yaml
 environment:
-  GRAFANA_METRICS_URL:   https://prometheus-prod-XX-prod-XX.grafana.net/api/prom/push
-  GRAFANA_METRICS_USER:  "12345"
+  GRAFANA_METRICS_URL:   https://prometheus-prod-us-east-2.grafana.net/api/prom/push
+  GRAFANA_METRICS_USER:  "1404501"
   GRAFANA_METRICS_TOKEN: "glc_…"
 ```
 
-Same `config.alloy` keep-list applies — only the remote-write endpoint
-changes.
+Same `config.alloy` keep-list applies — only the remote-write endpoint changes.
 
 ## SLO definition
 
@@ -136,4 +185,6 @@ The provisioner rescans every 30s — no Grafana restart needed.
 
 ## Documentation index
 
+- [docs/GRAFANA_CLOUD_SETUP.md](../docs/GRAFANA_CLOUD_SETUP.md) — production setup, free-tier limits, why the scrape endpoint is closed.
 - [docs/runbooks/grafana-observability.md](../docs/runbooks/grafana-observability.md) — page-by-page response runbook for each alert.
+- [docs/runbooks/synthetic-monitoring.md](../docs/runbooks/synthetic-monitoring.md) — blackbox probe targets and multi-region plan.

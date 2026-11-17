@@ -23,6 +23,16 @@ public class PatientSnapshotDTO {
     private String sex;
     private String mrn;
     private List<String> allergies;
+    /** QA D504: the patient opted out of sharing and other hospitals' allergy rows are withheld here. */
+    private boolean allergiesWithheld;
+
+    /**
+     * QA D504: the patient opted out of record sharing and nothing here
+     * overrides it, so every clinical list on this read (problems, medications,
+     * labs, vitals, notes, encounters, imaging) holds this hospital's rows
+     * only. Says nothing about whether other rows exist.
+     */
+    private boolean recordsWithheld;
     private String codeStatus;
     private List<String> activeDiagnoses;
     private List<MedicationItem> activeMedications;
@@ -50,11 +60,15 @@ public class PatientSnapshotDTO {
     public static class LabItem {
         private String test;
         private String value;
+        /** QA D1095: the unit the value is in (the test definition's when none was typed). */
+        private String unit;
         /** NORMAL / ABNORMAL / CRITICAL, or REVIEW for an unflagged, unacknowledged row. */
         private String flag;
         /** LOW / HIGH when the abnormal result's side of the range is known. */
         private com.example.hms.enums.AbnormalDirection abnormalDirection;
         private String date;
+        /** QA D1016: the result corrects a released value. */
+        private boolean corrected;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor

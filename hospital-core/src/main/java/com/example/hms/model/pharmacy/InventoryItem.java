@@ -56,8 +56,14 @@ public class InventoryItem extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_inv_medication"))
     private MedicationCatalogItem medicationCatalogItem;
 
+    /*
+     * Never written by an entity flush (updatable = false): every change goes
+     * through the atomic UPDATEs in the repository (#825 round 5), so a stale
+     * managed copy can never overwrite a concurrent fill, return, receipt or
+     * adjustment. Refresh the entity after one of those UPDATEs to read it.
+     */
     @NotNull
-    @Column(name = "quantity_on_hand", nullable = false, precision = 12, scale = 2)
+    @Column(name = "quantity_on_hand", nullable = false, updatable = false, precision = 12, scale = 2)
     @Builder.Default
     private BigDecimal quantityOnHand = BigDecimal.ZERO;
 
@@ -72,6 +78,10 @@ public class InventoryItem extends BaseEntity {
     @Size(max = 60)
     @Column(name = "unit", length = 60)
     private String unit;
+
+    /** QA D264: the selling price of one unit, in XOF; null until the pharmacy sets it. */
+    @Column(name = "unit_price", precision = 12, scale = 2)
+    private BigDecimal unitPrice;
 
     @Column(name = "active", nullable = false)
     @Builder.Default

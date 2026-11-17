@@ -84,6 +84,18 @@ public class AppointmentController {
 
     private static final String SORT_APPOINTMENT_DATE = "appointmentDate";
 
+    /**
+     * Longest calendar range accepted, in days counted INCLUSIVELY. The
+     * longest view the portal shows is FullCalendar's month grid, which is
+     * always six full weeks (fixedWeekCount): 42 days. The portal sends
+     * {@code from} = the first cell and {@code to} = the last cell (it turns
+     * FullCalendar's exclusive end into an inclusive one), so from..to spans
+     * 42 days and {@code DAYS.between(from, to)} is 41. Anything longer is
+     * not a view the portal can ask for, and is refused to keep the result
+     * set bounded.
+     */
+    static final int CALENDAR_MAX_RANGE_DAYS = 42;
+
     // ---- LIST BY PATIENT USERNAME ----
     // Not attributable by PatientAccessAuditInterceptor: the patient arrives
     // as a username, and turning that into an id is a database lookup the
@@ -128,6 +140,26 @@ public class AppointmentController {
         return auth.getName();
     }
 
+    /** QA D1474: the desk is told at once that a time cannot be booked, before it writes a reason. */
+    @GetMapping("/booking-time-check")
+    @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
+    @Operation(summary = "Why a booking at this time would be refused",
+        description = "The past, schedule and overlap rules of a booking; `refusal` is absent when it can be booked.")
+    public ResponseEntity<java.util.Map<String, String>> bookingTimeCheck(
+        @RequestParam java.util.UUID staffId,
+        @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+            iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date,
+        @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+            iso = org.springframework.format.annotation.DateTimeFormat.ISO.TIME) java.time.LocalTime time,
+        @RequestParam(required = false) java.util.UUID movedAppointmentId,
+        @RequestHeader(name = "Accept-Language", required = false) String lang,
+        Authentication authentication
+    ) {
+        String refusal = appointmentService.bookingTimeRefusal(staffId, date, time, movedAppointmentId,
+            parseLocale(lang), getUsername(authentication));
+        return ResponseEntity.ok(refusal == null ? java.util.Map.of() : java.util.Map.of("refusal", refusal));
+    }
+
     // ---- CREATE ----
     @PostMapping
     @PreAuthorize(APPOINTMENT_BOOK_ROLES)
@@ -162,12 +194,16 @@ public class AppointmentController {
     public ResponseEntity<AppointmentResponseDTO> updateAppointmentStatus(
         @PathVariable UUID id,
         @RequestParam(name = "action") String action,
+        // QA D1126 / D1132: the reason of a cancel or a no-show (required for those two).
+        @jakarta.validation.Valid @RequestBody(required = false)
+        com.example.hms.payload.dto.AppointmentStatusChangeRequestDTO body,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication authentication
     ) {
     Locale locale = parseLocale(lang);
         return ResponseEntity.ok(
-            appointmentService.confirmOrCancelAppointment(id, action, locale, getUsername(authentication))
+            appointmentService.confirmOrCancelAppointment(id, action, body != null ? body.getReason() : null,
+                locale, getUsername(authentication))
         );
     }
 
@@ -186,6 +222,7 @@ public class AppointmentController {
     }
 
     // ---- SEARCH ----
+    @com.example.hms.security.ReadsOnly("a filtered search of appointments, under POST for its body")
     @PostMapping("/search")
     @PreAuthorize(APPOINTMENT_READ_ROLES)
     public ResponseEntity<Page<AppointmentResponseDTO>> searchAppointments(
@@ -265,9 +302,9 @@ public class AppointmentController {
     Locale locale = parseLocale(lang);
         appointmentService.deleteAppointment(id, locale, getUsername(authentication));
         String rawMessage = messageSource.getMessage("appointment.deleted", new Object[]{id}, locale);
-        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMessage);
     }
 
@@ -439,8 +476,9 @@ public class AppointmentController {
 
     /**
      * Date-range slice for the Cadence calendar grid. Hospital-scoped;
-     * optionally filtered by provider. Caps the viewport at 31 days to
-     * keep the result set bounded; broader ranges return 400.
+     * optionally filtered by provider. Caps the range at
+     * {@link #CALENDAR_MAX_RANGE_DAYS} days inclusive (a six-week month grid)
+     * to keep the result set bounded; broader ranges return 400.
      */
     @GetMapping("/calendar")
     @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
@@ -453,13 +491,14 @@ public class AppointmentController {
         Authentication authentication,
         @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage
     ) {
-        if (from == null || to == null || from.isAfter(to)) {
-            return ResponseEntity.badRequest().build();
+        // QA round 29 sweep: a refusal names its field (it was an empty 400).
+        if (from.isAfter(to)) {
+            throw new com.example.hms.exception.FieldBusinessException("to", "query.dateRange.reversed");
         }
-        // 31-day cap is INCLUSIVE: ChronoUnit.DAYS.between is exclusive of
-        // the end date, so a 31-day range yields 30; reject when > 30.
-        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > 30) {
-            return ResponseEntity.badRequest().build();
+        // The cap is INCLUSIVE: ChronoUnit.DAYS.between excludes the end date,
+        // so the 42-day month grid yields 41; reject anything longer.
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > CALENDAR_MAX_RANGE_DAYS - 1) {
+            throw new com.example.hms.exception.FieldBusinessException("to", "query.dateRange.tooLong", CALENDAR_MAX_RANGE_DAYS);
         }
         Locale locale = (acceptLanguage == null || acceptLanguage.isBlank())
             ? Locale.ENGLISH : Locale.forLanguageTag(acceptLanguage);

@@ -36,7 +36,10 @@ import java.util.UUID;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import org.mockito.ArgumentCaptor;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -45,10 +48,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabResultServiceImplWorkflowTest {
 
     private static final String SIGNER_FULL_NAME = "Seema Signer";
+
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
 
     @Mock
     private LabResultRepository labResultRepository;
@@ -72,6 +78,10 @@ class LabResultServiceImplWorkflowTest {
     // dependency is injected as null — a trap the next reflex test springs.
     @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private AuditEventLogService auditEventLogService;
+    /** QA D709: release runs the critical-value notification. */
+    @Mock private CriticalValueNotificationService criticalValueNotificationService;
 
     @InjectMocks
     private LabResultServiceImpl labResultService;
@@ -110,6 +120,12 @@ class LabResultServiceImplWorkflowTest {
         resultAssignment = new UserRoleHospitalAssignment();
         resultAssignment.setId(UUID.randomUUID());
         resultAssignment.setHospital(hospital);
+
+        // The actor is pinned to the order's hospital. These tests used to
+        // leave the scope unstubbed, so the mock answered null and every
+        // guard read it as "super-admin, unscoped" - the very hole the
+        // null-scope rule closes. Tests about another scope stub their own.
+        org.mockito.Mockito.lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
     }
 
     @Test
@@ -158,10 +174,15 @@ class LabResultServiceImplWorkflowTest {
             .build();
 
         when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(current));
-        when(labResultRepository
-            .findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(
-                labOrder.getPatient().getId(),
-                labTestDefinition.getId())
+        // A caller pinned to the order's hospital reads the trend through the
+        // scoped finder; the unscoped one is a verified super-admin's only.
+        when(labResultRepository.findTrendReadableAt(
+                org.mockito.ArgumentMatchers.eq(labOrder.getPatient().getId()),
+                org.mockito.ArgumentMatchers.eq(labTestDefinition.getId()),
+                any(),
+                org.mockito.ArgumentMatchers.eq(hospitalId),
+                org.mockito.ArgumentMatchers.eq(false),
+                any())
         ).thenReturn(List.of(current, previous));
         when(labResultMapper.toResponseDTO(current)).thenReturn(baseResponse);
         when(labResultMapper.toTrendPointDTO(current)).thenReturn(currentPoint);
@@ -199,7 +220,7 @@ class LabResultServiceImplWorkflowTest {
         when(labResultRepository.save(labResult)).thenReturn(labResult);
         when(labResultMapper.toResponseDTO(labResult)).thenReturn(responseDTO);
 
-        LabResultResponseDTO result = labResultService.releaseLabResult(labResultId, Locale.US);
+        LabResultResponseDTO result = labResultService.releaseLabResult(labResultId, true, Locale.US);
 
         assertThat(result).isSameAs(responseDTO);
         assertThat(labResult.isReleased()).isTrue();
@@ -207,6 +228,80 @@ class LabResultServiceImplWorkflowTest {
         assertThat(labResult.getReleasedByUserId()).isEqualTo(actorId);
         assertThat(labResult.getReleasedByDisplay()).isEqualTo("Casey Clinician");
         verify(labResultRepository).save(labResult);
+    }
+
+    /** D58: the author releasing their own result in one click is refused, not released. */
+    @Test
+    void releaseLabResult_byItsAuthorWithoutConfirmation_isRefusedAndNothingIsReleased() {
+        UUID labResultId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        User actor = new User();
+        actor.setId(actorId);
+        resultAssignment.setUser(actor);
+
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+
+        assertThatThrownBy(() -> labResultService.releaseLabResult(labResultId, false, Locale.US))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(labResult.isReleased()).isFalse();
+        verify(labResultRepository, never()).save(any());
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    /** D58: a confirmed self-release goes through and leaves its own audit row. */
+    @Test
+    void releaseLabResult_confirmedSelfRelease_isReleasedAndAuditedAsASelfRelease() {
+        UUID labResultId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        User actor = new User();
+        actor.setId(actorId);
+        resultAssignment.setUser(actor);
+
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(labResult)).thenReturn(labResult);
+        when(labResultMapper.toResponseDTO(labResult)).thenReturn(LabResultResponseDTO.builder().build());
+
+        labResultService.releaseLabResult(labResultId, true, Locale.US);
+
+        assertThat(labResult.isReleased()).isTrue();
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.LAB_RESULT_SELF_RELEASED);
+        assertThat(audit.getValue().getUserId()).isEqualTo(actorId);
+        assertThat(audit.getValue().getResourceId()).isEqualTo(labResultId.toString());
+        assertThat(audit.getValue().getEventDescription()).startsWith("Self-release");
+        // QA D638: the row is anchored at the hospital and names the patient by id.
+        assertThat(audit.getValue().getHospitalId()).isNotNull();
+        assertThat(audit.getValue().getPatientId()).isNotNull();
+    }
+
+    /** D58: a second person's release needs no confirmation and is no self-release. */
+    @Test
+    void releaseLabResult_bySomeoneElse_needsNoConfirmationAndWritesNoSelfReleaseRow() {
+        UUID labResultId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        User author = new User();
+        author.setId(UUID.randomUUID());
+        resultAssignment.setUser(author);
+
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(labResult)).thenReturn(labResult);
+        when(labResultMapper.toResponseDTO(labResult)).thenReturn(LabResultResponseDTO.builder().build());
+
+        labResultService.releaseLabResult(labResultId, false, Locale.US);
+
+        assertThat(labResult.isReleased()).isTrue();
+        verify(auditEventLogService, never()).logEvent(any());
     }
 
     private void givenAReleasableResult(LabResult labResult) {
@@ -236,7 +331,7 @@ class LabResultServiceImplWorkflowTest {
         // and this test passes just as happily with the deferral deleted.
         TransactionSynchronizationManager.initSynchronization();
         try {
-            labResultService.releaseLabResult(labResultId, Locale.US);
+            labResultService.releaseLabResult(labResultId, true, Locale.US);
 
             verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
             assertThat(labResult.isReleased())
@@ -269,7 +364,7 @@ class LabResultServiceImplWorkflowTest {
 
         TransactionSynchronizationManager.initSynchronization();
         try {
-            assertDoesNotThrow(() -> labResultService.releaseLabResult(labResultId, Locale.US));
+            assertDoesNotThrow(() -> labResultService.releaseLabResult(labResultId, true, Locale.US));
             assertDoesNotThrow(this::commitRegisteredCallbacks);
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
@@ -302,7 +397,7 @@ class LabResultServiceImplWorkflowTest {
         labResult.setSourceMessageControlId("MSG-1");
         givenAReleasableResult(labResult);
 
-        labResultService.releaseLabResult(labResultId, Locale.US);
+        labResultService.releaseLabResult(labResultId, true, Locale.US);
 
         assertThat(labResult.isReleased()).isTrue();
         verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
@@ -318,7 +413,7 @@ class LabResultServiceImplWorkflowTest {
         labResult.setSourceSendingApplication("SYSMEX");
         givenAReleasableResult(labResult);
 
-        labResultService.releaseLabResult(labResultId, Locale.US);
+        labResultService.releaseLabResult(labResultId, true, Locale.US);
 
         verify(instrumentOutboxService, never()).enqueueReleasedObservation(any());
     }
@@ -378,7 +473,7 @@ class LabResultServiceImplWorkflowTest {
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
         when(labResultMapper.toResponseDTO(labResult)).thenReturn(responseDTO);
 
-        LabResultResponseDTO result = labResultService.releaseLabResult(labResultId, Locale.US);
+        LabResultResponseDTO result = labResultService.releaseLabResult(labResultId, true, Locale.US);
 
         assertThat(result).isSameAs(responseDTO);
         verify(labResultRepository, never()).save(any(LabResult.class));
@@ -401,7 +496,7 @@ class LabResultServiceImplWorkflowTest {
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_DIRECTOR")).thenReturn(false);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
 
-        assertThrows(BusinessException.class, () -> labResultService.releaseLabResult(labResultId, Locale.US));
+        assertThrows(BusinessException.class, () -> labResultService.releaseLabResult(labResultId, true, Locale.US));
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
@@ -478,7 +573,7 @@ class LabResultServiceImplWorkflowTest {
         UUID labResultId = UUID.randomUUID();
         when(labResultRepository.findById(labResultId)).thenReturn(Optional.empty());
         assertThrows(ResourceNotFoundException.class,
-            () -> labResultService.releaseLabResult(labResultId, Locale.US));
+            () -> labResultService.releaseLabResult(labResultId, true, Locale.US));
     }
 
     @Test
@@ -516,6 +611,10 @@ class LabResultServiceImplWorkflowTest {
         // Super-admin path sidesteps hospital-context resolution — the guard
         // under test is about acknowledgement, not signing permissions.
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
+        // A verified super-admin in global view: no hospital pin, and the
+        // JWT flag that makes a null scope unscoped.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        org.mockito.Mockito.lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
         when(labResultMapper.toResponseDTO(any(LabResult.class)))
             .thenReturn(LabResultResponseDTO.builder().id(labResultId.toString()).build());
@@ -539,6 +638,7 @@ class LabResultServiceImplWorkflowTest {
         UUID labResultId = UUID.randomUUID();
         LabResult critical = new LabResult();
         critical.setId(labResultId);
+        critical.setReleased(true);
         critical.setCriticalNotifiedAt(java.time.LocalDateTime.now().minusMinutes(5));
 
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -554,7 +654,7 @@ class LabResultServiceImplWorkflowTest {
     void acknowledgeLabResultStampsAcknowledgementFields() {
         UUID labResultId = UUID.randomUUID();
         UUID actorId = UUID.randomUUID();
-        LabResult labResult = buildLabResult(labResultId);
+        LabResult labResult = buildReleasedLabResult(labResultId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
 
@@ -575,6 +675,13 @@ class LabResultServiceImplWorkflowTest {
         labResult.setResultUnit("mmol/L");
         labResult.setResultDate(LocalDateTime.now().minusDays(1));
         labResult.setNotes("Initial pending result");
+        return labResult;
+    }
+
+    /** A released result: what a clinician acknowledges or reads back (QA D709). */
+    private LabResult buildReleasedLabResult(UUID labResultId) {
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(true);
         return labResult;
     }
 
@@ -601,7 +708,7 @@ class LabResultServiceImplWorkflowTest {
     @Test
     void acknowledgeLabResultPassesForTheOwningHospital() {
         UUID labResultId = UUID.randomUUID();
-        LabResult labResult = buildLabResult(labResultId);
+        LabResult labResult = buildReleasedLabResult(labResultId);
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -625,5 +732,91 @@ class LabResultServiceImplWorkflowTest {
 
         assertThrows(ResourceNotFoundException.class,
             () -> labResultService.recordCriticalReadBack(labResultId, request, Locale.US));
+    }
+
+    /** QA D709: GET answered 404 for the unreleased result, the read-back 200 and acknowledged it. */
+    @Test
+    void criticalReadBackOfAnUnreleasedResultReadsAsNotFound() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setResultValue("7.2");
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        CriticalValueReadBackRequestDTO request = new CriticalValueReadBackRequestDTO();
+        request.setRepeatedValue("7.2");
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> labResultService.recordCriticalReadBack(labResultId, request, Locale.US));
+        assertThat(labResult.isAcknowledged()).isFalse();
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    void acknowledgeOfAnUnreleasedResultReadsAsNotFound() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> labResultService.acknowledgeLabResult(labResultId, Locale.US));
+        assertThat(labResult.isAcknowledged()).isFalse();
+    }
+
+    /**
+     * QA D1092: a value no range can grade (its unit matches none and converts
+     * to none) raises no critical alert, so it is never released in one
+     * unconsidered click. Without the confirmation the release is a 409 and
+     * nothing is written.
+     */
+    @Test
+    void d1092_anUngradedResultIsNotReleasedWithoutConfirmation() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setResultUnit("mEq/L");
+        User author = new User();
+        author.setId(UUID.randomUUID());
+        resultAssignment.setUser(author);
+        UUID actorId = UUID.randomUUID();
+
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultMapper.isUngradedForUnitMismatch(labResult)).thenReturn(true);
+
+        assertThatThrownBy(() -> labResultService.releaseLabResult(labResultId, false, false, Locale.US))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("mEq/L");
+        assertThatThrownBy(() -> labResultService.releaseLabResult(labResultId, false, Locale.US))
+            .as("the entry point without the flag refuses too")
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(labResult.isReleased()).isFalse();
+        verify(labResultRepository, never()).save(any());
+        verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
+    }
+
+    /** QA D1092: confirmed, it is released; the reviewer said they read the warning. */
+    @Test
+    void d1092_aConfirmedUngradedReleaseGoesThrough() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setResultUnit("mEq/L");
+        User author = new User();
+        author.setId(UUID.randomUUID());
+        resultAssignment.setUser(author);
+        UUID actorId = UUID.randomUUID();
+
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(labResult)).thenReturn(labResult);
+        when(labResultMapper.toResponseDTO(labResult)).thenReturn(LabResultResponseDTO.builder().build());
+
+        labResultService.releaseLabResult(labResultId, false, true, Locale.US);
+
+        assertThat(labResult.isReleased()).isTrue();
+        verify(labResultRepository).save(labResult);
     }
 }

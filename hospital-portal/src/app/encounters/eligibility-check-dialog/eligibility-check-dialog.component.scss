@@ -1,10 +1,14 @@
 .elig-dialog {
-  position: fixed;
-  inset: 0;
-  z-index: 1400;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  // QA D1004: the full-screen layer is only the overlay; the dialog is the
+  // panel inside it (appModalDialog).
+  &__overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 
   &__backdrop {
     position: absolute;

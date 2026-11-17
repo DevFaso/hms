@@ -1,7 +1,7 @@
 ### Register new Staff through HOSPITAL_ADMIN
 ### Register a new HOSPITAL_ADMIN (must be authenticated as SUPER_ADMIN)
 POST http://localhost:8081/api/users/admin-register
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU1MTQyMTMsImV4cCI6MTc1NTYwMDYxM30.GYd5mw0WWJXcXUXGYWWNgGiNRdXO6-5gDGxWMUyvUbs
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -29,7 +29,7 @@ Content-Type: application/json
 
 ### Register a new DOCTOR (must be authenticated as HOSPITAL_ADMIN)
 POST http://localhost:8081/api/users/admin-register
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1NzM2NjM4LCJleHAiOjE3NTU4MjMwMzh9.Y5dYymVwqCfLpQfY9xKnGVGIMi0ZhTWaTeh3bOM7Cs0
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -66,7 +66,7 @@ Content-Type: application/json
 
 ### ✅ Register a HOSPITAL_ADMIN (must be authenticated as SUPER_ADMIN)
 POST http://localhost:8081/api/users/admin-register
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTYzNTA4MTksImV4cCI6MTc1NjQzNzIxOX0.fQUtYvgVqUKU4uBpIigBq8G0bAVi7kwPvQeVcF3m_TKBPO4z4MkTXUJc8H0aJXDd
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {

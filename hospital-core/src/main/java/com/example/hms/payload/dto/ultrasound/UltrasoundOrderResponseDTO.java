@@ -41,6 +41,11 @@ public class UltrasoundOrderResponseDTO {
     private LocalDateTime orderedDate;
 
     private String orderedBy;
+    /**
+     * QA D1081 (D995 class): the user the server's author check compares the caller with, so a
+     * list offers the author-only actions (cancel, edit, sign) on this row only to its author.
+     */
+    private java.util.UUID authorUserId;
 
     private Integer gestationalAgeAtOrder;
 
@@ -54,6 +59,9 @@ public class UltrasoundOrderResponseDTO {
     private String appointmentLocation;
 
     private String priority;
+
+    /** QA D1538 review: placed as an emergency for a patient the obstetric rule would refuse; to review. */
+    private boolean obstetricRuleSkipped;
 
     private Boolean isHighRiskPregnancy;
 

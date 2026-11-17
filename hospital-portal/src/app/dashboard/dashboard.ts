@@ -1,13 +1,20 @@
+import { LabValuePipe, LabRangePipe } from '../shared/pipes/lab-value.pipe';
+import { DayMonthPipe } from '../shared/pipes/day-month.pipe';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { currentMedications } from '../patient-portal/current-medications';
 import {
   ChangeDetectionStrategy,
   Component,
   OnDestroy,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
-import { CommonModule, DatePipe, TitleCasePipe } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
+import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { Router, RouterLink, Routes } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { HospitalService } from '../services/hospital.service';
@@ -58,6 +65,7 @@ import {
   CareTeamDTO,
 } from '../services/patient-portal.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../lab/shared/lab-correction-badge.component';
 import { Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
@@ -70,14 +78,22 @@ import { EncounterService } from '../services/encounter.service';
 import { PharmacyService } from '../services/pharmacy.service';
 import { RefillApprovalService } from '../services/refill-approval.service';
 import { ImagingService } from '../services/imaging.service';
+import { LabService } from '../services/lab.service';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { localDateString } from '../shared/date-utils';
+import { EnumLabelService } from '../core/enum-label.service';
+import { RoleContextService } from '../core/role-context.service';
 import {
   CredentialRenewalComponent,
   CredentialRenewalTarget,
 } from './credential-renewal/credential-renewal.component';
 
-import { currentLocale } from '../shared/i18n/app-locale';
+import { currentLocale, formatCfa } from '../shared/i18n/app-locale';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 // ── Local interfaces ────────────────────────────────────────────────────────
 
 interface QuickAction {
@@ -123,14 +139,23 @@ interface NavTile {
 
 // ────────────────────────────────────────────────────────────────────────────
 
+export { currentMedications };
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   imports: [
+    MeasurePipe,
+    LabValuePipe,
+    LabRangePipe,
+    DayMonthPipe,
+    PersonNamePipe,
+    LabCorrectionBadgeComponent,
+    ClockTimePipe,
+    ServerTimePipe,
     CommonModule,
     RouterLink,
     DatePipe,
-    TitleCasePipe,
     TranslateModule,
     DoctorWorklistComponent,
     DoctorPatientFlowComponent,
@@ -139,6 +164,7 @@ interface NavTile {
     InBasketPanelComponent,
     EnumLabelPipe,
     CredentialRenewalComponent,
+    CfaPipe,
   ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
@@ -147,6 +173,7 @@ interface NavTile {
 export class DashboardComponent implements OnInit, OnDestroy {
   // ── DI ───────────────────────────────────────────────────────
   private readonly auth = inject(AuthService);
+  private readonly enumLabels = inject(EnumLabelService);
   private readonly hospitalService = inject(HospitalService);
   readonly permissions = inject(PermissionService);
   private readonly appointmentService = inject(AppointmentService);
@@ -157,11 +184,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly portalService = inject(PatientPortalService);
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
+  private readonly labService = inject(LabService);
   private readonly translate = inject(TranslateService);
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly pharmacyService = inject(PharmacyService);
   private readonly refillApproval = inject(RefillApprovalService);
   private readonly imagingService = inject(ImagingService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * False for a super-admin in global view, and for any account whose
+   * hospital has not resolved. The review queue and the snapshot drawer are
+   * both refused by the backend in that state, so both say so.
+   */
+  readonly hasHospitalScope = this.roleContext.hasHospitalScope;
 
   /**
    * Bumps every time the active language changes. Reading this signal inside a
@@ -171,6 +207,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly langTick = signal(0);
   private langSub?: Subscription;
   private wsEventsSub?: Subscription;
+  /** The hospital this component holds a tracker-socket claim for, if any. */
+  private wsConnectedHospitalId: string | null = null;
   /** Collapse bursts of tracker events into a single panel refetch. */
   private static readonly WS_REFRESH_DEBOUNCE_MS = 2_500;
 
@@ -225,6 +263,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // /dashboard/lab-ops/summary, which D2 also opened to the bench roles that
   // actually see this view.
   labOpsSummary = signal<LabOpsSummary | null>(null);
+  /**
+   * D107: orders still waiting on the bench - placed, pending, collected or
+   * received - the same set as the lab page's pending tab, less IN_PROGRESS,
+   * which has its own card. It read statusPending alone, and a new order is
+   * ORDERED, so the card said 0 with a queue full of work.
+   */
+  readonly labPendingCount = computed(() => {
+    const s = this.labOpsSummary();
+    if (!s) return null;
+    return (
+      (s.statusOrdered ?? 0) +
+      (s.statusPending ?? 0) +
+      (s.statusCollected ?? 0) +
+      (s.statusReceived ?? 0)
+    );
+  });
 
   // ── Work-queue counts (role audit D1 + D2) ────────────────
   // Exact totals, read from the paginated endpoints with size=1 so the count
@@ -253,6 +307,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /** A read is in flight; the panel shows a spinner, not an empty state. */
   resultQueueLoading = signal(false);
   /**
+   * Result ids with an acknowledge in flight. The row is only removed once
+   * the server has taken it, so without this a physician on a slow link
+   * clicks ✓ repeatedly and sends the same POST several times.
+   */
+  acknowledgingResults = signal<string[]>([]);
+  /**
    * Which review-queue read is the current one.
    *
    * Two independent triggers can overlap — the panel's Retry and the
@@ -263,6 +323,35 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private resultQueueRequest = 0;
   patientSnapshot = signal<PatientSnapshot | null>(null);
   snapshotDrawerOpen = signal(false);
+  /** A snapshot read is in flight; the drawer says so rather than opening blank. */
+  snapshotLoading = signal(false);
+  /**
+   * Why the drawer has no snapshot, when it has none.
+   *
+   * `GET /me/patients/{id}/snapshot` is scoped now, and refuses with a 404
+   * when no hospital resolves. The drawer used to close itself on any
+   * failure, which is the same anti-pattern as an empty list: a refusal
+   * rendered as nothing at all, indistinguishable from a mis-click.
+   *
+   * Three states, because they have three remedies and only one of them is
+   * "try again":
+   *
+   * - NO_SCOPE is decided on the client BEFORE the request. The backend's 404
+   *   for an unresolved scope is deliberately the same answer it gives for a
+   *   patient that does not exist, so the status code cannot tell them apart
+   *   and only the client knows it never had a scope to send. Remedy: pick a
+   *   hospital.
+   * - NOT_HERE is a 404 from a read that DID carry a scope: the patient is not
+   *   reachable in this hospital, because #742 refuses rather than reading
+   *   patient-wide. Retrying can only reproduce it, so no Retry is offered.
+   * - FAILED is everything else — an outage, a 5xx, a dropped connection —
+   *   and is the only one worth retrying.
+   */
+  snapshotError = signal<'NO_SCOPE' | 'NOT_HERE' | 'FAILED' | null>(null);
+  /** The patient the drawer is showing (or failed to show), so Retry can ask again. */
+  private snapshotPatientId: string | null = null;
+  /** Which snapshot read is the current one; a stale answer must not open a drawer. */
+  private snapshotRequest = 0;
   specialization = signal<string | null>(null);
   departmentName = signal<string | null>(null);
   /** Name of the caller's active hospital, shown as a chip in the clinician hero. */
@@ -366,6 +455,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   completedToday = computed(
     () => this.todayAppointments().filter((a) => a.status === 'COMPLETED').length,
+  );
+  /** QA D945: today's appointments whose patient is checked in and waiting. */
+  checkedInToday = computed(
+    () => this.todayAppointments().filter((a) => a.status === 'CHECKED_IN').length,
   );
   pendingToday = computed(
     () =>
@@ -750,7 +843,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'View Prescriptions',
         {
           icon: 'local_pharmacy',
-          label: this.t('DASHBOARD.PRESCRIPTIONS'),
+          label: this.t('COMMON.LABEL.PRESCRIPTIONS'),
           description: this.t('DASHBOARD.QA.PRESCRIPTIONS_DESC'),
           route: '/prescriptions',
           color: '#0e7c6b',
@@ -808,7 +901,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     for (const [perm, action] of all) {
       if (
         !seen.has(action.route) &&
-        this.permissions.hasPermission(perm) &&
+        // QA D997: the acting role's actions only.
+        this.permissions.hasActivePermission(perm) &&
         this.canAccessRoute(action.route)
       ) {
         seen.add(action.route);
@@ -925,7 +1019,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         key: 'appts_today',
         label: this.t('DASHBOARD.TODAYS_APPOINTMENTS'),
-        value: s.appointments.todayTotal,
+        value: s.appointments.today,
         icon: 'calendar_today',
         color: '#0e7c6b',
         bgColor: '#e6f4f1',
@@ -1065,6 +1159,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.hospitalAdminSummary()?.recentAuditEvents ?? [];
   });
 
+  /**
+   * The resource half of a recent-activity line. The raw entity type (USER,
+   * PATIENT…) repeated what the translated event type already says, and the
+   * audit writer's "Unknown Resource" placeholder is not a name (D260).
+   */
+  auditResourceLabel(
+    resourceName: string | null | undefined,
+    entityType?: string | null,
+  ): string | null {
+    // QA D619: a write audit's resourceName is the entity token (TRANSFER,
+    // BILLING_INVOICE); echoing it put English wire tokens on the FR/ES card.
+    // QA D672: a resourceName that is only a record id falls back to the
+    // row's entity type, so the line reads like its neighbours.
+    return (
+      this.enumLabels.auditEntityLabel(resourceName) ?? this.enumLabels.auditEntityLabel(entityType)
+    );
+  }
+
   // ── MVP 17: Staffing by department ──────────────────────────
   staffingByDepartment = computed<DepartmentStaffingRow[]>(() => {
     return this.hospitalAdminSummary()?.staffingByDepartment ?? [];
@@ -1093,6 +1205,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   invoiceAging = computed<InvoiceAgingBuckets | null>(() => {
     return this.hospitalAdminSummary()?.invoiceAging ?? null;
   });
+
+  /** QA D283: the server's bucket labels are English; the order is fixed (current … 90+). */
+  readonly agingBucketLabelKeys: readonly string[] = [
+    'DASHBOARD.AGING_CURRENT',
+    'DASHBOARD.AGING_1_30',
+    'DASHBOARD.AGING_31_60',
+    'DASHBOARD.AGING_61_90',
+    'DASHBOARD.AGING_90_PLUS',
+  ];
 
   invoiceAgingBuckets = computed<InvoiceAgingBucket[]>(() => {
     const aging = this.invoiceAging();
@@ -1232,7 +1353,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         icon: 'local_pharmacy',
-        label: this.t('DASHBOARD.PRESCRIPTIONS'),
+        label: this.t('COMMON.LABEL.PRESCRIPTIONS'),
         route: '/prescriptions',
         color: '#9333ea',
         bg: '#f3e8ff',
@@ -1288,7 +1409,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         icon: 'medication',
-        label: this.t('DASHBOARD.PRESCRIPTIONS'),
+        label: this.t('COMMON.LABEL.PRESCRIPTIONS'),
         route: '/prescriptions',
         color: '#7c3aed',
         bg: '#ede9fe',
@@ -1490,7 +1611,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const d = this.labDirectorDashboard();
     if (!d) return [];
     const tatValue: number | string =
-      d.avgTurnaroundMinutesToday != null ? Math.round(d.avgTurnaroundMinutesToday) : 'N/A';
+      // QA D1597 class: no value reads as a dash in every language, never English "N/A".
+      d.avgTurnaroundMinutesToday != null ? Math.round(d.avgTurnaroundMinutesToday) : '—';
     return [
       {
         key: 'pending_director',
@@ -1646,7 +1768,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const d = this.qualityManagerDashboard();
     if (!d) return [];
     const passRateDisplay: string =
-      d.qualityPassRate != null ? d.qualityPassRate.toFixed(1) + '%' : 'N/A';
+      d.qualityPassRate != null
+        ? new Intl.NumberFormat(currentLocale(), {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          }).format(d.qualityPassRate) + '\u00a0%'
+        : '—';
     return [
       {
         key: 'pending_qa',
@@ -1775,7 +1902,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return [
       {
         icon: 'local_pharmacy',
-        label: this.t('DASHBOARD.PRESCRIPTIONS'),
+        label: this.t('COMMON.LABEL.PRESCRIPTIONS'),
         route: '/prescriptions',
         color: '#9333ea',
         bg: '#f3e8ff',
@@ -1960,15 +2087,148 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Upcoming appointments for patient (computed from portal data) ────
   upcomingAppointments = computed(() => {
-    const now = new Date();
+    // QA D642: the NEXT three, in date order (the service sorts), counted in
+    // the patient's own calendar days (D433): new Date('yyyy-MM-dd') is UTC
+    // midnight, so today's visit used to drop off the card.
+    const today = localDateString();
     return this.myAppointments()
-      .filter((a) => a.status !== 'CANCELLED' && new Date(a.date) >= now)
+      .filter((a) => a.status !== 'CANCELLED' && a.status !== 'COMPLETED' && a.date >= today)
+      .sort((a, b) =>
+        `${a.date}T${a.rawStartTime ?? ''}`.localeCompare(`${b.date}T${b.rawStartTime ?? ''}`),
+      )
       .slice(0, 3);
   });
 
   // ────────────────────────────────────────────────────────────
   // LIFECYCLE
   // ────────────────────────────────────────────────────────────
+
+  /**
+   * The effective hospital as the last scope reaction saw it.
+   *
+   * `undefined` means "no reaction has run yet", which a nullable hospital id
+   * cannot express — `null` is a real value here (a super-admin in global
+   * view). Same sentinel, for the same reason, as `HospitalScopeGateService`.
+   */
+  private lastScopeHospitalId: string | null | undefined;
+
+  constructor() {
+    // The review queue and the snapshot drawer are hospital-scoped reads on a
+    // page that is NOT behind the route-level scope gate — the dashboard
+    // renders for a super-admin in global view and for every role, so it
+    // cannot be gated, and the outlet is never rebuilt under it. The reaction
+    // therefore belongs to the component.
+    //
+    // First run is skipped: `ngOnInit`'s `loadDashboardData` already issues
+    // the read, and reacting here too would fire two on every page load.
+    effect(() => {
+      const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
+      const previous = this.lastScopeHospitalId;
+      this.lastScopeHospitalId = hospitalId;
+      if (previous === undefined || previous === hospitalId) return;
+      untracked(() => this.onHospitalScopeChanged());
+    });
+  }
+
+  /**
+   * The scope picker moved: everything on this page that was read for ONE
+   * hospital now belongs to the hospital that was just left.
+   *
+   * The rows are dropped before the new read is issued rather than when it
+   * lands. Elsewhere on this page a failed refresh deliberately keeps the rows
+   * it already has; here that rule inverts, because these rows are another
+   * tenant's and a slow — or failing — read would leave them on screen under
+   * the new hospital's heading, which is precisely the stale worklist this
+   * exists to prevent.
+   */
+  private onHospitalScopeChanged(): void {
+    // Invalidate any read in flight: a response issued under the old scope
+    // must not write its rows in after the switch.
+    this.resultQueueRequest++;
+    this.resultQueue.set([]);
+    this.resultQueueError.set(false);
+    this.resultQueueLoading.set(false);
+    // Every other panel the backend resolves from the acting hospital. The
+    // review queue is the one this change is about, but leaving the rest
+    // behind would put hospital B's queue beside hospital A's critical strip
+    // under one heading — the same lie in a different card.
+    this.kpis.set([]);
+    this.alerts.set([]);
+    this.inboxCounts.set(null);
+    this.onCallStatus.set(null);
+    this.roomedPatients.set([]);
+    // The hero's own labels. `hospitalName` most of all: `loadDashboardData`
+    // only re-reads it when a hospital resolves, so on a switch to global view
+    // the hero would go on naming the hospital just left, directly above the
+    // hint asking the reader to pick one. `departmentName` is the clinician's
+    // department AT that hospital and travels with it.
+    this.hospitalName.set(null);
+    this.departmentName.set(null);
+    this.criticalStrip.set(null);
+    this.worklistItems.set([]);
+    this.patientFlowData.set({});
+    this.inboxItems.set([]);
+    this.recentPatients.set([]);
+    this.todayAppointments.set([]);
+    // The role-specific summary cards are hospital-scoped too. `hospitalAdminSummary`
+    // matters most: `loadDashboardData` gates its read on
+    // `isHospitalAdmin() && !isSuperAdmin()`, so for a super-admin holding that
+    // role it is never re-read — left alone it would sit on the previous
+    // hospital's numbers indefinitely, which is worse than empty.
+    this.hospitalAdminSummary.set(null);
+    this.labDirectorDashboard.set(null);
+    this.qualityManagerDashboard.set(null);
+    this.labOpsSummary.set(null);
+    this.dispenseQueueCount.set(null);
+    this.refillPendingCount.set(null);
+    this.pharmacyClaimsCount.set(null);
+    this.imagingPendingCount.set(null);
+    this.imagingAwaitingReportCount.set(null);
+    this.billingRecentInvoices.set([]);
+    this.billingOverdueCount.set(0);
+    this.billingOverdueTotal.set(0);
+    this.billingSnapshotLoaded.set(false);
+    // The open snapshot is one patient's record at the hospital just left.
+    this.closePatientSnapshot();
+    // The tracker socket is subscribed per hospital
+    // (/topic/patient-tracker/{hospitalId}) and was connected once, in
+    // ngOnInit. Left alone it would go on delivering the previous hospital's
+    // encounter transitions — and deliver none of the new one's.
+    this.connectTracker();
+    // The same read the page's own Refresh button issues, which re-reads the
+    // review queue among the rest — so it is NOT also requested separately.
+    this.loadDashboardData();
+  }
+
+  /**
+   * Point the tracker socket at the hospital now in scope (clinicians only).
+   *
+   * Called from `ngOnInit` AND from a scope change, and it must create the
+   * subscription lazily rather than assume one: a super-admin holding a
+   * clinical role lands in global view with no hospital, so the first call
+   * connects nothing — and a version that bailed when the subscription was
+   * absent would leave that account, the very one this PR gives a picker to,
+   * without the live worklist refresh for the rest of the session.
+   */
+  private connectTracker(): void {
+    if (!this.isClinician()) return;
+    const hospitalId = this.auth.getHospitalId();
+    if (this.wsConnectedHospitalId === hospitalId) return;
+    if (this.wsConnectedHospitalId) {
+      this.trackerWs.disconnect();
+      this.wsConnectedHospitalId = null;
+    }
+    if (!hospitalId) return;
+    // Task 24: /topic/patient-tracker/{hospitalId} carries exactly the
+    // encounter transitions that invalidate the worklist, patient-flow and
+    // roomed-patients panels (debounced — a discharge emits several at once).
+    this.wsEventsSub ??= this.trackerWs
+      .getEvents()
+      .pipe(debounceTime(DashboardComponent.WS_REFRESH_DEBOUNCE_MS))
+      .subscribe(() => this.refreshFlowPanels());
+    this.trackerWs.connect(hospitalId);
+    this.wsConnectedHospitalId = hospitalId;
+  }
 
   ngOnInit(): void {
     this.initGreeting();
@@ -1994,24 +2254,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // the encounter transitions that invalidate the worklist, patient-flow,
     // and roomed-patients panels, so refresh those on the live stream
     // (debounced — a discharge can emit several transitions at once).
-    if (this.isClinician()) {
-      const hospitalId = this.auth.getHospitalId();
-      if (hospitalId) {
-        this.wsEventsSub = this.trackerWs
-          .getEvents()
-          .pipe(debounceTime(DashboardComponent.WS_REFRESH_DEBOUNCE_MS))
-          .subscribe(() => this.refreshFlowPanels());
-        this.trackerWs.connect(hospitalId);
-      }
-    }
+    this.connectTracker();
   }
 
   ngOnDestroy(): void {
     if (this.clockInterval) clearInterval(this.clockInterval);
     this.langSub?.unsubscribe();
-    if (this.wsEventsSub) {
-      this.wsEventsSub.unsubscribe();
+    this.wsEventsSub?.unsubscribe();
+    // Only release a claim this component actually took: `disconnect()` is
+    // ref-counted on a shared socket, so an unmatched call takes someone
+    // else's claim away.
+    if (this.wsConnectedHospitalId) {
       this.trackerWs.disconnect();
+      this.wsConnectedHospitalId = null;
     }
   }
 
@@ -2097,11 +2352,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   /** Mirrors the billing page's XOF formatting so amounts read identically. */
   formatInvoiceAmount(amount: number): string {
-    return new Intl.NumberFormat(currentLocale(), {
-      style: 'currency',
-      currency: 'XOF',
-      maximumFractionDigits: 0,
-    }).format(amount ?? 0);
+    // QA D621: "4 000 F CFA" in every language, not XOF / F CFA4,000.
+    return formatCfa(amount);
   }
 
   private initProfile(): void {
@@ -2152,7 +2404,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Hospital-admin summary
     if (this.isHospitalAdmin() && !this.isSuperAdmin()) {
       pending++;
-      const today = new Date().toISOString().split('T')[0];
+      const today = localDateString();
       this.dashboardService.getHospitalAdminSummary(today).subscribe({
         next: (s) => {
           this.hospitalAdminSummary.set(s);
@@ -2265,6 +2517,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
         next: (h) => this.hospitalName.set(h.name ?? null),
         error: () => this.hospitalName.set(null),
       });
+    } else {
+      // No scope to name. Leaving the previous value standing put "Hôpital A"
+      // in the hero beside "select a hospital to continue" — the header
+      // contradicting the page under it. The unnamed hero is the honest one.
+      this.hospitalName.set(null);
     }
 
     // Clinical dashboard (doctor / nurse / midwife)
@@ -2336,7 +2593,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.canAccessRoute('/appointments')
     ) {
       pending++;
-      const today = new Date().toISOString().split('T')[0];
+      const today = localDateString();
       this.appointmentService.list({ fromDate: today, toDate: today }).subscribe({
         next: (appts) => {
           const sorted = [...appts].sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -2433,7 +2690,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       pending++;
       this.portalService.getMyMedications().subscribe({
         next: (meds) => {
-          this.myMedications.set(meds);
+          // QA D316: the card is "current" medications; a completed or
+          // discontinued course stays on the medications page, not here.
+          this.myMedications.set(currentMedications(meds));
           done();
         },
         error: () => done(),
@@ -2548,22 +2807,135 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Open the snapshot drawer on a patient, with an explicit state for every
+   * way it can fail to fill.
+   *
+   * `getPatientSnapshot` carries no `catchError` (deliberately — see the
+   * service), and the endpoint answers 404 with no hospital scope, so the old
+   * `error: () => close the drawer` turned an authorization refusal into a
+   * drawer that flickered and vanished. A clinician clicking a patient and
+   * seeing nothing happen has no way to tell a refusal from a dead button.
+   */
   openPatientSnapshot(patientId: string): void {
+    const request = ++this.snapshotRequest;
+    const isCurrent = (): boolean => request === this.snapshotRequest;
+    this.snapshotPatientId = patientId;
     this.snapshotDrawerOpen.set(true);
     this.patientSnapshot.set(null);
+    this.snapshotError.set(null);
+    if (!this.roleContext.hasHospitalScope()) {
+      // Decline to read, as the chart's labs section does: the request would
+      // be refused, and "not found" is not what happened.
+      this.snapshotLoading.set(false);
+      this.snapshotError.set('NO_SCOPE');
+      return;
+    }
+    this.snapshotLoading.set(true);
     this.dashboardService.getPatientSnapshot(patientId).subscribe({
-      next: (s) => this.patientSnapshot.set(s),
-      error: () => this.snapshotDrawerOpen.set(false),
+      next: (s) => {
+        if (!isCurrent()) return;
+        this.snapshotLoading.set(false);
+        if (!s) {
+          // `getPatientSnapshot` is `map((res) => res.data)` with no null
+          // guard, so a 200 carrying no payload lands here. Rendered as
+          // "open, not loading, no error" the drawer would draw nothing at
+          // all — the dead button this whole state machine exists to stop.
+          this.snapshotError.set('FAILED');
+          return;
+        }
+        this.patientSnapshot.set(s);
+      },
+      error: (err: HttpErrorResponse) => {
+        if (!isCurrent()) return;
+        this.snapshotLoading.set(false);
+        // 404 is #742's refusal, 403 is a restricted chart
+        // (`PatientChartAccess.require`, E8 #54) and 401 is a dead session:
+        // all three return the same answer however often they are asked, so
+        // none of them gets a Retry. Only FAILED does.
+        const refused = err?.status === 404 || err?.status === 403 || err?.status === 401;
+        this.snapshotError.set(refused ? 'NOT_HERE' : 'FAILED');
+      },
     });
   }
 
+  /**
+   * The drawer's Retry: the same read, on the patient it is already open on.
+   * Reachable only from FAILED — neither refusal offers one, because asking
+   * again returns the same answer.
+   */
+  retryPatientSnapshot(): void {
+    const patientId = this.snapshotPatientId;
+    if (!patientId) return;
+    this.openPatientSnapshot(patientId);
+  }
+
+  /**
+   * Acknowledge a result from the review panel.
+   *
+   * This used to filter the row out of the local array and nothing else,
+   * although `POST /lab-results/{id}/acknowledge` exists, `LabService`
+   * already wraps it, and the queue item's id IS the `LabResult` id
+   * (`ResultReviewServiceImpl.toQueueItem` builds it from
+   * `result.getId()`). So a physician acknowledging a CRITICAL row watched it
+   * disappear while `LabResult.acknowledged` stayed false and the critical
+   * escalation sweep went on paging for it.
+   *
+   * The row is removed only once the server has taken it; a failure leaves it
+   * on screen and says so, because a control that silently does nothing is
+   * worse than one that reports a problem.
+   *
+   * `resultQueueError` is deliberately NOT cleared here. Clearing it once the
+   * last row was dismissed let a physician turn a 502 into the green "all
+   * results reviewed" card by clicking through stale rows — the exact
+   * all-clear removing `catchError` was meant to make impossible. Only a read
+   * that actually succeeds clears it.
+   */
   acknowledgeResult(resultId: string): void {
-    this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
-    // The stale notice described the rows that were on screen. Once the
-    // physician has cleared them it describes nothing, and leaving it set
-    // flipped an emptied panel into a full "could not be loaded" card —
-    // telling them the queue failed when they had just worked through it.
-    this.resultQueueError.set(false);
+    if (this.acknowledgingResults().includes(resultId)) return;
+    this.acknowledgingResults.update((ids) => [...ids, resultId]);
+    const settle = (): void =>
+      this.acknowledgingResults.update((ids) => ids.filter((id) => id !== resultId));
+    this.labService.acknowledgeResult(resultId).subscribe({
+      next: () => {
+        this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
+        settle();
+      },
+      error: (err: HttpErrorResponse) => {
+        // 400 is the read-back refusal, and it reaches far more rows than the
+        // Critical section: `CriticalValueNotificationService.isCritical`
+        // stamps `criticalNotifiedAt` for a reference-range severity of HIGH
+        // too, while the queue grades that row merely ABNORMAL. So the row
+        // that needs a read-back cannot be identified from `abnormalFlag`;
+        // the server's answer is what identifies it, and the message says
+        // where the ceremony lives.
+        // 404 has two causes and the message names both: the result is gone
+        // (`findById(...).orElseThrow`, which runs FIRST) or it belongs to
+        // another hospital (`requireResultInActiveHospital`). The second is
+        // the common one here — the acknowledge is checked against the ACTIVE
+        // hospital, while a panel left over from before a scope change can
+        // still offer rows released at another one — but insisting on it
+        // would send someone whose row was deleted to switch hospitals and
+        // try again, from every hospital.
+        //
+        // NOT, as this comment said until #745: "the queue is built from ONE
+        // Staff record (the earliest)". That premise is wrong twice over —
+        // #742 verified `uq_staff_user_id` gives a user exactly one Staff row
+        // platform-wide, and the queue is now read through
+        // `findByOrderingStaff_IdAndHospital_Id`. The conclusion survives the
+        // premise; the premise does not survive being checked.
+        this.toast.error(
+          this.t(
+            err?.status === 400
+              ? 'DASHBOARD.READ_BACK_REQUIRED'
+              : err?.status === 404
+                ? 'DASHBOARD.ACKNOWLEDGE_NOT_AVAILABLE'
+                : 'DASHBOARD.ACKNOWLEDGE_FAILED',
+          ),
+        );
+        settle();
+      },
+    });
   }
 
   /**
@@ -2575,9 +2947,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * them under that notice rather than losing them to a transient failure.
    */
   loadResultReviewQueue(done?: () => void): void {
+    // No scope, no read: the endpoint answers 404, and a 404 drawn as
+    // "the results could not be loaded" sends a physician looking for an
+    // outage. The panel renders the scope hint instead. `done()` still runs —
+    // it is the dashboard's pending-load counter, not this read's result.
+    if (!this.roleContext.hasHospitalScope()) {
+      this.resultQueueRequest++;
+      this.resultQueue.set([]);
+      this.resultQueueError.set(false);
+      this.resultQueueLoading.set(false);
+      // Deferred, not called inline: every other contributor to the pending
+      // counter settles asynchronously, and a synchronous `done()` here would
+      // let `loading` flip false before the reads issued after this one are
+      // even counted.
+      queueMicrotask(() => done?.());
+      return;
+    }
     const request = ++this.resultQueueRequest;
     const isCurrent = (): boolean => request === this.resultQueueRequest;
-    this.resultQueueError.set(false);
+    // NOT cleared here. Clearing on start hid the stale banner for the whole
+    // request window, so a Retry that failed thirty seconds later showed the
+    // rows as current for thirty seconds. Only a response clears it.
     // Set BEFORE the request: clearing the error while `resultQueue` is still
     // empty otherwise drew "all results reviewed" for the whole request
     // window, on the first load and again on every Retry.
@@ -2586,6 +2976,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (items) => {
         if (isCurrent()) {
           this.resultQueue.set(items);
+          this.resultQueueError.set(false);
           this.resultQueueLoading.set(false);
         }
         done?.();
@@ -2605,8 +2996,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   closePatientSnapshot(): void {
+    // Invalidate the read in flight too: without it, a snapshot arriving after
+    // the drawer was closed re-populated it for the next patient opened.
+    this.snapshotRequest++;
     this.snapshotDrawerOpen.set(false);
     this.patientSnapshot.set(null);
+    this.snapshotLoading.set(false);
+    this.snapshotError.set(null);
+    this.snapshotPatientId = null;
   }
 
   // ────────────────────────────────────────────────────────────
@@ -2669,7 +3066,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       REQUESTED: 'APPOINTMENTS.REQUESTED',
     };
     const key = map[status];
-    return key ? this.t(key) : status;
+    // Any other status (CHECKED_IN, PENDING, RESCHEDULED…) used to be shown
+    // as the raw wire token (D175): the shared vocabulary covers the rest.
+    return key ? this.t(key) : this.enumLabels.transform(status, 'appointmentStatus');
   }
 
   getTrendIcon(trend: string): string {
@@ -2757,6 +3156,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   formatMethodLabel(method: string): string {
-    return method.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return this.enumLabels.transform(method, 'paymentMethod');
   }
 }

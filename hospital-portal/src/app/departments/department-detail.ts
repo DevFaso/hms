@@ -4,14 +4,16 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { refusalReason } from '../shared/refusal-reason';
 
+/** The backend's DepartmentResponseDTO (guarded by scripts/check-department-dto.test.mjs). */
 interface DepartmentDetail {
   id: string;
   name: string;
-  code: string;
+  departmentCode: string;
   description?: string;
-  headOfDepartment?: string;
   headOfDepartmentName?: string;
   active: boolean;
   hospitalId?: string;
@@ -20,12 +22,12 @@ interface DepartmentDetail {
   updatedAt?: string;
 }
 
+/** One row of DepartmentWithStaffDTO.staffMembers (the backend's StaffMinimalDTO). */
 interface DepartmentStaff {
   id: string;
-  name: string;
-  jobTitle?: string;
-  email?: string;
-  active: boolean;
+  fullName: string | null;
+  /** JobTitle enum token, rendered through `| enumLabel: 'jobTitle'`. */
+  jobTitle: string | null;
 }
 
 /** E9 #63 — the department's default sensitive category (the backend's SensitivityTagResponseDTO). */
@@ -53,7 +55,7 @@ interface DepartmentStats {
 @Component({
   selector: 'app-department-detail',
   standalone: true,
-  imports: [RouterLink, TranslateModule],
+  imports: [RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './department-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './department-detail.scss',
@@ -109,9 +111,13 @@ export class DepartmentDetailComponent implements OnInit {
       },
     });
 
-    this.http.get<{ staff: DepartmentStaff[] }>(`/departments/${id}/with-staff`).subscribe({
-      next: (res) => this.staff.set(res?.staff ?? []),
-    });
+    // DepartmentWithStaffDTO sends `staffMembers`; reading `staff` left the
+    // tab permanently empty.
+    this.http
+      .get<{ staffMembers?: DepartmentStaff[] | null }>(`/departments/${id}/with-staff`)
+      .subscribe({
+        next: (res) => this.staff.set(res?.staffMembers ?? []),
+      });
 
     this.http.get<DepartmentStats>(`/departments/${id}/stats`).subscribe({
       next: (s) => this.stats.set(s),
@@ -145,10 +151,12 @@ export class DepartmentDetailComponent implements OnInit {
           this.sensitivitySaving.set(false);
           this.toast.success(this.translate.instant('DEPARTMENTS.TOAST.SENSITIVITY_SAVED'));
         },
-        error: () => {
+        error: (err: unknown) => {
           this.defaultSensitivity.set(previous);
           this.sensitivitySaving.set(false);
-          this.toast.error(this.translate.instant('DEPARTMENTS.TOAST.SENSITIVITY_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('DEPARTMENTS.TOAST.SENSITIVITY_FAILED'),
+          );
         },
       });
   }

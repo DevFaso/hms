@@ -29,9 +29,13 @@ import java.util.UUID;
     name = "patient_insurances",
     schema = "clinical",
     uniqueConstraints = {
-        // A patient shouldn't have the exact same policy duplicated
+        // A patient shouldn't have the exact same policy duplicated at one hospital.
+        // Review of #1131: each hospital holds its own row of a policy (rows are
+        // hospital-scoped through their assignment), so the key includes it. The
+        // production schema has no such constraint (V1 never created one); this
+        // shapes the entity-built test schema only.
         @UniqueConstraint(name = "uq_insurance_patient_provider_policy",
-            columnNames = {"patient_id", "provider_name", "policy_number"})
+            columnNames = {"patient_id", "provider_name", "policy_number", "assignment_id"})
     },
     indexes = {
         @Index(name = "idx_pi_patient", columnList = "patient_id"),
@@ -63,6 +67,21 @@ public class PatientInsurance extends BaseEntity {
     @JoinColumn(name = "assignment_id",
         foreignKey = @ForeignKey(name = "fk_pi_assignment"))
     private UserRoleHospitalAssignment assignment;
+
+    /**
+     * QA D1651: whether a reader acting at {@code hospitalId} may see this row.
+     * Coverage is hospital-scoped through its assignment: the acting
+     * hospital's rows and legacy rows tagged to no hospital are visible;
+     * another hospital's row is not. A {@code null} hospital (a verified
+     * super-admin in global view, or a patient bounded by ownership instead)
+     * has nothing to measure against.
+     */
+    public boolean isVisibleAt(java.util.UUID hospitalId) {
+        if (hospitalId == null || assignment == null || assignment.getHospital() == null) {
+            return true;
+        }
+        return hospitalId.equals(assignment.getHospital().getId());
+    }
 
     @Column(name = "is_primary", nullable = false)
     private boolean primary;

@@ -1,0 +1,1009 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { signal, WritableSignal } from '@angular/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { of, Subject, throwError } from 'rxjs';
+import { ProfileComponent } from './profile';
+import { AuthService, LoginUserProfile } from '../auth/auth.service';
+import { MfaService } from '../auth/mfa.service';
+import { OidcAuthService } from '../auth/oidc-auth.service';
+import { ToastService } from '../core/toast.service';
+import {
+  AuditEvent,
+  CredentialHealth,
+  EmailChangeResponse,
+  ProfileService,
+  UserProfile,
+} from '../services/profile.service';
+import { PatientPortalService, PatientProfileDTO } from '../services/patient-portal.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
+import { fieldControlFor, markServerFieldErrors } from '../shared/forms/server-field-errors';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import en from '../../assets/i18n/en.json';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
+
+const profile = (email: string, firstName = 'Awa'): UserProfile => ({
+  id: 'u1',
+  username: 'awa',
+  email,
+  firstName,
+  lastName: 'Traore',
+  phoneNumber: '+22670000000',
+  active: true,
+  roles: [],
+});
+
+const codeSent: EmailChangeResponse = {
+  message: 'sent',
+  // QUEUED is what the server answers: the code mail leaves from its outbox.
+  delivery: [
+    { channel: 'EMAIL', purpose: 'EMAIL_CHANGE_CODE', outcome: 'QUEUED', target: 'n***@x' },
+  ],
+};
+
+describe('ProfileComponent — editing the profile', () => {
+  let fixture: ComponentFixture<ProfileComponent>;
+  let component: ProfileComponent;
+  let profiles: jasmine.SpyObj<ProfileService>;
+  let toast: jasmine.SpyObj<ToastService>;
+  let auth: jasmine.SpyObj<AuthService>;
+  let ssoAuthenticated: WritableSignal<boolean>;
+  let stored: LoginUserProfile;
+  let portal: jasmine.SpyObj<PatientPortalService>;
+
+  beforeEach(async () => {
+    profiles = jasmine.createSpyObj<ProfileService>('ProfileService', [
+      'getUserProfile',
+      'getCredentialHealth',
+      'getAssignments',
+      'updateProfile',
+      'changeOwnEmail',
+      'confirmOwnEmailChange',
+      'changePassword',
+      'requestPasswordReset',
+      'requestPasswordResetByPhone',
+      'updateRecoveryContacts',
+      'sendRecoveryVerificationCode',
+      'verifyRecoveryContact',
+    ]);
+    profiles.getUserProfile.and.returnValue(of(profile('old@example.test')));
+    profiles.getCredentialHealth.and.returnValue(throwError(() => new Error('n/a')));
+    profiles.getAssignments.and.returnValue(of([]));
+    profiles.updateProfile.and.callFake((_id, data) =>
+      of(profile(data.email ?? '', data.firstName ?? 'Awa')),
+    );
+    toast = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'info',
+      'warning',
+    ]);
+    stored = { id: 'u1', username: 'awa', email: 'old@example.test' } as LoginUserProfile;
+    auth = jasmine.createSpyObj<AuthService>('AuthService', [
+      'getUserId',
+      'getUserProfile',
+      'getRoles',
+      'hasAnyRole',
+      'setUserProfile',
+      'logout',
+    ]);
+    auth.getUserId.and.returnValue('u1');
+    auth.getUserProfile.and.callFake(() => stored);
+    auth.getRoles.and.returnValue([]);
+    auth.hasAnyRole.and.returnValue(false);
+    ssoAuthenticated = signal(false);
+    portal = jasmine.createSpyObj<PatientPortalService>('PatientPortalService', [
+      'updateMyProfile',
+      'getMyProfile',
+    ]);
+    portal.updateMyProfile.and.returnValue(of({} as PatientProfileDTO));
+    portal.getMyProfile.and.returnValue(
+      of({ phoneNumberPrimary: '+22670111111' } as PatientProfileDTO),
+    );
+
+    await TestBed.configureTestingModule({
+      imports: [ProfileComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: ProfileService, useValue: profiles },
+        { provide: ToastService, useValue: toast },
+        { provide: AuthService, useValue: auth },
+        { provide: MfaService, useValue: {} },
+        { provide: OidcAuthService, useValue: { authenticated: ssoAuthenticated } },
+        { provide: PatientPortalService, useValue: portal },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(ProfileComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    component.switchTab('edit');
+    fixture.detectChanges();
+  });
+
+  const byId = (id: string): HTMLInputElement | null =>
+    fixture.nativeElement.querySelector(`#${id}`);
+
+  it('QA D1170: a blank first name is refused where it is typed, never "saved"', () => {
+    const first = byId('editFirstName')!;
+    first.value = '   ';
+    first.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const save = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '.edit-form button[type="submit"]',
+    )!;
+    save.click();
+    fixture.detectChanges();
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(byId('editFirstName')?.getAttribute('aria-invalid')).toBe('true');
+    component.saveProfile();
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('QA D844: a patient sees no staff counters (roles, assignments, security %) in the header', () => {
+    // PATIENT_B1 holds ROLE_PATIENT only.
+    auth.getRoles.and.returnValue(['ROLE_PATIENT']);
+    const patientFixture = TestBed.createComponent(ProfileComponent);
+    patientFixture.detectChanges();
+    expect(patientFixture.nativeElement.querySelector('.header-stats')).toBeNull();
+
+    // Any staff role keeps them, including one isStaffOrAdmin does not list.
+    for (const role of ['ROLE_DOCTOR', 'ROLE_PHARMACIST']) {
+      auth.getRoles.and.returnValue([role]);
+      const staffFixture = TestBed.createComponent(ProfileComponent);
+      staffFixture.detectChanges();
+      expect(staffFixture.nativeElement.querySelector('.header-stats'))
+        .withContext(role)
+        .not.toBeNull();
+    }
+  });
+
+  describe('patient phone (QA D939)', () => {
+    function asPatient(): ProfileComponent {
+      auth.getRoles.and.returnValue(['ROLE_PATIENT']);
+      const f = TestBed.createComponent(ProfileComponent);
+      f.detectChanges();
+      return f.componentInstance;
+    }
+
+    it('sends the new phone of a patient to the patient record too', () => {
+      profiles.updateProfile.and.callFake(() =>
+        of({ ...profile('old@example.test'), phoneNumber: '+22676112233' }),
+      );
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(portal.updateMyProfile).toHaveBeenCalledWith({ phoneNumberPrimary: '+22676112233' });
+    });
+
+    it('a refused record update is said, and the account gets its old phone back', () => {
+      profiles.updateProfile.and.callFake((_id, data) =>
+        of({ ...profile('old@example.test'), phoneNumber: data.phoneNumber ?? '' }),
+      );
+      portal.updateMyProfile.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'taken' } })),
+      );
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(toast.error).toHaveBeenCalledWith('taken');
+      expect(profiles.updateProfile).toHaveBeenCalledTimes(2);
+      expect(profiles.updateProfile.calls.mostRecent().args[1].phoneNumber).toBe('+22670000000');
+    });
+
+    it('an account with no phone before: the record takes it first, a refusal saves nothing', () => {
+      profiles.getUserProfile.and.returnValue(
+        of({ ...profile('old@example.test'), phoneNumber: '' }),
+      );
+      portal.updateMyProfile.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'taken' } })),
+      );
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(toast.error).toHaveBeenCalledWith('taken');
+      expect(profiles.updateProfile).not.toHaveBeenCalled();
+    });
+
+    it('an account with no phone before: a refused account save gives the record its phone back', () => {
+      profiles.getUserProfile.and.returnValue(
+        of({ ...profile('old@example.test'), phoneNumber: '' }),
+      );
+      profiles.updateProfile.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'phone used' } })),
+      );
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(toast.error).toHaveBeenCalledWith('phone used');
+      expect(portal.updateMyProfile.calls.allArgs()).toEqual([
+        [{ phoneNumberPrimary: '+22676112233' }],
+        [{ phoneNumberPrimary: '+22670111111' }],
+      ]);
+    });
+
+    it('a staff account phone stays the login contact only', () => {
+      component.updateField('phoneNumber', '+22676112233');
+      component.saveProfile();
+      expect(portal.updateMyProfile).not.toHaveBeenCalled();
+    });
+
+    it('a patient who changes only the name does not touch the record phone', () => {
+      const patient = asPatient();
+      patient.updateField('firstName', 'Rasmata');
+      patient.saveProfile();
+      expect(portal.updateMyProfile).not.toHaveBeenCalled();
+    });
+  });
+
+  it('saves names and phone through the profile PUT, sending the email back unchanged', () => {
+    component.updateField('firstName', 'Aminata');
+    component.saveProfile();
+
+    expect(profiles.changeOwnEmail).not.toHaveBeenCalled();
+    expect(profiles.updateProfile).toHaveBeenCalledWith(
+      'u1',
+      jasmine.objectContaining({ firstName: 'Aminata', email: 'old@example.test' }),
+    );
+    expect(toast.success).toHaveBeenCalledWith('PROFILE.UPDATED');
+    expect(auth.setUserProfile).toHaveBeenCalled();
+  });
+
+  it('asks for the current password only once the email is really changed', () => {
+    expect(byId('editEmailPassword')).toBeNull();
+    expect(byId('editEmail')?.disabled).withContext('editable outside single sign-on').toBeFalse();
+    expect(fixture.nativeElement.querySelector('#editEmailHint')).toBeNull();
+
+    component.updateField('email', '   ');
+    fixture.detectChanges();
+    expect(component.emailChanged()).withContext('blank is no change').toBeFalse();
+
+    component.updateField('email', 'OLD@example.test');
+    fixture.detectChanges();
+    expect(component.emailChanged()).withContext('letter case alone is no change').toBeFalse();
+
+    component.updateField('email', 'new@example.test');
+    fixture.detectChanges();
+    expect(component.emailChanged()).toBeTrue();
+    expect(byId('editEmailPassword')).not.toBeNull();
+  });
+
+  it('QA D1376: the server refusing the new e-mail marks the e-mail field, with its reason', () => {
+    component.updateField('email', 'pas-une-adresse');
+    component.emailChangePassword.set('Current-Pass-1');
+    fixture.detectChanges();
+    const form = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.edit-form')!;
+    const refusal = {
+      status: 400,
+      error: {
+        message: 'Adresse e-mail invalide.',
+        fieldErrors: {
+          newEmail: 'Adresse e-mail invalide.',
+          currentPassword: 'Mot de passe requis.',
+        },
+      },
+    };
+
+    // The interceptor (app.config.ts) marks what this lookup finds in the form acted in.
+    expect(fieldControlFor(form, 'newEmail')?.id).toBe('editEmail');
+    expect(fieldControlFor(form, 'currentPassword')?.id).toBe('editEmailPassword');
+    expect(markServerFieldErrors(form, refusal)).toEqual(['editEmail', 'editEmailPassword']);
+    fixture.detectChanges();
+    expect(byId('editEmail')?.getAttribute('aria-invalid')).toBe('true');
+    expect(form.textContent).toContain('Adresse e-mail invalide.');
+  });
+
+  it('a blank email field saves the rest and never sends an empty email', () => {
+    component.updateField('firstName', 'Aminata');
+    component.updateField('email', '');
+    component.saveProfile();
+
+    expect(profiles.changeOwnEmail).not.toHaveBeenCalled();
+    expect(profiles.updateProfile).toHaveBeenCalledWith(
+      'u1',
+      jasmine.objectContaining({ email: 'old@example.test' }),
+    );
+  });
+
+  it('QA D1228: emptying the e-mail alone is refused on the field, with the reason', () => {
+    const email = byId('editEmail')!;
+    email.value = '';
+    email.dispatchEvent(new Event('input'));
+    component.markDirty();
+    fixture.detectChanges();
+    const save = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '.edit-form button[type="submit"]',
+    )!;
+    save.click();
+    fixture.detectChanges();
+
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+    expect(profiles.changeOwnEmail).not.toHaveBeenCalled();
+    expect(byId('editEmail')?.getAttribute('aria-invalid')).toBe('true');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'PROFILE.EMAIL_CANNOT_CLEAR',
+    );
+  });
+
+  it('QA D1228: names saved with the e-mail emptied say the address stays', () => {
+    component.updateField('firstName', 'Aminata');
+    component.updateField('email', '');
+    component.saveProfile();
+
+    expect(toast.info).toHaveBeenCalledWith('PROFILE.EMAIL_CANNOT_CLEAR');
+    expect(profiles.updateProfile).toHaveBeenCalled();
+  });
+
+  it('QA D1228: a save that changes nothing says so', () => {
+    component.markDirty();
+    component.saveProfile();
+
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith('SUBMIT_GUARD.NO_CHANGES');
+  });
+
+  it('refuses to send an email change without the current password', () => {
+    component.updateField('email', 'new@example.test');
+    component.saveProfile();
+
+    expect(toast.error).toHaveBeenCalledWith('PROFILE.EMAIL_CHANGE_PASSWORD_REQUIRED');
+    expect(profiles.changeOwnEmail).not.toHaveBeenCalled();
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+    expect(component.saving()).toBeFalse();
+  });
+
+  it('an email-only change requests a code, says so, and changes nothing yet', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    component.updateField('email', ' new@example.test ');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+    fixture.detectChanges();
+
+    expect(profiles.changeOwnEmail).toHaveBeenCalledWith('Current-Pass-1', 'new@example.test');
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith('PROFILE.EMAIL_CODE_SENT');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(component.pendingEmail()).toBe('new@example.test');
+    expect(component.user()?.email).toBe('old@example.test');
+    expect(auth.setUserProfile).not.toHaveBeenCalled();
+    expect(component.emailChangePassword()).toBe('');
+    expect(byId('emailChangeCode')).not.toBeNull();
+  });
+
+  it('warns when the code could not be mailed', () => {
+    profiles.changeOwnEmail.and.returnValue(
+      of({ message: 'sent', delivery: [{ channel: 'EMAIL', outcome: 'NOT_CONFIGURED' }] }),
+    );
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+
+    expect(toast.warning).toHaveBeenCalledWith('PROFILE.VERIFICATION_SEND_FAILED');
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it('names and email: the names are saved and reported even when the email step is refused', () => {
+    profiles.changeOwnEmail.and.returnValue(
+      throwError(() => ({ status: 400, error: { message: 'The current password is incorrect.' } })),
+    );
+    component.updateField('firstName', 'Aminata');
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('wrong');
+    component.saveProfile();
+
+    expect(profiles.updateProfile).toHaveBeenCalledWith(
+      'u1',
+      jasmine.objectContaining({ firstName: 'Aminata', email: 'old@example.test' }),
+    );
+    // The typed password, not the '' the form reset leaves behind.
+    expect(profiles.changeOwnEmail).toHaveBeenCalledWith('wrong', 'new@example.test');
+    expect(toast.success).toHaveBeenCalledWith('PROFILE.UPDATED');
+    expect(toast.error).toHaveBeenCalledWith('The current password is incorrect.');
+    expect(toast.error).not.toHaveBeenCalledWith('PROFILE.UPDATE_FAILED');
+    expect(component.user()?.firstName).toBe('Aminata');
+    expect(component.user()?.email).toBe('old@example.test');
+    expect(component.pendingEmail()).toBeNull();
+    expect(component.saving()).toBeFalse();
+  });
+
+  it('names and email: the email step sends the password typed before the save reset the form', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    component.updateField('firstName', 'Aminata');
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+
+    expect(profiles.updateProfile).toHaveBeenCalled();
+    expect(profiles.changeOwnEmail).toHaveBeenCalledOnceWith('Current-Pass-1', 'new@example.test');
+    expect(component.pendingEmail()).toBe('new@example.test');
+  });
+
+  it('while a code is pending, neither the old address nor the password prompt is shown', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    fixture.detectChanges();
+    expect(byId('editEmailPassword')).not.toBeNull();
+
+    component.saveProfile();
+    component.updateField('email', 'other@example.test');
+    fixture.detectChanges();
+
+    expect(byId('emailChangeCode')).not.toBeNull();
+    expect(byId('editEmail')).withContext('old address hidden').toBeNull();
+    expect(byId('editEmailPassword')).withContext('password prompt hidden').toBeNull();
+  });
+
+  it('a 410 (expired or cancelled) drops the code form and shows the message', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    profiles.confirmOwnEmailChange.and.returnValue(
+      throwError(() => ({ status: 410, error: { message: 'The verification code has expired.' } })),
+    );
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+    component.emailCode.set('424242');
+    component.confirmEmailChange();
+    fixture.detectChanges();
+
+    expect(toast.error).toHaveBeenCalledWith('The verification code has expired.');
+    expect(component.pendingEmail()).toBeNull();
+    expect(byId('emailChangeCode')).toBeNull();
+    expect(byId('editEmail')).not.toBeNull();
+    expect(component.user()?.email).toBe('old@example.test');
+  });
+
+  it('Enter in the code box verifies the code, and does not submit the profile', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    profiles.confirmOwnEmailChange.and.returnValue(of({ message: 'done' }));
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+    fixture.detectChanges();
+    profiles.changeOwnEmail.calls.reset();
+    toast.error.calls.reset();
+
+    const codeInput = byId('emailChangeCode')!;
+    const codeForm = codeInput.closest('form')!;
+    expect(codeForm.classList.contains('edit-form'))
+      .withContext('not the profile form')
+      .toBeFalse();
+    component.emailCode.set('424242');
+    codeForm.dispatchEvent(new Event('submit'));
+
+    expect(profiles.confirmOwnEmailChange).toHaveBeenCalledOnceWith('424242');
+    expect(profiles.changeOwnEmail).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalledWith('PROFILE.EMAIL_CHANGE_PASSWORD_REQUIRED');
+  });
+
+  it('Save is disabled while a code is pending', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+    component.updateField('firstName', 'Aminata');
+    fixture.detectChanges();
+
+    const save = fixture.nativeElement.querySelector(
+      'form.edit-form button[type="submit"]',
+    ) as HTMLButtonElement;
+    expect(isSubmitBlocked(save)).toBeTrue();
+  });
+
+  it('a refused profile PUT stops there: no email step is attempted', () => {
+    profiles.updateProfile.and.returnValue(throwError(() => ({ status: 500 })));
+    component.updateField('firstName', 'Aminata');
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+
+    expect(toast.error).toHaveBeenCalledWith('PROFILE.UPDATE_FAILED');
+    expect(profiles.changeOwnEmail).not.toHaveBeenCalled();
+  });
+
+  it('the code applies the change: the page and the stored login profile get the new address', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    profiles.confirmOwnEmailChange.and.returnValue(of({ message: 'done' }));
+    component.updateField('email', 'New@Example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+    component.emailCode.set(' 424242 ');
+    component.confirmEmailChange();
+
+    expect(profiles.confirmOwnEmailChange).toHaveBeenCalledWith('424242');
+    expect(component.user()?.email).toBe('new@example.test');
+    expect(stored.email).toBe('new@example.test');
+    expect(auth.setUserProfile).toHaveBeenCalledWith(stored);
+    expect(component.pendingEmail()).toBeNull();
+    expect(toast.success).toHaveBeenCalledWith('PROFILE.EMAIL_CHANGED');
+  });
+
+  it('a refused code keeps the old address and the pending step, and shows the server message', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    profiles.confirmOwnEmailChange.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: 'The verification code is incorrect.' },
+      })),
+    );
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+    component.emailCode.set('000000');
+    component.confirmEmailChange();
+
+    expect(toast.error).toHaveBeenCalledWith('The verification code is incorrect.');
+    expect(component.user()?.email).toBe('old@example.test');
+    expect(component.pendingEmail()).toBe('new@example.test');
+    expect(auth.setUserProfile).not.toHaveBeenCalled();
+  });
+
+  it('cancelling the pending change clears it and the form', () => {
+    profiles.changeOwnEmail.and.returnValue(of(codeSent));
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.saveProfile();
+    component.cancelEmailChange();
+
+    expect(component.pendingEmail()).toBeNull();
+    expect(component.editForm().email).toBe('old@example.test');
+  });
+
+  it('a single sign-on session cannot edit the email: the field is locked and no change is sent', async () => {
+    ssoAuthenticated.set(true);
+    fixture.detectChanges();
+    component.updateField('email', 'new@example.test');
+    component.updateField('firstName', 'Aminata');
+    fixture.detectChanges();
+
+    expect(component.emailChanged()).toBeFalse();
+    expect(byId('editEmailPassword')).toBeNull();
+    // NgModel applies [disabled] asynchronously.
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(byId('editEmail')?.disabled).toBeTrue();
+    expect(
+      (fixture.nativeElement.querySelector('#editEmailHint') as HTMLElement).textContent?.trim(),
+    ).toBe('PROFILE.EMAIL_MANAGED_BY_SSO');
+    component.saveProfile();
+    expect(profiles.changeOwnEmail).not.toHaveBeenCalled();
+    expect(profiles.updateProfile).toHaveBeenCalledWith(
+      'u1',
+      jasmine.objectContaining({ email: 'old@example.test' }),
+    );
+  });
+
+  it('cancelling the edit forgets the typed password', () => {
+    component.updateField('email', 'new@example.test');
+    component.emailChangePassword.set('Current-Pass-1');
+    component.cancelEdit();
+
+    expect(component.emailChangePassword()).toBe('');
+    expect(component.emailChanged()).toBeFalse();
+  });
+
+  describe('password reset link (D256)', () => {
+    const asUser = (email: string, phoneNumber: string): void => {
+      component.user.set({ ...profile(email), phoneNumber });
+    };
+
+    it('an e-mail account gets the link by e-mail', () => {
+      profiles.requestPasswordReset.and.returnValue(of(undefined));
+      asUser('awa@example.test', '+22670000000');
+      component.requestPasswordReset();
+
+      expect(profiles.requestPasswordReset).toHaveBeenCalledWith('awa@example.test');
+      expect(profiles.requestPasswordResetByPhone).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith('PROFILE.RESET_LINK_SENT');
+    });
+
+    it('a phone-only account gets the link by SMS, not "no e-mail on file"', () => {
+      profiles.requestPasswordResetByPhone.and.returnValue(of(undefined));
+      asUser('', '+22670000000');
+      component.requestPasswordReset();
+
+      expect(profiles.requestPasswordResetByPhone).toHaveBeenCalledWith('+22670000000');
+      expect(profiles.requestPasswordReset).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith('PROFILE.RESET_LINK_SENT');
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('an SMS failure says the request failed', () => {
+      profiles.requestPasswordResetByPhone.and.returnValue(throwError(() => ({ status: 500 })));
+      asUser('', '+22670000000');
+      component.requestPasswordReset();
+
+      expect(toast.error).toHaveBeenCalledWith('PROFILE.RESET_REQUEST_FAILED');
+    });
+
+    it('an account with neither e-mail nor phone calls nothing and says so', () => {
+      asUser('', '');
+      component.requestPasswordReset();
+
+      expect(profiles.requestPasswordReset).not.toHaveBeenCalled();
+      expect(profiles.requestPasswordResetByPhone).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('PROFILE.NO_EMAIL_ON_FILE');
+    });
+  });
+
+  describe('recovery contacts (D2000)', () => {
+    for (const status of [429, 503]) {
+      it(`X7 preserves D2005: a confirmed address keeps its usable code after resend ${status}`, async () => {
+        spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+        const contact = health(true).recoveryContacts[0];
+        component.credentials.set(health(true));
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          of({ message: 'sent', contactType: 'PHONE' }),
+        );
+        await component.confirmRecoveryContact(contact);
+        component.verificationCode.set('123456');
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          throwError(
+            () =>
+              new HttpErrorResponse({
+                status,
+                error: { message: 'Please wait before resending.' },
+              }),
+          ),
+        );
+        component.sendVerificationCode(contact);
+        fixture.detectChanges();
+        expect(
+          (fixture.nativeElement as HTMLElement).querySelector('#verification-code'),
+        ).not.toBeNull();
+        expect(component.verificationCode()).toBe('123456');
+        profiles.verifyRecoveryContact.and.returnValue(of({ ...contact, verified: true }));
+        profiles.getCredentialHealth.and.returnValue(of(health(true)));
+        component.submitVerificationCode();
+        expect(profiles.verifyRecoveryContact).toHaveBeenCalledWith('rc1', '123456');
+      });
+    }
+
+    it('X7 preserves D2005: an accepted confirmation cannot dispatch twice while pending', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      const contact = health(true).recoveryContacts[0];
+      component.credentials.set(health(true));
+      const pending = new Subject<{ message: string; contactType: string }>();
+      profiles.sendRecoveryVerificationCode.and.returnValue(pending);
+      await component.confirmRecoveryContact(contact);
+      component.sendVerificationCode(contact);
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(1);
+      pending.next({ message: 'sent', contactType: 'PHONE' });
+      pending.complete();
+      expect(component.verificationCodeSent()).toBeTrue();
+    });
+
+    const health = (phoneRecoveryAvailable: boolean | undefined): CredentialHealth =>
+      ({
+        recoveryContacts: [
+          {
+            id: 'rc1',
+            contactType: 'PHONE',
+            contactValue: '+22676000000',
+            verified: false,
+            primaryContact: false,
+          },
+        ],
+        phoneRecoveryAvailable,
+      }) as CredentialHealth;
+    const typeOptions = (): string[] =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#recovery-type option',
+        ),
+      ).map((o) => o.value);
+
+    beforeEach(() => {
+      component.user.set(profile('awa@example.test'));
+      component.switchTab('security');
+    });
+
+    it('offers PHONE only when the server can text the code', () => {
+      component.credentials.set(health(undefined));
+      component.openAddRecovery();
+      fixture.detectChanges();
+      expect(typeOptions()).toEqual(['EMAIL']);
+      expect(byId('recovery-phone-unavailable')).not.toBeNull();
+
+      component.credentials.set(health(true));
+      fixture.detectChanges();
+      expect(typeOptions()).toEqual(['EMAIL', 'PHONE']);
+      expect(byId('recovery-phone-unavailable')).toBeNull();
+    });
+
+    for (const [language, bundle, phoneLabel, emailLabel] of [
+      ['en', en, 'Phone', 'Email'],
+      ['fr', fr, 'Téléphone', 'E-mail'],
+      ['es', es, 'Teléfono', 'Correo electrónico'],
+    ] as const) {
+      for (const type of ['PHONE', 'EMAIL'] as const) {
+        it(`X7: ${language} ${type} reads back the exact address and sends only after confirmation`, async () => {
+          const translate = TestBed.inject(TranslateService);
+          translate.setTranslation(language, bundle);
+          translate.use(language);
+          const contact = {
+            ...health(true).recoveryContacts[0],
+            contactType: type,
+            contactValue: type === 'PHONE' ? '+22676000000' : 'backup@example.test',
+          };
+          component.credentials.set({ ...health(true), recoveryContacts: [contact] });
+          profiles.sendRecoveryVerificationCode.and.returnValue(
+            of({ message: 'sent', contactType: type }),
+          );
+          fixture.detectChanges();
+          const host = fixture.nativeElement as HTMLElement;
+          expect(host.querySelector('.recovery-type')?.textContent?.trim()).toBe(
+            type === 'PHONE' ? phoneLabel : emailLabel,
+          );
+          component.sendVerificationCode(contact);
+          expect(profiles.sendRecoveryVerificationCode).not.toHaveBeenCalled();
+          host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
+          expect(profiles.sendRecoveryVerificationCode).not.toHaveBeenCalled();
+          let dialog = document.querySelector<HTMLElement>('[data-testid="confirm-dialog"]')!;
+          expect(dialog.textContent).toContain(contact.contactValue);
+          expect(dialog.textContent).not.toContain('PROFILE.RECOVERY_CONFIRM');
+          dialog.querySelector<HTMLButtonElement>('[data-testid="confirm-dialog-cancel"]')!.click();
+          await fixture.whenStable();
+          expect(profiles.sendRecoveryVerificationCode).not.toHaveBeenCalled();
+          host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
+          dialog = document.querySelector<HTMLElement>('[data-testid="confirm-dialog"]')!;
+          dialog
+            .querySelector<HTMLButtonElement>('[data-testid="confirm-dialog-confirm"]')!
+            .click();
+          await fixture.whenStable();
+          expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledOnceWith(
+            contact.id!,
+            contact.contactValue,
+          );
+          component.sendVerificationCode({ ...contact, contactValue: `${contact.contactValue}0` });
+          expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(1);
+          component.cancelVerification();
+          component.sendVerificationCode(contact);
+          expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(1);
+        });
+      }
+    }
+
+    it('D2007: offers the local international phone example', () => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', fr);
+      translate.use('fr');
+      component.credentials.set(health(true));
+      component.openAddRecovery();
+      component.newRecoveryType.set('PHONE');
+      fixture.detectChanges();
+      expect((byId('recovery-value') as HTMLInputElement).placeholder).toBe('+226 70 12 34 56');
+    });
+
+    it('an existing phone contact cannot ask for a code that would never be texted', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      const host = fixture.nativeElement as HTMLElement;
+      component.credentials.set(health(false));
+      fixture.detectChanges();
+      // No SMS transport: no Verify to press, the reason is said in its place.
+      expect(host.querySelector('.recovery-badges .btn-sm-primary')).toBeNull();
+      expect(
+        host.querySelector('[data-testid="recovery-phone-unverifiable"]')?.textContent,
+      ).toContain('PROFILE.RECOVERY_PHONE_UNAVAILABLE');
+
+      component.credentials.set(health(true));
+      fixture.detectChanges();
+      profiles.sendRecoveryVerificationCode.and.returnValue(
+        of({ message: 'sent', contactType: 'PHONE' }),
+      );
+      host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
+      await fixture.whenStable();
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledWith('rc1', '+22676000000');
+      expect(host.querySelector('[data-testid="recovery-phone-unverifiable"]')).toBeNull();
+    });
+
+    it('a refused FIRST send (429, 503) says why and offers a retry and a cancel', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      const host = fixture.nativeElement as HTMLElement;
+      component.credentials.set(health(true));
+      fixture.detectChanges();
+      for (const [status, message] of [
+        [429, 'Un code vient d’être envoyé à ce contact.'],
+        [503, 'Les SMS ne peuvent pas encore être envoyés depuis cette plateforme.'],
+      ] as const) {
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          throwError(() => new HttpErrorResponse({ status, error: { message } })),
+        );
+        host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
+        await fixture.whenStable();
+        fixture.detectChanges();
+
+        const alert = host.querySelector('[data-testid="recovery-send-refused"] [role="alert"]');
+        expect(alert?.textContent).withContext(String(status)).toContain(message);
+        const retry = host.querySelector<HTMLButtonElement>('[data-testid="recovery-send-retry"]');
+        expect(retry).withContext(String(status)).not.toBeNull();
+
+        retry!.click();
+        fixture.detectChanges();
+        expect(
+          host.querySelector('[data-testid="recovery-send-refused"] [role="alert"]')?.textContent,
+        )
+          .withContext(`${status} retried`)
+          .toContain(message);
+
+        component.cancelVerification();
+        fixture.detectChanges();
+        expect(host.querySelector('[data-testid="recovery-send-refused"]')).toBeNull();
+      }
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(4);
+    });
+
+    for (const status of [429, 503]) {
+      it(`D2005: a refused resend (${status}) keeps the first code form and typed code usable`, async () => {
+        spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+        const host = fixture.nativeElement as HTMLElement;
+        const contact = health(true).recoveryContacts[0];
+        component.credentials.set(health(true));
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          of({ message: 'sent', contactType: 'PHONE' }),
+        );
+        await component.confirmRecoveryContact(contact);
+        fixture.detectChanges();
+        component.verificationCode.set('123456');
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          throwError(
+            () => new HttpErrorResponse({ status, error: { message: 'Veuillez patienter.' } }),
+          ),
+        );
+        component.sendVerificationCode(contact);
+        fixture.detectChanges();
+        expect(host.querySelector('#verification-code')).not.toBeNull();
+        expect(host.querySelector('[data-testid="recovery-send-refused"]')).toBeNull();
+        expect(host.textContent).toContain('Veuillez patienter.');
+        expect(component.verificationCode()).toBe('123456');
+        profiles.verifyRecoveryContact.and.returnValue(of({ ...contact, verified: true }));
+        profiles.getCredentialHealth.and.returnValue(of(health(true)));
+        component.submitVerificationCode();
+        expect(profiles.verifyRecoveryContact).toHaveBeenCalledWith('rc1', '123456');
+      });
+    }
+
+    it('does not dispatch a second recovery request while the first is pending', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      const pending = new Subject<{ message: string; contactType: string }>();
+      profiles.sendRecoveryVerificationCode.and.returnValue(pending);
+      const contact = health(true).recoveryContacts[0];
+      component.credentials.set(health(true));
+      await component.confirmRecoveryContact(contact);
+      component.sendVerificationCode(contact);
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(1);
+      pending.next({ message: 'sent', contactType: 'PHONE' });
+      pending.complete();
+      expect(component.verificationSending()).toBeFalse();
+      expect(component.verificationCodeSent()).toBeTrue();
+    });
+
+    it('refuses the sign-in email or phone as a recovery contact, on the field', () => {
+      component.credentials.set(health(true));
+      component.openAddRecovery();
+      fixture.detectChanges();
+      for (const [type, value] of [
+        ['EMAIL', '  AWA@example.test '],
+        ['PHONE', '70 00 00 00'],
+        ['PHONE', '0022670000000'],
+      ] as const) {
+        component.newRecoveryType.set(type);
+        component.newRecoveryValue.set(value);
+        component.saveRecoveryContact();
+        expect(component.recoveryError())
+          .withContext(value)
+          .toBe('PROFILE.RECOVERY_SAME_AS_SIGN_IN');
+      }
+      expect(profiles.updateRecoveryContacts).not.toHaveBeenCalled();
+    });
+
+    it('accepts a different contact', () => {
+      profiles.updateRecoveryContacts.and.returnValue(of([]));
+      profiles.getCredentialHealth.and.returnValue(of(health(true)));
+      component.credentials.set(health(true));
+      component.openAddRecovery();
+      component.newRecoveryType.set('EMAIL');
+      component.newRecoveryValue.set('backup@example.test');
+      component.saveRecoveryContact();
+      expect(profiles.updateRecoveryContacts).toHaveBeenCalled();
+      expect(component.recoveryError()).toBe('');
+    });
+  });
+
+  describe('self-service password change (D38)', () => {
+    beforeEach(() => {
+      component.switchTab('security');
+      fixture.detectChanges();
+    });
+
+    const fill = (current: string, next: string, confirm: string): void => {
+      component.pwdCurrent.set(current);
+      component.pwdNew.set(next);
+      component.pwdConfirm.set(confirm);
+    };
+
+    it('the security tab offers a change-password form', () => {
+      expect(byId('pwdCurrent')).not.toBeNull();
+      expect(byId('pwdNew')).not.toBeNull();
+      expect(byId('pwdConfirm')).not.toBeNull();
+    });
+
+    it('sends the current and new password, then clears the form', () => {
+      profiles.changePassword.and.returnValue(of({ message: 'ok' }));
+      fill('Old-Pass-1', 'New-Pass-12', 'New-Pass-12');
+      component.changePassword();
+
+      expect(profiles.changePassword).toHaveBeenCalledWith('Old-Pass-1', 'New-Pass-12');
+      expect(toast.success).toHaveBeenCalledWith('PROFILE.PASSWORD_CHANGED');
+      expect(component.pwdCurrent()).toBe('');
+      expect(component.changingPassword()).toBeFalse();
+      // QA D114: the old session is dead server-side; sign in again.
+      expect(auth.logout).toHaveBeenCalled();
+    });
+
+    it('refuses a mismatch, a short or an unchanged password without calling the server', () => {
+      fill('Old-Pass-1', 'New-Pass-12', 'Other-Pass-12');
+      component.changePassword();
+      fill('Old-Pass-1', 'short', 'short');
+      component.changePassword();
+      fill('Same-Pass-1', 'Same-Pass-1', 'Same-Pass-1');
+      component.changePassword();
+
+      expect(profiles.changePassword).not.toHaveBeenCalled();
+      expect(toast.error.calls.allArgs().map((a) => a[0])).toEqual([
+        'PROFILE.PASSWORD_MISMATCH',
+        'PROFILE.PASSWORD_TOO_SHORT',
+        'PROFILE.PASSWORD_SAME_AS_CURRENT',
+      ]);
+    });
+
+    it('a 401 says the current password is wrong', () => {
+      profiles.changePassword.and.returnValue(throwError(() => ({ status: 401 })));
+      fill('Bad-Pass-1', 'New-Pass-12', 'New-Pass-12');
+      component.changePassword();
+
+      expect(toast.error).toHaveBeenCalledWith('PROFILE.PASSWORD_CURRENT_WRONG');
+      expect(component.changingPassword()).toBeFalse();
+    });
+
+    it('D2001: a 423 shows the server lockout sentence', () => {
+      profiles.changePassword.and.returnValue(
+        throwError(() => ({
+          status: 423,
+          error: { message: 'Compte temporairement verrouillé. Réessayez dans 15 minutes.' },
+        })),
+      );
+      fill('Bad-Pass-1', 'New-Pass-12', 'New-Pass-12');
+      component.changePassword();
+
+      expect(toast.error).toHaveBeenCalledWith(
+        'Compte temporairement verrouillé. Réessayez dans 15 minutes.',
+      );
+      expect(component.changingPassword()).toBeFalse();
+    });
+
+    it('a single sign-on session gets a hint instead of the form', () => {
+      ssoAuthenticated.set(true);
+      fixture.detectChanges();
+      expect(byId('pwdCurrent')).toBeNull();
+    });
+  });
+  it('QA D894: the activity timeline reads a system description in the reader language', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      AUDIT: {
+        DESC: { LOGIN_FAILED_BAD_CREDENTIALS: 'Échec de connexion : identifiants incorrects' },
+      },
+    });
+    translate.use('fr');
+    expect(
+      component.describeActivity({
+        eventDescription: 'Login failed: bad credentials',
+        entityType: 'USER',
+      } as AuditEvent),
+    ).toBe('Échec de connexion : identifiants incorrects');
+  });
+});

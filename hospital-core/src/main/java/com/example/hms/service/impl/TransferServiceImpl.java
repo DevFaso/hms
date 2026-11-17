@@ -12,7 +12,6 @@ import com.example.hms.model.Admission;
 import com.example.hms.model.Bed;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.IsolationPrecaution;
-import com.example.hms.model.Staff;
 import com.example.hms.model.TransferOrder;
 import com.example.hms.model.Ward;
 import com.example.hms.payload.dto.transfer.TransferCancellationRequestDTO;
@@ -87,19 +86,17 @@ public class TransferServiceImpl implements TransferService {
         UUID hospitalId = requireHospital();
 
         if (!StringUtils.hasText(request.getReason())) {
-            throw new BusinessException("A reason is required to move a patient.");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "transfer.r7.reasonRequired");
         }
         Admission admission = loadAdmissionScoped(request.getAdmissionId(), hospitalId);
 
         if (!TRANSFERABLE_STATUSES.contains(admission.getStatus())) {
-            throw new BusinessException(
-                "This admission is not holding a bed, so there is nothing to transfer.");
+            throw new com.example.hms.exception.FieldBusinessException("admissionId", 
+                "transfer.r7.noBedHeld");
         }
         transferOrderRepository.findPendingForAdmission(admission.getId())
             .ifPresent(existing -> {
-                throw new BusinessException(
-                    "This patient already has a transfer waiting to be carried out. "
-                        + "Complete or cancel it first.");
+                throw new com.example.hms.exception.FieldBusinessException("admissionId", "transfer.r7.alreadyPending");
             });
 
         Bed destination = bedRepository.findByIdAndWard_Hospital_Id(request.getToBedId(), hospitalId)
@@ -107,18 +104,27 @@ public class TransferServiceImpl implements TransferService {
 
         Bed origin = admission.getBed();
         if (origin != null && Objects.equals(origin.getId(), destination.getId())) {
-            throw new BusinessException("The patient is already in that bed.");
+            throw new com.example.hms.exception.FieldBusinessException(BedAssignmentService.FIELD_TO_BED_ID, "transfer.r7.alreadyInBed");
         }
+        // QA D609: the same sex and age rule bed assignment applies, checked when
+        // the transfer is ORDERED. It was only checked on completion, so a
+        // 6-year-old's transfer reserved a maternity bed and then stuck at 400.
+        // QA D1366 class: refused on the destination picker (toBedId), so the form marks it.
+        BedAssignmentService.requireWardFitsPatient(destination, admission.getPatient(),
+            BedAssignmentService.FIELD_TO_BED_ID);
         transferOrderRepository.findPendingForDestinationBed(destination.getId())
             .ifPresent(existing -> {
-                throw new BusinessException(
-                    "Another transfer is already on its way to bed %s."
-                        .formatted(BedAssignmentService.bedLabel(destination)));
+                throw new com.example.hms.exception.FieldBusinessException(BedAssignmentService.FIELD_TO_BED_ID,
+                    "transfer.r7.destinationTaken", BedAssignmentService.bedLabel(destination));
             });
 
         List<IsolationPrecaution> precautions =
             precautionRepository.findActiveForPatient(admission.getPatient().getId());
         boolean override = evaluateIsolation(precautions, destination, request);
+        // QA D713: the requester is the caller (a claim is checked), never left
+        // blank; resolved before the bed is held so a refusal strands nothing.
+        com.example.hms.model.Staff requestedBy = com.example.hms.security.CallerIdentity.resolveActor(
+            staffRepository, request.getRequestedByStaffId(), hospitalId);
 
         // Hold the bed. Everything above must pass first — a refused transfer
         // that had already reserved the bed would strand it.
@@ -137,7 +143,7 @@ public class TransferServiceImpl implements TransferService {
             .status(TransferOrderStatus.REQUESTED)
             .reason(request.getReason())
             .notes(request.getNotes())
-            .requestedBy(resolveStaff(request.getRequestedByStaffId(), hospitalId))
+            .requestedBy(requestedBy)
             .requestedAt(LocalDateTime.now(clock))
             .isolationOverride(override)
             .isolationOverrideReason(override ? request.getIsolationOverrideReason() : null)
@@ -159,9 +165,13 @@ public class TransferServiceImpl implements TransferService {
                                                      TransferCompletionRequestDTO request) {
         TransferOrder order = loadScoped(orderId);
         if (!order.isPending()) {
-            throw new BusinessException("This transfer is no longer waiting to be carried out.");
+            throw new BusinessException("transfer.r7.notPending");
         }
         UUID hospitalId = order.getHospital().getId();
+        // QA D713: the completer is the caller (a claim is checked), never left
+        // blank; resolved before the bed changes so a refusal moves nobody.
+        com.example.hms.model.Staff completedBy = com.example.hms.security.CallerIdentity.resolveActor(
+            staffRepository, request.getCompletedByStaffId(), hospitalId);
 
         // The destination has been RESERVED for this order since it was
         // raised, so completion claims it from that state. The bed change
@@ -172,7 +182,7 @@ public class TransferServiceImpl implements TransferService {
 
         order.setStatus(TransferOrderStatus.COMPLETED);
         order.setCompletedAt(LocalDateTime.now(clock));
-        order.setCompletedBy(resolveStaff(request.getCompletedByStaffId(), hospitalId));
+        order.setCompletedBy(completedBy);
         if (StringUtils.hasText(request.getNotes())) {
             order.setNotes(request.getNotes());
         }
@@ -185,13 +195,16 @@ public class TransferServiceImpl implements TransferService {
     public TransferOrderResponseDTO cancelTransfer(UUID orderId,
                                                    TransferCancellationRequestDTO request) {
         if (!StringUtils.hasText(request.getCancellationReason())) {
-            throw new BusinessException(
-                "A reason is required: the destination bed has been held out of circulation.");
+            throw new com.example.hms.exception.FieldBusinessException("cancellationReason", "transfer.r7.heldBedReasonRequired");
         }
         TransferOrder order = loadScoped(orderId);
         if (!order.isPending()) {
-            throw new BusinessException("This transfer is no longer waiting to be carried out.");
+            throw new BusinessException("transfer.r7.notPending");
         }
+
+        // QA D503 class: the canceller is the caller, checked before anything changes.
+        com.example.hms.model.Staff cancelledBy = com.example.hms.security.CallerIdentity.resolveActor(
+            staffRepository, request.getCancelledByStaffId(), order.getHospital().getId());
 
         // Hand the bed back. releaseReservation only touches a RESERVED bed,
         // so if somebody has since been put in it this cannot evict them.
@@ -200,8 +213,7 @@ public class TransferServiceImpl implements TransferService {
         order.setStatus(TransferOrderStatus.CANCELLED);
         order.setCancelledAt(LocalDateTime.now(clock));
         order.setCancellationReason(request.getCancellationReason());
-        order.setCancelledBy(
-            resolveStaff(request.getCancelledByStaffId(), order.getHospital().getId()));
+        order.setCancelledBy(cancelledBy);
 
         TransferOrder saved = transferOrderRepository.save(order);
         return mapper.toDto(saved, activePrecautions(saved));
@@ -244,19 +256,13 @@ public class TransferServiceImpl implements TransferService {
             return false;
         }
         if (!request.isIsolationOverride()) {
-            // Parenthesised deliberately: .formatted binds tighter than +, so
-            // without them it applies to the SECOND literal — which carries no
-            // specifier — and the clinician is refused with a raw "%s" where
-            // the bed should be.
-            throw new BusinessException(
-                ("This patient is on airborne precautions and bed %s is not in an isolation ward. "
-                    + "Move them to an isolation ward, or override with a reason.")
-                    .formatted(BedAssignmentService.bedLabel(destination)));
+            // The bed label is a MessageFormat argument: the clinician reads
+            // the bed, never a raw placeholder.
+            throw new com.example.hms.exception.FieldBusinessException("isolationOverride", "transfer.r7.isolationRequired",
+                BedAssignmentService.bedLabel(destination));
         }
         if (!StringUtils.hasText(request.getIsolationOverrideReason())) {
-            throw new BusinessException(
-                "Overriding the isolation requirement needs a reason — it is the only record "
-                    + "of why the patient was moved somewhere that cannot contain them.");
+            throw new com.example.hms.exception.FieldBusinessException("isolationOverrideReason", "transfer.r7.overrideReasonRequired");
         }
         return true;
     }
@@ -308,22 +314,13 @@ public class TransferServiceImpl implements TransferService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             throw new BusinessException(
-                "An active hospital is required: a transfer happens inside a building.");
+                "transfer.r7.hospitalRequired");
         }
         return hospitalId;
     }
 
     private Hospital hospitalRef(UUID hospitalId) {
-        return hospitalRepository.findById(hospitalId)
+        return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
-    }
-
-    private Staff resolveStaff(UUID staffId, UUID hospitalId) {
-        if (staffId == null) {
-            return null;
-        }
-        return staffRepository.findById(staffId)
-            .filter(s -> s.getHospital() == null || Objects.equals(s.getHospital().getId(), hospitalId))
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
     }
 }

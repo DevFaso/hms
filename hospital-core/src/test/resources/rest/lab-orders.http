@@ -2,7 +2,7 @@
 POST localhost:8081/api/lab-orders
 Content-Type: application/json
 Accept-Language: en
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+Authorization: Bearer {{token}}
 
 {
   "patientId": "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
@@ -21,19 +21,19 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST
 GET localhost:8081/api/lab-orders
 Accept: application/json
 Accept-Language: en
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+Authorization: Bearer {{token}}
 
 ### Get Lab Order by ID
 GET localhost:8081/api/lab-orders/2a6e00e8-0b96-4cb9-b733-fa57972e757e
 Accept: application/json
 Accept-Language: en
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+Authorization: Bearer {{token}}
 
 ### Update Lab Order
 PUT localhost:8081/api/lab-orders/2a6e00e8-0b96-4cb9-b733-fa57972e757e
 Content-Type: application/json
 Accept-Language: en
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+Authorization: Bearer {{token}}
 
 {
   "patientId": "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
@@ -50,9 +50,9 @@ Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST
 GET /lab-orders?page=0&size=10&patientId={UUID}&fromDate=2025-05-01T00:00:00&toDate=2025-05-26T23:59:59
 Accept: application/json
 Accept-Language: en
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4NDMyMDA2LCJleHAiOjE3NDg1MTg0MDZ9.dFJo0WS4LXQ_B2JScWsgEViJbPNUbTfshDaUBit4LOQ8kx8tIYVfWPBFfIEURPkAPhkM_AiTNPU9xAH7j-_qWw
+Authorization: Bearer {{token}}
 
 ### Delete Lab Order
 DELETE /lab-orders/{id}
 Accept-Language: en
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4NDMyMDA2LCJleHAiOjE3NDg1MTg0MDZ9.dFJo0WS4LXQ_B2JScWsgEViJbPNUbTfshDaUBit4LOQ8kx8tIYVfWPBFfIEURPkAPhkM_AiTNPU9xAH7j-_qWw
+Authorization: Bearer {{token}}

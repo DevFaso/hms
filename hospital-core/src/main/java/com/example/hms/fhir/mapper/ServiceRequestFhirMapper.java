@@ -123,6 +123,8 @@ public class ServiceRequestFhirMapper {
                 ServiceRequest.ServiceRequestStatus.ACTIVE;
             case RESULTED, VERIFIED, COMPLETED -> ServiceRequest.ServiceRequestStatus.COMPLETED;
             case CANCELLED -> ServiceRequest.ServiceRequestStatus.REVOKED;
+            // QA D820: voided as entered in error.
+            case ENTERED_IN_ERROR -> ServiceRequest.ServiceRequestStatus.ENTEREDINERROR;
         };
     }
 

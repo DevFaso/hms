@@ -44,6 +44,7 @@ public class DepartmentMapper {
         applyLocalizedContent(department, dto, locale);
 
         dto.setTranslations(extractTranslationNames(department));
+        dto.setTranslationEntries(mapTranslations(department.getDepartmentTranslations()));
         dto.setStaffCount(department.getStaffMembers() != null ? department.getStaffMembers().size() : 0);
         dto.setBedCount(department.getBedCapacity() != null ? department.getBedCapacity() : 0);
 
@@ -64,7 +65,7 @@ public class DepartmentMapper {
         department.setName(dto.getName());
         department.setDescription(dto.getDescription());
         department.setPhoneNumber(dto.getPhoneNumber());
-        department.setEmail(dto.getEmail());
+        department.setEmail(dto.getEmail() == null || dto.getEmail().isBlank() ? null : dto.getEmail().trim());
         department.setHospital(hospital);
         department.setHeadOfDepartment(headOfDepartment);
         department.setAssignment(assignment);
@@ -88,32 +89,37 @@ public class DepartmentMapper {
         department.setName(dto.getName());
         department.setDescription(dto.getDescription());
         department.setPhoneNumber(dto.getPhoneNumber());
-        department.setEmail(dto.getEmail());
+        department.setEmail(dto.getEmail() == null || dto.getEmail().isBlank() ? null : dto.getEmail().trim());
         department.setHospital(hospital);
         department.setHeadOfDepartment(headOfDepartment);
         department.setActive(dto.isActive());
         department.setCode(dto.getCode());
-    department.setBedCapacity(dto.getBedCapacity());
-
-        UserRoleHospitalAssignment assignment = department.getAssignment();
+        // R48: a field the request leaves out (null) is not touched. The portal's
+        // edit form sends neither the bed capacity nor the translations, and an
+        // edit of the phone wiped both.
+        if (dto.getBedCapacity() != null) {
+            department.setBedCapacity(dto.getBedCapacity());
+        }
 
         List<DepartmentTranslation> existing = department.getDepartmentTranslations();
         if (existing == null) {
             existing = new ArrayList<>();
             department.setDepartmentTranslations(existing);
         }
+        if (dto.getTranslations() == null) {
+            return;
+        }
+        // Sent: the request's list replaces them (orphanRemoval drops the old rows).
+        UserRoleHospitalAssignment assignment = department.getAssignment();
         existing.clear();
-        if (dto.getTranslations() != null) {
-            for (DepartmentTranslationRequestDTO tr : dto.getTranslations()) {
-                DepartmentTranslation t = toDepartmentTranslation(tr);
-                if (t != null) {
-                    t.setDepartment(department);
-                    t.setAssignment(assignment);
-                    existing.add(t);
-                }
+        for (DepartmentTranslationRequestDTO tr : dto.getTranslations()) {
+            DepartmentTranslation t = toDepartmentTranslation(tr);
+            if (t != null) {
+                t.setDepartment(department);
+                t.setAssignment(assignment);
+                existing.add(t);
             }
         }
-
     }
 
     public DepartmentTranslationResponseDTO mapTranslationForLocale(List<DepartmentTranslation> translations, Locale locale) {

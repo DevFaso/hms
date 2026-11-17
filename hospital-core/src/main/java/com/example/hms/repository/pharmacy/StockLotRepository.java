@@ -4,11 +4,14 @@ import com.example.hms.model.pharmacy.StockLot;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,8 +20,35 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
 
     Page<StockLot> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 
+    /** QA D315: whether this lot number was already received for the item with another expiry. */
+    @Query("SELECT (COUNT(s) > 0) FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
+         + "AND UPPER(s.lotNumber) = UPPER(CAST(:lotNumber AS string)) AND s.expiryDate <> :expiryDate")
+    boolean existsOtherExpiryForLot(@Param("inventoryItemId") UUID inventoryItemId,
+                                    @Param("lotNumber") String lotNumber,
+                                    @Param("expiryDate") LocalDate expiryDate);
+
+    /**
+     * QA D733: the lot already received for this item with this number and
+     * expiry; a second delivery of the same batch adds to it.
+     */
+    @Query("SELECT s FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
+         + "AND UPPER(s.lotNumber) = UPPER(CAST(:lotNumber AS string)) AND s.expiryDate = :expiryDate")
+    List<StockLot> findSameLot(@Param("inventoryItemId") UUID inventoryItemId,
+                               @Param("lotNumber") String lotNumber,
+                               @Param("expiryDate") LocalDate expiryDate);
+
+    /** QA D733: a further delivery of an existing lot, received and on hand. */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE StockLot l SET l.initialQuantity = l.initialQuantity + :quantity, "
+         + "l.remainingQuantity = l.remainingQuantity + :quantity, l.updatedAt = :now WHERE l.id = :id")
+    int addReceipt(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                   @Param("now") LocalDateTime now);
+
+    /** D82: whether the item is tracked in lots at all. */
+    boolean existsByInventoryItemId(UUID inventoryItemId);
+
     @Query("SELECT s FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId " +
-           "AND s.remainingQuantity > 0 AND s.expiryDate >= CURRENT_DATE " +
+           "AND s.remainingQuantity > 0 AND s.expiryDate > CURRENT_DATE " +
            "ORDER BY s.expiryDate ASC")
     List<StockLot> findAvailableLotsByFEFO(@Param("inventoryItemId") UUID inventoryItemId);
 
@@ -29,4 +59,38 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
                                    @Param("cutoffDate") LocalDate cutoffDate);
 
     Page<StockLot> findByInventoryItemPharmacyId(UUID pharmacyId, Pageable pageable);
+
+    /*
+     * Atomic stock movements (#825 security finding 1). Read-modify-write on
+     * the entity lost an update when two requests on DIFFERENT orders moved
+     * the same lot at once (both read 10, one wrote 12 or 7, not 9). These
+     * compute in the database; a decrement only applies when enough is left,
+     * and the caller checks the row count. Bulk JPQL skips @PreUpdate, so
+     * updatedAt is set here; the caller refreshes the managed copy.
+     */
+
+    /** Takes {@code quantity} off the lot when at least that much remains; 0 rows otherwise. */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE StockLot l SET l.remainingQuantity = l.remainingQuantity - :quantity, l.updatedAt = :now "
+         + "WHERE l.id = :id AND l.remainingQuantity >= :quantity")
+    int decrementRemaining(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                           @Param("now") LocalDateTime now);
+
+    /**
+     * QA D405: a positive count ADJUSTMENT, only while the lot stays within
+     * what it received; 0 rows otherwise. Returns of dispensed stock use
+     * {@link #incrementRemaining} (they put back what left).
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE StockLot l SET l.remainingQuantity = l.remainingQuantity + :quantity, l.updatedAt = :now "
+         + "WHERE l.id = :id AND l.remainingQuantity + :quantity <= l.initialQuantity")
+    int incrementRemainingWithinReceived(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                                         @Param("now") LocalDateTime now);
+
+    /** Puts {@code quantity} back on the lot. */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE StockLot l SET l.remainingQuantity = l.remainingQuantity + :quantity, l.updatedAt = :now "
+         + "WHERE l.id = :id")
+    int incrementRemaining(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                           @Param("now") LocalDateTime now);
 }

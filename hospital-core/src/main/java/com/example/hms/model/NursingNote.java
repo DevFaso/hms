@@ -115,6 +115,10 @@ public class NursingNote extends BaseEntity {
     @Column(name = "narrative", columnDefinition = "TEXT")
     private String narrative;
 
+    /** QA D1044: the short title the nurse gives the note (V245). */
+    @Column(name = "title", length = 255)
+    private String title;
+
     @Builder.Default
     @Column(name = "late_entry", nullable = false)
     private boolean lateEntry = false;

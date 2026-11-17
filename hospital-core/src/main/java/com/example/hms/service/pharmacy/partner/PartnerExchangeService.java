@@ -13,6 +13,8 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.StayOrderDiscontinuation;
+import com.example.hms.service.pharmacy.PrescriberPharmacyNotifier;
 import com.example.hms.utility.PhoneNumbers;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -60,6 +62,10 @@ public class PartnerExchangeService {
     private final PartnerNotificationChannel channel;
     private final PartnerSmsReplyParser replyParser;
     private final AuditEventLogService auditEventLogService;
+    private final PrescriberPharmacyNotifier prescriberNotifier;
+    private final WithdrawnOrderPartnerHandler withdrawnOrders;
+    /** QA D792 (#953 review, round 2): ends an ended-stay order once its partner offer closes. */
+    private final StayOrderDiscontinuation stayOrderDiscontinuation;
     /** The gateway's country code, so a locally stored number matches the international reply. */
     private final String countryNumberCode;
 
@@ -68,12 +74,18 @@ public class PartnerExchangeService {
                                   PartnerNotificationChannel channel,
                                   PartnerSmsReplyParser replyParser,
                                   AuditEventLogService auditEventLogService,
+                                  PrescriberPharmacyNotifier prescriberNotifier,
+                                  WithdrawnOrderPartnerHandler withdrawnOrders,
+                                  StayOrderDiscontinuation stayOrderDiscontinuation,
                                   @Value("${app.ikoddi.country-number-code:226}") String countryNumberCode) {
         this.routingDecisionRepository = routingDecisionRepository;
         this.prescriptionRepository = prescriptionRepository;
         this.channel = channel;
         this.replyParser = replyParser;
         this.auditEventLogService = auditEventLogService;
+        this.prescriberNotifier = prescriberNotifier;
+        this.withdrawnOrders = withdrawnOrders;
+        this.stayOrderDiscontinuation = stayOrderDiscontinuation;
         this.countryNumberCode = countryNumberCode;
     }
 
@@ -295,6 +307,32 @@ public class PartnerExchangeService {
             return null;
         }
         Prescription rx = decision.getPrescription();
+        if (action != PartnerSmsReplyParser.Action.CONFIRM_DISPENSE) {
+            // QA D792 (#953 review, round 2): a ward order of a stay that has
+            // ended is withdrawn when its partner answers; an accept or a
+            // refusal would put it back in the work queue, where every action
+            // on it is refused. A confirmed dispense is left to stand: the
+            // partner has already handed it over.
+            stayOrderDiscontinuation.discontinueIfStayEnded(rx, null, "Partner SMS " + action);
+        }
+        if (WithdrawnOrderPartnerHandler.isWithdrawn(rx)) {
+            // The prescriber took the order back while this offer was open:
+            // the prescription is not moved and nobody is asked to re-route.
+            return action == PartnerSmsReplyParser.Action.CONFIRM_DISPENSE
+                    ? withdrawnOrders.recordDispenseOfWithdrawn(decision, rx, "Partner SMS")
+                    : withdrawnOrders.closeOffer(decision, rx, "Partner SMS " + action);
+        }
+        boolean heldForReview = com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
+                com.example.hms.enums.OrderReviewType.PRESCRIPTION, rx != null ? rx.getId() : null);
+        if (heldForReview && action == PartnerSmsReplyParser.Action.ACCEPT) {
+            // A held order is not accepted, and the patient is not told to collect it.
+            PrescriptionRoutingDecision recalled = withdrawnOrders.recallOffer(decision, rx);
+            prescriptionRepository.save(rx);
+            return recalled;
+        }
+        if (heldForReview && action == PartnerSmsReplyParser.Action.CONFIRM_DISPENSE) {
+            withdrawnOrders.raiseDispenseOfHeld(decision, rx, "Partner SMS");
+        }
         switch (action) {
             case ACCEPT -> {
                 decision.setStatus(RoutingDecisionStatus.ACCEPTED);
@@ -307,6 +345,10 @@ public class PartnerExchangeService {
             case REJECT -> {
                 decision.setStatus(RoutingDecisionStatus.REJECTED);
                 rx.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+                // As the staff reject (partnerRespond): the refusing partner is
+                // no longer this order's pharmacy, so the work queue groups the
+                // row under the in-house dispensary; the decision keeps who refused.
+                rx.clearPharmacy();
                 audit(AuditEventType.PRESCRIPTION_ROUTED_EXTERNAL,
                         "Partner SMS reply rejected prescription " + rx.getId(),
                         decision.getId().toString());
@@ -321,15 +363,35 @@ public class PartnerExchangeService {
             }
         }
         prescriptionRepository.save(rx);
-        return routingDecisionRepository.save(decision);
+        PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
+        // The prescriber learns the outcome exactly as from the staff
+        // endpoints; the notifier defers the write until this commits.
+        PrescriptionStatus outcome = rx.getStatus();
+        tellPrescriber(rx, () -> prescriberNotifier.notifyPrescriber(rx, outcome));
+        return saved;
     }
 
     private void autoReject(PrescriptionRoutingDecision d) {
-        d.setStatus(RoutingDecisionStatus.REJECTED);
         Prescription rx = d.getPrescription();
+        // QA D792 (#953 review, round 2): as for a refusal, a timed-out offer
+        // of a ward order of an ended stay ends the order instead of sending
+        // it back to the queue.
+        stayOrderDiscontinuation.discontinueIfStayEnded(rx, null, "Partner timeout");
+        if (WithdrawnOrderPartnerHandler.isWithdrawn(rx)) {
+            // An offer opened before withdrawal closed it: close it now, leave
+            // the order as the prescriber left it, and ask nobody to re-route.
+            withdrawnOrders.closeOffer(d, rx, "Partner timeout");
+            channel.sendAutoRejected(d, d.getTargetPharmacy());
+            return;
+        }
+        d.setStatus(RoutingDecisionStatus.REJECTED);
         if (rx != null) {
             rx.setStatus(PrescriptionStatus.PARTNER_REJECTED);
+            // Same state as a refusal, so the same detachment: a timed-out
+            // offer must reach the in-house queue, not stay under the partner.
+            rx.clearPharmacy();
             prescriptionRepository.save(rx);
+            tellPrescriber(rx, () -> prescriberNotifier.notifyPrescriberOfPartnerTimeout(rx));
         }
         routingDecisionRepository.save(d);
         channel.sendAutoRejected(d, d.getTargetPharmacy());
@@ -337,6 +399,21 @@ public class PartnerExchangeService {
                 "Partner auto-rejected after timeout for prescription "
                         + (rx != null ? rx.getId() : d.getId()),
                 d.getId().toString());
+    }
+
+    /**
+     * The notifier already defers its write past the commit and swallows a
+     * failure there; this guards the queueing itself, so nothing about telling
+     * the prescriber can fail the webhook reply or the timeout sweep, or roll
+     * back the partner's answer.
+     */
+    private void tellPrescriber(Prescription rx, Runnable notify) {
+        try {
+            notify.run();
+        } catch (RuntimeException ex) {
+            log.warn("Could not queue the prescriber notification for prescription {}: {}",
+                    rx.getId(), ex.getMessage());
+        }
     }
 
     private void audit(AuditEventType type, String description, String resourceId) {

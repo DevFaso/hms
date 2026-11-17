@@ -35,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +49,8 @@ class DischargeApprovalServiceImplTest {
     @Mock private DischargeApprovalMapper mapper;
     @Mock private EncounterAutoCompletionService encounterAutoCompletion;
     @Mock private BedAssignmentService bedAssignmentService;
+    @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
+    @Mock private AdmissionStayEncounterService stayEncounters;
 
     @InjectMocks private DischargeApprovalServiceImpl service;
 
@@ -86,6 +89,13 @@ class DischargeApprovalServiceImplTest {
         registration.setId(registrationId);
         registration.setPatient(patient);
         registration.setHospital(hospital);
+        // QA D1065: a discharge request needs an open stay; every request test
+        // below has one unless it says otherwise.
+        com.example.hms.model.Admission openStay = new com.example.hms.model.Admission();
+        openStay.setStatus(com.example.hms.enums.AdmissionStatus.ACTIVE);
+        org.mockito.Mockito.lenient().when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
+                eq(patientId), eq(hospitalId), any()))
+            .thenReturn(List.of(openStay));
 
         role = new Role();
         role.setId(UUID.randomUUID());
@@ -100,6 +110,31 @@ class DischargeApprovalServiceImplTest {
         nurse.setId(nurseStaffId);
         nurse.setHospital(hospital);
         nurse.setAssignment(nurseAssignment);
+        // QA D503 class: the nurse who asks (and cancels) is the signed-in user.
+        actAsStaff(nurse);
+    }
+
+    private static void actAsStaff(Staff staff) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(UUID.randomUUID());
+        staff.setUser(user);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, java.util.List.of()));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSecurity() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void qaD503_anotherNurseCannotCancelInTheRequestingNursesName() {
+        DischargeApproval approval = buildApproval(DischargeStatus.PENDING);
+        when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
+        actAsStaff(Staff.builder().build());
+        assertThatThrownBy(() -> service.cancel(approvalId, nurseStaffId, "changed"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
     }
 
     private DischargeApprovalRequestDTO buildRequest() {
@@ -131,6 +166,7 @@ class DischargeApprovalServiceImplTest {
             .doctorStaffId(doctorStaffId)
             .doctorAssignmentId(doctorAssignmentId)
             .doctorNote("Approved for discharge")
+            .dischargeDiagnosis("Community-acquired pneumonia")
             .build();
     }
 
@@ -154,11 +190,45 @@ class DischargeApprovalServiceImplTest {
         verify(dischargeApprovalRepository).save(any(DischargeApproval.class));
     }
 
+    /** QA D1065: a walk-in who left unseen (never admitted) has no stay to end. */
+    @Test
+    void d1065_requestDischarge_neverAdmitted_isRefusedAndNothingIsWritten() {
+        when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+        when(dischargeApprovalRepository.findByRegistration_IdAndStatusIn(eq(registrationId), any()))
+            .thenReturn(Collections.emptyList());
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(patientId), eq(hospitalId), any()))
+            .thenReturn(List.of());
+
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("discharge.request.notAdmitted");
+        verify(dischargeApprovalRepository, never()).save(any());
+        verify(registrationRepository, never()).save(any());
+    }
+
+    /** QA D1065: the open stay is read in every open status, awaiting discharge included. */
+    @Test
+    void d1065_theOpenStayStatusesAreTheSharedSet() {
+        when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+        when(dischargeApprovalRepository.findByRegistration_IdAndStatusIn(eq(registrationId), any()))
+            .thenReturn(Collections.emptyList());
+        when(staffRepository.findByIdAndActiveTrue(nurseStaffId)).thenReturn(Optional.empty());
+
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request)).isInstanceOf(ResourceNotFoundException.class);
+        verify(admissionRepository).findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
+            com.example.hms.enums.AdmissionStatus.OPEN);
+        assertThat(com.example.hms.enums.AdmissionStatus.OPEN).contains(com.example.hms.enums.AdmissionStatus.AWAITING_DISCHARGE);
+    }
+
     @Test
     void requestDischarge_nullRequest_throwsBusiness() {
+        // QA D1111: a key, no longer the English "Request payload is required…".
         assertThatThrownBy(() -> service.requestDischarge(null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("required");
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("dischargeApproval.payloadRequired");
     }
 
     @Test
@@ -178,7 +248,8 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("inactive");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.registrationInactive");
     }
 
     @Test
@@ -189,7 +260,8 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already completed");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.alreadyDischarged");
     }
 
     @Test
@@ -202,7 +274,8 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("pending");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.alreadyPending");
     }
 
     @Test
@@ -231,7 +304,8 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("different hospitals");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.hospitalMismatch");
     }
 
     @Test
@@ -259,6 +333,7 @@ class DischargeApprovalServiceImplTest {
         Staff doctor = Staff.builder().build();
         doctor.setId(doctorStaffId);
         doctor.setHospital(hospital);
+        actAsStaff(doctor);
 
         Role doctorRole = new Role();
         doctorRole.setId(UUID.randomUUID());
@@ -277,15 +352,64 @@ class DischargeApprovalServiceImplTest {
         when(registrationRepository.save(registration)).thenReturn(registration);
         when(dischargeApprovalRepository.save(approval)).thenReturn(approval);
         when(mapper.toResponse(approval)).thenReturn(responseDTO);
+        com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionDateTime(java.time.LocalDateTime.now().minusDays(2));
+        stay.setStatus(com.example.hms.enums.AdmissionStatus.ACTIVE);
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
+            org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(hospitalId),
+            org.mockito.ArgumentMatchers.anyCollection())).thenReturn(java.util.List.of(stay));
 
         DischargeApprovalResponseDTO result = service.approve(approvalId, buildDecision());
         assertThat(result).isEqualTo(responseDTO);
         assertThat(approval.getStatus()).isEqualTo(DischargeStatus.APPROVED);
-        // The approval flow is a discharge in its own right — it must also
-        // complete the patient's active encounters.
-        verify(encounterAutoCompletion).completeActiveEncounters(patientId, hospitalId);
+        // The approval flow is a discharge in its own right: it completes the
+        // encounters of the patient's open stays, and only those (QA D134).
+        verify(encounterAutoCompletion).completeAdmissionEncounters(stay.getId());
         // …and free any structured beds the patient's admissions still hold (P0 #4).
         verify(bedAssignmentService).releaseBedsForPatient(patientId, hospitalId);
+        // QA D151: the admission row is closed and the discharge reaches the
+        // stay encounter before it is completed (the after-visit summary).
+        assertThat(stay.getStatus()).isEqualTo(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+        assertThat(stay.getActualDischargeDateTime()).isNotNull();
+        assertThat(stay.getDischargingProvider()).isSameAs(doctor);
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(bedAssignmentService, stayEncounters, encounterAutoCompletion);
+        order.verify(bedAssignmentService).releaseBedsForPatient(patientId, hospitalId);
+        order.verify(stayEncounters).recordDischarge(stay, "Community-acquired pneumonia");
+        order.verify(encounterAutoCompletion).completeAdmissionEncounters(stay.getId());
+        // QA D760: the approval path closes the walk-in that led to the stay too.
+        order.verify(encounterAutoCompletion).completeVisitsThatLedToAdmission(stay);
+    }
+
+    @Test
+    void approve_withoutDischargeDiagnosis_refusedAndNothingDischarged() {
+        // QA D766: the approval path discharges the stay, so like the direct
+        // discharge it refuses a blank diagnosis before touching anything.
+        DischargeApproval approval = buildApproval(DischargeStatus.PENDING);
+        Staff doctor = Staff.builder().build();
+        doctor.setId(doctorStaffId);
+        doctor.setHospital(hospital);
+        actAsStaff(doctor);
+        Role doctorRole = new Role();
+        doctorRole.setId(UUID.randomUUID());
+        doctorRole.setCode("DOCTOR");
+        UserRoleHospitalAssignment doctorAssignment = new UserRoleHospitalAssignment();
+        doctorAssignment.setId(doctorAssignmentId);
+        doctorAssignment.setHospital(hospital);
+        doctorAssignment.setRole(doctorRole);
+        doctor.setAssignment(doctorAssignment);
+        when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
+        org.mockito.Mockito.lenient().when(staffRepository.findByIdAndActiveTrue(doctorStaffId)).thenReturn(Optional.of(doctor));
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(doctorAssignmentId)).thenReturn(Optional.of(doctorAssignment));
+
+        var decision = buildDecision();
+        decision.setDischargeDiagnosis("   ");
+        assertThatThrownBy(() -> service.approve(approvalId, decision))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("admissionDischarge.dischargeDiagnosis.required");
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
+        org.mockito.Mockito.verifyNoInteractions(stayEncounters, encounterAutoCompletion, bedAssignmentService);
+        verify(registrationRepository, never()).save(any());
     }
 
     @Test
@@ -296,7 +420,8 @@ class DischargeApprovalServiceImplTest {
         var decision = buildDecision();
         assertThatThrownBy(() -> service.approve(approvalId, decision))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("pending");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.notPending");
     }
 
     @Test
@@ -316,6 +441,7 @@ class DischargeApprovalServiceImplTest {
         Staff doctor = Staff.builder().build();
         doctor.setId(doctorStaffId);
         doctor.setHospital(hospital);
+        actAsStaff(doctor);
 
         Role doctorRole = new Role();
         doctorRole.setId(UUID.randomUUID());
@@ -369,9 +495,12 @@ class DischargeApprovalServiceImplTest {
         when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
 
         UUID randomId = UUID.randomUUID();
+        // QA D1112: an authorship refusal (403) naming the rule, keyed (was an English 400).
         assertThatThrownBy(() -> service.cancel(approvalId, randomId, "reason"))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("requesting nurse");
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+            .satisfies(e -> assertThat(e.getMessage())
+                .containsAnyOf("dischargeApproval.cancel.requesterOnly", "nurse who requested this discharge"));
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
     }
 
     @Test
@@ -389,9 +518,47 @@ class DischargeApprovalServiceImplTest {
         approval.setNurse(null);
         when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
 
+        // QA D1111: a key, no longer the English "no nurse associated…".
         assertThatThrownBy(() -> service.cancel(approvalId, nurseStaffId, "reason"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no nurse");
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("dischargeApproval.cancel.noRequester");
+    }
+
+    // ---- QA D1160 (round 21): a withdrawn or refused request says why ----
+
+    @Test
+    void cancelWithoutAReasonIsRefused_D1160() {
+        DischargeApproval approval = buildApproval(DischargeStatus.PENDING);
+        when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
+
+        for (String blank : new String[] {null, "", "   "}) {
+            assertThatThrownBy(() -> service.cancel(approvalId, nurseStaffId, blank))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getMessageKey())
+                .isEqualTo("order.lifecycle.cancelReasonRequired");
+        }
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
+        verify(dischargeApprovalRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectWithoutAReasonIsRefused_D1160() {
+        DischargeApproval approval = buildApproval(DischargeStatus.PENDING);
+        when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
+        DischargeApprovalDecisionDTO decision = DischargeApprovalDecisionDTO.builder()
+            .doctorStaffId(doctorStaffId)
+            .doctorAssignmentId(doctorAssignmentId)
+            .rejectionReason("  ")
+            .build();
+
+        // QA D1267: a refused discharge says so, not "the reason for the cancellation".
+        assertThatThrownBy(() -> service.reject(approvalId, decision))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("dischargeApproval.reject.reasonRequired");
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
+        verify(dischargeApprovalRepository, never()).save(any());
     }
 
     // ---- getById ----
@@ -469,7 +636,8 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("role");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.assignmentNoRole");
     }
 
     @Test
@@ -489,6 +657,7 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not linked");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.staffAssignmentMismatch");
     }
 }

@@ -13,7 +13,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -32,10 +31,9 @@ import java.util.Objects;
 @Table(
     name = "appointments",
     schema = "clinical",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uq_appt_staff_slot",
-            columnNames = {"staff_id", "appointment_date", "start_time", "end_time"})
-    },
+    // QA D937: no unique (staff, date, start, end) constraint. The database
+    // never had one (V1), and a cancelled booking must not keep its slot: the
+    // overlap checks filter on AppointmentStatus#holdsSlot instead.
     indexes = {
         @Index(name = "idx_appt_patient", columnList = "patient_id"),
         @Index(name = "idx_appt_staff", columnList = "staff_id"),
@@ -57,7 +55,45 @@ public class Appointment extends BaseEntity {
     }
 
     public void setDepartment(Department department) {
+        if (!Objects.equals(entityId(this.department), entityId(department))) releaseLegacyBookingIdentity();
         this.department = department;
+    }
+
+    public void setStaff(Staff staff) {
+        if (!Objects.equals(entityId(this.staff), entityId(staff))) releaseLegacyBookingIdentity();
+        this.staff = staff;
+    }
+
+    public void setAppointmentDate(LocalDate appointmentDate) {
+        if (!Objects.equals(this.appointmentDate, appointmentDate)) releaseLegacyBookingIdentity();
+        this.appointmentDate = appointmentDate;
+    }
+
+    public void setStartTime(LocalTime startTime) {
+        if (!Objects.equals(this.startTime, startTime)) releaseLegacyBookingIdentity();
+        this.startTime = startTime;
+    }
+
+    public void setStatus(AppointmentStatus status) {
+        // Closing a legacy booking releases its intent permanently, including if
+        // the visit is later reinstated after a replacement has been booked.
+        if (AppointmentStatus.holdsSlot(this.status) != AppointmentStatus.holdsSlot(status)) {
+            releaseLegacyBookingIdentity();
+        }
+        this.status = status;
+    }
+
+    private static java.util.UUID entityId(BaseEntity entity) {
+        return entity == null ? null : entity.getId();
+    }
+
+    private void releaseLegacyBookingIdentity() {
+        // Explicit request IDs (and requests initially creating closed visits)
+        // identify one operation forever. Legacy identities describe the slot.
+        if (!bookingRequestDurable) {
+            bookingRequestKey = null;
+            bookingRequestFingerprint = null;
+        }
     }
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -102,6 +138,33 @@ public class Appointment extends BaseEntity {
 
     @Column(name = "notes", length = 2048)
     private String notes;
+
+    @Column(name = "booking_request_key", length = 64)
+    private String bookingRequestKey;
+
+    @Column(name = "booking_request_fingerprint", length = 64)
+    private String bookingRequestFingerprint;
+
+    @Column(name = "booking_request_durable", nullable = false)
+    @org.hibernate.annotations.ColumnDefault("false")
+    private boolean bookingRequestDurable;
+
+    /**
+     * QA D1126 / D1132 (V255): why the visit was cancelled or marked a
+     * no-show. Required on every staff move to CANCELLED or NO_SHOW; the
+     * close-unseen and death-record cancellations carry their own reason, a
+     * patient's self-cancellation the patient's when one was given.
+     */
+    @Column(name = "status_reason", length = 500)
+    private String statusReason;
+
+    /**
+     * QA D1429 (V270): why the desk booked this visit outside any published free
+     * slot. Null for a booking on a slot. Required by
+     * {@code AppointmentSlotPolicy#overbookReasonOffSlot} on every staff booking or move.
+     */
+    @Column(name = "overbook_reason", length = 500)
+    private String overbookReason;
 
     /** Timestamp when the patient was checked in by the receptionist (MVP 1). */
     @Column(name = "checked_in_at")

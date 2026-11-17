@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.context.request.WebRequest;
 
 import java.util.Map;
@@ -16,6 +18,11 @@ import static org.mockito.Mockito.when;
 
 @DisplayName("GlobalExceptionHandler")
 class GlobalExceptionHandlerTest {
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> fieldErrorsOf(Map<String, Object> body) {
+        return (Map<String, Object>) body.get("fieldErrors");
+    }
 
     private GlobalExceptionHandler handler;
     private WebRequest request;
@@ -28,8 +35,132 @@ class GlobalExceptionHandlerTest {
     }
 
     // =========================================================================
+    // handleAccessDenied
+    // =========================================================================
+
+    @Nested
+    @DisplayName("handleAccessDenied")
+    class HandleAccessDenied {
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> bodyOf(ResponseEntity<Object> response) {
+            return (Map<String, Object>) response.getBody();
+        }
+
+        @Test
+        @DisplayName("a plain AccessDeniedException keeps the opaque default — its message could disclose a tenant")
+        void plainAccessDeniedIsOpaque() {
+            var ex = new org.springframework.security.access.AccessDeniedException(
+                "Prescription belongs to hospital B");
+
+            ResponseEntity<Object> response = handler.handleAccessDenied(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(bodyOf(response)).containsEntry("message", "Access denied");
+        }
+
+        @Test
+        @DisplayName("a ClientSafeAccessDeniedException reaches the caller with its sentence")
+        void clientSafeMessageIsShown() {
+            var ex = new ClientSafeAccessDeniedException(
+                "Only the prescribing clinician can sign this prescription.");
+
+            ResponseEntity<Object> response = handler.handleAccessDenied(ex, request);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(bodyOf(response))
+                .containsEntry("message", "Only the prescribing clinician can sign this prescription.");
+        }
+    }
+
+    // =========================================================================
+    // QA D226: keyed service messages reach a French user in French
+    // =========================================================================
+
+    @Nested
+    @DisplayName("QA D226: service messages in the request locale")
+    class D226Localized {
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> bodyOf(ResponseEntity<Object> response) {
+            return (Map<String, Object>) response.getBody();
+        }
+
+        private ResponseEntity<Object> inFrench(java.util.function.Supplier<ResponseEntity<Object>> call) {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            handler.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                return call.get();
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+
+        @Test
+        @DisplayName("QA D1385: a filter value outside its list is a 400 naming the parameter, in French")
+        void anUnknownFilterValueNamesTheParameter_D1385() {
+            Map<String, Object> body = bodyOf(inFrench(() -> handler.handleInvalidQueryParameter(
+                new InvalidQueryParameterException("status"), request)));
+            assertThat(body).containsEntry("status", 400).containsEntry("code", "INVALID_PARAMETER")
+                .containsEntry("field", "status");
+            assertThat((String) body.get("message")).contains("statut").doesNotContain("BOGUS");
+            assertThat(fieldErrorsOf(body)).containsEntry("status", body.get("message"));
+        }
+
+        @Test
+        @DisplayName("a keyed UnauthorizedAccessException answers 403 in French, not a 500")
+        void keyedRefusalIsA403InFrench() {
+            ResponseEntity<Object> response = inFrench(() -> handler.handleUnauthorizedAccess(
+                new UnauthorizedAccessException("lab.result.entryLabStaffOnly", "Glycémie"), request));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat((String) bodyOf(response).get("message"))
+                .startsWith("Seul le personnel du laboratoire")
+                .contains("Glycémie");
+        }
+
+        @Test
+        @DisplayName("a free-sentence UnauthorizedAccessException stays in the log")
+        void sentenceRefusalIsOpaque() {
+            ResponseEntity<Object> response = inFrench(() -> handler.handleUnauthorizedAccess(
+                new UnauthorizedAccessException("Authenticated user not resolvable: jdoe"), request));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat((String) bodyOf(response).get("message")).doesNotContain("jdoe");
+        }
+
+        @Test
+        @DisplayName("a service BusinessException key renders French")
+        void businessKeyIsFrench() {
+            ResponseEntity<Object> response = inFrench(() -> handler.handleBusinessException(
+                new BusinessException("billing.payment.exceedsBalance",
+                    new java.math.BigDecimal("999999"), new java.math.BigDecimal("450.00")), request));
+
+            // QA D828: grouped in French and written in F CFA, as the portal writes every amount.
+            assertThat(((String) bodyOf(response).get("message")).replace(' ', ' ').replace(' ', ' '))
+                .isEqualTo("Le montant du paiement (999 999 F CFA) dépasse le solde dû (450 F CFA).");
+        }
+    }
+
+    // =========================================================================
     // handleNotificationTransportUnavailable
     // =========================================================================
+
+    @Test
+    @DisplayName("an unhandled runtime exception never echoes its text to the client (D32)")
+    void runtimeExceptionTextIsNotReturned() {
+        ResponseEntity<Object> response = handler.handleRuntimeException(
+            new NullPointerException("Cannot invoke java.util.Collection.size() because <parameter1> is null"), request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        // D53 replaced the bare D32 text with the translated error.unexpected message.
+        assertThat(String.valueOf(body.get("message")))
+            .isEqualTo("An unexpected error occurred. Please try again or contact support.")
+            .doesNotContain("Cannot invoke", "parameter1");
+    }
 
     @Nested
     @DisplayName("handleNotificationTransportUnavailable")
@@ -165,6 +296,27 @@ class GlobalExceptionHandlerTest {
                 .containsEntry("field", "email")
                 .containsEntry("message", "Value 'a:b' is already used.");
         }
+
+        /**
+         * QA D904: the assignment-delete refusals, as the three bundles word
+         * them, reached the toast cut at their first colon, with the first
+         * half sent as {@code field}.
+         */
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "Impossible de supprimer l'affectation : elle est encore utilisée par des services, des traductions de services. Désactivez-la plutôt pour conserver cet historique.",
+            "No se puede eliminar la asignación: todavía hay fichas de personal vinculadas. Reasigne o retire primero ese personal.",
+            "Cannot delete assignment: encounters were recorded under it. Deactivate it instead to keep that history."
+        })
+        void aTranslatedSentenceWithAColonIsSentWhole(String sentence) {
+            ResponseEntity<Object> response = handler.handleConflictException(new ConflictException(sentence), request);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(body).isNotNull()
+                .doesNotContainKey("field")
+                .containsEntry("message", sentence);
+        }
     }
 
     // =========================================================================
@@ -202,96 +354,113 @@ class GlobalExceptionHandlerTest {
     @DisplayName("handleHttpMessageNotReadable")
     class HandleHttpMessageNotReadable {
 
+        private org.springframework.http.converter.HttpMessageNotReadableException wrap(Throwable cause) {
+            return new org.springframework.http.converter.HttpMessageNotReadableException(
+                "Outer wrapper", cause,
+                new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+        }
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> bodyOf(ResponseEntity<Object> response) {
+            return (Map<String, Object>) response.getBody();
+        }
+
         /**
-         * Regression for the dev 500 reported on 2026-05-10 where the
-         * pharmacy-registry frontend posted {@code "pharmacyType":"COMMUNITY"}
-         * against a Java enum that expected {@code COMMUNITY_PHARMACY}.
-         * Jackson raised {@code HttpMessageNotReadableException}, the
-         * handler used to fall through to the catch-all RuntimeException
-         * branch and return a generic 500. Now it returns a 400 with the
-         * underlying Jackson message ("not one of the values accepted")
-         * so the frontend can self-diagnose enum drift.
+         * D53: the dev QA run saw "Cannot deserialize value of type
+         * `com.example.hms.enums.PharmacyType` ..." in a toast. The parser's
+         * text, Java types and enum constants must never reach the caller.
          */
         @Test
-        @DisplayName("returns 400 with the original Jackson message preserved")
-        void returns400WithJacksonMessage() {
+        @DisplayName("returns 400 with a safe message, never the Jackson text")
+        void neverEchoesJacksonText() {
             String jacksonMessage = "Cannot deserialize value of type "
                 + "`com.example.hms.enums.PharmacyType` from String \"COMMUNITY\": "
                 + "not one of the values accepted for Enum class: "
                 + "[COMMUNITY_PHARMACY, PARTNER_PHARMACY, HOSPITAL_DISPENSARY]";
-            org.springframework.http.converter.HttpMessageNotReadableException ex =
-                new org.springframework.http.converter.HttpMessageNotReadableException(
-                    "Outer wrapper",
-                    tools.jackson.databind.exc.MismatchedInputException.from(
-                        (tools.jackson.core.JsonParser) null, Object.class, jacksonMessage),
-                    new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+            var ex = wrap(tools.jackson.databind.exc.MismatchedInputException.from(
+                (tools.jackson.core.JsonParser) null, Object.class, jacksonMessage));
 
             ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            Map<String, Object> body = bodyOf(response);
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(body).isNotNull().containsEntry("status", 400);
+            assertThat(body).containsEntry("status", 400).containsEntry("code", "MALFORMED_REQUEST");
             assertThat((String) body.get("message"))
-                .startsWith("Malformed request body:")
-                .contains("not one of the values accepted")
-                .contains("COMMUNITY_PHARMACY");
+                .isEqualTo("The request could not be read. Check the values entered and try again.")
+                .doesNotContain("deserialize").doesNotContain("com.example").doesNotContain("COMMUNITY");
         }
 
         @Test
-        @DisplayName("falls back to outer message when no cause is set")
-        void fallsBackWhenCauseAbsent() {
-            org.springframework.http.converter.HttpMessageNotReadableException ex =
-                new org.springframework.http.converter.HttpMessageNotReadableException(
-                    "Required request body is missing",
-                    new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+        @DisplayName("names the offending JSON field when Jackson reports a path")
+        void namesTheField() {
+            var cause = tools.jackson.databind.exc.MismatchedInputException.from(
+                (tools.jackson.core.JsonParser) null, Object.class, "Cannot deserialize `java.time.LocalDate`");
+            cause.prependPath(new tools.jackson.core.JacksonException.Reference(null, 0));
+            cause.prependPath(new tools.jackson.core.JacksonException.Reference(null, "items"));
+            var ex = wrap(cause);
 
-            ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
+            Map<String, Object> body = bodyOf(handler.handleHttpMessageNotReadable(ex, request));
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> body = (Map<String, Object>) response.getBody();
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(body).isNotNull();
+            assertThat(body).containsEntry("field", "items[0]");
             assertThat((String) body.get("message"))
-                .startsWith("Malformed request body:")
-                .contains("Required request body is missing");
+                .isEqualTo("The value entered for \"items[0]\" is not valid.")
+                .doesNotContain("LocalDate");
         }
 
-        /**
-         * Regression guard against the Copilot-flagged "Malformed request
-         * body: null" output: when both the cause's message and the outer
-         * exception's message are blank, the handler must fall through to a
-         * fixed default rather than serialise {@code null} into the response.
-         */
         @Test
-        @DisplayName("falls back to a fixed default when both messages are blank")
-        void fallsBackToFixedDefaultWhenAllMessagesBlank() {
-            // Cause exists but has a null message — historically the source
-            // of the "Malformed request body: null" footgun.
-            tools.jackson.databind.exc.MismatchedInputException blankCause =
-                tools.jackson.databind.exc.MismatchedInputException.from(
-                    (tools.jackson.core.JsonParser) null, Object.class, (String) null);
-            org.springframework.http.converter.HttpMessageNotReadableException ex =
-                new org.springframework.http.converter.HttpMessageNotReadableException(
-                    "",
-                    blankCause,
-                    new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+        @DisplayName("a missing body still gets the safe message, never 'null'")
+        void missingBody() {
+            var ex = new org.springframework.http.converter.HttpMessageNotReadableException(
+                "Required request body is missing",
+                new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
 
-            ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
+            Map<String, Object> body = bodyOf(handler.handleHttpMessageNotReadable(ex, request));
+
+            assertThat((String) body.get("message"))
+                .isEqualTo("The request could not be read. Check the values entered and try again.")
+                .doesNotContain("null").doesNotContain("Required request body");
+        }
+
+        @Test
+        @DisplayName("uses the request locale through the MessageSource")
+        void translatesThroughMessageSource() {
+            var source = new org.springframework.context.support.ReloadableResourceBundleMessageSource();
+            source.setBasenames(com.example.hms.config.MessageBundles.basenames());
+            source.setDefaultEncoding("UTF-8");
+            source.setFallbackToSystemLocale(false);
+            source.setAlwaysUseMessageFormat(true);
+            handler.setMessageSource(source);
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                var ex = new org.springframework.http.converter.HttpMessageNotReadableException(
+                    "x", new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+                Map<String, Object> body = bodyOf(handler.handleHttpMessageNotReadable(ex, request));
+                assertThat((String) body.get("message"))
+                    .isEqualTo("La demande n'a pas pu être lue. Vérifiez les valeurs saisies et réessayez.");
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("handleRuntimeException")
+    class HandleRuntimeException {
+
+        @Test
+        @DisplayName("D53: the catch-all 500 never echoes the exception text")
+        void neverEchoesExceptionText() {
+            var ex = new NullPointerException("Cannot invoke \"User.getId()\" because \"user\" is null");
+
+            ResponseEntity<Object> response = handler.handleRuntimeException(ex, request);
 
             @SuppressWarnings("unchecked")
             Map<String, Object> body = (Map<String, Object>) response.getBody();
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(body).isNotNull();
-            // The exact wording is allowed to vary — Spring's
-            // HttpMessageNotReadableException normalises an empty message to
-            // "N/A" before we see it, so we land on
-            // "Malformed request body: N/A". The load-bearing invariant is
-            // simply that the response never serialises the literal string
-            // "null" into the body, which was Copilot's concern.
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(body).containsEntry("code", "UNEXPECTED_ERROR");
             assertThat((String) body.get("message"))
-                .startsWith("Malformed request body")
-                .doesNotContain("null");
+                .isEqualTo("An unexpected error occurred. Please try again or contact support.")
+                .doesNotContain("Cannot invoke");
         }
     }
 
@@ -334,8 +503,27 @@ class GlobalExceptionHandlerTest {
             var response = handler.handleTypeMismatch(ex, request);
 
             org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(400);
+            // D53: the parameter is named, the raw value and Java type are not.
             org.assertj.core.api.Assertions.assertThat(String.valueOf(response.getBody()))
-                .contains("sources").contains("PLATFORM_CONFIG");
+                .contains("sources").contains("INVALID_PARAMETER")
+                .doesNotContain("PLATFORM_CONFIG").doesNotContain("AuditSource");
+        }
+    }
+
+    @Nested
+    @DisplayName("handleMissingParameter (QA D332)")
+    class HandleMissingParameter {
+
+        @Test
+        @DisplayName("a missing required parameter answers 400 with a message naming it, not an empty body")
+        void namesTheMissingParameter() {
+            var ex = new org.springframework.web.bind.MissingServletRequestParameterException("summary", "String");
+
+            var response = handler.handleMissingParameter(ex, request);
+
+            org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(400);
+            org.assertj.core.api.Assertions.assertThat(String.valueOf(response.getBody()))
+                .contains("summary").contains("message");
         }
     }
 
@@ -454,7 +642,7 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
             @SuppressWarnings("unchecked")
             Map<String, Object> body = (Map<String, Object>) response.getBody();
-            assertThat(body).isNotNull().containsEntry("message", "An unexpected error occurred.");
+            assertThat(body).isNotNull().containsEntry("message", "An unexpected error occurred. Please try again or contact support.");
             assertThat(body.get("message").toString()).doesNotContain("internal-host");
         }
 
@@ -483,6 +671,415 @@ class GlobalExceptionHandlerTest {
             assertThat(annotation).isNotNull();
             assertThat(annotation.value()).containsExactly(
                 ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException.class);
+        }
+    }
+
+    // =========================================================================
+    // handleBusinessRuleException (D10)
+    // =========================================================================
+
+    @Nested
+    @DisplayName("handleBusinessRuleException")
+    class HandleBusinessRuleException {
+
+        @org.springframework.web.bind.annotation.RestController
+        static class Thrower {
+            @org.springframework.web.bind.annotation.GetMapping("/rule")
+            String rule() {
+                throw new BusinessRuleException("Purge cannot be scheduled in the past.");
+            }
+        }
+
+        @Test
+        @DisplayName("a rule refusal is a 400 with its sentence, through MVC dispatch — it used to fall to the 500 handler")
+        void dispatchesTo400() throws Exception {
+            org.springframework.test.web.servlet.MockMvc mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .standaloneSetup(new Thrower())
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/rule"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+                    .value("Purge cannot be scheduled in the past."));
+        }
+
+        @Test
+        @DisplayName("a keyed refusal is resolved in the caller's locale")
+        void keyIsResolved() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                ResponseEntity<Object> response = handler.handleBusinessRuleException(
+                    BusinessRuleException.ofKey("platform.department.noHospital"), request);
+
+                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> body = (Map<String, Object>) response.getBody();
+                assertThat(body).containsEntry("message", "Le service hospitalier n'est rattaché à aucun hôpital.");
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("handleConcurrentModification (G15 rule 1)")
+    class HandleConcurrentModification {
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> bodyOf(ResponseEntity<Object> response) {
+            return (Map<String, Object>) response.getBody();
+        }
+
+        private void inFrench(Runnable body) {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                body.run();
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+
+        @Test
+        @DisplayName("a lock that could not be taken (or a broken deadlock) is a 409, not a 500")
+        void pessimisticLockIsConflict() {
+            inFrench(() -> {
+                ResponseEntity<Object> response = handler.handleConcurrentModification(
+                    new org.springframework.dao.CannotAcquireLockException("deadlock detected"), request);
+
+                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                assertThat(bodyOf(response)).containsEntry("message",
+                    "Cet enregistrement a été modifié par quelqu'un d'autre au même moment. Rechargez et réessayez.");
+            });
+        }
+
+        @Test
+        @DisplayName("a failed @Version check is a 409 with the same message")
+        void optimisticLockIsConflict() {
+            inFrench(() -> {
+                ResponseEntity<Object> response = handler.handleConcurrentModification(
+                    new org.springframework.orm.ObjectOptimisticLockingFailureException("Prescription", "id"), request);
+
+                assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                assertThat(bodyOf(response).get("message").toString()).startsWith("Cet enregistrement");
+            });
+        }
+
+        @Test
+        @DisplayName("both families are mapped on the handler, so neither falls to the RuntimeException catch-all")
+        void handlerDeclaresBothFamilies() throws Exception {
+            org.springframework.web.bind.annotation.ExceptionHandler mapping = GlobalExceptionHandler.class
+                .getMethod("handleConcurrentModification", RuntimeException.class, WebRequest.class)
+                .getAnnotation(org.springframework.web.bind.annotation.ExceptionHandler.class);
+
+            assertThat(mapping.value()).containsExactlyInAnyOrder(
+                org.springframework.dao.PessimisticLockingFailureException.class,
+                org.springframework.dao.OptimisticLockingFailureException.class);
+        }
+    }
+
+    // =========================================================================
+    // D174: every handler-authored or key-carrying message follows Accept-Language
+    // =========================================================================
+
+    @Nested
+    @DisplayName("D174 French request locale")
+    class FrenchLocale {
+
+        private org.springframework.context.support.ReloadableResourceBundleMessageSource source;
+
+        @BeforeEach
+        void french() {
+            source = new org.springframework.context.support.ReloadableResourceBundleMessageSource();
+            source.setBasenames(com.example.hms.config.MessageBundles.basenames());
+            source.setDefaultEncoding("UTF-8");
+            source.setFallbackToSystemLocale(false);
+            source.setAlwaysUseMessageFormat(true);
+            handler.setMessageSource(source);
+            com.example.hms.utility.MessageUtil.setMessageSource(source);
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        }
+
+        @org.junit.jupiter.api.AfterEach
+        void reset() {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+
+        @SuppressWarnings("unchecked")
+        private String messageOf(ResponseEntity<Object> response) {
+            return (String) ((Map<String, Object>) response.getBody()).get("message");
+        }
+
+        @Test
+        @DisplayName("the D131 not-null violation is answered in French")
+        void notNullViolationInFrench() {
+            var ex = new org.springframework.dao.DataIntegrityViolationException("x",
+                new RuntimeException("null value in column \"created_at\" violates not-null constraint"));
+            assertThat(messageOf(handler.handleDataIntegrityViolation(ex, request)))
+                .isEqualTo("Une valeur obligatoire est manquante. Contactez le support si le problème persiste.");
+        }
+
+        @Test
+        @DisplayName("a duplicate key is answered in French")
+        void duplicateInFrench() {
+            var ex = new org.springframework.dao.DataIntegrityViolationException("x",
+                new RuntimeException("duplicate key value violates unique constraint"));
+            assertThat(messageOf(handler.handleDataIntegrityViolation(ex, request)))
+                .isEqualTo("Cet enregistrement existe déjà.");
+        }
+
+        @Test
+        @DisplayName("access denied is answered in French")
+        void accessDeniedInFrench() {
+            ResponseEntity<Object> response = handler.handleAccessDenied(
+                new org.springframework.security.access.AccessDeniedException("internal"), request);
+            assertThat(messageOf(response)).isEqualTo("Accès refusé");
+            assertThat(response.getBody()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .containsEntry("code", "ACCESS_DENIED");
+        }
+
+        @Test
+        @DisplayName("an IllegalArgumentException thrown with a bundle key is resolved, not echoed")
+        void illegalArgumentKeyResolved() {
+            assertThat(messageOf(handler.handleIllegalArgumentException(
+                new IllegalArgumentException("error.session.expired"), request)))
+                .isEqualTo("Session expirée. Veuillez vous reconnecter.");
+        }
+
+        @Test
+        @DisplayName("an IllegalStateException with free text passes through unchanged")
+        void freeTextUnchanged() {
+            assertThat(messageOf(handler.handleIllegalStateException(
+                new IllegalStateException("Texte libre déjà rédigé."), request)))
+                .isEqualTo("Texte libre déjà rédigé.");
+        }
+
+        @Test
+        @DisplayName("a ResponseStatusException keeps its 400 and is no longer a 500")
+        void responseStatusKeepsStatus() {
+            var response = handler.handleResponseStatus(
+                new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "error.access.denied"),
+                request);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(messageOf(response)).isEqualTo("Accès refusé");
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D258: the hospital-scope refusal speaks the caller's language")
+    class HospitalScopeRefusalLocale {
+
+        @Test
+        @DisplayName("the 403 body from the handler is French for a French caller")
+        void handlerBodyIsLocalized() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                ResponseEntity<Object> response = handler.handleHospitalScopeRefused(
+                    new HospitalScopeRefusedException("Select a hospital"), request);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> body = (Map<String, Object>) response.getBody();
+                assertThat(body).containsEntry("message",
+                    "Sélectionnez un hôpital : cette action est impossible en vue globale.");
+                assertThat(body).containsEntry("code", HospitalScopeRefusedException.CODE);
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+
+        @Test
+        @DisplayName("the 403 written by the auth filter is French for a French caller")
+        void filterBodyIsLocalized() throws Exception {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                org.springframework.mock.web.MockHttpServletResponse response =
+                    new org.springframework.mock.web.MockHttpServletResponse();
+                com.example.hms.security.HospitalScopeResponses.writeRefusal(response,
+                    com.example.hms.security.tenant.ActingScope.Reason.NOT_PERMITTED);
+                String json = response.getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                assertThat(new tools.jackson.databind.ObjectMapper().readTree(json).get("message").asString())
+                    .isEqualTo("Accès refusé : vous n'avez pas de rôle actif dans l'hôpital demandé.");
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+    }
+
+    /**
+     * QA D1037 / D984: a refused request body answers with the field reasons
+     * as the message, so every page that shows the server's message tells the
+     * user what to fix; the generic sentence was all a refused registration
+     * showed.
+     */
+    @Nested
+    @DisplayName("handleValidationException")
+    class HandleValidationException {
+
+        private MethodArgumentNotValidException refusal(FieldError... errors) throws Exception {
+            org.springframework.validation.BeanPropertyBindingResult result =
+                new org.springframework.validation.BeanPropertyBindingResult(new Object(), "patientRequestDTO");
+            for (FieldError error : errors) {
+                result.addError(error);
+            }
+            return new MethodArgumentNotValidException(
+                new org.springframework.core.MethodParameter(Object.class.getMethod("toString"), -1), result);
+        }
+
+        @Test
+        @DisplayName("the field reasons are the message, the fields stay under fieldErrors")
+        void theFieldReasonsAreTheMessage_D1037() throws Exception {
+            ResponseEntity<Object> response = handler.handleValidationException(refusal(
+                new FieldError("patientRequestDTO", "phoneNumberPrimary", "Phone number cannot exceed 30 characters.")),
+                request);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(body).containsEntry("message", "Phone number cannot exceed 30 characters.")
+                .containsEntry("error", "Validation Failed");
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf).contains("phoneNumberPrimary");
+        }
+
+        @Test
+        @DisplayName("a refusal with no readable reason keeps the generic message")
+        void noReasonKeepsTheGenericMessage() throws Exception {
+            ResponseEntity<Object> response = handler.handleValidationException(refusal(), request);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat((String) body.get("message")).isNotBlank();
+        }
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> validated(Object target) throws Exception {
+            org.springframework.validation.BeanPropertyBindingResult result =
+                new org.springframework.validation.BeanPropertyBindingResult(target, "body");
+            try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+                new org.springframework.validation.beanvalidation.SpringValidatorAdapter(factory.getValidator())
+                    .validate(target, result);
+            }
+            MethodArgumentNotValidException ex = new MethodArgumentNotValidException(
+                new org.springframework.core.MethodParameter(Object.class.getMethod("toString"), -1), result);
+            return (Map<String, Object>) handler.handleValidationException(ex, request).getBody();
+        }
+
+        @Test
+        @DisplayName("QA D1250: several reasons are separate sentences, not one run-on line")
+        void severalReasonsAreSeparateSentences_D1250() throws Exception {
+            ResponseEntity<Object> response = handler.handleValidationException(refusal(
+                new FieldError("body", "vaccineDisplay", "Le libellé du vaccin est obligatoire"),
+                new FieldError("body", "administrationDate", "La date d'administration est obligatoire"),
+                new FieldError("body", "status", "Le statut est obligatoire.")), request);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(body).containsEntry("message", "Le libellé du vaccin est obligatoire. "
+                + "La date d'administration est obligatoire. Le statut est obligatoire.");
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf)
+                .containsExactly("vaccineDisplay", "administrationDate", "status");
+        }
+
+        @Test
+        @DisplayName("QA D1249: a constraint left on its default text names its field")
+        void aDefaultConstraintMessageNamesItsField_D1249() throws Exception {
+            Map<String, Object> body = validated(new DefaultMessageBody());
+            assertThat((String) ((Map<?, ?>) body.get("fieldErrors")).get("reason")).startsWith("reason: ");
+            assertThat((String) body.get("message")).startsWith("reason: ");
+        }
+
+        @Test
+        @DisplayName("QA D1249: the diagnosis removal names the missing reason with its own key")
+        void theDiagnosisRemovalReasonHasItsOwnMessage_D1249() throws Exception {
+            Map<String, Object> body = validated(new com.example.hms.payload.dto.PatientDiagnosisDeleteRequestDTO());
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf).containsExactly("reason");
+        }
+
+        @Test
+        @DisplayName("QA D1245: a prescription with no patient names patientId, not an empty fieldErrors")
+        void aOneOfRuleNamesItsFirstField_D1245() throws Exception {
+            Map<String, Object> body = validated(new com.example.hms.payload.dto.PrescriptionRequestDTO());
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf).contains("patientId");
+        }
+
+        @Test
+        @DisplayName("QA D1245: a value that cannot be bound names its field instead of Spring's conversion text")
+        void aBindingFailureNamesItsField_D1245() throws Exception {
+            ResponseEntity<Object> response = handler.handleValidationException(refusal(
+                new FieldError("body", "patientId", "", true, new String[] {"typeMismatch"}, null,
+                    "Failed to convert property value of type 'java.lang.String' to required type 'java.util.UUID'")),
+                request);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            String reason = (String) ((Map<?, ?>) body.get("fieldErrors")).get("patientId");
+            assertThat(reason).contains("patientId").doesNotContain("Failed to convert");
+        }
+    }
+
+    /** A body whose constraint keeps bean validation's default text. */
+    static class DefaultMessageBody {
+        @jakarta.validation.constraints.NotBlank
+        private String reason;
+
+        public String getReason() {
+            return reason;
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D1245: parameter and body refusals name the field in fieldErrors")
+    class FieldNamedParameterRefusals {
+
+        @Test
+        void aMissingParameterIsNamedInFieldErrors() {
+            var ex = new org.springframework.web.bind.MissingServletRequestParameterException("reason", "String");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) handler.handleMissingParameter(ex, request).getBody();
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf).contains("reason");
+        }
+
+        @Test
+        void anUnreadableDateNamesItsFieldThroughTheCauseChain() {
+            tools.jackson.databind.json.JsonMapper mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+            Throwable cause = org.assertj.core.api.Assertions.catchThrowable(() ->
+                mapper.readValue("{\"administrationDate\":\"pas-une-date\"}", DatedBody.class));
+            var ex = new org.springframework.http.converter.HttpMessageNotReadableException("unreadable", cause,
+                new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) handler.handleHttpMessageNotReadable(ex, request).getBody();
+            assertThat(body).containsEntry("field", "administrationDate");
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf).contains("administrationDate");
+        }
+    }
+
+    /** A body with one date field. */
+    static class DatedBody {
+        private java.time.LocalDate administrationDate;
+
+        public java.time.LocalDate getAdministrationDate() {
+            return administrationDate;
+        }
+
+        public void setAdministrationDate(java.time.LocalDate administrationDate) {
+            this.administrationDate = administrationDate;
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D1470: a missing multipart part")
+    class MissingPart {
+
+        @Test
+        @DisplayName("names the part under fieldErrors")
+        void namesThePart() {
+            var ex = new org.springframework.web.multipart.support.MissingServletRequestPartException("file");
+            ResponseEntity<Object> response = handler.handleMissingPart(ex, request);
+
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(body).isNotNull().containsEntry("field", "file");
+            assertThat(fieldErrorsOf(body)).containsKey("file");
         }
     }
 }

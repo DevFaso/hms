@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.medicalhistory;
 
+import com.example.hms.enums.ImmunizationStatus;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -35,9 +36,13 @@ public class ImmunizationRequestDTO {
     private UUID encounterId;
 
     // Vaccine Information
-    @NotBlank(message = "{immunization.vaccineCode.required}")
+    // QA D1003 (round 17): optional. CVX is a US code system; a Burkina Faso
+    // EPI (PEV) vaccine either takes its verified CVX from the portal's
+    // mapping table or has none (MenAfriVac, malaria). A dose without a code
+    // is still a dose: the DHIS2 export reports it as unmapped instead of
+    // refusing the record. Blank is stored as null (ImmunizationMapper).
     @Size(max = 50)
-    @Schema(description = "Vaccine CVX code", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Vaccine CVX code (CDC), optional")
     private String vaccineCode;
 
     @NotBlank(message = "{immunization.vaccineDisplay.required}")
@@ -98,10 +103,11 @@ public class ImmunizationRequestDTO {
     private String ndcCode;
 
     // Status
-    @NotBlank(message = "{immunization.status.required}")
-    @Size(max = 50)
+    // QA D1348 (round 30): one of the vocabulary the series, overdue and
+    // export queries key on; free text ("FAIT") is refused with fieldErrors.status.
+    @NotNull(message = "{immunization.status.required}")
     @Schema(description = "Status", requiredMode = Schema.RequiredMode.REQUIRED)
-    private String status;
+    private ImmunizationStatus status;
 
     @Size(max = 500)
     @Schema(description = "Status reason")

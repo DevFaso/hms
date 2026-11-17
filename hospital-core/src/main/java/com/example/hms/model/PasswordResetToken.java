@@ -50,9 +50,10 @@ public class PasswordResetToken extends BaseEntity {
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
 
-    public boolean isExpired() { return LocalDateTime.now().isAfter(expiration); }
+    /** {@code now} comes from the service's injected {@code Clock}, the same source that wrote {@code expiration}. */
+    public boolean isExpiredAt(LocalDateTime now) { return now.isAfter(expiration); }
     public boolean isConsumed() { return consumedAt != null; }
-    public boolean isValid() { return !isExpired() && !isConsumed(); }
+    public boolean isValidAt(LocalDateTime now) { return !isExpiredAt(now) && !isConsumed(); }
 
     @PrePersist
     private void defaultTtl() {

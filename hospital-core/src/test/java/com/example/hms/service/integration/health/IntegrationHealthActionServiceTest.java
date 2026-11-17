@@ -145,7 +145,8 @@ class IntegrationHealthActionServiceTest {
     void getHistoryRejectsOutOfRangeWindow() {
         assertThatThrownBy(() -> service.getHistory("ok.partner", 0))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("between 1 and 168");
+            // A bundle key now: resolved when a message source is wired, the key itself otherwise.
+            .hasMessageMatching("(?s).*(168|integration.history.window.invalid).*");
         assertThatThrownBy(() -> service.getHistory("ok.partner", 169))
             .isInstanceOf(BusinessRuleException.class);
     }

@@ -75,8 +75,7 @@ public class OrganizationRegionServiceImpl implements OrganizationRegionService 
 
     private Organization loadOrThrow(UUID organizationId) {
         return organizationRepository.findById(organizationId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Organization not found: " + organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
     }
 
     private OrganizationRegionResponseDTO toResponse(Organization org) {

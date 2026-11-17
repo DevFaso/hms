@@ -28,6 +28,9 @@ public class PharmacyPaymentMapper {
             .referenceNumber(entity.getReferenceNumber())
             .receivedBy(entity.getReceivedByUser() != null ? entity.getReceivedByUser().getId() : null)
             .notes(entity.getNotes())
+            .status(entity.getStatus() != null ? entity.getStatus().name() : null)
+            .voidedAt(entity.getVoidedAt())
+            .voidReason(entity.getVoidReason())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
             .build();

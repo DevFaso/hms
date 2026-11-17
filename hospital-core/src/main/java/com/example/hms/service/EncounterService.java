@@ -46,6 +46,15 @@ public interface EncounterService {
 
     // Legacy list endpoints (kept for compatibility)
     List<EncounterResponseDTO> getEncountersByPatientId(UUID patientId, Locale locale);
+
+    /**
+     * The portal patient's own visits, at every hospital that holds any
+     * (design Q1: a patient is bounded by ownership, not by a hospital). No
+     * hospital scope is read. Callers MUST have bound {{@code patientId}} to the
+     * principal first: PatientPortalServiceImpl resolves it from the caller
+     * (or verifies a proxy grant); nothing else calls this.
+     */
+    List<EncounterResponseDTO> getEncountersForPortalPatient(UUID patientId);
     List<EncounterResponseDTO> getEncountersByPatientIdentifier(String identifier, Locale locale);
     List<EncounterResponseDTO> getEncountersByDoctorId(UUID staffId, Locale locale);
 
@@ -58,13 +67,27 @@ public interface EncounterService {
                                                               boolean isSuperAdmin,
                                                               UUID callerHospitalId);
 
+    /** QA D831: files the addendum under the named note entry; a null id means the current (latest) entry. */
+    EncounterNoteAddendumResponseDTO addEncounterNoteAddendum(UUID encounterId,
+                                                              UUID noteId,
+                                                              EncounterNoteAddendumRequestDTO request,
+                                                              Locale locale,
+                                                              boolean isSuperAdmin,
+                                                              UUID callerHospitalId);
+
     java.util.List<EncounterNoteHistoryResponseDTO> getEncounterNoteHistory(UUID encounterId, Locale locale);
 
     /** Server-side note signing ceremony (P3 #20): author-only, digest-backed, locks the note. */
     EncounterNoteResponseDTO signEncounterNote(UUID encounterId, Locale locale);
 
+    /** QA D831: signs the named note entry; a null id means the current (latest) entry only. */
+    EncounterNoteResponseDTO signEncounterNote(UUID encounterId, UUID noteId, Locale locale);
+
     /** Attending co-signature (P3 #20): requires a signed note that declared requiresCosign. */
     EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, Locale locale);
+
+    /** QA D831: co-signs the named note entry; a null id means the current (latest) entry only. */
+    EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, UUID noteId, Locale locale);
 
     /**
      * MVP 2 — Atomic triage submission: records vitals, chief complaint, acuity,
@@ -98,6 +121,17 @@ public interface EncounterService {
                                   UUID callerHospitalId);
 
     /**
+     * QA D788: closes a visit no clinician has seen as "left without being
+     * seen" or cancelled, with a reason. The encounter becomes CANCELLED (never
+     * a consultation, no After-Visit Summary) and its appointment is cancelled.
+     */
+    EncounterResponseDTO closeUnseen(UUID encounterId,
+                                     com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO request,
+                                     String actorUsername,
+                                     boolean isSuperAdmin,
+                                     UUID callerHospitalId);
+
+    /**
      * MVP 6 — Retrieve the After-Visit Summary for a completed (checked-out) encounter.
      * Loads the encounter entity and delegates to CheckOutMapper for full AVS construction.
      */
@@ -106,8 +140,20 @@ public interface EncounterService {
     /**
      * Doctor picks up a WAITING_FOR_PHYSICIAN encounter and transitions it to IN_PROGRESS.
      */
+    default EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
+                                                 boolean isSuperAdmin, UUID callerHospitalId) {
+        return startEncounter(encounterId, actorUsername, isSuperAdmin, callerHospitalId, false);
+    }
+
+    /**
+     * QA D1015: the clinician who owns the visit starts it. A doctor may pick
+     * up an unassigned visit; a midwife (who is not also a doctor) leads only
+     * the visits booked with her, so {@code mustBeAssignedClinician} refuses
+     * an unassigned visit or one assigned to someone else.
+     */
     EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
-                                         boolean isSuperAdmin, UUID callerHospitalId);
+                                         boolean isSuperAdmin, UUID callerHospitalId,
+                                         boolean mustBeAssignedClinician);
 
     /**
      * Advance a TRIAGE encounter to WAITING_FOR_PHYSICIAN (nurse completes triage from tracker).

@@ -25,7 +25,20 @@
         </div>
         <div class="bsc-body">
           <span class="bsc-label">{{ 'PORTAL.BILLING.TOTAL_BALANCE' | translate }}</span>
-          <span class="bsc-amount">{{ totalBalance() | currency: 'XOF' }}</span>
+          <span class="bsc-amount">{{ totalBalance() | cfa }}</span>
+        </div>
+      </div>
+    }
+
+    @if (totalRefundDue() > 0) {
+      <!-- QA D1466: the copay paid at check-in was above the visit. -->
+      <div class="billing-summary-card" data-testid="refund-due-summary">
+        <div class="bsc-icon">
+          <span class="material-symbols-outlined">savings</span>
+        </div>
+        <div class="bsc-body">
+          <span class="bsc-label">{{ 'PORTAL.BILLING.REFUND_DUE' | translate }}</span>
+          <span class="bsc-amount">{{ totalRefundDue() | cfa }}</span>
         </div>
       </div>
     }
@@ -35,43 +48,215 @@
       <div class="portal-list">
         @for (inv of invoices(); track inv.id) {
           <div class="portal-list-item">
-            <div
-              class="pli-icon"
-              [style.background]="inv.balance > 0 ? '#fef3c7' : '#d1fae5'"
-              [style.color]="inv.balance > 0 ? '#d97706' : '#059669'"
-            >
-              <span class="material-symbols-outlined">{{
-                inv.balance > 0 ? 'pending' : 'check_circle'
-              }}</span>
+            <!-- QA D1071: the icon follows the status; a cancelled invoice is never the paid check -->
+            @let tone = toneOf(inv);
+            <div class="pli-icon invoice-tone" [attr.data-tone]="tone.tone">
+              <span class="material-symbols-outlined" aria-hidden="true">{{ tone.icon }}</span>
             </div>
             <div class="pli-body">
-              <span class="pli-title">{{
-                inv.description || inv.facility || ('PORTAL.BILLING.MEDICAL_SERVICES' | translate)
-              }}</span>
-              <span class="pli-sub"
+              <span class="pli-title">
+                @if (inv.visitType) {
+                  <!-- QA D1421: the visit's type and day, never its clinical notes -->
+                  {{ inv.visitType | enumLabel: 'encounterType' }}
+                  @if (inv.visitDate) {
+                    · {{ inv.visitDate | serverTime | date: 'mediumDate' }}
+                  }
+                } @else {
+                  {{ inv.facility || ('PORTAL.BILLING.MEDICAL_SERVICES' | translate) }}
+                }
+              </span>
+              {{ ' '
+              }}<span class="pli-sub"
                 >{{ 'PORTAL.BILLING.INVOICE' | translate }} #{{ inv.invoiceNumber }} ·
-                {{ inv.date | date: 'MMM d, yyyy' }}</span
+                {{ inv.date | serverTime | date: 'mediumDate' }}</span
               >
-              <span class="pli-meta"
+              {{ ' '
+              }}<span class="pli-meta"
                 >{{ 'PORTAL.BILLING.DUE' | translate }}
-                {{ inv.dueDate | date: 'MMM d, yyyy' }}</span
+                {{ inv.dueDate | serverTime | date: 'mediumDate' }}</span
               >
+              @if (inv.visitType && inv.facility) {
+                <!-- QA D1413: the title is the visit when it has one; the hospital is always named -->
+                {{ ' '
+                }}<span class="pli-meta" [attr.data-testid]="'invoice-hospital-' + inv.id">{{
+                  'PORTAL.BILLING.ISSUED_BY' | translate: { hospital: inv.facility }
+                }}</span>
+              }
             </div>
             <div class="pli-end">
-              <span class="pli-amount" [class.has-balance]="inv.balance > 0">{{
-                inv.balance | currency: 'XOF'
+              <!-- QA D254: the invoice total, with what is left to pay when anything is -->
+              <span class="pli-amount" [class.has-balance]="isPayable(inv)">{{
+                inv.amount | cfa
               }}</span>
-              <span class="pli-status" [attr.data-status]="inv.status">{{
-                inv.status | enumLabel: 'invoiceStatus'
-              }}</span>
-              @if (inv.balance > 0 && inv.status !== 'DRAFT') {
-                <button class="pay-btn" (click)="openPayDialog(inv)">
+              @if (isPayable(inv)) {
+                {{ ' '
+                }}<span class="pli-meta"
+                  >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }} {{ inv.balance | cfa }}</span
+                >
+              }
+              @if (inv.refundDue) {
+                {{ ' '
+                }}<span class="pli-meta" [attr.data-testid]="'refund-due-' + inv.id"
+                  >{{ 'PORTAL.BILLING.REFUND_DUE' | translate }} {{ inv.refundDue | cfa }}</span
+                >
+              }
+              @if (pendingOf(inv) > 0) {
+                <!-- QA D982: a declared payment shows on the card, not only inside "Pay now". -->
+                {{ ' '
+                }}<span class="pli-meta pli-pending" [attr.data-testid]="'pending-' + inv.id"
+                  >{{ 'PORTAL.BILLING.PENDING_DECLARED' | translate }}
+                  {{ pendingOf(inv) | cfa }}</span
+                >
+              }
+              @if (inv.creditedTo) {
+                <!-- QA D428: a folded copay says where the money went, not only "cancelled" -->
+                <span class="pli-status" data-status="CREDITED">{{
+                  'PORTAL.BILLING.CREDITED_TO' | translate: { number: inv.creditedTo }
+                }}</span>
+              } @else {
+                <span class="pli-status" [attr.data-status]="inv.status">{{
+                  inv.status | enumLabel: 'invoiceStatus'
+                }}</span>
+              }
+              @if (canDeclare(inv)) {
+                <button
+                  class="pay-btn"
+                  [attr.data-testid]="'pay-btn-' + inv.id"
+                  (click)="openPayDialog(inv)"
+                >
                   <span class="material-symbols-outlined">payment</span>
                   {{ 'PORTAL.BILLING.PAY_NOW' | translate }}
                 </button>
+              } @else if (isPayable(inv)) {
+                <!--
+                  QA D814: the whole balance is already declared and waits for
+                  the cashier, so there is nothing left to pay from here.
+                -->
+                {{ ' '
+                }}<span class="pli-meta" [attr.data-testid]="'fully-declared-' + inv.id">{{
+                  'PORTAL.BILLING.FULLY_DECLARED' | translate
+                }}</span>
               }
+              <button
+                type="button"
+                class="detail-btn"
+                [attr.data-testid]="'detail-btn-' + inv.id"
+                [attr.aria-expanded]="openDetailId() === inv.id"
+                [attr.aria-controls]="'invoice-detail-' + inv.id"
+                (click)="toggleDetail(inv)"
+              >
+                {{
+                  (openDetailId() === inv.id
+                    ? 'PORTAL.BILLING.HIDE_DETAIL'
+                    : 'PORTAL.BILLING.SHOW_DETAIL'
+                  ) | translate
+                }}
+              </button>
             </div>
           </div>
+          @if (openDetailId() === inv.id) {
+            <div
+              class="invoice-detail"
+              [id]="'invoice-detail-' + inv.id"
+              [attr.data-testid]="'invoice-detail-' + inv.id"
+            >
+              @if (detailLoading()) {
+                <p class="pli-meta">{{ 'PORTAL.BILLING.LOADING' | translate }}</p>
+              } @else if (detailError()) {
+                <p class="pay-error" role="alert">
+                  {{ detailFailureReason() ?? ('PORTAL.BILLING.DETAIL_FAILED' | translate) }}
+                </p>
+              } @else if (detail(); as d) {
+                @if (downloadError()) {
+                  <p class="pay-error" role="alert" data-testid="download-error">
+                    {{ downloadFailureReason() ?? ('PORTAL.BILLING.DOWNLOAD_FAILED' | translate) }}
+                  </p>
+                }
+                @if (inv.facility) {
+                  <p class="pli-meta" [attr.data-testid]="'invoice-detail-hospital-' + inv.id">
+                    {{ 'PORTAL.BILLING.ISSUED_BY' | translate: { hospital: inv.facility } }}
+                  </p>
+                }
+                <h3 class="detail-title">{{ 'PORTAL.BILLING.LINES' | translate }}</h3>
+                @if (d.lines.length === 0) {
+                  <p class="pli-meta">{{ 'PORTAL.BILLING.NO_LINES' | translate }}</p>
+                } @else {
+                  <table class="detail-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">{{ 'PORTAL.BILLING.LINE_DESCRIPTION' | translate }}</th>
+                        <th scope="col">{{ 'PORTAL.BILLING.LINE_QUANTITY' | translate }}</th>
+                        <th scope="col">{{ 'PORTAL.BILLING.LINE_UNIT_PRICE' | translate }}</th>
+                        <th scope="col">{{ 'PORTAL.BILLING.LINE_TOTAL' | translate }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (l of d.lines; track l.id) {
+                        <tr>
+                          <td>{{ l.itemDescription }}</td>
+                          <td>{{ l.quantity }}</td>
+                          <td>{{ l.unitPrice | cfa }}</td>
+                          <td>{{ l.totalPrice | cfa }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+                @if (d.adjustments.length > 0) {
+                  <!-- QA D974: why the total is lower than the lines. -->
+                  <ul class="detail-payments" data-testid="portal-adjustments">
+                    @for (a of d.adjustments; track a.id) {
+                      <li>
+                        <span>{{ a.type | keyLabel: 'BILLING.ADJUSTMENT_TYPES.' }}</span>
+                        @if (a.invoiceItemDescription) {
+                          <span>({{ a.invoiceItemDescription }})</span>
+                        }
+                        <span>−{{ a.amount | cfa }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+                <h3 class="detail-title">{{ 'PORTAL.BILLING.PAYMENTS' | translate }}</h3>
+                @if (d.payments.length === 0) {
+                  <p class="pli-meta">{{ 'PORTAL.BILLING.NO_PAYMENTS' | translate }}</p>
+                } @else {
+                  <ul class="detail-payments">
+                    @for (p of d.payments; track p.id) {
+                      <li [attr.data-testid]="'payment-' + p.id">
+                        <span>{{ p.amount | cfa }}</span>
+                        @if (p.paymentMethod) {
+                          <span
+                            >· {{ p.paymentMethod | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</span
+                          >
+                        }
+                        <span class="pli-status" [attr.data-status]="p.status">{{
+                          p.status | keyLabel: 'BILLING.PAYMENT_STATUSES.'
+                        }}</span>
+                        @if (p.status === 'CONFIRMED') {
+                          <button
+                            type="button"
+                            class="detail-link"
+                            [attr.data-testid]="'receipt-' + p.id"
+                            (click)="downloadReceipt(inv, p)"
+                          >
+                            {{ 'PORTAL.BILLING.DOWNLOAD_RECEIPT' | translate }}
+                          </button>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+                <button
+                  type="button"
+                  class="detail-link"
+                  [attr.data-testid]="'invoice-pdf-' + inv.id"
+                  (click)="downloadInvoice(inv)"
+                >
+                  {{ 'PORTAL.BILLING.DOWNLOAD_INVOICE' | translate }}
+                </button>
+              }
+            </div>
+          }
         }
       </div>
     </section>
@@ -81,25 +266,30 @@
   @if (payingInvoice()) {
     <div
       class="pay-overlay"
-      role="dialog"
-      aria-modal="true"
       (click)="closePayDialog()"
       (keydown.escape)="closePayDialog()"
       tabindex="-1"
     >
       <div
         class="pay-dialog"
-        role="document"
+        appDialogA11y
+        tabindex="-1"
+        aria-labelledby="pay-dialog-title-1"
+        (dialogClose)="closePayDialog()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closePayDialog()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="pay-dialog-header">
-          <h3>
-            <span class="material-symbols-outlined">payment</span>
+          <h3 id="pay-dialog-title-1">
+            <span class="material-symbols-outlined" aria-hidden="true">payment</span>
             {{ 'PORTAL.BILLING.MAKE_PAYMENT' | translate }}
           </h3>
-          <button class="pay-dialog-close" (click)="closePayDialog()">
-            <span class="material-symbols-outlined">close</span>
+          <button
+            class="pay-dialog-close"
+            (click)="closePayDialog()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
 
@@ -110,10 +300,21 @@
           </div>
           <div class="pay-invoice-info">
             <span class="pay-label">{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }}</span>
-            <span class="pay-value pay-balance">{{
-              payingInvoice()!.balance | currency: 'XOF'
-            }}</span>
+            <span class="pay-value pay-balance">{{ payingInvoice()!.balance | cfa }}</span>
           </div>
+          <!-- QA D421: declarations awaiting confirmation are shown, and what is left to declare -->
+          @if (pendingOf(payingInvoice()!) > 0) {
+            <div class="pay-invoice-info pay-pending">
+              <span class="pay-label">{{ 'PORTAL.BILLING.PENDING_DECLARED' | translate }}</span>
+              <span class="pay-value">{{ pendingOf(payingInvoice()!) | cfa }}</span>
+            </div>
+            <div class="pay-invoice-info">
+              <span class="pay-label">{{ 'PORTAL.BILLING.LEFT_TO_DECLARE' | translate }}</span>
+              <span class="pay-value">{{ declarable(payingInvoice()!) | cfa }}</span>
+            </div>
+          }
+
+          <p class="pay-label">{{ 'PORTAL.BILLING.PAYMENT_PENDING_NOTE' | translate }}</p>
 
           @if (payError()) {
             <div class="pay-error">{{ payError() }}</div>
@@ -124,13 +325,14 @@
 
           @if (!paySuccess()) {
             <div class="pay-field">
-              <label for="payAmount">{{ 'PORTAL.BILLING.AMOUNT' | translate }}</label>
+              <label for="payAmount">{{ 'PORTAL.BILLING.AMOUNT' | translate }} *</label>
               <input
+                required
                 id="payAmount"
                 type="number"
-                [min]="0.01"
-                [max]="payingInvoice()!.balance"
-                step="0.01"
+                [min]="1"
+                [max]="declarable(payingInvoice()!)"
+                step="1"
                 [(ngModel)]="payAmount"
                 [placeholder]="'PORTAL.BILLING.ENTER_AMOUNT' | translate"
               />
@@ -138,7 +340,7 @@
 
             <div class="pay-field">
               <label for="payMethod">{{ 'PORTAL.BILLING.PAYMENT_METHOD' | translate }}</label>
-              <select id="payMethod" [(ngModel)]="payMethod">
+              <select id="payMethod" data-server-field="paymentMethod" [(ngModel)]="payMethod">
                 <option value="CARD">{{ 'PORTAL.BILLING.CARD' | translate }}</option>
                 <option value="BANK_TRANSFER">
                   {{ 'PORTAL.BILLING.BANK_TRANSFER' | translate }}
@@ -151,13 +353,24 @@
             </div>
 
             <div class="pay-field">
-              <label for="payRef">{{ 'PORTAL.BILLING.REFERENCE' | translate }}</label>
+              <!-- QA D1007: optional only for cash; the label no longer says so for the others. -->
+              <label for="payRef"
+                >{{ 'PORTAL.BILLING.REFERENCE' | translate }}
+                @if (payMethod === 'CASH') {
+                  ({{ 'COMMON.OPTIONAL' | translate | lowercase }})
+                } @else {
+                  *
+                }
+              </label>
               <input
                 id="payRef"
+                data-server-field="transactionReference"
                 type="text"
+                [required]="payMethod !== 'CASH'"
+                [attr.aria-required]="payMethod !== 'CASH'"
                 [(ngModel)]="payReference"
                 [placeholder]="'PORTAL.BILLING.REFERENCE_PLACEHOLDER' | translate"
-                maxlength="500"
+                maxlength="120"
               />
             </div>
 
@@ -169,16 +382,12 @@
               >
                 {{ 'PORTAL.BILLING.CANCEL' | translate }}
               </button>
-              <button
-                class="pay-submit-btn"
-                (click)="submitPayment()"
-                [disabled]="payProcessing() || !payAmount || payAmount <= 0"
-              >
+              <button class="pay-submit-btn" (click)="submitPayment()" [disabled]="payProcessing()">
                 @if (payProcessing()) {
                   <span class="pay-spinner"></span> {{ 'PORTAL.BILLING.PROCESSING' | translate }}
                 } @else {
                   {{ 'PORTAL.BILLING.PAY' | translate }}
-                  {{ payAmount ? (payAmount | currency: 'XOF') : '' }}
+                  {{ payAmount ? (payAmount | cfa) : '' }}
                 }
               </button>
             </div>

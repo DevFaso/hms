@@ -1,6 +1,6 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.model.platform.AuditSavedSearch;
@@ -105,26 +105,29 @@ class AuditSavedSearchServiceImplTest {
             .thenReturn(Optional.of(row(OWNER, "dup", false)));
         AuditSavedSearchRequestDTO dup = request("dup", "{}", false);
 
+        // QA CX-005: refused on its field, in the reader's language (it was a fieldless English sentence).
         assertThatThrownBy(() -> service.create(dup))
-            .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("already exists");
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                refused -> assertThat(refused.getFieldErrors()).containsOnlyKeys("name"));
         verify(repository, never()).save(any());
     }
 
     @Test
     void createRejectsBlankName() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         AuditSavedSearchRequestDTO req = request("   ", "{}", false);
         assertThatThrownBy(() -> service.create(req))
-            .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("name is required");
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("auditSavedSearch.nameRequired");
     }
 
     @Test
     void createRejectsBlankFilterJson() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         AuditSavedSearchRequestDTO req = request("name", "", false);
         assertThatThrownBy(() -> service.create(req))
-            .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("filterJson is required");
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("auditSavedSearch.filterRequired");
     }
 
     @Test
@@ -165,8 +168,8 @@ class AuditSavedSearchServiceImplTest {
         when(repository.findByOwnerUsernameAndName(OWNER, "taken")).thenReturn(Optional.of(other));
 
         assertThatThrownBy(() -> service.update(rowId, taken))
-            .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("already exists");
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                refused -> assertThat(refused.getFieldErrors()).containsOnlyKeys("name"));
     }
 
     @Test

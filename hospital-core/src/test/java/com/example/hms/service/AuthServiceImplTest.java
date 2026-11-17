@@ -2,6 +2,8 @@ package com.example.hms.service;
 
 import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeTestSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -24,6 +26,7 @@ class AuthServiceImplTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
     }
 
     @Test
@@ -33,6 +36,22 @@ class AuthServiceImplTest {
         when(userDetails.getUserId()).thenReturn(userId);
         Authentication auth = new UsernamePasswordAuthenticationToken(userDetails, "token", List.of());
         SecurityContextHolder.getContext().setAuthentication(auth);
+
+        assertThat(authService.getCurrentUserId()).isEqualTo(userId);
+    }
+
+    @Test
+    void getCurrentUserId_resolvesAKeycloakPrincipalThroughAppUserId() {
+        // The trap the tasklist records: this used to throw for every
+        // JwtAuthenticationToken, so a guard built on it answered 401 to a
+        // Keycloak patient reading their own record.
+        UUID userId = UUID.randomUUID();
+        org.springframework.security.oauth2.jwt.Jwt jwt = org.springframework.security.oauth2.jwt.Jwt
+            .withTokenValue("t").header("alg", "none").claim("appUserId", userId.toString()).build();
+        // As the Keycloak filter leaves it: the appUserId it verified is on the context.
+        ActingScopeTestSupport.signInLinked(
+            new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
+                jwt, List.of(new SimpleGrantedAuthority("ROLE_PATIENT"))), userId);
 
         assertThat(authService.getCurrentUserId()).isEqualTo(userId);
     }

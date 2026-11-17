@@ -8,7 +8,7 @@
   </div>
   @if (patient() && !activeEpisode() && !episodesLoading()) {
     <button class="btn-primary" (click)="openStartForm()">
-      <span class="material-symbols-outlined">add</span>
+      <span class="material-symbols-outlined" aria-hidden="true">add</span>
       {{ 'LABOR.START_EPISODE' | translate }}
     </button>
   }
@@ -17,7 +17,7 @@
 @if (!patient()) {
   <div class="empty-state">
     <span class="material-symbols-outlined empty-icon">pregnant_woman</span>
-    <h3>{{ 'MATERNITY.PICK_PATIENT_HINT' | translate }}</h3>
+    <h3>{{ 'LABOR.PICK_PATIENT_HINT' | translate }}</h3>
   </div>
 }
 
@@ -37,12 +37,18 @@
 
   <!-- ══ Start episode form ══ -->
   @if (startFormOpen()) {
-    <div class="view-section action-form">
+    <div class="view-section action-form" data-submit-scope>
       <h3 class="section-heading">{{ 'LABOR.START_EPISODE' | translate }}</h3>
       <div class="form-row">
         <div class="field">
-          <label for="labor-onset">{{ 'LABOR.ONSET_TIME' | translate }}</label>
-          <input id="labor-onset" type="datetime-local" [(ngModel)]="startForm.laborOnsetAt" />
+          <label for="labor-onset">{{ 'LABOR.ONSET_TIME' | translate }} *</label>
+          <input
+            id="labor-onset"
+            type="datetime-local"
+            required
+            aria-required="true"
+            [(ngModel)]="startForm.laborOnsetAt"
+          />
         </div>
         <div class="field">
           <label for="labor-membranes">{{ 'LABOR.MEMBRANE_STATUS' | translate }}</label>
@@ -78,12 +84,39 @@
         <label for="labor-risk">{{ 'LABOR.RISK_NOTES' | translate }}</label>
         <textarea id="labor-risk" rows="2" [(ngModel)]="startForm.riskNotes"></textarea>
       </div>
+      <div class="field">
+        <label for="labor-override"
+          >{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}
+          @if (startOverrideRequired()) {
+            *
+          }
+        </label>
+        <textarea
+          id="labor-override"
+          [required]="startOverrideRequired()"
+          rows="2"
+          maxlength="500"
+          aria-describedby="labor-override-hint"
+          [(ngModel)]="startForm.recentDeliveryOverrideReason"
+        ></textarea>
+        <p id="labor-override-hint" class="muted">
+          {{ 'LABOR.RECENT_DELIVERY_OVERRIDE_HINT' | translate }}
+        </p>
+      </div>
       <p class="muted">{{ 'LABOR.SNAPSHOT_HINT' | translate }}</p>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelStart()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitStart()" [disabled]="saving()">
+        <button
+          class="btn-primary"
+          data-testid="labor-start-submit"
+          (click)="submitStart()"
+          [disabled]="saving()"
+          [appSubmitGuard]="!startForm.laborOnsetAt"
+          submitGuardRequired
+          [submitGuardFields]="['labor-onset']"
+        >
           {{ 'LABOR.START_EPISODE' | translate }}
         </button>
       </div>
@@ -94,25 +127,73 @@
   @if (activeEpisode(); as episode) {
     <div class="view-section action-form">
       <div class="filter-bar">
-        <h3 class="section-heading">
-          {{ 'LABOR.ACTIVE_EPISODE' | translate }}
-          <span class="risk-badge risk-moderate">{{ 'LABOR.STATUS_ACTIVE' | translate }}</span>
-        </h3>
-        <div>
-          <button class="btn-secondary" (click)="entryFormOpen.set(true)">
-            <span class="material-symbols-outlined">add</span>
-            {{ 'LABOR.NEW_ENTRY' | translate }}
+        <!-- QA D811: the heading already says the labour is in progress; a
+             second "in labour" badge repeated the status. -->
+        <h3 class="section-heading">{{ 'LABOR.ACTIVE_EPISODE' | translate }}</h3>
+        @if (!activeEpisodeForeign()) {
+          <div>
+            <button class="btn-secondary" (click)="entryFormOpen.set(true)">
+              <span class="material-symbols-outlined" aria-hidden="true">add</span>
+              {{ 'LABOR.NEW_ENTRY' | translate }}
+            </button>
+            <button class="btn-primary" (click)="openDeliveryForm()">
+              <span class="material-symbols-outlined" aria-hidden="true">child_care</span>
+              {{ 'LABOR.RECORD_DELIVERY' | translate }}
+            </button>
+            @if (canTransfer()) {
+              <!-- Labour transfer (provisional rule, 2026-11-12): this hospital hands her labour on. -->
+              <button
+                class="btn-secondary"
+                data-testid="labor-transfer-open"
+                (click)="openTransfer()"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">local_shipping</span>
+                {{ 'LABOR.TRANSFER.ACTION' | translate }}
+              </button>
+            }
+          </div>
+        }
+        @if (canRecordArrival()) {
+          <!-- Labour transfer: she arrived here without a handover from the hospital shown. -->
+          <button class="btn-secondary" data-testid="labor-arrival-open" (click)="openArrival()">
+            <span class="material-symbols-outlined" aria-hidden="true">login</span>
+            {{ 'LABOR.ARRIVAL.ACTION' | translate }}
           </button>
-          <button class="btn-primary" (click)="openDeliveryForm()">
-            <span class="material-symbols-outlined">child_care</span>
-            {{ 'LABOR.RECORD_DELIVERY' | translate }}
-          </button>
-        </div>
+        }
       </div>
+      @if (episode.transferredFromEpisodeId) {
+        <p class="saved-note" role="note" data-testid="labor-continues">
+          {{
+            'LABOR.TRANSFER.CONTINUES'
+              | translate: { hospital: episode.transferredFromHospitalName || '—' }
+          }}
+        </p>
+      }
+      @if (activeEpisodeForeign()) {
+        <!-- QA D1631: another hospital's labour (shared patient) is read only
+             here: where, since when, its status, and no record button. -->
+        <p class="saved-note" role="note" data-testid="labor-foreign-episode">
+          <strong>{{
+            'LABOR.FOREIGN.ORIGIN' | translate: { hospital: episode.hospitalName || '—' }
+          }}</strong>
+          ·
+          {{ 'LABOR.ONSET_TIME' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ episode.laborOnsetAt ?? episode.admittedAt | serverTime | dateTime }}
+          · {{ 'LABOR.STATUS_ACTIVE' | translate }}
+        </p>
+        <!-- Rex on #1134: the arrival path is offered only to whoever may record it. -->
+        <p class="muted">
+          {{
+            (canRecordArrival() ? 'LABOR.FOREIGN.HINT_ARRIVAL' : 'LABOR.FOREIGN.HINT') | translate
+          }}
+        </p>
+      }
       <p class="muted">
-        {{ 'LABOR.ADMITTED' | translate }}: {{ episode.admittedAt | date: 'short' }}
+        {{ 'LABOR.ADMITTED' | translate }}{{ 'COMMON.COLON' | translate }}
+        {{ episode.admittedAt | serverTime | date: 'short' }}
         @if (episode.gestationalAgeWeeks) {
-          · {{ 'MATERNITY.GESTATIONAL_AGE' | translate }}: {{ episode.gestationalAgeWeeks }}
+          · {{ 'MATERNITY.GESTATIONAL_AGE' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ episode.gestationalAgeWeeks }}
           {{ 'MATERNITY.WEEKS' | translate }}
         }
         @if (episode.gravida !== null) {
@@ -125,12 +206,45 @@
           · {{ 'LABOR.MEMBRANE_' + episode.membraneStatus | translate }}
         }
         @if (episode.activePhaseStartAt) {
-          · {{ 'LABOR.ACTIVE_PHASE_SINCE' | translate }}:
-          {{ episode.activePhaseStartAt | date: 'shortTime' }}
+          · {{ 'LABOR.ACTIVE_PHASE_SINCE' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ episode.activePhaseStartAt | serverTime | date: 'shortTime' }}
         } @else {
           · {{ 'LABOR.LATENT_PHASE' | translate }}
         }
       </p>
+      <!-- QA D1068: the risk notes typed at admission are read back. -->
+      @if (episode.riskNotes) {
+        <p class="saved-note" data-testid="labor-risk-notes">
+          <strong>{{ 'LABOR.RISK_NOTES' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+          {{ episode.riskNotes }}
+        </p>
+      }
+    </div>
+  }
+
+  <!-- ══ Closed by a transfer or an arrival elsewhere (provisional rule, 2026-11-12) ══ -->
+  @if (closedByTransfer(); as episode) {
+    <div class="view-section action-form" data-testid="labor-transferred-out">
+      <h3 class="section-heading">
+        {{ 'LABOR.STATUS_' + episode.status | translate }}
+      </h3>
+      <p>
+        {{
+          (episode.status === 'TRANSFERRED_OUT'
+            ? 'LABOR.TRANSFER.CLOSED_TRANSFERRED'
+            : 'LABOR.TRANSFER.CLOSED_LEFT'
+          ) | translate: { hospital: episode.transferHospitalName || '—' }
+        }}
+        @if (episode.transferredAt) {
+          · {{ episode.transferredAt | serverTime | dateTime }}
+        }
+      </p>
+      @if (episode.transferReason) {
+        <p class="saved-note">
+          <strong>{{ 'LABOR.TRANSFER.REASON' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+          {{ episode.transferReason }}
+        </p>
+      }
     </div>
   }
 
@@ -142,27 +256,127 @@
           {{ 'LABOR.DELIVERY_SUMMARY' | translate }}
           <span class="risk-badge risk-low">{{ 'LABOR.STATUS_DELIVERED' | translate }}</span>
         </h3>
+        @if (isForeign(episode)) {
+          <p class="muted" data-testid="labor-foreign-delivery">
+            {{
+              'MATERNITY.FOREIGN_RECORDED_AT' | translate: { hospital: episode.hospitalName || '—' }
+            }}
+          </p>
+        }
         <p>
-          {{ record.birthDateTime | date: 'medium' }} ·
+          {{ record.birthDateTime | serverTime | dateTime }} ·
           {{ 'LABOR.MODE_' + record.deliveryMode | translate }}
           @if (record.infantSex) {
             · {{ 'LABOR.SEX_' + record.infantSex | translate }}
           }
           @if (record.birthWeightGrams) {
-            · {{ record.birthWeightGrams }} g
+            · {{ record.birthWeightGrams | measure: 'g' }}
           }
           @if (record.apgarOneMinute !== null && record.apgarFiveMinute !== null) {
             · APGAR {{ record.apgarOneMinute }}/{{ record.apgarFiveMinute }}
           }
           @if (record.estimatedBloodLossMl !== null) {
-            · {{ 'LABOR.BLOOD_LOSS' | translate }}: {{ record.estimatedBloodLossMl }} ml
+            <!-- QA D827: the form label carries "(ml)"; the summary names the unit once, after the value. -->
+            ·
+            {{
+              'LABOR.BLOOD_LOSS_VALUE'
+                | translate: { value: (record.estimatedBloodLossMl | measure: 'ml') }
+            }}
           }
         </p>
-        @for (alert of record.alerts ?? []; track $index) {
+        <!-- QA D1068: the third stage and the delivery notes, as recorded. -->
+        <p data-testid="delivery-third-stage">
+          {{ 'LABOR.PLACENTA_COMPLETE' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{
+            record.placentaComplete === null
+              ? '—'
+              : ((record.placentaComplete ? 'COMMON.YES' : 'COMMON.NO') | translate)
+          }}
+          @if (record.placentaDeliveredAt) {
+            · {{ 'LABOR.PLACENTA_TIME' | translate }}
+            {{ record.placentaDeliveredAt | serverTime | date: 'shortTime' }}
+          }
+          · {{ 'LABOR.UTEROTONIC_GIVEN' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{
+            record.uterotonicGiven === null
+              ? '—'
+              : ((record.uterotonicGiven ? 'COMMON.YES' : 'COMMON.NO') | translate)
+          }}
+        </p>
+        @if (record.bornBeforeArrival) {
+          <!-- QA r46 (provisional): a birth recorded as before her arrival, with its reason. -->
+          <p class="saved-note" data-testid="delivery-born-before-arrival">
+            <strong
+              >{{ 'LABOR.BORN_BEFORE_ARRIVAL' | translate }}{{ 'COMMON.COLON' | translate }}</strong
+            >
+            {{ record.bornBeforeArrivalReason }}
+          </p>
+        }
+        @if (record.notes) {
+          <p class="saved-note" data-testid="delivery-notes">
+            <strong>{{ 'LABOR.NOTES' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+            {{ record.notes }}
+          </p>
+        }
+        @if (record.newbornRegistrationPending) {
+          <p class="risk-badge risk-moderate" data-testid="delivery-newborn-pending">
+            {{ 'LABOR.NEWBORN_REGISTRATION_PENDING' | translate }}
+          </p>
+        }
+        <!-- QA D1714: each baby's outcome; a stillborn baby has a fetal-death event, no patient record. -->
+        @if (record.babies && record.babies.length > 1) {
+          <p data-testid="delivery-baby-outcomes">
+            <strong>{{ 'LABOR.BABY_OUTCOMES' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+            @for (baby of record.babies; track baby.birthOrder; let last = $last) {
+              {{ 'LABOR.BABY_OUTCOME' | translate: { order: baby.birthOrder }
+              }}{{ 'COMMON.COLON' | translate }}
+              {{ 'LABOR.BABY_OUTCOME_' + (baby.outcome ?? 'UNKNOWN') | translate
+              }}{{ last ? '' : ' · ' }}
+            }
+          </p>
+        }
+        @if (hasFetalDeathEvent(record)) {
+          <p class="saved-note" data-testid="delivery-fetal-death-event">
+            {{ 'LABOR.FETAL_DEATH_EVENT_RECORDED' | translate }}
+          </p>
+        }
+        <!-- QA D1592: each live-born baby is its own patient, linked to its chart. -->
+        @if (record.newborns?.length) {
+          <div data-testid="delivery-newborns">
+            <strong>{{ 'LABOR.NEWBORNS' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+            <ul class="newborn-list">
+              @for (baby of record.newborns; track baby.patientId) {
+                <li>
+                  <a
+                    [routerLink]="['/patients', baby.patientId]"
+                    data-testid="delivery-newborn-link"
+                  >
+                    {{ baby.displayName || ('LABOR.NEWBORN' | translate) }}
+                  </a>
+                  @if (baby.mrn) {
+                    · {{ 'LABOR.NEWBORN_MRN' | translate: { mrn: baby.mrn } }}
+                  }
+                  @if (baby.needsReview) {
+                    <span class="risk-badge risk-moderate">{{
+                      (baby.reviewReason
+                        ? 'LABOR.NEWBORN_REVIEW_' + baby.reviewReason
+                        : 'LABOR.NEWBORN_NEEDS_REVIEW'
+                      ) | translate
+                    }}</span>
+                  }
+                </li>
+              }
+            </ul>
+            <p class="muted">{{ 'LABOR.NEWBORN_NAME_PROVISIONAL' | translate }}</p>
+          </div>
+        }
+        @for (alert of record.alerts; track $index) {
           <p>
-            <span class="risk-badge risk-high" [title]="alert.triggeredBy">{{
-              alert.message
-            }}</span>
+            <!-- QA D797: a CAUTION (an implausible weight to check) is not shown as urgent. -->
+            <span
+              class="risk-badge {{ alert.severity === 'URGENT' ? 'risk-high' : 'risk-moderate' }}"
+              >{{ alert.message }}</span
+            >
           </p>
         }
       </div>
@@ -176,63 +390,33 @@
       <app-partograph-chart [entries]="entries()" />
     </div>
 
-    <div class="data-table">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">{{ 'LABOR.TIME' | translate }}</th>
-            <th scope="col">{{ 'LABOR.FHR' | translate }}</th>
-            <th scope="col">{{ 'LABOR.LIQUOR' | translate }}</th>
-            <th scope="col">{{ 'LABOR.DILATION' | translate }}</th>
-            <th scope="col">{{ 'LABOR.DESCENT' | translate }}</th>
-            <th scope="col">{{ 'LABOR.CONTRACTIONS' | translate }}</th>
-            <th scope="col">{{ 'LABOR.MATERNAL_VITALS' | translate }}</th>
-            <th scope="col">{{ 'LABOR.ALERTS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (entry of entries(); track entry.id) {
-            <tr class="data-row {{ entryAlertClass(entry) }}">
-              <td>{{ entry.observationTime | date: 'shortTime' }}</td>
-              <td>{{ entry.fetalHeartRateBpm ?? '—' }}</td>
-              <td>
-                {{ entry.liquorColour ? ('LABOR.LIQUOR_' + entry.liquorColour | translate) : '—' }}
-              </td>
-              <td>
-                {{ entry.cervicalDilationCm !== null ? entry.cervicalDilationCm + ' cm' : '—' }}
-              </td>
-              <td>{{ entry.descentFifths !== null ? entry.descentFifths + '/5' : '—' }}</td>
-              <td>
-                @if (entry.contractionsPerTenMinutes !== null) {
-                  {{ entry.contractionsPerTenMinutes }}/10min
-                  @if (entry.contractionDurationSeconds !== null) {
-                    · {{ entry.contractionDurationSeconds }}s
-                  }
-                } @else {
-                  —
+    <ng-container
+      [ngTemplateOutlet]="entryTable"
+      [ngTemplateOutletContext]="{ $implicit: entries() }"
+    />
+  }
+
+  <!-- ══ The partograph before the transfer, at the other hospital: read only ══ -->
+  @if (activeEpisode()?.transferredFromEpisodeId && previousEntries().length > 0) {
+    <div class="view-section" data-testid="labor-previous-partograph">
+      <h3 class="section-heading">
+        {{
+          'LABOR.TRANSFER.PREVIOUS_PARTOGRAPH'
+            | translate
+              : {
+                  hospital:
+                    previousEpisode()?.hospitalName ||
+                    activeEpisode()?.transferredFromHospitalName ||
+                    '—',
                 }
-              </td>
-              <td>
-                {{ entry.systolicBpMmHg ?? '—' }}/{{ entry.diastolicBpMmHg ?? '—' }} ·
-                {{ entry.pulseBpm ?? '—' }} · {{ entry.temperatureCelsius ?? '—' }}°C
-              </td>
-              <td>
-                @for (alert of entry.alerts ?? []; track $index) {
-                  <span
-                    class="risk-badge {{
-                      alert.severity === 'URGENT' ? 'risk-high' : 'risk-moderate'
-                    }}"
-                    [title]="alert.message"
-                  >
-                    {{ 'LABOR.ALERT_' + alert.type | translate }}
-                  </span>
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+        }}
+      </h3>
+      <app-partograph-chart [entries]="previousEntries()" />
     </div>
+    <ng-container
+      [ngTemplateOutlet]="entryTable"
+      [ngTemplateOutletContext]="{ $implicit: previousEntries() }"
+    />
   }
 
   <!-- ══ Episode history ══ -->
@@ -252,7 +436,7 @@
           <tbody>
             @for (episode of episodes(); track episode.id) {
               <tr class="data-row">
-                <td>{{ episode.admittedAt | date: 'short' }}</td>
+                <td>{{ episode.admittedAt | serverTime | date: 'short' }}</td>
                 <td>{{ 'LABOR.STATUS_' + episode.status | translate }}</td>
                 <td>
                   {{ episode.outcome ? ('LABOR.OUTCOME_' + episode.outcome | translate) : '—' }}
@@ -277,20 +461,22 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="labor-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="entryFormOpen.set(false); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'LABOR.NEW_ENTRY' | translate }}</h2>
+        <h2 id="labor-tab-dialog-1-title">{{ 'LABOR.NEW_ENTRY' | translate }}</h2>
         <button
           class="modal-close"
           (click)="entryFormOpen.set(false)"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -387,34 +573,42 @@
         <div class="form-row gtpal-row">
           <div class="field">
             <label for="pe-pulse">{{ 'LABOR.PULSE' | translate }}</label>
-            <input id="pe-pulse" type="number" min="0" max="300" [(ngModel)]="entryForm.pulseBpm" />
+            <input
+              id="pe-pulse"
+              type="number"
+              min="20"
+              max="300"
+              [(ngModel)]="entryForm.pulseBpm"
+            />
           </div>
           <div class="field">
-            <label for="pe-sys">SYS</label>
+            <label for="pe-sys">{{ 'LABOR.SYSTOLIC' | translate }}</label>
             <input
               id="pe-sys"
               type="number"
-              min="0"
-              max="350"
+              min="40"
+              max="300"
               [(ngModel)]="entryForm.systolicBpMmHg"
             />
           </div>
           <div class="field">
-            <label for="pe-dia">DIA</label>
+            <label for="pe-dia">{{ 'LABOR.DIASTOLIC' | translate }}</label>
             <input
               id="pe-dia"
               type="number"
-              min="0"
-              max="250"
+              min="20"
+              max="200"
               [(ngModel)]="entryForm.diastolicBpMmHg"
             />
           </div>
           <div class="field">
-            <label for="pe-temp">°C</label>
+            <label for="pe-temp">{{ 'LABOR.TEMPERATURE' | translate }}</label>
             <input
               id="pe-temp"
               type="number"
               step="0.1"
+              min="25"
+              max="44"
               [(ngModel)]="entryForm.temperatureCelsius"
             />
           </div>
@@ -458,6 +652,146 @@
   </div>
 }
 
+<!-- ══ Transfer modal (provisional rule, 2026-11-12) ══ -->
+@if (transferOpen()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelTransfer()"
+    (keydown.escape)="cancelTransfer()"
+  >
+    <div
+      class="modal"
+      aria-labelledby="labor-transfer-title"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="cancelTransfer(); $event.stopPropagation()"
+      appModalDialog
+    >
+      <div class="modal-header">
+        <h2 id="labor-transfer-title">{{ 'LABOR.TRANSFER.TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="cancelTransfer()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="muted">{{ 'LABOR.TRANSFER.HINT' | translate }}</p>
+        <div class="field">
+          <label for="lt-destination">{{ 'LABOR.TRANSFER.DESTINATION' | translate }} *</label>
+          <select
+            id="lt-destination"
+            required
+            aria-required="true"
+            [(ngModel)]="transferForm.destinationHospitalId"
+          >
+            <option [ngValue]="undefined">—</option>
+            @for (hospital of destinations(); track hospital.id) {
+              <option [ngValue]="hospital.id">{{ hospital.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="lt-reason">{{ 'LABOR.TRANSFER.REASON' | translate }} *</label>
+          <textarea
+            id="lt-reason"
+            rows="3"
+            required
+            aria-required="true"
+            [maxlength]="transferReasonMax"
+            [(ngModel)]="transferForm.reason"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelTransfer()" [disabled]="saving()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          data-testid="labor-transfer-submit"
+          (click)="submitTransfer()"
+          [disabled]="saving()"
+          [appSubmitGuard]="!transferForm.destinationHospitalId || !transferForm.reason?.trim()"
+          submitGuardRequired
+          [submitGuardFields]="['lt-destination', 'lt-reason']"
+        >
+          {{ 'LABOR.TRANSFER.SUBMIT' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Arrival without handover modal (provisional rule, 2026-11-12) ══ -->
+@if (arrivalOpen()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelArrival()"
+    (keydown.escape)="cancelArrival()"
+  >
+    <div
+      class="modal"
+      aria-labelledby="labor-arrival-title"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="cancelArrival(); $event.stopPropagation()"
+      appModalDialog
+    >
+      <div class="modal-header">
+        <h2 id="labor-arrival-title">{{ 'LABOR.ARRIVAL.TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="cancelArrival()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="muted">
+          {{ 'LABOR.ARRIVAL.HINT' | translate: { hospital: activeEpisode()?.hospitalName || '—' } }}
+        </p>
+        <div class="field">
+          <label for="la-reason">{{ 'LABOR.TRANSFER.REASON' | translate }} *</label>
+          <textarea
+            id="la-reason"
+            rows="3"
+            required
+            aria-required="true"
+            [maxlength]="transferReasonMax"
+            [(ngModel)]="arrivalReason"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelArrival()" [disabled]="saving()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          data-testid="labor-arrival-submit"
+          (click)="submitArrival()"
+          [disabled]="saving()"
+          [appSubmitGuard]="!arrivalReason.trim()"
+          submitGuardRequired
+          [submitGuardFields]="['la-reason']"
+        >
+          {{ 'LABOR.ARRIVAL.SUBMIT' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
 <!-- ══ Delivery modal ══ -->
 @if (deliveryFormOpen()) {
   <div
@@ -468,20 +802,22 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="labor-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="cancelDelivery(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'LABOR.RECORD_DELIVERY' | translate }}</h2>
+        <h2 id="labor-tab-dialog-2-title">{{ 'LABOR.RECORD_DELIVERY' | translate }}</h2>
         <button
           class="modal-close"
           (click)="cancelDelivery()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -492,7 +828,7 @@
           </div>
           <div class="field">
             <label for="dl-mode">{{ 'LABOR.DELIVERY_MODE' | translate }} *</label>
-            <select id="dl-mode" [(ngModel)]="deliveryForm.deliveryMode">
+            <select required id="dl-mode" [(ngModel)]="deliveryForm.deliveryMode">
               <option [ngValue]="undefined">—</option>
               @for (mode of deliveryModes; track mode) {
                 <option [ngValue]="mode">{{ 'LABOR.MODE_' + mode | translate }}</option>
@@ -501,12 +837,6 @@
           </div>
         </div>
         <div class="form-row gtpal-row">
-          <div class="field checkbox-field">
-            <label>
-              <input type="checkbox" [(ngModel)]="deliveryForm.liveBirth" />
-              {{ 'LABOR.LIVE_BIRTH' | translate }}
-            </label>
-          </div>
           <div class="field">
             <label for="dl-infants">{{ 'LABOR.NUMBER_OF_INFANTS' | translate }}</label>
             <input
@@ -517,6 +847,26 @@
               [(ngModel)]="deliveryForm.numberOfInfants"
             />
           </div>
+          <!-- QA D1714: one outcome per baby; a stillborn baby creates a fetal-death event, not a patient. -->
+          @for (baby of deliveryBabies(); track baby.birthOrder) {
+            <div class="field baby-outcome-field">
+              <label [for]="'dl-baby-' + baby.birthOrder">{{
+                'LABOR.BABY_OUTCOME' | translate: { order: baby.birthOrder }
+              }}</label>
+              <select
+                [id]="'dl-baby-' + baby.birthOrder"
+                [attr.data-testid]="'delivery-baby-outcome-' + baby.birthOrder"
+                [ngModel]="baby.outcome"
+                (ngModelChange)="setBabyOutcome(baby.birthOrder, $event)"
+              >
+                @for (choice of babyOutcomeChoices; track choice) {
+                  <option [ngValue]="choice">
+                    {{ 'LABOR.BABY_OUTCOME_' + choice | translate }}
+                  </option>
+                }
+              </select>
+            </div>
+          }
           <div class="field">
             <label for="dl-sex">{{ 'LABOR.INFANT_SEX' | translate }}</label>
             <select id="dl-sex" [(ngModel)]="deliveryForm.infantSex">
@@ -539,7 +889,7 @@
         </div>
         <div class="form-row gtpal-row">
           <div class="field">
-            <label for="dl-apgar1">APGAR 1'</label>
+            <label for="dl-apgar1">{{ 'LABOR.APGAR_ONE' | translate }}</label>
             <input
               id="dl-apgar1"
               type="number"
@@ -549,7 +899,7 @@
             />
           </div>
           <div class="field">
-            <label for="dl-apgar5">APGAR 5'</label>
+            <label for="dl-apgar5">{{ 'LABOR.APGAR_FIVE' | translate }}</label>
             <input
               id="dl-apgar5"
               type="number"
@@ -604,15 +954,150 @@
           <label for="dl-notes">{{ 'LABOR.NOTES' | translate }}</label>
           <textarea id="dl-notes" rows="2" [(ngModel)]="deliveryForm.notes"></textarea>
         </div>
+        <div class="field">
+          <label for="dl-override"
+            >{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}
+            @if (deliveryOverrideRequired()) {
+              *
+            }
+          </label>
+          <textarea
+            id="dl-override"
+            [required]="deliveryOverrideRequired()"
+            rows="2"
+            maxlength="500"
+            aria-describedby="dl-override-hint"
+            [(ngModel)]="deliveryForm.recentDeliveryOverrideReason"
+          ></textarea>
+          <p id="dl-override-hint" class="muted">
+            {{ 'LABOR.RECENT_DELIVERY_OVERRIDE_HINT' | translate }}
+          </p>
+        </div>
+        @if (bornBeforeArrivalOffered()) {
+          <div class="field checkbox-field">
+            <label>
+              <input
+                id="dl-bba"
+                type="checkbox"
+                data-testid="labor-delivery-bba"
+                aria-describedby="dl-bba-hint"
+                [(ngModel)]="deliveryForm.bornBeforeArrival"
+              />
+              {{ 'LABOR.BORN_BEFORE_ARRIVAL' | translate }}
+            </label>
+            <p id="dl-bba-hint" class="muted">
+              {{ 'LABOR.BORN_BEFORE_ARRIVAL_HINT' | translate }}
+            </p>
+          </div>
+          @if (deliveryForm.bornBeforeArrival) {
+            <div class="field">
+              <label for="dl-bba-reason"
+                >{{ 'LABOR.BORN_BEFORE_ARRIVAL_REASON' | translate }} *</label
+              >
+              <textarea
+                id="dl-bba-reason"
+                required
+                rows="2"
+                maxlength="500"
+                [(ngModel)]="deliveryForm.bornBeforeArrivalReason"
+              ></textarea>
+            </div>
+          }
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDelivery()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitDelivery()" [disabled]="saving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          data-testid="labor-delivery-submit"
+          (click)="submitDelivery()"
+          [disabled]="saving()"
+        >
           {{ 'LABOR.SAVE_DELIVERY' | translate }}
         </button>
       </div>
     </div>
   </div>
 }
+
+<!-- The partograph rows of one episode: this one, or (read only) the one it continues. -->
+<ng-template #entryTable let-rows>
+  <div class="data-table">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">{{ 'LABOR.TIME' | translate }}</th>
+          <th scope="col">{{ 'LABOR.FHR' | translate }}</th>
+          <th scope="col">{{ 'LABOR.LIQUOR' | translate }}</th>
+          <th scope="col">{{ 'LABOR.DILATION' | translate }}</th>
+          <th scope="col">{{ 'LABOR.DESCENT' | translate }}</th>
+          <th scope="col">{{ 'LABOR.CONTRACTIONS' | translate }}</th>
+          <th scope="col">{{ 'LABOR.MATERNAL_VITALS' | translate }}</th>
+          <th scope="col">{{ 'LABOR.ALERTS' | translate }}</th>
+          <th scope="col">{{ 'LABOR.NOTES' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of rows; track entry.id) {
+          <tr class="data-row {{ entryAlertClass(entry) }}">
+            <td>{{ entry.observationTime | serverTime | date: 'shortTime' }}</td>
+            <td>{{ entry.fetalHeartRateBpm ?? '—' }}</td>
+            <td>
+              {{ entry.liquorColour ? ('LABOR.LIQUOR_' + entry.liquorColour | translate) : '—' }}
+            </td>
+            <td>
+              {{ entry.cervicalDilationCm | measure: 'cm' }}
+            </td>
+            <td>{{ entry.descentFifths !== null ? entry.descentFifths + '/5' : '—' }}</td>
+            <td>
+              @if (entry.contractionsPerTenMinutes !== null) {
+                {{ entry.contractionsPerTenMinutes }}/10min
+                @if (entry.contractionDurationSeconds !== null) {
+                  · {{ entry.contractionDurationSeconds }}s
+                }
+              } @else {
+                —
+              }
+            </td>
+            <td>
+              {{ entry.systolicBpMmHg ?? '—' }}/{{ entry.diastolicBpMmHg ?? '—' }} ·
+              {{ entry.pulseBpm | measure: 'bpm' }} ·
+              {{ entry.temperatureCelsius | measure: '°C' }}
+            </td>
+            <td>
+              @for (alert of entry.alerts; track $index) {
+                <span
+                  class="risk-badge {{
+                    alert.severity === 'URGENT' ? 'risk-high' : 'risk-moderate'
+                  }}"
+                  [title]="alert.message"
+                >
+                  {{ 'LABOR.ALERT_' + alert.type | translate }}
+                </span>
+              }
+            </td>
+            <!-- QA D1068: the drugs given and the free-text note of each observation. -->
+            <td class="saved-note" data-testid="partograph-entry-notes">
+              @if (entry.drugsGiven) {
+                <div>
+                  {{ 'LABOR.DRUGS_GIVEN' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ entry.drugsGiven }}
+                </div>
+              }
+              @if (entry.notes) {
+                <div>{{ entry.notes }}</div>
+              }
+              @if (!entry.drugsGiven && !entry.notes) {
+                —
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</ng-template>

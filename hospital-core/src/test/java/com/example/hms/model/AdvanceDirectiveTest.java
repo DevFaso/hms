@@ -105,7 +105,7 @@ class AdvanceDirectiveTest {
                 AdvanceDirectiveStatus.REVOKED,
                 "Revoked by patient",
                 eff, exp,
-                "Bob Witness", "Dr. Jones",
+                "Bob Witness", "Dr. Jones", null, // revocationReason (V256, QA D1148)
                 "/docs/ad-002.pdf", "Legacy-EHR",
                 reviewed
             );

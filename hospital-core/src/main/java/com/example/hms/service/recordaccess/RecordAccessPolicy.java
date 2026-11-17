@@ -10,6 +10,9 @@ import java.util.UUID;
  * <p>Order of the gates, each named by {@code RecordAccessDenialReason}:
  * <ol>
  *   <li>the acting hospital exists;</li>
+ *   <li>it is a HOSPITAL, not a provider facility (a pharmacy or a laboratory
+ *       never reads a chart through this policy, whatever else holds:
+ *       provider plan §3.3, AC-9);</li>
  *   <li>it is not {@code SCHEMA}-isolated (V97) — cannot be read across, ever;</li>
  *   <li>its posture is {@code TREATMENT_PRESUMED} (E8 #52);</li>
  *   <li>the patient has not opted out (E8 #52);</li>
@@ -45,4 +48,13 @@ public interface RecordAccessPolicy {
      * construction.
      */
     Set<UUID> readableHospitalIds(UUID actorUserId, UUID patientId, UUID actingHospitalId);
+
+    /**
+     * QA D504 — true when the patient's sharing opt-out is active and nothing
+     * here overrides it ({@link #decide} refuses), so every clinical list read
+     * at this hospital is narrowed to the acting hospital's rows. The response
+     * must say so instead of returning a list that looks complete. Says
+     * nothing about whether such rows exist.
+     */
+    boolean foreignRowsWithheld(UUID actorUserId, UUID patientId, UUID actingHospitalId);
 }

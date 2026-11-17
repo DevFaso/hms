@@ -37,11 +37,11 @@ export class IntegrationHealthService {
 
   /**
    * MVP-3b — fire-and-forget re-sync. Backend dispatches the work
-   * asynchronously and the recorder captures success / failure as the
-   * job completes; the immediate response is just an ACK.
+   * asynchronously and answers 202 with no body (QA D851: the console took
+   * that empty body for a failure).
    */
-  resync(integrationId: string): Observable<IntegrationProbeResult> {
-    return this.http.post<IntegrationProbeResult>(
+  resync(integrationId: string): Observable<void> {
+    return this.http.post<void>(
       `/super-admin/integrations/${encodeURIComponent(integrationId)}/resync`,
       {},
     );

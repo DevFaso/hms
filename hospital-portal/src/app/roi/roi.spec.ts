@@ -9,7 +9,6 @@ import { RoiComponent } from './roi';
 import { RoiPage, RoiRequest, RoiService } from '../services/roi.service';
 import { PatientService } from '../services/patient.service';
 import { HospitalService } from '../services/hospital.service';
-import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -79,7 +78,6 @@ describe('RoiComponent', () => {
       'getMyHospitalAsResponse',
     ]);
     hospitalSpy.list.and.returnValue(of([]));
-    const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
 
     await TestBed.configureTestingModule({
       imports: [RoiComponent, TranslateModule.forRoot()],
@@ -91,7 +89,6 @@ describe('RoiComponent', () => {
           useValue: { search: () => of([]), lookup: () => of([]), list: () => of([]) },
         },
         { provide: HospitalService, useValue: hospitalSpy },
-        { provide: HospitalScopeUrlService, useValue: scopeUrlSpy },
         {
           provide: RoleContextService,
           useValue: {
@@ -113,17 +110,90 @@ describe('RoiComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('loads every status for All and merges by request date while retaining the server total', () => {
+    fixture.detectChanges();
+    roiService.worklist.calls.reset();
+    roiService.worklist.and.callFake((status) =>
+      of(
+        page([
+          request({
+            id: status!,
+            status: status!,
+            requestedOn: status === 'DENIED' ? '2026-08-01' : '2026-09-01',
+          }),
+        ]),
+      ),
+    );
+    component.setStatus('ALL');
+    expect(roiService.worklist.calls.count()).toBe(4);
+    expect(component.rows().length).toBe(4);
+    expect(component.rows()[0].status).toBe('DENIED');
+    expect(component.total()).toBe(4);
+  });
+
+  it('does not present a partial All queue as complete when one status fails', () => {
+    fixture.detectChanges();
+    roiService.worklist.and.callFake((status) =>
+      status === 'DENIED' ? throwError(() => new Error('offline')) : of(page([request()])),
+    );
+    component.setStatus('ALL');
+    expect(component.loadFailed()).toBeTrue();
+    expect(component.rows()).toEqual([]);
+  });
+
   it('loads the PENDING queue on init', () => {
     fixture.detectChanges();
     expect(roiService.worklist).toHaveBeenCalledWith('PENDING', 0, 200);
     expect(component.rows().length).toBe(1);
   });
 
-  it('a global-view super-admin gets the pick-a-hospital state — no requests fired', () => {
-    scopedHospitalId.set(null);
+  it('filters loaded requests without changing server totals or requester counts', () => {
+    roiService.worklist.and.returnValue(
+      of({
+        ...page([
+          request(),
+          request({ id: 'r2', patientName: 'Cdx Patient', requesterType: 'PATIENT' }),
+        ]),
+        totalElements: 240,
+      }),
+    );
     fixture.detectChanges();
+    roiService.worklist.calls.reset();
+    component.searchTerm.set('cdx');
+    component.requesterFilter.set('PATIENT');
+    expect(component.visibleRows().map((row) => row.id)).toEqual(['r2']);
+    expect(component.total()).toBe(240);
+    expect(component.patientRequestsLoaded()).toBe(1);
+    expect(component.thirdPartyRequestsLoaded()).toBe(1);
+    expect(component.truncated()).toBeTrue();
     expect(roiService.worklist).not.toHaveBeenCalled();
-    expect(component.scopeReady()).toBeFalse();
+    component.setStatus('DENIED');
+    expect(component.searchTerm()).toBe('');
+    expect(component.requesterFilter()).toBe('');
+  });
+
+  it('offers filter recovery rather than claiming the queue is empty', () => {
+    fixture.detectChanges();
+    component.searchTerm.set('cdx-missing');
+    fixture.detectChanges();
+    const empty = fixture.nativeElement.querySelector('.queue-empty');
+    expect(empty.textContent).toContain('ROI.NO_MATCHES');
+    empty.querySelector('button').click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('tbody tr').length).toBe(1);
+    roiService.worklist.and.returnValue(of(page([])));
+    component.load();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.queue-empty').textContent).toContain('ROI.EMPTY');
+  });
+
+  it('carries no scope chip or hint of its own: the route gate owns them', () => {
+    // The route is flagged requiresHospitalScope: the shell shows the one
+    // chip and builds this page only with a hospital pinned.
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(el.querySelector('app-hospital-scope-hint')).toBeNull();
   });
 
   it('an outage renders unavailable — never an empty queue', () => {
@@ -133,18 +203,18 @@ describe('RoiComponent', () => {
     expect(component.rows().length).toBe(0);
   });
 
-  it('unpinning the scope mid-flight drops the old hospital response — PHI never repopulates', () => {
+  it('a response landing after a scope change rebuilt the page never repopulates it — no PHI', () => {
+    // The route gate destroys and rebuilds the page on a scope change; the
+    // old instance's in-flight worklist must die with it.
     const slow = new Subject<RoiPage>();
     roiService.worklist.and.returnValue(slow.asObservable());
     fixture.detectChanges(); // init fires the PENDING load; response still in flight
 
-    scopedHospitalId.set(null); // super-admin returns to global view
-    component.onScopeChange(null);
+    fixture.destroy();
     slow.next(page([request()])); // the previous hospital's rows arrive late
     slow.complete();
 
     expect(component.rows().length).toBe(0);
-    expect(component.scopeReady()).toBeFalse();
   });
 
   it('a slow response for the previous status never overwrites the newer one', () => {

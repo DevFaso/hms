@@ -20,6 +20,7 @@ public class StockLotMapper {
             .id(entity.getId())
             .inventoryItemId(entity.getInventoryItem() != null ? entity.getInventoryItem().getId() : null)
             .lotNumber(entity.getLotNumber())
+            .unit(entity.getInventoryItem() != null ? entity.getInventoryItem().getUnit() : null)
             .expiryDate(entity.getExpiryDate())
             .initialQuantity(entity.getInitialQuantity())
             .remainingQuantity(entity.getRemainingQuantity())
@@ -64,9 +65,6 @@ public class StockLotMapper {
         }
         if (dto.getExpiryDate() != null) {
             entity.setExpiryDate(dto.getExpiryDate());
-        }
-        if (dto.getRemainingQuantity() != null) {
-            entity.setRemainingQuantity(dto.getRemainingQuantity());
         }
         if (dto.getSupplier() != null) {
             entity.setSupplier(dto.getSupplier());

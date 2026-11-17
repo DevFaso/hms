@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -54,6 +55,19 @@ describe('MyFamilyAccessComponent', () => {
   it('should not grant when fields missing', () => {
     component.form = { proxyUsername: '', relationship: '', permissions: 'ALL' };
     component.grantAccess();
+    expect(mockToast.error).toHaveBeenCalled();
+  });
+
+  it('QA D1464: a typed past end date is refused on its field; nothing is sent', () => {
+    const grant = spyOn(mockPortalService, 'grantProxy').and.callThrough();
+    component.form = {
+      proxyUsername: 'marie',
+      relationship: 'PARENT',
+      permissions: 'ALL',
+    } as typeof component.form;
+    component.expiresOn = '2020-01-01';
+    component.grantAccess();
+    expect(grant).not.toHaveBeenCalled();
     expect(mockToast.error).toHaveBeenCalled();
   });
 });
@@ -139,6 +153,32 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
+  // #948 review: the expiry is checked against the server's UTC clock and
+  // listed back through serverTime, so the end of the picked day is sent as
+  // the reader's 23:59:59 on the UTC clock, not as the wall clock.
+  it('sends the expiry as the end of the reader day on the UTC clock', () => {
+    fixture.detectChanges();
+    portal.grantProxy.and.returnValue(of(received));
+    component.form = {
+      proxyUsername: 'caregiver.sam',
+      relationship: 'CAREGIVER',
+      permissions: 'VIEW_APPOINTMENTS',
+    };
+    component.expiresOn = '2099-10-24';
+    component.grantAccess();
+
+    const endOfDay = new Date(2099, 9, 24, 23, 59, 59);
+    const sent = portal.grantProxy.calls.mostRecent().args[0];
+    expect(sent.expiresAt).toBe(endOfDay.toISOString().slice(0, 19));
+    expect(new Date(`${sent.expiresAt}Z`).getTime()).toBe(endOfDay.getTime());
+  });
+
+  it('offers today in the reader zone as the earliest expiry', () => {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    expect(component.minExpiry).toBe(`${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`);
+  });
+
   it('links each received grant to its proxy data viewer', () => {
     fixture.detectChanges();
     component.switchToReceived();
@@ -151,10 +191,84 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
     expect(link.getAttribute('href')).toBe('/my-family-access/p-77');
   });
 
+  it('QA D893: an unknown username says so, in the server message, not a generic failure', () => {
+    fixture.detectChanges();
+    const message = "Aucun compte ne porte l'identifiant inconnu.xyz.";
+    portal.grantProxy.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 404, error: { message } })),
+    );
+    component.form = {
+      proxyUsername: 'inconnu.xyz',
+      relationship: 'CAREGIVER',
+      permissions: 'ALL',
+    };
+    component.grantAccess();
+    expect(toast.error).toHaveBeenCalledWith(message);
+    expect(component.granting()).toBeFalse();
+  });
+
+  it('QA D893: a 404 without a message still names the unknown user', () => {
+    fixture.detectChanges();
+    portal.grantProxy.and.returnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+    component.form = {
+      proxyUsername: 'inconnu.xyz',
+      relationship: 'CAREGIVER',
+      permissions: 'ALL',
+    };
+    component.grantAccess();
+    expect(toast.error).toHaveBeenCalledWith('PORTAL.FAMILY.USER_NOT_FOUND');
+  });
+
+  it('QA D893: a server error keeps the generic failure (no technical text)', () => {
+    fixture.detectChanges();
+    portal.grantProxy.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 500, error: { message: 'NullPointerException' } }),
+      ),
+    );
+    component.form = { proxyUsername: 'sam', relationship: 'CAREGIVER', permissions: 'ALL' };
+    component.grantAccess();
+    expect(toast.error).toHaveBeenCalledWith('PORTAL.FAMILY.GRANT_FAILED');
+  });
+
   it('surfaces a toast when revoking fails', () => {
     fixture.detectChanges();
     portal.revokeProxy.and.returnValue(throwError(() => new Error('500')));
     component.revokeAccess('g-1');
     expect(toast.error).toHaveBeenCalled();
+  });
+
+  // QA D1197 (round 22): "Révoquer" acted on one click and dropped focus to BODY.
+  it('QA D1197: revoking asks for a confirmation; Cancel keeps the access, Confirm revokes', async () => {
+    const granted = { ...received, id: 'proxy-9', proxyDisplayName: 'Salif Ouédraogo' };
+    portal.getMyProxies.and.returnValue(of([granted]));
+    portal.revokeProxy.and.returnValue(of(undefined));
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      fixture.detectChanges();
+      const revoke = host.querySelector<HTMLButtonElement>('[data-testid="revoke-proxy-proxy-9"]')!;
+      revoke.focus();
+      revoke.click();
+      fixture.detectChanges();
+      expect(portal.revokeProxy).withContext('one click no longer revokes').not.toHaveBeenCalled();
+      const dialog = host.querySelector<HTMLElement>('[data-testid="confirm-dialog"]')!;
+      expect(dialog.getAttribute('role')).toBe('dialog');
+      expect(dialog.textContent).toContain('Salif Ouédraogo');
+      host.querySelector<HTMLButtonElement>('[data-testid="confirm-dialog-cancel"]')!.click();
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="confirm-dialog"]')).toBeNull();
+      expect(document.activeElement).toBe(revoke);
+      expect(portal.revokeProxy).not.toHaveBeenCalled();
+
+      revoke.click();
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="confirm-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(portal.revokeProxy).toHaveBeenCalledOnceWith('proxy-9');
+      expect(host.querySelector('[data-testid="confirm-dialog"]')).toBeNull();
+    } finally {
+      host.remove();
+    }
   });
 });

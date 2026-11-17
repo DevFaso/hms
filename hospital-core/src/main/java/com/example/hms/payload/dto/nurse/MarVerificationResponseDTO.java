@@ -21,7 +21,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class MarVerificationResponseDTO {
+public class MarVerificationResponseDTO implements com.example.hms.payload.dto.prescription.AllergyReviewCarrier {
 
     private UUID marId;
 
@@ -39,4 +39,23 @@ public class MarVerificationResponseDTO {
 
     /** Server time when verification ran (also persisted on the MAR). */
     private LocalDateTime verifiedAt;
+
+    /**
+     * QA D799: non-blocking advisories shown before the dose is given (the
+     * beta-lactam cross-reactivity warning the prescriber saw). They never
+     * make {@code allPassed} false: the five rights are about the scan.
+     */
+    private List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cdsAdvisories;
+
+
+    /**
+     * QA D1584: the allergy stop's review state, read with the cards from the same re-check the gate
+     * runs (awaiting review, CONTINUE with the plan, or STOP). Null when no card stops the drug.
+     */
+    private com.example.hms.payload.dto.prescription.AllergyReviewStateDTO allergyReview;
+
+    @Override
+    public void setAllergyCards(List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards) {
+        this.cdsAdvisories = cards;
+    }
 }

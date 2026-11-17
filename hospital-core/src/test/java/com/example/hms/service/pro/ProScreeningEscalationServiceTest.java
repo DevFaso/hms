@@ -27,9 +27,10 @@ import com.example.hms.repository.PanelAssignmentRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pro.ProResponseRepository;
-import com.example.hms.service.NotificationService;
 import com.example.hms.service.SmsService;
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -48,7 +49,7 @@ import com.example.hms.i18n.TestMessageSources;
 @ExtendWith(MockitoExtension.class)
 class ProScreeningEscalationServiceTest {
 
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private SmsService smsService;
     @Mock private ProResponseRepository responseRepository;
     @Mock private PanelAssignmentRepository panelAssignmentRepository;
@@ -56,6 +57,10 @@ class ProScreeningEscalationServiceTest {
     @Mock private UserRepository userRepository;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
+    /** Fixed instant: the stamps and the sweep cutoff come from the injected clock. */
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 2, 0);
+    @Spy private Clock clock = Clock.fixed(NOW.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
 
     @InjectMocks private ProScreeningEscalationService service;
 
@@ -87,7 +92,7 @@ class ProScreeningEscalationServiceTest {
             .patient(patient)
             .hospital(hospital)
             .recordedByUserId(recorderId)
-            .administeredAt(LocalDateTime.now())
+            .administeredAt(NOW)
             .answers("{}")
             .build();
         response.setId(UUID.randomUUID());
@@ -95,7 +100,7 @@ class ProScreeningEscalationServiceTest {
         lenient().when(userRepository.findById(recorderId)).thenReturn(Optional.of(recorder));
         lenient().when(panelAssignmentRepository.findByPatient_IdAndHospital_IdAndPanelRoleAndStatus(
                 any(), any(), any(), any())).thenReturn(Optional.empty());
-        lenient().when(notificationService.createNotification(anyString(), anyString(), anyString()))
+        lenient().when(notificationService.created(anyString(), anyString(), anyString()))
             .thenReturn(new Notification());
         lenient().when(smsService.deliversRealSms()).thenReturn(false);
     }
@@ -124,14 +129,14 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(notificationService).createNotification(contains("Item de sécurité EPDS"), eq("midwife.kone"),
+        verify(notificationService).created(contains("Réponse positive à l'item de sécurité EPDS"), eq("midwife.kone"),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
-        verify(notificationService).createNotification(anyString(), eq("dr.ouedraogo"),
+        verify(notificationService).created(anyString(), eq("dr.ouedraogo"),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
-        verify(notificationService).createNotification(anyString(), eq("chw.sawadogo"),
+        verify(notificationService).created(anyString(), eq("chw.sawadogo"),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
-        verify(notificationService, times(3)).createNotification(anyString(), anyString(), anyString());
-        verify(notificationService, never()).createNotification(contains("17"), anyString(), anyString());
+        verify(notificationService, times(3)).created(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(contains("17"), anyString(), anyString());
         // No fallback when the patient has owners; no admins on round 1.
         verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), anyString());
         assertThat(response.getNotifiedAt()).isNotNull();
@@ -144,9 +149,9 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(notificationService).createNotification(contains("Dépistage EPDS positif"), eq("midwife.kone"),
+        verify(notificationService).created(contains("Dépistage EPDS positif"), eq("midwife.kone"),
             eq(ProScreeningEscalationService.SCREEN_POSITIVE_TYPE));
-        verify(notificationService, never()).createNotification(anyString(), anyString(),
+        verify(notificationService, never()).created(anyString(), anyString(),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
         assertThat(response.getNotifiedAt()).isNotNull();
     }
@@ -155,7 +160,7 @@ class ProScreeningEscalationServiceTest {
     void negativeScreenNotifiesNobodyAndLeavesTheRowAlone() {
         service.notifyOnRecord(response);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         verify(responseRepository, never()).save(any());
         assertThat(response.getNotifiedAt()).isNull();
     }
@@ -169,9 +174,9 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(notificationService).createNotification(anyString(), eq("midwife.a"),
+        verify(notificationService).created(anyString(), eq("midwife.a"),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
-        verify(notificationService).createNotification(anyString(), eq("midwife.b"),
+        verify(notificationService).created(anyString(), eq("midwife.b"),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
         verify(userRepository, never()).findById(any());
         assertThat(response.getNotifiedAt()).isNotNull();
@@ -187,7 +192,7 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(response.getNotifiedAt()).isNull();
         verify(responseRepository, never()).save(any());
     }
@@ -196,7 +201,7 @@ class ProScreeningEscalationServiceTest {
     void notifyOnRecordNeverPropagates() {
         response.setCriticalItemPositive(true);
         doThrow(new IllegalStateException("notification store down"))
-            .when(notificationService).createNotification(anyString(), anyString(), anyString());
+            .when(notificationService).created(anyString(), anyString(), anyString());
 
         assertThatCode(() -> service.notifyOnRecord(response)).doesNotThrowAnyException();
         // The stamp is skipped, so the sweep picks the row up (COALESCE onto createdAt).
@@ -210,7 +215,7 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(smsService).send(eq("+22670000000"), contains("Item de sécurité EPDS"));
+        verify(smsService).send(eq("+22670000000"), contains("Réponse positive à l'item de sécurité EPDS"));
     }
 
     @Test
@@ -230,7 +235,7 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(notificationService).createNotification(anyString(), eq("midwife.kone"), anyString());
+        verify(notificationService).created(anyString(), eq("midwife.kone"), anyString());
         assertThat(response.getNotifiedAt()).isNotNull();
     }
 
@@ -245,12 +250,24 @@ class ProScreeningEscalationServiceTest {
         int escalated = service.escalateOverdue();
 
         assertThat(escalated).isEqualTo(1);
-        verify(notificationService).createNotification(contains("ESCALADE"), eq("midwife.kone"),
+        verify(notificationService).created(contains("ESCALADE"), eq("midwife.kone"),
             eq(ProScreeningEscalationService.ESCALATION_TYPE));
         verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), eq("ROLE_HOSPITAL_ADMIN"));
         assertThat(response.getEscalationLevel()).isEqualTo((short) 1);
         assertThat(response.getLastEscalationAt()).isNotNull();
         verify(responseRepository).save(response);
+    }
+
+    @Test
+    void sweepCutoffAndRoundStampComeFromTheInjectedClock() {
+        response.setCriticalItemPositive(true);
+        when(responseRepository.findCriticalAwaitingEscalation(NOW.minusMinutes(30)))
+            .thenReturn(List.of(response));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        assertThat(response.getLastEscalationAt()).isEqualTo(NOW);
+        assertThat(response.getNotifiedAt()).isEqualTo(NOW);
     }
 
     @Test
@@ -264,9 +281,9 @@ class ProScreeningEscalationServiceTest {
 
         service.escalateOverdue();
 
-        verify(notificationService).createNotification(anyString(), eq("midwife.kone"),
+        verify(notificationService).created(anyString(), eq("midwife.kone"),
             eq(ProScreeningEscalationService.ESCALATION_TYPE));
-        verify(notificationService).createNotification(anyString(), eq("admin.zongo"),
+        verify(notificationService).created(anyString(), eq("admin.zongo"),
             eq(ProScreeningEscalationService.ESCALATION_TYPE));
         assertThat(response.getEscalationLevel()).isEqualTo((short) 2);
     }
@@ -283,7 +300,7 @@ class ProScreeningEscalationServiceTest {
         int escalated = service.escalateOverdue();
 
         assertThat(escalated).isEqualTo(1);
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(response.getEscalationLevel()).isEqualTo((short) 1);
         assertThat(response.getLastEscalationAt()).isNotNull();
         // The interval advances; the promise to the patient does not.
@@ -305,7 +322,7 @@ class ProScreeningEscalationServiceTest {
 
         service.escalateOverdue();
 
-        verify(notificationService).createNotification(anyString(), eq("admin.zongo"),
+        verify(notificationService).created(anyString(), eq("admin.zongo"),
             eq(ProScreeningEscalationService.ESCALATION_TYPE));
         assertThat(response.getNotifiedAt()).isNotNull();
     }
@@ -337,7 +354,7 @@ class ProScreeningEscalationServiceTest {
 
         service.escalateOverdue();
 
-        verify(notificationService, times(3)).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, times(3)).created(anyString(), anyString(), anyString());
         verify(smsService, times(1)).send(anyString(), anyString());
     }
 

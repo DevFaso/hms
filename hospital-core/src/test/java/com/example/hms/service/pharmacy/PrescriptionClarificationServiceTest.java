@@ -19,7 +19,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.access.AccessDeniedException;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -34,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -52,6 +52,8 @@ class PrescriptionClarificationServiceTest {
     @Mock private RoleValidator roleValidator;
     @Mock private PharmacyServiceSupport support;
     @Mock private PrescriberPharmacyNotifier prescriberNotifier;
+    @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
+    @Mock private PrescriptionQueueClaimService queueClaimService;
 
     private PrescriptionClarificationService service;
 
@@ -66,7 +68,7 @@ class PrescriptionClarificationServiceTest {
     @BeforeEach
     void setUp() {
         service = new PrescriptionClarificationService(prescriptionRepository, staffRepository,
-                roleValidator, support, prescriberNotifier, CLOCK);
+                roleValidator, support, prescriberNotifier, CLOCK, dispenseRepository, queueClaimService);
         hospital = new Hospital();
         hospital.setId(hospitalId);
         prescription = new Prescription();
@@ -91,11 +93,28 @@ class PrescriptionClarificationServiceTest {
     class Request {
 
         @Test
+        @DisplayName("policy 2026-11-09: another hospital's prescription can be neither questioned nor resolved here (404)")
+        void aForeignPrescriptionIsNotFound() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.empty());
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            prescription.setHospital(other);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            verify(prescriptionRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("moves a SIGNED order to PENDING_CLARIFICATION with the reason, audits without it, and notifies the prescriber")
         void happyPath() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(pharmacistId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             service.requestClarification(prescriptionId, "  Dose au-dessus du plafond rénal ");
 
@@ -113,6 +132,26 @@ class PrescriptionClarificationServiceTest {
             assertThat(description.getValue()).doesNotContain("rénal");
 
             verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PENDING_CLARIFICATION);
+            // G13 AC-8/AC-9: the question ends the work-queue claim
+            verify(queueClaimService).releaseOnExit(prescription,
+                    com.example.hms.enums.QueueClaimReleaseReason.CLARIFICATION_REQUESTED, pharmacistId,
+                    com.example.hms.enums.QueueClaimExitActor.QUEUE_ROLE);
+        }
+
+        @Test
+        @DisplayName("G15 AC-10: no question while a fill is prepared: 409 under the lock, nothing changes")
+        void openPreparationBlocksTheQuestion() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId,
+                    com.example.hms.enums.DispenseStatus.PENDING)).thenReturn(true);
+
+            assertThatThrownBy(() -> service.requestClarification(prescriptionId, "Dose?"))
+                    .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+            verify(prescriptionRepository, never()).save(any());
+            verifyNoInteractions(prescriberNotifier);
         }
 
         @Test
@@ -124,7 +163,7 @@ class PrescriptionClarificationServiceTest {
             prescription.setClarificationResolvedByUserId(doctorUserId);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(pharmacistId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             service.requestClarification(prescriptionId, "new question");
 
@@ -134,17 +173,34 @@ class PrescriptionClarificationServiceTest {
         }
 
         @Test
+        @DisplayName("an order whose SMS dispatch failed is the hospital's again and can be questioned")
+        void clarifiesATransmissionFailedOrder() {
+            prescription.setStatus(PrescriptionStatus.TRANSMISSION_FAILED);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(pharmacistId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+
+            service.requestClarification(prescriptionId, "which strength?");
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
+            assertThat(prescription.getClarificationPreviousStatus())
+                    .isEqualTo(PrescriptionStatus.TRANSMISSION_FAILED);
+        }
+
+        @Test
         @DisplayName("refuses an order that is not awaiting a fill")
         void refusesNonDispensableStatus() {
             prescription.setStatus(PrescriptionStatus.DISPENSED);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("DISPENSED");
+                    .extracting("messageKey").isEqualTo("pharmacy.clarification.notClarifiable");
             verify(prescriptionRepository, never()).save(any());
             verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+            // G13 AC-9: a refused question keeps the claim
+            verifyNoInteractions(queueClaimService);
         }
 
         @Test
@@ -159,11 +215,11 @@ class PrescriptionClarificationServiceTest {
 
             prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("PARTNER_ACCEPTED");
+                    .extracting("messageKey").isEqualTo("pharmacy.clarification.notClarifiable");
             verify(prescriptionRepository, never()).save(any());
         }
 
@@ -171,18 +227,18 @@ class PrescriptionClarificationServiceTest {
         @DisplayName("refuses a blank reason")
         void refusesBlankReason() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "   "))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("reason");
+                    .extracting("messageKey").isEqualTo("pharmacy.clarification.reasonRequired");
         }
 
         @Test
         @DisplayName("a prescription at another hospital is 404, not 403")
         void crossTenantIs404() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
-            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.requestClarification(prescriptionId, "why"))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -280,7 +336,8 @@ class PrescriptionClarificationServiceTest {
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
-                    .isInstanceOf(AccessDeniedException.class);
+                    .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                    .hasMessageContaining("pharmacy.clarification.resolve.staffProfileRequired");
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
         }
 
@@ -293,7 +350,7 @@ class PrescriptionClarificationServiceTest {
 
             assertThatThrownBy(() -> service.resolveClarification(prescriptionId, "ok"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("not awaiting clarification");
+                    .extracting("messageKey").isEqualTo("pharmacy.clarification.notAwaiting");
         }
 
         @Test

@@ -18,7 +18,19 @@ public class AssignmentCreatedEvent {
     /** The persisted assignment's PK — used to re-load it in the listener. */
     private final UUID assignmentId;
 
+    /**
+     * True when the new user's welcome mail already carries this
+     * assignment's confirmation code: the listener then skips the separate
+     * assignment e-mail (SMS still goes out).
+     */
+    private final boolean emailCoveredByWelcome;
+
     public AssignmentCreatedEvent(UUID assignmentId) {
+        this(assignmentId, false);
+    }
+
+    public AssignmentCreatedEvent(UUID assignmentId, boolean emailCoveredByWelcome) {
         this.assignmentId = assignmentId;
+        this.emailCoveredByWelcome = emailCoveredByWelcome;
     }
 }

@@ -1,5 +1,7 @@
 package com.example.hms.security.audit;
 
+import com.example.hms.enums.AuditEventType;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -31,6 +33,13 @@ public @interface WriteAudited {
 
     /** Path variable or query parameter holding the patient the write concerns. Empty means {@code patientId}. */
     String patientIdVar() default "";
+
+    /**
+     * The specific event this handler's row records (QA D429: a lab order
+     * is {@code LAB_ORDER_CREATED}, not a bare {@code DATA_CREATE}). Empty
+     * means the generic event for the HTTP method. At most one value.
+     */
+    AuditEventType[] eventType() default {};
 
     /**
      * Do not record. Only for controllers whose service already emits a more

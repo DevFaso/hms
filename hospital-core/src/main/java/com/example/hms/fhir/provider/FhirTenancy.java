@@ -1,7 +1,7 @@
 package com.example.hms.fhir.provider;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
-import com.example.hms.security.context.HospitalContextHolder;
 import org.hl7.fhir.r4.model.OperationOutcome;
 
 import java.util.UUID;
@@ -17,7 +17,7 @@ final class FhirTenancy {
     private FhirTenancy() {}
 
     static UUID requireHospitalScope(String resourceType) {
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
             OperationOutcome outcome = new OperationOutcome();
             outcome.addIssue()

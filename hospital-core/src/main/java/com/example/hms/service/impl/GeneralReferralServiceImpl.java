@@ -6,6 +6,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Department;
 import com.example.hms.model.GeneralReferral;
 import com.example.hms.model.GeneralReferralAttachment;
+import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
@@ -40,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 
@@ -52,11 +54,11 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class GeneralReferralServiceImpl implements GeneralReferralService {
 
-    private static final int REFERRAL_APPOINTMENT_MINUTES = 30;
 
     private final GeneralReferralRepository referralRepository;
     private final com.example.hms.repository.AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
@@ -65,6 +67,12 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     private final ReferralEventRepository eventRepository;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    /** QA D1060 / D1063: the slot rules set the visit length and keep a slot held for an offer. */
+    private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+    /** QA D1073: the person who scheduled the referral is the appointment's creator. */
+    private final com.example.hms.repository.UserRepository userRepository;
+    /** QA D309: each referral step is audited here, with its patient (the generic write audit is skipped). */
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AuditEventLogService> auditServiceProvider;
 
     @Override
     @Transactional
@@ -72,34 +80,68 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+        // Both hospitals of a referral are clinical: a provider facility answers
+        // as an unknown one (provider plan AC-11).
+        // QA D205: the sending hospital is the caller's acting scope; the body's id is a claim.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(request.getHospitalId())) {
+            throw new ResourceNotFoundException("hospital.notFound", request.getHospitalId());
+        }
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        // QA D263: the referred patient is one the sending hospital registered. Any
+        // other patient answers as unknown, so the response cannot carry their name.
+        if (!registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
+            throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
+        }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Staff referringProvider = staffRepository.findById(request.getReferringProviderId())
-            .orElseThrow(() -> new ResourceNotFoundException("Referring provider not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("generalReferral.referringProvider.notFound", request.getReferringProviderId()));
 
         Staff receivingProvider = null;
         if (request.getReceivingProviderId() != null) {
             receivingProvider = staffRepository.findById(request.getReceivingProviderId())
-                .orElseThrow(() -> new ResourceNotFoundException("Receiving provider not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("generalReferral.receivingProvider.notFound", request.getReceivingProviderId()));
         }
 
         Department targetDepartment = null;
         if (request.getTargetDepartmentId() != null) {
             targetDepartment = departmentRepository.findById(request.getTargetDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Target department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("generalReferral.targetDepartment.notFound", request.getTargetDepartmentId()));
         }
 
         Hospital receivingHospital = null;
         if (request.getReceivingHospitalId() != null) {
-            receivingHospital = hospitalRepository.findById(request.getReceivingHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Receiving hospital not found"));
+            receivingHospital = hospitalRepository.findClinicalById(request.getReceivingHospitalId())
+                .orElseThrow(() -> new ResourceNotFoundException("generalReferral.receivingHospital.notFound", request.getReceivingHospitalId()));
         }
 
-        Department sourceDepartment = null;
-        if (request.getSourceDepartmentId() != null) {
-            sourceDepartment = departmentRepository.findById(request.getSourceDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Source department not found"));
+        // QA D205: the referrer is the signed-in clinician of the sending hospital,
+        // and a named receiver works at the hospital the referral is addressed to.
+        requireReferrerIsCaller(referringProvider, hospital.getId());
+        // QA D319 (D205): the referrer is a physician or a midwife. A nurse
+        // naming herself as the referring clinician passed the caller check.
+        requireReferrerMayRefer(referringProvider, hospital.getId());
+        if (receivingProvider != null) {
+            UUID addressedTo = receivingHospital != null ? receivingHospital.getId() : hospital.getId();
+            if (!worksAt(receivingProvider, addressedTo)) {
+                throw BusinessRuleException.ofKey("generalReferral.receivingProvider.wrongHospital");
+            }
+            // QA D273: only a physician acts on a received referral (acknowledge, schedule,
+            // start, complete are doctor-only), so a nurse cannot be the one it is addressed to.
+            requirePhysicianAt(receivingProvider, addressedTo);
+            // QA D955: the referral goes to someone else, from its creation on
+            // (checked after the hospital rules, which keep their own refusals).
+            requireReceiverIsNotReferrer(receivingProvider, referringProvider);
+        }
+
+        // A source department is one of the sending hospital's.
+        Department sourceDepartment = loadSourceDepartment(request.getSourceDepartmentId(), hospital.getId());
+        // A target department is one of the hospital the referral is addressed to.
+        UUID targetHospitalId = receivingHospital != null ? receivingHospital.getId() : hospital.getId();
+        if (targetDepartment != null && !belongsTo(targetDepartment, targetHospitalId)) {
+            throw new ResourceNotFoundException("generalReferral.targetDepartment.notFound", request.getTargetDepartmentId());
         }
 
         GeneralReferral referral = new GeneralReferral();
@@ -127,22 +169,26 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         referral.setPriorityScore(calculatePriorityScore(request.getUrgency()));
 
         referral = referralRepository.save(referral);
+        auditStep(referral, "CREATE", null);
         return toResponse(referral);
     }
 
     @Override
     public GeneralReferralResponseDTO getReferral(UUID referralId) {
-        return toResponse(findReferral(referralId));
+        return toResponse(findReferral(referralId, true));
     }
 
     @Override
     @Transactional
     public GeneralReferralResponseDTO submitReferral(UUID referralId) {
         GeneralReferral referral = findReferral(referralId);
+        requireCallerIsReferrer(referral);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         ReferralStatus before = referral.getStatus();
         referral.submit();
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.SUBMIT, before, null);
+        auditStep(referral, "SUBMIT", before);
         return toResponse(referral);
     }
 
@@ -150,12 +196,22 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO acknowledgeReferral(UUID referralId, String notes, UUID receivingProviderId) {
         GeneralReferral referral = findReferral(referralId);
+        UUID receivingHospitalId = requireReceivingSide(referral);
         Staff receivingProvider = staffRepository.findById(receivingProviderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Receiving provider not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("generalReferral.receivingProvider.notFound", receivingProviderId));
+        // QA D90: the named receiver must work at the hospital the referral is addressed to.
+        if (receivingProvider.getHospital() == null
+                || !receivingProvider.getHospital().getId().equals(receivingHospitalId)) {
+            throw new ResourceNotFoundException("generalReferral.receivingProvider.notFound", receivingProviderId);
+        }
+        requirePhysicianAt(receivingProvider, receivingHospitalId);
+        // QA D955: the referral goes to someone else; the referrer cannot be named its receiver.
+        requireReceiverIsNotReferrer(receivingProvider, referral.getReferringProvider());
         ReferralStatus before = referral.getStatus();
         referral.acknowledge(notes, receivingProvider);
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.ACKNOWLEDGE, before, notes);
+        auditStep(referral, "ACKNOWLEDGE", before);
         return toResponse(referral);
     }
 
@@ -163,6 +219,8 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO scheduleReferral(UUID referralId, ScheduleReferralRequestDTO request) {
         GeneralReferral referral = findReferral(referralId);
+        requireReceivingSide(referral);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         ReferralStatus before = referral.getStatus();
         referral.schedule(request.getAppointmentTime(), request.getLocation());
 
@@ -177,6 +235,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             + (request.getLocation() == null ? "" : ", location=" + request.getLocation())
             + (appointment == null ? ", appointment=none" : ", appointmentId=" + appointment.getId());
         eventRecorder.recordUserEvent(referral, ReferralEventType.SCHEDULE, before, note);
+        auditStep(referral, "SCHEDULE", before);
         return toResponse(referral);
     }
 
@@ -220,6 +279,29 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             return null;
         }
 
+        // QA D1013 (sibling): the same overlap rule as every booking path. A
+        // provider already booked at that time keeps the referral scheduled
+        // without an appointment, like the other "cannot produce one" cases,
+        // instead of double-booking them.
+        // QA D1060: the slot rules set the length (it was a flat 30 minutes).
+        java.time.LocalDateTime end = java.time.LocalDateTime.of(appointmentTime.toLocalDate(),
+            slotPolicy.endFor(provider.getId(), appointmentTime.toLocalDate(), appointmentTime.toLocalTime()));
+        try {
+            // QA D1063: a slot held for a waitlist offer is not given to the referral either.
+            slotPolicy.requireNoLiveHold(provider.getId(), appointmentTime, end);
+        } catch (com.example.hms.exception.BusinessException held) {
+            log.info("Referral {} scheduled without an appointment: the slot is held for a waitlist offer",
+                referral.getId());
+            return null;
+        }
+        if (com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                appointmentRepository.findByStaff_IdAndAppointmentDate(provider.getId(), appointmentTime.toLocalDate()),
+                null, appointmentTime, end)) {
+            log.info("Referral {} scheduled without an appointment: the provider is already booked then",
+                referral.getId());
+            return null;
+        }
+
         try {
             com.example.hms.model.Appointment appointment = com.example.hms.model.Appointment.builder()
                 .patient(referral.getPatient())
@@ -229,9 +311,11 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
                 .department(department)
                 .appointmentDate(appointmentTime.toLocalDate())
                 .startTime(appointmentTime.toLocalTime())
-                .endTime(appointmentTime.toLocalTime().plusMinutes(REFERRAL_APPOINTMENT_MINUTES))
+                .endTime(end.toLocalTime())
                 .status(com.example.hms.enums.AppointmentStatus.SCHEDULED)
                 .reason(buildAppointmentReason(referral))
+                // QA D1073: the appointment names who booked it.
+                .createdBy(currentUserOrNull())
                 .build();
             return appointmentRepository.save(appointment);
         } catch (RuntimeException ex) {
@@ -241,20 +325,30 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         }
     }
 
+    private com.example.hms.model.User currentUserOrNull() {
+        UUID userId = roleValidator.getCurrentUserId();
+        return userId != null ? userRepository.findById(userId).orElse(null) : null;
+    }
+
     private String buildAppointmentReason(GeneralReferral referral) {
         String reason = referral.getReferralReason();
-        String prefix = "Referral";
-        return (reason == null || reason.isBlank()) ? prefix : prefix + ": " + reason;
+        // Stored on the appointment the receiving desk reads: the bundle, not an English word.
+        return (reason == null || reason.isBlank())
+            ? com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.appointment.reason")
+            : com.example.hms.utility.MessageUtil.resolve("generalReferral.appointment.reasonWith", reason);
     }
 
     @Override
     @Transactional
     public GeneralReferralResponseDTO startReferral(UUID referralId) {
         GeneralReferral referral = findReferral(referralId);
+        requireReceivingSide(referral);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         ReferralStatus before = referral.getStatus();
         referral.start();
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.START, before, null);
+        auditStep(referral, "START", before);
         return toResponse(referral);
     }
 
@@ -262,10 +356,12 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO completeReferral(UUID referralId, String summary, String followUp) {
         GeneralReferral referral = findReferral(referralId);
+        requireReceivingSide(referral);
         ReferralStatus before = referral.getStatus();
         referral.complete(summary, followUp);
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.COMPLETE, before, summary);
+        auditStep(referral, "COMPLETE", before);
         return toResponse(referral);
     }
 
@@ -273,10 +369,12 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO rejectReferral(UUID referralId, RejectReferralRequestDTO request) {
         GeneralReferral referral = findReferral(referralId);
+        requireReceivingSide(referral);
         ReferralStatus before = referral.getStatus();
         referral.reject(request.getReason());
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.REJECT, before, request.getReason());
+        auditStep(referral, "REJECT", before);
         return toResponse(referral);
     }
 
@@ -284,10 +382,18 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public void cancelReferral(UUID referralId, String reason) {
         GeneralReferral referral = findReferral(referralId);
+        // QA D510: cancelling is the SENDING side's act; the receiver declines
+        // (reject) instead. QA D509: and only the clinician who wrote it, as for
+        // submit — a colleague at the same hospital cancelled DOCTOR_A's referral.
+        requireSendingSide(referral);
+        requireCallerIsReferrer(referral, "generalReferral.cancel.referrerOnly");
+        // QA D1098: a blank reason passed the required request parameter.
+        String cancelReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason, "reason");
         ReferralStatus before = referral.getStatus();
-        referral.cancel(reason);
+        referral.cancel(cancelReason);
         referral = referralRepository.save(referral);
-        eventRecorder.recordUserEvent(referral, ReferralEventType.CANCEL, before, reason);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.CANCEL, before, cancelReason);
+        auditStep(referral, "CANCEL", before);
     }
 
     @Override
@@ -299,7 +405,13 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             // hospitals (untagged, V158); every foreign row is accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
-            referrals = referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable);
+            // QA D623/D652: the same rule as the by-id read (findReferral) — a
+            // referral never sent exists only for the hospital that wrote it.
+            referrals = referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable)
+                .stream()
+                .filter(r -> NeverSentRule.readableHere(
+                    CrossHospitalReachRecorder.hospitalIdOf(r.getHospital()), activeHospitalId, wasSent(r)))
+                .toList();
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(referrals.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital referral read on the treatment relationship");
@@ -308,6 +420,18 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         }
         return referrals.stream()
             .map(this::toResponse)
+            .toList();
+    }
+
+    @Override
+    public List<GeneralReferralResponseDTO> getReferralsForPortalPatient(UUID patientId) {
+        // QA D430: a draft is the clinician's unfinished work, not yet a
+        // referral; the patient sees it once it is sent.
+        return referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
+            .filter(referral -> referral.getStatus() != ReferralStatus.DRAFT)
+            .map(this::toResponse)
+            // QA D1960: the patient's copy, without the clinicians' acknowledgement or cancellation text.
+            .map(com.example.hms.service.support.PatientSafeView::referral)
             .toList();
     }
 
@@ -346,16 +470,17 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         List<GeneralReferral> outgoing;
         List<GeneralReferral> incoming;
         if (status != null && !status.isBlank()) {
-            ReferralStatus referralStatus = ReferralStatus.valueOf(status.toUpperCase());
+            ReferralStatus referralStatus = referralStatusParam(status);
             outgoing = referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
             incoming = referralRepository.findByReceivingHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
         } else {
             outgoing = referralRepository.findByHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
             incoming = referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
         }
-        // Exclude DRAFT incoming referrals — drafts are unsent and only visible to the sender
+        // Exclude never-sent incoming referrals — drafts are unsent and only visible to the
+        // sender. QA D509: a draft CANCELLED before it was sent is still unsent.
         incoming = incoming.stream()
-            .filter(r -> r.getStatus() != ReferralStatus.DRAFT)
+            .filter(GeneralReferralServiceImpl::wasSent)
             .toList();
         // Merge outgoing and incoming, dedup by ID, sort newest-first
         Map<UUID, GeneralReferral> merged = new LinkedHashMap<>();
@@ -375,7 +500,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         }
         List<GeneralReferral> referrals;
         if (status != null && !status.isBlank()) {
-            ReferralStatus referralStatus = ReferralStatus.valueOf(status.toUpperCase());
+            ReferralStatus referralStatus = referralStatusParam(status);
             referrals = referralRepository.findByStatusOrderByCreatedAtDesc(referralStatus);
         } else {
             referrals = referralRepository.findAllByOrderByCreatedAtDesc();
@@ -430,24 +555,142 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     private static final String REFERRAL_NOT_FOUND = "generalReferral.notFound";
+    private static final String RECEIVER_NOT_REFERRER = "generalReferral.receiver.notReferrer";
+
+    /**
+     * QA D90: receiver-side transitions (acknowledge, schedule, start, complete, reject)
+     * belong to the hospital the referral is addressed to — the receiving hospital, or the
+     * sending hospital itself for an internal referral. {@link #findReferral} lets either
+     * side READ the referral; only the receiving side may act on it. Returns that hospital id.
+     */
+    private UUID requireReceivingSide(GeneralReferral referral) {
+        Hospital target = referral.getReceivingHospital() != null
+            ? referral.getReceivingHospital() : referral.getHospital();
+        UUID targetId = target != null ? target.getId() : null;
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(targetId)) {
+            // QA D332: a refusal the caller can read, in its own language.
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.receivingSide.required"));
+        }
+        // QA D955: an internal referral's sending and receiving hospital are the
+        // same, so the hospital check alone let the referrer accept, start and
+        // complete her own referral. Every receiving-side step is refused to
+        // the clinician who sent it.
+        UUID callerId = roleValidator.getCurrentUserId();
+        Staff referrer = referral.getReferringProvider();
+        if (callerId != null && referrer != null && referrer.getUser() != null
+                && callerId.equals(referrer.getUser().getId())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw(RECEIVER_NOT_REFERRER));
+        }
+        return targetId;
+    }
+
+    /** QA D955: a referral goes to someone else; its referrer is never its receiver. */
+    private static void requireReceiverIsNotReferrer(Staff receiver, Staff referrer) {
+        if (com.example.hms.security.CallerIdentity.sameUser(receiver, referrer)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw(RECEIVER_NOT_REFERRER));
+        }
+    }
 
     private GeneralReferral findReferral(UUID referralId) {
+        return findReferral(referralId, false);
+    }
+
+    /**
+     * @param read a read by id ({@code getReferral}): it also opens a referral
+     *             the by-patient list shows on the treatment relationship (QA
+     *             D652). Every write passes {@code false}: reading across is not
+     *             acting across.
+     */
+    private GeneralReferral findReferral(UUID referralId, boolean read) {
         GeneralReferral referral = referralRepository.findById(referralId)
             .orElseThrow(() -> new ResourceNotFoundException(REFERRAL_NOT_FOUND));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {
-            boolean isSendingHospital = referral.getHospital() != null
-                && activeHospitalId.equals(referral.getHospital().getId());
+            boolean isSendingHospital = isSendingHospital(referral, activeHospitalId);
             boolean isReceivingHospital = referral.getReceivingHospital() != null
                 && activeHospitalId.equals(referral.getReceivingHospital().getId());
-            if (!isSendingHospital && !isReceivingHospital) {
+            if (!isSendingHospital && !isReceivingHospital
+                    && !(read && readableOnTheTreatmentRelationship(referral, activeHospitalId))) {
+                throw new ResourceNotFoundException(REFERRAL_NOT_FOUND);
+            }
+            // QA D509: a referral never sent does not exist for the receiving hospital.
+            if (!NeverSentRule.readableHere(
+                    CrossHospitalReachRecorder.hospitalIdOf(referral.getHospital()), activeHospitalId, wasSent(referral))) {
                 throw new ResourceNotFoundException(REFERRAL_NOT_FOUND);
             }
         }
         return referral;
     }
 
+    /**
+     * QA D652 - the by-patient list reads across {@code readableHospitalIds}, so a
+     * sent referral of a third hospital it lists must open by id too (the rule
+     * D508 gave imaging), once it was sent.
+     */
+    private boolean readableOnTheTreatmentRelationship(GeneralReferral referral, UUID activeHospitalId) {
+        UUID rowHospitalId = CrossHospitalReachRecorder.hospitalIdOf(referral.getHospital());
+        UUID patientId = referral.getPatient() != null ? referral.getPatient().getId() : null;
+        if (rowHospitalId == null || patientId == null
+                || !NeverSentRule.readableHere(rowHospitalId, activeHospitalId, wasSent(referral))) {
+            return false;
+        }
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        if (!recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId).contains(rowHospitalId)) {
+            return false;
+        }
+        reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(List.of(rowHospitalId), activeHospitalId),
+            "Cross-hospital referral read on the treatment relationship");
+        return true;
+    }
+
+    private static boolean isSendingHospital(GeneralReferral referral, UUID activeHospitalId) {
+        return referral.getHospital() != null && activeHospitalId.equals(referral.getHospital().getId());
+    }
+
     private static final String OWNER = "GeneralReferral";
+
+    /**
+     * QA D889: the referral list and detail print the patient's MRN under the
+     * name, and the response never carried one, so the line was blank.
+     * #965 review: the MRN at the hospital the reader acts at first, when it is
+     * the sending or the receiving side — an incoming referral listed at the
+     * receiving hospital showed the referring hospital's MRN even when the
+     * patient has one here. Then the referring hospital's, then the receiving
+     * one's. A registration row pointing at a hard-deleted hospital leaves it
+     * unknown, never a 500.
+     */
+    private String resolvePatientMrn(Patient patient, Hospital hospital, Hospital receivingHospital,
+                                     UUID readerHospitalId, java.util.UUID referralId) {
+        if (patient == null) {
+            return null;
+        }
+        try {
+            UUID sendingId = hospital != null ? hospital.getId() : null;
+            UUID receivingId = receivingHospital != null ? receivingHospital.getId() : null;
+            String mrn = null;
+            if (readerHospitalId != null
+                    && (readerHospitalId.equals(sendingId) || readerHospitalId.equals(receivingId))) {
+                mrn = patient.getMrnForHospital(readerHospitalId);
+            }
+            if ((mrn == null || mrn.isBlank()) && sendingId != null) {
+                mrn = patient.getMrnForHospital(sendingId);
+            }
+            if ((mrn == null || mrn.isBlank()) && receivingId != null) {
+                mrn = patient.getMrnForHospital(receivingId);
+            }
+            return mrn == null || mrn.isBlank() ? null : mrn;
+        } catch (jakarta.persistence.EntityNotFoundException
+                 | org.springframework.orm.jpa.JpaObjectRetrievalFailureException ex) {
+            org.slf4j.LoggerFactory.getLogger(GeneralReferralServiceImpl.class)
+                .warn("Referral {}: patient registration points at a missing hospital; MRN unavailable.", referralId);
+            return null;
+        }
+    }
 
     private GeneralReferralResponseDTO toResponse(GeneralReferral referral) {
         GeneralReferralResponseDTO dto = new GeneralReferralResponseDTO();
@@ -474,6 +717,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
         dto.setPatientId(patient != null ? patient.getId() : null);
         dto.setPatientName(extractPatientName(patient));
+        // The acting hospital as the one tenant resolver answers it; null for a
+        // patient or a super-admin in global view (never a caller-supplied id).
+        dto.setPatientMrn(resolvePatientMrn(patient, hospital, receivingHospital,
+            roleValidator.getCurrentHospitalId(), referralId));
         dto.setHospitalId(hospital != null ? hospital.getId() : null);
         dto.setHospitalName(hospital != null ? hospital.getName() : null);
         dto.setReceivingHospitalId(receivingHospital != null ? receivingHospital.getId() : null);
@@ -572,16 +819,154 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         if (patient == null) {
             return null;
         }
-        StringBuilder builder = new StringBuilder();
-        if (patient.getFirstName() != null) {
-            builder.append(patient.getFirstName().trim());
+        return patient.getFullName();
+    }
+
+    /**
+     * QA D509 — has this referral ever been sent to the receiving hospital? A
+     * draft has not, and neither has a draft cancelled before submission
+     * (status CANCELLED, never stamped {@code submittedAt}).
+     */
+    static boolean wasSent(GeneralReferral referral) {
+        ReferralStatus status = referral.getStatus();
+        if (status == ReferralStatus.DRAFT) {
+            return false;
         }
-        if (patient.getLastName() != null) {
-            if (!builder.isEmpty()) {
-                builder.append(' ');
-            }
-            builder.append(patient.getLastName().trim());
+        return !(status == ReferralStatus.CANCELLED && referral.getSubmittedAt() == null);
+    }
+
+    /** QA D510 — only the sending hospital (which, for an internal referral, is also the receiver) cancels. */
+    private void requireSendingSide(GeneralReferral referral) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID sendingId = referral.getHospital() != null ? referral.getHospital().getId() : null;
+        if (activeHospitalId != null && !activeHospitalId.equals(sendingId)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.cancel.sendingSideOnly"));
         }
-        return builder.isEmpty() ? null : builder.toString();
+    }
+
+    /**
+     * QA D205: only the signed-in clinician, at the sending hospital, may be named as the referrer.
+     * QA D412: a draft is sent by the clinician who wrote it. A nurse could
+     * submit a doctor's draft, sending it out under the doctor's name. The
+     * referral was resolved in the caller's scope (findReferral), so the
+     * refusal names only what the caller would need to be.
+     */
+    private void requireCallerIsReferrer(GeneralReferral referral) {
+        requireCallerIsReferrer(referral, "generalReferral.submit.referrerOnly");
+    }
+
+    private void requireCallerIsReferrer(GeneralReferral referral, String messageKey) {
+        UUID callerId = roleValidator.getCurrentUserId();
+        Staff referrer = referral.getReferringProvider();
+        boolean isReferrer = callerId != null && referrer != null && referrer.getUser() != null
+            && callerId.equals(referrer.getUser().getId());
+        if (!isReferrer) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw(messageKey));
+        }
+    }
+
+    private void requireReferrerIsCaller(Staff referringProvider, UUID sendingHospitalId) {
+        UUID callerId = roleValidator.getCurrentUserId();
+        boolean isCaller = callerId != null && referringProvider.getUser() != null
+            && callerId.equals(referringProvider.getUser().getId());
+        if (!isCaller || !worksAt(referringProvider, sendingHospitalId)) {
+            throw BusinessRuleException.ofKey("generalReferral.referringProvider.notCaller");
+        }
+    }
+
+    /** QA D319: the referring clinician holds a physician or midwife role at the sending hospital. */
+    private void requireReferrerMayRefer(Staff provider, UUID hospitalId) {
+        UUID userId = provider.getUser() != null ? provider.getUser().getId() : null;
+        boolean mayRefer = userId != null && (roleValidator.isDoctor(userId, hospitalId)
+            || roleValidator.isPhysician(userId, hospitalId)
+            || roleValidator.isSurgeon(userId, hospitalId)
+            || roleValidator.isMidwife(userId, hospitalId));
+        if (!mayRefer) {
+            throw BusinessRuleException.ofKey("generalReferral.referringProvider.prescriber.required");
+        }
+    }
+
+    /**
+     * QA D309 (D260): one audit row per referral step, typed by what happened
+     * (a creation, or a change of status), naming the referral and keyed on
+     * its patient. Ids and statuses only: no name, no clinical text.
+     * The generic write audit was "DATA_CREATE" for every POST with no
+     * patient and an "Unknown Resource" name.
+     */
+    private void auditStep(GeneralReferral referral, String step, ReferralStatus before) {
+        com.example.hms.service.AuditEventLogService audit =
+            auditServiceProvider != null ? auditServiceProvider.getIfAvailable() : null;
+        if (audit == null || referral == null || referral.getId() == null) {
+            return;
+        }
+        try {
+            UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+            Hospital acting = referral.getReceivingHospital() != null && activeHospitalId != null
+                && activeHospitalId.equals(referral.getReceivingHospital().getId())
+                ? referral.getReceivingHospital() : referral.getHospital();
+            boolean created = "CREATE".equals(step);
+            audit.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .eventType(created ? com.example.hms.enums.AuditEventType.DATA_CREATE
+                    : com.example.hms.enums.AuditEventType.DATA_UPDATE)
+                .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                .userId(roleValidator.getCurrentUserId())
+                .hospitalName(acting != null ? acting.getName() : null)
+                .entityType("REFERRAL")
+                .resourceId(referral.getId().toString())
+                .resourceName("Referral " + referral.getId().toString().substring(0, 8))
+                .patientId(referral.getPatient() != null ? referral.getPatient().getId() : null)
+                .eventDescription("Referral " + step
+                    + (created ? " -> " + referral.getStatus() : ": " + before + " -> " + referral.getStatus()))
+                .build());
+        } catch (RuntimeException ex) {
+            org.slf4j.LoggerFactory.getLogger(GeneralReferralServiceImpl.class)
+                .warn("Referral step audit not written for {} ({}): {}", referral.getId(), step,
+                    ex.getClass().getSimpleName());
+        }
+    }
+
+    /** QA D273: the receiving provider holds a physician role at the hospital the referral is addressed to. */
+    private void requirePhysicianAt(Staff provider, UUID hospitalId) {
+        UUID userId = provider.getUser() != null ? provider.getUser().getId() : null;
+        boolean physician = userId != null && (roleValidator.isDoctor(userId, hospitalId)
+            || roleValidator.isPhysician(userId, hospitalId)
+            || roleValidator.isSurgeon(userId, hospitalId));
+        if (!physician) {
+            throw BusinessRuleException.ofKey("generalReferral.receivingProvider.physician.required");
+        }
+    }
+
+    /** The referral's source department, which must be one of the sending hospital's; null when none is named. */
+    private Department loadSourceDepartment(UUID sourceDepartmentId, UUID sendingHospitalId) {
+        if (sourceDepartmentId == null) {
+            return null;
+        }
+        Department department = departmentRepository.findById(sourceDepartmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("generalReferral.sourceDepartment.notFound", sourceDepartmentId));
+        if (department.getHospital() == null || !sendingHospitalId.equals(department.getHospital().getId())) {
+            throw new ResourceNotFoundException("generalReferral.sourceDepartment.notFound", sourceDepartmentId);
+        }
+        return department;
+    }
+
+    private static boolean belongsTo(Department department, UUID hospitalId) {
+        return department.getHospital() != null && department.getHospital().getId() != null
+            && department.getHospital().getId().equals(hospitalId);
+    }
+
+    private static boolean worksAt(Staff staff, UUID hospitalId) {
+        return staff.getHospital() != null && staff.getHospital().getId() != null
+            && staff.getHospital().getId().equals(hospitalId);
+    }
+
+    /** QA D1384 (round 32): an unknown {@code status} filter is refused on its name, never raw Java text. */
+    private static ReferralStatus referralStatusParam(String status) {
+        try {
+            return ReferralStatus.valueOf(status.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw com.example.hms.utility.EnumQueryParam.refusal("status");
+        }
     }
 }

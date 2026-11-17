@@ -101,4 +101,8 @@ public class AppointmentWaitlist extends BaseEntity {
 
     @Column(name = "created_by", length = 255)
     private String createdBy;
+
+    /** QA D1157 (V256): why the entry was closed; required by the server since round 21. */
+    @Column(name = "close_reason", length = 500)
+    private String closeReason;
 }

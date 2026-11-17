@@ -58,10 +58,11 @@ describe('BirthPlanService', () => {
     req.flush({ id: 'bp1', providerReviewed: true });
   });
 
-  it('DELETEs a plan', () => {
-    service.delete('bp1').subscribe();
-    const req = httpMock.expectOne('/birth-plans/bp1');
+  it('DELETEs a plan with its reason as ?reason= (QA D1241)', () => {
+    service.delete('bp1', 'Doublon').subscribe();
+    const req = httpMock.expectOne((r) => r.url === '/birth-plans/bp1');
     expect(req.request.method).toBe('DELETE');
+    expect(req.request.params.get('reason')).toBe('Doublon');
     req.flush(null, { status: 204, statusText: 'No Content' });
   });
 });

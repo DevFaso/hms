@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.StrictQueryParams;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.BreakGlassDeclareRequestDTO;
 import com.example.hms.payload.dto.BreakGlassReviewRequestDTO;
@@ -70,7 +71,7 @@ public class BreakGlassController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<BreakGlassSessionResponseDTO> revoke(
             @PathVariable UUID sessionId,
-            @RequestBody(required = false) BreakGlassRevokeRequestDTO request) {
+            @Valid @RequestBody(required = false) BreakGlassRevokeRequestDTO request) {
         return ResponseEntity.ok(breakGlassService.revoke(sessionId, request));
     }
 
@@ -106,6 +107,7 @@ public class BreakGlassController {
     }
 
     @GetMapping("/audit")
+    @StrictQueryParams
     @Operation(summary = "Hospital-scoped break-glass review",
                description = "Returns all sessions (live, expired, and revoked) for a hospital, "
                            + "ordered most-recent first. Intended for admin compliance review screens.")

@@ -20,7 +20,9 @@ public class PatientVitalSignMapper {
         // NEWS2 is computed on read, never stored — a stored score would go
         // stale the moment the scoring table changed (P3 #25b). Explicitly
         // partial: missing parameters are named, not silently zeroed.
-        NewsScoreCalculator.NewsScoreResult news = NewsScoreCalculator.score(entity);
+        // QA D518: no adult score is shown for a child.
+        NewsScoreCalculator.NewsScoreResult news = NewsScoreCalculator.applies(entity)
+            ? NewsScoreCalculator.score(entity) : null;
 
         return PatientVitalSignResponseDTO.builder()
             .id(entity.getId())
@@ -43,14 +45,16 @@ public class PatientVitalSignMapper {
             .heightCm(entity.getHeightCm())
             .headCircumferenceCm(entity.getHeadCircumferenceCm())
             .bodyPosition(entity.getBodyPosition())
-            .notes(entity.getNotes())
+            .notes(com.example.hms.service.support.VitalSignNotes.display(entity))
+            .painScore(entity.getPainScore())
+            .fundalHeightCm(entity.getFundalHeightCm())
             .clinicallySignificant(entity.isClinicallySignificant())
             .onOxygen(entity.getOnOxygen())
             .consciousnessLevel(entity.getConsciousnessLevel())
-            .newsScore(news.total())
-            .newsRiskBand(news.riskBand().name())
-            .newsComplete(news.complete())
-            .newsMissing(news.missingParameters())
+            .newsScore(news != null ? news.total() : null)
+            .newsRiskBand(news != null ? news.riskBand().name() : null)
+            .newsComplete(news != null ? news.complete() : null)
+            .newsMissing(news != null ? news.missingParameters() : null)
             .recordedAt(entity.getRecordedAt())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
@@ -75,6 +79,7 @@ public class PatientVitalSignMapper {
         entity.setOnOxygen(request.getOnOxygen());
         entity.setConsciousnessLevel(request.getConsciousnessLevel());
         entity.setNotes(request.getNotes());
+        entity.setOrganDamageSymptoms(com.example.hms.enums.OrganDamageSymptom.join(request.getOrganDamageSymptoms()));
         entity.setSource(request.getSource());
         entity.setRecordedAt(request.getRecordedAt());
         entity.setClinicallySignificant(Boolean.TRUE.equals(request.getClinicallySignificant()));
@@ -99,7 +104,7 @@ public class PatientVitalSignMapper {
             .temperature(entity.getTemperatureCelsius())
             .weightKg(entity.getWeightKg())
             .bodyPosition(entity.getBodyPosition())
-            .notes(entity.getNotes())
+            .notes(com.example.hms.service.support.VitalSignNotes.display(entity))
             .clinicallySignificant(entity.isClinicallySignificant())
             .recordedAt(entity.getRecordedAt())
             .build();

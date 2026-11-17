@@ -38,6 +38,14 @@ public class PatientViewCdsService implements CdsHookService {
     private static final String ID = "hms-patient-view";
     private static final String SOURCE_LABEL = "HMS Clinical Summary";
 
+    /** Card wording in the caller's language (D61); English when built outside Spring. */
+    private com.example.hms.cdshooks.CdsCardText text = com.example.hms.cdshooks.CdsCardText.ENGLISH;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCardText(com.example.hms.cdshooks.CdsCardText text) {
+        this.text = text;
+    }
+
     private final PatientAllergyRepository allergyRepository;
     private final PatientProblemRepository problemRepository;
 
@@ -72,7 +80,7 @@ public class PatientViewCdsService implements CdsHookService {
     }
 
     @Override
-    public CdsHookResponse evaluate(CdsHookRequest request) {
+    public CdsHookResponse evaluate(CdsHookRequest request, UUID callerHospitalId) {
         UUID patientId = CdsHookContext.requirePatientId(request);
         if (patientId == null) return CdsHookResponse.empty();
 
@@ -92,8 +100,9 @@ public class PatientViewCdsService implements CdsHookService {
             .anyMatch(a -> a.getSeverity() == AllergySeverity.SEVERE
                 || a.getSeverity() == AllergySeverity.LIFE_THREATENING);
         String summary = allergies.size() == 1
-            ? "1 active allergy on file"
-            : allergies.size() + " active allergies on file";
+            ? text.get("cds.patientView.allergy.one", "1 active allergy on file")
+            : text.get("cds.patientView.allergy.many", "{0} active allergies on file",
+                String.valueOf(allergies.size()));
         String detail = allergies.stream()
             .map(this::renderAllergy)
             .collect(Collectors.joining("\n"));
@@ -102,7 +111,7 @@ public class PatientViewCdsService implements CdsHookService {
             summary,
             detail,
             anyHigh ? CdsCard.Indicator.WARNING : CdsCard.Indicator.INFO,
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.clinicalSummary", SOURCE_LABEL), null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         ));
     }
@@ -116,8 +125,9 @@ public class PatientViewCdsService implements CdsHookService {
         if (active.isEmpty()) return;
 
         String summary = active.size() == 1
-            ? "1 active problem on the problem list"
-            : active.size() + " active problems on the problem list";
+            ? text.get("cds.patientView.problem.one", "1 active problem on the problem list")
+            : text.get("cds.patientView.problem.many", "{0} active problems on the problem list",
+                String.valueOf(active.size()));
         String detail = active.stream()
             .map(this::renderProblem)
             .collect(Collectors.joining("\n"));
@@ -126,7 +136,7 @@ public class PatientViewCdsService implements CdsHookService {
             summary,
             detail,
             CdsCard.Indicator.INFO,
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.clinicalSummary", SOURCE_LABEL), null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         ));
     }
@@ -135,21 +145,27 @@ public class PatientViewCdsService implements CdsHookService {
         StringBuilder sb = new StringBuilder("- ");
         sb.append(safe(a.getAllergenDisplay(), a.getAllergenCode()));
         if (a.getReaction() != null && !a.getReaction().isBlank()) {
-            sb.append(" — reaction: ").append(a.getReaction().trim());
+            sb.append(" — ").append(text.get("cds.patientView.reaction", "reaction: {0}", a.getReaction().trim()));
         }
         if (a.getSeverity() != null) {
-            sb.append(" (").append(a.getSeverity().name().toLowerCase()).append(")");
+            // QA D1134: "(gravité : légère)", agreeing with its noun, never a bare masculine "(léger)".
+            sb.append(" (").append(severityText(a.getSeverity())).append(")");
         }
         return sb.toString();
+    }
+
+    /** QA D1134: "gravité : légère", the severity agreeing with the noun it is read after. */
+    private String severityText(Enum<?> severity) {
+        return text.get("cds.patientView.severity", "severity: {0}", text.severityWord(severity));
     }
 
     private String renderProblem(PatientProblem p) {
         StringBuilder sb = new StringBuilder("- ");
         sb.append(safe(p.getProblemDisplay(), p.getProblemCode()));
         if (p.getSeverity() != null) {
-            sb.append(" (").append(p.getSeverity().name().toLowerCase()).append(")");
+            sb.append(" (").append(severityText(p.getSeverity())).append(")");
         }
-        if (p.isChronic()) sb.append(" — chronic");
+        if (p.isChronic()) sb.append(" — ").append(text.get("cds.patientView.chronic", "chronic"));
         appendCodings(sb, p);
         return sb.toString();
     }

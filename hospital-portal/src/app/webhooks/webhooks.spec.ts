@@ -12,7 +12,6 @@ import {
   WebhookEndpoint,
 } from '../services/integration-keys.service';
 import { HospitalService } from '../services/hospital.service';
-import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
@@ -84,7 +83,6 @@ describe('WebhooksComponent', () => {
       'getMyHospitalAsResponse',
     ]);
     hospitalSpy.list.and.returnValue(of([]));
-    const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
 
     await TestBed.configureTestingModule({
       imports: [WebhooksComponent, TranslateModule.forRoot()],
@@ -92,7 +90,6 @@ describe('WebhooksComponent', () => {
         provideRouter([]),
         { provide: IntegrationKeysService, useValue: api },
         { provide: HospitalService, useValue: hospitalSpy },
-        { provide: HospitalScopeUrlService, useValue: scopeUrlSpy },
         {
           provide: RoleContextService,
           useValue: {
@@ -121,11 +118,13 @@ describe('WebhooksComponent', () => {
     expect(component.endpoints().length).toBe(1);
   });
 
-  it('a global-view super-admin gets the pick-a-hospital state — no requests fired', () => {
-    scopedHospitalId.set(null);
+  it('carries no scope chip or hint of its own: the route gate owns them', () => {
+    // The route is flagged requiresHospitalScope: the shell shows the one
+    // chip and builds this page only with a hospital pinned.
     fixture.detectChanges();
-    expect(api.listKeys).not.toHaveBeenCalled();
-    expect(component.scopeReady()).toBeFalse();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(el.querySelector('app-hospital-scope-hint')).toBeNull();
   });
 
   it('an outage renders unavailable — never an empty credential inventory', () => {
@@ -135,13 +134,14 @@ describe('WebhooksComponent', () => {
     expect(component.keys().length).toBe(0);
   });
 
-  it('unpinning the scope mid-flight drops the old hospital response', () => {
+  it('a response landing after a scope change rebuilt the page never repopulates it', () => {
+    // The route gate destroys and rebuilds the page on a scope change; the
+    // old instance's in-flight credential inventory must die with it.
     const slow = new Subject<ApiKey[]>();
     api.listKeys.and.returnValue(slow.asObservable());
     fixture.detectChanges(); // load in flight
 
-    scopedHospitalId.set(null);
-    component.onScopeChange(null);
+    fixture.destroy();
     slow.next([key()]);
     slow.complete();
 

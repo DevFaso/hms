@@ -1,3 +1,4 @@
+import { unwrapDepartmentList } from './department-lookup.service';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
@@ -163,7 +164,7 @@ export class ReferralService {
   /** Fetch active departments for a hospital (for dropdowns) */
   getDepartmentsByHospital(hospitalId: string): Observable<DepartmentMinimal[]> {
     return this.http
-      .get<{ data: DepartmentMinimal[] }>(`/departments/active-minimal/${hospitalId}`)
-      .pipe(map((res) => res?.data ?? []));
+      .get<DepartmentMinimal[]>(`/departments/active-minimal/${hospitalId}`)
+      .pipe(map((res) => unwrapDepartmentList(res)));
   }
 }

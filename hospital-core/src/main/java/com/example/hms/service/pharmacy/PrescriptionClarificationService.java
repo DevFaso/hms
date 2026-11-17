@@ -2,6 +2,8 @@ package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.QueueClaimExitActor;
+import com.example.hms.enums.QueueClaimReleaseReason;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Prescription;
@@ -75,7 +77,8 @@ public class PrescriptionClarificationService {
             PrescriptionStatus.TRANSMITTED,
             PrescriptionStatus.PARTIALLY_FILLED,
             PrescriptionStatus.PENDING_STOCK,
-            PrescriptionStatus.PARTNER_REJECTED
+            PrescriptionStatus.PARTNER_REJECTED,
+            PrescriptionStatus.TRANSMISSION_FAILED
     );
     private static final String AUDIT_ENTITY = "PRESCRIPTION";
 
@@ -85,6 +88,10 @@ public class PrescriptionClarificationService {
     private final PharmacyServiceSupport support;
     private final PrescriberPharmacyNotifier prescriberNotifier;
     private final Clock clock;
+    /** G15: an open preparation blocks a clarification request (AC-10). */
+    private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
+    /** G13: asking the prescriber a question ends the work-queue claim (plan rule 4). */
+    private final PrescriptionQueueClaimService queueClaimService;
 
     /**
      * @param reason the pharmacist's question; required, at most 1000 chars,
@@ -92,18 +99,27 @@ public class PrescriptionClarificationService {
      */
     @Transactional
     public void requestClarification(UUID prescriptionId, String reason) {
-        Prescription prescription = findInScope(prescriptionId);
+        // Locked (G15 rule 1): a fill being prepared under the same lock
+        // cannot commit alongside a question that takes the order off the
+        // counter.
+        Prescription prescription = findInScopeForUpdate(prescriptionId);
+        // G15 AC-10: no question while a fill is prepared at the counter.
+        if (dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId,
+                com.example.hms.enums.DispenseStatus.PENDING)) {
+            throw new com.example.hms.exception.ConflictException(
+                    com.example.hms.utility.MessageUtil.resolve("dispense.ready.openPreparation"));
+        }
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("A clarification request needs a reason.");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "pharmacy.clarification.reasonRequired");
         }
         PrescriptionStatus status = prescription.getStatus();
         if (status == null || !CLARIFIABLE_STATUSES.contains(status)) {
-            throw new BusinessException("Only a prescription awaiting a fill can be sent back for "
-                    + "clarification; this one is " + status + ".");
+            throw new BusinessException("pharmacy.clarification.notClarifiable",
+                    status == null ? "" : status.localizedLabel());
         }
         UUID pharmacistId = roleValidator.getCurrentUserId();
         if (pharmacistId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
 
         prescription.setClarificationPreviousStatus(status);
@@ -115,6 +131,8 @@ public class PrescriptionClarificationService {
         prescription.setClarificationResolvedAt(null);
         prescription.setClarificationResolvedByUserId(null);
         prescriptionRepository.save(prescription);
+        queueClaimService.releaseOnExit(prescription, QueueClaimReleaseReason.CLARIFICATION_REQUESTED,
+                pharmacistId, QueueClaimExitActor.QUEUE_ROLE);
 
         // The reason is clinical narrative and stays off the audit description.
         support.logAudit(AuditEventType.PRESCRIPTION_CLARIFICATION_REQUESTED,
@@ -132,8 +150,8 @@ public class PrescriptionClarificationService {
     public void resolveClarification(UUID prescriptionId, String response) {
         Prescription prescription = findInScope(prescriptionId);
         if (prescription.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
-            throw new BusinessException("This prescription is not awaiting clarification; it is "
-                    + prescription.getStatus() + ".");
+            throw new BusinessException("pharmacy.clarification.notAwaiting",
+                    prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
         }
         Staff doctor = resolveDoctorAtHospital(prescription);
 
@@ -154,8 +172,26 @@ public class PrescriptionClarificationService {
 
     /** Same 404-not-403 idiom as the rest of the prescription surface. */
     private Prescription findInScope(UUID prescriptionId) {
-        Prescription prescription = prescriptionRepository.findById(prescriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        return requireInScope(prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND)));
+    }
+
+    /**
+     * {@link #findInScope} with the prescription row locked, for the write
+     * that takes the order away from the counter (G15 rule 1: every write
+     * that might meet a prepared fill takes the prescription lock first).
+     */
+    private Prescription findInScopeForUpdate(UUID prescriptionId) {
+        // The hospital is in the locking query when one is pinned (#825
+        // security finding 3); a super-admin in global view has none.
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        return requireInScope((hospitalId != null
+                ? prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId)
+                : prescriptionRepository.findByIdForUpdate(prescriptionId))
+                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND)));
+    }
+
+    private Prescription requireInScope(Prescription prescription) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
                 && (prescription.getHospital() == null
@@ -177,14 +213,17 @@ public class PrescriptionClarificationService {
         }
         UUID rxHospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
         if (rxHospitalId == null) {
-            throw new AccessDeniedException(
-                    "Only a clinician at the prescribing hospital can resolve a clarification.");
+            // QA D1187 class (round 22): a key, in the reader's language.
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                    "pharmacy.clarification.resolve.prescribingHospitalOnly");
         }
         // Looked up at the prescription's hospital, not "the doctor's first
         // profile": a clinician credentialed at two hospitals has two.
         return staffRepository.findByUserIdAndHospitalId(currentUserId, rxHospitalId)
-                .orElseThrow(() -> new AccessDeniedException(
-                        "Only a clinician with a staff profile at the prescribing hospital can "
-                                + "resolve a clarification."));
+                // Client-safe (both refusals here): findInScope answered 404
+                // for a foreign prescription before this runs, and the
+                // sentences name what the caller would need.
+                .orElseThrow(() -> new com.example.hms.exception.ClientSafeAccessDeniedException(
+                        "pharmacy.clarification.resolve.staffProfileRequired"));
     }
 }

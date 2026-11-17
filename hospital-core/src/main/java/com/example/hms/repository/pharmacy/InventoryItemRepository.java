@@ -4,10 +4,14 @@ import com.example.hms.model.pharmacy.InventoryItem;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,6 +20,24 @@ import java.util.UUID;
 public interface InventoryItemRepository extends JpaRepository<InventoryItem, UUID> {
 
     Page<InventoryItem> findByPharmacyIdAndActiveTrue(UUID pharmacyId, Pageable pageable);
+
+    /** QA D138: whether this pharmacy keeps stock here at all, so a fill must name a lot. */
+    boolean existsByPharmacyIdAndActiveTrue(UUID pharmacyId);
+
+    /**
+     * QA D967: every item of a pharmacy with its catalogue entry, deactivated
+     * ones included (a controlled drug taken off the list keeps its register).
+     */
+    @Query("SELECT i FROM InventoryItem i LEFT JOIN FETCH i.medicationCatalogItem WHERE i.pharmacy.id = :pharmacyId")
+    List<InventoryItem> findAllWithCatalogItemByPharmacyId(@Param("pharmacyId") UUID pharmacyId);
+
+    /**
+     * QA D270: the item row, locked for the rest of the transaction, so two
+     * manual returns cannot both fit under the same not-yet-returned total.
+     */
+    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM InventoryItem i WHERE i.id = :id")
+    Optional<InventoryItem> lockById(@Param("id") UUID id);
 
     Optional<InventoryItem> findByPharmacyIdAndMedicationCatalogItemId(UUID pharmacyId, UUID medicationCatalogItemId);
 
@@ -30,4 +52,46 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
     Page<InventoryItem> findByPharmacyHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
     List<InventoryItem> findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(UUID hospitalId, UUID medicationCatalogItemId);
+
+    /**
+     * QA D899: every active item of the hospital's pharmacies with its catalog
+     * item loaded, so the stock check can match a free-text order to the
+     * shelf by the dispense DRUG rule without one query per item.
+     */
+    @Query("SELECT i FROM InventoryItem i JOIN FETCH i.medicationCatalogItem "
+         + "WHERE i.pharmacy.hospital.id = :hospitalId AND i.active = true")
+    List<InventoryItem> findActiveWithCatalogItemByHospitalId(@Param("hospitalId") UUID hospitalId);
+
+    /*
+     * Atomic stock movements (#825 security finding 1). Read-modify-write on
+     * the entity lost an update when two requests on DIFFERENT orders moved
+     * the same lot at once (both read 10, one wrote 12 or 7, not 9). These
+     * compute in the database; a decrement only applies when enough is left,
+     * and the caller checks the row count. Bulk JPQL skips @PreUpdate, so
+     * updatedAt is set here; the caller refreshes the managed copy.
+     */
+
+    /** Takes {@code quantity} off the item when at least that much is on hand; 0 rows otherwise. */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE InventoryItem i SET i.quantityOnHand = i.quantityOnHand - :quantity, i.updatedAt = :now "
+         + "WHERE i.id = :id AND i.quantityOnHand >= :quantity")
+    int decrementOnHand(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                        @Param("now") LocalDateTime now);
+
+    /**
+     * Sets the quantity on hand outright: a count correction from the item
+     * edit endpoint. Last write wins, as a stock count does; it never rides
+     * along with an unrelated edit of a stale copy.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE InventoryItem i SET i.quantityOnHand = :quantity, i.updatedAt = :now WHERE i.id = :id")
+    int setOnHand(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                  @Param("now") LocalDateTime now);
+
+    /** Puts {@code quantity} back on hand. */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE InventoryItem i SET i.quantityOnHand = i.quantityOnHand + :quantity, i.updatedAt = :now "
+         + "WHERE i.id = :id")
+    int incrementOnHand(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                        @Param("now") LocalDateTime now);
 }

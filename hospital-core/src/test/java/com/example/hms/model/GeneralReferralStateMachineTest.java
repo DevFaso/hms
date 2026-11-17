@@ -50,8 +50,7 @@ class GeneralReferralStateMachineTest {
                 GeneralReferral r = newReferralIn(s);
                 assertThatThrownBy(r::submit)
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("submit")
-                    .hasMessageContaining(s.name());
+                    .hasMessage("referral.r7.wrongStatus");
             }
         }
     }
@@ -79,7 +78,7 @@ class GeneralReferralStateMachineTest {
                 GeneralReferral r = newReferralIn(s);
                 assertThatThrownBy(() -> r.acknowledge("x", anyStaff))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("acknowledge");
+                    .hasMessage("referral.r7.wrongStatus");
             }
         }
     }
@@ -105,7 +104,7 @@ class GeneralReferralStateMachineTest {
                 GeneralReferral r = newReferralIn(s);
                 assertThatThrownBy(() -> r.schedule(when, "X"))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("schedule");
+                    .hasMessage("referral.r7.wrongStatus");
             }
         }
     }
@@ -136,7 +135,7 @@ class GeneralReferralStateMachineTest {
                 GeneralReferral r = newReferralIn(s);
                 assertThatThrownBy(r::start)
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("start");
+                    .hasMessage("referral.r7.wrongStatus");
             }
         }
     }
@@ -169,7 +168,7 @@ class GeneralReferralStateMachineTest {
                 GeneralReferral r = newReferralIn(s);
                 assertThatThrownBy(() -> r.complete("s", "f"))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("complete");
+                    .hasMessage("referral.r7.wrongStatus");
             }
         }
     }
@@ -200,7 +199,7 @@ class GeneralReferralStateMachineTest {
                 GeneralReferral r = newReferralIn(s);
                 assertThatThrownBy(() -> r.cancel("x"))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("terminal");
+                    .hasMessage("referral.r7.cannotCancelTerminal");
             }
         }
     }
@@ -230,7 +229,7 @@ class GeneralReferralStateMachineTest {
                 GeneralReferral r = newReferralIn(s);
                 assertThatThrownBy(() -> r.reject("x"))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("reject");
+                    .hasMessage("referral.r7.wrongStatus");
             }
         }
     }
@@ -269,8 +268,7 @@ class GeneralReferralStateMachineTest {
             GeneralReferral r = newReferralIn(ReferralStatus.IN_PROGRESS);
             assertThatThrownBy(() -> r.expire(SLA_BREACH))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("expire")
-                .hasMessageContaining("IN_PROGRESS");
+                .hasMessage("referral.r7.wrongStatus");
         }
 
         @Test
@@ -287,7 +285,7 @@ class GeneralReferralStateMachineTest {
                 GeneralReferral r = newReferralIn(s);
                 assertThatThrownBy(() -> r.expire(SLA_BREACH))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("expire");
+                    .hasMessage("referral.r7.wrongStatus");
             }
         }
     }

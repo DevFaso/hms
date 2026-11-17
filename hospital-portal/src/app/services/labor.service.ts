@@ -2,7 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-export type LaborStatus = 'ACTIVE' | 'DELIVERED' | 'TRANSFERRED' | 'CLOSED';
+export type LaborStatus =
+  'ACTIVE' | 'DELIVERED' | 'TRANSFERRED' | 'CLOSED' | 'TRANSFERRED_OUT' | 'LEFT_WITHOUT_HANDOVER';
 export type MembraneStatus = 'INTACT' | 'SPONTANEOUS_RUPTURE' | 'ARTIFICIAL_RUPTURE';
 export type LiquorColour =
   'MEMBRANES_INTACT' | 'CLEAR' | 'MECONIUM_STAINED' | 'BLOOD_STAINED' | 'ABSENT';
@@ -39,6 +40,8 @@ export interface LaborEpisodeRequest {
   gravida?: number;
   para?: number;
   riskNotes?: string;
+  /** QA D214: required by the server when a birth was recorded recently. */
+  recentDeliveryOverrideReason?: string;
 }
 
 export interface LaborEpisodeResponse {
@@ -46,6 +49,8 @@ export interface LaborEpisodeResponse {
   patientId: string;
   patientName: string;
   hospitalId: string;
+  /** QA D1631: the hospital that owns the episode; another hospital shows it read only. */
+  hospitalName?: string | null;
   registrationId: string | null;
   maternalHistoryId: string | null;
   admittedByStaffName: string | null;
@@ -62,6 +67,21 @@ export interface LaborEpisodeResponse {
   riskNotes: string | null;
   entryCount: number;
   deliveryRecorded: boolean;
+  /** Labour transfer (provisional rule, 2026-11-12): on a closed episode, when, why and where to. */
+  transferredAt?: string | null;
+  transferReason?: string | null;
+  transferHospitalId?: string | null;
+  transferHospitalName?: string | null;
+  /** On the episode that took over: the episode it continues, and its hospital. */
+  transferredFromEpisodeId?: string | null;
+  transferredFromHospitalName?: string | null;
+}
+
+/** A labour transfer (with a handover) or an arrival without one: the reason is required. */
+export interface LaborTransferRequest {
+  /** The hospital taking her over (transfer with a handover only). */
+  destinationHospitalId?: string;
+  reason: string;
 }
 
 export interface PartographEntryRequest {
@@ -119,6 +139,20 @@ export interface PartographEntryResponse {
   hoursSinceActivePhaseStart: number | null;
 }
 
+/** QA D1714: the outcome of one baby of a delivery. */
+export type BabyOutcome = 'LIVE' | 'STILLBORN';
+
+/**
+ * QA D1714: one baby of a delivery. A stillborn baby is not registered as a patient: it creates a
+ * fetal-death event, named in a response. The outcome is null only for a later baby of a delivery
+ * recorded before per-baby outcomes with a single "not live" flag.
+ */
+export interface DeliveryBaby {
+  birthOrder?: number;
+  outcome: BabyOutcome | null;
+  fetalDeathEventId?: string | null;
+}
+
 export interface DeliveryRecordRequest {
   hospitalId?: string;
   deliveredByStaffId?: string;
@@ -126,6 +160,8 @@ export interface DeliveryRecordRequest {
   deliveryMode: DeliveryMode;
   liveBirth?: boolean;
   numberOfInfants?: number;
+  /** QA D1714: the outcome of each baby, in birth order (mixed twins). */
+  babies?: DeliveryBaby[];
   infantSex?: InfantSex;
   birthWeightGrams?: number;
   gestationalAgeWeeksAtBirth?: number;
@@ -137,6 +173,10 @@ export interface DeliveryRecordRequest {
   estimatedBloodLossMl?: number;
   perinealTear?: PerinealTear;
   notes?: string;
+  recentDeliveryOverrideReason?: string;
+  /** QA r46 (provisional): born before her arrival here, on an episode continued from another hospital. */
+  bornBeforeArrival?: boolean;
+  bornBeforeArrivalReason?: string;
 }
 
 export interface DeliveryRecordResponse {
@@ -159,7 +199,37 @@ export interface DeliveryRecordResponse {
   estimatedBloodLossMl: number | null;
   perinealTear: PerinealTear | null;
   notes: string | null;
+  /** QA r46 (provisional): born before her arrival here, with its reason. */
+  bornBeforeArrival?: boolean;
+  bornBeforeArrivalReason?: string | null;
   alerts: LaborAlert[];
+  /** QA D1714: each baby's outcome, in birth order, with a stillborn baby's fetal-death event. */
+  babies?: DeliveryBaby[];
+  /** QA D1714: every fetal-death event of the delivery, superseded ones with who, when and why. */
+  fetalDeathEvents?: {
+    id: string;
+    birthOrder: number;
+    creationReason?: string | null;
+    supersededAt?: string | null;
+    supersededByName?: string | null;
+    supersedeReason?: string | null;
+  }[];
+  /** QA D1592: the babies this delivery registered as patients (empty for a stillbirth). */
+  newborns?: DeliveryNewborn[];
+  /** QA D1592: the babies are not registered yet; reception registers them. */
+  newbornRegistrationPending?: boolean;
+}
+
+/** QA D1592: a baby a recorded delivery registered as its own patient. */
+export interface DeliveryNewborn {
+  patientId: string;
+  displayName: string | null;
+  mrn: string | null;
+  birthOrder: number;
+  /** The live-birth count no longer matches the babies registered: someone must review it. */
+  needsReview: boolean;
+  /** Why: LIVE_BIRTH_COUNT_LOWERED or NO_LONGER_LIVE_BIRTH. */
+  reviewReason?: 'LIVE_BIRTH_COUNT_LOWERED' | 'NO_LONGER_LIVE_BIRTH' | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -203,6 +273,30 @@ export class LaborService {
   ): Observable<DeliveryRecordResponse> {
     return this.http.post<DeliveryRecordResponse>(
       `${this.base(patientId)}/episodes/${episodeId}/delivery`,
+      req,
+    );
+  }
+
+  /** The episode's own hospital hands the active labour to another hospital, with a handover. */
+  transfer(
+    patientId: string,
+    episodeId: string,
+    req: LaborTransferRequest,
+  ): Observable<LaborEpisodeResponse> {
+    return this.http.post<LaborEpisodeResponse>(
+      `${this.base(patientId)}/episodes/${episodeId}/transfer`,
+      req,
+    );
+  }
+
+  /** She arrived here in labour without a handover from the hospital where this episode is active. */
+  arrivalWithoutHandover(
+    patientId: string,
+    episodeId: string,
+    req: LaborTransferRequest,
+  ): Observable<LaborEpisodeResponse> {
+    return this.http.post<LaborEpisodeResponse>(
+      `${this.base(patientId)}/episodes/${episodeId}/arrival-without-handover`,
       req,
     );
   }

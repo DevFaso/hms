@@ -12,7 +12,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, catchError, of, switchMap, tap } from 'rxjs';
 import {
@@ -24,6 +24,11 @@ import {
   PatientDocumentType,
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { currentLocale } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { blobRefusalReason } from '../../shared/blob-refusal';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 
 /** Same order as the patient's own upload form; labels reuse its keys. */
 export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: string }[] = [
@@ -35,6 +40,8 @@ export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: stri
   { value: 'INSURANCE_DOCUMENT', labelKey: 'PORTAL.DOCUMENTS.TYPE_INSURANCE_DOCUMENT' },
   { value: 'INVOICE', labelKey: 'PORTAL.DOCUMENTS.TYPE_INVOICE' },
   { value: 'IMMUNIZATION_RECORD', labelKey: 'PORTAL.DOCUMENTS.TYPE_IMMUNIZATION_RECORD' },
+  // QA D961: certificates a doctor issued from a visit.
+  { value: 'MEDICAL_CERTIFICATE', labelKey: 'PORTAL.DOCUMENTS.TYPE_MEDICAL_CERTIFICATE' },
   { value: 'OTHER', labelKey: 'PORTAL.DOCUMENTS.TYPE_OTHER' },
 ];
 
@@ -61,7 +68,7 @@ type ListOutcome = { ok: true; page: PatientDocumentPage } | { ok: false; messag
 @Component({
   selector: 'app-documents-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [DateTimePipe, DashPipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './documents-tab.component.html',
   styleUrl: './documents-tab.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -69,14 +76,26 @@ type ListOutcome = { ok: true; page: PatientDocumentPage } | { ok: false; messag
 export class DocumentsTabComponent implements OnInit, OnChanges {
   @Input({ required: true }) patientId = '';
   /**
-   * The super-admin's cross-tenant scope, forwarded by the chart so a change
-   * on the scope chip re-fetches under the new X-Hospital-Id. Non-super-admin
-   * hosts leave it null; the interceptor sends their own hospital.
+   * The hospital scope the host is reading under, so a change re-fetches.
+   *
+   * A CHANGE TRIGGER, not a parameter: the value is never sent, the
+   * interceptor scopes the request from `X-Hospital-Id`, and `ngOnChanges`
+   * below is the only thing that reads it. The host mirrors whatever the
+   * interceptor will send — for a plain clinician that is their own hospital
+   * id, not null, since a host that left it null could not notice a scope
+   * change it had never recorded.
    */
   @Input() hospitalScope: string | null = null;
+  /**
+   * QA D1599: the front desk and billing read insurance papers only. The server
+   * narrows them to that type regardless; this hides the type filter and sends
+   * the type, so the tab never offers what the server would answer empty.
+   */
+  @Input() insuranceOnly = false;
 
   private readonly documentsService = inject(PatientDocumentsService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly requests$ = new Subject<ListRequest>();
 
@@ -141,7 +160,10 @@ export class DocumentsTabComponent implements OnInit, OnChanges {
   }
 
   load(): void {
-    this.requests$.next({ type: this.typeFilter() || null, page: this.page() });
+    const type: PatientDocumentType | null = this.insuranceOnly
+      ? 'INSURANCE_DOCUMENT'
+      : this.typeFilter() || null;
+    this.requests$.next({ type, page: this.page() });
   }
 
   onFilterChange(value: PatientDocumentType | ''): void {
@@ -182,9 +204,12 @@ export class DocumentsTabComponent implements OnInit, OnChanges {
         // Defer revoke so Safari/WebKit has time to start reading the blob.
         setTimeout(() => URL.revokeObjectURL(url), 0);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.downloading.set(null);
-        this.toast.error('PATIENT_DOCUMENTS.DOWNLOAD_FAILED');
+        // QA D1184: a file the disk no longer holds says so, in the reader's language.
+        void blobRefusalReason(err).then((reason) =>
+          this.toast.error(reason ?? this.translate.instant('PATIENT_DOCUMENTS.DOWNLOAD_FAILED')),
+        );
       },
     });
   }
@@ -194,7 +219,7 @@ export class DocumentsTabComponent implements OnInit, OnChanges {
     if (bytes === null || bytes === undefined) return null;
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MB`;
   }
 
   private serverMessage(err: unknown): string | null {

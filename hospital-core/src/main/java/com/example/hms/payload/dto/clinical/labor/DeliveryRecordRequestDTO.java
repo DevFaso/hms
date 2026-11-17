@@ -19,17 +19,30 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@com.example.hms.validation.RecentDeliveryOverrideGiven(message = "{labor.delivery.recentDelivery}")
 public class DeliveryRecordRequestDTO {
 
     private UUID hospitalId;
     private UUID deliveredByStaffId;
+
+    @com.example.hms.validation.NotInClinicalFuture
 
     private LocalDateTime birthDateTime;
 
     @NotNull
     private DeliveryMode deliveryMode;
 
+    /** A single-baby shortcut kept for older clients; {@link #babies} is the per-baby form (QA D1714). */
     private Boolean liveBirth;
+
+    /**
+     * QA D1714 (user decision 2026-11-13): the outcome of each baby, LIVE or STILLBORN, in birth order, so mixed
+     * twins can be recorded. Live babies are registered as patients; each stillborn one creates a fetal-death
+     * event. When given, {@link #numberOfInfants} and {@link #liveBirth} (if sent) must agree with it.
+     */
+    @jakarta.validation.Valid
+    @jakarta.validation.constraints.Size(max = 5)
+    private java.util.List<DeliveryBabyDTO> babies;
 
     @Min(1) @Max(5)
     private Integer numberOfInfants;
@@ -47,6 +60,8 @@ public class DeliveryRecordRequestDTO {
     @Min(0) @Max(10)
     private Integer apgarFiveMinute;
 
+    @com.example.hms.validation.NotInClinicalFuture
+
     private LocalDateTime placentaDeliveredAt;
     private Boolean placentaComplete;
     private Boolean uterotonicGiven;
@@ -57,4 +72,21 @@ public class DeliveryRecordRequestDTO {
     private PerinealTear perinealTear;
 
     private String notes;
+
+    /**
+     * QA D214 (#896 review): required only when another birth was recorded
+     * for this mother within 20 weeks of this one; kept on the record notes.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String recentDeliveryOverrideReason;
+
+    /**
+     * QA r46 (D1712 follow-up, provisional rule pending clinical sign-off): on an episode that continues a labour
+     * from another hospital, the baby was born before she arrived (in transit). Only then may the birth time be
+     * earlier than the episode's start; {@link #bornBeforeArrivalReason} is then required.
+     */
+    private Boolean bornBeforeArrival;
+
+    @jakarta.validation.constraints.Size(max = 500)
+    private String bornBeforeArrivalReason;
 }

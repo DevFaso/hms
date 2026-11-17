@@ -180,4 +180,34 @@ class PatientChartAccessTest {
         }
         throw new AssertionError("expected ResourceNotFoundException");
     }
+
+    @Test
+    @DisplayName("the patient's own record resolves with no hospital scope, where the staff gate refuses every patient")
+    void ownRecordResolvesForAnUnscopedPatient() {
+        // A patient principal: not a super-admin, no hospital in context. The
+        // staff gate refuses this caller for ANY patient; that is correct for
+        // staff and was the reason the portal's no-scope branches never ran.
+        HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(UUID.randomUUID()).build());
+        try {
+            when(patientRepository.findByIdUnscoped(PATIENT_ID)).thenReturn(Optional.of(patient));
+
+            assertThatThrownBy(() -> access.require(PATIENT_ID, null))
+                .isInstanceOf(ResourceNotFoundException.class);
+            assertThat(access.requireOwnRecord(PATIENT_ID)).isSameAs(patient);
+            verify(recordAccessPolicy, never()).decide(any(), any(), any());
+        } finally {
+            HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("the own-record resolver still 404s an unknown patient")
+    void ownRecordUnknownPatientIsNotFound() {
+        when(patientRepository.findByIdUnscoped(PATIENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> access.requireOwnRecord(PATIENT_ID))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> access.requireOwnRecord(null))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
 }

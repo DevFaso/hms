@@ -1,8 +1,8 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { Login } from './login';
@@ -145,6 +145,69 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     httpMock.verify();
   });
 
+  it('lists ROLE_SUPER_ADMIN first in the role picker and keeps every held role', () => {
+    component.username = 'tchico1er';
+    component.password = 'irrelevant';
+    component.submit();
+    httpMock
+      .expectOne((req) => req.url.endsWith('/auth/login'))
+      .flush({
+        roleSelectionRequired: true,
+        availableRoles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
+      });
+
+    expect(component.roleSelectionMode).toBeTrue();
+    expect(component.availableRoles[0]).toBe('ROLE_SUPER_ADMIN');
+    expect(component.isRecommendedRole('ROLE_SUPER_ADMIN')).toBeTrue();
+    expect(component.isRecommendedRole('ROLE_HOSPITAL_ADMIN')).toBeFalse();
+    expect(roleContext.heldRoles).toEqual([
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_DOCTOR',
+      'ROLE_SUPER_ADMIN',
+    ]);
+    roleContext.clearSession();
+  });
+
+  it('QA D787: the reset dialog posts what was typed (e-mail, username or phone) as one identifier', () => {
+    component.openForgotPassword();
+    for (const typed of [' 70 20 20 20 ', 'patient_a3', 'a@b.c']) {
+      component.forgotPasswordEmail = typed;
+      component.submitForgotPassword();
+      const req = httpMock.expectOne((r) => r.url === '/auth/password/request');
+      expect(req.request.body).toEqual({ identifier: typed.trim() });
+      req.flush(null);
+    }
+  });
+
+  it('QA D787: the answer is the same neutral one, and sends a holder nothing reached to reception', () => {
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake((key: string | string[]) => key as string);
+    component.openForgotPassword();
+
+    component.forgotPasswordEmail = 'patient_a3';
+    component.submitForgotPassword();
+    httpMock.expectOne('/auth/password/request').flush(null);
+    expect(component.forgotPasswordSuccess).toBe('LOGIN.RESET_REQUEST_ACK');
+
+    component.forgotPasswordSuccess = '';
+    component.forgotPasswordEmail = 'nobody';
+    component.submitForgotPassword();
+    httpMock
+      .expectOne('/auth/password/request')
+      .flush({ message: 'x' }, { status: 429, statusText: 'Too Many Requests' });
+    expect(component.forgotPasswordSuccess).toBe('LOGIN.RESET_REQUEST_ACK');
+  });
+
+  it('QA D787: an empty identifier asks for one and posts nothing', () => {
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake((key: string | string[]) => key as string);
+    component.openForgotPassword();
+    component.forgotPasswordEmail = '   ';
+    component.submitForgotPassword();
+    httpMock.expectNone('/auth/password/request');
+    expect(component.error).toBe('LOGIN.ENTER_RESET_IDENTIFIER');
+  });
+
   it('the resend-activation dialog opens alone and posts the address', () => {
     component.openForgotPassword();
     component.openResendActivation();
@@ -157,7 +220,8 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       (r) =>
         r.method === 'POST' &&
         r.url === '/auth/resend-verification' &&
-        r.params.get('email') === 'a@b.c',
+        r.body?.email === 'a@b.c' &&
+        r.urlWithParams === '/auth/resend-verification',
     );
     req.flush({ message: 'If the email is registered, a new verification link has been sent.' });
     expect(component.resendActivationSuccess).toBe('LOGIN.ACTIVATION_LINK_SENT');
@@ -179,7 +243,23 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     component.openResendActivation();
     component.submitResendActivation();
     httpMock.expectNone((r) => r.url === '/auth/resend-verification');
-    expect(component.error).toBe('LOGIN.ENTER_EMAIL');
+    expect(component.error).toBe('LOGIN.ENTER_EMAIL_OR_PHONE');
+  });
+
+  it('QA D418: a phone number is sent as the phone, so a phone-only account can ask again', () => {
+    component.openResendActivation();
+    component.resendActivationEmail = ' +226 70 00 00 00 ';
+    component.submitResendActivation();
+    const req = httpMock.expectOne(
+      (r) =>
+        r.url === '/auth/resend-verification' &&
+        // QA D542: the phone number is in the body, never in the URL.
+        r.body?.phone === '+226 70 00 00 00' &&
+        !r.body?.email &&
+        r.urlWithParams === '/auth/resend-verification',
+    );
+    req.flush({});
+    expect(component.resendActivationSuccess).toBe('LOGIN.ACTIVATION_LINK_SENT');
   });
 
   it('seeds globalView=true and clears effective hospital scope after JWT-only login', () => {
@@ -244,12 +324,8 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       .toBeNull();
   });
 
-  it('still seeds globalView=true when sessionBootstrap returns roles the JWT did not carry', () => {
-    // Edge case: JWT issued without SUPER_ADMIN, but the DB-authoritative
-    // sessionBootstrap response upgrades the user to SUPER_ADMIN. The
-    // login flow MUST re-seed global view after bootstrap-setRoles,
-    // otherwise a freshly-promoted super-admin would still be chip-
-    // scoped to their primary hospital on first login.
+  it('keeps the selected hospital-admin role when bootstrap lists a super-admin assignment', () => {
+    // D1973: account assignments cannot upgrade the role selected at login.
     authSpy.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN']); // JWT only
 
     const upgradedBootstrap: SessionBootstrapResponse = {
@@ -257,7 +333,7 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       username: 'tchico1er',
       email: 'tchico1er@example.com',
       authSource: 'internal',
-      roles: ['ROLE_SUPER_ADMIN'], // upgraded from HOSPITAL_ADMIN in JWT
+      roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'], // account holds both; JWT selected HA
       superAdmin: true,
       hospitalAdmin: false,
       primaryHospitalId,
@@ -279,18 +355,13 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       hospitalIds: [primaryHospitalId],
     });
 
-    // After both setRoles + bootstrap-setRoles + the SECOND
-    // markSuperAdminGlobalDefaults call, the upgraded SUPER_ADMIN
-    // MUST be in global view. (The first markSuperAdminGlobalDefaults
-    // call right after setRoles(jwtRoles) is a no-op because the JWT
-    // only carried HOSPITAL_ADMIN — but the SECOND call after
-    // bootstrap-setRoles(bsRoles) sees SUPER_ADMIN and fires.)
+    expect(roleContext.activeRole).toBe('ROLE_HOSPITAL_ADMIN');
     expect(roleContext.globalView())
-      .withContext('post-bootstrap: bootstrap-upgraded SUPER_ADMIN MUST land in global view')
-      .toBeTrue();
+      .withContext('the selected role has no global super-admin view')
+      .toBeFalse();
     expect(roleContext.effectiveHospitalIdForRequest())
-      .withContext('post-bootstrap: interceptor scope MUST be null for upgraded super-admin')
-      .toBeNull();
+      .withContext('the selected role keeps its live primary hospital')
+      .toBe(primaryHospitalId);
   });
 
   it('does NOT flip globalView for non-super-admin logins', () => {
@@ -333,5 +404,171 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     expect(roleContext.effectiveHospitalIdForRequest())
       .withContext('hospital-admin interceptor scope MUST be the primary hospital')
       .toBe(primaryHospitalId);
+  });
+});
+
+/**
+ * QA D906: the first-run form checks the phone with the server's rule, so an
+ * e-mail address a browser autofilled into the phone field is flagged on the
+ * field itself, before anything is sent.
+ */
+describe('Login — bootstrap phone field (QA D906)', () => {
+  let httpMock: HttpTestingController;
+  let component: Login;
+  let host: HTMLElement;
+  let fixture: ComponentFixture<Login>;
+
+  beforeEach(() => {
+    const oidcSpy = jasmine.createSpyObj<OidcAuthService>('OidcAuthService', [
+      'isEnabled',
+      'isAvailable',
+      'discoveryFailed',
+      'login',
+    ]);
+    oidcSpy.isEnabled.and.returnValue(false);
+    oidcSpy.isAvailable.and.returnValue(false);
+    oidcSpy.discoveryFailed.and.returnValue(false);
+
+    TestBed.configureTestingModule({
+      imports: [Login, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: OidcAuthService, useValue: oidcSpy },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake((key: string | string[]) => key as string);
+    fixture = TestBed.createComponent(Login);
+    component = fixture.componentInstance;
+    host = fixture.nativeElement as HTMLElement;
+    httpMock = TestBed.inject(HttpTestingController);
+
+    fixture.detectChanges();
+    httpMock.expectOne('/auth/bootstrap-status').flush({ allowed: true });
+    fixture.detectChanges();
+
+    component.bootstrap = {
+      username: 'first_admin',
+      email: 'admin@example.com',
+      password: 'Secret123!',
+      confirmPassword: 'Secret123!',
+      firstName: 'Awa',
+      lastName: 'Ouedraogo',
+      phoneNumber: '',
+    };
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+  });
+
+  const phoneInput = (): HTMLInputElement => host.querySelector<HTMLInputElement>('#bs-phone')!;
+
+  it('keeps the phone and e-mail autocomplete hints distinct and asks for a phone keypad', () => {
+    expect(phoneInput().getAttribute('type')).toBe('tel');
+    expect(phoneInput().getAttribute('autocomplete')).toBe('tel');
+    expect(phoneInput().getAttribute('inputmode')).toBe('tel');
+    expect(host.querySelector('#bs-email')!.getAttribute('autocomplete')).toBe('email');
+    expect(host.querySelector('#bs-username')!.getAttribute('autocomplete')).toBe('username');
+    expect(phoneInput().getAttribute('placeholder')).toBe('LOGIN.PHONE_PLACEHOLDER');
+    expect(phoneInput().getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('refuses an e-mail typed into the phone field inline, focused, without calling the API', () => {
+    component.bootstrap.phoneNumber = 'admin@example.com';
+    component.submitBootstrap();
+    fixture.detectChanges();
+
+    httpMock.expectNone('/auth/bootstrap-signup');
+    expect(component.bootstrapPhoneError).toBe('USERS.PHONE_INVALID');
+    expect(component.error).toBe('');
+    expect(phoneInput().getAttribute('aria-invalid')).toBe('true');
+    expect(phoneInput().getAttribute('aria-describedby')).toContain('bs-phone-error');
+    expect(host.querySelector('#bs-phone-error')?.textContent?.trim()).toBe('USERS.PHONE_INVALID');
+    expect(document.activeElement).toBe(phoneInput());
+  });
+
+  it('clears the inline error as soon as the phone is edited', async () => {
+    // NgModel joins the form in a microtask; wait for it before typing.
+    await fixture.whenStable();
+    component.bootstrap.phoneNumber = 'admin@example.com';
+    component.submitBootstrap();
+    fixture.detectChanges();
+
+    const input = phoneInput();
+    input.value = '70202020';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(component.bootstrapPhoneError).toBe('');
+    expect(input.getAttribute('aria-invalid')).toBeNull();
+    expect(host.querySelector('#bs-phone-error')).toBeNull();
+  });
+
+  for (const accepted of ['70202020', '+22670202020']) {
+    it(`accepts ${accepted} and sends it as typed`, () => {
+      component.bootstrap.phoneNumber = accepted;
+      component.submitBootstrap();
+
+      const req = httpMock.expectOne('/auth/bootstrap-signup');
+      expect(req.request.body.phoneNumber).toBe(accepted);
+      expect(component.bootstrapPhoneError).toBe('');
+      req.flush({ username: 'first_admin' });
+    });
+  }
+
+  it("keeps the server's message as a fallback banner", () => {
+    component.bootstrap.phoneNumber = '70202020';
+    component.submitBootstrap();
+    httpMock
+      .expectOne('/auth/bootstrap-signup')
+      .flush({ message: 'server says no' }, { status: 400, statusText: 'Bad Request' });
+    expect(component.error).toBe('server says no');
+  });
+});
+
+describe('Login — the lock-screen lockout notice (D2001)', () => {
+  function createWith(reason: string | null): Login {
+    TestBed.configureTestingModule({
+      imports: [Login, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: OidcAuthService,
+          useValue: jasmine.createSpyObj<OidcAuthService>('OidcAuthService', [
+            'isEnabled',
+            'isAvailable',
+            'discoveryFailed',
+            'login',
+          ]),
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { queryParamMap: convertToParamMap(reason === null ? {} : { reason }) },
+          },
+        },
+      ],
+    });
+    const component = TestBed.createComponent(Login).componentInstance;
+    component.ngOnInit();
+    TestBed.inject(HttpTestingController).match('/auth/bootstrap-status');
+    return component;
+  }
+
+  it('shows the lockout message when the lock screen signed the user out', () => {
+    expect(createWith('locked').error).toBe('LOGIN.LOCKED_FROM_LOCK_SCREEN');
+  });
+
+  it('shows nothing on an ordinary visit', () => {
+    expect(createWith(null).error).toBe('');
+  });
+
+  it('ignores any other reason value', () => {
+    expect(createWith('expired').error).toBe('');
   });
 });

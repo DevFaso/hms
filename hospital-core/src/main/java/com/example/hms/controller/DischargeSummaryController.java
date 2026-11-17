@@ -67,7 +67,8 @@ public class DischargeSummaryController {
     public ResponseEntity<DischargeSummaryResponseDTO> finalizeDischargeSummary(
         @PathVariable UUID id,
         @RequestParam String providerSignature,
-        @RequestParam UUID providerId,
+        // QA D503: optional and only cross-checked; the signer is the session.
+        @RequestParam(required = false) UUID providerId,
         Locale locale
     ) {
         DischargeSummaryResponseDTO response = dischargeSummaryService.finalizeDischargeSummary(id, providerSignature, providerId, locale);

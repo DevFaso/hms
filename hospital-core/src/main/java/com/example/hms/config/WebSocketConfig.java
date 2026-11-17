@@ -1,5 +1,7 @@
 package com.example.hms.config;
 
+import com.example.hms.security.StompLocaleRegistry;
+import com.example.hms.security.StompRefusalErrorHandler;
 import com.example.hms.security.WebSocketSubscriptionInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +18,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final WebSocketSubscriptionInterceptor subscriptionInterceptor;
+    private final StompLocaleRegistry stompLocaleRegistry;
 
     /**
      * Comma-separated list of allowed origins for WebSocket / SockJS handshakes.
@@ -36,7 +39,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         // Default-deny SUBSCRIBE authorization — see WebSocketSubscriptionInterceptor.
-        registration.interceptors(subscriptionInterceptor);
+        // The reader's language for pushed notifications: see StompLocaleRegistry.
+        registration.interceptors(subscriptionInterceptor, stompLocaleRegistry);
     }
 
     @Override
@@ -50,6 +54,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws-chat")
                 .setAllowedOriginPatterns(origins)
                 .withSockJS();
+        // An authorization refusal says so in the ERROR frame, so a client
+        // stops reconnecting to what it may not subscribe to.
+        registry.setErrorHandler(new StompRefusalErrorHandler());
     }
 
 }

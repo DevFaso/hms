@@ -2,9 +2,11 @@ import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import {
   AfterViewInit,
+  afterNextRender,
   Component,
   ElementRef,
   inject,
+  Injector,
   OnInit,
   PLATFORM_ID,
   ViewChild,
@@ -20,12 +22,25 @@ import { safeReturnUrl } from '../auth/return-url';
 import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
+import { toE164 } from '../shared/phone-number';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+
+const SUPER_ADMIN_ROLE = 'ROLE_SUPER_ADMIN';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, RouterModule, TranslateModule, BrandMarkComponent, RoleLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    RouterModule,
+    TranslateModule,
+    BrandMarkComponent,
+    RoleLabelPipe,
+  ],
   templateUrl: './login.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./login.scss'],
@@ -40,6 +55,7 @@ export class Login implements OnInit, AfterViewInit {
    * docs/ui/accessibility.md §6.8.
    */
   @ViewChild('usernameInput') private usernameInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('bootstrapPhoneInput') private bootstrapPhoneInput?: ElementRef<HTMLInputElement>;
 
   username = '';
   password = '';
@@ -68,6 +84,12 @@ export class Login implements OnInit, AfterViewInit {
     lastName: '',
     phoneNumber: '',
   };
+  /**
+   * QA D906: the phone field's own error, shown under it. A browser that
+   * autofilled the e-mail address there used to get only the server's banner
+   * at the top of the card, with nothing pointing at the field.
+   */
+  bootstrapPhoneError = '';
 
   /** Forgot-password state */
   forgotPasswordMode = false;
@@ -92,6 +114,8 @@ export class Login implements OnInit, AfterViewInit {
   private readonly auth = inject(AuthService);
   private readonly oidcAuth = inject(OidcAuthService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly injector = inject(Injector);
+  private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly sessionScope = inject(SessionScopeService);
   private readonly translate = inject(TranslateService);
   private readonly platformId = inject(PLATFORM_ID);
@@ -125,6 +149,10 @@ export class Login implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     if (!this.isBrowser) return;
+    // D2001: the lock screen signed the user out on the account lockout.
+    if (this.route.snapshot.queryParamMap.get('reason') === 'locked') {
+      this.error = this.translate.instant('LOGIN.LOCKED_FROM_LOCK_SCREEN');
+    }
     this.checkBootstrapStatus();
   }
 
@@ -170,6 +198,7 @@ export class Login implements OnInit, AfterViewInit {
     if (!this.isBrowser || this.bootstrapLoading) return;
     this.error = '';
     this.bootstrapSuccess = '';
+    this.bootstrapPhoneError = '';
 
     if (
       !this.bootstrap.username ||
@@ -180,6 +209,13 @@ export class Login implements OnInit, AfterViewInit {
       !this.bootstrap.phoneNumber
     ) {
       this.error = this.translate.instant('LOGIN.ALL_FIELDS_REQUIRED');
+      return;
+    }
+    // QA D906: the server's rule (PhoneNumbers.toE164), checked here so the
+    // field is flagged and focused before anything is sent.
+    if (toE164(this.bootstrap.phoneNumber) === null) {
+      this.bootstrapPhoneError = this.translate.instant('USERS.PHONE_INVALID');
+      this.bootstrapPhoneInput?.nativeElement.focus();
       return;
     }
     if (this.bootstrap.password.length < 8) {
@@ -217,10 +253,7 @@ export class Login implements OnInit, AfterViewInit {
         },
         error: (err) => {
           this.bootstrapLoading = false;
-          this.error =
-            err?.error?.message ??
-            err?.error?.error ??
-            this.translate.instant('LOGIN.SETUP_FAILED');
+          this.error = err?.error?.message ?? this.translate.instant('LOGIN.SETUP_FAILED');
         },
       });
   }
@@ -279,7 +312,13 @@ export class Login implements OnInit, AfterViewInit {
         next: (res) => {
           // ── Multi-role gate: ask user to pick a role ──
           if (res?.roleSelectionRequired && res.availableRoles?.length) {
-            this.availableRoles = res.availableRoles;
+            // ROLE_SUPER_ADMIN first: it reaches every page an inherited role
+            // would, and picking a lesser role by mistake 403s the admin pages.
+            this.availableRoles = [...res.availableRoles].sort(
+              (a, b) => Number(b === SUPER_ADMIN_ROLE) - Number(a === SUPER_ADMIN_ROLE),
+            );
+            this.roleContext.setHeldRoles(res.availableRoles);
+            this.focusRecommendedRole();
             this.roleSelectionMode = true;
             this.loading = false;
             return;
@@ -328,6 +367,8 @@ export class Login implements OnInit, AfterViewInit {
           // role information before the session bootstrap response arrives.
           const jwtRoles = this.auth.getRoles();
           this.roleContext.setRoles(jwtRoles);
+          // No picker means the token holds every role; with one, the picker kept them.
+          if (!selectedRole) this.roleContext.setHeldRoles(jwtRoles);
           if (jwtRoles.length === 1) {
             this.roleContext.activeRole = jwtRoles[0];
           }
@@ -404,9 +445,9 @@ export class Login implements OnInit, AfterViewInit {
         error: (err) => {
           this.loading = false;
           this.error =
-            err?.error?.message ??
-            err?.error?.error ??
-            this.translate.instant('LOGIN.LOGIN_FAILED');
+            // `error` is the HTTP reason phrase ("Unauthorized") — English and
+            // not a sentence. The backend's message is translated (D64).
+            err?.error?.message ?? this.translate.instant('LOGIN.LOGIN_FAILED');
         },
       });
   }
@@ -425,6 +466,22 @@ export class Login implements OnInit, AfterViewInit {
     this.availableRoles = [];
     this.password = '';
     this.error = '';
+  }
+
+  /** Pre-selects the recommended card: Enter signs in with it, Tab still reaches the others. */
+  private focusRecommendedRole(): void {
+    afterNextRender(
+      () =>
+        this.hostEl.nativeElement
+          .querySelector<HTMLButtonElement>('.role-card--recommended')
+          ?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  /** The card the picker pre-selects: ROLE_SUPER_ADMIN when the account holds it. */
+  isRecommendedRole(role: string): boolean {
+    return role === SUPER_ADMIN_ROLE;
   }
 
   /** Material icon for a role — used in the role-picker cards. */
@@ -480,20 +537,24 @@ export class Login implements OnInit, AfterViewInit {
     if (!this.isBrowser || this.forgotPasswordLoading) return;
     this.error = '';
     this.forgotPasswordSuccess = '';
-    if (!this.forgotPasswordEmail) {
-      this.error = this.translate.instant('LOGIN.ENTER_EMAIL');
+    const identifier = this.forgotPasswordEmail.trim();
+    if (!identifier) {
+      this.error = this.translate.instant('LOGIN.ENTER_RESET_IDENTIFIER');
       return;
     }
     this.forgotPasswordLoading = true;
-    this.http.post<void>('/auth/password/request', { email: this.forgotPasswordEmail }).subscribe({
+    // QA D787 (D171): an e-mail address, a username or a phone number; the
+    // server finds the account and the channel that reaches it.
+    this.http.post<void>('/auth/password/request', { identifier }).subscribe({
       next: () => {
         this.forgotPasswordLoading = false;
-        this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_LINK_SENT');
+        this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_REQUEST_ACK');
       },
       error: () => {
         this.forgotPasswordLoading = false;
-        // Always show neutral message to avoid email enumeration
-        this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_LINK_SENT');
+        // One neutral answer: it never says whether the account exists or how
+        // it was reached, and it sends a holder nothing reached to reception.
+        this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_REQUEST_ACK');
       },
     });
   }
@@ -533,11 +594,17 @@ export class Login implements OnInit, AfterViewInit {
     if (!this.isBrowser || this.resendActivationLoading) return;
     this.error = '';
     this.resendActivationSuccess = '';
-    const email = this.resendActivationEmail.trim();
-    if (!email) {
-      this.error = this.translate.instant('LOGIN.ENTER_EMAIL');
+    const contact = this.resendActivationEmail.trim();
+    if (!contact) {
+      this.error = this.translate.instant('LOGIN.ENTER_EMAIL_OR_PHONE');
       return;
     }
+    // QA D542: the contact goes in the body, never the URL (logs, history).
+    // QA D311/D418: a phone-only account has no address to type; the server
+    // re-sends its activation code by SMS when given the number instead.
+    const params: Record<string, string> = contact.includes('@')
+      ? { email: contact }
+      : { phone: contact };
     this.resendActivationLoading = true;
     // One answer whatever the backend said: it does not reveal whether the
     // address exists, and neither does this dialog.
@@ -546,7 +613,7 @@ export class Login implements OnInit, AfterViewInit {
       this.resendActivationSuccess = this.translate.instant('LOGIN.ACTIVATION_LINK_SENT');
     };
     this.http
-      .post<void>('/auth/resend-verification', null, { params: { email } })
+      .post<void>('/auth/resend-verification', params)
       .subscribe({ next: done, error: done });
   }
 }

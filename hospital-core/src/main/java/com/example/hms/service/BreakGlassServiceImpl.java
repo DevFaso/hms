@@ -2,7 +2,6 @@ package com.example.hms.service;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedAccessException;
 import com.example.hms.model.BreakGlassSession;
@@ -27,8 +26,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -74,12 +73,23 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     /** Roles allowed to revoke any session at the hospital (declaring user can always revoke their own). */
     static final Set<String> ADMIN_REVOKE_ROLES = Set.of(HOSPITAL_ADMIN_CODE, SUPER_ADMIN_CODE);
 
+    /** One refusal for an unknown id and an out-of-scope one (D624). */
+    static final String PATIENT_OUT_OF_SCOPE_KEY = "breakGlass.patient.outOfScope";
+
     private final BreakGlassSessionRepository sessionRepository;
     private final UserRepository userRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditService;
+    /**
+     * The session clock. It writes {@code startedAt}/{@code expiresAt} and every
+     * live-session lookup reads them back; {@code BreakGlassGate} already reads
+     * with the same injected bean, so writer and readers share one time source.
+     */
+    private final Clock clock;
+    /** D410: a patient who opted out of sharing is told their opt-out was overridden. */
+    private final BreakGlassPatientNotifier patientNotifier;
 
     // ---------------------------------------------------------------------
     // Declare
@@ -89,17 +99,33 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     @Transactional
     public BreakGlassSessionResponseDTO declare(BreakGlassDeclareRequestDTO request) {
         User caller = currentUserOrThrow();
-        Hospital hospital = hospitalRepository.findById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + request.getHospitalId()));
-        Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Patient not found: " + request.getPatientId()));
-
+        // A provider facility (pharmacy, laboratory) is no place to break the
+        // glass: it reads no chart (provider plan §3.3, AC-10), and it answers
+        // exactly as an unknown hospital.
+        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        // D409: unscoped. Break-the-glass exists for a patient the reader's
+        // hospital does not know; the tenant-scoped finder answered 404 for
+        // exactly that patient. The caller is still checked as privileged at
+        // the hospital, and the declaration is audited.
+        // The privilege check comes BEFORE the unscoped load: otherwise an
+        // unprivileged caller could tell an existing patient id (403) from an
+        // unknown one (404) at any hospital.
         ensurePrivilegedAtHospital(caller, hospital.getId(), DECLARE_ROLES);
+        // D624 (user decision): break-the-glass reaches only a patient the
+        // caller's patient search already finds (same tenant scope). An id
+        // outside that scope and an unknown id get the SAME 403, same key, no
+        // id echoed, so the declaration reveals nothing search does not show.
+        // D409 is kept inside that scope: the declaring hospital need not hold
+        // the registration itself.
+        if (!patientRepository.isFindableByPatientSearch(request.getPatientId())) {
+            throw new UnauthorizedAccessException(PATIENT_OUT_OF_SCOPE_KEY);
+        }
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
+            .orElseThrow(() -> new UnauthorizedAccessException(PATIENT_OUT_OF_SCOPE_KEY));
 
-        int ttl = clampTtl(request.getTtlMinutes());
-        LocalDateTime now = LocalDateTime.now();
+        int ttl = validTtl(request.getTtlMinutes());
+        LocalDateTime now = LocalDateTime.now(clock);
         BreakGlassSession session = BreakGlassSession.builder()
             .user(caller)
             .patient(patient)
@@ -115,8 +141,12 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             "Break-the-glass session declared (TTL " + ttl + " min): " + request.getReason(),
             saved.getId(), AuditStatus.SUCCESS);
 
-        log.warn("[BREAK_GLASS] Declared session={} user={} patient={} hospital={} ttl={}min reason='{}'",
-            saved.getId(), caller.getId(), patient.getId(), hospital.getId(), ttl, request.getReason());
+        if (patientNotifier != null) {
+            patientNotifier.notifyIfOptedOut(patient, hospital);
+        }
+
+        log.warn("[BREAK_GLASS] Declared session={} user={} patient={} hospital={} ttl={}min (reason in the audit row, not the log: free text can carry PHI)",
+            saved.getId(), caller.getId(), patient.getId(), hospital.getId(), ttl);
 
         return toDto(saved);
     }
@@ -130,8 +160,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     public BreakGlassSessionResponseDTO revoke(UUID sessionId, BreakGlassRevokeRequestDTO request) {
         User caller = currentUserOrThrow();
         BreakGlassSession session = sessionRepository.findById(sessionId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Break-glass session not found: " + sessionId));
+            .orElseThrow(() -> new ResourceNotFoundException("breakGlass.session.notFound", sessionId));
 
         boolean isOwner = session.getUser().getId().equals(caller.getId());
         boolean isAdmin = hasAnyRoleAtHospital(caller, session.getHospital().getId(), ADMIN_REVOKE_ROLES)
@@ -142,8 +171,8 @@ public class BreakGlassServiceImpl implements BreakGlassService {
                 "Only the declaring user or a HOSPITAL_ADMIN/SUPER_ADMIN may revoke this session.");
         }
 
-        if (session.getRevokedAt() == null && session.getExpiresAt().isAfter(LocalDateTime.now())) {
-            session.setRevokedAt(LocalDateTime.now());
+        if (session.getRevokedAt() == null && session.getExpiresAt().isAfter(LocalDateTime.now(clock))) {
+            session.setRevokedAt(LocalDateTime.now(clock));
             session.setRevokedBy(caller);
             session.setRevokeReason(request != null ? request.getReason() : null);
             sessionRepository.save(session);
@@ -153,9 +182,8 @@ public class BreakGlassServiceImpl implements BreakGlassService {
                     + (request != null && request.getReason() != null ? request.getReason() : "no reason given"),
                 session.getId(), AuditStatus.SUCCESS);
 
-            log.warn("[BREAK_GLASS] Revoked session={} by user={} reason='{}'",
-                session.getId(), caller.getId(),
-                request != null ? request.getReason() : null);
+            // The reason is free text (it can carry PHI): it lives in the audit row only.
+            log.warn("[BREAK_GLASS] Revoked session={} by user={}", session.getId(), caller.getId());
         }
         return toDto(session);
     }
@@ -165,15 +193,14 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     public BreakGlassSessionResponseDTO review(UUID sessionId, BreakGlassReviewRequestDTO request) {
         User caller = currentUserOrThrow();
         BreakGlassSession session = sessionRepository.findById(sessionId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Break-glass session not found: " + sessionId));
+            .orElseThrow(() -> new ResourceNotFoundException("breakGlass.session.notFound", sessionId));
         boolean isAdmin = hasAnyRoleAtHospital(caller, session.getHospital().getId(), ADMIN_REVOKE_ROLES)
             || isSuperAdmin(caller);
         if (!isAdmin) {
             throw new UnauthorizedAccessException(
                 "Only a HOSPITAL_ADMIN of the session's hospital or a SUPER_ADMIN may review it.");
         }
-        session.setReviewedAt(LocalDateTime.now(ZoneId.systemDefault()));
+        session.setReviewedAt(LocalDateTime.now(clock));
         session.setReviewedByUserId(caller.getId());
         session.setReviewOutcome(request.getOutcome());
         session.setReviewNote(request.getNote());
@@ -200,7 +227,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         // Filter the row set to those hospitals before returning.
         User caller = currentUserOrThrow();
         boolean superAdmin = isSuperAdmin(caller);
-        return sessionRepository.findLiveForPatient(patientId, LocalDateTime.now())
+        return sessionRepository.findLiveForPatient(patientId, LocalDateTime.now(clock))
             .stream()
             .filter(s -> superAdmin
                 || hasAnyRoleAtHospital(caller, s.getHospital().getId(), DECLARE_ROLES))
@@ -254,7 +281,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         if (caller == null) {
             return Optional.empty();
         }
-        return sessionRepository.findLiveForUserAndPatient(caller.getId(), patientId, LocalDateTime.now())
+        return sessionRepository.findLiveForUserAndPatient(caller.getId(), patientId, LocalDateTime.now(clock))
             .stream()
             .findFirst()
             .map(this::toDto);
@@ -274,9 +301,35 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             }
             userId = caller.getId();
         }
+        return consumeLive(patientId, userId, null, purpose);
+    }
+
+    /**
+     * QA D840: a read made under a live session counts on that session. The
+     * banner promised "every read is logged", but nothing on the read path
+     * called {@link #consumeIfLive}, so auditCount stayed 0 and the reads were
+     * filed only as ordinary PATIENT_ACCESS. The patient-read interceptor now
+     * calls this for every successful patient-scoped GET. A session declared
+     * at another hospital does not count for a read made here (the
+     * {@link com.example.hms.service.recordaccess.BreakGlassGate} rule).
+     */
+    @Override
+    @Transactional
+    public Optional<BreakGlassSessionResponseDTO> consumeReadIfLive(UUID patientId, UUID userId,
+                                                                    UUID actingHospitalId, String purpose) {
+        if (patientId == null || userId == null) {
+            return Optional.empty();
+        }
+        return consumeLive(patientId, userId, actingHospitalId, purpose);
+    }
+
+    private Optional<BreakGlassSessionResponseDTO> consumeLive(UUID patientId, UUID userId,
+                                                               UUID actingHospitalId, String purpose) {
         Optional<BreakGlassSession> maybe = sessionRepository
-            .findLiveForUserAndPatient(userId, patientId, LocalDateTime.now())
+            .findLiveForUserAndPatient(userId, patientId, LocalDateTime.now(clock))
             .stream()
+            .filter(s -> actingHospitalId == null
+                || (s.getHospital() != null && actingHospitalId.equals(s.getHospital().getId())))
             .findFirst();
         if (maybe.isEmpty()) {
             return Optional.empty();
@@ -300,14 +353,19 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     // Helpers
     // ---------------------------------------------------------------------
 
-    private int clampTtl(Integer requested) {
+    private int validTtl(Integer requested) {
         if (requested == null) {
             return DEFAULT_TTL_MINUTES;
         }
         if (requested < 15) {
-            throw new BusinessException("ttlMinutes must be at least 15.");
+            throw new com.example.hms.exception.FieldBusinessException("ttlMinutes", "breakGlass.ttl.tooShort", 15);
         }
-        return Math.min(requested, MAX_TTL_MINUTES);
+        // QA D186: an out-of-range value is the caller's mistake, said as a 400,
+        // never silently capped (the session would end earlier than they were told).
+        if (requested > MAX_TTL_MINUTES) {
+            throw new com.example.hms.exception.FieldBusinessException("ttlMinutes", "breakGlass.ttl.tooLong", MAX_TTL_MINUTES);
+        }
+        return requested;
     }
 
     private User currentUserOrThrow() {
@@ -350,9 +408,22 @@ public class BreakGlassServiceImpl implements BreakGlassService {
 
     private void emitAudit(AuditEventType type, User user, Hospital hospital, Patient patient,
                            String description, UUID sessionId, AuditStatus status) {
+        // The actor's ACTIVE assignment at the session's hospital: without it
+        // the audit service took the first user_roles link, and a nurse role
+        // from an inactive assignment at another hospital was filed against
+        // a doctor's break-glass (QA D110, D165). Of those, the one of the role
+        // the token acts under (QA D1632).
+        UUID actingAssignmentId = user != null && user.getId() != null && hospital != null && hospital.getId() != null
+            ? com.example.hms.security.audit.ActingAssignments.resolve(assignmentRepository, user.getId(),
+                    hospital.getId(), org.springframework.security.core.context.SecurityContextHolder.getContext()
+                        .getAuthentication())
+                .map(com.example.hms.model.UserRoleHospitalAssignment::getId)
+                .orElse(null)
+            : null;
         AuditEventRequestDTO dto = AuditEventRequestDTO.builder()
             .eventType(type)
             .eventDescription(description)
+            .assignmentId(actingAssignmentId)
             .userId(user != null ? user.getId() : null)
             .userName(user != null ? user.getUsername() : null)
             .hospitalName(hospital != null ? hospital.getName() : null)
@@ -375,23 +446,38 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         }
     }
 
+    /** QA D839: "First Last", or null when the account carries neither. */
+    private static String displayName(User user) {
+        if (user == null) {
+            return null;
+        }
+        String first = user.getFirstName() == null ? "" : user.getFirstName().trim();
+        String last = user.getLastName() == null ? "" : user.getLastName().trim();
+        String full = (first + " " + last).trim();
+        return full.isEmpty() ? null : full;
+    }
+
     private BreakGlassSessionResponseDTO toDto(BreakGlassSession s) {
         return BreakGlassSessionResponseDTO.builder()
             .id(s.getId())
             .userId(s.getUser() != null ? s.getUser().getId() : null)
             .userName(s.getUser() != null ? s.getUser().getUsername() : null)
+            .userDisplayName(displayName(s.getUser()))
             .patientId(s.getPatient() != null ? s.getPatient().getId() : null)
+            .patientName(s.getPatient() != null ? s.getPatient().getFullName() : null)
+            .patientMrn(s.getPatient() != null && s.getHospital() != null
+                ? s.getPatient().getMrnForHospital(s.getHospital().getId()) : null)
             .hospitalId(s.getHospital() != null ? s.getHospital().getId() : null)
             .hospitalName(s.getHospital() != null ? s.getHospital().getName() : null)
             .reason(s.getReason())
-            .startedAt(s.getStartedAt())
-            .expiresAt(s.getExpiresAt())
-            .revokedAt(s.getRevokedAt())
+            .startedAt(withServerOffset(s.getStartedAt()))
+            .expiresAt(withServerOffset(s.getExpiresAt()))
+            .revokedAt(withServerOffset(s.getRevokedAt()))
             .revokedByUserId(s.getRevokedBy() != null ? s.getRevokedBy().getId() : null)
             .revokeReason(s.getRevokeReason())
             .auditCount(s.getAuditCount())
-            .live(s.isLive())
-            .reviewedAt(s.getReviewedAt())
+            .live(s.isLiveAt(LocalDateTime.now(clock)))
+            .reviewedAt(withServerOffset(s.getReviewedAt()))
             .reviewedByUserId(s.getReviewedByUserId())
             .reviewedByUserName(s.getReviewedByUserId() == null ? null
                 : userRepository.findById(s.getReviewedByUserId()).map(User::getUsername).orElse(null))
@@ -399,5 +485,14 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             .reviewNote(s.getReviewNote())
             .reviewed(s.isReviewed())
             .build();
+    }
+
+    /**
+     * D532: the session stamps are wall-clock {@code LocalDateTime}s in the
+     * clock's zone. Sent zone-less, a browser in another zone parsed them as
+     * its own local time and the expiry countdown was off by the UTC offset.
+     */
+    private java.time.OffsetDateTime withServerOffset(LocalDateTime value) {
+        return value == null ? null : value.atZone(clock.getZone()).toOffsetDateTime();
     }
 }

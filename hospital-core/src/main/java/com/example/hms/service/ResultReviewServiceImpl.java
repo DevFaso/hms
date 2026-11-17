@@ -7,6 +7,7 @@ import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.enums.SignatureStatus;
+import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.ChatMessage;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
@@ -20,6 +21,7 @@ import com.example.hms.repository.DigitalSignatureRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
@@ -88,9 +90,20 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private final PrescriptionRepository prescriptionRepository;
     private final com.example.hms.repository.NotificationRepository notificationRepository;
     private final MessageSource messageSource;
+    /** QA D178: grades a result exactly as the lab-results screen does. */
+    private final com.example.hms.mapper.LabResultMapper labResultMapper;
+    /** QA D1286: inbox items from notifications are rendered in the reader's language. */
+    private final com.example.hms.service.i18n.NotificationLocalizer notificationLocalizer;
+
+    /**
+     * Resolvable message key, not a sentence, and the key this codebase already
+     * throws for a staff id it will not resolve — so a refusal is
+     * indistinguishable from one.
+     */
+    private static final String MSG_STAFF_NOT_FOUND = "staff.notfound";
 
     @Override
-    public List<DoctorResultQueueItemDTO> getResultReviewQueue(UUID userId) {
+    public List<DoctorResultQueueItemDTO> getResultReviewQueue(UUID userId, UUID hospitalId) {
         log.info("Building result review queue for user: {}", userId);
 
         Optional<Staff> staffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId);
@@ -102,8 +115,100 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         // The queue is built for the physician making the request.
         Locale locale = LocaleContextHolder.getLocale();
 
-        // Get completed lab orders (results available) ordered by this physician
-        List<LabOrder> completedOrders = labOrderRepository.findByOrderingStaff_Id(staffId);
+        // The queue is one clinician's order history, and it was read with no
+        // hospital scope at all: findByOrderingStaff_Id returns every hospital's
+        // orders for this staff id, and with them every patient name, id and
+        // released value on them.
+        //
+        // That it leaks is not obvious, so it is worth writing down. A user has
+        // exactly ONE Staff row for the whole platform — uq_staff_user on
+        // (user_id) in the entity plus the uq_staff_user_id index V8 created
+        // after deleting the duplicates; uq_staff_user_hospital is subsumed by
+        // it and cannot make a second row. Multi-hospital membership is
+        // UserRoleHospitalAssignment, not a second staff row. Meanwhile
+        // buildLabOrder takes the ORDER's hospital from the encounter (or the
+        // requested hospitalId) and never compares it to staff.getHospital().
+        // So the one staff id of a clinician assigned at two hospitals owns
+        // orders at both, and this finder unions them — including orders from
+        // a hospital whose assignment has since been revoked, because the staff
+        // row outlives the assignment.
+        //
+        // Scoped to the acting hospital instead. Scope is a property of the
+        // CALLER: deriving it from staff.getHospital() would pin the queue to
+        // the clinician's home hospital whatever they are acting as, which is
+        // neither what they asked for nor something any disclosure could be
+        // accounted against.
+        if (hospitalId == null) {
+            // The scope MeController resolved for the whole request, not a
+            // second resolution taken here. RoleValidator.requireActiveHospitalId
+            // would have been the obvious call. It is not wrong in the common
+            // case — for a non-super-admin, MeController's pinnedHospitalId()
+            // returns ctx.activeHospitalId and requireActiveHospitalId's step 2
+            // returns the same field, so whenever that field is set the two
+            // agree exactly. They diverge only where it is NOT set, and in two
+            // ways that both matter:
+            //
+            //  - a clinician with more than one active assignment and nothing
+            //    pinned: MeController falls back to the FIRST active assignment
+            //    and answers, while requireActiveHospitalId's fallback demands
+            //    exactly one and otherwise throws BusinessException — a 400 on
+            //    a results worklist where every sibling /me endpoint still
+            //    answers;
+            //  - a super-admin with no X-Hospital-Id who nonetheless holds an
+            //    assignment: MeController resolves that assignment's hospital,
+            //    requireActiveHospitalId returns null. Taking the parameter is
+            //    what keeps this queue and the patient snapshot on the same page
+            //    answering for the same principal instead of one serving and the
+            //    other refusing.
+            //
+            // So: one resolution per request, in the controller, because a
+            // second one can only ever agree or be worse.
+            //
+            // Null therefore means what it means everywhere else in this
+            // controller, and it is narrower than "a super-admin in global view":
+            // MeController's step 2 falls back to the caller's NEWEST active
+            // assignment and does so for a super-admin as well, so a platform
+            // admin who also holds a clinical assignment is silently scoped to it
+            // and never arrives here. What arrives is a caller with a staff row
+            // for whom NEITHER an X-Hospital-Id nor any active assignment
+            // resolves: a super-admin with no assignment at all, or an ordinary
+            // clinician whose scope failed — a JWT outliving the assignment it was
+            // minted from, an assignment with no hospital, a principal the
+            // username lookup misses. RoleExpansion is what lets a super-admin
+            // past the @PreAuthorize on GET /me/results/review-queue in the first
+            // place.
+            //
+            // Refused rather than served unscoped, the same line #739 (open at
+            // the time of writing, not merged) draws on getLabOrdersByStaffId,
+            // which is this same read by another name: a
+            // queue filtered to one person is that person's record, not a
+            // worklist, and there is no acting hospital for a RECORD_SHARE row
+            // to name. A caller who wants this queue picks a hospital first.
+            //
+            // After the staff lookup on purpose: that lookup is on the CALLER's
+            // own user id and discloses nothing, and leaving it first keeps the
+            // ordinary case — a super-admin with no staff row, who has no
+            // clinical queue at all — answering [] exactly as before, so only
+            // the leaking shape changes.
+            //
+            // And a refusal rather than an empty list, although the line above
+            // returns []. Those are different answers to different questions: no
+            // staff row means this caller has placed no orders, which [] states
+            // truthfully, whereas an unresolved scope means we cannot decide
+            // WHICH of their orders to show. dashboard.service.ts settled that
+            // for this exact endpoint when it deleted its catchError — "a 403 or
+            // an outage rendered as an empty queue is indistinguishable from
+            // nothing to review, which is exactly how a released result reaches
+            // nobody". An error a caller clears by picking a hospital beats a
+            // queue that silently claims there is nothing to review.
+            log.warn("Result review queue refused: no hospital scope resolved for staff {}", staffId);
+            throw new com.example.hms.exception.ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId);
+        }
+
+        // Lab orders this physician placed AT THE HOSPITAL THEY ARE ACTING AT,
+        // whose results are available.
+        List<LabOrder> completedOrders =
+                labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, hospitalId);
         List<DoctorResultQueueItemDTO> queue = new ArrayList<>();
 
         // Sonar S135 — replaced the outer for-loop (which had two `continue`
@@ -123,15 +228,13 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 .filter(order -> REVIEWABLE_ORDER_STATUSES.contains(order.getStatus()))
                 .filter(order -> order.getPatient() != null)
                 .forEach(order -> {
-                    List<LabResult> results = labResultRepository.findByLabOrder_Id(order.getId());
-                    for (LabResult result : results) {
-                        // Only what the laboratory has released is the
-                        // doctor's to review: a result entered on an order
-                        // that had already completed is not on the chart yet.
-                        if (result.isReleased()) {
-                            queue.add(toQueueItem(order, result, locale));
-                        }
-                    }
+                    // Only what the laboratory has released is the doctor's
+                    // to review: a result entered on an order that had already
+                    // completed is not on the chart yet. QA D741: nor is a
+                    // released value its correction replaced, or a legacy
+                    // duplicate of the order's current result.
+                    ClinicalLabResultView.releasedAndCurrent(labResultRepository.findByLabOrder_Id(order.getId()))
+                        .forEach(result -> queue.add(toQueueItem(order, result, locale)));
                 });
 
         // Sort: CRITICAL → ABNORMAL → NORMAL, then by date desc
@@ -185,7 +288,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                 .source(consult.getRequestingProvider() != null
                                         ? consult.getRequestingProvider().getFullName()
                                         : text("inbox.source.unknown", locale))
-                                .patientName(consult.getPatient() != null ? consult.getPatient().getFirstName() + " " + consult.getPatient().getLastName() : null)
+                                .patientName(consult.getPatient() != null ? consult.getPatient().getFullName() : null)
                                 .patientId(consult.getPatient() != null ? consult.getPatient().getId() : null)
                                 .subject(consult.getReasonForConsult() != null
                                         ? truncate(consult.getReasonForConsult(), 80)
@@ -236,7 +339,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                         ? note.getAuthorName()
                                         : text("inbox.source.encounterNote", locale))
                                 .patientName(note.getPatient() != null
-                                        ? note.getPatient().getFirstName() + " " + note.getPatient().getLastName()
+                                        ? note.getPatient().getFullName()
                                         : null)
                                 .patientId(note.getPatient() != null ? note.getPatient().getId() : null)
                                 .subject(text("inbox.note.awaitingCosign", locale))
@@ -255,7 +358,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                     .id(enc.getId())
                     .category("TASK")
                     .source(text("inbox.source.encounter", locale))
-                    .patientName(enc.getPatient() != null ? enc.getPatient().getFirstName() + " " + enc.getPatient().getLastName() : null)
+                    .patientName(enc.getPatient() != null ? enc.getPatient().getFullName() : null)
                     .patientId(enc.getPatient() != null ? enc.getPatient().getId() : null)
                     .subject(text("inbox.encounter.active", locale))
                     .urgency(URGENCY_NORMAL)
@@ -294,6 +397,10 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 notificationRepository
                         .findByRecipientUsernameAndTypeAndReadFalseOrderByCreatedAtDesc(
                                 username, PHARMACY_EVENT_NOTIFICATION_TYPE)
+                        .stream()
+                        // QA D1286: rendered from its key in the reader's language,
+                        // not the staff-language copy stored with the row.
+                        .map(row -> notificationLocalizer.localized(row, locale))
                         .forEach(n -> items.add(ClinicalInboxItemDTO.builder()
                                 .id(n.getId())
                                 .category(CATEGORY_PHARMACY_EVENT)
@@ -325,7 +432,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                 .category("REFILL_REQUEST")
                                 .source(text("inbox.source.patientPortal", locale))
                                 .patientName(patient != null
-                                        ? patient.getFirstName() + " " + patient.getLastName() : null)
+                                        ? patient.getFullName() : null)
                                 .patientId(patient != null ? patient.getId() : null)
                                 .subject(text("inbox.refill.requested", locale, truncate(medication, 80)))
                                 .urgency(URGENCY_NORMAL)
@@ -352,32 +459,71 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private DoctorResultQueueItemDTO toQueueItem(LabOrder order, LabResult result, Locale locale) {
         String testName = order.getLabTestDefinition() != null
                 ? order.getLabTestDefinition().getName()
-                : text("lab.test.fallback", locale);
+                // QA D648: the same "deleted test" label as every other lab screen.
+                : text(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL, locale);
         // The queue exposes the three-value family: the portal buckets on
         // the exact strings NORMAL/ABNORMAL/CRITICAL, direction lives on the row.
-        String abnormalFlag = result.getAbnormalFlag() != null
-                ? result.getAbnormalFlag().severity().name()
-                : (result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name());
+        //
+        // QA D178: graded from the reference range first, as the lab-results
+        // screen grades it, so the two screens agree. The row's stored flag
+        // (an analyzer's) is the fallback when no range applies. A row with
+        // neither used to read ABNORMAL, so a normal glucose and an ungraded
+        // count both showed "Anormal" here and NORMAL / NON EVALUE there.
+        String rangeFlag = labResultMapper != null ? labResultMapper.severityFlagOf(result) : null;
+        if (rangeFlag == null) {
+            rangeFlag = LabResultMapper.FLAG_UNSPECIFIED;
+        }
+        String abnormalFlag;
+        com.example.hms.enums.AbnormalDirection direction;
+        switch (rangeFlag) {
+            case LabResultMapper.FLAG_CRITICAL -> {
+                abnormalFlag = AbnormalFlag.CRITICAL.name();
+                direction = null;
+            }
+            case "LOW", "HIGH" -> {
+                abnormalFlag = AbnormalFlag.ABNORMAL.name();
+                direction = com.example.hms.enums.AbnormalDirection.valueOf(rangeFlag);
+            }
+            case LabResultMapper.FLAG_ABNORMAL -> {
+                // QA D286: a qualitative answer that reads positive.
+                abnormalFlag = AbnormalFlag.ABNORMAL.name();
+                direction = null;
+            }
+            case URGENCY_NORMAL -> {
+                abnormalFlag = AbnormalFlag.NORMAL.name();
+                direction = null;
+            }
+            default -> {
+                // QA D1394: an analyser's NORMAL does not grade a value the hospital's ranges could not.
+                boolean ungraded = labResultMapper != null && labResultMapper.isUngraded(result);
+                abnormalFlag = result.getAbnormalFlag() != null && !ungraded
+                        ? result.getAbnormalFlag().severity().name() : LabResultMapper.FLAG_UNSPECIFIED;
+                direction = result.getAbnormalFlag() != null && !ungraded ? result.getAbnormalFlag().direction() : null;
+            }
+        }
         return DoctorResultQueueItemDTO.builder()
                 .id(result.getId())
-                .abnormalDirection(result.getAbnormalFlag() != null ? result.getAbnormalFlag().direction() : null)
-                .patientName(order.getPatient().getFirstName() + " " + order.getPatient().getLastName())
+                .abnormalDirection(direction)
+                .patientName(order.getPatient().getFullName())
                 .patientId(order.getPatient().getId())
                 .testName(testName)
                 .resultValue(result.getResultValue())
+                .resultUnit(com.example.hms.mapper.LabResultMapper.unitOf(result))
                 .abnormalFlag(abnormalFlag)
                 .resultedAt(result.getResultDate())
                 .orderingContext(order.getClinicalIndication())
+                .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
                 .build();
     }
 
     private int abnormalityRank(String flag) {
         if (flag == null) return 0;
         return switch (flag.toUpperCase()) {
-            case SEVERITY_CRITICAL -> 3;
-            case "ABNORMAL" -> 2;
+            case SEVERITY_CRITICAL -> 4;
+            case "ABNORMAL" -> 3;
             case URGENCY_NORMAL -> 1;
-            default -> 0;
+            // QA D178: ungraded sits above NORMAL, as the portal's buckets draw it.
+            default -> 2;
         };
     }
 

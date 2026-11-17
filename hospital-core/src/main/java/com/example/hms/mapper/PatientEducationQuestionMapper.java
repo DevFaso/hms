@@ -36,11 +36,11 @@ public class PatientEducationQuestionMapper {
         return PatientEducationQuestion.builder()
             .resourceId(dto.getResourceId())
             .question(dto.getQuestionText())
-            .isUrgent(dto.getIsUrgent())
-            .requiresInPersonDiscussion(dto.getRequiresInPersonDiscussion())
+            .isUrgent(Boolean.TRUE.equals(dto.getIsUrgent()))
+            .requiresInPersonDiscussion(Boolean.TRUE.equals(dto.getRequiresInPersonDiscussion()))
             .answer(dto.getAnswerText())
-            .isAnswered(dto.getIsAnswered())
-            .appointmentScheduled(dto.getAppointmentScheduled())
+            .isAnswered(Boolean.TRUE.equals(dto.getIsAnswered()))
+            .appointmentScheduled(Boolean.TRUE.equals(dto.getAppointmentScheduled()))
             .build();
     }
     

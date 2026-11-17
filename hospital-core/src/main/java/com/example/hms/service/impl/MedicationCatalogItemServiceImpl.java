@@ -46,7 +46,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         //   - super-admin: hospitalId optional. null  → global / LNME entry visible
         //                  to every tenant. non-null → tenant-specific entry attached
         //                  to that hospital (e.g. an SKU only one site stocks).
-        //   - hospital admin: hospitalId required and must equal their JWT scope.
+        //   - hospital admin: hospitalId defaults to the acting hospital and, when sent, must equal it.
         //                  An admin from Hospital A cannot insert a medication into
         //                  Hospital B's catalog, and cannot mint global entries —
         //                  global creation is a platform governance act.
@@ -85,16 +85,25 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
      */
     private Hospital resolveCreateHospital(UUID requestedHospitalId) {
         boolean superAdmin = roleValidator.isSuperAdminFromJwtClaim();
-        if (requestedHospitalId == null) {
-            if (!superAdmin) {
+        UUID targetHospitalId = requestedHospitalId;
+        if (targetHospitalId == null) {
+            if (superAdmin) {
+                return null;
+            }
+            // D34: a hospital admin's entry belongs to the hospital they act for;
+            // the form need not repeat it. The scope comes from the resolved
+            // acting scope, never from the request.
+            UUID activeScope = roleValidator.requireActiveHospitalId();
+            if (activeScope == null) {
                 throw new BusinessException(
                     "Hospital ID is required. Only super-admins may create global "
                         + "(platform-wide) medication catalog entries.");
             }
-            return null;
+            targetHospitalId = activeScope;
         }
-        Hospital hospital = hospitalRepository.findById(requestedHospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+        final UUID lookupId = targetHospitalId;
+        Hospital hospital = hospitalRepository.findClinicalById(lookupId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", lookupId));
         if (!superAdmin) {
             UUID activeScope = roleValidator.requireActiveHospitalId();
             if (!hospital.getId().equals(activeScope)) {
@@ -125,15 +134,22 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Override
     @Transactional(readOnly = true)
     public Page<MedicationCatalogItemResponseDTO> search(UUID hospitalId, String query, Pageable pageable) {
-        return catalogRepository.searchByHospital(hospitalId, query, pageable)
-                .map(mapper::toResponseDTO);
+        // A null scope is the verified super-admin's global view (the controller
+        // refuses it for everyone else), searched as the list endpoint lists.
+        Page<MedicationCatalogItem> page = hospitalId == null
+                ? catalogRepository.searchAllActive(query, pageable)
+                : catalogRepository.searchByHospital(hospitalId, query, pageable);
+        return page.map(mapper::toResponseDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<MedicationCatalogItemResponseDTO> listByCategory(UUID hospitalId, String category, Pageable pageable) {
-        return catalogRepository.findByHospital_IdAndCategoryAndActiveTrue(hospitalId, category, pageable)
-                .map(mapper::toResponseDTO);
+        // A null scope is the verified super-admin's global view, as on list and search.
+        Page<MedicationCatalogItem> page = hospitalId == null
+                ? catalogRepository.findByCategoryAndActiveTrue(category, pageable)
+                : catalogRepository.findByHospital_IdAndCategoryAndActiveTrue(hospitalId, category, pageable);
+        return page.map(mapper::toResponseDTO);
     }
 
     @Override
@@ -156,6 +172,10 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         existing.setCategory(dto.getCategory());
         existing.setEssentialList(dto.isEssentialList());
         existing.setControlled(dto.isControlled());
+        // Round 18 (QA D935): the paediatric limits are no longer written here.
+        // They are the pharmacy's, set and approved through
+        // updatePediatricDosing (audited), and this full-replace edit would
+        // otherwise wipe the fields its form does not carry.
         existing.setActive(dto.isActive());
         existing.setDescription(dto.getDescription());
 
@@ -177,6 +197,74 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         logAudit(AuditEventType.MEDICATION_DEACTIVATED,
                 "Deactivated medication catalog item '" + item.getNameFr() + "'",
                 item.getId().toString());
+    }
+
+    @Override
+    public MedicationCatalogItemResponseDTO updatePediatricDosing(
+            UUID id, com.example.hms.payload.dto.medication.PediatricDosingRequestDTO dto) {
+        // The scope is the caller's acting hospital, never a request field.
+        UUID scope = roleValidator.requireActiveHospitalId();
+        MedicationCatalogItem item = (scope != null
+                ? catalogRepository.findByIdAndHospital_Id(id, scope)
+                : java.util.Optional.<MedicationCatalogItem>empty())
+            .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
+        requireConsistentPediatricLimits(dto);
+
+        item.setPediatricMaxDoseMgPerKg(dto.getPediatricMaxDoseMgPerKg());
+        item.setPediatricMaxDailyMgPerKg(dto.getPediatricMaxDailyMgPerKg());
+        item.setPediatricMaxSingleDoseMg(dto.getPediatricMaxSingleDoseMg());
+        item.setPediatricMaxDailyMg(dto.getPediatricMaxDailyMg());
+        item.setPediatricManualReviewUnderMonths(dto.getPediatricManualReviewUnderMonths());
+        item.setPediatricWeightBands(new java.util.ArrayList<>(
+            MedicationCatalogItemMapper.toBands(dto.getPediatricWeightBands())));
+        String source = dto.getPediatricDoseSource();
+        item.setPediatricDoseSource(source == null || source.isBlank() ? null : source.trim());
+        item.setPediatricDoseStatus(dto.getPediatricDoseStatus());
+        item.setPediatricDoseReviewedBy(roleValidator.getCurrentUserId());
+        item.setPediatricDoseReviewedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+
+        MedicationCatalogItem saved = catalogRepository.save(item);
+        logAudit(AuditEventType.MEDICATION_DOSE_LIMITS_UPDATED,
+            (dto.getPediatricDoseStatus() == com.example.hms.enums.PediatricDoseLimitStatus.APPROVED
+                ? "Paediatric dose limits approved on catalog item '"
+                : "Paediatric dose limits set as a default pending approval on catalog item '")
+                + saved.getNameFr() + "'",
+            saved.getId().toString());
+        return mapper.toResponseDTO(saved);
+    }
+
+    /** Round 18 (QA D935): limits that contradict each other are refused, field by field. */
+    static void requireConsistentPediatricLimits(com.example.hms.payload.dto.medication.PediatricDosingRequestDTO dto) {
+        if (dto.getPediatricMaxDoseMgPerKg() != null && dto.getPediatricMaxDailyMgPerKg() != null
+                && dto.getPediatricMaxDoseMgPerKg().compareTo(dto.getPediatricMaxDailyMgPerKg()) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException("pediatricMaxDoseMgPerKg",
+                "medicationCatalogItem.pediatricDosing.perDoseAbovePerDay");
+        }
+        if (dto.getPediatricMaxSingleDoseMg() != null && dto.getPediatricMaxDailyMg() != null
+                && dto.getPediatricMaxSingleDoseMg().compareTo(dto.getPediatricMaxDailyMg()) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException("pediatricMaxSingleDoseMg",
+                "medicationCatalogItem.pediatricDosing.singleAboveDaily");
+        }
+        java.util.List<com.example.hms.model.medication.PediatricWeightBand> bands =
+            MedicationCatalogItemMapper.toBands(dto.getPediatricWeightBands());
+        for (int i = 0; i < bands.size(); i++) {
+            com.example.hms.model.medication.PediatricWeightBand band = bands.get(i);
+            if (band.getMaxWeightKg() != null && band.getMinWeightKg() != null
+                    && band.getMaxWeightKg().compareTo(band.getMinWeightKg()) <= 0) {
+                throw new com.example.hms.exception.FieldBusinessException(
+                    "pediatricWeightBands[" + i + "].maxWeightKg",
+                    "medicationCatalogItem.pediatricDosing.bandInverted");
+            }
+            if (i > 0) {
+                java.math.BigDecimal previousMax = bands.get(i - 1).getMaxWeightKg();
+                if (previousMax == null || (band.getMinWeightKg() != null
+                        && band.getMinWeightKg().compareTo(previousMax) < 0)) {
+                    throw new com.example.hms.exception.FieldBusinessException(
+                        "pediatricWeightBands[" + i + "].minWeightKg",
+                        "medicationCatalogItem.pediatricDosing.bandOverlap");
+                }
+            }
+        }
     }
 
     private void logAudit(AuditEventType eventType, String description, String resourceId) {

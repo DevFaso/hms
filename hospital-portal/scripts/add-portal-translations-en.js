@@ -14,7 +14,7 @@ en.PORTAL = {
     VALUE: 'Value',
     RECORDED: 'Recorded',
     SOURCE: 'Source',
-    NORMAL_RANGE: 'Normal Range'
+    NORMAL_RANGE: 'Normal Range',
   },
   APPOINTMENTS: {
     TITLE: 'My Appointments',
@@ -32,7 +32,7 @@ en.PORTAL = {
     STATUS: 'Status',
     NOT_ASSIGNED: 'Not assigned',
     GENERAL_VISIT: 'General Visit',
-    GENERAL: 'General'
+    GENERAL: 'General',
   },
   MEDICATIONS: {
     TITLE: 'My Medications',
@@ -51,7 +51,7 @@ en.PORTAL = {
     PROVIDER: 'Provider',
     REFILLS_REMAINING: 'Refills Remaining',
     REFILLS_COUNT: '{{count}} refills remaining',
-    STARTED: 'Started'
+    STARTED: 'Started',
   },
   LAB_RESULTS: {
     TITLE: 'Test Results',
@@ -67,7 +67,7 @@ en.PORTAL = {
     ABNORMAL: 'Abnormal',
     NORMAL_RESULT: 'Within normal limits',
     ABNORMAL_RESULT: 'Outside normal range \u2014 please consult your provider',
-    NORMAL_PREFIX: 'Normal:'
+    NORMAL_PREFIX: 'Normal:',
   },
   VISITS: {
     TITLE: 'Visit History',
@@ -82,7 +82,7 @@ en.PORTAL = {
     DIAGNOSIS: 'Diagnosis',
     STATUS: 'Status',
     NOT_ASSIGNED: 'Not assigned',
-    GENERAL: 'General'
+    GENERAL: 'General',
   },
   BILLING: {
     TITLE: 'Billing & Payments',
@@ -112,14 +112,14 @@ en.PORTAL = {
     CARD: 'Credit / Debit Card',
     BANK_TRANSFER: 'Bank Transfer',
     MOBILE_MONEY: 'Mobile Money',
-    CASH: 'Cash'
+    CASH: 'Cash',
   },
   CARE_TEAM: {
     TITLE: 'My Care Team',
     LOADING: 'Loading care team...',
     EMPTY_TITLE: 'No care team members',
     EMPTY_DESC: 'Your care team information will appear here.',
-    PRIMARY_PROVIDER: 'Primary Care Provider'
+    PRIMARY_PROVIDER: 'Primary Care Provider',
   },
   RECORDS: {
     TITLE: 'My Health Records',
@@ -155,7 +155,7 @@ en.PORTAL = {
     REF_PREFIX: 'Ref:',
     DIAGNOSIS_PREFIX: 'Diagnosis:',
     ADMINISTERED_BY: 'Administered by',
-    PRESCRIBED_BY: 'Prescribed by'
+    PRESCRIBED_BY: 'Prescribed by',
   },
   SHARING: {
     TITLE: 'Record Sharing & Privacy',
@@ -164,7 +164,8 @@ en.PORTAL = {
     LOADING_CONSENTS: 'Loading consents\u2026',
     NO_CONSENTS_TITLE: 'No Active Consents',
     NO_CONSENTS_DESC: "You haven't shared your records with any other hospital yet.",
-    NO_CONSENTS_HINT: 'When a referral requires sharing your records between hospitals, you can manage those consents here.',
+    NO_CONSENTS_HINT:
+      'When a referral requires sharing your records between hospitals, you can manage those consents here.',
     PURPOSE: 'Purpose:',
     TREATMENT: 'Treatment',
     GRANTED: 'Granted',
@@ -174,7 +175,7 @@ en.PORTAL = {
     CONSENT_REVOKE_FAILED: 'Failed to revoke consent',
     LOADING_LOG: 'Loading access log\u2026',
     NO_ACCESS_TITLE: 'No Access Records',
-    NO_ACCESS_DESC: 'Nobody has accessed your records yet, or access logging has just started.'
+    NO_ACCESS_DESC: 'Nobody has accessed your records yet, or access logging has just started.',
   },
   FAMILY: {
     TITLE: 'Family & Proxy Access',
@@ -223,20 +224,21 @@ en.PORTAL = {
     REVOKE_FAILED: 'Failed to revoke proxy access',
     LOAD_FAILED: 'Failed to load proxy grants',
     LOAD_ACCESS_FAILED: 'Failed to load proxy access',
-    REQUIRED_FIELDS: 'Username and relationship are required'
+    REQUIRED_FIELDS: 'Username and relationship are required',
   },
   SUMMARIES: {
     TITLE: 'After-Visit Summaries',
     LOADING: 'Loading summaries\u2026',
     EMPTY_TITLE: 'No Visit Summaries Yet',
-    EMPTY_DESC: 'After your visits are complete, discharge instructions and summaries will appear here.',
+    EMPTY_DESC:
+      'After your visits are complete, discharge instructions and summaries will appear here.',
     DIAGNOSES: 'Diagnoses',
     TREATMENT_SUMMARY: 'Treatment Summary',
     INSTRUCTIONS: 'Instructions',
     MEDICATIONS: 'Medications',
     FOLLOW_UP: 'Follow-Up',
     SCHEDULED_FOR: 'Scheduled for',
-    PRINT: 'Print Summary'
+    PRINT: 'Print Summary',
   },
   ENUM: {
     VITAL_TYPE: {
@@ -248,7 +250,7 @@ en.PORTAL = {
       OXYGEN_SATURATION: 'Oxygen Saturation (SpO\u2082)',
       RESPIRATORY_RATE: 'Respiratory Rate',
       BMI: 'BMI',
-      BLOOD_GLUCOSE: 'Blood Glucose'
+      BLOOD_GLUCOSE: 'Blood Glucose',
     },
     VITAL_SOURCE: {
       NURSE_STATION: 'Nurse Station',
@@ -256,7 +258,7 @@ en.PORTAL = {
       HOME: 'Home Reading',
       SELF_REPORTED: 'Self-Reported',
       DEVICE: 'Connected Device',
-      TRIAGE: 'Triage'
+      TRIAGE: 'Triage',
     },
     ENCOUNTER_TYPE: {
       CONSULTATION: 'Consultation',
@@ -271,7 +273,7 @@ en.PORTAL = {
       DISCHARGE: 'Discharge',
       WALK_IN: 'Walk-In',
       TELEMEDICINE: 'Telemedicine',
-      REFERRAL: 'Referral'
+      REFERRAL: 'Referral',
     },
     STATUS: {
       SCHEDULED: 'Scheduled',
@@ -292,7 +294,7 @@ en.PORTAL = {
       DRAFT: 'Draft',
       PARTIALLY_PAID: 'Partially Paid',
       REVOKED: 'Revoked',
-      EXPIRED: 'Expired'
+      EXPIRED: 'Expired',
     },
     ROLE: {
       DOCTOR: 'Doctor',
@@ -300,19 +302,19 @@ en.PORTAL = {
       ADMIN: 'Admin',
       PHARMACIST: 'Pharmacist',
       LAB_TECHNICIAN: 'Lab Technician',
-      RECEPTIONIST: 'Receptionist'
+      RECEPTIONIST: 'Receptionist',
     },
     ACCESS_TYPE: {
       READ: 'Viewed',
       DOWNLOAD: 'Downloaded',
       PRINT: 'Printed',
       UPDATE: 'Updated',
-      CREATE: 'Created'
+      CREATE: 'Created',
     },
     GENDER: {
       MALE: 'Male',
       FEMALE: 'Female',
-      OTHER: 'Other'
+      OTHER: 'Other',
     },
     RELATIONSHIP: {
       PARENT: 'Parent',
@@ -321,7 +323,7 @@ en.PORTAL = {
       CAREGIVER: 'Caregiver',
       LEGAL_GUARDIAN: 'Legal Guardian',
       SIBLING: 'Sibling',
-      OTHER: 'Other'
+      OTHER: 'Other',
     },
     PERMISSIONS: {
       ALL: 'Full Access',
@@ -329,19 +331,23 @@ en.PORTAL = {
       LAB_RESULTS: 'Lab Results',
       MEDICATIONS: 'Medications',
       VITALS: 'Vitals',
-      BILLING: 'Billing'
+      BILLING: 'Billing',
     },
     PAYMENT_METHOD: {
       CARD: 'Credit / Debit Card',
       BANK_TRANSFER: 'Bank Transfer',
       MOBILE_MONEY: 'Mobile Money',
-      CASH: 'Cash'
-    }
-  }
+      CASH: 'Cash',
+    },
+  },
 };
 
 // Sort top-level keys alphabetically
 const sorted = {};
-Object.keys(en).sort().forEach(k => sorted[k] = en[k]);
+Object.keys(en)
+  .sort()
+  .forEach((k) => (sorted[k] = en[k]));
 fs.writeFileSync(enPath, JSON.stringify(sorted, null, 2) + '\n');
-console.log('en.json updated with PORTAL section (' + Object.keys(en.PORTAL).length + ' subsections)');
+console.log(
+  'en.json updated with PORTAL section (' + Object.keys(en.PORTAL).length + ' subsections)',
+);

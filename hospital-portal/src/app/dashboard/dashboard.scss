@@ -2800,6 +2800,12 @@ $shadow-md:
     background: #fef3c7;
     color: #b45309;
   }
+
+  /* Released but not compared with any range: neither the all-clear nor a warning. */
+  &.lab-ungraded {
+    background: #eef2f7;
+    color: #33415c;
+  }
 }
 
 .lab-info {

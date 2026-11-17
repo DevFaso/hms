@@ -1,8 +1,10 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.ItemCategory;
+import com.example.hms.enums.PaymentStatus;
 import com.example.hms.model.BillingInvoice;
 import com.example.hms.model.InvoiceItem;
+import com.example.hms.model.PaymentTransaction;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
 import com.google.zxing.MultiFormatWriter;
@@ -12,6 +14,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.springframework.context.MessageSource;
@@ -20,100 +23,314 @@ import org.springframework.stereotype.Service;
 import javax.imageio.ImageIO;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 /**
- * One-page invoice PDF. Labels come from the message bundle in the locale the caller resolved
- * (the downloading user's request, or the language the invoice e-mail asked for); with no
- * locale at all the product's first language, French. Amounts, numbers and identifiers are
- * printed as stored.
+ * Invoice and payment-receipt PDFs. Labels come from the message bundle in the locale the
+ * caller resolved; with no locale at all the product's first language, French.
+ *
+ * <p>QA D141: the invoice states the hospital, the dates, every amount in francs CFA, the
+ * total, the amount paid, the balance and the status, and the confirmed payments; the
+ * totals are always printed (a long invoice continues on a new page instead of losing
+ * them), and text outside the fonts' WinAnsi encoding is written as '?' instead of failing
+ * the whole document.
  */
 @Service
 @RequiredArgsConstructor
 public class PdfInvoiceService {
+
+    private static final float MARGIN = 50f;
+    private static final float BOTTOM = 80f;
+    private static final PDFont BODY = PDType1Font.HELVETICA;
+    private static final PDFont BOLD = PDType1Font.HELVETICA_BOLD;
+    private static final String GRAND_TOTAL = "pdf.invoice.grandTotal";
+    private static final String AMOUNT_PAID = "pdf.invoice.amountPaid";
+    private static final String BALANCE_DUE = "pdf.invoice.balanceDue";
+    private static final String HOSPITAL = "pdf.invoice.hospital";
+    private static final String PATIENT = "pdf.invoice.patient";
 
     private final MessageSource messageSource;
 
     public byte[] generateInvoicePdf(BillingInvoice invoice,
                                      List<InvoiceItem> items,
                                      Locale locale) {
+        return generateInvoicePdf(invoice, items, List.of(), locale);
+    }
+
+    public byte[] generateInvoicePdf(BillingInvoice invoice,
+                                     List<InvoiceItem> items,
+                                     List<PaymentTransaction> payments,
+                                     Locale locale) {
+        return generateInvoicePdf(invoice, items, payments, List.of(), locale);
+    }
+
+    /** QA D974: with the discounts, waivers and credit notes printed between the lines and the total. */
+    public byte[] generateInvoicePdf(BillingInvoice invoice,
+                                     List<InvoiceItem> items,
+                                     List<PaymentTransaction> payments,
+                                     List<com.example.hms.model.InvoiceAdjustment> adjustments,
+                                     Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
-            var page = new PDPage(PDRectangle.LETTER);
-            doc.addPage(page);
-            try (var cs = new PDPageContentStream(doc, page)) {
-                float margin = 50f;
-                float y = page.getMediaBox().getHeight() - margin;
+            var w = new Writer(doc);
+            w.logo();
+            w.text(BOLD, 16, MARGIN, t.get("pdf.invoice.title", safe(invoice.getInvoiceNumber())));
+            w.down(20);
+            w.text(BODY, 11, MARGIN, t.get(HOSPITAL, hospitalName(invoice)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN,
+                t.get("pdf.invoice.dates", t.fmt(invoice.getInvoiceDate()), t.fmt(invoice.getDueDate())));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get(PATIENT, patientLine(invoice)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.invoice.status", statusLabel(t, invoice)));
+            w.qr(buildQrPng("hms://invoice/" + invoice.getId()));
+            w.down(80);
+            cancellationBlock(w, t, invoice);
 
-                // Logo (from classpath)
-                var logoStream = getClass().getResourceAsStream("/branding/hospital-logo.png");
-                if (logoStream != null) {
-                    var logo = PDImageXObject.createFromByteArray(doc, logoStream.readAllBytes(), "logo");
-                    cs.drawImage(logo, margin, y - 60, 120, 40);
-                }
-
-                // Header text
-                y -= 80;
-                writeText(cs, 16, margin, y, t.get("pdf.invoice.title", safe(invoice.getInvoiceNumber())));
-                y -= 20;
-                writeText(cs, 11, margin, y,
-                    t.get("pdf.invoice.dates", t.fmt(invoice.getInvoiceDate()), t.fmt(invoice.getDueDate())));
-                y -= 15;
-                writeText(cs, 11, margin, y, t.get("pdf.invoice.patient",
-                    safe(invoice.getPatient().getFirstName()) + " " +
-                    safe(invoice.getPatient().getLastName()) + " " +
-                    safe(invoice.getPatient().getMrnForHospital(invoice.getHospital().getId()))
-                ));
-                y -= 15;
-                writeText(cs, 11, margin, y, t.get("pdf.invoice.hospital", safe(invoice.getHospital().getName())));
-
-                // QR (invoice lookup URL or deep link)
-                y -= 90;
-                var qrPng = buildQrPng("hms://invoice/" + invoice.getId());
-                var qr = PDImageXObject.createFromByteArray(doc, qrPng, "qr");
-                cs.drawImage(qr, page.getMediaBox().getWidth() - margin - 90, y + 10, 80, 80);
-
-                // Table header
-                y -= 10;
-                drawLine(cs, margin, y, page.getMediaBox().getWidth() - margin, y);
-                y -= 14;
-                writeRow(cs, margin, y,
-                    t.get("pdf.invoice.col.description"),
-                    t.get("pdf.invoice.col.category"),
-                    t.get("pdf.invoice.col.qty"),
-                    t.get("pdf.invoice.col.unitPrice"),
-                    t.get("pdf.invoice.col.total"));
-                y -= 10;
-                drawLine(cs, margin, y, page.getMediaBox().getWidth() - margin, y);
-
-                // Table rows
-                for (var it : items) {
-                    y -= 16;
-                    writeRow(cs, margin, y,
-                        it.getItemDescription(),
-                        categoryLabel(t, it.getItemCategory()),
-                        String.valueOf(it.getQuantity()),
-                        it.getUnitPrice().toString(),
-                        it.getTotalPrice().toString());
-                    if (y < 100) break;
-                }
-
-                // Totals
-                y -= 20;
-                drawLine(cs, margin, y, page.getMediaBox().getWidth() - margin, y);
-                y -= 18;
-                writeTextRight(cs, 12, page, margin, y,
-                    t.get("pdf.invoice.grandTotal", String.valueOf(invoice.getTotalAmount())));
+            w.rule();
+            w.down(14);
+            w.row(BOLD,
+                t.get("pdf.invoice.col.description"),
+                t.get("pdf.invoice.col.category"),
+                t.get("pdf.invoice.col.qty"),
+                t.get("pdf.invoice.col.unitPrice"),
+                t.get("pdf.invoice.col.total"));
+            w.down(8);
+            w.rule();
+            for (var it : items) {
+                w.down(16);
+                w.row(BODY,
+                    designation(t, it),
+                    categoryLabel(t, it.getItemCategory()),
+                    it.getQuantity() != null ? String.valueOf(it.getQuantity()) : "",
+                    money(it.getUnitPrice()),
+                    money(lineTotal(it)));
             }
-            try (var baos = new ByteArrayOutputStream()) {
-                doc.save(baos);
-                return baos.toByteArray();
+
+            for (var adjustment : adjustments) {
+                w.down(16);
+                String kind = t.get("pdf.invoice.adjustment." + adjustment.getType().name());
+                // QA D1091: the mandatory reason is printed whole, wrapped, never cut.
+                w.paragraph(BODY, 10, MARGIN, adjustment.getReason() == null || adjustment.getReason().isBlank()
+                    ? t.get("pdf.invoice.adjustmentLineNoReason", kind, money(adjustment.getAmount()))
+                    : t.get("pdf.invoice.adjustmentLine", kind, adjustment.getReason().strip(),
+                        money(adjustment.getAmount())));
             }
+
+            BigDecimal total = nz(invoice.getTotalAmount());
+            BigDecimal paid = nz(invoice.getAmountPaid());
+            w.ensureRoom(80);
+            w.down(18);
+            w.rule();
+            w.down(18);
+            w.right(BOLD, 12, t.get(GRAND_TOTAL, money(total)));
+            w.down(16);
+            w.right(BODY, 11, t.get(AMOUNT_PAID, money(paid)));
+            w.down(16);
+            // QA D1104: the shared balance rule: nothing is owed on a cancelled invoice.
+            w.right(BOLD, 11, t.get(BALANCE_DUE, money(com.example.hms.utility.InvoiceBalance.dueOf(invoice))));
+            // QA D1466: a copay above the visit total: what the hospital owes back.
+            BigDecimal refundDue = com.example.hms.utility.InvoiceBalance.refundDueOf(invoice);
+            if (refundDue.signum() > 0) {
+                w.down(16);
+                w.right(BOLD, 11, t.get("pdf.invoice.refundDue", money(refundDue)));
+            }
+
+            List<PaymentTransaction> confirmed = payments.stream()
+                .filter(p -> p.getStatus() == null || p.getStatus() == PaymentStatus.CONFIRMED)
+                .toList();
+            if (!confirmed.isEmpty()) {
+                w.ensureRoom(40);
+                w.down(28);
+                w.text(BOLD, 11, MARGIN, t.get("pdf.invoice.payments"));
+                for (var p : confirmed) {
+                    w.ensureRoom(16);
+                    w.down(15);
+                    w.text(BODY, 10, MARGIN, t.get("pdf.invoice.paymentLine",
+                        t.fmt(p.getPaymentDate()), methodLabel(t, p), safe(p.getReferenceNumber()),
+                        money(p.getAmount())));
+                }
+            }
+            return w.finish();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to generate invoice PDF", e);
         }
+    }
+
+    /**
+     * QA D1104: a cancelled invoice says why it was cancelled, and a check-in
+     * copay folded onto a visit invoice says which invoice the money went to.
+     * The PDF said "Annulée" and then "Reste à payer" the full amount, with no
+     * reason and nothing about the carry-over.
+     */
+    private static void cancellationBlock(Writer w, PdfLabels t, BillingInvoice invoice) throws IOException {
+        boolean printed = false;
+        // QA D1901: a reason the server wrote, in the paper's language; a typed one as typed.
+        String reason = t.billingText(invoice.getCancelReasonCode(), invoice.getCancelReasonArgs(),
+            invoice.getCancelReason());
+        if (invoice.getStatus() == com.example.hms.enums.InvoiceStatus.CANCELLED
+                && reason != null && !reason.isBlank()) {
+            w.paragraph(BODY, 11, MARGIN, t.get("pdf.invoice.cancelReason", reason.strip()));
+            w.down(15);
+            printed = true;
+        }
+        if (invoice.getCreditedToInvoice() != null) {
+            w.paragraph(BODY, 11, MARGIN,
+                t.get("pdf.invoice.carriedOver", safe(invoice.getCreditedToInvoice().getInvoiceNumber())));
+            w.down(15);
+            printed = true;
+        }
+        if (printed) {
+            w.down(4);
+        }
+    }
+
+    /** QA D141: a receipt for one confirmed payment. */
+    public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, Locale locale) {
+        return generateReceiptPdf(invoice, payment, String.valueOf(payment.getId()), nz(invoice.getAmountPaid()), locale);
+    }
+
+    /**
+     * QA D228: {@code receiptNumber} is the readable number printed on the
+     * receipt and {@code paidAsOfPayment} the invoice's amount paid right
+     * after this payment, so a reprint shows the balance at that moment.
+     */
+    public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
+                                     BigDecimal paidAsOfPayment, Locale locale) {
+        return generateReceiptPdf(invoice, payment, receiptNumber, paidAsOfPayment, null, false, locale);
+    }
+
+    /**
+     * QA D1056: {@code totalOverride}, when given, is the total printed instead
+     * of the one recorded with the payment - for a payment received on another
+     * invoice and carried over to this one (a folded check-in copay), whose
+     * recorded total is the other invoice's. {@code carriedOver} adds the line
+     * saying so.
+     */
+    public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
+                                     BigDecimal paidAsOfPayment, BigDecimal totalOverride, boolean carriedOver,
+                                     Locale locale) {
+        PdfLabels t = PdfLabels.of(messageSource, locale);
+        try (var doc = new PDDocument()) {
+            var w = new Writer(doc);
+            w.logo();
+            w.text(BOLD, 16, MARGIN, t.get("pdf.receipt.title"));
+            w.down(20);
+            w.text(BODY, 11, MARGIN, t.get(HOSPITAL, hospitalName(invoice)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.number", safe(receiptNumber)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.invoice", safe(invoice.getInvoiceNumber())));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get(PATIENT, patientLine(invoice)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.date", t.fmt(payment.getPaymentDate())));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.method", methodLabel(t, payment)));
+            if (payment.getReferenceNumber() != null && !payment.getReferenceNumber().isBlank()) {
+                w.down(15);
+                w.text(BODY, 11, MARGIN, t.get("pdf.receipt.reference", payment.getReferenceNumber()));
+            }
+            if (carriedOver) {
+                w.down(15);
+                w.text(BODY, 11, MARGIN, t.get("pdf.receipt.carriedOver"));
+            }
+            w.down(28);
+            w.text(BOLD, 14, MARGIN, t.get("pdf.receipt.amount", money(payment.getAmount())));
+            // QA D228: the total when this money was received, not today's.
+            BigDecimal total;
+            if (totalOverride != null) {
+                total = totalOverride;
+            } else {
+                total = payment.getInvoiceTotalAtReceipt() != null
+                    ? payment.getInvoiceTotalAtReceipt() : nz(invoice.getTotalAmount());
+            }
+            BigDecimal paid = nz(paidAsOfPayment);
+            w.down(24);
+            w.text(BODY, 11, MARGIN, t.get(GRAND_TOTAL, money(total)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get(AMOUNT_PAID, money(paid)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get(BALANCE_DUE, money(total.subtract(paid).max(BigDecimal.ZERO))));
+            return w.finish();
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to generate receipt PDF", e);
+        }
+    }
+
+    /**
+     * Whole francs with an ASCII-space thousands separator and the currency: "2 500 F CFA".
+     * The franc CFA has no minor unit; the locale's own grouping character (a narrow
+     * no-break space in French) is not a WinAnsi glyph, so it is not used.
+     */
+    static String money(BigDecimal amount) {
+        BigDecimal v = nz(amount).setScale(0, RoundingMode.HALF_UP);
+        String digits = v.abs().toPlainString();
+        StringBuilder grouped = new StringBuilder();
+        for (int i = 0; i < digits.length(); i++) {
+            if (i > 0 && (digits.length() - i) % 3 == 0) {
+                grouped.append(' ');
+            }
+            grouped.append(digits.charAt(i));
+        }
+        return (v.signum() < 0 ? "-" : "") + grouped + " F CFA";
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v != null ? v : BigDecimal.ZERO;
+    }
+
+    private static BigDecimal lineTotal(InvoiceItem item) {
+        if (item.getTotalPrice() != null) return item.getTotalPrice();
+        if (item.getUnitPrice() != null && item.getQuantity() != null) {
+            return item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private static String hospitalName(BillingInvoice invoice) {
+        return invoice.getHospital() != null ? safe(invoice.getHospital().getName()) : "";
+    }
+
+    private static String patientLine(BillingInvoice invoice) {
+        if (invoice.getPatient() == null) {
+            return "";
+        }
+        String mrn = invoice.getHospital() != null
+            ? invoice.getPatient().getMrnForHospital(invoice.getHospital().getId()) : null;
+        // QA D1036: the whole name, middle name included.
+        return (safe(invoice.getPatient().getFullName()) + " " + safe(mrn)).trim();
+    }
+
+    private static String statusLabel(PdfLabels t, BillingInvoice invoice) {
+        if (invoice.getStatus() == null) {
+            return "";
+        }
+        String code = invoice.getStatus().name();
+        return t.getOrCode("pdf.invoice.statusValue." + code, code);
+    }
+
+    private static String methodLabel(PdfLabels t, PaymentTransaction p) {
+        if (p.getPaymentMethod() == null) {
+            return "";
+        }
+        String code = p.getPaymentMethod().name();
+        return t.getOrCode("pdf.payment.method." + code, code);
+    }
+
+    /** The line's own description; the category label only when the line has none. */
+    private static String designation(PdfLabels t, InvoiceItem it) {
+        // QA D1901: a line the server worded, in the paper's language; a typed one as typed.
+        String d = t.billingText(it.getTextCode(), it.getTextArgs(), it.getItemDescription());
+        if (d != null && !d.isBlank()) {
+            return d;
+        }
+        return categoryLabel(t, it.getItemCategory());
     }
 
     /** The category's bundle label; the enum constant itself for a value the bundle does not know. */
@@ -124,36 +341,29 @@ public class PdfInvoiceService {
         return t.getOrCode("pdf.invoice.category." + category.name(), category.name());
     }
 
-    private static void writeText(PDPageContentStream cs, int size, float x, float y, String text) throws IOException {
-        cs.beginText();
-        cs.setFont(PDType1Font.HELVETICA, size);
-        cs.newLineAtOffset(x, y);
-        cs.showText(text);
-        cs.endText();
-    }
-
-    private static void writeTextRight(PDPageContentStream cs, int size, PDPage page, float margin, float y, String text) throws IOException {
-        var width = page.getMediaBox().getWidth();
-        var textWidth = size * text.length() * 0.5f;
-        writeText(cs, size, width - margin - textWidth, y, text);
-    }
-
-    @SuppressWarnings("java:S107") // parameters are all primitive layout values for PDF row rendering
-    private static void writeRow(PDPageContentStream cs, float x, float y,
-                                 String d, String c, String q, String u, String t) throws IOException {
-        writeText(cs, 10, x, y, truncate(d, 42));
-        writeText(cs, 10, x + 260, y, truncate(c, 16));
-        writeText(cs, 10, x + 360, y, q);
-        writeText(cs, 10, x + 400, y, u);
-        writeText(cs, 10, x + 470, y, t);
-    }
-
-    private static void drawLine(PDPageContentStream cs, float x1, float y1, float x2, float y2) throws IOException {
-        cs.moveTo(x1, y1); cs.lineTo(x2, y2); cs.stroke();
-    }
-
     private static String safe(String v) { return v == null ? "" : v; }
-    private static String truncate(String s, int n) { return s != null && s.length() > n ? s.substring(0, n - 1) + "…" : s; }
+
+    /** Standard-14 fonts carry WinAnsi only; a glyph outside it becomes '?', not an exception. */
+    static String sanitize(PDFont font, String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\n' || c == '\r' || c == '\t') {
+                out.append(' ');
+                continue;
+            }
+            try {
+                font.encode(String.valueOf(c));
+                out.append(c);
+            } catch (IllegalArgumentException | IOException e) {
+                out.append('?');
+            }
+        }
+        return out.toString();
+    }
 
     private static byte[] buildQrPng(String content) {
         try {
@@ -165,6 +375,131 @@ public class PdfInvoiceService {
             return baos.toByteArray();
         } catch (com.google.zxing.WriterException | java.io.IOException e) {
             throw new IllegalStateException("QR generation failed", e);
+        }
+    }
+
+    /** A cursor over pages: moves down, and opens a new page when the room runs out. */
+    private static final class Writer {
+        /** Line height of a wrapped 10-point line. */
+        private static final float LINE = 12f;
+        private static final float DESCRIPTION_WIDTH = 232f;
+        private static final float CATEGORY_WIDTH = 86f;
+
+        private final PDDocument doc;
+        private PDPage page;
+        private PDPageContentStream cs;
+        private float y;
+
+        Writer(PDDocument doc) throws IOException {
+            this.doc = doc;
+            newPage();
+        }
+
+        private void newPage() throws IOException {
+            if (cs != null) {
+                cs.close();
+            }
+            page = new PDPage(PDRectangle.LETTER);
+            doc.addPage(page);
+            cs = new PDPageContentStream(doc, page);
+            y = page.getMediaBox().getHeight() - MARGIN;
+        }
+
+        void logo() throws IOException {
+            try (var logoStream = PdfInvoiceService.class.getResourceAsStream("/branding/hospital-logo.png")) {
+                if (logoStream != null) {
+                    var logo = PDImageXObject.createFromByteArray(doc, logoStream.readAllBytes(), "logo");
+                    cs.drawImage(logo, MARGIN, y - 60, 120, 40);
+                }
+            }
+            y -= 80;
+        }
+
+        void qr(byte[] png) throws IOException {
+            var qr = PDImageXObject.createFromByteArray(doc, png, "qr");
+            cs.drawImage(qr, page.getMediaBox().getWidth() - MARGIN - 90, y - 10, 80, 80);
+        }
+
+        void down(float dy) {
+            y -= dy;
+        }
+
+        void ensureRoom(float needed) throws IOException {
+            if (y - needed < BOTTOM) {
+                newPage();
+            }
+        }
+
+        void text(PDFont font, float size, float x, String text) throws IOException {
+            cs.beginText();
+            cs.setFont(font, size);
+            cs.newLineAtOffset(x, y);
+            cs.showText(sanitize(font, text));
+            cs.endText();
+        }
+
+        void right(PDFont font, float size, String text) throws IOException {
+            String clean = sanitize(font, text);
+            float width = font.getStringWidth(clean) / 1000f * size;
+            float x = page.getMediaBox().getWidth() - MARGIN - width;
+            text(font, size, x, clean);
+        }
+
+        /**
+         * One table row. QA D1091: the description and the category wrap inside
+         * their columns (they were cut at 40 and 16 characters, mid-word); the
+         * row is as tall as its longest cell and starts on a new page when it
+         * does not fit.
+         */
+        void row(PDFont font, String d, String c, String q, String u, String total) throws IOException {
+            List<String> description = PdfText.wrap(font, 10, sanitize(font, d), DESCRIPTION_WIDTH);
+            List<String> category = PdfText.wrap(font, 10, sanitize(font, c), CATEGORY_WIDTH);
+            int lines = Math.max(description.size(), category.size());
+            if (y - (lines - 1) * LINE < BOTTOM) {
+                newPage();
+            }
+            text(font, 10, MARGIN + 330, safe(q));
+            text(font, 10, MARGIN + 370, safe(u));
+            text(font, 10, MARGIN + 450, safe(total));
+            for (int i = 0; i < lines; i++) {
+                if (i > 0) {
+                    down(LINE);
+                }
+                if (i < description.size()) {
+                    text(font, 10, MARGIN, description.get(i));
+                }
+                if (i < category.size()) {
+                    text(font, 10, MARGIN + 240, category.get(i));
+                }
+            }
+        }
+
+        /** {@code text} wrapped to the page width from {@code x}, each line given its room. */
+        void paragraph(PDFont font, float size, float x, String text) throws IOException {
+            float maxWidth = page.getMediaBox().getWidth() - MARGIN - x;
+            List<String> lines = PdfText.wrap(font, size, sanitize(font, text), maxWidth);
+            for (int i = 0; i < lines.size(); i++) {
+                if (i > 0) {
+                    down(LINE);
+                }
+                ensureRoom(0);
+                text(font, size, x, lines.get(i));
+            }
+        }
+
+        void rule() throws IOException {
+            cs.moveTo(MARGIN, y);
+            cs.lineTo(page.getMediaBox().getWidth() - MARGIN, y);
+            cs.stroke();
+        }
+
+        byte[] finish() throws IOException {
+            cs.close();
+            cs = null;
+            try (var baos = new ByteArrayOutputStream()) {
+                doc.save(baos);
+                return baos.toByteArray();
+            }
         }
     }
 }

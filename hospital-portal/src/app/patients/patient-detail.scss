@@ -46,7 +46,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px 20px;
+  padding: 22px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
@@ -113,6 +113,14 @@
   &.inactive {
     background: #fbe9e7;
     color: #c62828;
+  }
+  &.deceased {
+    background: #37474f;
+    color: #fff;
+  }
+  &.disputed {
+    background: #fff3e0;
+    color: #b45309;
   }
 }
 
@@ -802,37 +810,4 @@ input:focus-visible {
     white-space: normal;
     overflow-wrap: anywhere;
   }
-}
-
-.record-actions {
-  position: relative;
-}
-.record-actions > summary {
-  cursor: pointer;
-  white-space: nowrap;
-}
-.record-actions-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  z-index: 20;
-  display: grid;
-  gap: 8px;
-  width: max-content;
-  max-width: min(360px, 85vw);
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
-  button {
-    width: 100%;
-    text-align: left;
-    justify-content: flex-start;
-    white-space: normal;
-  }
-}
-.record-actions > summary:focus-visible {
-  outline: 3px solid var(--primary);
-  outline-offset: 3px;
 }

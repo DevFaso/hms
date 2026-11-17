@@ -44,9 +44,29 @@ public class PatientTimelineResponseDTO {
 
     @Schema(description = "Indicates that at least one sensitive event was included in the payload.")
     private boolean containsSensitiveData;
+    /** QA D504: the patient opted out of sharing and other hospitals' allergy rows are withheld here. */
+    private boolean allergiesWithheld;
 
-    @Schema(description = "Total number of entries after applying filters and limits.")
+    /**
+     * QA D504: the patient opted out of record sharing and nothing here
+     * overrides it, so every clinical list on this read (problems, medications,
+     * labs, vitals, notes, encounters, imaging) holds this hospital's rows
+     * only. Says nothing about whether other rows exist.
+     */
+    private boolean recordsWithheld;
+
+    /**
+     * QA D1380 (D1347 class): every entry the filters keep, never the page's
+     * length (the chart read "50 evenements" for the newest 50 of many more).
+     */
+    @Schema(description = "Total number of entries after applying the filters, across every page.")
     private int totalEntries;
+
+    @Schema(description = "QA D1380: the 0-based page of entries returned.")
+    private int page;
+
+    @Schema(description = "QA D1380: entries per page (maxEvents after clamping).")
+    private int pageSize;
 
     /**
      * E9 #64 — rows this read withheld under decision D3 (foreign, in a

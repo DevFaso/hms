@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.clinical.newborn;
 
+import com.example.hms.enums.NewbornDangerSignObservation;
 import com.example.hms.enums.NewbornEducationTopic;
 import com.example.hms.enums.NewbornFollowUpAction;
 import lombok.AllArgsConstructor;
@@ -22,6 +23,8 @@ public class NewbornAssessmentResponseDTO {
     private UUID id;
     private UUID patientId;
     private UUID hospitalId;
+    /** QA D1631: the hospital that owns the record, so another hospital shows it as theirs, read only. */
+    private String hospitalName;
     private UUID registrationId;
 
     /** The delivery this newborn came from, when one was recorded. */
@@ -55,6 +58,12 @@ public class NewbornAssessmentResponseDTO {
     private String examNeurological;
     private String examMusculoskeletal;
     private String examNotes;
+
+    /** CR-05: NOT_ASSESSED is not absent. Rows saved before these signs existed read NOT_ASSESSED. */
+    private NewbornDangerSignObservation poorFeeding;
+    private NewbornDangerSignObservation convulsions;
+    private NewbornDangerSignObservation severeChestIndrawing;
+    private NewbornDangerSignObservation absentSpontaneousMovement;
 
     private boolean escalationRecommended;
     private boolean respiratorySupportInitiated;

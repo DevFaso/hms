@@ -12,6 +12,10 @@ struct ProfileView: View {
     @State private var showError = false
     @State private var showLanguagePicker = false
 
+    private var isPasswordSession: Bool {
+        KeychainHelper.shared.oidcAccessToken == nil && KeychainHelper.shared.accessToken != nil
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -33,7 +37,7 @@ struct ProfileView: View {
                                             .scaledToFill()
                                             .frame(width: 76, height: 76)
                                             .clipShape(Circle())
-                                            .overlay(Circle().stroke(Color("BrandBlue").opacity(0.2), lineWidth: 2))
+                                            .overlay(Circle().stroke(Color("BrandPrimary").opacity(0.2), lineWidth: 2))
                                     } else if let url = profile.profileImageUrl, !url.isEmpty {
                                         AsyncImage(url: URL(string: url.hasPrefix("http") ? url : AppEnvironment.assetOrigin + url)) { phase in
                                             if let img = phase.image {
@@ -41,16 +45,16 @@ struct ProfileView: View {
                                             } else {
                                                 Image(systemName: "person.crop.circle.fill")
                                                     .font(.system(size: 64))
-                                                    .foregroundStyle(Color("BrandBlue").opacity(0.6))
+                                                    .foregroundStyle(Color("BrandPrimary").opacity(0.6))
                                             }
                                         }
                                         .frame(width: 76, height: 76)
                                         .clipShape(Circle())
-                                        .overlay(Circle().stroke(Color("BrandBlue").opacity(0.2), lineWidth: 2))
+                                        .overlay(Circle().stroke(Color("BrandPrimary").opacity(0.2), lineWidth: 2))
                                     } else {
                                         Image(systemName: "person.crop.circle.fill")
                                             .font(.system(size: 64))
-                                            .foregroundStyle(Color("BrandBlue").opacity(0.6))
+                                            .foregroundStyle(Color("BrandPrimary").opacity(0.6))
                                     }
 
                                     Button { showPhotoPicker = true } label: {
@@ -58,7 +62,7 @@ struct ProfileView: View {
                                             .font(.system(size: 10, weight: .semibold))
                                             .foregroundStyle(.white)
                                             .padding(7)
-                                            .background(Color("BrandBlue"))
+                                            .background(Color("BrandPrimary"))
                                             .clipShape(Circle())
                                             .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
                                     }
@@ -112,6 +116,13 @@ struct ProfileView: View {
                             NavigationLink { HealthRecordsView() } label: {
                                 Label("health_records".localized, systemImage: "heart.text.square")
                             }
+                            // My Medical History (#709) was built with no way
+                            // to reach it: the only screen that shows the
+                            // recorded medical, surgical, family and social
+                            // history, and the device-only notes on each.
+                            NavigationLink { MedicalHistoryView() } label: {
+                                Label("history_title".localized, systemImage: "clock.arrow.circlepath")
+                            }
                             NavigationLink { DocumentsView() } label: {
                                 Label("documents".localized, systemImage: "doc.fill")
                             }
@@ -126,6 +137,16 @@ struct ProfileView: View {
                             }
                             NavigationLink { FamilyAccessView() } label: {
                                 Label("family_access".localized, systemImage: "person.2.circle")
+                            }
+                        }
+
+                        // Security — a password session only: an SSO
+                        // patient's password is Keycloak's, not ours.
+                        if isPasswordSession {
+                            Section("security".localized) {
+                                NavigationLink { ChangePasswordView() } label: {
+                                    Label("change_password".localized, systemImage: "key")
+                                }
                             }
                         }
 
@@ -199,7 +220,7 @@ struct ProfileView: View {
     private func readOnlyContent(_ profile: PatientProfileDTO) -> some View {
         Section("personal_information".localized) {
             ProfileRow(label: "date_of_birth".localized, value: profile.dateOfBirth)
-            ProfileRow(label: "gender".localized, value: profile.gender)
+            ProfileRow(label: "gender".localized, value: EnumLabel.label(.gender, profile.gender, rawFallback: true))
             ProfileRow(label: "blood_type".localized, value: profile.bloodType)
             ProfileRow(label: "language".localized, value: profile.preferredLanguage)
             ProfileRow(label: "username".localized, value: profile.username)
@@ -241,7 +262,8 @@ struct ProfileView: View {
             ProfileRow(label: "name".localized, value: profile.emergencyContactName)
             ProfileRow(label: "phone".localized, value: profile.emergencyContactPhone)
             if let rel = profile.emergencyContactRelationship {
-                ProfileRow(label: "relationship".localized, value: rel)
+                ProfileRow(label: "relationship".localized,
+                           value: EnumLabel.label(.relationship, rel, rawFallback: true))
             }
         }
     }
@@ -314,7 +336,7 @@ struct LanguagePickerSheet: View {
                             Spacer()
                             if localization.currentLanguage == lang.code {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(Color("BrandBlue"))
+                                    .foregroundStyle(Color("BrandPrimary"))
                                     .font(.title3)
                             }
                         }
@@ -437,7 +459,7 @@ final class ProfileViewModel: ObservableObject {
         guard let image = UIImage(data: data),
               let jpegData = image.jpegData(compressionQuality: 0.8)
         else {
-            errorMessage = "Could not process the selected image."
+            errorMessage = "photo_process_failed".localized
             return
         }
         profileImage = image

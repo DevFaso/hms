@@ -1,6 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import type { AllergyReviewState } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
+import { CdsCard } from '../shared/cds-card/cds-card.model';
 
 /* ───────────────────────────── Medication Catalog ───────────────────────────── */
 
@@ -20,6 +22,32 @@ export interface MedicationCatalogItemRequest {
   description?: string;
 }
 
+/** Round 18 (QA D935): one weight band; min inclusive, max exclusive (null: no upper bound). */
+export interface PediatricWeightBand {
+  minWeightKg: number | null;
+  maxWeightKg: number | null;
+  dosePerAdministration: number | null;
+  doseUnit: string;
+  maxDosesPerDay: number | null;
+}
+
+export type PediatricDoseLimitStatus = 'DEFAULT_PENDING_APPROVAL' | 'APPROVED';
+
+/**
+ * Round 18 (QA D935): a catalogue item's paediatric dose limits, the
+ * pharmacy's to set and approve (PUT /medication-catalog/{id}/pediatric-dosing).
+ */
+export interface PediatricDosingRequest {
+  pediatricMaxDoseMgPerKg: number | null;
+  pediatricMaxDailyMgPerKg: number | null;
+  pediatricMaxSingleDoseMg: number | null;
+  pediatricMaxDailyMg: number | null;
+  pediatricManualReviewUnderMonths: number | null;
+  pediatricWeightBands: PediatricWeightBand[];
+  pediatricDoseSource: string | null;
+  pediatricDoseStatus: PediatricDoseLimitStatus;
+}
+
 export interface MedicationCatalogItemResponse {
   id: string;
   nameFr: string;
@@ -34,6 +62,17 @@ export interface MedicationCatalogItemResponse {
   category?: string;
   essentialList: boolean;
   controlled: boolean;
+  /** QA D935: mg per kg per dose, or null when the catalogue holds no ceiling. */
+  pediatricMaxDoseMgPerKg?: number | null;
+  /** Round 18 (QA D935): the rest of the paediatric limits, their source and approval. */
+  pediatricMaxDailyMgPerKg?: number | null;
+  pediatricMaxSingleDoseMg?: number | null;
+  pediatricMaxDailyMg?: number | null;
+  pediatricManualReviewUnderMonths?: number | null;
+  pediatricWeightBands?: PediatricWeightBand[];
+  pediatricDoseSource?: string | null;
+  pediatricDoseStatus?: PediatricDoseLimitStatus | null;
+  pediatricDoseReviewedAt?: string | null;
   active: boolean;
   description?: string;
   hospitalId?: string;
@@ -92,10 +131,13 @@ export interface PharmacyResponse {
 export interface InventoryItemRequest {
   pharmacyId: string;
   medicationCatalogItemId: string;
-  quantityOnHand: number;
+  /** Optional on update: the server refuses a value that differs from the live stock. */
+  quantityOnHand?: number;
   reorderThreshold: number;
   reorderQuantity: number;
   unit?: string;
+  /** QA D264: selling price of one unit, whole XOF. */
+  unitPrice?: number | null;
   active?: boolean;
 }
 
@@ -109,9 +151,18 @@ export interface InventoryItemResponse {
   reorderThreshold: number;
   reorderQuantity: number;
   unit?: string;
+  unitPrice?: number | null;
   active: boolean;
+  /** QA D157: a controlled substance; a manual movement of it needs a witness. */
+  controlled?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** QA D157: a colleague who may witness a controlled-substance movement. */
+export interface StockWitnessCandidate {
+  userId: string;
+  displayName: string;
 }
 
 export interface StockLotRequest {
@@ -124,6 +175,8 @@ export interface StockLotRequest {
   unitCost?: number;
   receivedDate?: string;
   notes?: string;
+  /** QA D655: the colleague who witnessed the receipt of a controlled substance. */
+  witnessedBy?: string;
 }
 
 export interface StockLotResponse {
@@ -144,6 +197,11 @@ export interface StockLotResponse {
    * mints one.
    */
   barcodeValue?: string;
+  /**
+   * QA D1163: the unit (dosage form) of the stock item the lot belongs to,
+   * when the server sends it; a lot of another form than the order is not offered.
+   */
+  unit?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -157,6 +215,8 @@ export interface StockTransactionRequest {
   /** Must be a UUID when present (e.g. destination pharmacy on TRANSFER). */
   referenceId?: string;
   performedBy?: string;
+  /** QA D157: the colleague who witnessed a controlled-substance movement. */
+  witnessedBy?: string;
   // FU-2: first-class RECEIPT fields (all optional)
   lotNumber?: string;
   supplier?: string;
@@ -164,6 +224,69 @@ export interface StockTransactionRequest {
   /** ISO date (YYYY-MM-DD). */
   expiryDate?: string;
   unitCost?: number;
+  /**
+   * QA D964: why the chosen lot is taken although a shorter-dated usable lot
+   * of the same item could serve this movement. Required by the server only
+   * then; recorded with the movement.
+   */
+  fefoOverrideReason?: string;
+}
+
+/** QA D967: one movement of the controlled-drug register, with the drug's balance after it. */
+export interface ControlledRegisterEntry {
+  transactionId: string;
+  occurredAt?: string;
+  movementType: string;
+  /** Signed: in positive, out negative. */
+  quantity: number;
+  lotNumber?: string;
+  balanceAfter: number;
+  patientName?: string;
+  prescriberName?: string;
+  recordedBy?: string;
+  witnessedBy?: string;
+  /** Already in the reader's language. */
+  reason?: string;
+  /** QA D1084: a return booked against a fill: its lot, and the minute it was given (server time). */
+  reasonFillLot?: string | null;
+  reasonFillAt?: string | null;
+}
+
+/** QA D967: one controlled drug's page of the register. */
+export interface ControlledRegisterDrug {
+  inventoryItemId: string;
+  medicationName?: string;
+  unit?: string;
+  openingBalance: number;
+  closingBalance: number;
+  quantityOnHand?: number;
+  entries: ControlledRegisterEntry[];
+}
+
+/** QA D967: the controlled-drug (stupéfiants) register of a pharmacy over a period. */
+export interface ControlledRegister {
+  pharmacyId: string;
+  pharmacyName?: string;
+  from: string;
+  to: string;
+  truncated: boolean;
+  drugs: ControlledRegisterDrug[];
+}
+
+/**
+ * QA D932: a fill a return can be booked against (completed or partial, of
+ * the chosen item and lot, with stock still out).
+ */
+export interface ReturnableDispense {
+  dispenseId: string;
+  prescriptionId?: string;
+  patientName?: string;
+  medicationName?: string;
+  dispensedAt?: string;
+  quantityDispensed: number;
+  returnableQuantity: number;
+  unit?: string;
+  lotNumber?: string;
 }
 
 export interface StockTransactionResponse {
@@ -175,6 +298,12 @@ export interface StockTransactionResponse {
   reason?: string;
   referenceId?: string;
   performedBy?: string;
+  /** QA D158: who did it, as a name. */
+  performedByName?: string;
+  witnessedBy?: string;
+  witnessedByName?: string;
+  /** QA D158: the lot's number, never its id. */
+  stockLotNumber?: string;
   createdAt: string;
   // FU-2: first-class RECEIPT fields
   lotNumber?: string;
@@ -218,6 +347,18 @@ export interface DispenseRequest {
   substitutionReason?: string;
   notes?: string;
   /**
+   * QA D964: why the chosen lot is taken although a shorter-dated usable lot
+   * of the same item could serve this movement. Required by the server only
+   * then; recorded with the movement.
+   */
+  fefoOverrideReason?: string;
+  /**
+   * QA D1102 class: the pharmacist's reason for dispensing past a serious
+   * interaction alert. Sent only once the server refused the fill with the
+   * alerts (`cdsAdvisories`), which the form then shows beside this field.
+   */
+  cdsOverrideReason?: string;
+  /**
    * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
    * offline-dispense queue mints when the user clicks Dispense. Allows the
    * same logical dispense to be replayed after connectivity returns without
@@ -225,6 +366,9 @@ export interface DispenseRequest {
    * contract: see DispenseRequestDTO.idempotencyKey + V94 migration.
    */
   idempotencyKey?: string;
+
+  /** QA D654: the colleague who witnessed a controlled substance leaving the shelf. */
+  witnessedBy?: string;
 
   /**
    * Tier 2 item 34 — raw value scanned from the patient wristband (the bare
@@ -250,28 +394,50 @@ export type DispenseVerificationStatus = 'NOT_VERIFIED' | 'VERIFIED' | 'OVERRIDD
 /** Which dispense-time check was overridden. Mirrors the backend enum. */
 export type DispenseCheck = 'PATIENT' | 'DRUG' | 'EXPIRY';
 
+/**
+ * Mirrors `DispenseResponseDTO` field for field. Six fields used to be
+ * declared here that `DispenseMapper` never sent (patientName, pharmacyName,
+ * dispensedById, dispensedByName, verifiedById, verifiedByName) while the
+ * wire carried `dispensedBy` / `verifiedBy`, so the dispensing history's
+ * "Dispensed by" column was blank on every row. The backend now sends
+ * `dispensedByName`; the ids are named as the wire names them; the rest,
+ * which nothing rendered, are gone rather than left to look available.
+ */
 export interface DispenseResponse {
   id: string;
   prescriptionId: string;
   patientId: string;
+  /** The patient as a person reads them (QA D102); on every dispense read since QA D1058. */
   patientName?: string;
-  pharmacyId: string;
+  /** The pharmacy name; GET /pharmacy/dispense/{id} only (QA D102). */
   pharmacyName?: string;
+  pharmacyId: string;
   stockLotId?: string;
-  dispensedById: string;
+  /** The dispensing user's id. */
+  dispensedBy: string;
+  /** Their name; absent when none is on file. */
   dispensedByName?: string;
-  verifiedById?: string;
-  verifiedByName?: string;
+  /** The verifying user's id, when a second person verified. */
+  verifiedBy?: string;
   medicationCatalogItemId?: string;
   medicationName: string;
   quantityRequested: number;
   quantityDispensed: number;
+  /** QA D264: what the dispense costs; null when the pharmacy has not priced the medication. */
+  chargeAmount?: number | null;
+  /**
+   * QA D843: a payment is already POSTED against this dispense. Sent by
+   * GET /pharmacy/dispense/{id} and the pharmacy list the checkout reads;
+   * absent elsewhere.
+   */
+  paid?: boolean | null;
   unit?: string;
   substitution: boolean;
   substitutionReason?: string;
   status: string;
   notes?: string;
-  dispensedAt: string;
+  /** When the fill was handed over; absent while it is PENDING (prepared, G15). */
+  dispensedAt?: string | null;
   /**
    * NOT_VERIFIED is the paper-fallback path and a legitimate outcome, not a
    * failure — do not render it as an error.
@@ -280,8 +446,68 @@ export interface DispenseResponse {
   scanVerifiedAt?: string;
   verificationOverrides?: DispenseCheck[];
   verificationOverrideReason?: string;
+  /** G15: who prepared the fill (absent for a one-step fill); kept after hand-over. */
+  preparedBy?: string;
+  preparedByName?: string;
+  /** G15: when it was marked ready for collection. */
+  readyAt?: string;
+  /** G15: why a preparation was cancelled or voided. */
+  cancelReason?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * G15: the reasons a pharmacist may give when cancelling a preparation. The
+ * backend's two PRESCRIPTION_* values are its own (a withdrawn or changed
+ * order) and are refused from here.
+ */
+export const READY_CANCEL_REASONS = [
+  'STOCK_UNAVAILABLE',
+  'PATIENT_DECLINED',
+  'NOT_COLLECTED',
+  'OTHER',
+] as const;
+export type ReadyCancelReason = (typeof READY_CANCEL_REASONS)[number];
+
+/** G15: GET /pharmacy/dispense/settings (G13 adds the work-queue claim switch and TTL). */
+export interface DispenseSettings {
+  readyForCollectionEnabled: boolean;
+  /** G13: whether work-queue claims are on; absent from an older backend. */
+  queueClaimEnabled?: boolean;
+  /** G13: how long a claim lasts without being renewed, in minutes. */
+  queueClaimTtlMinutes?: number;
+}
+
+/** G13: which work-queue rows to list, by claim. */
+export type QueueClaimFilter = 'ALL' | 'MINE' | 'UNCLAIMED';
+
+/**
+ * G13: an active work-queue claim ("being prepared by"). Advisory: it never
+ * blocks a dispense or any other action. Times are the server's zone-less
+ * local timestamps.
+ */
+export interface WorkQueueClaim {
+  prescriptionId: string;
+  claimedByUserId: string;
+  claimedByName?: string;
+  claimedAt: string;
+  expiresAt?: string;
+  /** True only for the caller's own claim. */
+  mine: boolean;
+  /** Claim and take-over answers only: true when the caller already held it. */
+  renewed?: boolean;
+}
+
+/** G15: the fill prepared for a work-queue row and waiting for collection. */
+export interface WorkQueueReadyForCollection {
+  dispenseId: string;
+  readyAt?: string;
+  preparedByName?: string;
+  quantity?: number;
+  unit?: string;
+  /** When the one reminder SMS went out; absent before. */
+  reminderSentAt?: string;
 }
 
 /** Work-queue prescription — minimal projection returned by GET /pharmacy/dispense/work-queue. */
@@ -291,12 +517,19 @@ export interface WorkQueuePrescription {
   dosage?: string;
   frequency?: string;
   quantity?: number;
+  /**
+   * QA D1001: what may still be dispensed on this order (the server's own
+   * ceiling: every fill owed minus the fills not cancelled). Absent when the
+   * order carries no quantity.
+   */
+  remainingQuantity?: number;
   quantityUnit?: string;
   status: string;
   createdAt?: string;
   patient?: {
     id: string;
     firstName?: string;
+    middleName?: string;
     lastName?: string;
   };
   staff?: {
@@ -310,6 +543,14 @@ export interface WorkQueuePrescription {
   /** Absent on a first fill with no refill allowance and no request history. */
   refill?: WorkQueueRefillContext;
   /**
+   * G15: the fill prepared for this order and waiting at the counter; absent
+   * when there is none. While it is set the row is handed over or its
+   * preparation cancelled, never dispensed or routed.
+   */
+  readyForCollection?: WorkQueueReadyForCollection;
+  /** G13: who is preparing this order; absent when nobody holds an active claim. */
+  claim?: WorkQueueClaim;
+  /**
    * True when the row is not a plain fill and the pharmacist should look
    * before dispensing; {@link attentionReason} says which. Absent (rather
    * than false) on payloads produced before the backend added the flag.
@@ -317,11 +558,40 @@ export interface WorkQueuePrescription {
   needsAttention?: boolean;
   /**
    * PENDING_STOCK, PARTNER_REJECTED, PARTNER_ACCEPTED,
-   * BACK_ORDER_OUTSTANDING or CLARIFICATION_RESOLVED; absent when nothing
+   * BACK_ORDER_OUTSTANDING, CLARIFICATION_RESOLVED or (G15)
+   * READY_UNCOLLECTED; absent when nothing
    * needs attention. Only CLARIFICATION_RESOLVED is acted on here (gap G5) —
    * the rest belong to the back-order and partner-routing cues.
    */
   attentionReason?: string;
+  /**
+   * When the prescriber answered the pharmacist's question, if the pharmacy
+   * has not acted on that answer yet; absent otherwise.
+   *
+   * <p>A SECOND fact about the row, not a competing reason:
+   * `attentionReason` reports one reason by precedence and resolving a
+   * clarification restores the status the question was asked from, so an
+   * answer on a PENDING_STOCK or PARTNER_REJECTED order is masked by that
+   * status. This is the only reliable "the prescriber answered" cue.
+   *
+   * <p>Carries no clinical text — the projection is served to roles that
+   * `GET /prescriptions/{id}` refuses. The words are fetched in the dialog.
+   */
+  clarificationResolvedAt?: string;
+  /**
+   * QA D1101: the prescriber passed an allergy or a critical decision-support
+   * alert with a reason. A cue only; the reason is read on the prescription.
+   */
+  alertOverridden?: boolean;
+  /**
+   * QA D1555: the order's allergy cards against the patient's CURRENT allergies (an allergy recorded
+   * after the signature included); the stop's `exceptionKey` is the token a fill sends back.
+   */
+  allergyAlerts?: CdsCard[];
+  /** QA D1584: the allergy stop's review state (awaiting, CONTINUE with the plan, STOP). */
+  allergyReview?: AllergyReviewState | null;
+  /** Existing when a recorded death was disputed: a prescriber reviews it first. */
+  heldForReview?: boolean;
 }
 
 /**
@@ -352,8 +622,14 @@ export interface StockCheckResult {
   /** Null when `quantityOnHand` is an aggregate across all hospital dispensaries. */
   pharmacyId: string | null;
   quantityOnHand: number;
+  /** QA D913: what is still owed on the order; absent from a server that predates it. */
+  quantityRequired?: number | null;
   sufficient: boolean;
   partnerPharmacies: PartnerOption[];
+  /** QA D966: the order's status (PRINTED_FOR_PATIENT once printed). */
+  prescriptionStatus?: string;
+  /** QA D966: whether a routing action can still be taken; the buttons follow it. */
+  routable?: boolean;
 }
 
 export interface PartnerOption {
@@ -381,7 +657,16 @@ export interface RoutingDecisionResponse {
   targetPharmacyName?: string;
   decidedByUserId: string;
   patientId: string;
+  /** Why the decision was taken, as it was typed — free text only. */
   reason?: string;
+  /**
+   * The decision was cancelled because the partner never delivered. A flag,
+   * not a stored sentence: the sentence used to be composed in English on the
+   * server and rendered verbatim to French and Spanish prescribers.
+   */
+  partnerNoShow?: boolean;
+  /** The pharmacist's own words about the no-show; absent when they typed none. */
+  noShowReason?: string;
   estimatedRestockDate?: string;
   /**
    * The quantity this routing is for — the REMAINDER on a partially filled
@@ -414,6 +699,8 @@ export interface PharmacyPaymentRequest {
 
 export interface PharmacyPaymentResponse {
   id: string;
+  /** QA D1032: the readable receipt number (CODE-PH-YYYY-000001) the server assigns. */
+  receiptNumber?: string | null;
   dispenseId: string;
   patientId: string;
   hospitalId: string;
@@ -423,6 +710,10 @@ export interface PharmacyPaymentResponse {
   referenceNumber?: string;
   receivedBy: string;
   notes?: string;
+  /** QA D404: POSTED, or VOIDED once the dispense it paid for was cancelled. */
+  status?: 'POSTED' | 'VOIDED';
+  voidedAt?: string | null;
+  voidReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -447,6 +738,8 @@ export interface PharmacyClaimResponse {
   id: string;
   dispenseId: string;
   patientId: string;
+  /** QA D992 class: shown instead of a slice of the patient id. */
+  patientName?: string | null;
   hospitalId: string;
   coverageReference?: string;
   claimStatus: PharmacyClaimStatus;
@@ -500,6 +793,17 @@ export class PharmacyService {
 
   deleteMedication(id: string): Observable<void> {
     return this.http.delete<void>(`/medication-catalog/${id}`);
+  }
+
+  /** Round 18 (QA D935): the pharmacy sets or approves an item's paediatric dose limits. */
+  updatePediatricDosing(
+    id: string,
+    req: PediatricDosingRequest,
+  ): Observable<MedicationCatalogItemResponse> {
+    return this.http.put<MedicationCatalogItemResponse>(
+      `/medication-catalog/${id}/pediatric-dosing`,
+      req,
+    );
   }
 
   // ── Pharmacy Registry ──
@@ -595,12 +899,31 @@ export class PharmacyService {
     );
   }
 
+  /** QA D241: the pharmacy's lots of the prescribed drug, with stock left. */
+  listDispensableLots(
+    prescriptionId: string,
+    pharmacyId: string,
+  ): Observable<ApiResponse<StockLotResponse[]>> {
+    const params = new HttpParams().set('pharmacyId', pharmacyId);
+    return this.http.get<ApiResponse<StockLotResponse[]>>(
+      `/pharmacy/dispense/prescription/${prescriptionId}/dispensable-lots`,
+      { params },
+    );
+  }
+
+  /**
+   * Every lot of the pharmacy, one page. QA D1233: `sort` (Spring's
+   * `property,direction`) lets the goods receipt ask for the newest received
+   * first across ALL items, instead of reading the lots of the first five.
+   */
   listLotsByPharmacy(
     pharmacyId: string,
     page = 0,
     size = 20,
+    sort: readonly string[] = [],
   ): Observable<ApiResponse<Page<StockLotResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+    let params = new HttpParams().set('page', page).set('size', size);
+    for (const s of sort) params = params.append('sort', s);
     return this.http.get<ApiResponse<Page<StockLotResponse>>>(
       `/pharmacy/inventory/lots/pharmacy/${pharmacyId}`,
       { params },
@@ -641,6 +964,63 @@ export class PharmacyService {
     return this.http.post<ApiResponse<StockTransactionResponse>>(
       '/pharmacy/stock-transactions',
       req,
+    );
+  }
+
+  /** QA D157: colleagues of the active hospital who may witness a controlled-substance movement. */
+  listWitnessCandidates(): Observable<ApiResponse<StockWitnessCandidate[]>> {
+    return this.http.get<ApiResponse<StockWitnessCandidate[]>>(
+      '/pharmacy/stock-transactions/witness-candidates',
+    );
+  }
+
+  /** QA D967: the controlled-drug register (dates are ISO YYYY-MM-DD). */
+  getControlledRegister(
+    pharmacyId: string,
+    from: string,
+    to: string,
+    inventoryItemId?: string,
+  ): Observable<ApiResponse<ControlledRegister>> {
+    return this.http.get<ApiResponse<ControlledRegister>>('/pharmacy/controlled-register', {
+      params: this.registerParams(pharmacyId, from, to, inventoryItemId),
+    });
+  }
+
+  /** QA D967: the register as CSV or PDF, in the reader's language. */
+  exportControlledRegister(
+    format: 'csv' | 'pdf',
+    pharmacyId: string,
+    from: string,
+    to: string,
+    inventoryItemId?: string,
+  ): Observable<Blob> {
+    return this.http.get(`/pharmacy/controlled-register/export.${format}`, {
+      params: this.registerParams(pharmacyId, from, to, inventoryItemId),
+      responseType: 'blob',
+    });
+  }
+
+  private registerParams(
+    pharmacyId: string,
+    from: string,
+    to: string,
+    inventoryItemId?: string,
+  ): HttpParams {
+    let params = new HttpParams().set('pharmacyId', pharmacyId).set('from', from).set('to', to);
+    if (inventoryItemId) params = params.set('inventoryItemId', inventoryItemId);
+    return params;
+  }
+
+  /** QA D932: the fills a return of this item (and lot) can be booked against. */
+  listReturnableDispenses(
+    inventoryItemId: string,
+    stockLotId?: string,
+  ): Observable<ApiResponse<ReturnableDispense[]>> {
+    let params = new HttpParams().set('inventoryItemId', inventoryItemId);
+    if (stockLotId) params = params.set('stockLotId', stockLotId);
+    return this.http.get<ApiResponse<ReturnableDispense[]>>(
+      '/pharmacy/stock-transactions/returnable-dispenses',
+      { params },
     );
   }
 
@@ -707,11 +1087,55 @@ export class PharmacyService {
 
   // ── Dispensing ──
 
-  getDispenseWorkQueue(page = 0, size = 20): Observable<ApiResponse<Page<WorkQueuePrescription>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+  /**
+   * The dispensing work queue. Without `sort` the endpoint orders by
+   * `createdAt` ascending (oldest first); a caller that loads a window of
+   * the queue and wants the newest orders passes `['createdAt,desc', 'id,desc']`
+   * (one `sort` parameter per key, the id as the tiebreaker that gives one
+   * fixed order). Offset pages still shift when an order leaves the queue
+   * between two reads, so a caller that widens its window re-reads it from
+   * page 0 in one request instead of appending page N.
+   */
+  getDispenseWorkQueue(
+    page = 0,
+    size = 20,
+    claim: QueueClaimFilter = 'ALL',
+    sort?: string[],
+  ): Observable<ApiResponse<Page<WorkQueuePrescription>>> {
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (claim !== 'ALL') params = params.set('claim', claim);
+    for (const key of sort ?? []) {
+      params = params.append('sort', key);
+    }
     return this.http.get<ApiResponse<Page<WorkQueuePrescription>>>(
       '/pharmacy/dispense/work-queue',
       { params },
+    );
+  }
+
+  // ── Work-queue claim (G13) ──
+
+  /** Claim a queue row, or renew one's own claim; 409 when a colleague holds it. */
+  claimQueueRow(prescriptionId: string): Observable<ApiResponse<WorkQueueClaim>> {
+    return this.http.post<ApiResponse<WorkQueueClaim>>(
+      `/pharmacy/dispense/work-queue/${prescriptionId}/claim`,
+      null,
+    );
+  }
+
+  /** Take a colleague's claim over; audited with the previous holder. */
+  takeOverQueueRow(prescriptionId: string): Observable<ApiResponse<WorkQueueClaim>> {
+    return this.http.post<ApiResponse<WorkQueueClaim>>(
+      `/pharmacy/dispense/work-queue/${prescriptionId}/claim/take-over`,
+      null,
+    );
+  }
+
+  /** Release one's own claim; nothing to release answers the same. */
+  releaseQueueRow(prescriptionId: string): Observable<ApiResponse<null>> {
+    return this.http.post<ApiResponse<null>>(
+      `/pharmacy/dispense/work-queue/${prescriptionId}/claim/release`,
+      null,
     );
   }
 
@@ -769,8 +1193,56 @@ export class PharmacyService {
     );
   }
 
-  cancelDispense(id: string): Observable<ApiResponse<DispenseResponse>> {
-    return this.http.post<ApiResponse<DispenseResponse>>(`/pharmacy/dispense/${id}/cancel`, {});
+  /**
+   * QA D654: a controlled fill goes back on the shelf in front of a witness.
+   * QA D1069: every cancel says why (it voids the payment and returns the stock).
+   */
+  cancelDispense(
+    id: string,
+    reason: string,
+    witnessedBy?: string,
+  ): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.post<ApiResponse<DispenseResponse>>(
+      `/pharmacy/dispense/${id}/cancel`,
+      witnessedBy ? { reason, witnessedBy } : { reason },
+    );
+  }
+
+  // ── Ready for collection (G15) ──
+
+  /** Whether "Mark ready for collection" is switched on server-side. */
+  getDispenseSettings(): Observable<ApiResponse<DispenseSettings>> {
+    return this.http.get<ApiResponse<DispenseSettings>>('/pharmacy/dispense/settings');
+  }
+
+  /** Prepare a fill (stock set aside) and text the patient that it is ready. */
+  markReady(req: DispenseRequest): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.post<ApiResponse<DispenseResponse>>('/pharmacy/dispense/ready', req);
+  }
+
+  /** Hand a prepared fill over; the wristband scan is optional and checked when sent. */
+  handOver(
+    dispenseId: string,
+    body: {
+      patientScanValue?: string;
+      notes?: string;
+    } = {},
+  ): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.post<ApiResponse<DispenseResponse>>(
+      `/pharmacy/dispense/${dispenseId}/hand-over`,
+      body,
+    );
+  }
+
+  /** Cancel a preparation: the stock goes back and the patient is told. */
+  cancelReady(
+    dispenseId: string,
+    reason: ReadyCancelReason,
+  ): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.post<ApiResponse<DispenseResponse>>(
+      `/pharmacy/dispense/${dispenseId}/cancel-ready`,
+      { reason },
+    );
   }
 
   // ── Stock-Out Routing ──
@@ -786,6 +1258,22 @@ export class PharmacyService {
       '/pharmacy/routing/route-to-partner',
       req,
     );
+  }
+
+  /** QA D966: the printed copy the patient takes to an outside pharmacy (PDF). */
+  getPrintedPrescriptionCopy(prescriptionId: string): Observable<Blob> {
+    return this.http.get(`/pharmacy/routing/print-for-patient/${prescriptionId}/document`, {
+      responseType: 'blob',
+    });
+  }
+
+  /**
+   * QA D966: the lot label as an authenticated blob. The page opened the bare
+   * URL in a new tab, which skips the /api prefix and the token, so it landed
+   * on the login page and printed nothing.
+   */
+  getStockLotLabel(stockLotId: string): Observable<Blob> {
+    return this.http.get(`/pharmacy/stock-lots/${stockLotId}/label.pdf`, { responseType: 'blob' });
   }
 
   printForPatient(prescriptionId: string): Observable<ApiResponse<RoutingDecisionResponse>> {
@@ -841,10 +1329,14 @@ export class PharmacyService {
     prescriptionId: string,
     page = 0,
     size = 20,
-    sort?: string,
+    sort?: string | string[],
   ): Observable<ApiResponse<Page<RoutingDecisionResponse>>> {
     let params = new HttpParams().set('page', page).set('size', size);
-    if (sort) params = params.set('sort', sort);
+    // Spring takes one `sort` parameter per key, so a tiebreaker is a second
+    // parameter rather than a longer string.
+    for (const key of typeof sort === 'string' ? [sort] : (sort ?? [])) {
+      params = params.append('sort', key);
+    }
     return this.http.get<ApiResponse<Page<RoutingDecisionResponse>>>(
       `/pharmacy/routing/decisions/prescription/${prescriptionId}`,
       { params },
@@ -1041,6 +1533,9 @@ export interface MtmReviewRequest {
 export interface MtmReviewResponse {
   id: string;
   patientId: string;
+  /** QA D900: the patient's name and MRN at the review's hospital, so the list never shows the UUID. */
+  patientName?: string;
+  patientMrn?: string;
   hospitalId: string;
   pharmacistUserId: string;
   reviewDate: string;

@@ -23,12 +23,17 @@ public class EncounterResponseDTO {
 
     private UUID id;
 
+    /** QA D276: the visit's code, the key a billing clerk types to link an invoice to it. */
+    private String code;
+
     private UUID patientId;
     private String patientName;
     private String patientEmail;
     private String patientPhoneNumber;
 
     private UUID staffId;
+    /** QA D1085: the assigned clinician's user id, for the per-visit "Démarrer" rule. */
+    private UUID staffUserId;
     private String staffName;
     private String staffEmail;
     private String staffPhoneNumber;
@@ -43,6 +48,13 @@ public class EncounterResponseDTO {
     private String hospitalName;
 
     private UUID appointmentId;
+
+    /**
+     * QA D831: the admission this encounter is the stay of, null for a visit.
+     * On a stay each note POST is a new progress entry, so the note form stays
+     * offered after the current entry is signed.
+     */
+    private UUID admissionId;
     private String appointmentReason;
     private String appointmentNotes;
     private String appointmentStatus;
@@ -59,6 +71,13 @@ public class EncounterResponseDTO {
 
     /** Chief complaint captured at check-in or triage (MVP 1). */
     private String chiefComplaint;
+
+    /**
+     * RCPT-CLIN: what the desk itself typed. Never serialized: ReceptionistResponseShaping
+     * puts it in place of {@link #chiefComplaint} for a receptionist.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String deskChiefComplaint;
 
     /** ESI acuity score 1-5 (MVP 2). */
     private Integer esiScore;
@@ -98,6 +117,20 @@ public class EncounterResponseDTO {
         private java.util.Map<String, Object> extraFields;
 
         private EncounterNoteResponseDTO note;
+
+        /**
+         * QA D831: every note entry of the encounter, oldest first, when it has
+         * more than one (an inpatient stay's progress notes). {@code note} is the
+         * last of them.
+         */
+        private java.util.List<EncounterNoteResponseDTO> noteEntries;
+
+        /**
+         * QA D1910 (round 53): set on the patient's read only. True while a note
+         * of the visit still waits for its author's signature; the patient then
+         * reads "not finalised" instead of the draft, which is never sent.
+         */
+        private Boolean notePendingSignature;
 
     /** Optional derived full name so clients don't concatenate */
     @JsonProperty("patientFullName")

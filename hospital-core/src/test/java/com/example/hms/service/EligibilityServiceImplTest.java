@@ -68,6 +68,7 @@ class EligibilityServiceImplTest {
     private AuditEventLogService auditService;
     private StubEligibilityProvider stubProvider;
     private IntegrationHealthRecorder healthRecorder;
+    private com.example.hms.service.support.PatientRegistrationGuard registrationGuard;
     private Clock fixedClock;
     private EligibilityServiceImpl service;
 
@@ -88,12 +89,13 @@ class EligibilityServiceImplTest {
         auditService = mock(AuditEventLogService.class);
         stubProvider = new StubEligibilityProvider();
         healthRecorder = mock(IntegrationHealthRecorder.class);
+        registrationGuard = mock(com.example.hms.service.support.PatientRegistrationGuard.class);
         fixedClock = Clock.fixed(Instant.parse("2026-05-01T08:30:00Z"), ZoneOffset.UTC);
 
         service = new EligibilityServiceImpl(
             checkRepository, patientRepository, hospitalRepository,
             patientInsuranceRepository, userRepository, auditService,
-            List.of(stubProvider), fixedClock, healthRecorder
+            List.of(stubProvider), fixedClock, healthRecorder, registrationGuard
         );
 
         userId = UUID.randomUUID();
@@ -133,7 +135,7 @@ class EligibilityServiceImplTest {
 
     private void stubLookups() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
         when(checkRepository.save(any(EligibilityCheck.class)))
             .thenAnswer(inv -> {
@@ -229,7 +231,7 @@ class EligibilityServiceImplTest {
         @Test
         @DisplayName("missing patient throws ResourceNotFoundException; no save / audit")
         void missingPatient() {
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.submit(
@@ -264,7 +266,7 @@ class EligibilityServiceImplTest {
 
             assertThatThrownBy(() -> service.submit(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PatientInsurance does not belong");
+                .extracting("messageKey").isEqualTo("eligibility.insurance.otherPatient");
         }
 
         @Test
@@ -289,7 +291,7 @@ class EligibilityServiceImplTest {
             service = new EligibilityServiceImpl(
                 checkRepository, patientRepository, hospitalRepository,
                 patientInsuranceRepository, userRepository, auditService,
-                List.of(specific, stubProvider), fixedClock, healthRecorder
+                List.of(specific, stubProvider), fixedClock, healthRecorder, registrationGuard
             );
             stubLookups();
 
@@ -361,14 +363,14 @@ class EligibilityServiceImplTest {
         void nullRequest() {
             assertThatThrownBy(() -> service.submit(null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("required");
+                .extracting("messageKey").isEqualTo("eligibility.request.required");
         }
 
         @Test
         @DisplayName("missing hospital throws ResourceNotFoundException")
         void missingHospital() {
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.submit(
                 baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE, "NHIS-001")))
@@ -408,15 +410,15 @@ class EligibilityServiceImplTest {
             service = new EligibilityServiceImpl(
                 checkRepository, patientRepository, hospitalRepository,
                 patientInsuranceRepository, userRepository, auditService,
-                List.of(noneMatch), fixedClock, healthRecorder
+                List.of(noneMatch), fixedClock, healthRecorder, registrationGuard
             );
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
             assertThatThrownBy(() -> service.submit(
                 baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE, "NHIS-001")))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("No eligibility provider");
+                .extracting("messageKey").isEqualTo("eligibility.provider.none");
         }
 
         @Test
@@ -434,7 +436,7 @@ class EligibilityServiceImplTest {
             service = new EligibilityServiceImpl(
                 checkRepository, patientRepository, hospitalRepository,
                 patientInsuranceRepository, userRepository, auditService,
-                List.of(throwing), fixedClock, healthRecorder
+                List.of(throwing), fixedClock, healthRecorder, registrationGuard
             );
             stubLookups();
 

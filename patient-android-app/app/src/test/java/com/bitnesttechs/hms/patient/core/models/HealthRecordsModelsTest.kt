@@ -25,8 +25,8 @@ class HealthRecordsModelsTest {
                 "content": [
                   {
                     "id": "plan-1",
-                    "title": "Recovery plan",
-                    "status": "ACTIVE"
+                    "problemStatement": "Recovery plan",
+                    "status": "APPROVED"
                   }
                 ],
                 "totalElements": 1,
@@ -39,7 +39,7 @@ class HealthRecordsModelsTest {
             """.trimIndent()
         )
 
-        assertEquals("Recovery plan", decoded?.data?.content?.single()?.title)
+        assertEquals("Recovery plan", decoded?.data?.content?.single()?.problemStatement)
     }
 
     @Test

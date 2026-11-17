@@ -60,6 +60,8 @@ export interface MedicationTimelineEntry {
   hospitalId?: string;
   hospitalName?: string;
   prescriberName?: string;
+  /** D1573: when a prescription row was signed. */
+  signedAt?: string;
   pharmacyName?: string;
   /** PrescriptionStatus name for RX rows; always 'DISPENSED' for fills. */
   status?: string;

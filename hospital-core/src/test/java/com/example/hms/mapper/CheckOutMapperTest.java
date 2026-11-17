@@ -127,6 +127,159 @@ class CheckOutMapperTest {
         }
 
         @Test
+        void blankSectionsFallBackToTheSignedNote() {
+            // QA D42: a visit documented in a signed note produced an empty summary.
+            Encounter encounter = buildEncounter();
+            encounter.setChiefComplaint(null);
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setChiefComplaint("Cough for a week");
+            note.setAssessment("Acute bronchitis");
+            note.setPlan("Fluids, review in 7 days");
+            note.setSignedAt(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            encounter.setEncounterNote(note);
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null);
+
+            assertThat(avs.getChiefComplaint()).isEqualTo("Cough for a week");
+            assertThat(avs.getDischargeDiagnoses()).containsExactly("Acute bronchitis");
+            assertThat(avs.getFollowUpInstructions()).isEqualTo("Fluids, review in 7 days");
+        }
+
+        /** Provisional platform rule: "not finalised" while a note waits for its signature, normal once signed. */
+        @Test
+        void theSummaryIsNotFinalisedWhileANoteIsUnsignedAndNormalOnceSigned() {
+            Encounter encounter = buildEncounter();
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setAssessment("Acute bronchitis");
+            encounter.setEncounterNote(note);
+
+            assertThat(mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null)
+                .isPendingSignature()).isTrue();
+
+            note.setSignedAt(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            assertThat(mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null)
+                .isPendingSignature()).isFalse();
+        }
+
+        /** Polish 2026-11-13: the identity band, the signature line and the diagnosis wording. */
+        @Test
+        void theIdentityBandAndTheSignature() {
+            Encounter encounter = buildEncounter();
+            encounter.getPatient().setDateOfBirth(java.time.LocalDate.of(1970, 3, 15));
+            com.example.hms.model.PatientHospitalRegistration here = new com.example.hms.model.PatientHospitalRegistration();
+            here.setHospital(encounter.getHospital());
+            here.setMrn("MRN-0042");
+            encounter.getPatient().getHospitalRegistrations().add(here);
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setAssessment("HTA");
+            note.setSignedAt(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            note.setSignedByName("Dr Kaboré");
+            encounter.setEncounterNote(note);
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null);
+
+            assertThat(avs.getPatientDateOfBirth()).isEqualTo(java.time.LocalDate.of(1970, 3, 15));
+            assertThat(avs.getPatientMrn()).isEqualTo("MRN-0042");
+            assertThat(avs.getSignedByName()).isEqualTo("Dr Kaboré");
+            assertThat(avs.getSignedAt()).isEqualTo(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            assertThat(avs.isInpatientStay()).isFalse();
+
+            encounter.setAdmissionId(UUID.randomUUID());
+            assertThat(mapper.toAfterVisitSummary(encounter, null, null).isInpatientStay()).isTrue();
+        }
+
+        @Test
+        void anUnsignedNoteSignsNothing() {
+            Encounter encounter = buildEncounter();
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setAssessment("HTA");
+            note.setSignedByName("Dr Kaboré");
+            encounter.setEncounterNote(note);
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null);
+
+            assertThat(avs.getSignedAt()).isNull();
+            assertThat(avs.getSignedByName()).isNull();
+        }
+
+        @Test
+        void aBlankUnsignedRowNeverHoldsTheSummaryNotFinalised() {
+            // D1151: a blank row cannot be signed, so it must not hold the visit open for ever.
+            Encounter encounter = buildEncounter();
+            encounter.setEncounterNote(new com.example.hms.model.encounter.EncounterNote());
+
+            assertThat(mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null)
+                .isPendingSignature()).isFalse();
+        }
+
+        @Test
+        void checkoutTextWinsAndTheNoteAddsInstructionsAndPlan() {
+            Encounter encounter = buildEncounter();
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setChiefComplaint("From the note");
+            note.setAssessment("Note assessment");
+            note.setPlan("Note plan");
+            note.setPatientInstructions("Take with food");
+            note.setSignedAt(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            encounter.setEncounterNote(note);
+            CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+                .dischargeDiagnoses(List.of("Typed at checkout"))
+                .build();
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, request, null);
+
+            assertThat(avs.getChiefComplaint()).isEqualTo("Headache and fatigue");
+            assertThat(avs.getDischargeDiagnoses()).containsExactly("Typed at checkout");
+            // QA D730: the plan is no longer dropped when instructions exist.
+            assertThat(avs.getFollowUpInstructions()).isEqualTo("Take with food\n\nNote plan");
+        }
+
+        @Test
+        void qaD730SignedInstructionsAndPlanSurviveCheckoutFollowUpText() {
+            // The exact round-10 note: both sections written, then signed; the
+            // checkout form carried its own follow-up line.
+            Encounter encounter = buildEncounter();
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setAssessment("Céphalée de tension");
+            note.setPlan("Paracétamol, repos");
+            note.setPatientInstructions("Boire beaucoup, revenir si fièvre");
+            note.setSignedAt(java.time.LocalDateTime.of(2026, 10, 24, 9, 0));
+            encounter.setEncounterNote(note);
+            CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+                .followUpInstructions("Revoir dans 7 jours")
+                .build();
+
+            AfterVisitSummaryDTO checkout = mapper.toAfterVisitSummary(encounter, request, null);
+            assertThat(checkout.getFollowUpInstructions()).isEqualTo(
+                "Revoir dans 7 jours\n\nBoire beaucoup, revenir si fièvre\n\nParacétamol, repos");
+
+            // The later GET /encounters/{id}/avs reads the encounter column, not the request.
+            encounter.setFollowUpInstructions("Revoir dans 7 jours");
+            AfterVisitSummaryDTO reread = mapper.toAfterVisitSummary(encounter, null, null);
+            assertThat(reread.getFollowUpInstructions()).isEqualTo(checkout.getFollowUpInstructions());
+
+            // Nothing is repeated when the checkout text already holds the instructions.
+            encounter.setFollowUpInstructions("Boire beaucoup, revenir si fièvre");
+            assertThat(mapper.toAfterVisitSummary(encounter, null, null).getFollowUpInstructions())
+                .isEqualTo("Boire beaucoup, revenir si fièvre\n\nParacétamol, repos");
+        }
+
+        @Test
+        void anUnsignedDraftNoteIsNeverShown() {
+            Encounter encounter = buildEncounter();
+            encounter.setChiefComplaint(null);
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setChiefComplaint("Draft");
+            note.setAssessment("Draft assessment");
+            encounter.setEncounterNote(note);
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, null, null);
+
+            assertThat(avs.getChiefComplaint()).isNull();
+            assertThat(avs.getDischargeDiagnoses()).isEmpty();
+        }
+
+        @Test
         void handlesLinkedAppointment() {
             Encounter encounter = buildEncounter();
             Appointment appointment = new Appointment();
@@ -139,6 +292,21 @@ class CheckOutMapperTest {
 
             assertThat(avs.getAppointmentId()).isEqualTo(appointment.getId());
             assertThat(avs.getAppointmentStatus()).isEqualTo("COMPLETED");
+        }
+
+        @Test
+        void showsTheRequestedFollowUpDateWithoutABookedAppointment_D321() {
+            // QA D321: checkout files the follow-up as a recall and passes no
+            // appointment id; the date used to need one and was dropped.
+            Encounter encounter = buildEncounter();
+            CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+                .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
+                    .preferredDate("2026-11-16").reason("Contrôle").build())
+                .build();
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, request, null);
+
+            assertThat(avs.getFollowUpAppointmentDate()).isEqualTo("2026-11-16");
         }
 
         @Test

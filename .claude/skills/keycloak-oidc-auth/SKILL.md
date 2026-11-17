@@ -53,10 +53,27 @@ Token TTL:
 `app.mfa.required-roles` controls which roles MUST enroll TOTP:
 
 ```
-ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_PHARMACIST, ROLE_FINANCE
+ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_PHARMACIST, ROLE_FINANCE, ROLE_PROVIDER_ADMIN
 ```
 
-Override via `MFA_REQUIRED_ROLES` env. Enrollment lives on
+Override via `MFA_REQUIRED_ROLES` env (prod does: any role added to the
+default must be added to the prod env var too).
+
+**Provider users (external pharmacies and labs, AC-13)** are gated on live
+assignments, not on that list, by `security/provider/ProviderMfaGate`: the
+proof is `otp` in the token's `amr` claim on BOTH paths. Keycloak emits it
+through the `amr` mapper on `hms-profile` and the Authenticator References of
+the `hms browser` flow; the legacy issuer stamps `amr: ["pwd","otp"]` only on
+the tokens `POST /auth/mfa/verify` mints (and on an impersonation token after
+a TOTP step-up), with `otp_at`, the time of the code; a refresh carries both
+unchanged, and the proof lapses 48 h after `otp_at`
+(`app.mfa.second-factor-max-age-seconds`, = the realm's Authenticator
+Reference max age), so both paths re-challenge on the same clock. Without it, the session bootstrap
+reports `mfaEnrollmentRequired` and the confinement filter answers 403
+`mfa.enrollment.required` outside the sign-in and MFA enrolment handlers
+(`CommonProviderConfinement.SECOND_FACTOR_EXEMPT_RULES`; the rest of `/auth`,
+the ws ticket included, needs the factor). Never mint a token with a
+second-factor time on any other path. Enrollment lives on
 `UserMfaEnrollment` (TOTP secret encrypted via `TotpSecretEncryptor` —
 different converter from `EncryptedStringConverter`). Backup-code use
 emits `AuditEventType.MFA_BACKUP_USED`.
@@ -74,11 +91,22 @@ partner-webhook service users).
 
 ## Hospital context resolution
 
-`KeycloakHospitalContextFilter` reads the `hospital_id` claim from the
-OIDC token and seeds `HospitalContextHolder`. For internal JWTs the
-same claim is encoded by `JwtTokenProvider` at issuance. **Worker
-threads (MLLP, schedulers, Kafka consumers) have no filter** — they
-must resolve the hospital from the message envelope and set the
+Both filters build `HospitalContextHolder` from the SAME live
+computation, `ActingScopeResolver.liveContext` (the caller's active
+assignments), then apply `X-Hospital-Id` (refused with 403 when the
+caller may not name it), the tenant lifecycle gate (423) and the
+super-admin authority reconciliation (`SuperAdminAuthorities`: a
+`ROLE_SUPER_ADMIN` the assignment table does not back is dropped with
+what it inherited). The token's `hospital_id`, `role_assignments`,
+`primaryHospitalId` and `isSuperAdmin` claims are UI hints at most.
+
+On Keycloak the local account is the `appUserId` claim (mapped from the
+`app_user_id` attribute) and nothing else; the account must carry the
+token's username or email. A token without it gets no hospital scope
+(`NO_LOCAL_USER`). Run `npm run backfill:app-user-id -- --check` in
+`scripts/keycloak-migration` before any deploy that relies on it.
+**Worker threads (MLLP, schedulers, Kafka consumers) have no filter** —
+they must resolve the hospital from the message envelope and set the
 context explicitly if they need tenant-scoped repository finds.
 
 ## Env-sync discipline

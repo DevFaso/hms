@@ -83,6 +83,19 @@ describe('PartographChartComponent', () => {
     expect(chart.actionLine.y1).toBe(chart.alertLine.y1); // both start at 4 cm
   });
 
+  it('QA D811: draws the action-line label right of the line, never across it', () => {
+    const fixture = create([]);
+    const chart = fixture.componentInstance;
+    const label = (fixture.nativeElement as HTMLElement).querySelector('text.action-label');
+    expect(label?.getAttribute('text-anchor')).toBe('start');
+    const x = Number(label?.getAttribute('x'));
+    // Starting right of the line's top end, the text never meets the line,
+    // which only runs down and to the left of that point.
+    expect(x).toBeGreaterThan(chart.actionLine.x2);
+    // and the label (about 70 px at 8 px for the longest language) stays inside the chart.
+    expect(x + 70).toBeLessThanOrEqual(chart.width);
+  });
+
   it('renders descent as a separate series', () => {
     const fixture = create([point(1, 6, 3)]);
     expect(fixture.componentInstance.descentPointsAttr().length).toBe(1);

@@ -181,7 +181,7 @@ private struct EducationItemCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: item.resourceType == "VIDEO" ? "play.circle.fill" : "doc.text.fill")
-                    .foregroundColor(item.isWarningSign ? .red : Color("BrandBlue"))
+                    .foregroundColor(item.isWarningSign ? .red : Color("BrandPrimary"))
                 Text(item.title ?? "").font(.headline)
                 Spacer(minLength: 8)
                 if let status = item.comprehensionStatus {
@@ -507,7 +507,7 @@ enum EducationLabels {
         switch status.uppercased() {
         case "COMPLETED", "CONFIRMED_UNDERSTANDING", "FEEDBACK_PROVIDED": .green
         case "NEEDS_CLARIFICATION": .red
-        default: Color("BrandBlue")
+        default: Color("BrandPrimaryText")
         }
     }
 

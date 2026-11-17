@@ -6,6 +6,8 @@ package com.example.hms.enums;
 public enum PostpartumAlertType {
     HEMORRHAGE,
     INFECTION,
+    /** QA D1890 (provisional): severe blood pressure after birth. */
+    HYPERTENSION,
     PAIN,
     PSYCHOSOCIAL,
     EDUCATION,

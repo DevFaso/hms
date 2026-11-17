@@ -9,7 +9,7 @@ import java.util.Map;
 /**
  * Reads a draft {@code MedicationRequest} payload (CDS Hooks 1.0 wire shape:
  * a loosely-typed {@link Map}) and pulls the three fields the rule engine
- * needs: human-readable name, terminology code, and dose.
+ * needs: human-readable name, terminology code, dose and route.
  *
  * <p>The extractor prefers an RxNorm-system coding when one is present
  * (via {@link RxNormCodingExtractor}); otherwise it falls back to the
@@ -27,8 +27,8 @@ public final class MedicationDraftExtractor {
 
     private MedicationDraftExtractor() { /* static-only */ }
 
-    /** A medication draft reduced to the three fields the rule engine consumes. */
-    public record ProposedMedication(String name, String code, String dose) { }
+    /** A medication draft reduced to the fields the rule engine consumes. */
+    public record ProposedMedication(String name, String code, String dose, String route) { }
 
     /**
      * Extract from a draft {@code MedicationRequest} resource map. Returns a
@@ -37,14 +37,39 @@ public final class MedicationDraftExtractor {
      * extractor never throws on malformed input.
      */
     public static ProposedMedication extract(Map<String, Object> draft) {
-        if (draft == null) return new ProposedMedication(null, null, null);
+        if (draft == null) return new ProposedMedication(null, null, null, null);
         Object cc = draft.get("medicationCodeableConcept");
         String name = textFromCodeableConcept(cc);
         if (name == null) name = textFromReference(draft.get("medicationReference"));
         String code = RxNormCodingExtractor.rxnormFromCodeableConcept(cc)
             .orElseGet(() -> codeFromCodeableConcept(cc));
         String dose = doseFromDosageInstruction(draft.get("dosageInstruction"));
-        return new ProposedMedication(name, code, dose);
+        return new ProposedMedication(name, code, dose, routeOf(draft));
+    }
+
+    /**
+     * CR-01: the route the draft's {@code dosageInstruction[0].route} states: its text, else a coding
+     * the route reading knows, else the first coding as written (a dose rule reads that as unknown).
+     * {@code null} when the draft states none.
+     */
+    public static String routeOf(Map<String, Object> draft) {
+        if (draft == null || !(draft.get("dosageInstruction") instanceof List<?> list) || list.isEmpty()
+                || !(list.get(0) instanceof Map<?, ?> instruction)
+                || !(instruction.get("route") instanceof Map<?, ?> route)) {
+            return null;
+        }
+        String text = nonBlank(route.get("text"));
+        if (text != null) return text;
+        if (!(route.get("coding") instanceof List<?> codings)) return null;
+        String first = null;
+        for (Object coding : codings) {
+            if (coding instanceof Map<?, ?> entry) {
+                String read = nonBlank(entry.get("display")) != null ? nonBlank(entry.get("display")) : nonBlank(entry.get("code"));
+                if (com.example.hms.service.emar.MedicationRoutes.canonical(read) != null) return read;
+                first = first == null ? read : first;
+            }
+        }
+        return first;
     }
 
     private static String textFromCodeableConcept(Object value) {

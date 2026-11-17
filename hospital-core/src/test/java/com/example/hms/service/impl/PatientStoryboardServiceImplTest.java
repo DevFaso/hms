@@ -88,7 +88,7 @@ class PatientStoryboardServiceImplTest {
         patient = buildPatient("MRN-1001", "FULL_CODE");
 
         when(patientChartAccess.require(eq(PATIENT_ID), any())).thenReturn(patient);
-        when(hospitalRepo.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
+        when(hospitalRepo.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
     }
 
     @Test
@@ -105,7 +105,7 @@ class PatientStoryboardServiceImplTest {
         PatientAllergy mild = allergy("Sulfa", AllergySeverity.MILD, true);
         PatientAllergy lifeThreat = allergy("Penicillin", AllergySeverity.LIFE_THREATENING, true);
         PatientAllergy inactive = allergy("Latex", AllergySeverity.SEVERE, false);
-        when(allergyRepo.findByPatient_Id(PATIENT_ID))
+        when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any()))
             .thenReturn(List.of(mild, lifeThreat, inactive));
 
         PatientProblem chronic = problem("Sickle cell disease", ProblemStatus.ACTIVE, true);
@@ -155,7 +155,7 @@ class PatientStoryboardServiceImplTest {
 
     @Test
     void emptyChartRendersWithoutCrashing() {
-        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of());
+        when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(List.of());
         when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
         when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
             eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
@@ -175,15 +175,39 @@ class PatientStoryboardServiceImplTest {
     }
 
     @Test
-    void capsAllergyAndProblemListsToProtectMobileBandwidth() {
+    void withNoOpenVisitTheLastFinishedOneIsNamed_D252() {
+        when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(List.of());
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
+        when(patientChartAccess.require(eq(PATIENT_ID), any())).thenReturn(buildPatient("MRN-1", null));
+        Encounter done = new Encounter();
+        done.setId(java.util.UUID.randomUUID());
+        done.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        done.setEncounterDate(java.time.LocalDateTime.now().minusDays(2));
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(eq(PATIENT_ID), eq(HOSPITAL_ID),
+            org.mockito.ArgumentMatchers.argThat(c -> c != null && c.contains(com.example.hms.enums.EncounterStatus.COMPLETED))))
+            .thenReturn(List.of());
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(eq(PATIENT_ID), eq(HOSPITAL_ID),
+            org.mockito.ArgumentMatchers.argThat(c -> c != null && !c.contains(com.example.hms.enums.EncounterStatus.COMPLETED))))
+            .thenReturn(List.of(done));
+
+        PatientStoryboardDTO dto = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(dto.getActiveEncounter()).isNull();
+        assertThat(dto.getLastEncounter()).isNotNull();
+        assertThat(dto.getLastEncounter().getId()).isEqualTo(done.getId());
+    }
+
+    @Test
+    void everyAllergyAndProblemReachesTheBanner_aCutListReadsAsComplete() {
         java.util.List<PatientAllergy> many = new java.util.ArrayList<>();
-        for (int i = 0; i < PatientStoryboardServiceImpl.MAX_ALLERGIES + 4; i++) {
+        for (int i = 0; i < 40; i++) {
             many.add(allergy("Allergen " + i, AllergySeverity.MILD, true));
         }
-        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(many);
+        when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(many);
 
         java.util.List<PatientProblem> manyProblems = new java.util.ArrayList<>();
-        for (int i = 0; i < PatientStoryboardServiceImpl.MAX_PROBLEMS + 4; i++) {
+        for (int i = 0; i < 40; i++) {
             manyProblems.add(problem("Problem " + i, ProblemStatus.ACTIVE, false));
         }
         when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(manyProblems);
@@ -194,8 +218,8 @@ class PatientStoryboardServiceImplTest {
 
         PatientStoryboardDTO dto = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
 
-        assertThat(dto.getAllergies()).hasSize(PatientStoryboardServiceImpl.MAX_ALLERGIES);
-        assertThat(dto.getProblems()).hasSize(PatientStoryboardServiceImpl.MAX_PROBLEMS);
+        assertThat(dto.getAllergies()).hasSize(40);
+        assertThat(dto.getProblems()).hasSize(40);
     }
 
     @Test
@@ -304,7 +328,7 @@ class PatientStoryboardServiceImplTest {
         away.setHospital(other);
         PatientAllergy here = allergy("Sulfa", AllergySeverity.MILD, true);
         here.setHospital(hospital);
-        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of(here, away));
+        when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(List.of(here, away));
         when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
         when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
             eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
@@ -319,6 +343,64 @@ class PatientStoryboardServiceImplTest {
         assertThat(sb.getAllergies().get(0).getHospitalName()).isEqualTo("CHU Yalgado");
         assertThat(sb.getAllergies().get(1).getHospitalId()).isEqualTo(HOSPITAL_ID);
         assertThat(sb.isHasHighSeverityAllergy()).isTrue();
+    }
+
+    @Test
+    void d504WithoutBreakGlassTheStoryboardSaysItsAllergyListIsNarrowed() {
+        PatientAllergy local = allergy("Sulfa", AllergySeverity.MILD, true);
+        when(allergyRepo.hasActiveSharingOptOut(PATIENT_ID)).thenReturn(true);
+        when(allergyRepo.findVisibleAt(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of(local));
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
+            eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
+
+        when(recordAccessPolicy.foreignRowsWithheld(any(), eq(PATIENT_ID), eq(HOSPITAL_ID))).thenReturn(true);
+
+        PatientStoryboardDTO sb = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(sb.getAllergies())
+            .extracting(PatientStoryboardDTO.AllergySummaryDTO::getAllergenDisplay)
+            .containsExactly("Sulfa");
+        assertThat(sb.isAllergiesWithheld()).isTrue();
+        // QA D504 (round 3): problems and encounters are narrowed too.
+        assertThat(sb.isRecordsWithheld()).isTrue();
+    }
+
+    @Test
+    void d504BreakGlassShowsTheOtherHospitalsAllergyDespiteTheOptOut() {
+        UUID doctorB = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
+        try {
+            Hospital other = Hospital.builder().name("CHU Yalgado").build();
+            other.setId(UUID.randomUUID());
+            PatientAllergy away = allergy("Penicillin", AllergySeverity.SEVERE, true);
+            away.setHospital(other);
+            when(allergyRepo.hasActiveSharingOptOut(PATIENT_ID)).thenReturn(true);
+            when(recordAccessPolicy.decide(doctorB, PATIENT_ID, HOSPITAL_ID)).thenReturn(
+                com.example.hms.service.recordaccess.RecordAccessDecision.permitted(PATIENT_ID, HOSPITAL_ID, doctorB,
+                    new com.example.hms.service.recordaccess.TreatmentRelationship(
+                        com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, UUID.randomUUID(), HOSPITAL_ID,
+                        PATIENT_ID, null, null, true),
+                    com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of(away));
+            when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(List.of());
+            when(problemRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
+            when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
+                eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
+            when(directiveRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
+
+            PatientStoryboardDTO sb = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+            assertThat(sb.getAllergies())
+                .extracting(PatientStoryboardDTO.AllergySummaryDTO::getAllergenDisplay)
+                .containsExactly("Penicillin");
+            assertThat(sb.isAllergiesWithheld()).isFalse();
+            assertThat(sb.isRecordsWithheld()).isFalse();
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 
     @Test
@@ -348,7 +430,7 @@ class PatientStoryboardServiceImplTest {
         dnr.setStatus(com.example.hms.enums.AdvanceDirectiveStatus.ACTIVE);
         when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID, other.getId())))
             .thenReturn(List.of(dnr));
-        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of());
+        when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(List.of());
         when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
             eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
 
@@ -389,7 +471,7 @@ class PatientStoryboardServiceImplTest {
             .thenReturn(Set.of(HOSPITAL_ID, other.getId()));
         PatientAllergy awayAllergy = allergy("Penicillin", AllergySeverity.SEVERE, true);
         awayAllergy.setHospital(other);
-        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of(awayAllergy));
+        when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(List.of(awayAllergy));
         PatientProblem away = problem("Asthme", ProblemStatus.ACTIVE, false);
         away.setHospital(other);
         when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID, other.getId())))
@@ -420,7 +502,7 @@ class PatientStoryboardServiceImplTest {
             .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
         when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID, other.getId())))
             .thenReturn(List.of(awaySensitive));
-        when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of());
+        when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(List.of());
         when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID, other.getId())))
             .thenReturn(List.of());
         when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(

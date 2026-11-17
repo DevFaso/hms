@@ -1,6 +1,11 @@
+import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+
+import type { AllergyReviewState } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
+import { CdsCard } from '../shared/cds-card/cds-card.model';
+import { NewbornVitalAlert } from '../shared/newborn-vital-alerts';
 
 export interface NurseVitalTask {
   id: string;
@@ -11,15 +16,83 @@ export interface NurseVitalTask {
   overdue: boolean;
 }
 
+/** QA D922: a colleague who may witness a controlled dose. */
+export interface AdministrationWitnessCandidate {
+  userId: string;
+  displayName: string;
+}
+
+/**
+ * QA D1225 (round 24): one closed dose of a MAR row, read back with WHY —
+ * the hold or refusal reason, the early-dose reason (QA D1210) and the
+ * five-rights override reason the administer call required.
+ */
+export interface MarDoseHistoryEntry {
+  id: string;
+  /** GIVEN, HELD, REFUSED or MISSED. */
+  status: string;
+  scheduledTime?: string | null;
+  /** When the outcome was recorded. */
+  recordedAt?: string | null;
+  reason?: string | null;
+  /** A GIVEN dose recorded before the minimum interval, with a reason. */
+  givenEarly?: boolean;
+  overrideReason?: string | null;
+  administeredBy?: string | null;
+  witnessName?: string | null;
+}
+
 export interface NurseMedicationTask {
+  /** Existing when a recorded death was disputed: a prescriber reviews it first. */
+  heldForReview?: boolean;
   id: string;
   patientId: string;
   patientName: string;
   medication: string;
   dose: string;
   route: string;
+  /** QA D950: the route as a form code (PO, IV…) whatever way it was stored; null when unknown. */
+  routeCode?: string | null;
   dueTime: string;
+  /** DUE, OVERDUE, UPCOMING (next slot not yet open, QA D949) or COMPLETED (no dose left). */
   status: string;
+  /** QA D929: GIVEN, HELD, REFUSED or MISSED for the last closed dose; null when none. */
+  lastOutcome?: string | null;
+  /** QA D1225: when the last closed dose was recorded. */
+  lastOutcomeAt?: string | null;
+  /** QA D1225: the reason on the last closed dose (held, refused or given early). */
+  lastReason?: string | null;
+  /** QA D1225: the last dose was given early, with a reason. */
+  lastGivenEarly?: boolean;
+  /** QA D1225: the recent closed doses of this row, newest first. */
+  doseHistory?: MarDoseHistoryEntry[];
+  /** QA D922: a controlled substance (prescriber's tick or the catalogue's flag). */
+  controlledSubstance?: boolean;
+  /**
+   * QA D1237: the order's frequency is written but cannot be read as a
+   * schedule. The course stays open (status DUE) and every later dose asks for
+   * a reason (the server's `earlyDoseReason` refusal); the prescriber should
+   * restate the frequency.
+   */
+  frequencyUnread?: boolean;
+  /** QA D1419: a continuous infusion: `prnLabel` says so; once started it is never late. */
+  continuousInfusion?: boolean;
+  /**
+   * QA round 30 (user decision 2026-11-02): an as-needed (PRN) order, given on
+   * demand: always offered (DUE, never OVERDUE); `earlyDose` flags a dose
+   * inside the prescriber's minimum interval since the last one given.
+   */
+  asNeeded?: boolean;
+  /** QA round 30: the prescriber's minimum hours between two doses, or null. */
+  prnMinIntervalHours?: number | null;
+  /** QA round 30: the as-needed rule in the reader's language, composed by the server. */
+  prnLabel?: string | null;
+  /**
+   * QA D1254 (round 26): the dose is offered now (status DUE) but falls inside
+   * the minimum interval since the last dose given: Give asks for a reason
+   * (the server's `earlyDoseReason` refusal opens the early-dose dialog).
+   */
+  earlyDose?: boolean;
   /**
    * Pharmacist verification (Tier 2 item 33). Both flags come from the server
    * on the task itself rather than being derived in the UI, so a nurse sees
@@ -32,6 +105,14 @@ export interface NurseMedicationTask {
    */
   requiresPharmacistVerification?: boolean;
   pharmacistVerified?: boolean;
+  /**
+   * QA D799: non-blocking advisories for this dose (the beta-lactam
+   * cross-reactivity warning the prescriber saw), shown before the dose is
+   * given. Empty when there is nothing to say.
+   */
+  cdsAdvisories?: CdsCard[];
+  /** QA D1584: the allergy stop's review state (awaiting, CONTINUE with the plan, STOP). */
+  allergyReview?: AllergyReviewState | null;
 }
 
 /** Bedside five-rights barcode-scan check (P1 #8). */
@@ -52,6 +133,10 @@ export interface MarVerificationResponse {
   failureReasons: Partial<Record<FiveRightsCheck, string>>;
   allPassed: boolean;
   verifiedAt: string;
+  /** QA D799: advisories that never fail a right (allPassed stays true). */
+  cdsAdvisories?: CdsCard[];
+  /** QA D1584: the allergy stop's review state, read with the cards. */
+  allergyReview?: AllergyReviewState | null;
 }
 
 export interface NurseOrderTask {
@@ -69,6 +154,11 @@ export interface NurseHandoff {
   patientName: string;
   direction: string;
   updatedAt: string;
+  /**
+   * QA D1075: when the handoff was reported. `updatedAt` moves on completion,
+   * so it is never the report time (absent only on a server that predates it).
+   */
+  createdAt?: string | null;
   /** SBAR situation line. */
   note: string | null;
   background: string | null;
@@ -79,6 +169,17 @@ export interface NurseHandoff {
   /** Set once the handoff is completed — absent on PENDING rows. */
   completedAt?: string | null;
   completedByName?: string | null;
+  /** QA D776: who the handoff is addressed to (absent on legacy rows). */
+  recipientUserId?: string | null;
+  recipientName?: string | null;
+  /** QA D776: the server's word on whether the caller may complete it. */
+  completableByMe?: boolean | null;
+}
+
+/** QA D776: a colleague a handoff can be addressed to. */
+export interface NurseHandoffRecipient {
+  userId: string;
+  displayName: string;
 }
 
 export interface NurseHandoffCreateRequest {
@@ -88,6 +189,8 @@ export interface NurseHandoffCreateRequest {
   background?: string;
   assessment?: string;
   recommendation?: string;
+  /** QA D776: required — the colleague the patient is handed over to. */
+  recipientUserId: string;
 }
 
 export interface NurseAnnouncement {
@@ -104,6 +207,8 @@ export interface NurseDashboardSummary {
   vitalsDue: number;
   medicationsDue: number;
   medicationsOverdue: number;
+  /** QA D1402: the as-needed orders on the eMAR, which the two counts above leave out. */
+  medicationsAsNeeded?: number;
   ordersPending: number;
   handoffsPending: number;
   announcements: number;
@@ -159,6 +264,18 @@ export interface NurseAdmissionSummary {
   admissionType: string;
 }
 
+/** QA D1564: what a nurse-station vitals save reports back. */
+export interface NurseVitalCaptureResponse {
+  vitalSignId?: string;
+  clinicallySignificant?: boolean;
+  /** The newborn warnings on the set; empty for anyone 28 days old or more. */
+  newbornAlerts?: NewbornVitalAlert[];
+  /** QA D1890, r54: the obstetric severe-blood-pressure warning (pregnancy, or 42 days after a birth); empty when none. */
+  postpartumAlerts?: NewbornVitalAlert[];
+  /** r54: the adult severe-blood-pressure warning; empty when none. */
+  hypertensionAlerts?: NewbornVitalAlert[];
+}
+
 export interface NurseVitalCaptureRequest {
   temperatureCelsius?: number;
   heartRateBpm?: number;
@@ -174,7 +291,11 @@ export interface NurseVitalCaptureRequest {
   onOxygen?: boolean;
   /** NEWS2 (P3 #25b): ACVPU consciousness assessment. */
   consciousnessLevel?: 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
+  /** QA D1045: the 0-10 pain score of a ward reassessment. */
+  painScale?: number;
   notes?: string;
+  /** r54: the organ-damage signs ticked with the blood pressure (optional). */
+  organDamageSymptoms?: OrganDamageSymptom[];
 }
 
 // ── MVP 13 interfaces ─────────────────────────────────────────────
@@ -240,6 +361,19 @@ export interface NurseCareNoteResponse {
   documentedAt: string;
 }
 
+/** PUT /nurse/medications/mar/{id}/administer (NurseMedicationAdministrationRequestDTO). */
+export interface MedicationAdministrationRequest {
+  status: string;
+  note?: string;
+  overrideReason?: string;
+  witnessUserId?: string;
+  /** QA D1210: why a dose is given before the minimum interval since the last one. */
+  earlyDoseReason?: string;
+  /** A dose given before an order was held for review: when, and why it is charted now. */
+  givenBeforeHoldAt?: string;
+  givenBeforeHoldReason?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class NurseTaskService {
   private readonly http = inject(HttpClient);
@@ -271,9 +405,23 @@ export class NurseTaskService {
     });
   }
 
+  /**
+   * QA D922: the clinicians of the active hospital, the caller excluded, who
+   * may witness a controlled dose (NurseTaskController).
+   */
+  getAdministrationWitnessCandidates(): Observable<AdministrationWitnessCandidate[]> {
+    return this.http.get<AdministrationWitnessCandidate[]>(
+      `${this.baseUrl}/medications/mar/witness-candidates`,
+    );
+  }
+
+  /**
+   * QA D1210 (round 23): `earlyDoseReason` answers the server's "dose too soon"
+   * refusal (nurse-station/early-dose.ts); it is sent only when the nurse gave one.
+   */
   administerMedication(
     taskId: string,
-    data: { status: string; note?: string; overrideReason?: string },
+    data: MedicationAdministrationRequest,
   ): Observable<NurseMedicationTask> {
     return this.http.put<NurseMedicationTask>(
       `${this.baseUrl}/medications/mar/${taskId}/administer`,
@@ -326,6 +474,10 @@ export class NurseTaskService {
     return this.http.post<NurseHandoff>(`${this.baseUrl}/handoffs`, data, { params: httpParams });
   }
 
+  getHandoffRecipients(): Observable<NurseHandoffRecipient[]> {
+    return this.http.get<NurseHandoffRecipient[]>(`${this.baseUrl}/handoffs/recipients`);
+  }
+
   completeHandoff(handoffId: string): Observable<void> {
     return this.http.put<void>(`${this.baseUrl}/handoffs/${handoffId}/complete`, {});
   }
@@ -374,8 +526,14 @@ export class NurseTaskService {
     return this.http.get<NurseFlowBoard>(`${this.baseUrl}/patient-flow`, { params: httpParams });
   }
 
-  captureVitals(patientId: string, data: NurseVitalCaptureRequest): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/patients/${patientId}/vitals`, data);
+  captureVitals(
+    patientId: string,
+    data: NurseVitalCaptureRequest,
+  ): Observable<NurseVitalCaptureResponse> {
+    return this.http.post<NurseVitalCaptureResponse>(
+      `${this.baseUrl}/patients/${patientId}/vitals`,
+      data,
+    );
   }
 
   getPendingAdmissions(params?: {

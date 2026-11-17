@@ -9,7 +9,7 @@
 
 | File | Purpose |
 |------|---------|
-| `realm-export.json` | Full HMS realm export (4 clients, realm roles aligned 1:1 with backend `ROLE_*` authorities in [`SecurityConstants.java`](../hospital-core/src/main/java/com/example/hms/config/SecurityConstants.java), TOTP policy, custom claim mappers for `hospital_id` + `role_assignments`). Safe to import in any environment (dev/prod). Imported on first boot via `--import-realm`. |
+| `realm-export.json` | Full HMS realm export (4 clients, realm roles aligned 1:1 with backend `ROLE_*` authorities in [`SecurityConstants.java`](../hospital-core/src/main/java/com/example/hms/config/SecurityConstants.java), TOTP policy, custom claim mappers for `hospital_id` + `role_assignments`, the `amr` mapper, and the `hms browser` login flow that makes OTP mandatory for `ROLE_PROVIDER_ADMIN`). Safe to import in any environment (dev/prod). Imported on first boot via `--import-realm`. No secret is ever committed: `hms-backend`'s `secret` is a placeholder. |
 | `realm-export.dev-users.json` | **Dev-only.** Three seeded users (`dev.admin`, `dev.doctor`, `dev.patient`) with temporary passwords. NOT mounted by the compose stack — apply manually via the admin console's **Partial Import** when you need them locally. Never import in prod. |
 | `redirect-uris.md`  | Registered redirect URI matrix per client and environment. Keep this file in sync with `realm-export.json`. |
 
@@ -161,6 +161,13 @@ edits to `realm-export.json`. To pick up changes:
 # Admin console: Realm Settings → Action → Partial Import → Overwrite
 ```
 
+Partial Import carries clients, realm roles, groups, users and identity
+providers only. **Authentication flows, authenticator configs, the browser
+flow binding and client-scope mappers are not partial-importable**: on a realm
+that already exists they are applied by hand. The steps for the provider MFA
+flow and the `amr` mapper are in
+[keycloak-realm-sync.md § Provider MFA](../docs/runbooks/keycloak-realm-sync.md#provider-mfa-one-time-steps-per-environment-d5-p1-t11).
+
 **Option B — wipe and re-create (destroys all users):**
 
 ```powershell
@@ -168,6 +175,38 @@ docker compose --profile keycloak rm -sf keycloak keycloak-db
 docker volume rm hms_keycloak_pgdata
 docker compose --profile keycloak up -d keycloak
 ```
+
+## Provider MFA (external providers, AC-13)
+
+The export binds `hms browser` as the browser flow: the built-in `browser`
+flow, plus
+
+- a `hms browser Provider admin OTP` subflow: **OTP is mandatory for
+  `ROLE_PROVIDER_ADMIN`** (configured on first login when missing);
+- the existing conditional OTP (for anyone who has configured OTP), now
+  skipped for `ROLE_PROVIDER_ADMIN`, so a provider admin is asked once;
+- Authenticator References on the password form (`pwd`) and both OTP forms
+  (`otp`), with a max age of 172800 s (= `ssoSessionMaxLifespan`), which the
+  `amr` mapper on `hms-profile` turns into the token's `amr` claim.
+
+The backend's provider MFA gate reads `otp` in `amr` for **every** provider
+user (pharmacists and lab staff at a provider too, whose roles hospitals share,
+so the realm cannot single them out). Verified on a local Keycloak 26.0.7 (the
+prod image's version): a provider admin gets `"amr":["pwd","otp"]`, kept
+across a refresh and an SSO re-login; a doctor without OTP gets
+`"amr":["pwd"]`. **On the login where OTP is first configured, `amr` holds
+`pwd` only**, so the backend answers `mfaEnrollmentRequired` until the user
+signs in again, and a silent SSO re-login repeats the session's `amr`: the
+client must re-authenticate with `prompt=login` (or `max_age=0`).
+
+The export declares the full set of Keycloak 26.0.7's built-in flows
+(browser, direct grant, clients, reset credentials, registration, first
+broker login, docker auth, saml ecp) beside `hms browser`, so a fresh import
+keeps them all. Checked on a fresh import: `client_credentials` for a
+confidential client, the "forgot password" flow, and the four OTP cases.
+
+If `ssoSessionMaxLifespan` changes, change the three max ages with it:
+an older reference drops out of `amr` and the backend refuses the session.
 
 ## Production
 

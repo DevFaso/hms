@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -68,6 +69,13 @@ class UserRoleHospitalAssignmentControllerTest {
      *  Same posture as the org-level mock above. */
     @MockitoBean
     private com.example.hms.service.HospitalLifecycleStatusService hospitalLifecycleStatusService;
+
+    /** The JWT filter's shared lifecycle gate and the one tenant resolver it builds the context with. */
+    @MockitoBean
+    private com.example.hms.security.TenantLifecycleGate tenantLifecycleGate;
+
+    @MockitoBean
+    private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
 
     /** v1.0 row 7 fixup — JwtAuthenticationFilter now also depends on
      *  IdleSessionGate. Slice context needs a mock or autowiring fails. */
@@ -123,7 +131,7 @@ class UserRoleHospitalAssignmentControllerTest {
                     .channel("SMS").purpose("ACTIVATION").outcome("MOCKED")
                     .target("+226*****56").build());
             return null;
-        }).when(assignmentService).sendNotifications(assignmentId);
+        }).when(assignmentService).resendNotifications(assignmentId);
 
         mockMvc.perform(post("/assignments/{assignmentId}/resend-notification", assignmentId))
             .andExpect(status().isOk())
@@ -131,6 +139,19 @@ class UserRoleHospitalAssignmentControllerTest {
                 .jsonPath("$[0].channel").value("SMS"))
             .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                 .jsonPath("$[0].outcome").value("MOCKED"));
+    }
+
+    @Test
+    void resendNotificationAtAnArchivedHospitalIsAConflict_D789() throws Exception {
+        // QA D789 re-test: the same call returned 200 with EMAIL and SMS
+        // activations queued. The service now refuses it; the answer is a 409
+        // and no delivery report.
+        UUID assignmentId = UUID.randomUUID();
+        doThrow(new com.example.hms.exception.ConflictException("assignment.hospital.closed"))
+            .when(assignmentService).resendNotifications(assignmentId);
+
+        mockMvc.perform(post("/assignments/{assignmentId}/resend-notification", assignmentId))
+            .andExpect(status().isConflict());
     }
 
     @Test

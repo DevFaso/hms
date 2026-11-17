@@ -25,9 +25,11 @@ public class InventoryItemMapper {
             .medicationCatalogItemId(med != null ? med.getId() : null)
             .medicationName(med != null ? med.getNameFr() : null)
             .medicationCode(med != null ? med.getCode() : null)
+            .controlled(med != null && med.isControlled())
             .quantityOnHand(entity.getQuantityOnHand())
             .reorderThreshold(entity.getReorderThreshold())
             .reorderQuantity(entity.getReorderQuantity())
+            .unitPrice(entity.getUnitPrice())
             .unit(entity.getUnit())
             .active(entity.isActive())
             .createdAt(entity.getCreatedAt())
@@ -48,14 +50,17 @@ public class InventoryItemMapper {
             .reorderThreshold(dto.getReorderThreshold() != null ? dto.getReorderThreshold() : BigDecimal.ZERO)
             .reorderQuantity(dto.getReorderQuantity() != null ? dto.getReorderQuantity() : BigDecimal.ZERO)
             .unit(dto.getUnit())
+            .unitPrice(dto.getUnitPrice())
             .active(dto.getActive() == null || dto.getActive())
             .build();
     }
 
+    /**
+     * Everything but the quantity on hand, which is never written by an
+     * entity flush; {@code InventoryServiceImpl.updateInventoryItem} sets it
+     * with an atomic UPDATE (#825 round 5).
+     */
     public void updateEntity(InventoryItem entity, InventoryItemRequestDTO dto) {
-        if (dto.getQuantityOnHand() != null) {
-            entity.setQuantityOnHand(dto.getQuantityOnHand());
-        }
         if (dto.getReorderThreshold() != null) {
             entity.setReorderThreshold(dto.getReorderThreshold());
         }
@@ -64,6 +69,9 @@ public class InventoryItemMapper {
         }
         if (dto.getUnit() != null) {
             entity.setUnit(dto.getUnit());
+        }
+        if (dto.getUnitPrice() != null) {
+            entity.setUnitPrice(dto.getUnitPrice());
         }
         if (dto.getActive() != null) {
             entity.setActive(dto.getActive());

@@ -1,0 +1,48 @@
+.nursing-notes {
+  &__state {
+    margin: 0;
+    color: var(--text-secondary, #555);
+    font-size: 0.9rem;
+  }
+
+  &__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  &__meta {
+    margin: 0 0 4px;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #555);
+  }
+
+  &__template {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--primary-tint, #ccebe4);
+    color: var(--text-primary, #1a202c);
+    font-weight: 600;
+  }
+
+  &__late {
+    margin-left: 6px;
+    font-style: italic;
+  }
+
+  &__part {
+    margin: 2px 0;
+    white-space: pre-wrap;
+  }
+}

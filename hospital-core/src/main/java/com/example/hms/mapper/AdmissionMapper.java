@@ -14,10 +14,12 @@ import com.example.hms.payload.dto.AdmissionResponseDTO;
 import com.example.hms.persistence.JpaProxyUtils;
 import com.example.hms.repository.EncounterRepository;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.util.StringUtils;
 
 import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -30,8 +32,9 @@ import java.util.UUID;
 public class AdmissionMapper {
 
     /** Encounter statuses that are terminal — excluded from the active lookup. */
-    private static final Set<EncounterStatus> TERMINAL_ENCOUNTER_STATUSES =
-        EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED);
+    private static final Set<EncounterStatus> TERMINAL_ENCOUNTER_STATUSES = EncounterStatus.CLOSED;
+
+    private static final ObjectMapper DIAGNOSES_READER = new ObjectMapper();
 
     /** Owning-entity label used in {@link JpaProxyUtils#safeInit} log lines. */
     private static final String OWNER = "Admission";
@@ -69,7 +72,7 @@ public class AdmissionMapper {
         // Patient info
         if (patient != null) {
             dto.setPatientId(patient.getId());
-            dto.setPatientName(buildFullName(patient.getFirstName(), patient.getLastName()));
+            dto.setPatientName(patient.getFullName());
             // resolvePatientMrn touches patient.getHospitalRegistrations() so
             // we must only invoke it once safeInit has confirmed the patient
             // row still exists; otherwise the lazy registration collection
@@ -93,7 +96,7 @@ public class AdmissionMapper {
         // Single query per admission — same shape as the registration lookup above.
         // Returns null when no open encounter exists, which the picker handles
         // gracefully (medication + lab fan-out tolerate null encounter).
-        dto.setCurrentEncounterId(resolveCurrentEncounterId(patient, hospital));
+        applyEncounterIds(dto, admission, patient, hospital);
 
         // Department
         if (department != null) {
@@ -111,6 +114,9 @@ public class AdmissionMapper {
         dto.setAdmissionDateTime(admission.getAdmissionDateTime());
         dto.setExpectedDischargeDateTime(admission.getExpectedDischargeDateTime());
         dto.setActualDischargeDateTime(admission.getActualDischargeDateTime());
+        // QA D1381: the stay's cancellation reason and time.
+        dto.setCancellationReason(admission.getCancellationReason());
+        dto.setCancelledAt(admission.getCancelledAt());
 
         dto.setChiefComplaint(admission.getChiefComplaint());
         dto.setPrimaryDiagnosisCode(admission.getPrimaryDiagnosisCode());
@@ -211,6 +217,49 @@ public class AdmissionMapper {
         return dto;
     }
 
+        /**
+         * QA D135: the stay's own INPATIENT encounter (V193) comes first, open
+         * or closed: a discharged admission still has its encounter, which is
+         * where the discharge summary and the after-visit summary live.
+         */
+        private void applyEncounterIds(AdmissionResponseDTO dto, Admission admission,
+                                       Patient patient, Hospital hospital) {
+            Encounter stay = admission.getId() == null ? null
+                : encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()).orElse(null);
+            if (stay == null) {
+                // An admission from before V193 has no encounter of its own.
+                dto.setEncounterId(null);
+                dto.setCurrentEncounterId(resolveCurrentEncounterId(patient, hospital));
+                return;
+            }
+            dto.setEncounterId(stay.getId());
+            dto.setEncounterCode(stay.getCode());
+            // QA D803: the discharge diagnosis lives on the stay's encounter.
+            dto.setDischargeDiagnosis(joinDiagnoses(stay.getDischargeDiagnoses()));
+            dto.setCurrentEncounterId(TERMINAL_ENCOUNTER_STATUSES.contains(stay.getStatus()) ? null : stay.getId());
+        }
+
+        /**
+         * The encounter keeps its discharge diagnoses as a JSON array of
+         * strings (the check-out's and the discharge's shape); text that is not
+         * one is shown as it is, as the after-visit summary does.
+         */
+        static String joinDiagnoses(String json) {
+            if (!StringUtils.hasText(json)) {
+                return null;
+            }
+            try {
+                List<String> diagnoses = DIAGNOSES_READER.readValue(json, new TypeReference<List<String>>() { });
+                String joined = diagnoses == null ? "" : diagnoses.stream()
+                    .filter(StringUtils::hasText)
+                    .map(String::trim)
+                    .collect(java.util.stream.Collectors.joining("; "));
+                return joined.isEmpty() ? null : joined;
+            } catch (JacksonException notAnArray) {
+                return json.trim();
+            }
+        }
+
         private UUID resolveCurrentEncounterId(Patient patient, Hospital hospital) {
             if (patient == null || patient.getId() == null
                 || hospital == null || hospital.getId() == null) {
@@ -245,12 +294,5 @@ public class AdmissionMapper {
                 .filter(StringUtils::hasText)
                 .findFirst()
                 .orElse(null);
-        }
-
-        private static String buildFullName(String first, String last) {
-            String f = first == null ? "" : first.trim();
-            String l = last == null ? "" : last.trim();
-            String full = (f + " " + l).trim();
-            return full.isEmpty() ? null : full;
         }
 }

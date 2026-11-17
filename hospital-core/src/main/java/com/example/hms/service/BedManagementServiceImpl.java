@@ -12,9 +12,11 @@ import com.example.hms.payload.dto.bed.BedResponseDTO;
 import com.example.hms.payload.dto.bed.BedStatusUpdateRequestDTO;
 import com.example.hms.payload.dto.bed.WardRequestDTO;
 import com.example.hms.payload.dto.bed.WardResponseDTO;
+import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.BedRepository;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.TransferOrderRepository;
 import com.example.hms.repository.WardRepository;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
@@ -38,15 +40,19 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class BedManagementServiceImpl implements BedManagementService {
+    private static final String WARD_NOT_FOUND_KEY = "ward.notFound";
+    private static final String BED_NOT_FOUND_KEY = "bed.notFound";
 
-    private static final String WARD_NOT_FOUND = "Ward not found: ";
-    private static final String BED_NOT_FOUND = "Bed not found: ";
+
 
     private final WardRepository wardRepository;
     private final BedRepository bedRepository;
     private final DepartmentRepository departmentRepository;
     private final HospitalRepository hospitalRepository;
+    private final AdmissionRepository admissionRepository;
+    private final TransferOrderRepository transferOrderRepository;
     private final RoleValidator roleValidator;
+    private final com.example.hms.repository.PatientRepository patientRepository;
 
     /* ═══════════════════════ Wards ═══════════════════════ */
 
@@ -67,12 +73,12 @@ public class BedManagementServiceImpl implements BedManagementService {
     @Transactional
     public WardResponseDTO createWard(WardRequestDTO request) {
         UUID hospitalId = requireWriteScope();
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
         String code = request.getCode().trim();
         if (wardRepository.existsByHospital_IdAndCodeIgnoreCase(hospitalId, code)) {
-            throw new BusinessException("A ward with code '" + code + "' already exists in this hospital.");
+            throw new com.example.hms.exception.FieldBusinessException("code", "ward.code.duplicate", code);
         }
 
         Ward ward = Ward.builder()
@@ -95,11 +101,11 @@ public class BedManagementServiceImpl implements BedManagementService {
     public WardResponseDTO updateWard(UUID wardId, WardRequestDTO request) {
         UUID hospitalId = requireWriteScope();
         Ward ward = wardRepository.findByIdAndHospital_Id(wardId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND + wardId));
+            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND_KEY, wardId));
 
         String code = request.getCode().trim();
         if (wardRepository.existsByHospital_IdAndCodeIgnoreCaseAndIdNot(hospitalId, code, wardId)) {
-            throw new BusinessException("A ward with code '" + code + "' already exists in this hospital.");
+            throw new com.example.hms.exception.FieldBusinessException("code", "ward.code.duplicate", code);
         }
 
         ward.setName(request.getName().trim());
@@ -120,10 +126,14 @@ public class BedManagementServiceImpl implements BedManagementService {
     public void deleteWard(UUID wardId) {
         UUID hospitalId = requireWriteScope();
         Ward ward = wardRepository.findByIdAndHospital_Id(wardId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND + wardId));
+            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND_KEY, wardId));
         if (!bedRepository.findByWard_Id(wardId).isEmpty()) {
-            throw new BusinessException(
-                "Ward '" + ward.getCode() + "' still has beds. Delete its beds first or deactivate the ward.");
+            throw new BusinessException("ward.delete.hasBeds", ward.getCode());
+        }
+        // QA D601: a transfer from or to this ward keeps it in the patient's
+        // movement history; deactivate the ward instead.
+        if (transferOrderRepository.existsByFromWard_IdOrToWard_Id(wardId, wardId)) {
+            throw new BusinessException("ward.delete.inUse", ward.getCode());
         }
         wardRepository.delete(ward);
     }
@@ -139,17 +149,42 @@ public class BedManagementServiceImpl implements BedManagementService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<BedResponseDTO> getAvailableBeds() {
+        return availableBeds(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BedResponseDTO> getAvailableBeds(UUID patientId) {
+        return availableBeds(patientId);
+    }
+
+    /** Shared body of both overloads, so neither calls a transactional method through 'this'. */
+    private List<BedResponseDTO> availableBeds(UUID patientId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException(
-                "Hospital context required to list available beds. Super-admins must pin a hospital (X-Hospital-Id).");
+            throw new BusinessException("bed.hospitalContextRequired");
         }
+        // The tenant-scoped finder: a patient this hospital does not know
+        // narrows nothing (and the assignment itself refuses them).
+        com.example.hms.model.Patient patient = patientId == null ? null
+            : patientRepository.findById(patientId).orElse(null);
         return bedRepository
             .findByWard_Hospital_IdAndStatusAndActiveTrueOrderByBedNumberAsc(hospitalId, BedStatus.AVAILABLE)
             .stream()
+            .filter(bed -> patient == null || fitsPatient(bed, patient))
             .map(this::toBedDto)
             .toList();
+    }
+
+    private static boolean fitsPatient(Bed bed, com.example.hms.model.Patient patient) {
+        try {
+            BedAssignmentService.requireWardFitsPatient(bed, patient);
+            return true;
+        } catch (BusinessException refused) {
+            return false;
+        }
     }
 
     @Override
@@ -157,12 +192,11 @@ public class BedManagementServiceImpl implements BedManagementService {
     public BedResponseDTO createBed(UUID wardId, BedRequestDTO request) {
         UUID hospitalId = requireWriteScope();
         Ward ward = wardRepository.findByIdAndHospital_Id(wardId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND + wardId));
+            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND_KEY, wardId));
 
         String bedNumber = request.getBedNumber().trim();
         if (bedRepository.existsByWard_IdAndBedNumberIgnoreCase(wardId, bedNumber)) {
-            throw new BusinessException(
-                "Bed '" + bedNumber + "' already exists in ward '" + ward.getCode() + "'.");
+            throw new com.example.hms.exception.FieldBusinessException("bedNumber", "bed.number.duplicate", bedNumber, ward.getCode());
         }
 
         Bed bed = Bed.builder()
@@ -184,15 +218,15 @@ public class BedManagementServiceImpl implements BedManagementService {
     public BedResponseDTO updateBed(UUID bedId, BedRequestDTO request) {
         UUID hospitalId = requireWriteScope();
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND + bedId));
+            .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND_KEY, bedId));
 
         String bedNumber = request.getBedNumber().trim();
         if (bedRepository.existsByWard_IdAndBedNumberIgnoreCaseAndIdNot(bed.getWard().getId(), bedNumber, bedId)) {
-            throw new BusinessException(
-                "Bed '" + bedNumber + "' already exists in ward '" + bed.getWard().getCode() + "'.");
+            throw new com.example.hms.exception.FieldBusinessException("bedNumber", "bed.number.duplicate", bedNumber,
+                bed.getWard().getCode());
         }
         if (Boolean.FALSE.equals(request.getActive()) && bed.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("An occupied bed cannot be retired. Discharge or reassign the patient first.");
+            throw new com.example.hms.exception.FieldBusinessException("active", "bed.occupied.cannotRetire");
         }
 
         bed.setBedNumber(bedNumber);
@@ -211,13 +245,14 @@ public class BedManagementServiceImpl implements BedManagementService {
     public BedResponseDTO updateBedStatus(UUID bedId, BedStatusUpdateRequestDTO request) {
         UUID hospitalId = requireWriteScope();
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND + bedId));
+            .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND_KEY, bedId));
 
         if (request.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("OCCUPIED is set by bed assignment, not manually.");
+            throw new com.example.hms.exception.FieldBusinessException("status", "bed.occupied.manualStatus");
         }
         if (bed.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("Bed is occupied. Discharge or unassign the patient first.");
+            // QA D1366 class: the requested status is refused while the bed is occupied; named on it.
+            throw new com.example.hms.exception.FieldBusinessException("status", "bed.occupied.unassignFirst");
         }
         bed.setStatus(request.getStatus());
         if (request.getNotes() != null) {
@@ -231,9 +266,15 @@ public class BedManagementServiceImpl implements BedManagementService {
     public void deleteBed(UUID bedId) {
         UUID hospitalId = requireWriteScope();
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND + bedId));
+            .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND_KEY, bedId));
         if (bed.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("An occupied bed cannot be deleted. Discharge or reassign the patient first.");
+            throw new BusinessException("bed.occupied.cannotDelete");
+        }
+        // QA D601: a bed any admission or transfer ever used is part of the
+        // chart (bed history), even once it is free again.
+        if (admissionRepository.existsByBed_Id(bedId)
+            || transferOrderRepository.existsByFromBed_IdOrToBed_Id(bedId, bedId)) {
+            throw new BusinessException("bed.delete.inUse", bed.getBedNumber());
         }
         bedRepository.delete(bed);
     }
@@ -243,8 +284,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     private UUID requireWriteScope() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException(
-                "Hospital context required to manage wards and beds. Super-admins must pin a hospital (X-Hospital-Id).");
+            throw new BusinessException("ward.hospitalContextRequired");
         }
         return hospitalId;
     }
@@ -254,7 +294,7 @@ public class BedManagementServiceImpl implements BedManagementService {
         return (scope == null
             ? wardRepository.findById(wardId)
             : wardRepository.findByIdAndHospital_Id(wardId, scope))
-            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND + wardId));
+            .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND_KEY, wardId));
     }
 
     private Department resolveDepartment(UUID departmentId, UUID hospitalId) {

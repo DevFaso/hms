@@ -135,6 +135,7 @@ class AdmissionControllerTest {
         dto.setDischargeDisposition(DischargeDisposition.HOME);
         dto.setDischargeSummary("Stable for home discharge");
         dto.setDischargeInstructions("Follow up cardiology in 7 days");
+        dto.setDischargeDiagnosis("Pneumopathie");
         dto.setDischargingProviderId(UUID.randomUUID());
         dto.setFollowUpAppointments(List.of(Map.of("specialty", "Cardiology", "daysOut", 7)));
         return dto;
@@ -204,6 +205,30 @@ class AdmissionControllerTest {
 
             verify(admissionService).admitPatient(any(AdmissionRequestDTO.class));
         }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_MIDWIFE")
+        @DisplayName("policy 2: a midwife reaches the admission (the service narrows it to labour)")
+        void admitPatient_midwifeReachesTheService() throws Exception {
+            when(admissionService.admitPatient(any(AdmissionRequestDTO.class)))
+                .thenReturn(buildAdmissionResponse(UUID.randomUUID()));
+
+            mockMvc.perform(post(BASE)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(buildAdmitRequest())))
+                .andExpect(status().isCreated());
+        }
+
+        @Test
+        @DisplayName("a nurse still cannot admit: the guard names the doctor and the midwife only (this slice has no method security)")
+        void admitPatient_guardAdmitsDoctorAndMidwifeOnly() throws Exception {
+            org.springframework.security.access.prepost.PreAuthorize guard = AdmissionController.class
+                .getMethod("admitPatient", AdmissionRequestDTO.class)
+                .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class);
+            org.assertj.core.api.Assertions.assertThat(
+                    com.example.hms.config.PreAuthorizeMatcherPairingTest.rolesAdmittedBy(guard.value()))
+                .containsExactlyInAnyOrder("ROLE_DOCTOR", "ROLE_MIDWIFE");
+        }
     }
 
     @Nested
@@ -247,6 +272,55 @@ class AdmissionControllerTest {
                 .andExpect(jsonPath("$.roomBed").value("ICU-102-B"));
 
             verify(admissionService).updateAdmission(eq(id), any(AdmissionUpdateRequestDTO.class));
+        }
+
+        /**
+         * QA D1672 (r44): the edit dialog sent the type, time and clinician, the
+         * update took none of them, answered 200 and kept the old values. Each
+         * property the update does not take is now refused by name.
+         */
+        @Test
+        @WithMockUser(authorities = "ROLE_DOCTOR")
+        @DisplayName("QA D1672: refuses, by name, every property the update does not take")
+        void updateAdmission_refusesWhatItDoesNotTake() throws Exception {
+            UUID id = UUID.randomUUID();
+            String body = "{\"chiefComplaint\":\"Complainte corrigée\",\"admissionType\":\"EMERGENCY\","
+                + "\"admissionDateTime\":\"2026-11-12T08:00:00\",\"admittingProviderId\":\"" + UUID.randomUUID()
+                + "\",\"consultingPhysiciansToAdd\":[{\"id\":\"x\"}]}";
+
+            mockMvc.perform(put(BASE + "/{admissionId}", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.admissionType").exists())
+                .andExpect(jsonPath("$.fieldErrors.admissionDateTime").exists())
+                .andExpect(jsonPath("$.fieldErrors.admittingProviderId").exists())
+                .andExpect(jsonPath("$.fieldErrors.consultingPhysiciansToAdd").exists())
+                .andExpect(jsonPath("$.fieldErrors.chiefComplaint").doesNotExist());
+
+            Mockito.verifyNoInteractions(admissionService);
+        }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_DOCTOR")
+        @DisplayName("QA D1672: takes the corrected chief complaint, never a blank one")
+        void updateAdmission_takesTheChiefComplaint() throws Exception {
+            UUID id = UUID.randomUUID();
+            when(admissionService.updateAdmission(eq(id), any(AdmissionUpdateRequestDTO.class)))
+                .thenReturn(buildAdmissionResponse(id));
+
+            mockMvc.perform(put(BASE + "/{admissionId}", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"chiefComplaint\":\"Complainte corrigée\"}"))
+                .andExpect(status().isOk());
+            verify(admissionService).updateAdmission(eq(id),
+                org.mockito.ArgumentMatchers.argThat(r -> "Complainte corrigée".equals(r.getChiefComplaint())));
+
+            mockMvc.perform(put(BASE + "/{admissionId}", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"chiefComplaint\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.chiefComplaint").exists());
         }
     }
 
@@ -296,6 +370,23 @@ class AdmissionControllerTest {
 
             verify(admissionService).dischargePatient(eq(id), any(AdmissionDischargeRequestDTO.class));
         }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_DOCTOR")
+        @DisplayName("QA D766 / D1596: a discharge with no diagnosis (and no written summary) is refused with 400")
+        void dischargeWithoutDiagnosisIsRefused_D766() throws Exception {
+            // QA D1596: the service decides, as a written discharge summary supplies the diagnosis.
+            UUID id = UUID.randomUUID();
+            AdmissionDischargeRequestDTO request = buildDischargeRequest();
+            request.setDischargeDiagnosis(null);
+            when(admissionService.dischargePatient(eq(id), any(AdmissionDischargeRequestDTO.class)))
+                .thenThrow(new com.example.hms.exception.FieldBusinessException("dischargeDiagnosis",
+                    "admissionDischarge.dischargeDiagnosis.required"));
+            mockMvc.perform(post(BASE + "/{admissionId}/discharge", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+        }
     }
 
     @Nested
@@ -307,12 +398,36 @@ class AdmissionControllerTest {
         @DisplayName("returns 204 NO CONTENT")
         void cancelAdmission_noContent() throws Exception {
             UUID id = UUID.randomUUID();
-            doNothing().when(admissionService).cancelAdmission(id);
+            doNothing().when(admissionService).cancelAdmission(id, "Erreur de saisie");
 
-            mockMvc.perform(delete(BASE + "/{admissionId}", id))
+            // QA D1381: the reason travels in the body.
+            mockMvc.perform(delete(BASE + "/{admissionId}", id)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"Erreur de saisie\"}"))
                 .andExpect(status().isNoContent());
 
-            verify(admissionService).cancelAdmission(id);
+            verify(admissionService).cancelAdmission(id, "Erreur de saisie");
+        }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_NURSE")
+        @DisplayName("QA D1100: the bed-release reason travels in the body, never the query string")
+        void unassignBed_readsTheReasonFromTheBody_D1100() throws Exception {
+            UUID id = UUID.randomUUID();
+            when(admissionService.unassignBed(eq(id), any())).thenReturn(new AdmissionResponseDTO());
+
+            mockMvc.perform(delete(BASE + "/{admissionId}/bed", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"Transfert en réanimation\"}"))
+                .andExpect(status().isOk());
+            verify(admissionService).unassignBed(id, "Transfert en réanimation");
+
+            Mockito.reset(admissionService);
+            when(admissionService.unassignBed(eq(id), any())).thenReturn(new AdmissionResponseDTO());
+            mockMvc.perform(delete(BASE + "/{admissionId}/bed", id).param("reason", "dans l'URL"))
+                .andExpect(status().isOk());
+            // A query-string reason is ignored: the service sees none and refuses it (400).
+            verify(admissionService).unassignBed(eq(id), isNull());
         }
     }
 
@@ -363,16 +478,33 @@ class AdmissionControllerTest {
 
         @Test
         @WithMockUser(authorities = "ROLE_NURSE")
-        @DisplayName("returns 404 NOT FOUND when no active admission")
-        void getCurrentAdmission_notFound() throws Exception {
+        // QA D1082 class (round 18): this used to expect 404; no open stay is an
+        // answer, and the house convention for an empty "current" is 204.
+        @DisplayName("returns 204 NO CONTENT when no active admission")
+        void getCurrentAdmission_noneIsNoContent() throws Exception {
             UUID patientId = UUID.randomUUID();
             when(admissionService.getCurrentAdmissionForPatient(patientId)).thenReturn(null);
 
             mockMvc.perform(get(BASE + "/patient/{patientId}/current", patientId))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNoContent());
 
             verify(admissionService).getCurrentAdmissionForPatient(patientId);
         }
+    }
+
+    @Test
+    @WithMockUser(authorities = "ROLE_DOCTOR")
+    @DisplayName("QA D800: GET /admissions?patientId= passes the patient to the service (it was silently dropped)")
+    void listAllAdmissions_passesPatientId() throws Exception {
+        UUID patientId = UUID.randomUUID();
+        when(admissionService.getAllAdmissions(isNull(), isNull(), isNull(), eq(patientId)))
+            .thenReturn(List.of(buildAdmissionResponse(UUID.randomUUID())));
+
+        mockMvc.perform(get(BASE).param("patientId", patientId.toString()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1));
+
+        verify(admissionService).getAllAdmissions(null, null, null, patientId);
     }
 
     // ═══════════════════════ Hospital queries ═══════════════════════

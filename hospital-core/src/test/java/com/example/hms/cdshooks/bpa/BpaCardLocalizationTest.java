@@ -1,0 +1,159 @@
+package com.example.hms.cdshooks.bpa;
+
+import com.example.hms.cdshooks.CdsCardText;
+import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
+import com.example.hms.model.BpaProtocol;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientVitalSign;
+import com.example.hms.repository.BpaProtocolRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.support.ReloadableResourceBundleMessageSource;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+/**
+ * QA D217: the malaria, NEWS2 and qSOFA advisories came back in English to a
+ * French chart (the D61 fix localised the CDS rules but not these BPA ones).
+ * Uses the real message bundles; the protocol rows carry the seeded English.
+ */
+class BpaCardLocalizationTest {
+
+    private final BpaProtocolRepository repo = mock(BpaProtocolRepository.class);
+    private CdsCardText text;
+
+    @BeforeEach
+    void setUp() {
+        ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
+        source.setBasenames(com.example.hms.config.MessageBundles.basenames());
+        source.setDefaultEncoding("UTF-8");
+        source.setFallbackToSystemLocale(false);
+        source.setAlwaysUseMessageFormat(true);
+        text = new CdsCardText(source);
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+        when(repo.findByProtocolCodeAndActiveTrue(anyString())).thenAnswer(inv -> Optional.of(
+            BpaProtocol.builder().protocolCode(inv.getArgument(0)).name("English name")
+                .summary("English summary.").protocolUrl("https://example.org").active(true).build()));
+    }
+
+    @AfterEach
+    void tearDown() {
+        LocaleContextHolder.resetLocaleContext();
+    }
+
+    private static BpaRuleContext context(List<PatientVitalSign> vitals) {
+        Patient p = Patient.builder().build();
+        p.setId(UUID.randomUUID());
+        return new BpaRuleContext(p, UUID.randomUUID(), vitals, List.of(), List.of());
+    }
+
+    /** NURSE_A's QA set: T 38.9, HR 112, RR 26, BP 95/60, SpO2 91. */
+    private static PatientVitalSign qaSet() {
+        return PatientVitalSign.builder()
+            .temperatureCelsius(38.9).heartRateBpm(112).respiratoryRateBpm(26)
+            .systolicBpMmHg(95).diastolicBpMmHg(60).spo2Percent(91)
+            .recordedAt(LocalDateTime.now().minusMinutes(30)).source("NURSE_STATION")
+            .build();
+    }
+
+    @Test
+    void news2CardIsFrench() {
+        CdsCard card = new NewsScoreProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.summary()).startsWith("NEWS2 — score d'alerte précoce");
+        assertThat(card.detail()).contains("risque élevé").contains("non renseigné")
+            .doesNotContain("English").doesNotContain("vitals recorded").doesNotContain("INCOMPLETE");
+        assertThat(card.source().label()).isEqualTo("Alerte de bonnes pratiques e-Keneya");
+    }
+
+    @Test
+    void qsofaCardIsFrench() {
+        CdsCard card = new SepsisQsofaProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.summary()).startsWith("Sepsis — bundle de la première heure");
+        // QA D1231 class (round 24): the criteria are those of the 6-hour window,
+        // not "currently" met - the score reads every reading in it.
+        assertThat(card.detail()).contains("Critères qSOFA remplis au cours des 6 dernières heures : 2/3").contains("oui")
+            .doesNotContain("English").doesNotContain("yes");
+    }
+
+    @Test
+    void malariaCardIsFrench() {
+        CdsCard card = new MalariaFeverProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.summary()).startsWith("Paludisme");
+        // QA D1078 (round 18): the French decimal comma. This assertion used to
+        // read "38.9 °C" - it pinned the defect (Locale.ROOT formatting).
+        // QA D1231 (round 24): the febrile reading is labelled as such, not as the last one.
+        assertThat(card.detail()).contains("Fièvre relevée : 38,9 °C")
+            .doesNotContain("Dernière température").doesNotContain("38.9").doesNotContain("English").doesNotContain("Most recent");
+    }
+
+    @Test
+    void malariaCardUsesTheSpanishDecimalCommaToo() {
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+        CdsCard card = new MalariaFeverProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.detail()).contains("38,9").doesNotContain("38.9");
+    }
+
+    @Test
+    void theEnglishCardKeepsTheDecimalPoint() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        CdsCard card = new MalariaFeverProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.detail()).contains("38.9");
+    }
+
+    @Test
+    void theEnglishNews2CardDisplaysTheComparisonAsClinicalProse() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        CdsCard card = new NewsScoreProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.detail()).contains("NEWS2 ≥ 5", "single parameter scoring 3").doesNotContain(">=");
+    }
+
+    @Test
+    void theEnglishFallbackStillReadsWithoutABundle() {
+        CdsCard card = new SepsisQsofaProtocolRule(repo).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.summary()).isEqualTo("English name");
+        assertThat(card.detail()).contains("qSOFA criteria met in the last 6 hours: 2/3");
+    }
+
+    /**
+     * QA D1231 (round 24): triage 39.6 °C, then ward vitals 38.4 °C. The card
+     * called the 39.6 the "Dernière température"; it now names it the fever
+     * reading and shows the 38.4 as the latest, in every language.
+     */
+    @Test
+    void malariaCardNamesTheFeverReadingAndShowsTheLaterOneAsTheLatest() {
+        PatientVitalSign triage = PatientVitalSign.builder().temperatureCelsius(39.6)
+            .recordedAt(LocalDateTime.now().minusMinutes(40)).source("TRIAGE").build();
+        PatientVitalSign ward = PatientVitalSign.builder().temperatureCelsius(38.4)
+            .recordedAt(LocalDateTime.now().minusMinutes(20)).source("NURSE_STATION").build();
+        List<PatientVitalSign> newestFirst = List.of(ward, triage);
+
+        CdsCard fr = new MalariaFeverProtocolRule(repo, text).evaluate(context(newestFirst)).get(0);
+        assertThat(fr.detail()).contains("Fièvre relevée : 39,6 °C").contains("Dernière température : 38,4 °C")
+            .doesNotContain("Dernière température : 39,6");
+
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        CdsCard en = new MalariaFeverProtocolRule(repo, text).evaluate(context(newestFirst)).get(0);
+        assertThat(en.detail()).contains("Fever recorded: 39.6 °C").contains("Latest temperature: 38.4 °C");
+
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+        CdsCard es = new MalariaFeverProtocolRule(repo, text).evaluate(context(newestFirst)).get(0);
+        assertThat(es.detail()).contains("Fiebre registrada: 39,6 °C").contains("Última temperatura: 38,4 °C");
+    }
+
+    @Test
+    void aFeverThatIsTheLatestReadingIsNotRepeated() {
+        CdsCard card = new MalariaFeverProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.detail()).contains("Fièvre relevée : 38,9 °C").doesNotContain("Dernière température");
+    }
+}

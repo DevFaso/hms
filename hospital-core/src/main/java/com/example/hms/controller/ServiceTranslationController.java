@@ -112,10 +112,10 @@ public class ServiceTranslationController {
         // path that could be triggered if the message template were ever tampered
         // with, and to satisfy CodeQL's java/xss taint-flow check definitively.
         String rawMessage = messageSource.getMessage("translation.deleted", new Object[]{id}, locale);
-        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity
                 .ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMessage);
     }
 }

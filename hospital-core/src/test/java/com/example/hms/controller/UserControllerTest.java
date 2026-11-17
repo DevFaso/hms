@@ -25,10 +25,12 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -52,9 +54,11 @@ class UserControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockitoBean private UserService userService;
+    @MockitoBean private com.example.hms.service.PatientAccountRegistrationService patientAccountRegistrationService;
     @MockitoBean private HospitalRepository hospitalRepository;
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @MockitoBean private com.example.hms.utility.RoleValidator roleValidator;
 
     // -------------------------------------------------------------------------
     // adminRegister — SUPER_ADMIN without hospitalId must succeed (201)
@@ -156,6 +160,92 @@ class UserControllerTest {
             .andExpect(status().isCreated());
     }
 
+    // -------------------------------------------------------------------------
+    // QA D626 (regression of D329): staff onboarding must not register a patient
+    // -------------------------------------------------------------------------
+
+    private AdminSignupRequest patientSignup(String role, Boolean fromPatientForm) {
+        AdminSignupRequest req = new AdminSignupRequest();
+        req.setEmail("qa-onb@example.test");
+        req.setFirstName("QA");
+        req.setLastName("Onb");
+        req.setPhoneNumber("+22670027075");
+        req.setRoleNames(Set.of(role));
+        req.setHospitalId(UUID.randomUUID());
+        req.setPatientRegistration(fromPatientForm);
+        return req;
+    }
+
+    private org.springframework.test.web.servlet.ResultActions registerAs(AdminSignupRequest req, String authority)
+        throws Exception {
+        return mockMvc.perform(post("/users/admin-register")
+            .with(SecurityMockMvcRequestPostProcessors.authentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                    "qa", "pw", AuthorityUtils.createAuthorityList(authority))))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(req)));
+    }
+
+    @Test
+    void qaD626_hospitalAdminStaffOnboardingWithRolePatient_isRefusedAndWritesNothing() throws Exception {
+        for (String role : new String[] {"ROLE_PATIENT", "PATIENT", "role_patient"}) {
+            registerAs(patientSignup(role, null), "ROLE_HOSPITAL_ADMIN")
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                    .jsonPath("$.message").isNotEmpty());
+            registerAs(patientSignup(role, false), "ROLE_SUPER_ADMIN").andExpect(status().isBadRequest());
+        }
+        verify(userService, never()).createUserWithRolesAndHospital(any());
+    }
+
+    @Test
+    void qaD626_thePatientFormRegistersTheAccountAndTheRecordTogether() throws Exception {
+        UserResponseDTO response = new UserResponseDTO();
+        response.setId(UUID.randomUUID());
+        response.setPatientId(UUID.randomUUID());
+        when(patientAccountRegistrationService.registerPatient(any(), any())).thenReturn(response);
+
+        AdminSignupRequest req = patientSignup("PATIENT", true);
+        com.example.hms.payload.dto.PatientRequestDTO patient = new com.example.hms.payload.dto.PatientRequestDTO();
+        patient.setFirstName("QA");
+        patient.setLastName("Onb");
+        req.setPatient(patient);
+        registerAs(req, "ROLE_HOSPITAL_ADMIN")
+            .andExpect(status().isCreated())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.patientId").value(response.getPatientId().toString()));
+        // The account-only path is never taken for a patient registration.
+        verify(userService, never()).createUserWithRolesAndHospital(any());
+    }
+
+    // QA D626 (verification): the flag is the client's word; without the
+    // patient record it would mint a PATIENT account with no record.
+    @Test
+    void qaD626_patientRegistrationFlagWithoutThePatientRecord_isRefusedAndWritesNothing() throws Exception {
+        for (String authority : new String[] {"ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN"}) {
+            registerAs(patientSignup("PATIENT", true), authority)
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                    .jsonPath("$.message").isNotEmpty());
+        }
+        verify(userService, never()).createUserWithRolesAndHospital(any());
+        verify(patientAccountRegistrationService, never()).registerPatient(any(), any());
+    }
+
+    // The receptionist path (roles forced to PATIENT, no flag needed) is
+    // covered through the real filter chain by UserEndpointAuthorizationIT
+    // receptionistCompensationDelete: this slice runs without filters, so the
+    // controller's Authentication argument is null here.
+
+    @Test
+    void qaD626_staffOnboardingOfAStaffRoleIsUnchanged() throws Exception {
+        UserResponseDTO response = new UserResponseDTO();
+        response.setId(UUID.randomUUID());
+        when(userService.createUserWithRolesAndHospital(any())).thenReturn(response);
+
+        registerAs(patientSignup("ROLE_DOCTOR", null), "ROLE_HOSPITAL_ADMIN").andExpect(status().isCreated());
+    }
+
     @Test
     void adminRegister_hospitalAdmin_withoutHospital_returns400() throws Exception {
         // HOSPITAL_ADMIN *does* require a hospital — must still return 400 when missing.
@@ -176,7 +266,48 @@ class UserControllerTest {
                         AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isBadRequest())
+            // D201: the refusal carries a sentence, never an empty body
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void adminRegister_hospitalAdmin_withoutHospitalId_registersIntoTheActingHospital() throws Exception {
+        // D201: the portal's Users > "Inscrire" sent no hospitalId; the
+        // hospital admin's acting hospital is the hospital of the new account.
+        UUID hospitalA = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .hospitalAdmin(true)
+                .activeHospitalId(hospitalA)
+                .permittedHospitalIds(Set.of(hospitalA))
+                .build());
+        try {
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setEmail("awa@example.com");
+            req.setFirstName("Awa");
+            req.setLastName("Traore");
+            req.setPhoneNumber("+22670000003");
+            req.setRoleNames(Set.of("ROLE_NURSE"));
+            UserResponseDTO dto = new UserResponseDTO();
+            dto.setId(UUID.randomUUID());
+            when(userService.createUserWithRolesAndHospital(any())).thenReturn(dto);
+
+            mockMvc.perform(post("/users/admin-register")
+                    .with(SecurityMockMvcRequestPostProcessors.user("qa.admin.a")
+                        .authorities(AuthorityUtils.createAuthorityList("ROLE_HOSPITAL_ADMIN")))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isCreated());
+
+            org.mockito.ArgumentCaptor<AdminSignupRequest> sent =
+                org.mockito.ArgumentCaptor.forClass(AdminSignupRequest.class);
+            verify(userService).createUserWithRolesAndHospital(sent.capture());
+            org.assertj.core.api.Assertions.assertThat(sent.getValue().getHospitalId()).isEqualTo(hospitalA);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -212,19 +343,40 @@ class UserControllerTest {
     // -------------------------------------------------------------------------
 
     private void authenticateAs(String username, String... authorities) {
-        // Directly on the holder: the slice runs with addFilters=false, so
+        // Directly on the holders: the slice runs with addFilters=false, so
         // neither request.getUserPrincipal() nor the request-post-processor
-        // route reaches the controller. Same thread, so this is what
-        // canSeeDeleted() reads.
+        // route reaches the controller. The super-admin signal canSeeDeleted()
+        // reads is RoleValidator's, stubbed as it answers for such a token.
+        authenticateAs(username,
+            java.util.Arrays.asList(authorities).contains("ROLE_SUPER_ADMIN"), authorities);
+    }
+
+    private void authenticateAs(String username, boolean superAdminFlag, String... authorities) {
         org.springframework.security.core.context.SecurityContextHolder.getContext()
             .setAuthentication(
                 new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                     username, "n/a", AuthorityUtils.createAuthorityList(authorities)));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(superAdminFlag);
     }
 
     @org.junit.jupiter.api.AfterEach
     void clearSecurityContext() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void inflatedSuperAdminAuthority_withoutTheVerifiedFlag_getsTheLiveView() throws Exception {
+        // canSeeDeleted() asks RoleValidator's super-admin signal, not the
+        // authorities collection.
+        when(userService.getAllUsers(0, 10, false, false))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        authenticateAs("impostor", false, "ROLE_SUPER_ADMIN");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/users").param("includeDeleted", "true"))
+            .andExpect(status().isOk());
+
+        verify(userService).getAllUsers(0, 10, false, false);
     }
 
     @Test
@@ -264,10 +416,29 @@ class UserControllerTest {
         authenticateAs("hadmin", "ROLE_HOSPITAL_ADMIN");
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .get("/users").param("includeDeleted", "true").param("onlyDeleted", "true"))
+                .get("/users").param("includeDeleted", "true"))
             .andExpect(status().isOk());
 
         verify(userService).getAllUsers(0, 10, false, false);
+    }
+
+    @Test
+    void onlyDeleted_isAnEmptyPageForHospitalAdmin_notTheLiveList() throws Exception {
+        // QA D919: the "Supprimé" filter showed a hospital admin every LIVE
+        // account, with edit and delete buttons, because the flag was dropped
+        // and the live view answered instead.
+        authenticateAs("hadmin", "ROLE_HOSPITAL_ADMIN");
+
+        for (String path : java.util.List.of("/users", "/users/search")) {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .get(path).param("includeDeleted", "true").param("onlyDeleted", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty());
+        }
+
+        verify(userService, never()).getAllUsers(
+            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -281,5 +452,25 @@ class UserControllerTest {
                 .with(SecurityMockMvcRequestPostProcessors.user("superadmin")
                     .authorities(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
             .andExpect(status().isNotFound());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "en, User deleted.",
+        "fr, Utilisateur supprimé.",
+        "es, Usuario eliminado."
+    })
+    void deleteUser_answersInTheReadersLanguage(String language, String expected) throws Exception {
+        // QA D911: the answer was "User deleted successfully." whatever the
+        // reader's language.
+        UUID id = UUID.randomUUID();
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/users/{id}", id)
+                .header("Accept-Language", language)
+                .with(SecurityMockMvcRequestPostProcessors.user("superadmin")
+                    .authorities(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
+            .andExpect(status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.message").value(expected));
+        verify(userService).deleteUser(id);
     }
 }

@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   OnChanges,
   OnDestroy,
   SimpleChanges,
@@ -10,6 +11,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -22,6 +24,12 @@ import {
 } from '../../services/break-glass.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+const SERVER_TIME = new ServerTimePipe();
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -36,7 +44,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 @Component({
   selector: 'app-break-glass-banner',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './break-glass-banner.component.html',
   styleUrl: './break-glass-banner.component.scss',
@@ -53,6 +61,8 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly state = signal<LoadState>('idle');
   protected readonly mySession = signal<BreakGlassSession | null>(null);
@@ -95,6 +105,21 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
    * letting the user click and then hit a useless "missing patient/hospital"
    * error toast.
    */
+  /**
+   * QA D436: BreakGlassController#findMyLiveSession admits the declaring roles
+   * plus the front desk. Any other role (lab, pharmacy, billing...) got a 403
+   * on every chart open; such a caller can hold no session, so it does not ask.
+   */
+  private canAskForMySession(): boolean {
+    const roles = this.auth.getRoles?.() ?? [];
+    return roles.some(
+      (r) =>
+        BreakGlassBannerComponent.DECLARE_ROLES.has(r) ||
+        r === 'ROLE_RECEPTIONIST' ||
+        r === 'RECEPTIONIST',
+    );
+  }
+
   protected readonly canInvokeDeclare = computed(
     () => this.canDeclare() && !!this.patientId() && !!this.hospitalId(),
   );
@@ -166,7 +191,10 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
       return;
     }
     if (reason.length < 10) {
-      this.toast.error(this.translate.instant('BREAK_GLASS.REASON_TOO_SHORT'));
+      // QA D1281 class: the short justification is marked where it is typed.
+      const message = this.translate.instant('BREAK_GLASS.REASON_TOO_SHORT');
+      refuseFields(this.host.nativeElement, ['bgReason'], ['bgReason'], message);
+      this.toast.error(message);
       return;
     }
 
@@ -198,11 +226,17 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
     });
   }
 
-  protected revoke(): void {
+  protected async revoke(): Promise<void> {
     const session = this.mySession();
     if (!session || !session.live) {
       return;
     }
+    // QA CX-010: one click ended the emergency access mid-care.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'BREAK_GLASS.REVOKE_CONFIRM',
+      confirmKey: 'COMMON.CONFIRM',
+    });
+    if (!confirmed) return;
     this.cancelInFlight();
     this.inFlight = this.service.revoke(session.id, {}).subscribe({
       next: (updated) => {
@@ -221,7 +255,7 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
 
   private refreshFromInputs(): void {
     const id = this.patientId();
-    if (!id) {
+    if (!id || !this.canAskForMySession()) {
       this.mySession.set(null);
       this.state.set('idle');
       this.stopClock();
@@ -276,7 +310,10 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
       this.stopClock();
       return;
     }
-    const ms = new Date(session.expiresAt).getTime() - Date.now();
+    // QA D532: a zone-less stamp is the server's UTC wall clock (the
+    // serverTime convention); parsed raw, the browser read it as local time and
+    // the countdown was off by the browser's UTC offset.
+    const ms = new Date(SERVER_TIME.transform(session.expiresAt)).getTime() - Date.now();
     if (ms <= 0) {
       this.remainingLabel.set(this.translate.instant('BREAK_GLASS.EXPIRED'));
       this.mySession.set({ ...session, live: false });

@@ -7,6 +7,7 @@ import { LabInventoryComponent } from './lab-inventory';
 import { AuthService } from '../../auth/auth.service';
 import { LabInventoryItemResponse } from '../../services/lab-instrument.service';
 import { PagedResponse } from '../../services/staff.service';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 function mockItem(overrides: Partial<LabInventoryItemResponse> = {}): LabInventoryItemResponse {
   return {
@@ -197,6 +198,24 @@ describe('LabInventoryComponent', () => {
     expect(component.form.name).toBe('');
   });
 
+  // QA D1193 (round 22): an empty "Créer" posted and showed the server's raw
+  // "ne doit pas être vide" (instruments) or a generic toast (inventory).
+  it('QA D1193: an empty "Créer" sends nothing and names the missing fields', () => {
+    fixture.detectChanges();
+    flushItems();
+    component.openCreate();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    fixture.detectChanges();
+    httpMock.expectNone((r) => r.url.includes('/lab/inventory') && r.method === 'POST');
+    const reason = host.querySelector('[data-testid="submit-guard-reason"]')?.textContent ?? '';
+    expect(reason).toContain('COMMON.MISSING_REQUIRED_FIELDS');
+    host
+      .querySelectorAll('input[required]')
+      .forEach((f) => expect(f.getAttribute('aria-invalid')).toBe('true'));
+  });
+
   it('should save new inventory item', () => {
     fixture.detectChanges();
     flushItems();
@@ -256,14 +275,14 @@ describe('LabInventoryComponent', () => {
     expect(component.saving()).toBeFalse();
   });
 
-  it('should deactivate inventory item', () => {
+  it('should deactivate inventory item', async () => {
     fixture.detectChanges();
     flushItems();
 
-    spyOn(globalThis, 'confirm').and.returnValue(true);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
 
     const item = component.items()[0];
-    component.deactivate(item);
+    await component.deactivate(item);
 
     const req = httpMock.expectOne(
       (r) => r.url.includes('/lab/inventory/item-1') && r.method === 'DELETE',
@@ -274,26 +293,26 @@ describe('LabInventoryComponent', () => {
     flushItems();
   });
 
-  it('should not deactivate if user cancels confirm', () => {
+  it('should not deactivate if user cancels confirm', async () => {
     fixture.detectChanges();
     flushItems();
 
-    spyOn(globalThis, 'confirm').and.returnValue(false);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
 
     const item = component.items()[0];
-    component.deactivate(item);
+    await component.deactivate(item);
 
     // No HTTP request should fire
   });
 
-  it('should handle deactivate error', () => {
+  it('should handle deactivate error', async () => {
     fixture.detectChanges();
     flushItems();
 
-    spyOn(globalThis, 'confirm').and.returnValue(true);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
 
     const item = component.items()[0];
-    component.deactivate(item);
+    await component.deactivate(item);
 
     const req = httpMock.expectOne((r) => r.method === 'DELETE');
     req.error(new ProgressEvent('error'));

@@ -3,6 +3,18 @@
     <div>
       <h1 class="page-title">{{ 'INTEGRATION_MESSAGES.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'INTEGRATION_MESSAGES.SUBTITLE' | translate }}</p>
+      @if (retentionOff()) {
+        <p class="retention-note" data-test="retention-off">
+          {{ 'INTEGRATION_MESSAGES.RETENTION_OFF' | translate }}
+        </p>
+      } @else if (retentionActive() && retentionDays(); as days) {
+        <p class="retention-note" data-test="retention-note">
+          {{
+            'INTEGRATION_MESSAGES.RETENTION_NOTE'
+              | translate: { days: days, maxDays: unresolvedMaxDays() }
+          }}
+        </p>
+      }
     </div>
     <div class="dlq-badge" data-test="dlq-badge">
       <span class="material-symbols-outlined" aria-hidden="true">error</span>
@@ -75,6 +87,7 @@
       <span>{{ 'INTEGRATION_MESSAGES.FILTER.TO' | translate }}</span>
       <input
         type="datetime-local"
+        [attr.min]="fromDate() || null"
         [ngModel]="toDate()"
         (ngModelChange)="toDate.set($event)"
         name="toDate"
@@ -125,7 +138,7 @@
       <tbody>
         @for (row of rows(); track row.id) {
           <tr [attr.data-test-row]="row.id">
-            <td>{{ row.receivedAt | date: 'short' }}</td>
+            <td>{{ row.receivedAt | serverTime | date: 'short' }}</td>
             <td>
               <code>{{ row.integrationId }}</code>
             </td>
@@ -134,16 +147,29 @@
                 row.direction
               }}</span>
             </td>
-            <td>{{ row.messageType ?? '—' }}</td>
+            <td>{{ row.messageType | dash }}</td>
             <td>
               <span class="status-badge" [attr.data-status]="row.status">
-                {{ 'INTEGRATION_MESSAGES.STATUS.' + row.status | translate }}
+                {{ row.status | keyLabel: 'INTEGRATION_MESSAGES.STATUS.' }}
               </span>
             </td>
             <td>{{ row.attemptCount }}</td>
-            <td class="cell-error">{{ row.errorMessage ?? '—' }}</td>
+            <td class="cell-error">{{ row.errorMessage | dash }}</td>
             <td class="cell-actions">
-              @if (row.status === 'FAILED') {
+              @if (isPurged(row)) {
+                <small
+                  class="purged-note"
+                  [attr.data-test-purged]="row.id"
+                  [title]="
+                    'INTEGRATION_MESSAGES.CONTENT_PURGED_TITLE'
+                      | translate: { date: (row.payloadPurgedAt | serverTime | dateTime) }
+                  "
+                >
+                  {{ 'INTEGRATION_MESSAGES.CONTENT_PURGED' | translate }}
+                </small>
+              }
+              <!-- QA D1124: a purged message cannot be replayed; the "content purged" note above says why, so no dead button. -->
+              @if (row.status === 'FAILED' && !isPurged(row)) {
                 <button
                   type="button"
                   class="replay-btn"

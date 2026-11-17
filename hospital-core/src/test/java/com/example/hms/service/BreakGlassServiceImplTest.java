@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedAccessException;
@@ -16,6 +17,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,11 +27,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -39,6 +44,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -63,6 +70,10 @@ class BreakGlassServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditService;
+    @Mock private BreakGlassPatientNotifier patientNotifier;
+
+    /** Real system clock — the production bean is Clock.systemDefaultZone() (TimeConfig). */
+    @Spy private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks private BreakGlassServiceImpl service;
 
@@ -75,9 +86,15 @@ class BreakGlassServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        lenient().when(hospitalRepository.findClinicalById(any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(ClinicalHospitals::isClinical));
         userId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();
+        // D624: the caller's patient search finds the patient unless a test says otherwise.
+        lenient().when(patientRepository.isFindableByPatientSearch(patientId)).thenReturn(true);
 
         caller = new User();
         caller.setId(userId);
@@ -140,6 +157,31 @@ class BreakGlassServiceImplTest {
         }
 
         @Test
+        @DisplayName("D409/D410: a patient unknown to the reader's hospital can be broken into, and is told")
+        void declareForAPatientRegisteredElsewhere() {
+            // The tenant-scoped findById is never asked: it answered 404 for
+            // exactly the patient break-the-glass exists for.
+            stubAuthenticatedDoctor();
+            when(sessionRepository.save(any(BreakGlassSession.class)))
+                .thenAnswer(inv -> {
+                    BreakGlassSession bg = inv.getArgument(0);
+                    bg.setId(UUID.randomUUID());
+                    return bg;
+                });
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Unconscious trauma patient, no family reachable.")
+                .build();
+
+            service.declare(req);
+
+            verify(patientRepository).findByIdUnscoped(patientId);
+            verify(patientRepository, never()).findById(any());
+            verify(patientNotifier).notifyIfOptedOut(patient, hospital);
+        }
+
+        @Test
         @DisplayName("stamps the patient on the audit row so emergency access reaches the patient's own list")
         void declareStampsPatientOnAuditRow() {
             // THE REGRESSION. These rows carry entityType=BREAK_GLASS_SESSION
@@ -178,11 +220,39 @@ class BreakGlassServiceImplTest {
         }
 
         @Test
-        @DisplayName("clamps caller-supplied TTL above 240 min to the 240-min ceiling")
-        void declareClampsTtl() {
+        @DisplayName("QA D165: the audit row carries the actor's ACTIVE assignment at the session hospital")
+        void declareLinksTheActingAssignment() {
+            // Without it the audit service took the first user_roles link: a
+            // doctor's break-glass at B was filed as ROLE_NURSE from an
+            // inactive assignment at another hospital.
             stubAuthenticatedDoctor();
             when(sessionRepository.save(any(BreakGlassSession.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+                .thenAnswer(inv -> {
+                    BreakGlassSession bg = inv.getArgument(0);
+                    bg.setId(UUID.randomUUID());
+                    return bg;
+                });
+            com.example.hms.model.UserRoleHospitalAssignment doctorHere = new com.example.hms.model.UserRoleHospitalAssignment();
+            doctorHere.setId(UUID.randomUUID());
+            when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+                .thenReturn(java.util.List.of(doctorHere));
+
+            service.declare(BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Unconscious trauma patient, no family reachable.")
+                .build());
+
+            ArgumentCaptor<AuditEventRequestDTO> audit =
+                ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditService).logEvent(audit.capture());
+            assertThat(audit.getValue().getAssignmentId()).isEqualTo(doctorHere.getId());
+        }
+
+        @Test
+        @DisplayName("QA D186: rejects a TTL above the 240-min ceiling instead of silently capping it")
+        void declareRejectsHighTtl() {
+            stubAuthenticatedDoctor();
 
             BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
                 .patientId(patientId)
@@ -191,12 +261,10 @@ class BreakGlassServiceImplTest {
                 .ttlMinutes(9999)
                 .build();
 
-            service.declare(req);
+            assertThatThrownBy(() -> service.declare(req))
+                .isInstanceOf(BusinessException.class);
 
-            ArgumentCaptor<BreakGlassSession> captor = ArgumentCaptor.forClass(BreakGlassSession.class);
-            verify(sessionRepository).save(captor.capture());
-            assertThat(captor.getValue().getExpiresAt())
-                .isBefore(LocalDateTime.now().plusMinutes(241));
+            verify(sessionRepository, never()).save(any());
         }
 
         @Test
@@ -221,8 +289,7 @@ class BreakGlassServiceImplTest {
         @DisplayName("rejects callers without a privileged role at the hospital")
         void declareRejectsUnprivileged() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.empty());
             when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(userId), eq(hospitalId), any()))
@@ -238,6 +305,76 @@ class BreakGlassServiceImplTest {
                 .isInstanceOf(UnauthorizedAccessException.class);
 
             verify(sessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an unprivileged caller gets the same 403 for an existing and an unknown patient id")
+        void declareUnprivilegedCannotProbePatientIds() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
+                .thenReturn(Optional.empty());
+            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(userId), eq(hospitalId), any()))
+                .thenReturn(false);
+
+            for (UUID probe : List.of(patientId, UUID.randomUUID())) {
+                BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                    .patientId(probe).hospitalId(hospitalId).reason("Probing.").build();
+                assertThatThrownBy(() -> service.declare(req))
+                    .isInstanceOf(UnauthorizedAccessException.class);
+            }
+            verify(patientRepository, never()).findByIdUnscoped(any());
+            verify(sessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D624: DOCTOR_B on a patient outside search scope gets exactly the 403 of a random id")
+        void declareForPatientOutsideSearchScopeAnswersAsUnknown() {
+            stubAuthenticatedDoctor();
+            UUID outOfScope = UUID.randomUUID();
+            UUID randomId = UUID.randomUUID();
+            Patient a1 = new Patient();
+            a1.setId(outOfScope);
+            lenient().when(patientRepository.findByIdUnscoped(outOfScope)).thenReturn(Optional.of(a1));
+            lenient().when(patientRepository.findByIdUnscoped(randomId)).thenReturn(Optional.empty());
+            when(patientRepository.isFindableByPatientSearch(outOfScope)).thenReturn(false);
+            when(patientRepository.isFindableByPatientSearch(randomId)).thenReturn(false);
+
+            List<Throwable> answers = new java.util.ArrayList<>();
+            for (UUID probe : List.of(outOfScope, randomId)) {
+                BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                    .patientId(probe).hospitalId(hospitalId).reason("Unconscious in the ED.").build();
+                Throwable t = org.assertj.core.api.Assertions.catchThrowable(() -> service.declare(req));
+                assertThat(t).isInstanceOf(UnauthorizedAccessException.class);
+                answers.add(t);
+            }
+            UnauthorizedAccessException known = (UnauthorizedAccessException) answers.get(0);
+            UnauthorizedAccessException unknown = (UnauthorizedAccessException) answers.get(1);
+            assertThat(known.getMessage()).isEqualTo("breakGlass.patient.outOfScope").isEqualTo(unknown.getMessage());
+            assertThat(known.getArgs()).isEmpty();
+            assertThat(unknown.getArgs()).isEmpty();
+            verify(patientRepository, never()).findByIdUnscoped(any());
+            verify(sessionRepository, never()).save(any());
+            verify(patientNotifier, never()).notifyIfOptedOut(any(), any());
+        }
+
+        @Test
+        @DisplayName("a provider facility answers exactly as an unknown hospital, and no session is saved")
+        void declareAtAProviderIsRefusedAsUnknown() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            hospital.setFacilityType(FacilityType.PHARMACY);
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Override needed for trauma chart.")
+                .build();
+
+            assertThatThrownBy(() -> service.declare(req))
+                .isInstanceOf(ResourceNotFoundException.class);
+            verify(sessionRepository, never()).save(any());
+            verify(patientRepository, never()).findByIdUnscoped(any());
         }
 
         @Test
@@ -395,6 +532,74 @@ class BreakGlassServiceImplTest {
         }
     }
 
+    // -------------------------------------------------------------------- QA D840 / D839
+
+    @Nested
+    @DisplayName("QA D840: consumeReadIfLive (the patient-read path)")
+    class RecordRead {
+        @Test
+        @DisplayName("a read at the session's hospital counts and is audited")
+        void countsAReadAtTheSessionsHospital() {
+            BreakGlassSession session = liveSession();
+            when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+                .thenReturn(List.of(session));
+            when(sessionRepository.incrementAuditCount(session.getId())).thenReturn(1);
+
+            Optional<BreakGlassSessionResponseDTO> out =
+                service.consumeReadIfLive(patientId, userId, hospitalId, "GET /patients/{id}");
+
+            assertThat(out).isPresent();
+            assertThat(out.get().getAuditCount()).isEqualTo(1);
+            verify(sessionRepository).incrementAuditCount(session.getId());
+            verify(auditService).logEvent(org.mockito.ArgumentMatchers.argThat(e -> e.getEventType() == com.example.hms.enums.AuditEventType.BREAK_GLASS_ACCESS));
+        }
+
+        @Test
+        @DisplayName("a session declared at another hospital does not count a read made here")
+        void ignoresASessionDeclaredElsewhere() {
+            when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+                .thenReturn(List.of(liveSession()));
+
+            assertThat(service.consumeReadIfLive(patientId, userId, UUID.randomUUID(), "GET /patients/{id}")).isEmpty();
+            verify(sessionRepository, never()).incrementAuditCount(any());
+            verify(auditService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("no user, no patient: nothing is looked up")
+        void nullsShortCircuit() {
+            assertThat(service.consumeReadIfLive(null, userId, hospitalId, "x")).isEmpty();
+            assertThat(service.consumeReadIfLive(patientId, null, hospitalId, "x")).isEmpty();
+            verify(sessionRepository, never()).findLiveForUserAndPatient(any(), any(), any());
+        }
+    }
+
+    @Test
+    @DisplayName("QA D839: the register names the patient (with the hospital's MRN) and the declarer, not ids")
+    void theRegisterCarriesNamesNotIds() {
+        caller.setFirstName("Kadi");
+        caller.setLastName("Sanogo");
+        patient.setFirstName("Salif");
+        patient.setLastName("Kaboré");
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        registration.setHospital(hospital);
+        registration.setPatient(patient);
+        registration.setMrn("CNK4035");
+        patient.setHospitalRegistrations(new java.util.HashSet<>(java.util.Set.of(registration)));
+        BreakGlassSession session = liveSession();
+        when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+            .thenReturn(List.of(session));
+        when(sessionRepository.incrementAuditCount(session.getId())).thenReturn(1);
+
+        BreakGlassSessionResponseDTO dto =
+            service.consumeReadIfLive(patientId, userId, hospitalId, "GET /patients/{id}").orElseThrow();
+
+        assertThat(dto.getPatientName()).isEqualTo("Salif Kaboré");
+        assertThat(dto.getPatientMrn()).isEqualTo("CNK4035");
+        assertThat(dto.getUserDisplayName()).isEqualTo("Kadi Sanogo");
+    }
+
     // -------------------------------------------------------------------- list / find
 
     @Nested
@@ -519,8 +724,8 @@ class BreakGlassServiceImplTest {
         @DisplayName("SUPER_ADMIN can declare even without a hospital-scoped role")
         void superAdminBypassesHospitalRoleCheck() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
             when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -551,7 +756,7 @@ class BreakGlassServiceImplTest {
         void auditFailureSwallowed() {
             stubAuthenticatedDoctor();
             when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            org.mockito.Mockito.doThrow(new RuntimeException("audit DB down"))
+            doThrow(new RuntimeException("audit DB down"))
                 .when(auditService).logEvent(any());
 
             BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
@@ -563,12 +768,81 @@ class BreakGlassServiceImplTest {
         }
     }
 
+    // -------------------------------------------------------------------- injected clock
+
+    @Nested
+    @DisplayName("injected clock")
+    class InjectedClock {
+        private final LocalDateTime now = LocalDateTime.of(2026, 3, 1, 10, 0);
+        private BreakGlassServiceImpl fixedService;
+
+        @BeforeEach
+        void fixClock() {
+            Clock fixed = Clock.fixed(now.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+            fixedService = new BreakGlassServiceImpl(sessionRepository, userRepository, patientRepository,
+                hospitalRepository, assignmentRepository, auditService, fixed, null);
+        }
+
+        @Test
+        @DisplayName("declare stamps startedAt and expiresAt from the injected clock")
+        void declareWritesFromInjectedClock() {
+            stubAuthenticatedDoctor();
+            when(sessionRepository.save(any(BreakGlassSession.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            fixedService.declare(BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId).hospitalId(hospitalId).reason("Unconscious, no family reachable.").build());
+
+            ArgumentCaptor<BreakGlassSession> captor = ArgumentCaptor.forClass(BreakGlassSession.class);
+            verify(sessionRepository).save(captor.capture());
+            assertThat(captor.getValue().getStartedAt()).isEqualTo(now);
+            assertThat(captor.getValue().getExpiresAt()).isEqualTo(now.plusMinutes(240));
+        }
+
+        @Test
+        @DisplayName("D532: the declared session's stamps carry the server offset, so the browser countdown is exact")
+        void declaredSessionStampsCarryOffset() throws Exception {
+            ZoneId lagos = ZoneId.of("Africa/Lagos");
+            BreakGlassServiceImpl lagosService = new BreakGlassServiceImpl(sessionRepository, userRepository,
+                patientRepository, hospitalRepository, assignmentRepository, auditService,
+                Clock.fixed(now.atZone(lagos).toInstant(), lagos), null);
+            stubAuthenticatedDoctor();
+            when(sessionRepository.save(any(BreakGlassSession.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            var out = lagosService.declare(BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId).hospitalId(hospitalId).reason("Unconscious, no family reachable.").build());
+
+            String json = tools.jackson.databind.json.JsonMapper.builder().build()
+                .writeValueAsString(out);
+            assertThat(json).contains("\"expiresAt\":\"2026-03-01T14:00:00+01:00\"")
+                .contains("\"startedAt\":\"2026-03-01T10:00:00+01:00\"");
+            assertThat(out.getExpiresAt().toInstant()).isEqualTo(now.plusMinutes(240).atZone(lagos).toInstant());
+        }
+
+        @Test
+        @DisplayName("the live lookup reads at the injected now, and a session expiring exactly then is not live")
+        void liveLookupReadsFromInjectedClock() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            BreakGlassSession expiringNow = liveSession();
+            expiringNow.setExpiresAt(now);
+            when(sessionRepository.findLiveForUserAndPatient(userId, patientId, now))
+                .thenReturn(List.of(expiringNow));
+
+            Optional<BreakGlassSessionResponseDTO> out = fixedService.findLiveForCurrentUserAndPatient(patientId);
+
+            assertThat(out).isPresent();
+            assertThat(out.get().isLive()).isFalse();
+
+            expiringNow.setExpiresAt(now.plusNanos(1));
+            assertThat(fixedService.findLiveForCurrentUserAndPatient(patientId).orElseThrow().isLive()).isTrue();
+        }
+    }
+
     // -------------------------------------------------------------------- helpers
 
     private void stubAuthenticatedDoctor() {
         when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
             .thenReturn(Optional.empty());
         // Pin the role-code set so a regression that drops the ROLE_ prefix

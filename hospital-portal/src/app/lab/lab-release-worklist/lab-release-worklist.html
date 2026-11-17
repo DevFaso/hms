@@ -1,9 +1,14 @@
-<div class="release-worklist-container">
+<div class="diagnostics-workspace release-worklist-container">
   <header class="page-header">
     <div class="header-left">
-      <span class="material-symbols-outlined header-icon">published_with_changes</span>
       <div>
-        <h1 class="page-title">{{ 'LAB_RELEASE.TITLE' | translate }}</h1>
+        <p class="diagnostics-eyebrow">
+          <span class="material-symbols-outlined" aria-hidden="true">published_with_changes</span
+          ><span>{{ 'DIAGNOSTICS_WORKSPACE.LABEL' | translate }}</span>
+        </p>
+        <h1 class="page-title" id="diagnostics-lab-release-worklist-title">
+          {{ 'LAB_RELEASE.TITLE' | translate }}
+        </h1>
         <p class="page-subtitle">{{ 'LAB_RELEASE.SUBTITLE' | translate }}</p>
       </div>
     </div>
@@ -62,7 +67,12 @@
       <p>{{ 'LAB_RELEASE.EMPTY' | translate }}</p>
     </div>
   } @else {
-    <div class="table-wrap">
+    <div
+      class="table-wrap"
+      tabindex="0"
+      role="region"
+      aria-labelledby="diagnostics-lab-release-worklist-title"
+    >
       <table class="release-table">
         <caption class="sr-only">
           {{
@@ -75,6 +85,7 @@
             <th scope="col">{{ 'LAB_RELEASE.COL_TEST' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_VALUE' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_FLAG' | translate }}</th>
+            <th scope="col">{{ 'LAB_RELEASE.COL_SOURCE' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_RESULT_DATE' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_RECEIVED' | translate }}</th>
             <th scope="col">{{ 'LAB_RELEASE.COL_ACTIONS' | translate }}</th>
@@ -93,20 +104,64 @@
               </td>
               <td>
                 <span class="test-name">{{ row.labTestName }}</span>
+                @if (isUrgentPriority(row)) {
+                  {{ ' '
+                  }}<span
+                    class="priority-badge"
+                    [class.priority-stat]="row.orderPriority === 'STAT'"
+                    [attr.data-testid]="'release-priority-' + row.id"
+                    >{{ row.orderPriority | enumLabel: 'labOrderPriority' }}</span
+                  >
+                }
                 @if (row.labOrderCode) {
-                  <span class="order-code mono">{{ row.labOrderCode }}</span>
+                  <span class="order-code mono" [title]="row.labOrderCode">{{
+                    shortOrderCode(row.labOrderCode)
+                  }}</span>
                 }
               </td>
               <td class="numeric">
-                {{ row.resultValue }}
-                @if (row.resultUnit) {
-                  <span class="unit">{{ row.resultUnit }}</span>
-                }
+                {{ row.resultValue | labValue: row.resultUnit }}
+                <!-- QA D1016: a correction says it replaces a validated value -->
+                <app-lab-correction-badge [corrected]="!!row.supersedesResultId" />
               </td>
               <td>
                 <span [class]="severityClass(row)">
                   {{ 'LAB_RELEASE.FLAG_' + severityKey(row) | translate }}
                 </span>
+              </td>
+              <!-- Provenance: an analyzer's number or a typed one, and — for
+                   an analyzer's — whether it said preliminary or final. The
+                   message control id is the sender's own text, shown as text. -->
+              <td>
+                @if (isInstrumentResult(row)) {
+                  <span
+                    class="source-tag"
+                    [attr.data-testid]="'release-source-instrument-' + row.id"
+                  >
+                    {{ 'LAB_RELEASE.SOURCE_INSTRUMENT' | translate }}
+                  </span>
+                  <span
+                    class="order-code mono control-id"
+                    [title]="'LAB_RELEASE.CONTROL_ID' | translate"
+                    >{{ row.sourceMessageControlId }}</span
+                  >
+                } @else {
+                  <span
+                    class="source-tag source-manual"
+                    [attr.data-testid]="'release-source-manual-' + row.id"
+                  >
+                    {{ 'LAB_RELEASE.SOURCE_MANUAL' | translate }}
+                  </span>
+                }
+                @if (resultStatusKey(row); as statusKey) {
+                  <span
+                    class="status-tag"
+                    [class.status-preliminary]="statusKey === 'LAB_RELEASE.STATUS_PRELIMINARY'"
+                    [attr.data-testid]="'release-status-' + row.id"
+                  >
+                    {{ statusKey | translate: { code: row.observationResultStatus } }}
+                  </span>
+                }
               </td>
               <!-- Two different times, and the difference is the point. The
                    result date is OBX-14 from the analyzer, or whatever the
@@ -114,8 +169,8 @@
                    row existed here, and it is what the queue is sorted by.
                    `createdAt` is when it actually landed, which is what
                    "how long has this been waiting" means. -->
-              <td>{{ row.resultDate ? (row.resultDate | date: 'short') : '—' }}</td>
-              <td>{{ row.createdAt ? (row.createdAt | date: 'short') : '—' }}</td>
+              <td>{{ row.resultDate ? (row.resultDate | serverTime | date: 'short') : '—' }}</td>
+              <td>{{ row.createdAt ? (row.createdAt | serverTime | date: 'short') : '—' }}</td>
               <td class="actions-cell">
                 @if (canReleaseResult(row)) {
                   <button
@@ -174,9 +229,11 @@
         class="form-card"
         role="dialog"
         aria-modal="true"
+        appModalDialog
+        (escaped)="cancelRelease()"
+        (keydown.escape)="$event.stopPropagation()"
         [attr.aria-label]="'LAB_RELEASE.CONFIRM_TITLE' | translate"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
         <h2>{{ 'LAB_RELEASE.CONFIRM_TITLE' | translate }}</h2>
@@ -186,12 +243,38 @@
               | translate
                 : {
                     test: target.labTestName,
-                    value: target.resultValue + (target.resultUnit ? ' ' + target.resultUnit : ''),
+                    value: (target.resultValue | labValue: target.resultUnit),
                     patient: target.patientFullName,
                   }
           }}
         </p>
+        @if (target.supersedesResultId) {
+          <!-- QA D1016: validating a correction replaces a value already validated -->
+          <p class="self-release-note" role="note" data-testid="release-correction-note">
+            {{ 'LAB_RELEASE.CONFIRM_CORRECTION' | translate }}
+          </p>
+        }
         <p class="confirm-note">{{ 'LAB_RELEASE.CONFIRM_NOTE' | translate }}</p>
+        @if (target.unitMismatch) {
+          <!-- QA D1092: no range can grade this value; releasing it is a reviewed decision -->
+          <p class="self-release-note" role="note" data-testid="release-ungraded-note">
+            {{ 'LAB_RELEASE.UNGRADED_NOTE' | translate: { unit: target.resultUnit || '—' } }}
+          </p>
+        }
+        @if (target.gradeUnknown) {
+          <!-- QA D1394: the same reviewed release for a comparator that settles no grade -->
+          <p class="self-release-note" role="note" data-testid="release-grade-unknown-note">
+            {{
+              'LAB_RELEASE.GRADE_UNKNOWN_NOTE'
+                | translate: { value: target.resultValue | labValue: target.resultUnit }
+            }}
+          </p>
+        }
+        @if (isSelfRelease(target)) {
+          <p class="self-release-note" role="note" data-testid="self-release-note">
+            {{ 'LAB_RELEASE.SELF_RELEASE_NOTE' | translate }}
+          </p>
+        }
 
         @if (releaseError(); as message) {
           <p class="modal-error" role="alert" data-testid="release-confirm-error">{{ message }}</p>
@@ -214,7 +297,10 @@
             @if (releasingId()) {
               <span class="material-symbols-outlined spin">progress_activity</span>
             }
-            {{ 'LAB_RELEASE.RELEASE' | translate }}
+            {{
+              (isSelfRelease(target) ? 'LAB_RELEASE.SELF_RELEASE_CONFIRM' : 'LAB_RELEASE.RELEASE')
+                | translate
+            }}
           </button>
         </div>
       </div>

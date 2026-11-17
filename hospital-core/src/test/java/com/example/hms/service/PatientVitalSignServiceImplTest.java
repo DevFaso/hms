@@ -24,11 +24,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -60,8 +58,34 @@ class PatientVitalSignServiceImplTest {
     @Mock
     private PatientVitalSignMapper vitalSignMapper;
 
+    @Mock
+    private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
+
+    @org.mockito.Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    @Mock
+    private com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
+
     @InjectMocks
     private PatientVitalSignServiceImpl patientVitalSignService;
+
+    /** QA D1564: the real shared vitals judgement, over the NEWS2 escalation mock. */
+    @org.junit.jupiter.api.BeforeEach
+    void realJudgement() {
+        org.springframework.test.util.ReflectionTestUtils.setField(patientVitalSignService, "vitalSignJudgement", new com.example.hms.service.vitals.VitalSignJudgement(
+            org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
+            org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
+            com.example.hms.i18n.TestMessageSources.bundles(),
+            org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class),
+            com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(
+                org.mockito.Mockito.mock(com.example.hms.repository.DeliveryRecordRepository.class))));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
+    }
 
     @Test
     void recordVital_persistsMeasurementWithResolvedContext() {
@@ -110,6 +134,7 @@ class PatientVitalSignServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, null);
         when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
         when(vitalSignRepository.save(any(PatientVitalSign.class))).thenAnswer(invocation -> {
             PatientVitalSign entity = invocation.getArgument(0);
@@ -143,46 +168,10 @@ class PatientVitalSignServiceImplTest {
         assertEquals(98, saved.getSpo2Percent());
     }
 
-    @Test
-    void getRecentVitals_prefersHospitalScopedQueryWhenProvided() {
-        UUID patientId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-        int limit = 5;
-
-        PatientVitalSign entity = PatientVitalSign.builder().build();
-        PatientVitalSignResponseDTO dto = PatientVitalSignResponseDTO.builder().id(UUID.randomUUID()).build();
-
-        when(vitalSignRepository.findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId, PageRequest.of(0, limit)))
-            .thenReturn(List.of(entity));
-        when(vitalSignMapper.toResponse(entity)).thenReturn(dto);
-
-        List<PatientVitalSignResponseDTO> result = patientVitalSignService.getRecentVitals(patientId, hospitalId, limit);
-
-    assertEquals(1, result.size());
-    assertEquals(dto, result.get(0));
-        verify(vitalSignRepository)
-            .findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId, PageRequest.of(0, limit));
-    }
-
-    @Test
-    void getRecentVitals_withoutHospitalFallsBackToGlobalQuery() {
-        UUID patientId = UUID.randomUUID();
-        int limit = 3;
-
-        PatientVitalSign entity = PatientVitalSign.builder().build();
-        PatientVitalSignResponseDTO dto = PatientVitalSignResponseDTO.builder().id(UUID.randomUUID()).build();
-
-        when(vitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, limit)))
-            .thenReturn(List.of(entity));
-        when(vitalSignMapper.toResponse(entity)).thenReturn(dto);
-
-        List<PatientVitalSignResponseDTO> result = patientVitalSignService.getRecentVitals(patientId, null, limit);
-
-    assertEquals(1, result.size());
-    assertEquals(dto, result.get(0));
-        verify(vitalSignRepository)
-            .findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, limit));
-    }
+    // getRecentVitals is pinned in service.impl.PatientVitalSignServiceImplTest:
+    // the two cases that stood here asserted the unscoped, ungated read the
+    // staff path no longer performs (a null scope now refuses; a scoped read
+    // goes through the chart gate and the readable hospitals).
 
     @Test
     void getLatestSnapshot_returnsEmptyWhenNoVitalsPresent() {
@@ -265,6 +254,7 @@ class PatientVitalSignServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findById(registration.getId())).thenReturn(Optional.of(registration));
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, null);
         when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
 
         assertThrows(BusinessException.class,

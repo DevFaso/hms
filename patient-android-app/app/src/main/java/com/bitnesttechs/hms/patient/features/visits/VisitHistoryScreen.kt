@@ -1,5 +1,10 @@
 package com.bitnesttechs.hms.patient.features.visits
 
+import com.bitnesttechs.hms.patient.core.models.DischargeDisposition
+import com.bitnesttechs.hms.patient.core.models.EncounterStatus
+import com.bitnesttechs.hms.patient.core.models.EncounterType
+import com.bitnesttechs.hms.patient.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,22 +31,17 @@ import com.bitnesttechs.hms.patient.core.models.DischargeSummaryDto
 import com.bitnesttechs.hms.patient.core.models.EncounterDto
 import com.bitnesttechs.hms.patient.core.models.FollowUpAppointmentDto
 import com.bitnesttechs.hms.patient.core.models.MedicationReconciliationDto
-import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
-import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
+import com.bitnesttechs.hms.patient.ui.theme.BrandPrimary
+import com.bitnesttechs.hms.patient.ui.theme.BrandSoft
 
-private fun formatDate(iso: String): String {
-    return try {
-        val parts = iso.take(10).split("-")
-        if (parts.size == 3) {
-            val months = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-            val month = months[parts[1].toInt() - 1]
-            val day = parts[2].toInt()
-            val year = parts[0]
-            "$month $day, $year"
-        } else iso.take(10)
-    } catch (_: Exception) { iso.take(10) }
-}
+/** The date part, in the app language (it was an English month array). */
+private fun formatDate(iso: String): String =
+    runCatching {
+        java.time.LocalDate.parse(iso.take(10)).format(
+            java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+                .withLocale(java.util.Locale.getDefault())
+        )
+    }.getOrDefault(iso.take(10))
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,19 +51,19 @@ fun VisitHistoryScreen(onBack: () -> Unit = {}, viewModel: VisitHistoryViewModel
     val isLoading by viewModel.isLoading.collectAsState()
     var selectedEncounter by remember { mutableStateOf<EncounterDto?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Visits", "Summaries")
+    val tabs = listOf(stringResource(R.string.visits), stringResource(R.string.visit_summaries_tab))
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Visit History") },
+                title = { Text(stringResource(R.string.visit_history)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BrandBlue, titleContentColor = Color.White
+                    containerColor = BrandPrimary, titleContentColor = Color.White
                 )
             )
         }
@@ -78,7 +78,7 @@ fun VisitHistoryScreen(onBack: () -> Unit = {}, viewModel: VisitHistoryViewModel
 
             if (isLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = BrandBlue)
+                    CircularProgressIndicator(color = BrandPrimary)
                 }
                 return@Column
             }
@@ -87,7 +87,7 @@ fun VisitHistoryScreen(onBack: () -> Unit = {}, viewModel: VisitHistoryViewModel
                 0 -> {
                     if (encounters.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No visits on record", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.no_visits_on_record), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
                         LazyColumn(
@@ -105,7 +105,7 @@ fun VisitHistoryScreen(onBack: () -> Unit = {}, viewModel: VisitHistoryViewModel
                 1 -> {
                     if (summaries.isEmpty()) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No after-visit summaries available", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.no_visit_summaries), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
                         LazyColumn(
@@ -142,24 +142,24 @@ private fun EncounterRow(encounter: EncounterDto, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(shape = RoundedCornerShape(10.dp), color = BrandLightBlue,
+            Surface(shape = RoundedCornerShape(10.dp), color = BrandSoft,
                 modifier = Modifier.size(44.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.LocalHospital, null, tint = BrandBlue, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Default.LocalHospital, null, tint = BrandPrimary, modifier = Modifier.size(22.dp))
                 }
             }
             Column(Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     // Type chip like iOS
-                    Surface(shape = RoundedCornerShape(4.dp), color = BrandBlue.copy(alpha = 0.1f)) {
-                        Text(encounter.encounterType.replace("_", " ").replaceFirstChar { it.uppercase() },
+                    Surface(shape = RoundedCornerShape(4.dp), color = BrandPrimary.copy(alpha = 0.1f)) {
+                        Text(stringResource(EncounterType.fromWire(encounter.encounterType).labelRes),
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
-                            color = BrandBlue)
+                            color = BrandPrimary)
                     }
                 }
                 Spacer(Modifier.height(2.dp))
-                Text(encounter.doctorName ?: encounter.department ?: "Provider",
+                Text(encounter.doctorName ?: encounter.department ?: stringResource(R.string.provider_fallback),
                     fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                 encounter.department?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall,
@@ -185,12 +185,12 @@ private fun EncounterRow(encounter: EncounterDto, onClick: () -> Unit) {
 private fun EncounterStatusChip(status: String) {
     val (bg, fg) = when (status.uppercase()) {
         "COMPLETED" -> Pair(Color(0xFFDCFCE7), Color(0xFF166534))
-        "IN_PROGRESS" -> Pair(Color(0xFFDBEAFE), BrandBlue)
+        "IN_PROGRESS" -> Pair(Color(0xFFDBEAFE), BrandPrimary)
         "CANCELLED" -> Pair(Color(0xFFFEE2E2), Color(0xFFDC2626))
         else -> Pair(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
     }
     Surface(shape = RoundedCornerShape(20.dp), color = bg) {
-        Text(status.replace("_", " "), modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        Text(stringResource(EncounterStatus.fromWire(status).labelRes), modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
             style = MaterialTheme.typography.labelSmall, color = fg, fontWeight = FontWeight.SemiBold)
     }
 }
@@ -204,27 +204,27 @@ private fun EncounterDetailSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Visit Details", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.visit_details), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             HorizontalDivider()
-            DetailRow("Type", encounter.encounterType.replace("_", " ").replaceFirstChar { it.uppercase() })
-            DetailRow("Date", formatDate(encounter.encounterDate))
-            encounter.department?.let { DetailRow("Department", it) }
-            encounter.diagnosis?.let { DetailRow("Diagnosis", it) }
-            encounter.notes?.let { DetailRow("Notes", it) }
+            DetailRow(stringResource(R.string.type_label), stringResource(EncounterType.fromWire(encounter.encounterType).labelRes))
+            DetailRow(stringResource(R.string.date), formatDate(encounter.encounterDate))
+            encounter.department?.let { DetailRow(stringResource(R.string.department), it) }
+            encounter.diagnosis?.let { DetailRow(stringResource(R.string.visit_diagnosis), it) }
+            encounter.notes?.let { DetailRow(stringResource(R.string.notes), it) }
             summary?.let { s ->
                 Spacer(Modifier.height(8.dp))
-                Text("Discharge Summary", style = MaterialTheme.typography.titleSmall,
+                Text(stringResource(R.string.doc_type_discharge_summary), style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold)
                 HorizontalDivider()
-                s.dischargingProviderName?.let { DetailRow("Provider", it) }
-                s.dischargeDiagnosis?.let { DetailRow("Diagnosis", it) }
-                s.dischargeCondition?.let { DetailRow("Condition", it) }
-                s.disposition?.let { DetailRow("Disposition", it.replace("_", " ").replaceFirstChar { c -> c.uppercase() }) }
-                s.followUpInstructions?.let { DetailRow("Follow-Up", it) }
-                s.activityRestrictions?.let { DetailRow("Activity Restrictions", it) }
-                s.dietInstructions?.let { DetailRow("Diet", it) }
-                s.warningSigns?.let { DetailRow("Warning Signs", it) }
-                s.dischargeDate?.let { DetailRow("Discharge Date", formatDate(it)) }
+                s.dischargingProviderName?.let { DetailRow(stringResource(R.string.provider_fallback), it) }
+                s.dischargeDiagnosis?.let { DetailRow(stringResource(R.string.visit_diagnosis), it) }
+                s.dischargeCondition?.let { DetailRow(stringResource(R.string.visit_condition), it) }
+                s.disposition?.let { DetailRow(stringResource(R.string.visit_disposition), stringResource(DischargeDisposition.fromWire(it).labelRes)) }
+                s.followUpInstructions?.let { DetailRow(stringResource(R.string.treatment_plan_follow_up), it) }
+                s.activityRestrictions?.let { DetailRow(stringResource(R.string.visit_activity_restrictions), it) }
+                s.dietInstructions?.let { DetailRow(stringResource(R.string.visit_diet), it) }
+                s.warningSigns?.let { DetailRow(stringResource(R.string.visit_warning_signs), it) }
+                s.dischargeDate?.let { DetailRow(stringResource(R.string.visit_discharge_date), formatDate(it)) }
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -257,7 +257,7 @@ private fun SummaryCard(summary: DischargeSummaryDto) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(summary.dischargingProviderName ?: "Provider",
+                    Text(summary.dischargingProviderName ?: stringResource(R.string.provider_fallback),
                         style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     summary.hospitalName?.let {
                         Text(it, style = MaterialTheme.typography.labelSmall,
@@ -271,7 +271,7 @@ private fun SummaryCard(summary: DischargeSummaryDto) {
                 }
                 Icon(
                     if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = if (expanded) stringResource(R.string.collapse) else stringResource(R.string.expand),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -281,17 +281,17 @@ private fun SummaryCard(summary: DischargeSummaryDto) {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     summary.dischargeDiagnosis?.takeIf { it.isNotBlank() }?.let {
-                        SummaryField("Diagnosis", it)
+                        SummaryField(stringResource(R.string.visit_diagnosis), it)
                     }
-                summary.dischargeCondition?.let { SummaryField("Condition", it) }
-                summary.hospitalCourse?.let { SummaryField("Hospital Course", it) }
-                summary.followUpInstructions?.let { SummaryField("Follow-up", it) }
-                summary.activityRestrictions?.let { SummaryField("Activity Restrictions", it) }
-                summary.dietInstructions?.let { SummaryField("Diet", it) }
+                summary.dischargeCondition?.let { SummaryField(stringResource(R.string.visit_condition), it) }
+                summary.hospitalCourse?.let { SummaryField(stringResource(R.string.visit_hospital_course), it) }
+                summary.followUpInstructions?.let { SummaryField(stringResource(R.string.treatment_plan_follow_up), it) }
+                summary.activityRestrictions?.let { SummaryField(stringResource(R.string.visit_activity_restrictions), it) }
+                summary.dietInstructions?.let { SummaryField(stringResource(R.string.visit_diet), it) }
                 summary.warningSigns?.takeIf { it.isNotBlank() }?.let {
                     Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFFEF3C7)) {
                         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text("Warning signs", style = MaterialTheme.typography.labelMedium,
+                            Text(stringResource(R.string.visit_warning_signs), style = MaterialTheme.typography.labelMedium,
                                 color = Color(0xFF92400E), fontWeight = FontWeight.SemiBold)
                             Text(it,
                             style = MaterialTheme.typography.labelSmall, color = Color(0xFF92400E))
@@ -305,7 +305,7 @@ private fun SummaryCard(summary: DischargeSummaryDto) {
                     SummaryAppointmentList(appts)
                 }
                 summary.additionalNotes?.takeIf { it.isNotBlank() }?.let {
-                    SummaryField("Notes", it)
+                    SummaryField(stringResource(R.string.notes), it)
                 }
                 }
             }
@@ -316,13 +316,13 @@ private fun SummaryCard(summary: DischargeSummaryDto) {
 @Composable
 private fun SummaryMedicationList(meds: List<MedicationReconciliationDto>) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Medications", style = MaterialTheme.typography.labelMedium,
+        Text(stringResource(R.string.medications), style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
         meds.forEach { med ->
             Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(med.medicationName ?: "Medication", style = MaterialTheme.typography.bodySmall,
+                    Text(med.medicationName ?: stringResource(R.string.medication), style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold)
                     listOfNotNull(med.dosage, med.frequency, med.reconciliationAction)
                         .takeIf { it.isNotEmpty() }
@@ -339,7 +339,7 @@ private fun SummaryMedicationList(meds: List<MedicationReconciliationDto>) {
 @Composable
 private fun SummaryAppointmentList(appts: List<FollowUpAppointmentDto>) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Follow-up appointments", style = MaterialTheme.typography.labelMedium,
+        Text(stringResource(R.string.visit_follow_up_appointments), style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
         appts.forEach { appt ->
             val details = listOfNotNull(appt.providerName, appt.department, appt.appointmentDate)
@@ -360,7 +360,7 @@ private fun SummaryField(label: String, value: String) {
             Text(
                 label,
                 style = MaterialTheme.typography.labelMedium,
-                color = BrandBlue,
+                color = BrandPrimary,
                 fontWeight = FontWeight.SemiBold
             )
             Text(

@@ -2,7 +2,7 @@
 @invoiceId = e65fdced-df9c-4f41-9f0f-556858778e0f
 @assignmentId = 6431583a-bcd5-4bc3-8d6c-1cdb5caedda1
 @treatmentId = ab4f325a-68de-403e-ba47-287099a159bd
-@token = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDk2NDU1NCwiZXhwIjoxNzU1MDUwOTU0fQ.2io471XlIunZKD0Qj0pgLtOmvCmUnqoxSQfyCqheqYA
+@token = {{token}}
 @lang = en
 
 POST http://localhost:8081/api/invoice-items

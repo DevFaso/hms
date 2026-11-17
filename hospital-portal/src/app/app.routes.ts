@@ -3,8 +3,10 @@ import { AuthGuard } from './auth/auth.guard';
 import { AccountSetupGuard } from './auth/account-setup.guard';
 import { LoginRedirectGuard } from './auth/login-redirect.guard';
 import { RoleGuard } from './auth/role.guard';
+import { empiEnabledGuard } from './reception/empi-status.service';
 import { SuperAdminRedirectGuard } from './auth/super-admin-redirect.guard';
 import { superAdminPathRewriteGuard } from './auth/super-admin-path-rewrite.guard';
+import { FacilityTypeGuard, ProviderHomeRedirectGuard } from './auth/facility-type.guard';
 import { AppointmentLinkGuard } from './patient-portal/my-appointments/appointment-link.guard';
 
 export const routes: Routes = [
@@ -61,7 +63,8 @@ export const routes: Routes = [
     children: [
       {
         path: 'dashboard',
-        canActivate: [SuperAdminRedirectGuard],
+        // A provider user (private pharmacy or laboratory) lands on /provider.
+        canActivate: [SuperAdminRedirectGuard, ProviderHomeRedirectGuard],
         loadComponent: () => import('./dashboard/dashboard').then((m) => m.DashboardComponent),
       },
 
@@ -287,7 +290,19 @@ export const routes: Routes = [
               import('./patients/patient-list').then((m) => m.PatientListComponent),
           },
           {
+            // Exactly the registrars POST /patients admits (QA D55): a doctor
+            // reached the form and got a 403 on submit.
             path: 'new',
+            canActivate: [RoleGuard],
+            data: {
+              roles: [
+                'ROLE_SUPER_ADMIN',
+                'ROLE_HOSPITAL_ADMIN',
+                'ROLE_RECEPTIONIST',
+                'ROLE_NURSE',
+                'ROLE_MIDWIFE',
+              ],
+            },
             loadComponent: () =>
               import('./patients/patient-form').then((m) => m.PatientFormComponent),
           },
@@ -354,6 +369,7 @@ export const routes: Routes = [
         path: 'registries',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./registries/registries').then((m) => m.RegistriesComponent),
@@ -366,6 +382,7 @@ export const routes: Routes = [
         path: 'panels',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_NURSE',
             'ROLE_MIDWIFE',
@@ -384,6 +401,7 @@ export const routes: Routes = [
         path: 'roi',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_RECEPTIONIST',
             'ROLE_NURSE',
@@ -403,6 +421,7 @@ export const routes: Routes = [
         path: 'webhooks',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./webhooks/webhooks').then((m) => m.WebhooksComponent),
@@ -468,6 +487,7 @@ export const routes: Routes = [
         path: 'on-call',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
@@ -508,6 +528,26 @@ export const routes: Routes = [
               import('./departments/department-detail').then((m) => m.DepartmentDetailComponent),
           },
         ],
+      },
+
+      // Billing-money plan PR 2: the hospital's price list (grille tarifaire).
+      // Read by every role that bills or quotes; the page offers writes only to
+      // the hospital admin and the accountant (action-permissions.ts).
+      {
+        path: 'billing/tarifs',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_RECEPTIONIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/price-list/price-list.component').then((m) => m.PriceListComponent),
       },
 
       // Billing
@@ -580,6 +620,7 @@ export const routes: Routes = [
         path: 'transfusions',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_DOCTOR',
             'ROLE_SURGEON',
@@ -596,12 +637,33 @@ export const routes: Routes = [
           import('./transfusion/transfusion').then((m) => m.TransfusionComponent),
       },
       {
+        // Roles mirror MortalityController's READER set; recording is gated in-component.
+        // The screen and its API existed with no route, so nobody could open it (QA round 35).
+        path: 'mortality',
+        canActivate: [RoleGuard],
+        data: {
+          requiresHospitalScope: true,
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_SURGEON',
+            'ROLE_MIDWIFE',
+            'ROLE_NURSE',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./mortality/mortality').then((m) => m.MortalityComponent),
+      },
+      {
         // Roles mirror MicroCultureController.READ_ROLES exactly (P3 #19) —
         // resulting/finalize buttons are gated in-component to the narrower
         // ENTRY/FINALIZE role sets.
         path: 'microbiology',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: [
             'ROLE_LAB_SCIENTIST',
             'ROLE_LAB_TECHNICIAN',
@@ -871,7 +933,8 @@ export const routes: Routes = [
       {
         path: 'users',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        // The hospital admin onboards their own staff (QA D117).
+        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN'] },
         loadComponent: () => import('./users/user-list').then((m) => m.UserListComponent),
       },
 
@@ -902,6 +965,15 @@ export const routes: Routes = [
         },
         loadComponent: () => import('./encounters/encounters').then((m) => m.EncountersComponent),
       },
+      // D96: the worklist's "start" and every deep link land on one encounter.
+      {
+        path: 'encounters/:id',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () => import('./encounters/encounters').then((m) => m.EncountersComponent),
+      },
 
       // Admissions
       {
@@ -922,6 +994,8 @@ export const routes: Routes = [
         path: 'bed-board',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
+          supportsGlobalHospitalView: true,
           roles: [
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
@@ -939,6 +1013,9 @@ export const routes: Routes = [
         path: 'bed-management',
         canActivate: [RoleGuard],
         data: {
+          // Global reads are supported; each write names its owning hospital.
+          requiresHospitalScope: true,
+          supportsGlobalHospitalView: true,
           // ADMIN removed per role audit C1 — the bed backend rejects it.
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
@@ -953,6 +1030,7 @@ export const routes: Routes = [
         path: 'slot-admin',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./slot-admin/slot-admin').then((m) => m.SlotAdminComponent),
@@ -968,6 +1046,19 @@ export const routes: Routes = [
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./reports/reports').then((m) => m.ReportsComponent),
+      },
+
+      // Provisional platform rule: notes unsigned for more than 72 hours at the
+      // acting hospital. Mirrors UnsignedNoteController's @PreAuthorize.
+      {
+        path: 'unsigned-notes',
+        canActivate: [RoleGuard],
+        data: {
+          requiresHospitalScope: true,
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./unsigned-notes/unsigned-notes-page').then((m) => m.UnsignedNotesPageComponent),
       },
 
       // Disease surveillance — top diagnoses per month. Mirrors
@@ -1032,7 +1123,10 @@ export const routes: Routes = [
             // the guard rejected it, so the role that exists to do this job
             // could not reach the page it is done on.
             'ROLE_PHARMACY_VERIFIER',
-            'ROLE_ADMIN',
+            // ROLE_ADMIN is not here: neither backend read admits it (GET
+            // /prescriptions and GET /prescriptions/{id}), and RoleExpansion
+            // grants it nothing, so the page could only toast "failed to
+            // load". Same fix as the lab-result entries (B16).
             'ROLE_SUPER_ADMIN',
           ],
         },
@@ -1100,6 +1194,16 @@ export const routes: Routes = [
             'ROLE_MIDWIFE',
             'ROLE_LAB_TECHNICIAN',
             'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_PHYSICIAN',
+            'ROLE_SURGEON',
+            'ROLE_HOSPITAL_ADMIN',
+            // QA D1592: a newborn a delivery could not register waits here for reception.
+            'ROLE_RECEPTIONIST',
+            // Provisional rule 1 (2026-11-15): the pre-authorisation to obtain after an urgent imaging study.
+            'ROLE_BILLING_SPECIALIST',
             'ROLE_SUPER_ADMIN',
           ],
         },
@@ -1119,6 +1223,9 @@ export const routes: Routes = [
             // order creation and listing — the guard was the outlier.
             'ROLE_MIDWIFE',
             'ROLE_RADIOLOGIST',
+            // User decision 2026-11-14: the admin roles read Imagerie
+            // (orders and released reports of their hospitals), read-only.
+            'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
@@ -1221,7 +1328,8 @@ export const routes: Routes = [
       // lesson on PR #341.
       {
         path: 'reception/empi-candidates',
-        canActivate: [RoleGuard],
+        // QA D987: not offered while the matcher is switched off (it answers 404).
+        canActivate: [RoleGuard, empiEnabledGuard],
         data: {
           roles: [
             'ROLE_RECEPTIONIST',
@@ -1278,9 +1386,10 @@ export const routes: Routes = [
         path: 'pharmacy-registry',
         canActivate: [RoleGuard],
         data: {
-          // E9 #68: mirrors PharmacyDirectoryController, which admits clinicians and
-          // pharmacists only since E9 #67 (D5).
-          roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
+          // E9 #68 / QA D39: the page reads and writes /pharmacy-registry
+          // (PharmacyRegistryController), whose list admits the hospital admin
+          // and whose create/update/delete are hospital-admin and super-admin only.
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./pharmacy/pharmacy-registry').then((m) => m.PharmacyRegistryComponent),
@@ -1331,6 +1440,21 @@ export const routes: Routes = [
           import('./pharmacy/stock-adjustment').then((m) => m.StockAdjustmentComponent),
       },
       {
+        // QA D967: the controlled-drug register; roles mirror ControlledRegisterController.
+        path: 'pharmacy/controlled-register',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/controlled-register').then((m) => m.ControlledRegisterComponent),
+      },
+      {
         path: 'pharmacy/dispensing',
         canActivate: [RoleGuard],
         data: {
@@ -1378,6 +1502,7 @@ export const routes: Routes = [
         path: 'pharmacy/mtm',
         canActivate: [RoleGuard],
         data: {
+          requiresHospitalScope: true,
           roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () => import('./pharmacy/mtm-review').then((m) => m.MtmReviewComponent),
@@ -1465,6 +1590,82 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./super-admin/super-admin').then((m) => m.SuperAdminComponent),
+      },
+
+      // Super-Admin provider facilities: private pharmacies and laboratories
+      // (provider plan P1-T12). Mirrors SuperAdminProviderController's
+      // hasAuthority('ROLE_SUPER_ADMIN'); 'new' precedes ':id'.
+      {
+        path: 'super-admin/providers',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/providers/provider-list/provider-list').then(
+            (m) => m.ProviderListComponent,
+          ),
+      },
+      {
+        path: 'super-admin/providers/new',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/providers/provider-form/provider-form').then(
+            (m) => m.ProviderFormComponent,
+          ),
+      },
+      {
+        path: 'super-admin/providers/:id',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/providers/provider-detail/provider-detail').then(
+            (m) => m.ProviderDetailComponent,
+          ),
+      },
+      {
+        path: 'super-admin/providers/:id/resubmit',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/providers/provider-form/provider-form').then(
+            (m) => m.ProviderFormComponent,
+          ),
+      },
+
+      // Provider shell (provider plan P1-T13, AC-12). The backend admits
+      // /provider/** from live assignments at the facility, never from a
+      // token role, so FacilityTypeGuard asks GET /provider/settings the same
+      // question instead of RoleGuard: staff and audit are the facility
+      // PROVIDER_ADMIN's only.
+      {
+        path: 'provider',
+        canActivate: [FacilityTypeGuard],
+        data: { facilityTypes: ['PHARMACY', 'LABORATORY'] },
+        loadComponent: () =>
+          import('./provider/provider-home/provider-home').then((m) => m.ProviderHomeComponent),
+      },
+      {
+        path: 'provider/profile',
+        canActivate: [FacilityTypeGuard],
+        data: { facilityTypes: ['PHARMACY', 'LABORATORY'] },
+        loadComponent: () =>
+          import('./provider/provider-profile/provider-profile').then(
+            (m) => m.ProviderProfileComponent,
+          ),
+      },
+      {
+        path: 'provider/staff',
+        canActivate: [FacilityTypeGuard],
+        data: { facilityTypes: ['PHARMACY', 'LABORATORY'], providerAdmin: true },
+        loadComponent: () =>
+          import('./provider/provider-staff/provider-staff').then((m) => m.ProviderStaffComponent),
+      },
+      {
+        path: 'provider/audit',
+        canActivate: [FacilityTypeGuard],
+        data: { facilityTypes: ['PHARMACY', 'LABORATORY'], providerAdmin: true },
+        loadComponent: () =>
+          import('./provider/provider-audit/provider-audit').then((m) => m.ProviderAuditComponent),
       },
 
       // Super-Admin Integration Health Console (MVP-3 — see docs/super-admin-gaps.md)
@@ -1658,6 +1859,7 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: {
           requiresHospitalScope: true,
+          hospitalNetworkTitleKey: 'ORDER_SETS.ADMIN_TITLE',
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>

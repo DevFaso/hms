@@ -63,6 +63,7 @@ public interface PatientProblemRepository extends JpaRepository<PatientProblem, 
         where p.hospital.id = :hospitalId
           and p.createdAt >= :fromInclusive
           and p.createdAt < :toExclusive
+          and p.enteredInError = false
         group by p.problemCode, p.problemDisplay
         order by count(p) desc, p.problemDisplay asc
         """)
@@ -81,6 +82,7 @@ public interface PatientProblemRepository extends JpaRepository<PatientProblem, 
         from PatientProblem p
         where p.createdAt >= :fromInclusive
           and p.createdAt < :toExclusive
+          and p.enteredInError = false
         group by p.problemCode, p.problemDisplay
         order by count(p) desc, p.problemDisplay asc
         """)
@@ -113,6 +115,7 @@ public interface PatientProblemRepository extends JpaRepository<PatientProblem, 
         join p.hospital h
         where p.createdAt >= :fromInclusive
           and p.createdAt < :toExclusive
+          and p.enteredInError = false
         group by h.id, h.name, p.problemCode, p.problemDisplay
         order by h.name asc, count(p) desc, p.problemDisplay asc
         """)

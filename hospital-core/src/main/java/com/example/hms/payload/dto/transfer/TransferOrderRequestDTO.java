@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.transfer;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -22,7 +23,7 @@ public class TransferOrderRequestDTO {
     @NotNull
     private UUID toBedId;
 
-    @NotNull
+    @NotBlank
     @Size(max = 500)
     private String reason;
 

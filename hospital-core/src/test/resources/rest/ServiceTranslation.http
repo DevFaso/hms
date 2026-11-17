@@ -1,6 +1,6 @@
 ### Service Translation API - Create a new translation for a treatment
 POST http://localhost:8081/api/service-translations
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0NTEyNzEsImV4cCI6MTc1NDUzNzY3MX0.uXYNjPxkBsk8HtmcotNGlQ0KPPU8nb5wDSDPu8H8Xlyj5Nmm3LyHJyyWJ2TZdDYQxX-zf0TLc_gsQIMRnY1Bgg
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
@@ -14,7 +14,7 @@ Accept-Language: en
 
 ###
 POST http://localhost:8081/api/service-translations
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
@@ -28,7 +28,7 @@ Accept-Language: en
 
 ###
 POST http://localhost:8081/api/service-translations
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
@@ -42,7 +42,7 @@ Accept-Language: en
 
 ###
 POST http://localhost:8081/api/service-translations
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
@@ -56,7 +56,7 @@ Accept-Language: en
 
 ###
 POST http://localhost:8081/api/service-translations
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
@@ -70,7 +70,7 @@ Accept-Language: en
 
 ###
 POST http://localhost:8081/api/service-translations
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
@@ -86,12 +86,12 @@ Accept-Language: en
 
 ##### Get translations for a treatment id
 GET http://localhost:8081//api/service-translations/90fd9e4c-d828-4462-aecd-ad692eedf3e6
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 ### Get all translations for a treatment in a specific language
 GET http://localhost:8081/api/service-translations
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 ### Update a translation for a treatment
@@ -114,12 +114,12 @@ Accept-Language: en
 
 ##### Get all translations for a treatment
 GET http://localhost:8081//api/service-translations/660526cd-786a-4a7d-92a8-e2cdd90ad9d4
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 ### Get all translations for a treatment in a specific language
 GET http://localhost:8081/api/service-translations
-Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Authorization: Bearer {{token}}
 Accept-Language: en
 
 ### Update a translation for a treatment

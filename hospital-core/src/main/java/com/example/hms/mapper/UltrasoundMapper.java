@@ -30,6 +30,7 @@ public class UltrasoundMapper {
 
         return UltrasoundOrderResponseDTO.builder()
             .id(order.getId())
+            .authorUserId(order.getOrderedByUserId())
             .patientId(order.getPatient() != null ? order.getPatient().getId() : null)
             .patientDisplayName(resolvePatientDisplayName(order.getPatient()))
             .patientMrn(resolvePatientMrn(order.getPatient()))
@@ -45,6 +46,7 @@ public class UltrasoundMapper {
             .scheduledTime(order.getScheduledTime())
             .appointmentLocation(order.getAppointmentLocation())
             .priority(order.getPriority())
+            .obstetricRuleSkipped(order.isObstetricRuleSkipped())
             .isHighRiskPregnancy(order.getIsHighRiskPregnancy())
             .highRiskNotes(order.getHighRiskNotes())
             .specialInstructions(order.getSpecialInstructions())
@@ -134,6 +136,11 @@ public class UltrasoundMapper {
         if (dto.getSpecialInstructions() != null) {
             order.setSpecialInstructions(dto.getSpecialInstructions());
         }
+        // QA D1672 class (r44 sweep): the edit dialog offers the scan count and the
+        // update validated it, then dropped it behind a success.
+        if (dto.getScanCountForPregnancy() != null) {
+            order.setScanCountForPregnancy(dto.getScanCountForPregnancy());
+        }
     }
 
     /**
@@ -207,6 +214,8 @@ public class UltrasoundMapper {
             .reportReviewedByProvider(report.getReportReviewedByProvider())
             .providerReviewNotes(report.getProviderReviewNotes())
             .patientNotified(report.getPatientNotified())
+            // QA D1525: display only (a null on a legacy row reads "no answer", on a stated row "not assessed")
+            .observationsStated(!Boolean.FALSE.equals(report.getObservationsStated()))
             .patientNotifiedAt(report.getPatientNotifiedAt())
             .createdAt(report.getCreatedAt())
             .updatedAt(report.getUpdatedAt())
@@ -249,7 +258,7 @@ public class UltrasoundMapper {
             .estimatedDueDate(dto.getEstimatedDueDate())
             .dueDateConfirmed(Boolean.TRUE.equals(dto.getDueDateConfirmed()))
             // Fetal count and position
-            .numberOfFetuses(dto.getNumberOfFetuses() != null ? dto.getNumberOfFetuses() : 1)
+            .numberOfFetuses(dto.getNumberOfFetuses())
             .fetalPosition(dto.getFetalPosition())
             // Second trimester
             .biparietalDiameterMm(dto.getBiparietalDiameterMm())
@@ -269,9 +278,10 @@ public class UltrasoundMapper {
             .uterineArteryDoppler(dto.getUterineArteryDoppler())
             // Fetal well-being
             .fetalHeartRate(dto.getFetalHeartRate())
-            .fetalCardiacActivity(dto.getFetalCardiacActivity() == null || dto.getFetalCardiacActivity())
-            .fetalMovementObserved(dto.getFetalMovementObserved() == null || dto.getFetalMovementObserved())
-            .fetalToneNormal(dto.getFetalToneNormal() == null || dto.getFetalToneNormal())
+            // QA D1525: tri-state, null stays "not assessed" (it was turned into TRUE)
+            .fetalCardiacActivity(dto.getFetalCardiacActivity())
+            .fetalMovementObserved(dto.getFetalMovementObserved())
+            .fetalToneNormal(dto.getFetalToneNormal())
             // Anatomy
             .anatomySurveyComplete(Boolean.TRUE.equals(dto.getAnatomySurveyComplete()))
             .anatomyFindings(dto.getAnatomyFindings())
@@ -279,7 +289,7 @@ public class UltrasoundMapper {
             .findingCategory(dto.getFindingCategory())
             .findingsSummary(dto.getFindingsSummary())
             .interpretation(dto.getInterpretation())
-            .anomaliesDetected(Boolean.TRUE.equals(dto.getAnomaliesDetected()))
+            .anomaliesDetected(dto.getAnomaliesDetected()) // QA D1525: null = not stated
             .anomalyDescription(dto.getAnomalyDescription())
             // Genetic screening
             .geneticScreeningRecommended(Boolean.TRUE.equals(dto.getGeneticScreeningRecommended()))
@@ -388,27 +398,13 @@ public class UltrasoundMapper {
 
     /**
      * Resolve patient display name from Patient entity.
-     * Returns "LastName, FirstName" or components available.
+     * Returns "First Middle Last", the app's shared name format.
      */
     private String resolvePatientDisplayName(Patient patient) {
-        if (patient == null) {
-            return null;
-        }
-
-        String firstName = safeTrim(patient.getFirstName());
-        String lastName = safeTrim(patient.getLastName());
-
-        if (lastName != null && firstName != null) {
-            return lastName + ", " + firstName;
-        }
-        if (lastName != null) {
-            return lastName;
-        }
-        if (firstName != null) {
-            return firstName;
-        }
-
-        return null;
+        // r44: the app's one name format, "First Middle Last" (QA D1036), not
+        // "Last, First": the imaging list read "Traoré, Seydou" where every
+        // other screen reads "Seydou Traoré".
+        return patient == null ? null : patient.getFullName();
     }
 
     /**
@@ -421,16 +417,5 @@ public class UltrasoundMapper {
         }
         // Future: Use Patient.mrn field if available
         return patient.getId().toString();
-    }
-
-    /**
-     * Safely trim a string, returning null if input is null or blank.
-     */
-    private String safeTrim(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
     }
 }

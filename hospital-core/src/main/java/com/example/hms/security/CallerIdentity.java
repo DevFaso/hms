@@ -1,0 +1,185 @@
+package com.example.hms.security;
+
+import com.example.hms.exception.ClientSafeAccessDeniedException;
+import com.example.hms.model.Staff;
+import com.example.hms.utility.MessageUtil;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.util.UUID;
+
+/**
+ * QA D302/D406/D407/D503 class: an identity the server should derive (the
+ * signer, the author, the provider, the nurse who asked) is never taken from
+ * the request. A staff id in a body or a query string is a claim; the service
+ * resolves it, then asks this class whether it is the caller's own record.
+ *
+ * <p>Static, so a service adopts it without a new constructor dependency.
+ * {@code ClientSuppliedIdentityGuardTest} lists every write endpoint that
+ * still accepts such an id and why.
+ */
+public final class CallerIdentity {
+
+    private CallerIdentity() {
+    }
+
+    /** The caller's local user id, or {@code null} when there is none. */
+    public static UUID currentUserId() {
+        org.springframework.security.core.Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof com.example.hms.model.User user) {
+            return user.getId();
+        }
+        return PrincipalUserIds.of(auth).orElse(null);
+    }
+
+    /** True when the two staff records belong to the same user (QA D955 class: requester vs approver). */
+    public static boolean sameUser(Staff a, Staff b) {
+        return a != null && b != null && a.getUser() != null && b.getUser() != null
+            && a.getUser().getId() != null && a.getUser().getId().equals(b.getUser().getId());
+    }
+
+    /** True when {@code staff} is the caller's own staff record. */
+    public static boolean isCaller(Staff staff) {
+        UUID caller = currentUserId();
+        return caller != null && staff != null && staff.getUser() != null
+            && caller.equals(staff.getUser().getId());
+    }
+
+    /**
+     * Refuse (403, with a message about the caller) unless {@code staff} is the
+     * caller's own staff record. The record must already have been resolved in
+     * the caller's scope, so the refusal discloses nothing.
+     */
+    public static void requireCaller(Staff staff) {
+        if (!isCaller(staff)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("identity.notCaller"));
+        }
+    }
+
+    /**
+     * {@link #requireCaller(Staff)}, except for a verified super-admin in
+     * global view (the one resolver's {@code Global} scope), who may act for a
+     * staff member already checked to belong to the hospital in question.
+     */
+    public static void requireCallerUnlessSuperAdmin(Staff staff) {
+        if (!isGlobalSuperAdmin()) {
+            requireCaller(staff);
+        }
+    }
+
+    /**
+     * QA D1112 (round 19): an authorship check says what the rule is. A doctor
+     * finalizing a colleague's discharge summary read "Vous ne pouvez agir
+     * qu'en votre propre nom" ({@code identity.notCaller}), which is the
+     * refusal for naming someone else in a request, not for touching a record
+     * someone else wrote. Refuse (403) with {@code messageKey}, the object's
+     * own rule ("Seul le médecin qui a rédigé ce résumé peut le finaliser."),
+     * unless {@code author} is the caller's staff record.
+     * {@code AuthorshipRefusalKeyGuardTest} keeps {@code requireCaller} for
+     * the acting-on-behalf checks only.
+     */
+    public static void requireAuthor(Staff author, String messageKey) {
+        if (!isCaller(author)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw(messageKey));
+        }
+    }
+
+    /** {@link #requireAuthor}, except for a verified super-admin in global view. */
+    public static void requireAuthorUnlessSuperAdmin(Staff author, String messageKey) {
+        if (!isGlobalSuperAdmin()) {
+            requireAuthor(author, messageKey);
+        }
+    }
+
+    /** True for a verified super-admin in global view, as the one resolver decides it. */
+    public static boolean isGlobalSuperAdmin() {
+        return com.example.hms.security.tenant.ActingScopeResolver.currentScope()
+            instanceof com.example.hms.security.tenant.ActingScope.Global;
+    }
+
+    /**
+     * True for a verified super-admin who may decide for {@code hospitalId}: in
+     * global view, or pinned to that very hospital (a hospital selected in the
+     * portal). The admin review deciders ask this instead of
+     * {@link #isGlobalSuperAdmin()} alone, which refused a super-admin as soon
+     * as they selected a hospital although the endpoint's role check admits
+     * SUPER_ADMIN. A super-admin pinned to another hospital is not admitted.
+     * {@code SuperAdminReviewDeciderGuardTest} keeps the mortality review
+     * endpoints on it.
+     */
+    public static boolean isSuperAdminFor(UUID hospitalId) {
+        if (isGlobalSuperAdmin()) {
+            return true;
+        }
+        return hospitalId != null
+            && hospitalId.equals(com.example.hms.security.tenant.ActingScopeResolver.superAdminPinnedHospitalIdOrNull());
+    }
+
+    /**
+     * The acting staff member for a write that records who did it (the
+     * recorder, the performer, the author, the canceller). A claimed staff id
+     * must be a staff record at {@code hospitalId} and, unless the caller is a
+     * super-admin in global view, the caller's own; with no claim the caller's
+     * own staff record at that hospital is used (or {@code null} when the
+     * caller has none there). QA D503 class.
+     */
+    public static Staff resolveActor(com.example.hms.repository.StaffRepository staffRepository,
+                                     UUID claimedStaffId, UUID hospitalId) {
+        if (claimedStaffId == null) {
+            UUID caller = currentUserId();
+            if (caller == null || hospitalId == null) {
+                return null;
+            }
+            return staffRepository.findByUserIdAndHospitalId(caller, hospitalId).orElse(null);
+        }
+        Staff claimed = staffRepository.findById(claimedStaffId)
+            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("staff.notFound", claimedStaffId));
+        return confirmActor(staffRepository, claimed, hospitalId);
+    }
+
+    /**
+     * Confirm an already-loaded claimed actor: the caller's own record at
+     * {@code hospitalId} (a caller who sent their staff record at another
+     * hospital gets their record at this one), or, for a super-admin in global
+     * view, any staff record at that hospital.
+     */
+    public static Staff confirmActor(com.example.hms.repository.StaffRepository staffRepository,
+                                     Staff claimed, UUID hospitalId) {
+        if (isCaller(claimed) && hospitalId != null && (claimed.getHospital() == null
+            || !hospitalId.equals(claimed.getHospital().getId()))) {
+            return staffRepository.findByUserIdAndHospitalId(currentUserId(), hospitalId)
+                .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("staff.notFound", claimed.getId()));
+        }
+        requireAtHospital(claimed, hospitalId);
+        requireCallerUnlessSuperAdmin(claimed);
+        return claimed;
+    }
+
+    /** The id of a record's hospital, or {@code null} when the record has none. */
+    public static UUID hospitalIdOf(com.example.hms.model.Hospital hospital) {
+        return hospital == null ? null : hospital.getId();
+    }
+
+    /** Refuse a staff record that is not at {@code hospitalId} (a null hospital is never a match). */
+    public static void requireAtHospital(Staff staff, UUID hospitalId) {
+        if (hospitalId != null && (staff == null || staff.getHospital() == null
+            || !hospitalId.equals(staff.getHospital().getId()))) {
+            throw new com.example.hms.exception.ResourceNotFoundException("staff.notFound",
+                staff == null ? null : staff.getId());
+        }
+    }
+
+    /**
+     * A user id the client names as the one who performed something must be the
+     * caller's (super-admin in global view excepted); with none, the caller's.
+     */
+    public static UUID resolveActorUserId(UUID claimedUserId) {
+        UUID caller = currentUserId();
+        if (claimedUserId == null) {
+            return caller;
+        }
+        if (!claimedUserId.equals(caller) && !isGlobalSuperAdmin()) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("identity.notCaller"));
+        }
+        return claimedUserId;
+    }
+}

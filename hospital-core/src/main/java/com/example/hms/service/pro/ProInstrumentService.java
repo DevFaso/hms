@@ -66,7 +66,7 @@ public class ProInstrumentService {
     @Transactional(readOnly = true)
     public ProInstrument requireActive(String code) {
         return instrumentRepository.findByCodeAndActiveTrue(normalizeCode(code))
-            .orElseThrow(() -> new ResourceNotFoundException("Instrument not found: " + code));
+            .orElseThrow(() -> new ResourceNotFoundException("pro.instrument.notFound", code));
     }
 
     @Transactional(readOnly = true)
@@ -112,13 +112,12 @@ public class ProInstrumentService {
 
         List<ProInstrumentViewDTO.Item> items = new ArrayList<>();
         for (ProInstrumentItem item : instrument.getItems()) {
-            List<ProInstrumentViewDTO.Option> options = new ArrayList<>();
-            for (ProInstrumentOption option : item.getOptions()) {
-                options.add(ProInstrumentViewDTO.Option.builder()
+            List<ProInstrumentViewDTO.Option> options = item.getOptions().stream()
+                .map(option -> ProInstrumentViewDTO.Option.builder()
                     .optionNo(option.getOptionNo())
                     .label(texts.get(key(item.getItemNo(), option.getOptionNo())))
-                    .build());
-            }
+                    .build())
+                .toList();
             items.add(ProInstrumentViewDTO.Item.builder()
                 .itemNo(item.getItemNo())
                 .prompt(texts.get(key(item.getItemNo(), ProInstrumentText.PROMPT)))
@@ -221,9 +220,7 @@ public class ProInstrumentService {
         String current = existing.getVersion();
         String proposed = trimToNull(definition.getVersion());
         if (proposed == null || proposed.equals(current)) {
-            throw new BusinessException("Instrument " + existing.getCode() + " has recorded responses"
-                + " under version " + (current == null ? "(none)" : current)
-                + "; changing its items, option scores, threshold or critical item needs a new version.");
+            throw new com.example.hms.exception.FieldBusinessException("version", "pro.instrument.versionLocked", existing.getCode(), current == null ? "-" : current);
         }
     }
 
@@ -279,12 +276,11 @@ public class ProInstrumentService {
         }
         int maxScore = maxScoreOf(definition);
         if (definition.getPositiveThreshold() != null && definition.getPositiveThreshold() > maxScore) {
-            throw new BusinessException("Positive threshold " + definition.getPositiveThreshold()
-                + " exceeds the instrument's maximum score " + maxScore + "; it could never screen positive.");
+            throw new com.example.hms.exception.FieldBusinessException("positiveThreshold", "pro.instrument.thresholdTooHigh", definition.getPositiveThreshold(), maxScore);
         }
         Integer critical = definition.getCriticalItemNo();
         if (critical != null && !optionCounts.containsKey(critical)) {
-            throw new BusinessException("Critical item " + critical + " is not one of the instrument's items.");
+            throw new com.example.hms.exception.FieldBusinessException("criticalItemNo", "pro.instrument.criticalItemUnknown", critical);
         }
         Set<String> languages = new HashSet<>();
         for (ProInstrumentDefinitionDTO.Translation translation : definition.getTexts()) {

@@ -346,6 +346,6 @@ class BedBoardServiceImplTest {
 
         assertThatThrownBy(() -> service.getBoard())
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital is required");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("bed.r7.boardNeedsHospital"));
     }
 }

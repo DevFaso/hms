@@ -1,11 +1,6 @@
-import {
-  Component,
-  inject,
-  OnInit,
-  signal,
-  computed,
-  ChangeDetectionStrategy,
-} from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subject, Subscription, debounceTime, distinctUntilChanged } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -17,11 +12,26 @@ import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { AuditDescriptionService } from './audit-description.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../shared/date-utils';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+
+/** QA D794: how long the search box waits after the last keystroke before asking the server. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 @Component({
   selector: 'app-audit-logs',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
+  imports: [
+    DateTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RoleLabelPipe,
+  ],
   templateUrl: './audit-logs.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './audit-logs.scss',
@@ -30,8 +40,19 @@ export class AuditLogsComponent implements OnInit {
   private readonly auditService = inject(AuditLogService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly descriptions = inject(AuditDescriptionService);
 
   readonly pageSize = 20;
+
+  /** QA D330: the entity in the reader's language. */
+  entityLabel(entityType: string | null | undefined): string {
+    return this.descriptions.entityLabel(entityType);
+  }
+
+  /** QA D330 / D774 / D894: the description in the reader's language. */
+  describe(log: AuditEventLog): string {
+    return this.descriptions.describe(log);
+  }
 
   logs = signal<AuditEventLog[]>([]);
   eventTypes = signal<AuditEventTypeStatus[]>([]);
@@ -45,36 +66,43 @@ export class AuditLogsComponent implements OnInit {
   fromDate = '';
   toDate = '';
 
-  filtered = computed(() => {
-    let list = this.logs();
-    if (this.selectedEventType) {
-      list = list.filter((l) => l.eventType === this.selectedEventType);
-    }
-    const term = this.searchTerm.toLowerCase().trim();
-    if (term) {
-      list = list.filter(
-        (l) =>
-          (l.userName ?? '').toLowerCase().includes(term) ||
-          (l.eventDescription ?? '').toLowerCase().includes(term) ||
-          (l.entityType ?? '').toLowerCase().includes(term) ||
-          (l.resourceName ?? '').toLowerCase().includes(term),
-      );
-    }
-    return list;
-  });
+  /**
+   * QA D794: the search box and the event-type filter are applied by the
+   * server over every audit row the reader may see. They used to filter the
+   * 20 rows on screen, so a match on another page was never found.
+   */
+  private readonly searchChanges = new Subject<string>();
+  private loadSub?: Subscription;
+
+  constructor() {
+    this.searchChanges
+      .pipe(debounceTime(SEARCH_DEBOUNCE_MS), distinctUntilChanged(), takeUntilDestroyed())
+      .subscribe(() => {
+        this.currentPage.set(0);
+        this.load();
+      });
+  }
 
   ngOnInit(): void {
     this.load();
+    this.loadEventTypes();
   }
 
   load(): void {
     this.loading.set(true);
-    this.auditService
+    const search = this.searchTerm.trim();
+    // A newer query replaces an older one still in flight, so a slow page
+    // never overwrites the result of the latest search.
+    this.loadSub?.unsubscribe();
+    this.loadSub = this.auditService
       .list({
         page: this.currentPage(),
         size: this.pageSize,
-        fromDate: this.fromDate || undefined,
-        toDate: this.toDate || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        fromDate: this.fromDate ? toServerDateTime(this.fromDate) : undefined,
+        toDate: this.toDate ? toServerDateTime(this.toDate) : undefined,
+        eventType: this.selectedEventType || undefined,
+        search: search || undefined,
       })
       .subscribe({
         next: (res) => {
@@ -88,6 +116,9 @@ export class AuditLogsComponent implements OnInit {
           this.loading.set(false);
         },
       });
+  }
+
+  private loadEventTypes(): void {
     this.auditService.getEventTypeStatus().subscribe({
       next: (types) => this.eventTypes.set(Array.isArray(types) ? types : []),
       error: () => {
@@ -109,7 +140,12 @@ export class AuditLogsComponent implements OnInit {
   }
 
   onEventTypeChange(): void {
-    // event type filter stays client-side within the current page
+    this.currentPage.set(0);
+    this.load();
+  }
+
+  onSearchInput(): void {
+    this.searchChanges.next(this.searchTerm.trim());
   }
 
   prevPage(): void {

@@ -1,5 +1,8 @@
 package com.bitnesttechs.hms.patient.features.familyaccess
 
+import com.bitnesttechs.hms.patient.core.network.FailureText
+import com.bitnesttechs.hms.patient.core.network.AppText
+import com.bitnesttechs.hms.patient.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.core.models.GrantProxyRequest
@@ -42,7 +45,7 @@ class FamilyAccessViewModel @Inject constructor(
                     accessIHave = accessResp.body()?.data ?: emptyList()
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+                _uiState.value = _uiState.value.copy(isLoading = false, error = AppText.get(R.string.proxy_load_failed, FailureText.of(e)))
             }
         }
     }
@@ -52,13 +55,13 @@ class FamilyAccessViewModel @Inject constructor(
             try {
                 val resp = api.grantProxy(request)
                 if (resp.isSuccessful) {
-                    _uiState.value = _uiState.value.copy(actionResult = "Access granted successfully")
+                    _uiState.value = _uiState.value.copy(actionResult = AppText.get(R.string.proxy_granted_ok))
                     load()
                 } else {
-                    _uiState.value = _uiState.value.copy(actionResult = "Failed: ${resp.code()}")
+                    _uiState.value = _uiState.value.copy(actionResult = AppText.get(R.string.proxy_grant_failed, FailureText.http(resp.code())))
                 }
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(actionResult = "Error: ${e.message}")
+                _uiState.value = _uiState.value.copy(actionResult = AppText.get(R.string.proxy_grant_failed, FailureText.of(e)))
             }
         }
     }
@@ -68,13 +71,13 @@ class FamilyAccessViewModel @Inject constructor(
             try {
                 val resp = api.revokeProxy(proxyId)
                 if (resp.isSuccessful) {
-                    _uiState.value = _uiState.value.copy(actionResult = "Access revoked")
+                    _uiState.value = _uiState.value.copy(actionResult = AppText.get(R.string.proxy_revoked_ok))
                     load()
                 } else {
-                    _uiState.value = _uiState.value.copy(actionResult = "Revoke failed: ${resp.code()}")
+                    _uiState.value = _uiState.value.copy(actionResult = AppText.get(R.string.proxy_revoke_failed, FailureText.http(resp.code())))
                 }
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(actionResult = "Error: ${e.message}")
+                _uiState.value = _uiState.value.copy(actionResult = AppText.get(R.string.proxy_revoke_failed, FailureText.of(e)))
             }
         }
     }

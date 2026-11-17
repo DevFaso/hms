@@ -59,7 +59,9 @@ public class ChargebackReportController {
         @RequestParam(value = "to", required = false) String toRaw
     ) {
         if (!service.isEnabled()) {
-            return ResponseEntity.notFound().build();
+            // D248: off is a state, not a missing page — 204 and the panel
+            // shows how to enable it, instead of a 404 in the console.
+            return ResponseEntity.noContent().build();
         }
         Window window = parseWindow(fromRaw, toRaw);
         return ResponseEntity.ok(service.auditEventCountsPerTenant(window.from(), window.to()));
@@ -69,7 +71,7 @@ public class ChargebackReportController {
      * Row-44 follow-on endpoint: per-tenant chargeback rollup with
      * stable {@code hospitalId} key + configured cost-model amounts.
      * Same flag + window + window-cap contract as the foundation
-     * endpoint above. Returns {@code 404} when the flag is off so
+     * endpoint above. Returns {@code 204} when the flag is off so
      * the shape stays hidden until the operator has set the rates
      * on {@code TenantCostModelProperties}.
      */
@@ -80,7 +82,9 @@ public class ChargebackReportController {
         @RequestParam(value = "to", required = false) String toRaw
     ) {
         if (!service.isEnabled()) {
-            return ResponseEntity.notFound().build();
+            // D248: off is a state, not a missing page — 204 and the panel
+            // shows how to enable it, instead of a 404 in the console.
+            return ResponseEntity.noContent().build();
         }
         Window window = parseWindow(fromRaw, toRaw);
         return ResponseEntity.ok(service.chargebackPerTenant(window.from(), window.to()));

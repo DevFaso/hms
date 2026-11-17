@@ -6,13 +6,14 @@ import com.example.hms.payload.dto.PlatformOwnershipDTO;
 import com.example.hms.payload.dto.PlatformServiceMetadataDTO;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
 @Component
 public class InventoryIntegrationAdapter extends AbstractToggleableIntegrationAdapter {
 
-    public InventoryIntegrationAdapter(PlatformIntegrationProperties properties) {
-        super(properties);
+    public InventoryIntegrationAdapter(PlatformIntegrationProperties properties, MessageSource messageSource) {
+        super(properties, messageSource);
     }
 
     @Override
@@ -27,12 +28,12 @@ public class InventoryIntegrationAdapter extends AbstractToggleableIntegrationAd
 
     @Override
     protected String defaultDisplayName(Locale locale) {
-        return "Supply chain & formulary";
+        return text("platform.catalog.inventory.displayName", locale);
     }
 
     @Override
     protected String defaultDescription(Locale locale) {
-        return "Inventory bridge stub for implants, pharmacy stock and par-level monitoring.";
+        return text("platform.catalog.inventory.description", locale);
     }
 
     @Override
@@ -43,9 +44,9 @@ public class InventoryIntegrationAdapter extends AbstractToggleableIntegrationAd
     @Override
     protected List<String> defaultCapabilities(Locale locale) {
         return List.of(
-            "Requisition sync",
-            "Lot/expiration alerts",
-            "Par-level variance reports"
+            text("platform.catalog.inventory.capability.1", locale),
+            text("platform.catalog.inventory.capability.2", locale),
+            text("platform.catalog.inventory.capability.3", locale)
         );
     }
 
@@ -53,7 +54,7 @@ public class InventoryIntegrationAdapter extends AbstractToggleableIntegrationAd
     protected PlatformServiceMetadataDTO defaultMetadata(Locale locale) {
         return PlatformServiceMetadataDTO.builder()
             .inventorySystem("InventoryBridge Stub")
-            .integrationNotes("Disabled by default until site readiness review is complete.")
+            .integrationNotes(text("platform.catalog.inventory.integrationNotes", locale))
             .build();
     }
 
@@ -62,7 +63,7 @@ public class InventoryIntegrationAdapter extends AbstractToggleableIntegrationAd
         return PlatformOwnershipDTO.builder()
             .ownerTeam("Supply Chain Guild")
             .ownerContactEmail("inventory-ops@example.com")
-            .serviceLevel("Business hours")
+            .serviceLevel(text("platform.catalog.inventory.serviceLevel", locale))
             .build();
     }
 

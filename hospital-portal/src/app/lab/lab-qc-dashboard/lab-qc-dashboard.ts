@@ -16,7 +16,10 @@ import {
   LabValidationSummary,
 } from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
-import { currentLocale } from '../../shared/i18n/app-locale';
+import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { serverInstant } from '../../shared/date-utils';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 interface QcPoint {
   x: number;
@@ -53,7 +56,7 @@ interface QcChartGroup {
 @Component({
   selector: 'app-lab-qc-dashboard',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [MeasurePipe, ServerTimePipe, CommonModule, TranslateModule],
   templateUrl: './lab-qc-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-qc-dashboard.scss',
@@ -141,7 +144,9 @@ export class LabQcDashboardComponent implements OnInit {
     for (const level of levels) {
       const levelEvents = events
         .filter((e) => e.qcLevel === level)
-        .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+        .sort(
+          (a, b) => serverInstant(a.recordedAt).getTime() - serverInstant(b.recordedAt).getTime(),
+        );
 
       if (levelEvents.length === 0) continue;
 
@@ -208,18 +213,18 @@ export class LabQcDashboardComponent implements OnInit {
         const v = e.measuredValue;
         const dev = Math.abs(v - mean) / sd;
         const zone = this.classifyZone(dev);
-        const dateStr = new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
+        const dateStr = serverInstant(e.recordedAt).toLocaleDateString(currentLocale(), {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
         });
-        return { x: xToSvg(i), y: yToSvg(v), zone, title: `${dateStr} | ${v.toFixed(3)}` };
+        return { x: xToSvg(i), y: yToSvg(v), zone, title: `${dateStr} | ${formatDecimal(v, 3)}` };
       });
 
       const polyline = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 
       const prec = this.sdPrecision(sd);
-      const f = (v: number) => v.toFixed(prec);
+      const f = (v: number) => formatDecimal(v, prec);
       const yAxisLabels = [
         { y: p3sY, label: `+3s (${f(mean + 3 * sd)})` },
         { y: p2sY, label: `+2s` },
@@ -232,7 +237,7 @@ export class LabQcDashboardComponent implements OnInit {
 
       const xAxisLabels: { x: number; label: string }[] = [];
       const fmtDate = (e: LabQcEvent) =>
-        new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
+        serverInstant(e.recordedAt).toLocaleDateString(currentLocale(), {
           month: 'short',
           day: 'numeric',
         });

@@ -43,9 +43,11 @@ describe('PatientChartComponent — restricted rows', () => {
       'listChartUpdates',
     ]);
     patientService.getDoctorTimeline.and.returnValue(of(tl));
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
 
     TestBed.configureTestingModule({
       imports: [PatientChartComponent, TranslateModule.forRoot()],
@@ -129,9 +131,11 @@ describe('PatientChartComponent — restricted rows', () => {
     component.ngOnChanges({ refreshToken: new SimpleChange(0, 1, false) });
 
     expect(patientService.getDoctorTimeline).toHaveBeenCalledTimes(2);
+    // QA D1380: the reload reads the first page again (the page index is now sent).
     expect(patientService.getDoctorTimeline.calls.mostRecent().args).toEqual([
       'p-1',
       'Urgence vitale',
+      0,
     ]);
   });
 

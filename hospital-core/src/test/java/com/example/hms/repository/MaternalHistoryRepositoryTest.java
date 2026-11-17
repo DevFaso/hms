@@ -300,6 +300,30 @@ class MaternalHistoryRepositoryTest {
         assertThat(results.getContent().get(0).getDataComplete()).isTrue();
     }
 
+    /**
+     * QA D770, the exact scenario: records badged "En attente de revue" with
+     * dataComplete false were missing from pending-review, which came back empty.
+     */
+    @Test
+    void findPendingReviewByHospital_includesIncompleteUnreviewedRecords() {
+        MaternalHistory incomplete = MaternalHistory.builder()
+                .patient(patient)
+                .hospital(hospital)
+                .recordedBy(staff)
+                .recordedDate(LocalDateTime.now())
+                .versionNumber(4)
+                .dataComplete(false)
+                .reviewedByProvider(false)
+                .build();
+        entityManager.persistAndFlush(incomplete);
+
+        Page<MaternalHistory> results = maternalHistoryRepository
+                .findPendingReviewByHospital(hospital.getId(), PageRequest.of(0, 10));
+
+        assertThat(results.getContent()).extracting(MaternalHistory::getId).contains(incomplete.getId());
+        assertThat(results.getContent()).allMatch(mh -> !Boolean.TRUE.equals(mh.getReviewedByProvider()));
+    }
+
     @Test
     void findRequiringSpecialistReferral_shouldReturnCasesNeedingReferral() {
         maternalHistory2.setRequiresSpecialistReferral(true);

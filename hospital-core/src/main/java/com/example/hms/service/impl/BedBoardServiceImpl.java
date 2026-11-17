@@ -328,7 +328,7 @@ public class BedBoardServiceImpl implements BedBoardService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             throw new BusinessException(
-                "An active hospital is required: a bed board belongs to a building.");
+                "bed.r7.boardNeedsHospital");
         }
         return hospitalId;
     }

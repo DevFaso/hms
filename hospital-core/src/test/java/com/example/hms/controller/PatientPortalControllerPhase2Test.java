@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.model.Notification;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
@@ -14,11 +15,18 @@ import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.pro.ProInstrumentViewDTO;
 import com.example.hms.payload.dto.pro.ProResponseCreateDTO;
 import com.example.hms.payload.dto.pro.ProSelfReportDTO;
+import com.example.hms.repository.NotificationPreferenceRepository;
+import com.example.hms.repository.NotificationRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.security.provider.ProviderCallerResolver;
+import com.example.hms.service.NotificationService.ReadOutcome;
 import com.example.hms.service.NotificationService;
+import com.example.hms.service.NotificationServiceImpl;
 import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
 import com.example.hms.service.pharmacy.PharmacyClaimService;
 import com.example.hms.service.pharmacy.PharmacyPaymentService;
+import org.springframework.beans.factory.ObjectProvider;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,8 +55,10 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -104,10 +114,16 @@ class PatientPortalControllerPhase2Test {
         public PharmacyClaimService pharmacyClaimService() {
             return mock(PharmacyClaimService.class);
         }
+
+        @Bean
+        public com.example.hms.service.pharmacy.PrescriptionCopyPdfService prescriptionCopyPdfService() {
+            return mock(com.example.hms.service.pharmacy.PrescriptionCopyPdfService.class);
+        }
     }
 
     @Autowired private MockMvc mockMvc;
     @Autowired private PatientPortalService portalService;
+    @Autowired private com.example.hms.service.pharmacy.PrescriptionCopyPdfService prescriptionCopyPdfService;
 
     private ObjectMapper objectMapper;
     private Authentication auth;
@@ -120,6 +136,27 @@ class PatientPortalControllerPhase2Test {
         auth = new UsernamePasswordAuthenticationToken(
                 "patient.jane", "password",
                 List.of(new SimpleGrantedAuthority("ROLE_PATIENT")));
+    }
+
+    @Test
+    @DisplayName("QA D966: the patient downloads the printed copy of their own prescription, as a PDF")
+    void printedCopyIsServedForTheCallersOwnPatient() throws Exception {
+        UUID patientId = UUID.randomUUID();
+        UUID prescriptionId = UUID.randomUUID();
+        byte[] pdf = "%PDF-1.4 copy".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        when(portalService.resolvePatientId(any(Authentication.class))).thenReturn(patientId);
+        when(prescriptionCopyPdfService.copyForPatient(prescriptionId, patientId)).thenReturn(pdf);
+
+        mockMvc.perform(get("/me/patient/prescriptions/" + prescriptionId + "/printed-copy").principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(pdf))
+            // QA D1443: a readable name, with no database id.
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(
+                org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                org.hamcrest.Matchers.allOf(org.hamcrest.Matchers.containsString("ordonnance.pdf"),
+                    org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(prescriptionId.toString())))));
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -267,6 +304,26 @@ class PatientPortalControllerPhase2Test {
     // ══════════════════════════════════════════════════════════════════════
 
     @Nested
+    @DisplayName("GET /me/patient/vitals/history (QA D1379)")
+    class MyVitalsHistory {
+
+        @Test
+        @DisplayName("answers one page of the history with the total of every record")
+        void pagesTheHistoryWithTheTotal() throws Exception {
+            com.example.hms.payload.dto.PatientVitalSignResponseDTO record =
+                com.example.hms.payload.dto.PatientVitalSignResponseDTO.builder().id(UUID.randomUUID()).build();
+            when(portalService.getMyVitalsPage(any(Authentication.class), eq(2), eq(10)))
+                .thenReturn(new PageImpl<>(List.of(record), org.springframework.data.domain.PageRequest.of(2, 10), 45));
+
+            mockMvc.perform(get("/me/patient/vitals/history").param("page", "2").param("size", "10").principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(45))
+                .andExpect(jsonPath("$.data.number").value(2))
+                .andExpect(jsonPath("$.data.content", hasSize(1)));
+        }
+    }
+
+    @Nested
     @DisplayName("POST /me/patient/refills")
     class RequestMedicationRefill {
 
@@ -376,6 +433,104 @@ class PatientPortalControllerPhase2Test {
     // ══════════════════════════════════════════════════════════════════════
     // After-Visit Summaries
     // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("GET /me/patient/notifications in the reader's language (QA D665)")
+    class NotificationsInTheReaderLanguage {
+
+        @Autowired private NotificationService notificationService;
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "Accept-Language {0}")
+        @org.junit.jupiter.params.provider.CsvSource({"fr", "es", "en"})
+        @DisplayName("a patient notification written once is read in fr, es and en")
+        void patientReadsInTheirLanguage(String language) throws Exception {
+            org.springframework.context.MessageSource messages = com.example.hms.i18n.TestMessageSources.bundles();
+            NotificationRepository repository = mock(NotificationRepository.class);
+            when(repository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            @SuppressWarnings("unchecked")
+            ObjectProvider<ProviderCallerResolver> noResolver = mock(ObjectProvider.class);
+            NotificationService real = new NotificationServiceImpl(repository,
+                mock(NotificationWebSocketController.class), mock(NotificationPreferenceRepository.class),
+                mock(UserRepository.class), noResolver,
+                new com.example.hms.service.i18n.NotificationLocalizer(messages));
+            Notification row = real.createNotification("breakGlass.patient.optOutOverridden",
+                new Object[]{"Hôpital B"}, "patient.jane", "BREAK_GLASS_OPT_OUT_OVERRIDE");
+            when(notificationService.getNotificationsForUser(eq("patient.jane"), any(), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(row),
+                    org.springframework.data.domain.PageRequest.of(0, 20), 1));
+            when(notificationService.localize(any(), any()))
+                .thenAnswer(invocation -> real.localize(invocation.getArgument(0), invocation.getArgument(1)));
+            Locale locale = Locale.of(language);
+
+            mockMvc.perform(get("/me/patient/notifications").header("Accept-Language", language).principal(auth))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.content[0].message").value(messages.getMessage(
+                        "breakGlass.patient.optOutOverridden", new Object[]{"Hôpital B"}, locale)));
+            assertThat(row.getMessage()).isEqualTo(messages.getMessage(
+                "breakGlass.patient.optOutOverridden", new Object[]{"Hôpital B"}, Locale.FRENCH));
+        }
+    }
+
+    @Nested
+    @DisplayName("PUT /me/patient/notifications/{notificationId}/read")
+    class MarkNotificationRead {
+
+        @Autowired private NotificationService notificationService;
+
+        @Test
+        @DisplayName("the caller's own notification: 200")
+        void ownNotificationIsMarked() throws Exception {
+            UUID id = UUID.randomUUID();
+            when(notificationService.markAsRead(eq(id), any(), eq(false))).thenReturn(ReadOutcome.MARKED);
+
+            mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", id).principal(auth))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("someone else's or an unknown notification: the same 404")
+        void foreignOrUnknownNotificationIsNotFound() throws Exception {
+            UUID foreign = UUID.randomUUID();
+            UUID unknown = UUID.randomUUID();
+            when(notificationService.markAsRead(eq(foreign), any(), eq(false))).thenReturn(ReadOutcome.NOT_FOUND);
+            when(notificationService.markAsRead(eq(unknown), any(), eq(false))).thenReturn(ReadOutcome.NOT_FOUND);
+
+            String asForeign = mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", foreign)
+                            .principal(auth))
+                    .andExpect(status().isNotFound())
+                    .andReturn().getResponse().getContentAsString();
+            String asUnknown = mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", unknown)
+                            .principal(auth))
+                    .andExpect(status().isNotFound())
+                    .andReturn().getResponse().getContentAsString();
+            assertThat(normalise(asForeign, foreign))
+                .isEqualTo(normalise(asUnknown, unknown));
+        }
+
+        @Test
+        @DisplayName("a broadcast (no recipient): 200 as always, and left unread (its one flag is everyone's)")
+        void broadcastIsNotMarked() throws Exception {
+            UUID id = UUID.randomUUID();
+            NotificationRepository repository = mock(NotificationRepository.class);
+            Notification broadcast = Notification.builder().id(id).message("announcement").read(false).build();
+            when(repository.findById(id)).thenReturn(Optional.of(broadcast));
+            @SuppressWarnings("unchecked")
+            ObjectProvider<ProviderCallerResolver> noResolver = mock(ObjectProvider.class);
+            NotificationService real = new NotificationServiceImpl(repository,
+                mock(NotificationWebSocketController.class), mock(NotificationPreferenceRepository.class),
+                mock(UserRepository.class), noResolver, new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles()));
+            when(notificationService.markAsRead(eq(id), any(), eq(false)))
+                .thenAnswer(invocation -> real.markAsRead(id, invocation.getArgument(1), invocation.getArgument(2)));
+
+            mockMvc.perform(put("/me/patient/notifications/{notificationId}/read", id).principal(auth))
+                    .andExpect(status().isOk());
+            assertThat(broadcast.isRead()).isFalse();
+        }
+
+        private String normalise(String body, UUID id) {
+            return body.replace(id.toString(), "<id>").replaceAll("\"timestamp\":\"[^\"]*\"", "");
+        }
+    }
 
     @Nested
     @DisplayName("GET /me/patient/after-visit-summaries")
@@ -591,7 +746,7 @@ class PatientPortalControllerPhase2Test {
             UUID hospitalId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
             Map<String, Object> dept = Map.of("id", deptId, "name", "Cardiology");
-            when(portalService.getDepartmentsForHospital(hospitalId))
+            when(portalService.getDepartmentsForHospital(any(), eq(hospitalId)))
                     .thenReturn(List.of(dept));
 
             mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId + "/departments")
@@ -622,7 +777,7 @@ class PatientPortalControllerPhase2Test {
                     "fullName", "Jane Doe",
                     "role", "Doctor"
             );
-            when(portalService.getProvidersForDepartment(hospitalId, deptId))
+            when(portalService.getProvidersForDepartment(any(), eq(hospitalId), eq(deptId)))
                     .thenReturn(List.of(provider));
 
             mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId
@@ -639,7 +794,7 @@ class PatientPortalControllerPhase2Test {
         void getProviders_empty() throws Exception {
             UUID hospitalId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
-            when(portalService.getProvidersForDepartment(hospitalId, deptId))
+            when(portalService.getProvidersForDepartment(any(), eq(hospitalId), eq(deptId)))
                     .thenReturn(List.of());
 
             mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId
@@ -718,5 +873,75 @@ class PatientPortalControllerPhase2Test {
                             .principal(auth))
                     .andExpect(status().isBadRequest());
         }
+    }
+
+    // QA D128: a bad document date or type is a 400 that never names a Java class.
+    @Nested
+    @DisplayName("POST /me/patient/documents — bad input")
+    class DocumentUploadValidation {
+
+        private org.springframework.mock.web.MockMultipartFile file() {
+            return new org.springframework.mock.web.MockMultipartFile("file", "scan.pdf", "application/pdf", new byte[] {1});
+        }
+
+        @Test
+        void badCollectionDateIs400() throws Exception {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .multipart("/me/patient/documents")
+                            .file(file())
+                            .file(new org.springframework.mock.web.MockMultipartFile("documentType", "", "text/plain",
+                                    "LAB_RESULT".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                            .param("collectionDate", "31/02/2026")
+                            .principal(auth))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void unknownDocumentTypeIs400WithoutTheEnumClass() throws Exception {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .multipart("/me/patient/documents")
+                            .file(file())
+                            .file(new org.springframework.mock.web.MockMultipartFile("documentType", "", "text/plain",
+                                    "NOPE".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                            .principal(auth))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(
+                            org.hamcrest.Matchers.containsString("com.example"))));
+        }
+    }
+
+    /** QA D1399: the pages and totals of the lists that used to stop at their default limit. */
+    @Test
+    @DisplayName("GET /medications/page answers the server's total")
+    void d1399_myMedicationsPage() throws Exception {
+        when(portalService.getMyMedicationsPage(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(
+                com.example.hms.payload.dto.medication.PatientMedicationResponseDTO.builder()
+                    .medicationName("Paracétamol").asNeeded(true).prnMinIntervalHours(6).build()),
+                org.springframework.data.domain.PageRequest.of(0, 20), 249));
+
+        mockMvc.perform(get("/me/patient/medications/page").param("page", "0").param("size", "20").principal(auth))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(249))
+            .andExpect(jsonPath("$.data.content[0].asNeeded").value(true))
+            .andExpect(jsonPath("$.data.content[0].prnMinIntervalHours").value(6));
+    }
+
+    @Test
+    @DisplayName("GET /proxy-access/{id}/medications/page and the lab counts answer the server's total")
+    void d1399_proxyMedicationsPageAndLabCounts() throws Exception {
+        java.util.UUID grantor = java.util.UUID.randomUUID();
+        when(portalService.getProxyMedicationsPage(any(), eq(grantor), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(),
+                org.springframework.data.domain.PageRequest.of(0, 20), 340));
+        when(portalService.countProxyLabResults(any(), eq(grantor))).thenReturn(121L);
+        when(portalService.countMyLabResults(any())).thenReturn(7L);
+
+        mockMvc.perform(get("/me/patient/proxy-access/" + grantor + "/medications/page").principal(auth))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(340));
+        mockMvc.perform(get("/me/patient/proxy-access/" + grantor + "/lab-results/count").principal(auth))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data").value(121));
+        mockMvc.perform(get("/me/patient/lab-results/count").principal(auth))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data").value(7));
     }
 }

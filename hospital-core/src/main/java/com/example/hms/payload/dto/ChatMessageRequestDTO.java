@@ -40,4 +40,26 @@ public class ChatMessageRequestDTO {
      * persists them under the new message. Capped at 4 by the service.
      */
     private List<ChatAttachmentDTO> attachments;
+
+    /**
+     * QA D1349 (round 30): the service's two rules (a recipient; content or
+     * attachments), checked at the edge too, so both are named in one answer
+     * with any malformed value of the body.
+     */
+    @jakarta.validation.constraints.AssertTrue(message = "{chat.recipient.required}")
+    @com.example.hms.validation.ReportedOn("recipientId")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @io.swagger.v3.oas.annotations.Hidden
+    public boolean isRecipientNamed() {
+        return recipientId != null || (recipientEmail != null && !recipientEmail.isBlank());
+    }
+
+    /** See {@link #isRecipientNamed()}. */
+    @jakarta.validation.constraints.AssertTrue(message = "{chat.message.empty}")
+    @com.example.hms.validation.ReportedOn("content")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @io.swagger.v3.oas.annotations.Hidden
+    public boolean isContentOrAttachmentGiven() {
+        return (content != null && !content.isBlank()) || (attachments != null && !attachments.isEmpty());
+    }
 }

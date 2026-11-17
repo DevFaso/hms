@@ -1,3 +1,4 @@
+@use './operations-workspace' as operations;
 @use '../shared/styles/page-common';
 
 .header-actions {
@@ -117,3 +118,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.pharmacy-empty-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #5b6472);
+}
+
+@include operations.workspace;

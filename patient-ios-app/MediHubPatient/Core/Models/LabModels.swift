@@ -82,10 +82,48 @@ struct LabResultDTO: Codable, Identifiable {
         // `statusOf(null)`. Under-reassuring is the safe direction, and
         // exposing the flag is reported as backend debt rather than guessed
         // at from this side.
-        guard !(referenceRange ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        let range = (referenceRange ?? "").trimmingCharacters(in: .whitespaces)
+        guard !range.isEmpty else { return false }
         guard let raw = value?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return false }
         return Double(raw) != nil
     }
+
+
+    /// The reference range to put in front of the patient.
+    ///
+    /// Shown as the backend sends it. **The app cannot tell whether it is the
+    /// range this result was graded against**, and an earlier version of this
+    /// file tried to: it compared the unit trailing the formatted range with
+    /// the row's own, withheld the green tick when they differed, and caveated
+    /// the limits. That was removed rather than patched further, after three
+    /// review rounds, because two server-side facts make it unfixable from
+    /// here:
+    ///
+    ///  * `PatientLabResultServiceImpl.formatReferenceRange` always formats
+    ///    `ranges[0]`, and when `ranges[0]` carries no unit it stamps the
+    ///    RESULT's unit onto its numbers — so the very case the check was
+    ///    written for (a unitless `ranges[0]` beside a `mmol/L` `ranges[1]`,
+    ///    resulted in mmol/L) reads as agreeing, and the check passes;
+    ///  * `LabResultMapper.findMatchingRange` falls back to `ranges[0]` when
+    ///    nothing matches, and `ranges[0]` is what is displayed — so on the
+    ///    ordinary single-range test the range shown IS the graded one
+    ///    whatever the units say, and every notational pair (`U/L` vs `IU/L`,
+    ///    `cells/mm3` vs `/mm3`, `mm/h` vs `mm/hr`, `K/uL` vs `10^3/uL`) cost
+    ///    a healthy patient their "Within normal range" line for nothing.
+    ///
+    /// A caveat that mostly fires on correct data teaches people to ignore
+    /// caveats, including the one that matters. The fix is for the DTO to name
+    /// the range that was graded against, or to serve `abnormalFlag`; that is
+    /// filed as backend debt. Do not reintroduce a client-side unit comparison
+    /// without one of those.
+    var displayReferenceRange: String? {
+        guard !isPending,
+              let range = referenceRange,
+              !range.trimmingCharacters(in: .whitespaces).isEmpty
+        else { return nil }
+        return range
+    }
+
 
     /// What the badge shows: a pending row never borrows a grading.
     var displayStatus: LabResultStatus { isPending ? .pending : statusEnum }

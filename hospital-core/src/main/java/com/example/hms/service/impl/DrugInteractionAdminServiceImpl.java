@@ -1,7 +1,6 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.enums.InteractionSeverity;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.DrugInteractionMapper;
 import com.example.hms.model.medication.DrugInteraction;
@@ -20,8 +19,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminService {
+    private static final String DRUG_INTERACTION_NOT_FOUND_KEY = "drugInteraction.notFound";
 
-    private static final String MSG_NOT_FOUND = "Drug interaction not found with ID: ";
+
 
     private final DrugInteractionRepository repository;
     private final DrugInteractionMapper mapper;
@@ -59,7 +59,7 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
         // as a new row would leave two rows for one pair.
         repository.findAnyInteractionBetween(request.getDrug1Code(), request.getDrug2Code())
             .ifPresent(existing -> {
-                throw new BusinessException(existing.isActive()
+                throw new com.example.hms.exception.FieldBusinessException("drug1Code", existing.isActive()
                     ? "An interaction between these two drugs already exists; update it instead."
                     : "An interaction between these two drugs exists but was retired; "
                         + "reactivate it instead of re-creating it.");
@@ -76,7 +76,7 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
     public DrugInteractionDTO update(UUID id, DrugInteractionDTO request) {
         validate(request);
         DrugInteraction entity = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND + id));
+            .orElseThrow(() -> new ResourceNotFoundException(DRUG_INTERACTION_NOT_FOUND_KEY, id));
         apply(entity, request);
         return mapper.toDTO(repository.save(entity));
     }
@@ -85,7 +85,7 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
     @Transactional
     public DrugInteractionDTO deactivate(UUID id) {
         DrugInteraction entity = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND + id));
+            .orElseThrow(() -> new ResourceNotFoundException(DRUG_INTERACTION_NOT_FOUND_KEY, id));
         entity.setActive(false);
         return mapper.toDTO(repository.save(entity));
     }
@@ -94,27 +94,24 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
     @Transactional
     public DrugInteractionDTO reactivate(UUID id) {
         DrugInteraction entity = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND + id));
+            .orElseThrow(() -> new ResourceNotFoundException(DRUG_INTERACTION_NOT_FOUND_KEY, id));
         entity.setActive(true);
         return mapper.toDTO(repository.save(entity));
     }
 
     private void validate(DrugInteractionDTO request) {
-        if (request.getDrug1Code() == null || request.getDrug1Code().isBlank()
-            || request.getDrug2Code() == null || request.getDrug2Code().isBlank()) {
-            throw new BusinessException("Both drug codes are required.");
-        }
-        if (request.getDrug1Code().equalsIgnoreCase(request.getDrug2Code())) {
-            throw new BusinessException("An interaction needs two different drugs.");
-        }
-        if (request.getSeverity() == null) {
-            throw new BusinessException("Severity is required.");
-        }
-        if (request.getRecommendation() == null || request.getRecommendation().isBlank()) {
+        // QA round 29 sweep: every missing value named at once, in the reader's
+        // language (they were English sentences, one per request).
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(request.getDrug1Code(), "drug1Code", "drugInteraction.drug1Required")
+            .requireValue(request.getDrug2Code(), "drug2Code", "drugInteraction.drug2Required")
+            .requireValue(request.getSeverity(), "severity", "drugInteraction.severityRequired")
             // An alert that says "these interact" and nothing else is the kind
             // clinicians learn to dismiss without reading.
-            throw new BusinessException(
-                "A recommendation is required — an alert with no action is an alert that gets ignored.");
+            .requireValue(request.getRecommendation(), "recommendation", "drugInteraction.recommendationRequired")
+            .orThrow();
+        if (request.getDrug1Code().equalsIgnoreCase(request.getDrug2Code())) {
+            throw new com.example.hms.exception.FieldBusinessException("drug2Code", "drugInteraction.sameDrug");
         }
     }
 

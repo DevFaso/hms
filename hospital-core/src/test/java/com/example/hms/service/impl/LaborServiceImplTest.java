@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.DeliveryMode;
@@ -40,7 +41,6 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.service.NotificationService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -57,8 +57,12 @@ import java.util.Map;
 import java.util.Set;
 import com.example.hms.i18n.TestMessageSources;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LaborServiceImplTest {
+
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     @Mock private LaborEpisodeRepository episodeRepository;
     @Mock private LaborPartographEntryRepository entryRepository;
@@ -69,9 +73,20 @@ class LaborServiceImplTest {
     @Mock private MaternalHistoryRepository maternalHistoryRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRepository userRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
+    @Mock private com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
+    @Mock private com.example.hms.service.DeliveryChargeService deliveryChargeService;
+    @Mock private com.example.hms.service.AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private jakarta.persistence.EntityManager entityManager;
+    @Mock private com.example.hms.service.maternity.NewbornRegistrationService newbornRegistration;
+    @Mock private com.example.hms.service.maternity.FetalDeathEventService fetalDeathEvents;
+    @Mock private com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
+    @Mock private com.example.hms.repository.NewbornAssessmentRepository newbornAssessmentRepository;
+    @Mock private com.example.hms.repository.ObstetricAlertEscalationRepository escalationRepository;
 
     private LaborServiceImpl service;
 
@@ -88,10 +103,14 @@ class LaborServiceImplTest {
     void setUp() {
         service = new LaborServiceImpl(
             episodeRepository, entryRepository, deliveryRecordRepository,
-            patientRepository, hospitalRepository, registrationRepository,
+            patientRepository, patientRegistrationGuard, hospitalRepository, registrationRepository,
             maternalHistoryRepository, staffRepository, userRepository,
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
-            TestMessageSources.bundles());
+            TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService,
+            obstetricAlertEscalation, new com.example.hms.mapper.MaternalHistoryMapper(), auditEventLogService,
+            roleValidator, entityManager, newbornRegistration, fetalDeathEvents,
+            new com.example.hms.service.maternity.StillbornNeonatalAlerts(deliveryNewbornRepository,
+                newbornAssessmentRepository, escalationRepository));
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -125,37 +144,289 @@ class LaborServiceImplTest {
             .thenAnswer(inv -> inv.getArgument(0));
         lenient().when(episodeRepository.save(any(LaborEpisode.class)))
             .thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(episodeRepository.saveAndFlush(any(LaborEpisode.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
+        // The committed status a transition reads after the patient lock.
+        lenient().when(episodeRepository.findStatusById(any())).thenReturn(Optional.of(LaborStatus.ACTIVE));
         lenient().when(deliveryRecordRepository.save(any(DeliveryRecord.class)))
             .thenAnswer(inv -> inv.getArgument(0));
+        // QA D796: a booked pregnancy (no dating) is on record unless a test
+        // says otherwise; an unbooked labour needs an estimated gestational age.
+        lenient().when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(any(), any()))
+            .thenReturn(Optional.of(new MaternalHistory()));
+        lenient().when(maternalHistoryRepository.save(any(MaternalHistory.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
+        // Cross-hospital reads default OFF: the caller reads her acting hospital only.
+        lenient().when(recordAccessPolicy.readableHospitalIds(any(), any(), any()))
+            .thenAnswer(inv -> inv.getArgument(2) == null ? java.util.Set.of() : java.util.Set.of(inv.<UUID>getArgument(2)));
     }
 
     private PartographEntryRequestDTO entryRequest() {
         PartographEntryRequestDTO request = new PartographEntryRequestDTO();
         request.setHospitalId(hospitalId);
         request.setObservationTime(LocalDateTime.now());
+        request.setFetalHeartRateBpm(140); // QA D1151: an entry charts an observation
         return request;
+    }
+
+    @Test
+    void partographLosingATransferRaceCannotWriteTheClosedEpisode() {
+        when(episodeRepository.findStatusById(episodeId)).thenReturn(Optional.of(LaborStatus.TRANSFERRED_OUT));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setCervicalDilationCm(4);
+
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("maternity.partograph.laborNotActive");
+
+        var ordered = org.mockito.Mockito.inOrder(patientRepository, entityManager, episodeRepository);
+        ordered.verify(patientRepository).lockByIdUnscoped(patientId);
+        ordered.verify(entityManager).refresh(episode);
+        ordered.verify(episodeRepository).findStatusById(episodeId);
+        verify(episodeRepository, never()).save(any());
+        verify(entryRepository, never()).save(any());
+    }
+
+    @Test
+    void transferCopiesTheAnchorCommittedWhileWaitingForThePatientLock() {
+        UUID destinationId = UUID.randomUUID();
+        transferable(destinationInSameOrganisation(destinationId));
+        when(roleValidator.isMidwife(recorderUserId, hospitalId)).thenReturn(true);
+        LocalDateTime anchor = LocalDateTime.now().minusHours(2);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            episode.setActivePhaseStartAt(anchor);
+            return null;
+        }).when(entityManager).refresh(episode);
+
+        service.transferEpisode(patientId, episodeId, recorderUserId, transferTo(destinationId));
+
+        ArgumentCaptor<LaborEpisode> saved = ArgumentCaptor.forClass(LaborEpisode.class);
+        verify(episodeRepository).save(saved.capture());
+        assertThat(saved.getValue().getActivePhaseStartAt()).isEqualTo(anchor);
     }
 
     /* ── Episodes ─────────────────────────────────────────────────────── */
 
     @Test
+    void startEpisodeRefusesAPatientRecordedAsMale() {
+        // QA D46: a labour episode was accepted for a MALE patient.
+        patient.setGender("MALE");
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class);
+        verify(episodeRepository, never())
+            .save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void startEpisodeRefusesAnEpisodeWithNoOnsetTime_D295() {
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.onset.required");
+        verify(episodeRepository, never()).save(org.mockito.ArgumentMatchers.any());
+
+        try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            assertThat(factory.getValidator().validate(request))
+                .extracting(v -> v.getPropertyPath().toString())
+                .containsExactly("laborOnsetAt");
+        }
+    }
+
+    @Test
+    void startEpisodeRefusesAFutureOnsetTime_D295() {
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(java.time.LocalDateTime.now().plusHours(3)).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.onset.future");
+    }
+
+    @Test
     void startEpisodeRejectsSecondActiveEpisode() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
             .thenReturn(true);
 
-        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
 
         assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("active labor episode");
     }
 
+    /** QA D1631: one woman, one active labour, whichever hospital opened it. */
+    @Test
+    void startEpisodeRefusesWhileSheIsInLabourAtAnotherHospital() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName("Hôpital B");
+        when(recordAccessPolicy.readableHospitalIds(recorderUserId, patientId, hospitalId))
+            .thenReturn(Set.of(hospitalId, other.getId()));
+        LaborEpisode atB = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.ACTIVE)
+            .admittedAt(LocalDateTime.now().minusHours(3)).build();
+        atB.setId(UUID.randomUUID());
+        when(episodeRepository.findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(patientId, LaborStatus.ACTIVE))
+            .thenReturn(Optional.of(atB));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).gestationalAgeWeeks(39).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("maternity.labor.alreadyActiveElsewhere"))
+            .satisfies(e -> assertThat(((BusinessException) e).getArgs()).containsExactly("Hôpital B"));
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType())
+            .isEqualTo(com.example.hms.enums.AuditEventType.LABOR_EPISODE_START_REFUSED);
+        assertThat(audit.getValue().getPatientId()).isEqualTo(patientId);
+        assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(recorderUserId), isNull(),
+            eq(Map.of(other.getId().toString(), 1L)), anyString());
+        // The global active check must happen after the shared patient lock, even
+        // when this hospital has no episode row that could itself be locked.
+        var ordered = org.mockito.Mockito.inOrder(patientRegistrationGuard, patientRepository, episodeRepository);
+        ordered.verify(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
+        ordered.verify(patientRepository).lockByIdUnscoped(patientId);
+        ordered.verify(episodeRepository).existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE);
+        ordered.verify(episodeRepository).findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(patientId, LaborStatus.ACTIVE);
+        verify(episodeRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void startEpisodeDoesNotDiscloseAnUnreadableSource() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName("Protected hospital");
+        LaborEpisode foreign = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.ACTIVE).build();
+        foreign.setId(UUID.randomUUID());
+        when(episodeRepository.findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(patientId, LaborStatus.ACTIVE))
+            .thenReturn(Optional.of(foreign));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> {
+                BusinessException refusal = (BusinessException) e;
+                assertThat(refusal.getMessageKey()).isEqualTo("maternity.labor.coordinationRequired");
+                assertThat(refusal.getArgs()).isEmpty();
+            });
+        var audit = ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getResourceId()).isNull();
+        assertThat(audit.getValue().getDetails()).isEqualTo(Map.of());
+        verifyNoInteractions(reachRecorder);
+        verify(episodeRepository, never()).save(any());
+    }
+
+    /** QA D1631: the partograph of an episode the list shows from a readable hospital is readable too. */
+    @Test
+    void getEntriesReadsAForeignEpisodeTheListShows() {
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        LaborEpisode atB = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.ACTIVE)
+            .admittedAt(LocalDateTime.now().minusHours(3)).build();
+        UUID foreignId = UUID.randomUUID();
+        atB.setId(foreignId);
+        when(episodeRepository.findByIdAndHospital_Id(foreignId, hospitalId)).thenReturn(Optional.empty());
+        when(episodeRepository.findById(foreignId)).thenReturn(Optional.of(atB));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(entryRepository.findByEpisode_IdOrderByObservationTimeAsc(foreignId)).thenReturn(List.of());
+
+        assertThat(service.getEntries(patientId, foreignId, hospitalId)).isEmpty();
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void getDeliveryReadsOnlyAnAuthorizedForeignEpisode() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        LaborEpisode foreign = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.DELIVERED).build();
+        UUID foreignId = UUID.randomUUID();
+        foreign.setId(foreignId);
+        when(episodeRepository.findById(foreignId)).thenReturn(Optional.of(foreign));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, other.getId()));
+        DeliveryRecord delivery = DeliveryRecord.builder().episode(foreign).patient(patient).build();
+        delivery.setId(UUID.randomUUID());
+        when(deliveryRecordRepository.findByEpisode_Id(foreignId)).thenReturn(Optional.of(delivery));
+
+        assertThat(service.getDelivery(patientId, foreignId, hospitalId).getId()).isEqualTo(delivery.getId());
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(other.getId().toString(), 1L)), anyString());
+    }
+
+    @Test
+    void foreignEpisodeOfAnotherPatientIsNotReadableEvenAtAReadableHospital() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        Patient otherPatient = new Patient();
+        otherPatient.setId(UUID.randomUUID());
+        LaborEpisode foreign = LaborEpisode.builder().patient(otherPatient).hospital(other)
+            .status(LaborStatus.DELIVERED).build();
+        UUID foreignId = UUID.randomUUID();
+        foreign.setId(foreignId);
+        when(episodeRepository.findById(foreignId)).thenReturn(Optional.of(foreign));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, other.getId()));
+
+        assertThatThrownBy(() -> service.getEntries(patientId, foreignId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getDelivery(patientId, foreignId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(reachRecorder, entryRepository, deliveryRecordRepository);
+    }
+
+    @Test
+    void getDeliveryDoesNotReadOrAccountAnUnreadableForeignEpisode() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        LaborEpisode foreign = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.DELIVERED).build();
+        UUID foreignId = UUID.randomUUID();
+        foreign.setId(foreignId);
+        when(episodeRepository.findById(foreignId)).thenReturn(Optional.of(foreign));
+
+        assertThatThrownBy(() -> service.getDelivery(patientId, foreignId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(deliveryRecordRepository, reachRecorder);
+    }
+
+    @Test
+    void getEntriesOfAnUnreadableForeignEpisodeIsNotFound() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        LaborEpisode atB = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.ACTIVE).build();
+        UUID foreignId = UUID.randomUUID();
+        atB.setId(foreignId);
+        when(episodeRepository.findByIdAndHospital_Id(foreignId, hospitalId)).thenReturn(Optional.empty());
+        when(episodeRepository.findById(foreignId)).thenReturn(Optional.of(atB));
+
+        assertThatThrownBy(() -> service.getEntries(patientId, foreignId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(reachRecorder, entryRepository);
+    }
+
     @Test
     void startEpisodeSnapshotsGravidaParaAndEddDerivedGestationalAge() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
             .thenReturn(false);
 
@@ -163,9 +434,9 @@ class LaborServiceImplTest {
         history.setGravida(3);
         history.setPara(2);
         history.setEstimatedDueDate(LocalDate.now().plusWeeks(2)); // → 38 weeks
-        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(history));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(history));
 
-        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
 
         LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
 
@@ -173,6 +444,47 @@ class LaborServiceImplTest {
         assertThat(created.getPara()).isEqualTo(2);
         assertThat(created.getGestationalAgeWeeks()).isEqualTo(38);
         assertThat(created.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    /** QA D629: the screen names nobody, so the recorder is the admitting clinician. */
+    @Test
+    void startEpisodeWithNoAdmittingStaffNamesTheRecorder() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(false);
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(recorderStaff()));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
+
+        assertThat(created.getAdmittedByStaffName()).isEqualTo("Nina Kabore");
+    }
+
+    /** QA D629: the delivery names the recorder when no delivering clinician is sent. */
+    @Test
+    void recordDeliveryWithNoDeliveringStaffNamesTheRecorder() {
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(recorderStaff()));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        assertThat(response.getDeliveredByStaffName()).isEqualTo("Nina Kabore");
+    }
+
+    private com.example.hms.model.Staff recorderStaff() {
+        User named = new User();
+        named.setId(recorderUserId);
+        named.setUsername("midwife.nina");
+        named.setFirstName("Nina");
+        named.setLastName("Kabore");
+        com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+        staff.setId(UUID.randomUUID());
+        staff.setUser(named);
+        staff.setHospital(hospital);
+        return staff;
     }
 
     @Test
@@ -192,6 +504,53 @@ class LaborServiceImplTest {
         assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("active labor episode");
+    }
+
+    @Test
+    void qaD714AnEntryFiveHoursAheadIsRefusedBeforeAnyAlertOrSave() {
+        // Round 10: observationTime = now + 5 h answered 201, raised a CAUTION
+        // alert and was drawn on the chart.
+        episode.setActivePhaseStartAt(LocalDateTime.now().minusHours(4));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().plusHours(5));
+        request.setCervicalDilationCm(6);
+
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.partograph.futureTime");
+        verify(entryRepository, never()).save(any());
+        verify(episodeRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD745AnEntryBeforeLabourOnsetIsRefused() {
+        // Round 10 re-test: an entry dated 6 h ago on an episode whose onset
+        // was 3 h ago answered 201.
+        episode.setLaborOnsetAt(LocalDateTime.now().minusHours(3));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().minusHours(6));
+
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.partograph.beforeOnset");
+        verify(entryRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD714ASmallClockSkewIsStillAccepted() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().plusMinutes(LaborServiceImpl.PARTOGRAPH_FUTURE_SKEW_MINUTES - 2));
+
+        assertThat(service.addEntry(patientId, episodeId, recorderUserId, request)).isNotNull();
+    }
+
+    @Test
+    void qaD714ALateEntryInThePastIsStillAccepted() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().minusHours(3));
+        request.setLateEntry(true);
+
+        assertThat(service.addEntry(patientId, episodeId, recorderUserId, request)).isNotNull();
     }
 
     @Test
@@ -229,7 +588,7 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-alert-line");
                 assertThat(alert.getSeverity()).isEqualTo("CAUTION");
             });
-        verify(notificationService, never()).createNotification(anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -246,7 +605,13 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-action-line");
                 assertThat(alert.getSeverity()).isEqualTo("URGENT");
             });
-        verify(notificationService).createNotification(contains("Alerte de travail"), eq("midwife.nina"));
+        verify(notificationService).created(contains("Alerte de travail"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
+        // QA D605: the on-call team is told too, not only the documenter.
+        verify(obstetricAlertEscalation, org.mockito.Mockito.atLeastOnce()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+            hospitalId.equals(a.hospitalId()) && patientId.equals(a.patientId())
+                && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_PARTOGRAPH.equals(a.sourceType())
+                && recorderUserId.equals(a.documentedByUserId())
+                && a.notificationText().contains("Alerte de travail")));
     }
 
     @Test
@@ -258,7 +623,12 @@ class LaborServiceImplTest {
 
         assertThat(response.getAlerts())
             .anySatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-fetal-bradycardia"));
-        verify(notificationService).createNotification(contains("FETAL_HEART_RATE"), eq("midwife.nina"));
+        // QA D172: a translated type label and French text, never the raw enum or English.
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).created(text.capture(), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
+        assertThat(text.getValue())
+            .contains("rythme cardiaque fœtal", "95 bpm", "souffrance fœtale")
+            .doesNotContain("FETAL_HEART_RATE", "Fetal heart rate", "fetal distress");
     }
 
     @Test
@@ -308,7 +678,7 @@ class LaborServiceImplTest {
     void notificationFailureDoesNotFailTheEntrySave() {
         PartographEntryRequestDTO request = entryRequest();
         request.setFetalHeartRateBpm(90);
-        when(notificationService.createNotification(anyString(), anyString()))
+        when(notificationService.created(anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
             .thenThrow(new IllegalStateException("broker down"));
 
         PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
@@ -336,6 +706,142 @@ class LaborServiceImplTest {
         assertThat(episode.getOutcome()).isEqualTo(LaborOutcome.CAESAREAN_SECTION);
     }
 
+    /** CR-08: a blank time stores the moment of documenting, and the record says it was not stated. */
+    @Test
+    void recordDeliverySaysWhetherTheBirthTimeWasStated() {
+        DeliveryRecordRequestDTO blank = deliveryRequest();
+        blank.setBirthDateTime(null);
+        service.recordDelivery(patientId, episodeId, recorderUserId, blank);
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertThat(saved.getValue().getBirthDateTime()).isNotNull();
+        assertThat(saved.getValue().isBirthTimeStated()).isFalse();
+    }
+
+    @Test
+    void recordDeliveryWithATimeSaysItWasStated() {
+        DeliveryRecordRequestDTO stated = deliveryRequest();
+        stated.setBirthDateTime(java.time.LocalDateTime.now());
+        service.recordDelivery(patientId, episodeId, recorderUserId, stated);
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertThat(saved.getValue().isBirthTimeStated()).isTrue();
+    }
+
+    /** QA D1592: recording a birth registers its live-born babies, and the response lists them. */
+    @Test
+    void recordDeliveryRegistersTheLiveBornBabies() {
+        var baby = com.example.hms.payload.dto.clinical.labor.DeliveryNewbornDTO.builder()
+            .patientId(UUID.randomUUID()).displayName("Bébé Traore").mrn("MRN-1").birthOrder(1).build();
+        when(newbornRegistration.registerLiveBorn(any(DeliveryRecord.class), org.mockito.ArgumentMatchers.eq(recorderUserId)))
+            .thenReturn(List.of(baby));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        verify(newbornRegistration).registerLiveBorn(
+            org.mockito.ArgumentMatchers.argThat(d -> d.getPatient() == patient && d.getHospital() == hospital),
+            org.mockito.ArgumentMatchers.eq(recorderUserId));
+        assertThat(response.getNewborns()).containsExactly(baby);
+    }
+
+    /**
+     * QA D1592: a midwife can always record a birth. The baby's registration
+     * failing never undoes the delivery: it is saved, the response says the
+     * registration is pending, and the failure is recorded for reception.
+     */
+    @Test
+    void recordDeliveryKeepsTheBirthWhenTheNewbornRegistrationFails() {
+        when(newbornRegistration.registerLiveBorn(any(DeliveryRecord.class), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new com.example.hms.exception.ResourceNotFoundException("role.notFound", "ROLE_PATIENT"));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository).save(saved.capture());
+        assertThat(saved.getValue().isNewbornRegistrationPending()).isTrue();
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+        assertThat(response.isNewbornRegistrationPending()).isTrue();
+        assertThat(response.getNewborns()).isEmpty();
+        verify(newbornRegistration).recordRegistrationFailure(
+            org.mockito.ArgumentMatchers.argThat(d -> d == saved.getValue()), org.mockito.ArgumentMatchers.eq(recorderUserId),
+            any(com.example.hms.exception.ResourceNotFoundException.class));
+    }
+
+    /** QA D1592: reading the delivery back lists the babies it registered. */
+    @Test
+    void getDeliveryListsTheRegisteredBabies() {
+        DeliveryRecord record = DeliveryRecord.builder().episode(episode).patient(patient).hospital(hospital)
+            .birthDateTime(java.time.LocalDateTime.now()).deliveryMode(DeliveryMode.SPONTANEOUS_VAGINAL).build();
+        record.setId(UUID.randomUUID());
+        when(deliveryRecordRepository.findByEpisode_Id(episodeId)).thenReturn(Optional.of(record));
+        var baby = com.example.hms.payload.dto.clinical.labor.DeliveryNewbornDTO.builder()
+            .patientId(UUID.randomUUID()).birthOrder(1).build();
+        when(newbornRegistration.newbornsOf(record)).thenReturn(List.of(baby));
+
+        var response = service.getDelivery(patientId, episodeId, hospitalId);
+
+        assertThat(response.getNewborns()).containsExactly(baby);
+    }
+
+    /** QA D516: recording a birth posts its charge, filed by the recorder. */
+    @Test
+    void recordDeliveryPostsTheDeliveryCharge() {
+        service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        verify(deliveryChargeService).chargeDelivery(
+            org.mockito.ArgumentMatchers.argThat(d -> d.getPatient() == patient), org.mockito.ArgumentMatchers.eq(recorderUserId));
+    }
+
+    /** QA D516: a charge that cannot be posted never undoes the clinical record. */
+    @Test
+    void recordDeliveryKeepsTheBirthWhenTheChargeFails() {
+        when(deliveryChargeService.chargeDelivery(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new IllegalStateException("boom"));
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+    }
+
+    /**
+     * QA D516 (self-review of #921): inside a transaction the charge waits
+     * for the delivery to commit and then runs in its own transaction, so a
+     * charge whose invoice save throws leaves the committed birth intact.
+     */
+    @Test
+    void recordDeliveryPostsTheChargeOnlyAfterCommitAndSurvivesItsFailure() {
+        when(deliveryChargeService.chargeDelivery(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new org.springframework.dao.DataIntegrityViolationException("invoice save failed"));
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+            org.mockito.Mockito.verifyNoInteractions(deliveryChargeService);
+            verify(deliveryRecordRepository).save(org.mockito.ArgumentMatchers.any());
+            org.assertj.core.api.Assertions.assertThatCode(() ->
+                org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit))
+                .doesNotThrowAnyException();
+            verify(deliveryChargeService).chargeDelivery(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(recorderUserId));
+            assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    /** QA D516: no second charge when the episode already has a delivery. */
+    @Test
+    void recordDeliverySecondAttemptPostsNoCharge() {
+        when(deliveryRecordRepository.existsByEpisode_Id(episodeId)).thenReturn(true);
+
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("already exists");
+        org.mockito.Mockito.verifyNoInteractions(deliveryChargeService);
+    }
+
     @Test
     void recordDeliveryRejectsSecondRecord() {
         when(deliveryRecordRepository.existsByEpisode_Id(episodeId)).thenReturn(true);
@@ -344,6 +850,60 @@ class LaborServiceImplTest {
         assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already exists");
+    }
+
+    /* ── QA D214 (#896 review): two episodes at two hospitals ─────────── */
+
+    @Test
+    void recordDeliveryRefusesASecondBirthHoursAfterOneFiledOnAnotherEpisode() {
+        // The mother had an episode opened here before giving birth at another
+        // hospital; that birth is on a different episode, so startEpisode's
+        // guard never ran for this one.
+        when(deliveryRecordRepository.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(
+            org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(episodeId),
+            any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(true);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1339: marked on the override field").isEqualTo("recentDeliveryOverrideReason"))
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("labor.delivery.recentDelivery");
+        verify(deliveryRecordRepository, never()).save(any());
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+    }
+
+    @Test
+    void recordDeliveryAcceptsAnOverrideAndKeepsTheReasonOnTheRecord() {
+        when(deliveryRecordRepository.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(
+            org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(episodeId),
+            any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(true);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setRecentDeliveryOverrideReason("Second twin, delayed interval delivery");
+        request.setNotes("Stable");
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getNotes())
+            .contains("Dérogation (accouchement récent) : Second twin, delayed interval delivery")
+            .contains("Stable");
+    }
+
+    @Test
+    void recordDeliveryLooksTwentyWeeksEitherSideOfTheBirth() {
+        LocalDateTime birth = LocalDateTime.of(2026, 10, 1, 8, 0);
+        org.mockito.ArgumentCaptor<LocalDateTime> from = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        org.mockito.ArgumentCaptor<LocalDateTime> to = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        when(deliveryRecordRepository.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(
+            org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(episodeId),
+            from.capture(), to.capture())).thenReturn(false);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(birth);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(from.getValue()).isEqualTo(birth.minusDays(140));
+        assertThat(to.getValue()).isEqualTo(birth.plusDays(140));
     }
 
     @Test
@@ -358,7 +918,14 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-pph");
                 assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.URGENT.name());
             });
-        verify(notificationService).createNotification(contains("HEMORRHAGE"), eq("midwife.nina"));
+        verify(notificationService).created(contains("hémorragie"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
+        // QA D605: a PPH reaches the on-call team and escalates.
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+            hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY.equals(a.sourceType())
+                && a.alertMessage().toLowerCase().contains("hémorragie")
+                // QA D665: the sentence also travels as its key and its numbers.
+                && "labor.alert.msg.labor-pph".equals(a.alertMessageKey())
+                && a.alertMessageArgs() != null && a.alertMessageArgs().size() == 1));
     }
 
     @Test
@@ -448,5 +1015,1937 @@ class LaborServiceImplTest {
         assertThat(result).extracting(LaborEpisodeResponseDTO::getHospitalId).containsExactly(hospitalId, otherHospitalId);
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void recordDeliveryRefusesABirthBeforeLabourOnset() {
+        // QA D104: a delivery time before the labour onset was accepted.
+        episode.setLaborOnsetAt(LocalDateTime.now().minusHours(2));
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(LocalDateTime.now().minusHours(5));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class);
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+    }
+
+    /* ── QA D806: the times of a delivery follow the labour they end ── */
+
+    /** The QA walk: partograph entry at 18:42, birth typed 18:23, placenta 15:43. */
+    private void chartedAt(LocalDateTime observedAt) {
+        LaborPartographEntry entry = LaborPartographEntry.builder().episode(episode).observationTime(observedAt).build();
+        when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(episodeId)).thenReturn(Optional.of(entry));
+    }
+
+    @Test
+    void qaD806ABirthEarlierThanAChartedPartographEntryIsRefusedOnTheBirthField() {
+        LocalDateTime entryAt = LocalDateTime.now().minusHours(1);          // 18:42
+        episode.setLaborOnsetAt(entryAt.minusHours(8));
+        chartedAt(entryAt);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(entryAt.minusMinutes(19));                   // 18:23
+        request.setPlacentaDeliveredAt(entryAt.minusMinutes(179));            // 15:43
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "birthDateTime")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeLastPartograph");
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+        verify(deliveryRecordRepository, never()).save(any(DeliveryRecord.class));
+    }
+
+    @Test
+    void qaD806APlacentaDeliveredBeforeTheBirthIsRefusedOnThePlacentaField() {
+        LocalDateTime entryAt = LocalDateTime.now().minusHours(2);
+        episode.setLaborOnsetAt(entryAt.minusHours(8));
+        chartedAt(entryAt);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(entryAt.plusMinutes(20));
+        request.setPlacentaDeliveredAt(entryAt.minusMinutes(40));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "placentaDeliveredAt")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.placentaBeforeBirth");
+        verify(deliveryRecordRepository, never()).save(any(DeliveryRecord.class));
+    }
+
+    @Test
+    void qaD806APlacentaWithNoBirthTimeIsComparedWithTheRecordedBirth() {
+        // No birth time typed: the birth is recorded now, so a placenta two hours ago precedes it.
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setPlacentaDeliveredAt(LocalDateTime.now().minusHours(2));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "placentaDeliveredAt");
+    }
+
+    @Test
+    void qaD806TimesInOrderAreStillRecorded() {
+        LocalDateTime entryAt = LocalDateTime.now().minusHours(2);
+        episode.setLaborOnsetAt(entryAt.minusHours(8));
+        chartedAt(entryAt);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(entryAt);                                    // at the last entry: allowed
+        request.setPlacentaDeliveredAt(entryAt.plusMinutes(15));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getPlacentaDeliveredAt()).isEqualTo(entryAt.plusMinutes(15));
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+    }
+
+    @Test
+    void qaD806ABirthBeforeOnsetNowNamesTheBirthField() {
+        episode.setLaborOnsetAt(LocalDateTime.now().minusHours(2));
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(LocalDateTime.now().minusHours(5));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "birthDateTime")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeOnset");
+    }
+
+    /* ── QA D809: gravidity and parity describe one possible history ── */
+
+    private void admissible() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+    }
+
+    @Test
+    void qaD809AnAdmissionTypedG1P3IsRefusedOnTheParaField() {
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).gravida(1).para(3).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "para")
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.obstetric.paraAboveGravida");
+        verify(episodeRepository, never()).save(any(LaborEpisode.class));
+        verify(maternalHistoryRepository, never()).save(any(MaternalHistory.class));
+    }
+
+    @Test
+    void qaD809AGravidityTypedBelowTheRecordedParityIsRefused() {
+        admissible();
+        MaternalHistory history = new MaternalHistory();
+        history.setGravida(4);
+        history.setPara(3);
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any()))
+            .thenReturn(Optional.of(history));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).gravida(1).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "para");
+        verify(episodeRepository, never()).save(any(LaborEpisode.class));
+    }
+
+    @Test
+    void qaD809CountsSnapshottedUnchangedFromHerRecordDoNotBlockTheAdmission() {
+        admissible();
+        MaternalHistory history = new MaternalHistory();
+        history.setGravida(1);
+        history.setPara(3);
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any()))
+            .thenReturn(Optional.of(history));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).build();
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
+
+        assertThat(created.getGravida()).isEqualTo(1);
+        assertThat(created.getPara()).isEqualTo(3);
+    }
+
+    @Test
+    void qaD809ConsistentTypedCountsAreKept() {
+        admissible();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).gravida(3).para(2).build();
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
+
+        assertThat(created.getGravida()).isEqualTo(3);
+        assertThat(created.getPara()).isEqualTo(2);
+    }
+
+    /* ── QA D172: every alert text comes from the French staff bundle ── */
+
+    @Test
+    void maternalFeverAndTachycardiaAreFrenchCautions() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setTemperatureCelsius(38.6);
+        request.setPulseBpm(128);
+
+        PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts())
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-maternal-fever");
+                assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.CAUTION.name());
+                assertThat(alert.getMessage()).contains("Température maternelle", "38,6").doesNotContain("temperature");
+            })
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-maternal-tachycardia");
+                assertThat(alert.getMessage()).contains("Pouls maternel 128 bpm").doesNotContain("pulse");
+            });
+    }
+
+    @Test
+    void elevatedBloodPressureIsAFrenchCaution() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setSystolicBpMmHg(145);
+        request.setDiastolicBpMmHg(92);
+
+        PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts())
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-hypertension");
+                assertThat(alert.getMessage()).contains("Tension artérielle élevée 145/92 mmHg");
+            })
+            .noneSatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-severe-hypertension"));
+    }
+
+    @Test
+    void incompletePlacentaAndLowApgarAreFrenchAlerts() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setPlacentaComplete(false);
+        request.setApgarFiveMinute(5);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts())
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-retained-placenta");
+                assertThat(alert.getMessage()).contains("Placenta incomplet").doesNotContain("retained");
+            })
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-apgar-low");
+                assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.CAUTION.name());
+                assertThat(alert.getMessage()).contains("Apgar à 5 minutes 5");
+            });
+    }
+
+    /* ── QA D162: gestational age from the LMP when no EDD was recorded ── */
+
+    @Test
+    void startEpisodeDerivesGestationalAgeFromTheLmpWhenNoEddIsRecorded() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(false);
+        MaternalHistory history = new MaternalHistory();
+        history.setLastMenstrualPeriod(LocalDate.now().minusWeeks(38));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(history));
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId,
+            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build());
+
+        assertThat(created.getGestationalAgeWeeks()).isEqualTo(38);
+    }
+
+    @Test
+    void startEpisodeLeavesGestationalAgeEmptyForAnImplausibleLmp() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(false);
+        MaternalHistory history = new MaternalHistory();
+        history.setLastMenstrualPeriod(LocalDate.now().minusWeeks(93));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(history));
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId,
+            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build());
+
+        assertThat(created.getGestationalAgeWeeks()).isNull();
+    }
+
+    @Test
+    void nullPayloadsAreRejectedInPlainText() {
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageNotContaining("maternity.");
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageNotContaining("maternity.");
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageNotContaining("maternity.");
+    }
+
+    @Test
+    void recordDeliveryRejectsClosedEpisode() {
+        episode.setStatus(LaborStatus.DELIVERED);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("active labor episode");
+    }
+
+    /* ── QA D214: second labour 24 h after a birth ──────────────────────── */
+
+    @Test
+    void startEpisodeRefusesANewLabourSoonAfterARecordedBirthWithoutAnOverride() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
+
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1339: marked on the override field").isEqualTo("recentDeliveryOverrideReason"))
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("labor.episode.recentDelivery");
+        verify(episodeRepository, never()).save(any());
+    }
+
+    @Test
+    void startEpisodeAcceptsAnExplicitOverrideAndKeepsTheReasonOnTheChart() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
+
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2))
+            .recentDeliveryOverrideReason("Second twin retained").riskNotes("Anaemia").build();
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
+
+        assertThat(created.getRiskNotes())
+            .contains("Dérogation (accouchement récent) : Second twin retained")
+            .contains("Anaemia");
+    }
+
+    @Test
+    void startEpisodeLooksBackTwentyWeeksForAPriorBirth() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.ArgumentCaptor<LocalDateTime> since = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), since.capture())).thenReturn(false);
+
+        service.startEpisode(patientId, recorderUserId,
+            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build());
+
+        assertThat(since.getValue()).isBetween(
+            LocalDateTime.now().minusDays(141), LocalDateTime.now().minusDays(139));
+    }
+
+    @Test
+    void aBirthAtTwentyFourWeeksRaisesAnUrgentFrenchPretermAlert() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setGestationalAgeWeeksAtBirth(24);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts()).anySatisfy(alert -> {
+            assertThat(alert.getCode()).isEqualTo("labor-preterm");
+            assertThat(String.valueOf(alert.getSeverity())).isEqualTo("URGENT");
+            assertThat(alert.getMessage()).contains("prématurée à 24 semaines");
+        });
+    }
+
+    @Test
+    void aTermBirthRaisesNoPretermAlert() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setGestationalAgeWeeksAtBirth(39);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts()).noneSatisfy(alert ->
+            assertThat(alert.getCode()).isEqualTo("labor-preterm"));
+    }
+
+    /* -- QA D796: a labour episode with no pregnancy on record -- */
+
+    private void unbookedPatientAtTheHospital() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.empty());
+    }
+
+    /** The exact round-12 call: MIDWIFE_A posts an onset and an admission time for A3, who has no maternal history. */
+    @Test
+    void anUnbookedLabourWithNoEstimatedGestationalAgeIsRefused_D796() {
+        unbookedPatientAtTheHospital();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(1)).admittedAt(LocalDateTime.now().minusMinutes(30)).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("maternity.labor.pregnancyRequired");
+        verify(episodeRepository, never()).save(any());
+        verify(maternalHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    void anUnbookedLabourOpensItsPregnancyFromTheEstimateAndLinksIt_D796() {
+        unbookedPatientAtTheHospital();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(38).gravida(2).para(1).build();
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
+
+        org.mockito.ArgumentCaptor<MaternalHistory> pregnancy = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(pregnancy.capture());
+        MaternalHistory opened = pregnancy.getValue();
+        assertThat(opened.getPatient()).isSameAs(patient);
+        assertThat(opened.getHospital()).isSameAs(hospital);
+        assertThat(opened.getVersionNumber()).isEqualTo(1);
+        assertThat(opened.getEstimatedDueDate()).isEqualTo(LocalDate.now().plusWeeks(2));
+        assertThat(opened.getGravida()).isEqualTo(2);
+        assertThat(opened.getPara()).isEqualTo(1);
+        assertThat(opened.getUpdateReason()).contains("38");
+        org.mockito.ArgumentCaptor<LaborEpisode> saved = org.mockito.ArgumentCaptor.forClass(LaborEpisode.class);
+        verify(episodeRepository).save(saved.capture());
+        assertThat(saved.getValue().getMaternalHistory()).isSameAs(opened);
+        assertThat(created.getGestationalAgeWeeks()).isEqualTo(38);
+    }
+
+    @Test
+    void anUnbookedLabourEstimateOutsideTwentyToFortyFiveWeeksIsRefused_D796() {
+        unbookedPatientAtTheHospital();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(14).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("maternity.labor.gestationalAgeRange");
+        verify(maternalHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    void aBookedLabourOpensNoSecondPregnancy_D796() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory booked = new MaternalHistory();
+        booked.setEstimatedDueDate(LocalDate.now().plusWeeks(1));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(booked));
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId,
+            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).build());
+
+        verify(maternalHistoryRepository, never()).save(any());
+        assertThat(created.getGestationalAgeWeeks()).isEqualTo(39);
+    }
+
+    @Test
+    void aPregnancyThatHasDeliveredIsNotTheCurrentOne_D796() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory previous = new MaternalHistory();
+        previous.setRecordedDate(LocalDateTime.now().minusYears(2));
+        previous.setEstimatedDueDate(LocalDate.now().minusYears(2).plusMonths(5));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(previous));
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(3);
+        // The birth of that pregnancy: after its record, long before the D214 window.
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+
+        LaborEpisodeRequestDTO withoutEstimate = LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).build();
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, withoutEstimate))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("maternity.labor.pregnancyRequired");
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(36).build());
+
+        org.mockito.ArgumentCaptor<MaternalHistory> opened = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(opened.capture());
+        assertThat(opened.getValue()).isNotSameAs(previous);
+        assertThat(opened.getValue().getVersionNumber()).isEqualTo(4);
+        assertThat(opened.getValue().getEstimatedDueDate()).isEqualTo(LocalDate.now().plusWeeks(4));
+    }
+
+    /**
+     * Review of #954: the opened pregnancy becomes her current history (highest
+     * version), so it must not drop what the previous version knew about her.
+     */
+    @Test
+    void aNewPregnancyCarriesHerPastHistoryForward_D796() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory previous = new MaternalHistory();
+        previous.setRecordedDate(LocalDateTime.now().minusYears(2));
+        previous.setLastMenstrualPeriod(LocalDate.now().minusYears(2).minusMonths(4));
+        previous.setEstimatedDueDate(LocalDate.now().minusYears(2).plusMonths(5));
+        previous.setEstimatedDueDateByUltrasound(LocalDate.now().minusYears(2).plusMonths(5).plusDays(3));
+        previous.setUltrasoundConfirmationDate(LocalDate.now().minusYears(2).minusMonths(1));
+        previous.setMenstrualCycleLengthDays(30);
+        previous.setGravida(1);
+        previous.setPara(0);
+        previous.setPreviousCesareanSections(1);
+        previous.setPostpartumHemorrhageHistory(Boolean.TRUE);
+        previous.setPreeclampsiaHistory(Boolean.TRUE);
+        previous.setAllergies("Peanuts");
+        previous.setDrugAllergies("Penicillin");
+        previous.setLatexAllergy(Boolean.TRUE);
+        previous.setChronicConditions("Sickle cell trait");
+        previous.setPrenatalVitaminsStarted(Boolean.TRUE);
+        previous.setClinicalNotes("Notes about the previous pregnancy");
+        // Her previous record is the acting hospital's own.
+        previous.setHospital(hospital);
+        historiesOnRecord(previous);
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(2);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(37).build());
+
+        org.mockito.ArgumentCaptor<MaternalHistory> captor = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        MaternalHistory opened = captor.getValue();
+        assertThat(opened).isNotSameAs(previous);
+        assertThat(opened.getVersionNumber()).isEqualTo(3);
+        assertThat(opened.getPreviousCesareanSections()).isEqualTo(1);
+        assertThat(opened.getPostpartumHemorrhageHistory()).isTrue();
+        assertThat(opened.getPreeclampsiaHistory()).isTrue();
+        assertThat(opened.getAllergies()).isEqualTo("Peanuts");
+        assertThat(opened.getDrugAllergies()).isEqualTo("Penicillin");
+        assertThat(opened.getLatexAllergy()).isTrue();
+        assertThat(opened.getChronicConditions()).isEqualTo("Sickle cell trait");
+        // The previous pregnancy's own dating, supplementation and assessment do not carry over.
+        assertThat(opened.getEstimatedDueDate()).isEqualTo(LocalDate.now().plusWeeks(3));
+        assertThat(opened.getLastMenstrualPeriod()).isNull();
+        assertThat(opened.getEstimatedDueDateByUltrasound()).isNull();
+        assertThat(opened.getUltrasoundConfirmationDate()).isNull();
+        assertThat(opened.getMenstrualCycleLengthDays()).isNull();
+        assertThat(opened.getPrenatalVitaminsStarted()).isFalse();
+        assertThat(opened.getClinicalNotes()).isNull();
+        // Her counts changed with the birth since: not carried as if current.
+        assertThat(opened.getGravida()).isNull();
+        assertThat(opened.getPara()).isNull();
+    }
+
+    /**
+     * Review of #958: her previous delivered record is G3 P1 A2, and an
+     * unbooked labour is admitted typed G1 P0. The abortions are carried
+     * forward with her past history, so the new current version would read
+     * G1 P0 A2 (P + A above G) and refuse every later edit on a field the
+     * midwife never typed. The admission is refused instead, and nothing is
+     * saved.
+     */
+    @Test
+    void aCarriedAbortionCountAboveTheTypedGravidityIsRefused_D809() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory previous = new MaternalHistory();
+        previous.setRecordedDate(LocalDateTime.now().minusYears(2));
+        previous.setGravida(3);
+        previous.setPara(1);
+        previous.setAbortions(2);
+        previous.setHospital(hospital);
+        historiesOnRecord(previous);
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(38).gravida(1).para(0).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.obstetric.outcomesAboveGravida");
+        verify(maternalHistoryRepository, never()).save(any(MaternalHistory.class));
+        verify(episodeRepository, never()).save(any(LaborEpisode.class));
+    }
+
+    /** Review of #958: typed counts that leave room for the carried abortions open the record. */
+    @Test
+    void aTypedGravidityCoveringTheCarriedAbortionsOpensTheRecord_D809() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory previous = new MaternalHistory();
+        previous.setRecordedDate(LocalDateTime.now().minusYears(2));
+        previous.setGravida(3);
+        previous.setPara(1);
+        previous.setAbortions(2);
+        previous.setHospital(hospital);
+        historiesOnRecord(previous);
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(38).gravida(4).para(2).build());
+
+        org.mockito.ArgumentCaptor<MaternalHistory> captor = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getGravida()).isEqualTo(4);
+        assertThat(captor.getValue().getPara()).isEqualTo(2);
+        assertThat(captor.getValue().getAbortions()).isEqualTo(2);
+    }
+
+    /**
+     * Review of #954 (round 2): her latest record belongs to another hospital
+     * that the caller may not read (cross-hospital reads off). The repository
+     * answers like the real query, by the hospital set it is given, so the
+     * record must not be reached: nothing is linked, nothing is carried into
+     * the acting hospital's new record, and no reach is recorded.
+     */
+    @Test
+    void aPreviousRecordOutsideTheReadableHospitalsIsNeverCarried_D796() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        MaternalHistory elsewhere = new MaternalHistory();
+        elsewhere.setHospital(otherHospital);
+        elsewhere.setRecordedDate(LocalDateTime.now().minusMonths(2));
+        elsewhere.setEstimatedDueDate(LocalDate.now().plusWeeks(1));
+        elsewhere.setAllergies("Peanuts");
+        elsewhere.setPreviousCesareanSections(2);
+        elsewhere.setMentalHealthConditions("Postpartum depression");
+        elsewhere.setDomesticViolenceDetails("Disclosed at booking");
+        elsewhere.setPsychosocialNotes("Social worker referral");
+        historiesOnRecord(elsewhere);
+        // The unscoped patient-wide readers would hand back the other hospital's
+        // record, as the real queries do: a fallback to any of them must turn
+        // this test red, not pass on Mockito's empty default.
+        lenient().when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(elsewhere));
+        lenient().when(maternalHistoryRepository.findByPatientIdOrderByVersionDesc(eq(patientId), any()))
+            .thenReturn(List.of(elsewhere));
+        lenient().when(maternalHistoryRepository.findByPatientIdOrderByRecordedDateDesc(patientId))
+            .thenReturn(List.of(elsewhere));
+        lenient().when(maternalHistoryRepository.findAllVersionsByPatientId(patientId)).thenReturn(List.of(elsewhere));
+        lenient().when(maternalHistoryRepository.findByPatientOrderByRecordedDateDesc(patient))
+            .thenReturn(List.of(elsewhere));
+        lenient().when(maternalHistoryRepository.findByPatientIdAndVersion(eq(patientId), any()))
+            .thenReturn(Optional.of(elsewhere));
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
+
+        // Not linked: her dated pregnancy elsewhere is invisible here, so an estimate is needed.
+        LaborEpisodeRequestDTO withoutEstimate = LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).build();
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, withoutEstimate))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("maternity.labor.pregnancyRequired");
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(38).build());
+
+        org.mockito.ArgumentCaptor<MaternalHistory> captor = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        MaternalHistory opened = captor.getValue();
+        assertThat(opened.getHospital()).isSameAs(hospital);
+        assertThat(opened.getAllergies()).isNull();
+        assertThat(opened.getPreviousCesareanSections()).isNull();
+        assertThat(opened.getMentalHealthConditions()).isNull();
+        assertThat(opened.getDomesticViolenceDetails()).isNull();
+        assertThat(opened.getPsychosocialNotes()).isNull();
+        org.mockito.ArgumentCaptor<LaborEpisode> saved = org.mockito.ArgumentCaptor.forClass(LaborEpisode.class);
+        verify(episodeRepository).save(saved.capture());
+        assertThat(saved.getValue().getMaternalHistory()).isSameAs(opened);
+        verify(reachRecorder, never()).recordReach(any(), any(), any(), any(),
+            org.mockito.ArgumentMatchers.argThat(reach -> reach != null && !reach.isEmpty()), any());
+        verify(maternalHistoryRepository, never()).findCurrentByPatientId(any());
+        verify(maternalHistoryRepository, never()).findByPatientIdOrderByVersionDesc(any(), any());
+        verify(maternalHistoryRepository, never()).findByPatientIdOrderByRecordedDateDesc(any());
+        verify(maternalHistoryRepository, never()).findAllVersionsByPatientId(any());
+        verify(maternalHistoryRepository, never()).findByPatientOrderByRecordedDateDesc(any());
+        verify(maternalHistoryRepository, never()).findByPatientIdAndVersion(any(), any());
+    }
+
+    /**
+     * Review of #954 (round 2): when the treatment relationship makes the other
+     * hospital readable, her history there is carried forward and the copy is
+     * accounted as a cross-hospital reach naming that hospital.
+     */
+    @Test
+    void aReadablePreviousRecordAtAnotherHospitalIsCarriedAndItsReachRecorded_D796() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        when(recordAccessPolicy.readableHospitalIds(recorderUserId, patientId, hospitalId))
+            .thenReturn(java.util.Set.of(hospitalId, otherHospital.getId()));
+        MaternalHistory elsewhere = new MaternalHistory();
+        elsewhere.setHospital(otherHospital);
+        elsewhere.setRecordedDate(LocalDateTime.now().minusYears(2));
+        elsewhere.setPreviousCesareanSections(1);
+        historiesOnRecord(elsewhere);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(37).build());
+
+        org.mockito.ArgumentCaptor<MaternalHistory> captor = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getPreviousCesareanSections()).isEqualTo(1);
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(recorderUserId), isNull(),
+            eq(java.util.Map.of(otherHospital.getId().toString(), 1L)), anyString());
+    }
+
+    /** Answers the scoped lookup like the real query: the first record whose hospital is in the given set. */
+    private void historiesOnRecord(MaternalHistory... records) {
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
+            eq(patientId), any()))
+            .thenAnswer(inv -> {
+                java.util.Collection<UUID> hospitals = inv.getArgument(1);
+                return java.util.Arrays.stream(records)
+                    .filter(r -> r.getHospital() != null && hospitals.contains(r.getHospital().getId()))
+                    .findFirst();
+            });
+    }
+
+    @Test
+    void aLabourThatContinuesARecentBirthKeepsItsPregnancy_D796() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory twins = new MaternalHistory();
+        twins.setRecordedDate(LocalDateTime.now().minusMonths(7));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(twins));
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1))
+            .recentDeliveryOverrideReason("Second twin retained").build());
+
+        verify(maternalHistoryRepository, never()).save(any());
+        org.mockito.ArgumentCaptor<LaborEpisode> saved = org.mockito.ArgumentCaptor.forClass(LaborEpisode.class);
+        verify(episodeRepository).save(saved.capture());
+        assertThat(saved.getValue().getMaternalHistory()).isSameAs(twins);
+    }
+
+    /* -- QA D797: implausible birth weight for gestational age -- */
+
+    /** The exact round-12 call: the episode is dated 24 weeks, the delivery sends 3,200 g and no age. */
+    @Test
+    void threeThousandTwoHundredGramsAtTwentyFourWeeksIsFlaggedButRecorded_D797() {
+        episode.setGestationalAgeWeeks(24);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthWeightGrams(3200);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts()).anySatisfy(alert -> {
+            assertThat(alert.getCode()).isEqualTo("labor-weight-implausible");
+            assertThat(String.valueOf(alert.getSeverity())).isEqualTo("CAUTION");
+            assertThat(alert.getMessage()).contains("24 semaines").contains("peu plausible");
+        });
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+        verify(deliveryRecordRepository).save(any(DeliveryRecord.class));
+    }
+
+    @Test
+    void aTypicalWeightForTheAgeRaisesNoPlausibilityAlert_D797() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setGestationalAgeWeeksAtBirth(39);
+        request.setBirthWeightGrams(3200);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts()).noneSatisfy(alert ->
+            assertThat(alert.getCode()).isEqualTo("labor-weight-implausible"));
+    }
+
+    @Test
+    void theBandIsWideAndTwoSided_D797() {
+        assertThat(LaborServiceImpl.isImplausibleBirthWeight(3200, 24)).isTrue();
+        assertThat(LaborServiceImpl.isImplausibleBirthWeight(650, 24)).isFalse();
+        assertThat(LaborServiceImpl.isImplausibleBirthWeight(1000, 24)).isFalse();
+        assertThat(LaborServiceImpl.isImplausibleBirthWeight(4500, 40)).isFalse();
+        assertThat(LaborServiceImpl.isImplausibleBirthWeight(2200, 37)).isFalse();
+        assertThat(LaborServiceImpl.isImplausibleBirthWeight(600, 40)).isTrue();
+        // Outside the table: clamped to its first and last weeks.
+        assertThat(LaborServiceImpl.isImplausibleBirthWeight(3000, 20)).isTrue();
+        assertThat(LaborServiceImpl.isImplausibleBirthWeight(3600, 44)).isFalse();
+    }
+
+    @Test
+    void noAgeMeansNoPlausibilityAlert_D797() {
+        DeliveryRecordRequestDTO noAge = deliveryRequest();
+        noAge.setBirthWeightGrams(3200);
+        assertThat(service.recordDelivery(patientId, episodeId, recorderUserId, noAge).getAlerts())
+            .noneSatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-weight-implausible"));
+    }
+
+    /* ── QA D215: a new delivery closes the earlier postpartum plan ─────── */
+
+    @Test
+    void recordDeliveryClosesThePostpartumPlanOfAnEarlierBirth() {
+        com.example.hms.model.postpartum.PostpartumCarePlan old = new com.example.hms.model.postpartum.PostpartumCarePlan();
+        old.setDeliveryOccurredAt(LocalDateTime.now().minusDays(1));
+        old.setActive(true);
+        when(postpartumCarePlanRepository.findByPatient_IdAndHospital_IdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(java.util.List.of(old));
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        assertThat(old.isActive()).isFalse();
+        verify(postpartumCarePlanRepository).save(old);
+    }
+
+    /** QA D1427: the same row, read by a reader of each language. */
+    private static java.util.List<String> readIn(java.util.Locale locale,
+                                                 java.util.function.Supplier<java.util.List<com.example.hms.payload.dto.clinical.labor.LaborAlertDTO>> read) {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+        try {
+            return read.get().stream().map(com.example.hms.payload.dto.clinical.labor.LaborAlertDTO::getMessage).toList();
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    @Test
+    void d1427_everyPartographAlertIsReadInTheReadersLanguageWithTheValuesItWasStoredWith() {
+        episode.setActivePhaseStartAt(LocalDateTime.now().minusHours(8));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setFetalHeartRateBpm(90);
+        request.setLiquorColour(com.example.hms.enums.LiquorColour.MECONIUM_STAINED);
+        request.setCervicalDilationCm(5);
+        request.setTemperatureCelsius(38.5);
+        request.setPulseBpm(130);
+        request.setSystolicBpMmHg(170);
+        request.setDiastolicBpMmHg(115);
+
+        service.addEntry(patientId, episodeId, recorderUserId, request);
+        ArgumentCaptor<LaborPartographEntry> saved = ArgumentCaptor.forClass(LaborPartographEntry.class);
+        verify(entryRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        LaborPartographEntry entry = saved.getValue();
+        // Read back from the database: the in-memory arguments are gone.
+        java.util.List<String> stored = entry.getAlerts().stream().map(com.example.hms.model.labor.LaborAlert::getMessage).toList();
+        assertThat(stored).hasSizeGreaterThanOrEqualTo(6);
+
+        LaborMapper reader = new LaborMapper(new com.example.hms.service.i18n.NotificationLocalizer(
+            com.example.hms.i18n.TestMessageSources.bundles()));
+        LocalDateTime anchor = episode.getActivePhaseStartAt();
+        java.util.function.Supplier<java.util.List<com.example.hms.payload.dto.clinical.labor.LaborAlertDTO>> read =
+            () -> reader.toEntryResponse(entry, anchor).getAlerts();
+
+        assertThat(readIn(java.util.Locale.FRENCH, read)).as("French: exactly the stored sentences").isEqualTo(stored);
+        assertThat(readIn(java.util.Locale.ENGLISH, read))
+            .anyMatch(m -> m.contains("Fetal heart rate 90 bpm below 110"))
+            .anyMatch(m -> m.contains("Severe hypertension 170/115"))
+            .anyMatch(m -> m.contains("Liquor meconium"))
+            .noneMatch(stored::contains);
+        assertThat(readIn(java.util.Locale.forLanguageTag("es"), read)).noneMatch(stored::contains);
+    }
+
+    @Test
+    void d1427_everyDeliveryAlertIsReadInTheReadersLanguageWithTheValuesItWasStoredWith() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setEstimatedBloodLossMl(650);
+        request.setApgarFiveMinute(3);
+        request.setPlacentaComplete(false);
+        request.setLiveBirth(false);
+        request.setGestationalAgeWeeksAtBirth(30);
+        request.setBirthWeightGrams(4200);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        DeliveryRecord delivery = saved.getValue();
+        java.util.List<String> stored = delivery.getAlerts().stream().map(com.example.hms.model.labor.LaborAlert::getMessage).toList();
+        assertThat(delivery.getAlerts()).extracting(com.example.hms.model.labor.LaborAlert::getCode)
+            .contains("labor-preterm", "labor-weight-implausible", "labor-pph", "labor-retained-placenta",
+                "labor-apgar-critical", "labor-stillbirth");
+
+        LaborMapper reader = new LaborMapper(new com.example.hms.service.i18n.NotificationLocalizer(
+            com.example.hms.i18n.TestMessageSources.bundles()));
+        java.util.function.Supplier<java.util.List<com.example.hms.payload.dto.clinical.labor.LaborAlertDTO>> read =
+            () -> reader.toDeliveryResponse(delivery).getAlerts();
+
+        assertThat(readIn(java.util.Locale.FRENCH, read)).isEqualTo(stored);
+        assertThat(readIn(java.util.Locale.ENGLISH, read)).noneMatch(stored::contains);
+    }
+
+    @Test
+    void d1427_aPressureAloneReadsAsADashNotNull() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setDiastolicBpMmHg(115);
+
+        PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts()).anySatisfy(alert -> {
+            assertThat(alert.getCode()).isEqualTo("labor-severe-hypertension");
+            assertThat(alert.getMessage()).contains("—/115").doesNotContain("null");
+        });
+    }
+
+    /* ── Labour transfer between hospitals (provisional rule, 2026-11-12) ── */
+
+    private Hospital destinationInSameOrganisation(UUID destinationId) {
+        com.example.hms.model.Organization organisation = new com.example.hms.model.Organization();
+        organisation.setId(UUID.randomUUID());
+        hospital.setOrganization(organisation);
+        hospital.setName("Hôpital B");
+        Hospital destination = new Hospital();
+        destination.setId(destinationId);
+        destination.setName("Hôpital A");
+        destination.setOrganization(organisation);
+        return destination;
+    }
+
+    private com.example.hms.payload.dto.clinical.labor.LaborTransferRequestDTO transferTo(UUID destinationId) {
+        return com.example.hms.payload.dto.clinical.labor.LaborTransferRequestDTO.builder()
+            .hospitalId(hospitalId).destinationHospitalId(destinationId).reason("  Plateau technique  ").build();
+    }
+
+    private void transferable(Hospital destination) {
+        when(hospitalRepository.findClinicalById(destination.getId())).thenReturn(Optional.of(destination));
+        com.example.hms.model.PatientHospitalRegistration registration = new com.example.hms.model.PatientHospitalRegistration();
+        registration.setId(UUID.randomUUID());
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, destination.getId()))
+            .thenReturn(Optional.of(registration));
+    }
+
+    /** Transfer B→A: B is closed (when, why, where to), A is active and linked, A reads B's partograph. */
+    @Test
+    void transferClosesTheSourceAndOpensALinkedActiveEpisodeAtTheDestination() {
+        UUID destinationId = UUID.randomUUID();
+        Hospital destination = destinationInSameOrganisation(destinationId);
+        transferable(destination);
+        when(roleValidator.isMidwife(recorderUserId, hospitalId)).thenReturn(true);
+        LocalDateTime anchor = LocalDateTime.now().minusHours(2);
+        episode.setActivePhaseStartAt(anchor);
+        episode.setLaborOnsetAt(LocalDateTime.now().minusHours(8));
+        episode.setGestationalAgeWeeks(39);
+
+        LaborEpisodeResponseDTO taken = service.transferEpisode(patientId, episodeId, recorderUserId, transferTo(destinationId));
+
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.TRANSFERRED_OUT);
+        assertThat(episode.getTransferHospital()).isSameAs(destination);
+        assertThat(episode.getTransferReason()).isEqualTo("Plateau technique");
+        assertThat(episode.getTransferredAt()).isNotNull();
+        assertThat(episode.getTransferredBy()).isSameAs(recorder);
+        assertThat(taken.getStatus()).isEqualTo("ACTIVE");
+        assertThat(taken.getHospitalId()).isEqualTo(destinationId);
+        assertThat(taken.getTransferredFromEpisodeId()).isEqualTo(episodeId);
+        assertThat(taken.getTransferredFromHospitalName()).isEqualTo("Hôpital B");
+        assertThat(taken.getActivePhaseStartAt()).as("the WHO lines keep the original clock").isEqualTo(anchor);
+        assertThat(taken.getGestationalAgeWeeks()).isEqualTo(39);
+
+        // Lock, read the committed state, close (flushed), then open: one active labour at every step.
+        var ordered = org.mockito.Mockito.inOrder(patientRepository, episodeRepository);
+        ordered.verify(patientRepository).lockByIdUnscoped(patientId);
+        ordered.verify(episodeRepository).findStatusById(episodeId);
+        ordered.verify(episodeRepository).existsByPatient_IdAndStatusAndIdNot(patientId, LaborStatus.ACTIVE, episodeId);
+        ordered.verify(episodeRepository).saveAndFlush(episode);
+        ordered.verify(episodeRepository).save(any(LaborEpisode.class));
+
+        var audit = ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService, org.mockito.Mockito.times(2)).logEvent(audit.capture());
+        assertThat(audit.getAllValues()).extracting(com.example.hms.payload.dto.AuditEventRequestDTO::getEventType)
+            .containsExactly(com.example.hms.enums.AuditEventType.LABOR_EPISODE_TRANSFERRED_OUT,
+                com.example.hms.enums.AuditEventType.LABOR_EPISODE_TRANSFERRED_IN);
+        assertThat(audit.getAllValues()).extracting(com.example.hms.payload.dto.AuditEventRequestDTO::getHospitalId)
+            .containsExactly(hospitalId, destinationId);
+
+        var notice = ArgumentCaptor.forClass(com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert.class);
+        verify(obstetricAlertEscalation).raiseAfterCommit(notice.capture());
+        assertThat(notice.getValue().hospitalId()).as("A's maternity team is told").isEqualTo(destinationId);
+        assertThat(notice.getValue().sourceType()).isEqualTo(LaborServiceImpl.NOTICE_SOURCE_TRANSFER);
+        assertThat(notice.getValue().alertMessage()).contains("Hôpital B");
+
+        // A reads B's closed episode and its partograph, read only, on the readable-hospitals rule.
+        when(episodeRepository.findById(episodeId)).thenReturn(Optional.of(episode));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(destinationId)))
+            .thenReturn(Set.of(destinationId, hospitalId));
+        when(entryRepository.findByEpisode_IdOrderByObservationTimeAsc(episodeId)).thenReturn(List.of());
+        assertThat(service.getEntries(patientId, episodeId, destinationId)).isEmpty();
+    }
+
+    @Test
+    void transferRefusesANurse() {
+        lenient().when(roleValidator.isNurse(recorderUserId, hospitalId)).thenReturn(true);
+        var request = transferTo(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.transferEpisode(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.transfer.notPermitted");
+        verify(patientRepository, never()).lockByIdUnscoped(any());
+        verify(episodeRepository, never()).save(any());
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+    }
+
+    @Test
+    void transferRefusesAnotherOrganisationTheSharingRuleDoesNotOpen() {
+        UUID destinationId = UUID.randomUUID();
+        Hospital destination = destinationInSameOrganisation(destinationId);
+        com.example.hms.model.Organization other = new com.example.hms.model.Organization();
+        other.setId(UUID.randomUUID());
+        destination.setOrganization(other);
+        when(hospitalRepository.findClinicalById(destinationId)).thenReturn(Optional.of(destination));
+        when(roleValidator.isDoctor(recorderUserId, hospitalId)).thenReturn(true);
+
+        // Rex on #1134: registered there or not, the caller gets the same refusal,
+        // and her registration at the other organisation is never even looked up.
+        for (boolean registeredThere : new boolean[] {true, false}) {
+            com.example.hms.model.PatientHospitalRegistration registration = new com.example.hms.model.PatientHospitalRegistration();
+            lenient().when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, destinationId))
+                .thenReturn(registeredThere ? Optional.of(registration) : Optional.empty());
+            assertThatThrownBy(() -> service.transferEpisode(patientId, episodeId, recorderUserId, transferTo(destinationId)))
+                .as("registered at the destination: %s", registeredThere)
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getMessageKey())
+                .isEqualTo("maternity.labor.transfer.notShared");
+        }
+        verify(registrationRepository, never()).findByPatientIdAndHospitalIdAndActiveTrue(patientId, destinationId);
+        verify(episodeRepository, never()).saveAndFlush(any());
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+    }
+
+    @Test
+    void transferAcrossOrganisationsWhenTheSharingRuleOpensIt() {
+        UUID destinationId = UUID.randomUUID();
+        Hospital destination = destinationInSameOrganisation(destinationId);
+        destination.setOrganization(null);
+        transferable(destination);
+        when(roleValidator.isDoctor(recorderUserId, hospitalId)).thenReturn(true);
+        when(recordAccessPolicy.readableHospitalIds(recorderUserId, patientId, hospitalId))
+            .thenReturn(Set.of(hospitalId, destinationId));
+
+        assertThat(service.transferEpisode(patientId, episodeId, recorderUserId, transferTo(destinationId)).getHospitalId())
+            .isEqualTo(destinationId);
+    }
+
+    @Test
+    void transferRequiresAReason() {
+        var request = transferTo(UUID.randomUUID());
+        request.setReason("   ");
+
+        assertThatThrownBy(() -> service.transferEpisode(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.transfer.reasonRequired");
+    }
+
+    /** Two transitions race: the one that committed first closed the episode, so this one is refused. */
+    @Test
+    void transferLosingTheRaceIsRefusedAfterTheLock() {
+        UUID destinationId = UUID.randomUUID();
+        transferable(destinationInSameOrganisation(destinationId));
+        when(roleValidator.isMidwife(recorderUserId, hospitalId)).thenReturn(true);
+        when(episodeRepository.findStatusById(episodeId)).thenReturn(Optional.of(LaborStatus.LEFT_WITHOUT_HANDOVER));
+
+        assertThatThrownBy(() -> service.transferEpisode(patientId, episodeId, recorderUserId, transferTo(destinationId)))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.transfer.notActive");
+        var ordered = org.mockito.Mockito.inOrder(patientRepository, episodeRepository);
+        ordered.verify(patientRepository).lockByIdUnscoped(patientId);
+        ordered.verify(episodeRepository).findStatusById(episodeId);
+        verify(episodeRepository, never()).save(any());
+        verify(episodeRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void transferIsRefusedWhileAnotherActiveEpisodeExists() {
+        UUID destinationId = UUID.randomUUID();
+        transferable(destinationInSameOrganisation(destinationId));
+        when(roleValidator.isMidwife(recorderUserId, hospitalId)).thenReturn(true);
+        when(episodeRepository.existsByPatient_IdAndStatusAndIdNot(patientId, LaborStatus.ACTIVE, episodeId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.transferEpisode(patientId, episodeId, recorderUserId, transferTo(destinationId)))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.transfer.otherActive");
+        verify(episodeRepository, never()).save(any());
+    }
+
+    /**
+     * QA D1713 (round 46): the other active episode may be at either hospital, so the transfer and the arrival
+     * refusal name no hospital and never say "in this hospital".
+     */
+    @Test
+    void d1713_theOtherActiveEpisodeRefusalNamesNoHospital() {
+        java.util.Locale fr = java.util.Locale.FRENCH;
+        org.springframework.context.support.ResourceBundleMessageSource bundle =
+            new org.springframework.context.support.ResourceBundleMessageSource();
+        bundle.setBasenames("i18n/messages-maternity");
+        bundle.setDefaultEncoding("UTF-8");
+        bundle.setFallbackToSystemLocale(false);
+        for (java.util.Locale locale : List.of(java.util.Locale.ENGLISH, fr, java.util.Locale.forLanguageTag("es"))) {
+            String text = bundle.getMessage("maternity.labor.transfer.otherActive", null, locale);
+            assertThat(text).doesNotContainIgnoringCase("this hospital").doesNotContainIgnoringCase("cet hôpital")
+                .doesNotContainIgnoringCase("este hospital").doesNotContain("{0}");
+        }
+    }
+
+    private LaborEpisode activeAtOtherHospital(UUID otherHospitalId) {
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        other.setName("Hôpital B");
+        LaborEpisode atB = LaborEpisode.builder().patient(patient).hospital(other).status(LaborStatus.ACTIVE)
+            .laborOnsetAt(LocalDateTime.now().minusHours(6)).admittedAt(LocalDateTime.now().minusHours(5)).build();
+        atB.setId(UUID.randomUUID());
+        lenient().when(episodeRepository.findById(atB.getId())).thenReturn(Optional.of(atB));
+        return atB;
+    }
+
+    private com.example.hms.payload.dto.clinical.labor.LaborArrivalRequestDTO arrival() {
+        return com.example.hms.payload.dto.clinical.labor.LaborArrivalRequestDTO.builder()
+            .hospitalId(hospitalId).reason("Arrivée par ses propres moyens").build();
+    }
+
+    /** No handover: she arrives at A (the acting hospital); B is closed and told, A opens its own episode. */
+    @Test
+    void arrivalWithoutHandoverClosesTheOtherHospitalsEpisodeAndNotifiesIt() {
+        UUID otherHospitalId = UUID.randomUUID();
+        LaborEpisode atB = activeAtOtherHospital(otherHospitalId);
+        hospital.setName("Hôpital A");
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(roleValidator.isDoctor(recorderUserId, hospitalId)).thenReturn(true);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+
+        LaborEpisodeResponseDTO opened = service.recordArrivalWithoutHandover(patientId, atB.getId(), recorderUserId, arrival());
+
+        assertThat(atB.getStatus()).isEqualTo(LaborStatus.LEFT_WITHOUT_HANDOVER);
+        assertThat(atB.getTransferHospital()).isSameAs(hospital);
+        assertThat(atB.getTransferReason()).isEqualTo("Arrivée par ses propres moyens");
+        assertThat(opened.getStatus()).isEqualTo("ACTIVE");
+        assertThat(opened.getHospitalId()).isEqualTo(hospitalId);
+        assertThat(opened.getTransferredFromEpisodeId()).isEqualTo(atB.getId());
+        verify(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
+
+        var notice = ArgumentCaptor.forClass(com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert.class);
+        verify(obstetricAlertEscalation).raiseAfterCommit(notice.capture());
+        assertThat(notice.getValue().hospitalId()).as("B's maternity team is told").isEqualTo(otherHospitalId);
+        assertThat(notice.getValue().alertType()).isEqualTo("LEFT_WITHOUT_HANDOVER");
+        assertThat(notice.getValue().alertMessage()).contains("Hôpital A");
+
+        var audit = ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService, org.mockito.Mockito.times(2)).logEvent(audit.capture());
+        assertThat(audit.getAllValues()).extracting(com.example.hms.payload.dto.AuditEventRequestDTO::getEventType)
+            .containsExactly(com.example.hms.enums.AuditEventType.LABOR_EPISODE_LEFT_WITHOUT_HANDOVER,
+                com.example.hms.enums.AuditEventType.LABOR_EPISODE_TRANSFERRED_IN);
+        assertThat(audit.getAllValues()).extracting(com.example.hms.payload.dto.AuditEventRequestDTO::getHospitalId)
+            .containsExactly(otherHospitalId, hospitalId);
+
+        var ordered = org.mockito.Mockito.inOrder(patientRepository, episodeRepository);
+        ordered.verify(patientRepository).lockByIdUnscoped(patientId);
+        ordered.verify(episodeRepository).findStatusById(atB.getId());
+        ordered.verify(episodeRepository).saveAndFlush(atB);
+        ordered.verify(episodeRepository).save(any(LaborEpisode.class));
+    }
+
+    /** Another organisation whose records the sharing rule does not open: B's episode is not even found. */
+    @Test
+    void arrivalWithoutHandoverRefusesAnEpisodeTheCallerMayNotRead() {
+        LaborEpisode atB = activeAtOtherHospital(UUID.randomUUID());
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(roleValidator.isMidwife(recorderUserId, hospitalId)).thenReturn(true);
+        var request = arrival();
+
+        assertThatThrownBy(() -> service.recordArrivalWithoutHandover(patientId, atB.getId(), recorderUserId, request))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(patientRepository, never()).lockByIdUnscoped(any());
+        assertThat(atB.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+    }
+
+    @Test
+    void arrivalWithoutHandoverRefusesANurse() {
+        LaborEpisode atB = activeAtOtherHospital(UUID.randomUUID());
+        lenient().when(roleValidator.isNurse(recorderUserId, hospitalId)).thenReturn(true);
+        var request = arrival();
+
+        assertThatThrownBy(() -> service.recordArrivalWithoutHandover(patientId, atB.getId(), recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.transfer.notPermitted");
+        assertThat(atB.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+    }
+
+    /** A role at B counts for nothing at A: the arrival needs a role at A. */
+    @Test
+    void arrivalWithoutHandoverRefusesARoleHeldOnlyAtTheOtherHospital() {
+        UUID otherHospitalId = UUID.randomUUID();
+        LaborEpisode atB = activeAtOtherHospital(otherHospitalId);
+        lenient().when(roleValidator.isMidwife(recorderUserId, otherHospitalId)).thenReturn(true);
+        var request = arrival();
+
+        assertThatThrownBy(() -> service.recordArrivalWithoutHandover(patientId, atB.getId(), recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.transfer.notPermitted");
+    }
+
+    @Test
+    void arrivalWithoutHandoverRefusesTheActingHospitalsOwnEpisode() {
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(roleValidator.isMidwife(recorderUserId, hospitalId)).thenReturn(true);
+        var request = arrival();
+
+        assertThatThrownBy(() -> service.recordArrivalWithoutHandover(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.arrival.ownEpisode");
+    }
+
+    /** The #1129 refusal offers the no-handover path to whoever may admit a labour at A. */
+    @Test
+    void startRefusalOffersTheArrivalPathToAClinicianWhoMayAdmitLabour() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        UUID otherHospitalId = UUID.randomUUID();
+        LaborEpisode atB = activeAtOtherHospital(otherHospitalId);
+        when(recordAccessPolicy.readableHospitalIds(recorderUserId, patientId, hospitalId))
+            .thenReturn(Set.of(hospitalId, otherHospitalId));
+        when(episodeRepository.findFirstByPatient_IdAndStatusOrderByAdmittedAtDesc(patientId, LaborStatus.ACTIVE))
+            .thenReturn(Optional.of(atB));
+        when(roleValidator.isMidwife(recorderUserId, hospitalId)).thenReturn(true);
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).gestationalAgeWeeks(39).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("maternity.labor.alreadyActiveElsewhereArrivalOffered"))
+            .satisfies(e -> assertThat(((BusinessException) e).getArgs()).containsExactly("Hôpital B"));
+        verify(episodeRepository, never()).save(any());
+    }
+
+    /** A delivery racing a transfer: the transfer committed first, so the birth is refused on B's episode. */
+    @Test
+    void recordDeliveryIsRefusedWhenTheEpisodeClosedBeforeTheLock() {
+        when(episodeRepository.findStatusById(episodeId)).thenReturn(Optional.of(LaborStatus.TRANSFERRED_OUT));
+        DeliveryRecordRequestDTO request = new DeliveryRecordRequestDTO();
+        request.setHospitalId(hospitalId);
+        request.setDeliveryMode(DeliveryMode.SPONTANEOUS_VAGINAL);
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.delivery.laborNotActive");
+        verify(patientRepository).lockByIdUnscoped(patientId);
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    /**
+     * User decision (2026-11-12): a transfer with a handover is B's handover of
+     * care. Within one organisation and with no general read of B, A still sees
+     * the transferred episode and its partograph, read only, and nothing else of B's.
+     */
+    @Test
+    void theReceivingHospitalReadsTheHandedOverEpisodeAndNothingElseOfTheSender() {
+        Hospital b = new Hospital();
+        b.setId(UUID.randomUUID());
+        b.setName("Hôpital B");
+        LaborEpisode handed = LaborEpisode.builder().patient(patient).hospital(b).status(LaborStatus.TRANSFERRED_OUT)
+            .transferHospital(hospital).admittedAt(LocalDateTime.now().minusHours(8)).build();
+        handed.setId(UUID.randomUUID());
+        LaborEpisode earlierAtB = LaborEpisode.builder().patient(patient).hospital(b).status(LaborStatus.DELIVERED)
+            .admittedAt(LocalDateTime.now().minusYears(2)).build();
+        earlierAtB.setId(UUID.randomUUID());
+        LaborEpisode leftB = LaborEpisode.builder().patient(patient).hospital(b).status(LaborStatus.LEFT_WITHOUT_HANDOVER)
+            .transferHospital(hospital).admittedAt(LocalDateTime.now().minusYears(1)).build();
+        leftB.setId(UUID.randomUUID());
+        LaborEpisode continued = LaborEpisode.builder().patient(patient).hospital(hospital).status(LaborStatus.ACTIVE)
+            .transferredFrom(handed).admittedAt(LocalDateTime.now().minusHours(1)).build();
+        continued.setId(UUID.randomUUID());
+        // A reads only itself (the default readable set): no general read of B.
+        when(episodeRepository.findByPatient_IdAndHospital_IdInOrderByAdmittedAtDesc(eq(patientId), eq(Set.of(hospitalId)), any()))
+            .thenReturn(List.of(continued));
+        lenient().when(episodeRepository.existsByTransferredFrom_IdAndHospital_Id(handed.getId(), hospitalId)).thenReturn(true);
+        lenient().when(episodeRepository.existsByTransferredFrom_IdAndHospital_Id(leftB.getId(), hospitalId)).thenReturn(true);
+        for (LaborEpisode e : List.of(handed, earlierAtB, leftB)) {
+            lenient().when(episodeRepository.findById(e.getId())).thenReturn(Optional.of(e));
+        }
+        when(entryRepository.findByEpisode_IdOrderByObservationTimeAsc(handed.getId()))
+            .thenReturn(List.of(LaborPartographEntry.builder().episode(handed).patient(patient).hospital(b)
+                .observationTime(LocalDateTime.now().minusHours(3)).fetalHeartRateBpm(140).build()));
+
+        assertThat(service.getEpisodes(patientId, hospitalId, 10))
+            .extracting(LaborEpisodeResponseDTO::getId)
+            .containsExactly(continued.getId(), handed.getId());
+        // Rex on #1134: the handed-over row never takes the list past its limit.
+        assertThat(service.getEpisodes(patientId, hospitalId, 1))
+            .extracting(LaborEpisodeResponseDTO::getId)
+            .containsExactly(continued.getId());
+        assertThat(service.getEntries(patientId, handed.getId(), hospitalId)).hasSize(1);
+        verify(reachRecorder, org.mockito.Mockito.atLeastOnce()).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(b.getId().toString(), 1L)), eq("Labour episode handed over by transfer read at the receiving hospital"));
+
+        // Nothing else of B's: an earlier episode, nor one closed by an arrival without handover.
+        assertThatThrownBy(() -> service.getEntries(patientId, earlierAtB.getId(), hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getEntries(patientId, leftB.getId(), hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getDelivery(patientId, earlierAtB.getId(), hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /**
+     * Rex on #1134: after a transfer the labour's partograph spans the episodes
+     * it continues. A birth earlier than an entry charted at the sending hospital
+     * (with a handover, or before an arrival without one) is refused on the
+     * birth field, two hand-overs back as well.
+     */
+    @Test
+    void aBirthEarlierThanAnEntryChartedBeforeTheTransferIsRefused() {
+        LocalDateTime entryAtB = LocalDateTime.now().minusHours(2);
+        LocalDateTime entryAtC = LocalDateTime.now().minusHours(1);
+        LaborEpisode atC = LaborEpisode.builder().patient(patient).status(LaborStatus.LEFT_WITHOUT_HANDOVER).build();
+        atC.setId(UUID.randomUUID());
+        LaborEpisode atB = LaborEpisode.builder().patient(patient).status(LaborStatus.TRANSFERRED_OUT)
+            .transferredFrom(atC).build();
+        atB.setId(UUID.randomUUID());
+        episode.setTransferredFrom(atB);
+        episode.setLaborOnsetAt(entryAtB.minusHours(8));
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(atB.getId()))
+            .thenReturn(Optional.of(LaborPartographEntry.builder().episode(atB).observationTime(entryAtB).build()));
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(atC.getId()))
+            .thenReturn(Optional.of(LaborPartographEntry.builder().episode(atC).observationTime(entryAtC).build()));
+
+        for (LocalDateTime birth : List.of(entryAtB.minusMinutes(10), entryAtC.minusMinutes(10))) {
+            DeliveryRecordRequestDTO request = deliveryRequest();
+            request.setBirthDateTime(birth);
+            assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("field", "birthDateTime")
+                .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeLastPartograph");
+        }
+        verify(deliveryRecordRepository, never()).save(any(DeliveryRecord.class));
+
+        // After the last entry of the whole chain, the birth is recorded.
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(entryAtC.plusMinutes(5));
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+    }
+
+    /* ── QA D1712 (round 46): the receiving episode holds her care from her arrival on ── */
+
+    private LaborEpisode continuedFromAnotherHospital(LocalDateTime arrivedAt) {
+        Hospital b = new Hospital();
+        b.setId(UUID.randomUUID());
+        LaborEpisode handed = LaborEpisode.builder().patient(patient).hospital(b).status(LaborStatus.TRANSFERRED_OUT)
+            .admittedAt(arrivedAt.minusHours(4)).build();
+        handed.setId(UUID.randomUUID());
+        episode.setTransferredFrom(handed);
+        episode.setAdmittedAt(arrivedAt);
+        episode.setLaborOnsetAt(arrivedAt.minusHours(6));
+        return handed;
+    }
+
+    @Test
+    void d1712_anEntryBeforeTheTransferIsRefusedOnItsField() {
+        continuedFromAnotherHospital(LocalDateTime.now().minusMinutes(30));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().minusMinutes(80));      // after onset, before her arrival
+        request.setCervicalDilationCm(6);
+
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "observationTime")
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.partograph.beforeTransfer");
+        verify(entryRepository, never()).save(any());
+    }
+
+    @Test
+    void d1712_anEntryFromHerArrivalOnIsAccepted() {
+        LocalDateTime arrived = LocalDateTime.now().minusMinutes(30);
+        continuedFromAnotherHospital(arrived);
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(arrived);
+
+        service.addEntry(patientId, episodeId, recorderUserId, request);
+
+        verify(entryRepository).save(any());
+    }
+
+    @Test
+    void d1712_anEpisodeOpenedHereKeepsOnlyTheOnsetBound() {
+        episode.setAdmittedAt(LocalDateTime.now().minusMinutes(30));
+        episode.setLaborOnsetAt(LocalDateTime.now().minusHours(6));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().minusMinutes(80));      // a late entry, no transfer
+
+        service.addEntry(patientId, episodeId, recorderUserId, request);
+
+        verify(entryRepository).save(any());
+    }
+
+    @Test
+    void d1712_aBirthBeforeTheTransferIsRefusedOnItsField() {
+        continuedFromAnotherHospital(LocalDateTime.now().minusMinutes(30));
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(LocalDateTime.now().minusMinutes(80));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "birthDateTime")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeTransfer");
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    /* ── QA r46 follow-up: a baby born in transit after an arrival without handover ── */
+
+    /** She arrived without a handover: the episode at B is closed, A's started when the arrival was recorded. */
+    private LaborEpisode arrivedWithoutHandover(LocalDateTime arrivalRecordedAt) {
+        Hospital b = new Hospital();
+        b.setId(UUID.randomUUID());
+        LaborEpisode left = LaborEpisode.builder().patient(patient).hospital(b)
+            .status(LaborStatus.LEFT_WITHOUT_HANDOVER).admittedAt(arrivalRecordedAt.minusHours(5)).build();
+        left.setId(UUID.randomUUID());
+        episode.setTransferredFrom(left);
+        episode.setAdmittedAt(arrivalRecordedAt);
+        episode.setLaborOnsetAt(arrivalRecordedAt.minusHours(6));
+        return left;
+    }
+
+    private DeliveryRecordRequestDTO bornBeforeArrival(LocalDateTime birthAt, String reason) {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(birthAt);
+        request.setBornBeforeArrival(true);
+        request.setBornBeforeArrivalReason(reason);
+        return request;
+    }
+
+    @Test
+    void d1712_bornBeforeArrivalIsAcceptedKeptAndAudited() {
+        LocalDateTime arrived = LocalDateTime.now().minusMinutes(30);
+        arrivedWithoutHandover(arrived);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId,
+            bornBeforeArrival(arrived.minusMinutes(20), "  Née dans le taxi  "));
+
+        assertThat(response.isBornBeforeArrival()).isTrue();
+        assertThat(response.getBornBeforeArrivalReason()).isEqualTo("Née dans le taxi");
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(audit.capture());
+        assertThat(audit.getAllValues()).extracting(com.example.hms.payload.dto.AuditEventRequestDTO::getEventType)
+            .contains(com.example.hms.enums.AuditEventType.LABOR_DELIVERY_BORN_BEFORE_ARRIVAL);
+    }
+
+    @Test
+    void d1712_aBirthBeforeArrivalWithoutTheMarkIsRefusedOnTheBirthField() {
+        LocalDateTime arrived = LocalDateTime.now().minusMinutes(30);
+        arrivedWithoutHandover(arrived);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(arrived.minusMinutes(20));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "birthDateTime")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeTransfer");
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void d1712_theMarkNeedsItsReason() {
+        LocalDateTime arrived = LocalDateTime.now().minusMinutes(30);
+        arrivedWithoutHandover(arrived);
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId,
+                bornBeforeArrival(arrived.minusMinutes(20), "  ")))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "bornBeforeArrivalReason")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.bornBeforeArrivalReasonRequired");
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void d1712_aBirthBeforeArrivalStillFollowsThePreviousEpisodesLastEntry() {
+        LocalDateTime arrived = LocalDateTime.now().minusMinutes(30);
+        LaborEpisode left = arrivedWithoutHandover(arrived);
+        LaborPartographEntry atB = LaborPartographEntry.builder().episode(left)
+            .observationTime(arrived.minusMinutes(40)).build();
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(any())).thenReturn(Optional.empty());
+        when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(left.getId())).thenReturn(Optional.of(atB));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId,
+                bornBeforeArrival(arrived.minusMinutes(60), "Né en route")))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "birthDateTime")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeLastPartograph");
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void d1712_aBirthBeforeArrivalNeverPrecedesThePreviousEpisodesStart() {
+        LocalDateTime arrived = LocalDateTime.now().minusMinutes(30);
+        LaborEpisode left = arrivedWithoutHandover(arrived);
+        episode.setLaborOnsetAt(left.getAdmittedAt().minusHours(3));      // onset alone would allow it
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId,
+                bornBeforeArrival(left.getAdmittedAt().minusMinutes(10), "Né en route")))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "birthDateTime")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforePreviousEpisode");
+    }
+
+    /* ── Rex on #1140: the formal-handover path, and the receiving hospital's own entries ── */
+
+    /** A formal handover: A's episode starts at the handover, before the journey. */
+    private LaborEpisode handedOverAt(LocalDateTime handedOver) {
+        LaborEpisode previous = arrivedWithoutHandover(handedOver);
+        previous.setStatus(LaborStatus.TRANSFERRED_OUT);
+        return previous;
+    }
+
+    @Test
+    void d1712_aTransitBirthAfterAFormalHandoverIsDeclaredKeptAndAudited() {
+        LocalDateTime handedOver = LocalDateTime.now().minusHours(2);
+        handedOverAt(handedOver);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId,
+            bornBeforeArrival(handedOver.plusMinutes(30), "Née dans l'ambulance"));
+
+        assertThat(response.isBornBeforeArrival()).isTrue();
+        assertThat(response.getBornBeforeArrivalReason()).isEqualTo("Née dans l'ambulance");
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(audit.capture());
+        assertThat(audit.getAllValues()).extracting(com.example.hms.payload.dto.AuditEventRequestDTO::getEventType)
+            .contains(com.example.hms.enums.AuditEventType.LABOR_DELIVERY_BORN_BEFORE_ARRIVAL);
+    }
+
+    @Test
+    void d1712_aDeclaredTransitBirthAfterAFormalHandoverStillNeedsItsReason() {
+        LocalDateTime handedOver = LocalDateTime.now().minusHours(2);
+        handedOverAt(handedOver);
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId,
+                bornBeforeArrival(handedOver.plusMinutes(30), " ")))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "bornBeforeArrivalReason");
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void d1712_anUndeclaredBirthAfterAFormalHandoverIsAnOrdinaryBirth() {
+        LocalDateTime handedOver = LocalDateTime.now().minusHours(2);
+        handedOverAt(handedOver);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(handedOver.plusMinutes(30));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.isBornBeforeArrival()).isFalse();
+        assertThat(response.getBornBeforeArrivalReason()).isNull();
+    }
+
+    @Test
+    void d1712_theReceivingHospitalsAdmissionEntryNeverBlocksADeclaredTransitBirth() {
+        LocalDateTime arrived = LocalDateTime.now().minusMinutes(30);
+        arrivedWithoutHandover(arrived);
+        // A's admission observation, after the birth; B charted nothing.
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(any())).thenReturn(Optional.empty());
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(episodeId)).thenReturn(Optional.of(
+            LaborPartographEntry.builder().episode(episode).observationTime(arrived.plusMinutes(5)).build()));
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeAsc(episodeId)).thenReturn(Optional.of(
+            LaborPartographEntry.builder().episode(episode).observationTime(arrived.plusMinutes(5)).build()));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId,
+            bornBeforeArrival(arrived.minusMinutes(20), "Né en route"));
+
+        assertThat(response.isBornBeforeArrival()).isTrue();
+    }
+
+    @Test
+    void d1712_anUndeclaredBirthStillFollowsTheReceivingHospitalsOwnEntries() {
+        LocalDateTime handedOver = LocalDateTime.now().minusHours(2);
+        handedOverAt(handedOver);
+        chartedAt(handedOver.plusMinutes(40));
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(handedOver.plusMinutes(30));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeLastPartograph");
+    }
+
+    /** Rex on #1140: observed here in labour before the birth means she had arrived; the declaration is refused. */
+    @Test
+    void d1712_anObservationHereBeforeTheBirthRefusesTheDeclaration() {
+        LocalDateTime handedOver = LocalDateTime.now().minusHours(2);
+        handedOverAt(handedOver);
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(any())).thenReturn(Optional.empty());
+        lenient().when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeAsc(episodeId)).thenReturn(Optional.of(
+            LaborPartographEntry.builder().episode(episode).observationTime(handedOver.plusMinutes(10)).build()));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId,
+                bornBeforeArrival(handedOver.plusMinutes(30), "Née dans l'ambulance")))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "bornBeforeArrival")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.bornBeforeArrivalAfterObservation");
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    /* ── QA D1714: one outcome per baby, and the fetal-death event ──── */
+
+    private static com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO baby(
+            com.example.hms.enums.BabyOutcome outcome) {
+        return com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO.builder().outcome(outcome).build();
+    }
+
+    @Test
+    void recordDeliveryOfASingleStillbirthCreatesItsFetalDeathEvent() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setLiveBirth(false);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository).save(saved.capture());
+        assertThat(saved.getValue().stillbornOrders()).containsExactly(1);
+        assertThat(saved.getValue().isLiveBirth()).isFalse();
+        assertThat(saved.getValue().isNewbornRegistrationPending()).isFalse();
+        verify(fetalDeathEvents).recordOutcomes(saved.getValue(), recorderUserId);
+        assertThat(episode.getOutcome()).isEqualTo(LaborOutcome.STILLBIRTH);
+    }
+
+    @Test
+    void recordDeliveryOfMixedTwinsKeepsEachBabysOutcome() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBabies(List.of(baby(com.example.hms.enums.BabyOutcome.LIVE),
+            baby(com.example.hms.enums.BabyOutcome.STILLBORN)));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository).save(saved.capture());
+        DeliveryRecord record = saved.getValue();
+        assertThat(record.getNumberOfInfants()).isEqualTo(2);
+        assertThat(record.isLiveBirth()).as("a live twin keeps the delivery a live birth").isTrue();
+        assertThat(record.liveOrders()).containsExactly(1);
+        assertThat(record.stillbornOrders()).containsExactly(2);
+        assertThat(record.isNewbornRegistrationPending()).isTrue();
+        assertThat(record.getAlerts()).as("a stillborn twin still raises the stillbirth alert")
+            .anySatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-stillbirth"));
+        verify(fetalDeathEvents).recordOutcomes(record, recorderUserId);
+        verify(newbornRegistration).registerLiveBorn(record, recorderUserId);
+        assertThat(response.getBabies()).extracting(com.example.hms.payload.dto.clinical.labor.DeliveryBabyDTO::getOutcome)
+            .containsExactly(com.example.hms.enums.BabyOutcome.LIVE, com.example.hms.enums.BabyOutcome.STILLBORN);
+    }
+
+    @Test
+    void aNotLiveFlagOverSeveralBabiesAsksForEachOutcomeRatherThanGuessing() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setLiveBirth(false);
+        request.setNumberOfInfants(2);
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("babies"));
+        verify(deliveryRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void theBabiesMustAgreeWithTheCountAndTheFlag() {
+        DeliveryRecordRequestDTO count = deliveryRequest();
+        count.setNumberOfInfants(3);
+        count.setBabies(List.of(baby(com.example.hms.enums.BabyOutcome.LIVE),
+            baby(com.example.hms.enums.BabyOutcome.LIVE)));
+        assertThatThrownBy(() -> LaborServiceImpl.resolveBabyOutcomes(count))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("numberOfInfants"));
+
+        DeliveryRecordRequestDTO flag = deliveryRequest();
+        flag.setLiveBirth(false);
+        flag.setBabies(List.of(baby(com.example.hms.enums.BabyOutcome.LIVE)));
+        assertThatThrownBy(() -> LaborServiceImpl.resolveBabyOutcomes(flag))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("liveBirth"));
+    }
+
+    @Test
+    void correctingABabysOutcomeGoesThroughTheFetalDeathServiceAndReRunsTheRegistration() {
+        DeliveryRecord record = DeliveryRecord.builder().episode(episode).patient(patient).hospital(hospital)
+            .birthDateTime(java.time.LocalDateTime.now()).deliveryMode(DeliveryMode.SPONTANEOUS_VAGINAL)
+            .numberOfInfants(1).build();
+        record.setId(UUID.randomUUID());
+        record.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.STILLBORN);
+        episode.setStatus(LaborStatus.DELIVERED);
+        when(episodeRepository.findStatusById(episodeId)).thenReturn(Optional.of(LaborStatus.DELIVERED));
+        when(deliveryRecordRepository.findByEpisode_Id(episodeId)).thenReturn(Optional.of(record));
+        when(deliveryRecordRepository.save(any(DeliveryRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(fetalDeathEvents.correctOutcome(record, 1, com.example.hms.enums.BabyOutcome.LIVE, "Heartbeat", recorderUserId))
+            .thenAnswer(inv -> {
+                record.putBabyOutcome(1, com.example.hms.enums.BabyOutcome.LIVE);
+                return new com.example.hms.service.maternity.FetalDeathEventService.Correction(true,
+                    com.example.hms.enums.BabyOutcome.STILLBORN, com.example.hms.enums.BabyOutcome.LIVE, null, null);
+            });
+        var request = com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder()
+            .hospitalId(hospitalId).birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("Heartbeat").build();
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId, request);
+
+        verify(fetalDeathEvents).correctOutcome(record, 1, com.example.hms.enums.BabyOutcome.LIVE, "Heartbeat", recorderUserId);
+        verify(newbornRegistration).registerLiveBorn(record, recorderUserId);
+        assertThat(episode.getOutcome()).isNotEqualTo(LaborOutcome.STILLBIRTH);
+    }
+
+    @Test
+    void anotherHospitalCannotCorrectABabysOutcome() {
+        UUID otherHospital = UUID.randomUUID();
+        when(episodeRepository.findByIdAndHospital_Id(episodeId, otherHospital)).thenReturn(Optional.empty());
+        var request = com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder()
+            .hospitalId(otherHospital).birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("x").build();
+
+        assertThatThrownBy(() -> service.correctBabyOutcome(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(fetalDeathEvents, never()).correctOutcome(any(), org.mockito.ArgumentMatchers.anyInt(), any(), any(), any());
+    }
+
+    // ── Rex on #1144: a correction refreshes the stillbirth alert and escalates a new one ──
+
+    private DeliveryRecord deliveredRecordFor(com.example.hms.enums.BabyOutcome... outcomes) {
+        DeliveryRecord record = DeliveryRecord.builder().episode(episode).patient(patient).hospital(hospital)
+            .birthDateTime(java.time.LocalDateTime.now()).deliveryMode(DeliveryMode.SPONTANEOUS_VAGINAL)
+            .numberOfInfants(outcomes.length).documentedBy(recorder).build();
+        record.setId(UUID.randomUUID());
+        for (int i = 0; i < outcomes.length; i++) {
+            record.putBabyOutcome(i + 1, outcomes[i]);
+        }
+        episode.setStatus(LaborStatus.DELIVERED);
+        when(episodeRepository.findStatusById(episodeId)).thenReturn(Optional.of(LaborStatus.DELIVERED));
+        when(deliveryRecordRepository.findByEpisode_Id(episodeId)).thenReturn(Optional.of(record));
+        when(deliveryRecordRepository.save(any(DeliveryRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+        return record;
+    }
+
+    private void correctionApplies(DeliveryRecord record, int order, com.example.hms.enums.BabyOutcome to) {
+        when(fetalDeathEvents.correctOutcome(any(), org.mockito.ArgumentMatchers.anyInt(), any(), any(), any()))
+            .thenAnswer(inv -> {
+                com.example.hms.enums.BabyOutcome from = record.outcomeOf(order);
+                record.putBabyOutcome(order, to);
+                return new com.example.hms.service.maternity.FetalDeathEventService.Correction(true, from, to, null, null);
+            });
+    }
+
+    @Test
+    void correctingTheLastStillbornBabyToLiveWithdrawsTheStillbirthAlert() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.STILLBORN);
+        record.addAlert(com.example.hms.enums.LaborAlertType.GENERAL, com.example.hms.enums.LaborAlertSeverity.URGENT,
+            "labor-stillbirth", "Stillbirth recorded", "liveBirth", new Object[]{});
+        correctionApplies(record, 1, com.example.hms.enums.BabyOutcome.LIVE);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("Heartbeat").build());
+
+        assertThat(record.getAlerts()).noneMatch(alert -> "labor-stillbirth".equals(alert.getCode()));
+    }
+
+    @Test
+    void correctingABabyToStillbornRaisesAndEscalatesTheStillbirthAlert() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE,
+            com.example.hms.enums.BabyOutcome.LIVE);
+        correctionApplies(record, 2, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(2).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("Wrong twin").build());
+
+        assertThat(record.getAlerts()).anyMatch(alert -> "labor-stillbirth".equals(alert.getCode()));
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY.equals(urgent.sourceType())
+                && record.getId().equals(urgent.sourceId())
+                && "labor.alert.msg.labor-stillbirth".equals(urgent.alertMessageKey())));
+    }
+
+    // ── Provisional 2026-11-14: Apgar and preterm alerts follow each baby's confirmed outcome ──
+
+    private static java.util.List<String> codesOf(DeliveryRecord record) {
+        return record.getAlerts().stream().map(com.example.hms.model.labor.LaborAlert::getCode).toList();
+    }
+
+    private DeliveryRecord savedDelivery() {
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        return saved.getValue();
+    }
+
+    @Test
+    void aConfirmedStillbirthRaisesNoApgarOrPretermAlertButKeepsTheMaternalAndStillbirthOnes() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setLiveBirth(false);
+        request.setApgarFiveMinute(0);
+        request.setGestationalAgeWeeksAtBirth(28);
+        request.setEstimatedBloodLossMl(1200);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(codesOf(savedDelivery()))
+            .doesNotContain("labor-apgar-critical", "labor-apgar-low", "labor-preterm", "labor-outcome-conflict")
+            .contains("labor-stillbirth", "labor-pph");
+        verify(obstetricAlertEscalation, never()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            urgent.alertMessageKey() != null && (urgent.alertMessageKey().endsWith("labor-apgar-critical")
+                || urgent.alertMessageKey().endsWith("labor-preterm"))));
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-stillbirth".equals(urgent.alertMessageKey())));
+    }
+
+    @Test
+    void aStillbornTwinNeverSilencesTheLiveTwinsApgarAndPretermAlerts() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBabies(List.of(baby(com.example.hms.enums.BabyOutcome.LIVE),
+            baby(com.example.hms.enums.BabyOutcome.STILLBORN)));
+        request.setApgarFiveMinute(3);
+        request.setGestationalAgeWeeksAtBirth(28);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(codesOf(savedDelivery()))
+            .contains("labor-apgar-critical", "labor-preterm", "labor-stillbirth")
+            .doesNotContain("labor-outcome-conflict");
+    }
+
+    @Test
+    void aStillbirthWithARecordedSignOfLifeIsFlaggedNotSilenced() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setLiveBirth(false);
+        request.setApgarFiveMinute(3);
+        request.setGestationalAgeWeeksAtBirth(28);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(codesOf(savedDelivery()))
+            .contains("labor-apgar-critical", "labor-preterm", "labor-stillbirth", "labor-outcome-conflict");
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-outcome-conflict".equals(urgent.alertMessageKey())));
+    }
+
+    @Test
+    void anUnknownOutcomeIsFlaggedNotSilenced() {
+        // A delivery recorded before V293: one "not live" flag over twins cannot say which baby was stillborn.
+        DeliveryRecord record = DeliveryRecord.builder().episode(episode).patient(patient).hospital(hospital)
+            .birthDateTime(java.time.LocalDateTime.now()).deliveryMode(DeliveryMode.SPONTANEOUS_VAGINAL)
+            .numberOfInfants(2).liveBirth(false).apgarFiveMinute(0).gestationalAgeWeeksAtBirth(28)
+            .documentedBy(recorder).build();
+        record.setId(UUID.randomUUID());
+        com.example.hms.service.maternity.StillbornNeonatalAlerts.Assessment assessment =
+            new com.example.hms.service.maternity.StillbornNeonatalAlerts(deliveryNewbornRepository,
+                newbornAssessmentRepository, escalationRepository).assess(record);
+        assertThat(assessment.suppress()).isFalse();
+        assertThat(assessment.conflict()).isTrue();
+    }
+
+    private void withNeonatalAlerts(DeliveryRecord record) {
+        record.setApgarFiveMinute(0);
+        record.setGestationalAgeWeeksAtBirth(28);
+        record.addAlert(com.example.hms.enums.LaborAlertType.GENERAL, com.example.hms.enums.LaborAlertSeverity.URGENT,
+            "labor-preterm", "Preterm", "gestationalAgeWeeksAtBirth", new Object[]{28});
+        record.addAlert(com.example.hms.enums.LaborAlertType.GENERAL, com.example.hms.enums.LaborAlertSeverity.URGENT,
+            "labor-apgar-critical", "Apgar 0", "apgarFiveMinute", new Object[]{0});
+    }
+
+    @Test
+    void aCorrectionToStillbornTakesTheBabysNeonatalAlertsOffTheRecord() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        correctionApplies(record, 1, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("No signs of life").build());
+
+        assertThat(codesOf(record)).doesNotContain("labor-preterm", "labor-apgar-critical")
+            .contains("labor-stillbirth");
+    }
+
+    @Test
+    void aCorrectionToStillbornOfOneTwinKeepsTheDeliveryAlertsForTheLiveTwin() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE,
+            com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        correctionApplies(record, 2, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(2).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("Twin B").build());
+
+        assertThat(codesOf(record)).contains("labor-preterm", "labor-apgar-critical", "labor-stillbirth");
+    }
+
+    @Test
+    void aCorrectionToLiveReassessesTheNeonatalAlertsAndNotifiesOnlyOnesNeverSent() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.STILLBORN);
+        record.setApgarFiveMinute(0);
+        record.setGestationalAgeWeeksAtBirth(28);
+        correctionApplies(record, 1, com.example.hms.enums.BabyOutcome.LIVE);
+        // The preterm alert was escalated before (live, then stillborn): it is back on the record, never replayed.
+        when(escalationRepository.existsBySourceTypeAndSourceIdAndAlertMessageKey(
+            com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY, record.getId(),
+            "labor.alert.msg.labor-preterm")).thenReturn(true);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.LIVE).reason("Heartbeat").build());
+
+        assertThat(codesOf(record)).contains("labor-preterm", "labor-apgar-critical");
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-apgar-critical".equals(urgent.alertMessageKey())));
+        verify(obstetricAlertEscalation, never()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-preterm".equals(urgent.alertMessageKey())));
+    }
+
+    @Test
+    void anAlertThatStillAppliesAfterACorrectionKeepsItsEntryAndIsNotRepublished() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE,
+            com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        com.example.hms.model.labor.LaborAlert preterm = record.getAlerts().get(0);
+        correctionApplies(record, 2, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(2).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("Twin B").build());
+
+        assertThat(record.getAlerts()).anySatisfy(alert -> assertThat(alert).isSameAs(preterm));
+        verify(obstetricAlertEscalation, never()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-preterm".equals(urgent.alertMessageKey())));
+    }
+
+    @Test
+    void aCorrectionAgainstABabysRecordedSignOfLifeIsFlaggedAndKeepsItsAlerts() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE,
+            com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        com.example.hms.model.Patient twinB = new com.example.hms.model.Patient();
+        twinB.setId(UUID.randomUUID());
+        when(deliveryNewbornRepository.findByDeliveryRecord_IdOrderByBirthOrderAsc(record.getId())).thenReturn(List.of(
+            com.example.hms.model.labor.DeliveryNewborn.builder().deliveryRecord(record).birthOrder(2)
+                .newbornPatient(twinB).build()));
+        when(newbornAssessmentRepository.anySignOfLifeRecorded(twinB.getId())).thenReturn(true);
+        correctionApplies(record, 2, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(2).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("Twin B").build());
+
+        assertThat(codesOf(record)).contains("labor-outcome-conflict", "labor-preterm", "labor-apgar-critical");
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-outcome-conflict".equals(urgent.alertMessageKey())));
+    }
+    /** Rex on #1152: a sign of life recorded on the mother's chart for this delivery (no registered baby). */
+    @Test
+    void aCorrectionAgainstASignOfLifeOnTheMothersChartIsFlaggedAndKeepsItsAlerts() {
+        DeliveryRecord record = deliveredRecordFor(com.example.hms.enums.BabyOutcome.LIVE);
+        withNeonatalAlerts(record);
+        when(newbornAssessmentRepository.anyUnattributedSignOfLifeRecorded(record.getId())).thenReturn(true);
+        correctionApplies(record, 1, com.example.hms.enums.BabyOutcome.STILLBORN);
+
+        service.correctBabyOutcome(patientId, episodeId, recorderUserId,
+            com.example.hms.payload.dto.clinical.labor.BabyOutcomeCorrectionRequestDTO.builder().hospitalId(hospitalId)
+                .birthOrder(1).outcome(com.example.hms.enums.BabyOutcome.STILLBORN).reason("No signs of life").build());
+
+        assertThat(codesOf(record)).contains("labor-outcome-conflict", "labor-preterm", "labor-apgar-critical");
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
+            "labor.alert.msg.labor-outcome-conflict".equals(urgent.alertMessageKey())));
     }
 }

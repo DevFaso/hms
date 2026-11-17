@@ -1,6 +1,9 @@
 package com.example.hms.fhir.write;
 
+import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
+import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import com.example.hms.fhir.FhirWriteProperties;
 import com.example.hms.fhir.mapper.ObservationFhirMapper;
 import com.example.hms.model.Hospital;
@@ -23,6 +26,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,10 +35,13 @@ import static org.mockito.Mockito.when;
 /**
  * Audit gap B1 on FHIR PUT /Observation: the tenant predicate is the one
  * REST PUT /lab-results/{id} uses — the ordering hospital and the performing
- * laboratory may amend the result, a third hospital is forbidden.
+ * laboratory may amend the result; a third hospital gets exactly the answer a
+ * nonexistent result gets.
  */
 @ExtendWith(MockitoExtension.class)
 class ObservationFhirWriteServiceScopeTest {
+
+    private static final FhirContext FHIR = FhirContext.forR4();
 
     @Mock private ObservationFhirMapper observationMapper;
     @Mock private LabResultRepository labResultRepository;
@@ -89,14 +96,40 @@ class ObservationFhirWriteServiceScopeTest {
     }
 
     @Test
-    void thirdHospitalIsForbidden() {
+    void thirdHospitalIsByteIdenticalToAMissingResult() {
+        // The same id asked in two worlds: a real result another hospital
+        // handles, and no result at all. LabResult is not TenantScoped, so
+        // findById reaches every tenant; a 403 for the first beside a 404 for
+        // the second let a writer enumerate which lab results exist elsewhere.
         scope(hospital());
-        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
 
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.of(result));
+        Throwable elsewhere = catchThrowable(() -> service.updateLabResult(fhirId, new Observation()));
+
+        when(labResultRepository.findById(result.getId())).thenReturn(Optional.empty());
+        Throwable nowhere = catchThrowable(() -> service.updateLabResult(fhirId, new Observation()));
+
+        assertThat(nowhere).isExactlyInstanceOf(ResourceNotFoundException.class);
+        assertThat(elsewhere).isExactlyInstanceOf(ResourceNotFoundException.class);
+        BaseServerResponseException a = (BaseServerResponseException) elsewhere;
+        BaseServerResponseException b = (BaseServerResponseException) nowhere;
+        assertThat(a.getStatusCode()).isEqualTo(b.getStatusCode());
+        assertThat(a.getMessage()).isEqualTo(b.getMessage());
+        assertThat(FHIR.newJsonParser().encodeResourceToString(a.getOperationOutcome()))
+            .isEqualTo(FHIR.newJsonParser().encodeResourceToString(b.getOperationOutcome()));
+        verify(observationMapper, never()).applyFhirLabResultUpdates(any(), any());
+        verify(labResultRepository, never()).save(any());
+    }
+
+    @Test
+    void noHospitalScopeIsForbidden() {
+        // "Pin a hospital" names no identifier, so it may differ from a 404.
+        HospitalContextHolder.setContext(HospitalContext.builder().build());
         Observation observation = new Observation();
+
         assertThatThrownBy(() -> service.updateLabResult(fhirId, observation))
             .isInstanceOf(ForbiddenOperationException.class);
-        verify(labResultRepository, never()).save(any());
+        verify(labResultRepository, never()).findById(any());
     }
 
     private static void scope(Hospital hospital) {

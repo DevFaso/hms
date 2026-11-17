@@ -23,11 +23,15 @@ load-bearing for **all** inbound HL7 work — follow it.
 4. **Parse domain segments** — `Hl7v2MessageBuilder.parseOruR01` /
    `parseAdtMessage`. Unparseable → record FAILED + return AE.
 5. **Call inbound service** — `MllpInbound{Lab,Adt,Merge}Service`. Map
-   outcome to ACK: `ACCEPTED → AA`, `REJECTED_NOT_FOUND/INVALID → AE`.
-   There is no third mapping. `AR` belongs to the dispatcher's own
-   transport-level refusals (bad MSH, sender not allowlisted, unsupported
-   type) and to nothing a domain handler returns — see **Cross-tenant
-   gate**.
+   outcome to ACK: `ACCEPTED → AA`, `REJECTED_NOT_FOUND/INVALID → AE`,
+   `REJECTED_NOT_OWNER → AR`. `AR` otherwise belongs to the dispatcher's
+   own transport-level refusals (bad MSH, sender not allowlisted,
+   unsupported type). `REJECTED_NOT_OWNER` is the one terminal domain
+   answer, and a handler may return it ONLY after it has established that
+   the receiving hospital holds a registration for every patient the
+   message names (today: an A40 whose master identity another hospital
+   owns). Before that point every refusal is `REJECTED_NOT_FOUND` — see
+   **Cross-tenant gate**. Never use it to say "not yours".
 
 ## Idempotency rules (MSH-10)
 
@@ -107,10 +111,77 @@ feed stops — it is the newest row for its correlation id, so it stays
 counted until an operator resolves it.
 
 The gate lives in the inbound services rather than in `EmpiServiceImpl`
-because there is **no security context on an MLLP worker thread**: every
-guard that resolves the caller's hospital from it reads a null active
-hospital as "unscoped, allow". Do not add anything on this path that reads
-the security context.
+because there is **no security context on an MLLP worker thread**, so no
+request-scoped guard can decide anything there. Do not assume such a guard
+"passes" without one: `RoleValidator.requireActiveHospitalId()` THROWS
+`HOSPITAL_CONTEXT_REQUIRED` for a caller with neither context nor
+authentication, and `TenantAwareJpaRepository.findById` answers empty for a
+`TenantScoped` entity. That is how every inbound A40 was refused from #527
+until the fix that added `EmpiAuthorisedMergePort` (a narrow type only the A40 path may inject):
+the MLLP path hands EMPI the hospital it already established (allowlist) and
+authorised (the gate), and EMPI holds the merge to a pinned caller's rules at
+it. Do the same for any new worker-thread path — pass the scope explicitly,
+never fabricate a security context, and prove it with a test that runs the
+REAL downstream service on a thread with no context
+(`AdtA40MergeEndToEndIT`); a mocked `EmpiService` cannot see this class of
+bug. And when a domain call inside the handler's transaction can throw, mark
+the transaction rollback-only yourself before returning the refusal, or the
+commit throws `UnexpectedRollbackException` and the sender gets the
+server-error AE instead of yours.
+
+## Field widths
+
+Every sender-controlled **identifier** (a field that is matched or keyed on)
+is held to the width of its column **once, where it is first read** — the limits live
+in `Hl7FieldBounds`. MSH-3/4/10 are checked in
+`Hl7MessageInspector.parseHeader` (an invalid MSH, so `AR` before the
+allowlist); PID-3 and MRG-1 in the ADT and A40 parsers; OBR-2 in
+`MllpInboundLabServiceImpl`, because the ORU parser is shared with paths
+where OBR-2 is not an accession; PV1-19 and PV1-3's point of care in the
+visit projection, their only reader, which skips rather than refusing the
+message - an over-width visit field must not drop a demographic update. The
+message is still AA, but an over-width PV1-19 leaves a FAILED dead letter
+(no payload, MSH-10 quoted) so the dropped visit step is visible.
+Check a field where it is **read**: refusing the whole message for a field
+only an optional step reads rejects what works today.
+
+- **Refuse, never truncate.** These are identifiers: a truncated MSH-10
+  reads as a replay of any other id with the same prefix, a truncated MRN
+  or placer can match someone else. A limit is the column's width, not the
+  HL7 nominal length — senders exceed v2.5's 20-character MSH-10.
+- **Do not add per-sink wrappers** (capping or sanitising a field where it
+  is logged or recorded). That was tried and did not converge, and a setter
+  into a `VARCHAR(255)` is a sink no wrapper sees. A new field that reaches
+  a sink gets a bound in `Hl7FieldBounds`, checked where it is parsed.
+- A refusal names the field and the limit, **never the value**.
+- A new bound is a copy of an entity `@Column(length)`: add the pair to
+  `Hl7FieldBoundsColumnWidthTest`, or a migration will silently move one
+  without the other. `Hl7FieldBounds.fits` counts code points, as
+  `VARCHAR(n)` does - not `String.length()`.
+- **Sender text is quoted wherever we write it.** A sender value that goes
+  into text we write - an audit description, a dead-letter reason, a merge
+  note - goes through `Hl7SenderText.quote`: double quotes, quote and
+  backslash escaped, and control, bidi, separator, zero-width, surrogate and
+  private-use characters shown as hex escapes. A sender can then neither end
+  its slot and write a finding of its own nor put an ANSI escape or a line
+  break into the text. MSH-10 goes through
+  `MllpRecordingContext.quotedControlId` / `withControlId` (the same quoting
+  after stripping surrounding spaces), in log lines too. Our own markers stay
+  unquoted (`Hl7SenderText.ABSENT`, `(over 255 characters)`), which is what
+  makes them unforgeable. Compute a quoted value into a local before a log
+  call (Sonar S2629). Known residual: the sender pair is still logged raw.
+- **Demographics and OBX-5 are refused too.** PID-5 (three name parts),
+  PID-8 and PID-11 (street, city, state, zip, country) are checked by
+  `MllpInboundAdtServiceImpl` before any lookup against the `Patient`
+  field's `@Size` (`Hl7FieldBounds.fitsSize`: bean validation runs at flush
+  and counts UTF-16 units); OBX-5 by the MLLP lab service and the HTTP
+  ingest against `result_value` (2048). Over-width is AE (HTTP: 400) with a
+  dead letter naming the field and the limit, instead of a flush-time
+  server error with no row. PID-7 is a date and has no width.
+  `Patient.addressLine1` is encrypted TEXT: its `@Size(255)` is its only
+  limit. OBX-3/6/7/11 are still truncated at their sink (an older decision).
+- MSH-9 is **not** bounded: not an identifier, and the recorder clamps the
+  one column it reaches.
 
 ## Audit on accept
 

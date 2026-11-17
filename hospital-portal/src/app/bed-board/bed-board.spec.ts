@@ -1,9 +1,11 @@
+import { resetStoredLangForTests } from '../shared/i18n/app-locale';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { of, throwError, Subject } from 'rxjs';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
 
 import { BedBoardComponent } from './bed-board';
 import {
@@ -15,9 +17,13 @@ import {
 } from '../services/bed-board.service';
 import { IsolationPrecautionResponse, IsolationService } from '../services/isolation.service';
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
+import { BedResponse, BedService } from '../services/bed.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { RoleContextStubState, roleContextStub } from '../testing/role-context.stub';
+import { AuthService } from '../auth/auth.service';
+import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
+import { answerReasonDialog, reasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
+import { mouseClick } from '../testing/mouse-click';
 
 function occupant(overrides: Partial<BedOccupant> = {}): BedOccupant {
   return {
@@ -125,8 +131,9 @@ describe('BedBoardComponent', () => {
   let isolationSpy: jasmine.SpyObj<IsolationService>;
   let transferSpy: jasmine.SpyObj<TransferService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
-  let scope: RoleContextStubState;
-  let roleCtx: RoleContextService;
+  let roleCtx: RoleContextStub;
+  let authSpy: jasmine.SpyObj<AuthService>;
+  let bedSpy: jasmine.SpyObj<BedService>;
 
   beforeEach(async () => {
     boardSpy = jasmine.createSpyObj('BedBoardService', ['getBoard']);
@@ -149,9 +156,19 @@ describe('BedBoardComponent', () => {
     ]);
     transferSpy.getPending.and.returnValue(of([]));
 
+    // Default: the eligibility lookup fails, so the picker is unfiltered
+    // (the server's refusal is the backstop) and older specs keep their beds.
+    bedSpy = jasmine.createSpyObj('BedService', ['getAvailableBeds', 'getWards']);
+    bedSpy.getAvailableBeds.and.returnValue(throwError(() => new Error('offline')));
+
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
-    scope = { superAdmin: false, hospitalId: 'h1', roles: ['ROLE_NURSE', 'ROLE_DOCTOR'] };
-    roleCtx = roleContextStub(scope);
+    authSpy = jasmine.createSpyObj('AuthService', ['getRoles']);
+    authSpy.getRoles.and.returnValue(['ROLE_NURSE', 'ROLE_DOCTOR']);
+    roleCtx = roleContextStub({
+      superAdmin: false,
+      hospitalId: 'h1',
+      roles: ['ROLE_NURSE', 'ROLE_DOCTOR'],
+    });
 
     await TestBed.configureTestingModule({
       imports: [BedBoardComponent, TranslateModule.forRoot()],
@@ -162,8 +179,10 @@ describe('BedBoardComponent', () => {
         { provide: BedBoardService, useValue: boardSpy },
         { provide: IsolationService, useValue: isolationSpy },
         { provide: TransferService, useValue: transferSpy },
+        { provide: BedService, useValue: bedSpy },
         { provide: ToastService, useValue: toastSpy },
         { provide: RoleContextService, useValue: roleCtx },
+        { provide: AuthService, useValue: authSpy },
       ],
     }).compileComponents();
 
@@ -174,32 +193,151 @@ describe('BedBoardComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('a super-admin in global view sees the pick-a-hospital hint and no request is made', () => {
-    // A bed board belongs to a building: nothing to fetch until one is picked.
-    scope.superAdmin = true;
-    scope.hospitalId = null;
-    const fixture = TestBed.createComponent(BedBoardComponent);
-    fixture.detectChanges();
+  it('loads only inventory in global view and aggregates weighted hospital capacity', () => {
+    roleCtx.set({ superAdmin: true, hospitalId: null, roles: ['ROLE_SUPER_ADMIN'] });
+    spyOn(TestBed.inject(HospitalService), 'list').and.returnValue(
+      of([
+        { id: 'h1', name: 'Cdx Hospital' },
+        { id: 'h2', name: 'Cdx Clinic' },
+      ] as HospitalResponse[]),
+    );
+    bedSpy.getWards.and.returnValue(
+      of([
+        { id: 'w1', hospitalId: 'h1', totalBeds: 10, availableBeds: 4, occupiedBeds: 6 },
+        { id: 'w2', hospitalId: 'h1', totalBeds: 20, availableBeds: 15, occupiedBeds: 5 },
+        { id: 'w3', hospitalId: 'h2', totalBeds: 5, availableBeds: 0, occupiedBeds: 5 },
+      ] as import('../services/bed.service').WardResponse[]),
+    );
+    component.ngOnInit();
     expect(boardSpy.getBoard).not.toHaveBeenCalled();
     expect(transferSpy.getPending).not.toHaveBeenCalled();
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="scope-hint"]'),
-    ).toBeTruthy();
+    expect(component.networkTotals()).toEqual({ total: 35, available: 19, occupied: 16 });
+    expect(component.networkRows().find((h) => h.hospitalId === 'h1')?.wards).toBe(2);
+    expect(component.occupancy(16, 35)).toBe(45.7);
+    component.searchTerm.set('Clinic');
+    expect(component.visibleHospitals().length).toBe(1);
+    expect(component.networkTotals().total).toBe(35);
+    expect(component.occupancy(0, 0)).toBe(0);
   });
 
-  it('picking a hospital after landing in global view loads that board', () => {
-    scope.superAdmin = true;
-    scope.hospitalId = null;
+  it('waits for hospital names before exposing inventory cards and preserves the names-failure fallback', () => {
+    roleCtx.set({ superAdmin: true, hospitalId: null, roles: ['ROLE_SUPER_ADMIN'] });
+    const names = new Subject<HospitalResponse[]>();
+    const hospitals = spyOn(TestBed.inject(HospitalService), 'list').and.returnValue(names);
+    bedSpy.getWards.and.returnValue(
+      of([
+        { id: 'w1', hospitalId: 'h1', totalBeds: 10, availableBeds: 4, occupiedBeds: 6 },
+      ] as import('../services/bed.service').WardResponse[]),
+    );
+    component.ngOnInit();
+    expect(component.loading()).toBeTrue();
+    expect(component.networkRows()).toEqual([]);
+    names.next([{ id: 'h1', name: 'Cdx Hospital' }] as HospitalResponse[]);
+    names.complete();
+    expect(component.loading()).toBeFalse();
+    expect(component.networkRows()[0].name).toBe('Cdx Hospital');
+    expect(bedSpy.getWards).toHaveBeenCalledWith(false);
+    hospitals.and.returnValue(throwError(() => new Error('directory unavailable')));
+    component.refresh();
+    expect(component.loading()).toBeFalse();
+    expect(component.hospitalNamesError()).toBeTrue();
+    expect(component.networkTotals().total).toBe(10);
+    expect(component.networkRows()[0].name).toBe('h1');
+  });
+
+  it('shows a retryable network error instead of a zero-capacity success', () => {
+    roleCtx.set({ superAdmin: true, hospitalId: null, roles: ['ROLE_SUPER_ADMIN'] });
+    spyOn(TestBed.inject(HospitalService), 'list').and.returnValue(of([]));
+    bedSpy.getWards.and.returnValue(throwError(() => new Error('offline')));
+    component.ngOnInit();
+    expect(component.loadError()).toBeTrue();
+    expect(component.loading()).toBeFalse();
+    expect(boardSpy.getBoard).not.toHaveBeenCalled();
+    bedSpy.getWards.and.returnValue(of([]));
+    component.refresh();
+    expect(component.loadError()).toBeFalse();
+  });
+
+  it('keeps scoped reloads current and clears stale census on error', () => {
+    const first = new Subject<BedBoard>();
+    const second = new Subject<BedBoard>();
+    boardSpy.getBoard.and.returnValues(first, second);
+    component.loadBoard();
+    component.loadBoard();
+    second.next(board({ hospitalId: 'new' }));
+    first.next(board({ hospitalId: 'old' }));
+    first.complete();
+    expect(component.board()?.hospitalId).toBe('new');
+    boardSpy.getBoard.and.returnValue(throwError(() => new Error('offline')));
+    component.loadBoard();
+    expect(component.board()).toBeNull();
+    expect(component.loadError()).toBeTrue();
+  });
+
+  it('searches beds by patient, MRN, room and unit without changing the census', () => {
+    component.board.set(
+      board({
+        wards: [
+          ward({
+            wardName: 'Cdx Ward',
+            rooms: [
+              {
+                roomNumber: 'Cdx Room',
+                beds: [
+                  bed({
+                    bedNumber: 'Cdx Bed',
+                    occupant: occupant({ patientName: 'Cdx Patient', mrn: 'CDX123' }),
+                  }),
+                  bed({ bedId: 'empty', bedNumber: 'Other' }),
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    for (const term of ['Cdx Patient', 'cdx123', 'Cdx Bed']) {
+      component.searchTerm.set(term);
+      expect(component.visibleWards()[0].rooms[0].beds.length).toBe(1);
+    }
+    component.searchTerm.set('Cdx Room');
+    expect(component.visibleWards()[0].rooms[0].beds.length).toBe(2);
+    expect(component.board()?.census.totalBeds).toBe(1);
+  });
+
+  it('carries no scope chip or hint of its own: the route gate owns them', () => {
+    // /bed-board is flagged requiresHospitalScope; the shell shows the one
+    // chip and keeps the page unbuilt until a hospital is pinned.
     const fixture = TestBed.createComponent(BedBoardComponent);
     fixture.detectChanges();
-    expect(boardSpy.getBoard).not.toHaveBeenCalled();
-
-    // What the chip does on a pick: pin the scope, then tell the host.
-    roleCtx.scopeToHospital('h1');
-    fixture.componentInstance.onScopeChange();
-    expect(boardSpy.getBoard).toHaveBeenCalledTimes(1);
-    expect(transferSpy.getPending).toHaveBeenCalledTimes(1);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-hospital-scope-chip')).toBeNull();
+    expect(el.querySelector('app-hospital-scope-hint')).toBeNull();
   });
+
+  // QA D1004 (round 18): the Transférer and Précautions dialogs ignored Escape
+  // (the handler sat on the sibling backdrop) and left focus on the opener.
+  for (const which of ['transfer', 'precautions'] as const) {
+    it(`D1004: the ${which} dialog takes focus and closes on Escape`, () => {
+      const fixture = TestBed.createComponent(BedBoardComponent);
+      const cmp = fixture.componentInstance;
+      fixture.detectChanges();
+      if (which === 'transfer') cmp.openTransfer(occupant());
+      else cmp.openPrecautions(occupant());
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const dialog = el.querySelector('[role="dialog"]') as HTMLElement;
+      expect(dialog).withContext('dialog rendered').not.toBeNull();
+      expect(dialog.getAttribute('aria-modal')).toBe('true');
+      expect(dialog.contains(document.activeElement))
+        .withContext('focus moved into the dialog')
+        .toBeTrue();
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      const open = which === 'transfer' ? cmp.showTransferModal() : cmp.showPrecautionModal();
+      expect(open).withContext('Escape closed the dialog').toBeFalse();
+    });
+  }
 
   it('loads the board on init', () => {
     component.ngOnInit();
@@ -307,6 +445,29 @@ describe('BedBoardComponent', () => {
     expect(component.bedStatusClass(bed())).toContain('bed-available');
   });
 
+  // QA D1124 (round 20 merge): the precaution and transfer buttons were
+  // disabled until their form was complete, so a click explained nothing.
+  for (const which of ['transfer', 'precautions'] as const) {
+    it(`D1124: the ${which} submit stays enabled, refuses a blank form and names the fields`, () => {
+      const fixture = TestBed.createComponent(BedBoardComponent);
+      const cmp = fixture.componentInstance;
+      fixture.detectChanges();
+      if (which === 'transfer') cmp.openTransfer(occupant());
+      else cmp.openPrecautions(occupant());
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const submit = el.querySelector<HTMLButtonElement>('.modal-footer .btn-primary')!;
+      expect(submit.disabled).withContext('never silently disabled').toBeFalse();
+      submit.click();
+      fixture.detectChanges();
+      expect(isolationSpy.startPrecaution).not.toHaveBeenCalled();
+      expect(transferSpy.requestTransfer).not.toHaveBeenCalled();
+      const field = which === 'transfer' ? '#transfer-reason' : '#precaution-reason';
+      expect(el.querySelector(field)?.getAttribute('aria-invalid')).toBe('true');
+      expect(el.querySelector('[data-testid="submit-guard-reason"]')).not.toBeNull();
+    });
+  }
+
   it('loads the patient precautions when the modal opens', () => {
     component.openPrecautions(occupant());
     expect(isolationSpy.getActiveForPatient).toHaveBeenCalledWith('p1');
@@ -340,22 +501,128 @@ describe('BedBoardComponent', () => {
     expect(boardSpy.getBoard).toHaveBeenCalledTimes(2);
   });
 
-  it('does not discontinue when no reason is given', () => {
-    spyOn(window, 'prompt').and.returnValue('');
-    component.discontinue({ id: 'i1' } as IsolationPrecautionResponse);
+  // QA D1201 (round 22): the shared reason dialog, not window.prompt (a blank
+  // answer to the prompt silently did nothing).
+  it('lifting a precaution asks the reason in the shared dialog; blank sends nothing and says why', () => {
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    const board = fixture.componentInstance;
+    board.discontinue({ id: 'i1' } as IsolationPrecautionResponse);
+    const dialog = reasonDialog(fixture);
+    expect(dialog).withContext('the reason is asked in the page').not.toBeNull();
+    answerReasonDialog(fixture, '   ');
     expect(isolationSpy.discontinuePrecaution).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="submit-guard-reason"]'),
+    ).not.toBeNull();
   });
 
   it('passes the lifting reason through', () => {
-    spyOn(window, 'prompt').and.returnValue('Culture negative');
     isolationSpy.discontinuePrecaution.and.returnValue(
       of({ id: 'i1' } as IsolationPrecautionResponse),
     );
-    component.openPrecautions(occupant());
-    component.discontinue({ id: 'i1' } as IsolationPrecautionResponse);
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    const board = fixture.componentInstance;
+    board.openPrecautions(occupant());
+    board.discontinue({ id: 'i1' } as IsolationPrecautionResponse);
+    answerReasonDialog(fixture, '  Culture negative ');
 
     const [, payload] = isolationSpy.discontinuePrecaution.calls.mostRecent().args;
     expect(payload.discontinuationReason).toBe('Culture negative');
+    expect(reasonDialog(fixture)).toBeNull();
+  });
+
+  // QA D1209 / D1201 (round 23, REGRESSION of the D1201 fix): the reason
+  // dialog opened from inside the still-open Précautions dialog was painted
+  // UNDER it (the bed board's `.modal` is z-index 1001, the shared dialog's
+  // backdrop 1000), so "Lever" could not be clicked. The D1201 spec called
+  // `discontinue()` and `button.click()` and never saw it. These click with
+  // the mouse (testing/mouse-click.ts: the element under the button's centre).
+  it('D1209: "Lever" in the open Précautions dialog opens the reason ON TOP; a mouse lifts the precaution', () => {
+    const precaution = {
+      id: 'i1',
+      precautionType: 'CONTACT',
+      reason: 'MRSA',
+    } as IsolationPrecautionResponse;
+    isolationSpy.getActiveForPatient.and.returnValue(of([precaution]));
+    isolationSpy.discontinuePrecaution.and.returnValue(of(precaution));
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openPrecautions(occupant());
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    mouseClick(host.querySelector<HTMLElement>('.precaution-list .btn-link.danger')!);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.showPrecautionModal())
+      .withContext('the Précautions dialog stays open underneath')
+      .toBeTrue();
+    const dialog = reasonDialog(fixture)!;
+    expect(dialog.contains(document.activeElement))
+      .withContext('focus is in the reason')
+      .toBeTrue();
+    const field = dialog.querySelector<HTMLTextAreaElement>(
+      '[data-testid="reason-dialog-reason"]',
+    )!;
+    mouseClick(field);
+    field.value = 'Culture negative';
+    field.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    mouseClick(dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-confirm"]')!);
+    fixture.detectChanges();
+
+    expect(isolationSpy.discontinuePrecaution).toHaveBeenCalledWith('i1', {
+      discontinuationReason: 'Culture negative',
+    });
+    expect(reasonDialog(fixture)).toBeNull();
+  });
+
+  it('D1209: the reason dialog over Précautions takes the keyboard; Escape closes only the reason', () => {
+    isolationSpy.getActiveForPatient.and.returnValue(
+      of([{ id: 'i1', precautionType: 'CONTACT' } as IsolationPrecautionResponse]),
+    );
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openPrecautions(occupant());
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const lift = host.querySelector<HTMLElement>('.precaution-list .btn-link.danger')!;
+    lift.focus();
+    mouseClick(lift);
+    fixture.detectChanges();
+    const dialog = reasonDialog(fixture)!;
+    (document.activeElement as HTMLElement).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    fixture.detectChanges();
+    expect(reasonDialog(fixture)).withContext('the reason closed').toBeNull();
+    expect(dialog.isConnected).toBeFalse();
+    expect(fixture.componentInstance.showPrecautionModal())
+      .withContext('the Précautions dialog underneath stays open')
+      .toBeTrue();
+  });
+
+  // QA D1219 (round 23): both buttons of the transfer-cancel dialog read
+  // "Annuler"; the confirm now names the action and the dismiss reads "Retour".
+  it('D1219: the transfer-cancel dialog labels its two buttons differently and a mouse confirms it', () => {
+    const order = { id: 't1', patientName: 'A' } as unknown as TransferOrderResponse;
+    transferSpy.cancelTransfer.and.returnValue(of(order));
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.cancelTransfer(order);
+    const dialog = reasonDialog(fixture)!;
+    const cancel = dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-cancel"]')!;
+    const confirm = dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-confirm"]')!;
+    expect(cancel.textContent!.trim()).toBe('COMMON.BACK');
+    expect(confirm.textContent!.trim()).toBe('BED_BOARD.TRANSFER_CANCEL_CONFIRM');
+    const field = dialog.querySelector<HTMLTextAreaElement>(
+      '[data-testid="reason-dialog-reason"]',
+    )!;
+    field.value = 'Bed no longer needed';
+    field.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    mouseClick(confirm);
+    fixture.detectChanges();
+    expect(transferSpy.cancelTransfer).toHaveBeenCalled();
   });
 
   // ── Transfers (item 30) ────────────────────────────────────────────
@@ -363,6 +630,60 @@ describe('BedBoardComponent', () => {
   it('loads the transfer worklist on init', () => {
     component.ngOnInit();
     expect(transferSpy.getPending).toHaveBeenCalled();
+  });
+
+  it('a hospital admin sees the board but neither the worklist nor the clinical actions (D88)', () => {
+    roleCtx.set({ roles: ['ROLE_HOSPITAL_ADMIN'] });
+    const admin = TestBed.createComponent(BedBoardComponent).componentInstance;
+    admin.ngOnInit();
+    expect(boardSpy.getBoard).toHaveBeenCalled();
+    expect(transferSpy.getPending).not.toHaveBeenCalled();
+    expect(admin.canTransfer).toBeFalse();
+    expect(admin.canManagePrecautions).toBeFalse();
+  });
+
+  it('a multi-role session acting as hospital admin never asks for the worklist (D229)', () => {
+    // The session lists every held role, but the token from the role picker
+    // carries only ROLE_HOSPITAL_ADMIN, which /transfers/pending refuses.
+    roleCtx.set({ roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_NURSE'], activeRole: null });
+    authSpy.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN']);
+    const admin = TestBed.createComponent(BedBoardComponent).componentInstance;
+    admin.ngOnInit();
+    expect(transferSpy.getPending).not.toHaveBeenCalled();
+    expect(admin.canTransfer).toBeFalse();
+  });
+
+  it('a multi-role session pinned to hospital admin never asks for the worklist (D229)', () => {
+    roleCtx.set({
+      roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_NURSE'],
+      activeRole: 'ROLE_HOSPITAL_ADMIN',
+    });
+    authSpy.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN', 'ROLE_NURSE']);
+    TestBed.createComponent(BedBoardComponent).componentInstance.ngOnInit();
+    expect(transferSpy.getPending).not.toHaveBeenCalled();
+  });
+
+  it('a refused worklist read is not reported as a load failure (D188)', () => {
+    transferSpy.getPending.and.returnValue(throwError(() => ({ status: 403 })));
+    component.ngOnInit();
+    expect(component.pendingTransfers()).toEqual([]);
+    expect(toastSpy.error).not.toHaveBeenCalled();
+  });
+
+  it('stacks the transfer dialog above its backdrop so its buttons take clicks (D133)', () => {
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    fixture.componentInstance.showTransferModal.set(true);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const backdrop = el.querySelector('.modal-backdrop') as HTMLElement;
+    const dialog = el.querySelector('.modal') as HTMLElement;
+    expect(getComputedStyle(dialog).position).toBe('fixed');
+    expect(Number(getComputedStyle(dialog).zIndex)).toBeGreaterThan(
+      Number(getComputedStyle(backdrop).zIndex),
+    );
+    fixture.nativeElement.remove();
   });
 
   it('offers only free beds as destinations', () => {
@@ -385,6 +706,43 @@ describe('BedBoardComponent', () => {
     component.ngOnInit();
 
     expect(component.destinationOptions().map((o) => o.bedId)).toEqual(['free']);
+  });
+
+  it('offers only the beds /beds/available?patientId= allows for that patient (D651)', () => {
+    // QA D651: NURSE_A clicked 'Transférer' for a man and was offered the
+    // maternity beds MATA M1–M3, which the server then refused.
+    boardSpy.getBoard.and.returnValue(
+      of(
+        board({
+          wards: [
+            ward({
+              wardName: 'Maternité A',
+              rooms: [{ roomNumber: '1', beds: [bed({ bedId: 'm1', bedNumber: 'M1' })] }],
+            }),
+            ward({
+              wardId: 'w2',
+              wardName: 'Médecine',
+              wardType: 'GENERAL',
+              rooms: [{ roomNumber: '2', beds: [bed({ bedId: 'g1', bedNumber: 'G1' })] }],
+            }),
+          ],
+        }),
+      ),
+    );
+    bedSpy.getAvailableBeds.and.returnValue(of([{ id: 'g1' } as BedResponse]));
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openTransfer(occupant({ patientId: 'man-1' }));
+    fixture.detectChanges();
+
+    expect(bedSpy.getAvailableBeds).toHaveBeenCalledWith('man-1');
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '#transfer-destination',
+    ) as HTMLSelectElement;
+    const offered = Array.from(select.options)
+      .map((o) => o.value)
+      .filter((v) => v !== '');
+    expect(offered).toEqual(['g1']);
   });
 
   it('excludes a bed another transfer is already on its way to', () => {
@@ -501,6 +859,28 @@ describe('BedBoardComponent', () => {
     expect(sent.isolationOverrideReason).toBeUndefined();
   });
 
+  it('QA D631: a refused transfer shows the server reason, a crash keeps the generic text', () => {
+    const reason = 'Un transfert est déjà en attente pour cette admission.';
+    transferSpy.requestTransfer.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 400, error: { message: reason } })),
+    );
+    component.ngOnInit();
+    component.openTransfer(occupant());
+    component.transferForm.toBedId = 'b2';
+    component.transferForm.reason = 'Closer observation';
+    component.submitTransfer();
+    expect(toastSpy.error).toHaveBeenCalledWith(reason);
+
+    transferSpy.requestTransfer.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'NPE at x' } })),
+    );
+    component.openTransfer(occupant());
+    component.transferForm.toBedId = 'b2';
+    component.transferForm.reason = 'Closer observation';
+    component.submitTransfer();
+    expect(toastSpy.error).toHaveBeenCalledWith('BED_BOARD.TRANSFER_ERROR');
+  });
+
   it('reloads both the board and the worklist after a transfer is ordered', () => {
     // A transfer changes the grid AND the set of held beds.
     transferSpy.requestTransfer.and.returnValue(of(transferOrder()));
@@ -520,18 +900,68 @@ describe('BedBoardComponent', () => {
     expect(transferSpy.completeTransfer).toHaveBeenCalledWith('t1', {});
   });
 
-  it('does not cancel a transfer when no reason is given', () => {
-    spyOn(window, 'prompt').and.returnValue('');
-    component.cancelTransfer(transferOrder());
+  it('cancelling a transfer asks the reason in the shared dialog; blank sends nothing', () => {
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.componentInstance.cancelTransfer(transferOrder());
+    expect(reasonDialog(fixture)).not.toBeNull();
+    answerReasonDialog(fixture, '');
     expect(transferSpy.cancelTransfer).not.toHaveBeenCalled();
   });
 
   it('passes the cancellation reason through', () => {
-    spyOn(window, 'prompt').and.returnValue('Patient improved');
     transferSpy.cancelTransfer.and.returnValue(of(transferOrder({ status: 'CANCELLED' })));
-    component.cancelTransfer(transferOrder());
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.componentInstance.cancelTransfer(transferOrder());
+    answerReasonDialog(fixture, 'Patient improved');
 
     const [, sent] = transferSpy.cancelTransfer.calls.mostRecent().args;
     expect(sent.cancellationReason).toBe('Patient improved');
+    expect(reasonDialog(fixture)).toBeNull();
   });
+
+  it('titles the precautions dialog without a literal "null" when the name is unknown', () => {
+    // The title is a translate param; ngx-translate prints a null param as
+    // "null" and leaves "{{name}}" for an undefined one, so the template
+    // passes an empty string for a patient with no name on file.
+    TestBed.inject(TranslateService).setTranslation('en', {
+      BED_BOARD: { PRECAUTIONS_FOR: 'Isolation precautions — {{name}}' },
+    });
+    TestBed.inject(TranslateService).use('en');
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openPrecautions(occupant({ patientName: null }));
+    fixture.detectChanges();
+
+    const title = (fixture.nativeElement as HTMLElement)
+      .querySelector('[role="dialog"] h2')
+      ?.textContent?.trim();
+    expect(title).toBe('Isolation precautions —');
+  });
+
+  // QA D1135 / D1106 (NOT_FIXED r19, r20): the occupancy tile read "16.7%"
+  // in French and Spanish.
+  for (const [lang, expected] of [
+    ['fr', '16,7 %'],
+    ['es', '16,7 %'],
+    ['en', '16.7%'],
+  ]) {
+    it(`shows the occupancy in the reader's notation (${lang}: ${expected})`, () => {
+      localStorage.setItem('lang', lang);
+      resetStoredLangForTests();
+      try {
+        boardSpy.getBoard.and.returnValue(
+          of(board({ census: { ...board().census, occupancyRate: 16.7 } })),
+        );
+        const fixture = TestBed.createComponent(BedBoardComponent);
+        fixture.detectChanges();
+        const values = Array.from(
+          (fixture.nativeElement as HTMLElement).querySelectorAll('.census-value'),
+        ).map((e) => e.textContent?.trim());
+        expect(values).toContain(expected);
+      } finally {
+        localStorage.removeItem('lang');
+        resetStoredLangForTests();
+      }
+    });
+  }
 });

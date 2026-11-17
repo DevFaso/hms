@@ -75,7 +75,8 @@ public class MedicalHistoryController {
     @Operation(summary = "Get current active social history", description = "Retrieve the current active social history for a patient")
     public ResponseEntity<SocialHistoryResponseDTO> getCurrentSocialHistory(@PathVariable UUID patientId) {
         SocialHistoryResponseDTO response = socialHistoryService.getCurrentSocialHistory(patientId);
-        return ResponseEntity.ok(response);
+        // QA D1082 class: none recorded is 204, the house answer for an empty "current".
+        return response == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(response);
     }
 
     @PutMapping("/social/{id}")

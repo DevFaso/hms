@@ -25,7 +25,9 @@ import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.utility.RoleValidator;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,6 +55,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -86,8 +89,36 @@ class DepartmentServiceImplTest {
     private User user;
     private Locale locale;
 
+    /**
+     * Refusals now carry their key and resolve it through MessageUtil (#1096): route
+     * MessageUtil to this test's message source, and give the JVM's back afterwards.
+     */
+    private Object previousMessageUtilSource;
+
+    private void routeMessageUtilToTheMock() {
+        previousMessageUtilSource = org.springframework.test.util.ReflectionTestUtils.getField(
+            com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(messageSource);
+        // A real source never answers null: an unstubbed key reads as itself.
+        org.mockito.Mockito.lenient().when(messageSource.getMessage(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(java.util.Locale.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @AfterEach
+    void restoreMessageUtil() {
+        com.example.hms.utility.MessageUtil.setMessageSource(
+            (org.springframework.context.MessageSource) previousMessageUtilSource);
+    }
+
     @BeforeEach
     void setUp() {
+        routeMessageUtilToTheMock();
+        // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
+        lenient().when(hospitalRepository.findClinicalById(any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
+                .filter(ClinicalHospitals::isClinical));
         deptId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         staffId = UUID.randomUUID();
@@ -172,7 +203,6 @@ class DepartmentServiceImplTest {
     @Test
     void getDepartmentById_throwsWhenNotFound() {
         when(departmentRepository.findByIdWithHeadOfDepartment(deptId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.getDepartmentById(deptId, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -202,20 +232,44 @@ class DepartmentServiceImplTest {
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
         when(staffService.getStaffEntityById(staffId, locale)).thenReturn(staff);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Wrong hospital");
 
         assertThatThrownBy(() -> departmentService.updateDepartmentHead(deptId, staffId, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.head.wrongHospital"));
     }
 
     @Test
     void getActiveDepartmentsMinimal_returnsMinimalList() {
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
         when(departmentRepository.findByHospitalId(hospitalId)).thenReturn(List.of(department));
 
         List<DepartmentMinimalDTO> result = departmentService.getActiveDepartmentsMinimal(hospitalId, locale);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getName()).isEqualTo("Cardiology");
+    }
+
+    @Test
+    void getActiveDepartmentsMinimal_ownHospital_includesContacts() {
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
+        when(departmentRepository.findByHospitalId(hospitalId)).thenReturn(List.of(department));
+
+        List<DepartmentMinimalDTO> result = departmentService.getActiveDepartmentsMinimal(hospitalId, locale);
+
+        assertThat(result.get(0).getEmail()).isEqualTo("cardio@test.com");
+        assertThat(result.get(0).getPhoneNumber()).isEqualTo("555-1234");
+    }
+
+    @Test
+    void getActiveDepartmentsMinimal_otherHospital_omitsContacts() {
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(UUID.randomUUID());
+        when(departmentRepository.findByHospitalId(hospitalId)).thenReturn(List.of(department));
+
+        List<DepartmentMinimalDTO> result = departmentService.getActiveDepartmentsMinimal(hospitalId, locale);
+
+        assertThat(result.get(0).getEmail()).isNull();
+        assertThat(result.get(0).getPhoneNumber()).isNull();
     }
 
     @Test
@@ -294,13 +348,43 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    void deleteDepartment_referencedWithoutForeignKey_isRefusedBeforeDelete_D601() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(departmentRepository.hasStaffMembers(deptId)).thenReturn(false);
+        when(departmentRepository.existsByClinicalReference(deptId)).thenReturn(true);
+        when(messageSource.getMessage(org.mockito.ArgumentMatchers.eq("department.r7.deleteInUse"), any(), any(Locale.class)))
+                .thenReturn("still used");
+
+        assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.r7.deleteInUse"))
+                .hasMessage("still used");
+        verify(departmentRepository, never()).delete(any(Department.class));
+    }
+
+    @Test
+    void deleteDepartment_stillReferenced_saysWhy_D435() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(departmentRepository.hasStaffMembers(deptId)).thenReturn(false);
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("fk"))
+                .when(departmentRepository).flush();
+        when(messageSource.getMessage(org.mockito.ArgumentMatchers.eq("department.r7.deleteInUse"), any(), any(Locale.class)))
+                .thenReturn("still used");
+
+        assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.r7.deleteInUse"))
+                .hasMessage("still used");
+    }
+
+    @Test
     void deleteDepartment_throwsWhenHasStaff() {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
         when(departmentRepository.hasStaffMembers(deptId)).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Has staff");
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessRuleException) e).getMessageKey()).isEqualTo("department.delete.withStaff"));
     }
 
     @Test
@@ -379,7 +463,7 @@ class DepartmentServiceImplTest {
         responseDto.setName("Updated Cardiology");
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.save(department)).thenReturn(department);
         when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(responseDto);
 
@@ -453,10 +537,10 @@ class DepartmentServiceImplTest {
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
         responseDto.setName("Neurology");
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -469,6 +553,36 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    void createDepartment_prefersActiveHospitalAdminAssignment() {
+        // D26: an admin who also holds another role at the same hospital must not
+        // hit "query did not return a unique result" — the admin assignment wins.
+        UUID userId = UUID.randomUUID();
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setName("Neurology");
+        dto.setHospitalId(hospitalId);
+        UserRoleHospitalAssignment adminAssignment = UserRoleHospitalAssignment.builder()
+            .hospital(hospital).active(true).build();
+        Department createdDepartment = new Department();
+        createdDepartment.setName("Neurology");
+        createdDepartment.setHospital(hospital);
+
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId)).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(userId);
+        when(roleAssignmentRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            userId, hospitalId, "ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(adminAssignment));
+        when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(adminAssignment))).thenReturn(createdDepartment);
+        when(departmentRepository.save(createdDepartment)).thenReturn(createdDepartment);
+        when(departmentMapper.toDepartmentResponseDTO(eq(createdDepartment), any(Locale.class)))
+            .thenReturn(new DepartmentResponseDTO());
+
+        departmentService.createDepartment(dto, locale);
+
+        verify(departmentMapper).toDepartment(any(), eq(hospital), isNull(), eq(adminAssignment));
+        verify(roleAssignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(any(), any());
+    }
+
+    @Test
     void createDepartment_nullDto_throwsIllegalArgument() {
         assertThatThrownBy(() -> departmentService.createDepartment(null, locale))
             .isInstanceOf(IllegalArgumentException.class);
@@ -476,22 +590,22 @@ class DepartmentServiceImplTest {
 
     @Test
     void createDepartment_noHospitalIdOrName_throwsIllegalArgument() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         DepartmentRequestDTO dto = new DepartmentRequestDTO();
         dto.setName("Test");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Hospital required");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
     void createDepartment_noName_throwsIllegalArgument() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         DepartmentRequestDTO dto = new DepartmentRequestDTO();
         dto.setHospitalId(hospitalId);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Name required");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
@@ -500,7 +614,7 @@ class DepartmentServiceImplTest {
         dto.setHospitalId(hospitalId);
         dto.setName("Cardiology");
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Cardiology", hospitalId)).thenReturn(true);
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Duplicate");
 
@@ -514,11 +628,40 @@ class DepartmentServiceImplTest {
         dto.setHospitalId(hospitalId);
         dto.setName("Test");
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createDepartment_atAProviderFacility_answersAsAnUnknownHospital() {
+        // Provider plan AC-11: departments are clinical, so a pharmacy is not a
+        // department destination; the same call at a hospital succeeds
+        // (createDepartment_success_minimal). The super-admin's HOSPITAL_ADMIN
+        // auto-provisioning therefore never targets a provider either.
+        hospital.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setHospitalId(hospitalId);
+        dto.setName("Neurology");
+        dto.setCode("neuro");
+        UUID userId = UUID.randomUUID();
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).active(true).build();
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId))
+            .thenReturn(false);
+        lenient().when(authService.getCurrentUserId()).thenReturn(userId);
+        lenient().when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+            .thenReturn(Optional.of(assignment));
+        lenient().when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment)))
+            .thenReturn(department);
+        lenient().when(departmentRepository.save(department)).thenReturn(department);
+
+        assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .satisfies(ex -> assertThat(((ResourceNotFoundException) ex).getMessageKey()).isEqualTo("hospital.notfound"));
+        verify(departmentRepository, never()).save(any());
     }
 
     @Test
@@ -534,10 +677,10 @@ class DepartmentServiceImplTest {
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
         responseDto.setName("ICU");
 
-        when(hospitalRepository.findByNameIgnoreCase("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalByNameIgnoreCase("Test Hospital")).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("ICU", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -553,7 +696,7 @@ class DepartmentServiceImplTest {
         dto.setHospitalName("NonexistentHospital");
         dto.setName("Test");
 
-        when(hospitalRepository.findByNameIgnoreCase("NonexistentHospital")).thenReturn(Optional.empty());
+        when(hospitalRepository.findClinicalByNameIgnoreCase("NonexistentHospital")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -574,12 +717,12 @@ class DepartmentServiceImplTest {
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
         responseDto.setName("Surgery");
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Surgery", hospitalId)).thenReturn(false);
         when(staffService.getStaffByUserEmail("doctor@test.com", locale)).thenReturn(List.of(staffDto));
         when(staffService.getStaffEntityById(staffId, locale)).thenReturn(staff);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), eq(staff), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -602,10 +745,10 @@ class DepartmentServiceImplTest {
             .user(user).hospital(hospital).active(true).build();
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Radiology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -632,10 +775,10 @@ class DepartmentServiceImplTest {
             .startDate(LocalDate.now()).build();
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(superAdminId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(superAdminId, hospitalId)).thenReturn(Optional.empty());
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(superAdminId, hospitalId)).thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
         when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
         when(roleAssignmentRepository.findFirstByHospitalIdAndRole_Name(hospitalId, "ROLE_HOSPITAL_ADMIN"))
@@ -662,12 +805,11 @@ class DepartmentServiceImplTest {
 
         UUID userId = UUID.randomUUID();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.empty());
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId)).thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -684,10 +826,10 @@ class DepartmentServiceImplTest {
             .user(user).hospital(hospital).active(true).build();
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Oncology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -710,6 +852,7 @@ class DepartmentServiceImplTest {
 
         StaffResponseDTO staffDto = new StaffResponseDTO();
         staffDto.setId(staffId.toString());
+        staffDto.setHospitalId(hospitalId.toString());
 
         // Current head is different from new head
         Staff currentHead = new Staff();
@@ -719,7 +862,7 @@ class DepartmentServiceImplTest {
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffService.getStaffByUserEmail("doctor@test.com", locale)).thenReturn(List.of(staffDto));
         when(staffService.getStaffEntityById(staffId, locale)).thenReturn(staff);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -740,6 +883,7 @@ class DepartmentServiceImplTest {
 
         StaffResponseDTO staffDto = new StaffResponseDTO();
         staffDto.setId(staffId.toString());
+        staffDto.setHospitalId(hospitalId.toString());
 
         // Same head
         department.setHeadOfDepartment(staff);
@@ -747,7 +891,7 @@ class DepartmentServiceImplTest {
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffService.getStaffByUserEmail("doctor@test.com", locale)).thenReturn(List.of(staffDto));
         when(staffService.getStaffEntityById(staffId, locale)).thenReturn(staff);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -769,7 +913,7 @@ class DepartmentServiceImplTest {
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.save(department)).thenReturn(department);
         when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(responseDto);
 
@@ -784,7 +928,6 @@ class DepartmentServiceImplTest {
         dto.setHospitalId(hospitalId);
         dto.setName("Test");
         when(departmentRepository.findById(deptId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -797,7 +940,7 @@ class DepartmentServiceImplTest {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
-            .isInstanceOf(jakarta.persistence.EntityNotFoundException.class);
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     // ========== getDepartmentStatistics edge case ==========
@@ -805,7 +948,6 @@ class DepartmentServiceImplTest {
     @Test
     void getDepartmentStatistics_notFound_throws() {
         when(departmentRepository.findByIdWithTranslations(deptId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.getDepartmentStatistics(deptId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -816,7 +958,6 @@ class DepartmentServiceImplTest {
     @Test
     void updateDepartmentHead_departmentNotFound_throws() {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.updateDepartmentHead(deptId, staffId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -827,7 +968,6 @@ class DepartmentServiceImplTest {
     @Test
     void getDepartmentWithStaff_notFound_throws() {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.getDepartmentWithStaff(deptId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -881,10 +1021,10 @@ class DepartmentServiceImplTest {
             .user(user).hospital(hospital).role(hospitalAdminRole).active(true).build();
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Pharmacy", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(superAdminId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(superAdminId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(superAdminId, hospitalId))
             .thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
         when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
@@ -910,16 +1050,15 @@ class DepartmentServiceImplTest {
         hospitalAdminRole.setId(UUID.randomUUID());
         hospitalAdminRole.setName("ROLE_HOSPITAL_ADMIN");
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(superAdminId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(superAdminId, hospitalId)).thenReturn(Optional.empty());
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(superAdminId, hospitalId)).thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
         when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
         when(roleAssignmentRepository.findFirstByHospitalIdAndRole_Name(hospitalId, "ROLE_HOSPITAL_ADMIN"))
             .thenReturn(Optional.empty());
         when(userRepository.findById(superAdminId)).thenReturn(Optional.empty());
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -940,10 +1079,10 @@ class DepartmentServiceImplTest {
             .user(user).hospital(hospital).role(hospitalAdminRole).active(true).build();
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(superAdminId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(superAdminId, hospitalId)).thenReturn(Optional.empty());
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(superAdminId, hospitalId)).thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
         when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
         when(roleAssignmentRepository.findFirstByHospitalIdAndRole_Name(hospitalId, "ROLE_HOSPITAL_ADMIN"))
@@ -972,11 +1111,11 @@ class DepartmentServiceImplTest {
             .user(user).hospital(hospital).active(true).build();
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Test", hospitalId)).thenReturn(false);
         when(staffService.getStaffByUserEmail("unknown@test.com", locale)).thenReturn(List.of());
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -998,7 +1137,7 @@ class DepartmentServiceImplTest {
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.save(department)).thenReturn(department);
         when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(responseDto);
 
@@ -1019,10 +1158,10 @@ class DepartmentServiceImplTest {
             .user(user).hospital(hospital).active(true).build();
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Pediatrics", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -1045,10 +1184,10 @@ class DepartmentServiceImplTest {
             .user(user).hospital(hospital).active(true).build();
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Dermatology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -1077,10 +1216,10 @@ class DepartmentServiceImplTest {
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
         responseDto.setName("Neurology");
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -1108,10 +1247,10 @@ class DepartmentServiceImplTest {
             .user(user).hospital(hospital).active(true).build();
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Orthopedics", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -1153,10 +1292,10 @@ class DepartmentServiceImplTest {
             .user(user).hospital(hospital).active(true).build();
         DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("SuperAdminDept", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -1187,7 +1326,6 @@ class DepartmentServiceImplTest {
         dto.setName("Cross Update");
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -1208,7 +1346,7 @@ class DepartmentServiceImplTest {
         responseDto.setName("Updated Cardiology");
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.save(department)).thenReturn(department);
         when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(responseDto);
 
@@ -1231,7 +1369,6 @@ class DepartmentServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -1308,7 +1445,6 @@ class DepartmentServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
         when(departmentRepository.findByIdWithHeadOfDepartment(deptId)).thenReturn(Optional.of(department));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
 
         assertThatThrownBy(() -> departmentService.getDepartmentById(deptId, locale))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -1362,16 +1498,41 @@ class DepartmentServiceImplTest {
     }
 
     @Test
-    void getActiveDepartmentsMinimal_nonSuperAdmin_crossHospital_throwsAccessDenied() {
+    void getActiveDepartmentsMinimal_crossHospital_isANameOnlyDirectoryOfActiveDepartments() {
+        // QA D118: a referral picks the RECEIVING hospital's department. This
+        // used to throw AccessDenied (a silent 403 in the referral form).
         UUID otherHospitalId = UUID.randomUUID();
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
-        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        UUID doctorId = UUID.randomUUID();
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorId);
+        when(roleValidator.isDoctor(doctorId, hospitalId)).thenReturn(true);
+        Department open = Department.builder().name("Pediatrie").email("ped@example.test")
+            .phoneNumber("+22600000000").build();
+        open.setId(UUID.randomUUID());
+        open.setActive(true);
+        Department closed = Department.builder().name("Ferme").build();
+        closed.setId(UUID.randomUUID());
+        closed.setActive(false);
+        when(departmentRepository.findByHospitalId(otherHospitalId)).thenReturn(List.of(open, closed));
+
+        List<DepartmentMinimalDTO> result = departmentService.getActiveDepartmentsMinimal(otherHospitalId, locale);
+
+        assertThat(result).extracting(DepartmentMinimalDTO::getName).containsExactly("Pediatrie");
+        assertThat(result.get(0).getEmail()).isNull();
+        assertThat(result.get(0).getPhoneNumber()).isNull();
+    }
+
+    @Test
+    void getActiveDepartmentsMinimal_crossHospital_refusedToAHospitalAdmin() {
+        // QA D145: admin A listed hospital B's departments through this endpoint.
+        UUID otherHospitalId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(adminId);
 
         assertThatThrownBy(() -> departmentService.getActiveDepartmentsMinimal(otherHospitalId, locale))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-
-        verify(departmentRepository, never()).findByHospitalId(any(UUID.class));
+        verify(departmentRepository, never()).findByHospitalId(otherHospitalId);
     }
 
     @Test
@@ -1427,5 +1588,246 @@ class DepartmentServiceImplTest {
             .hasMessageContaining("assigned hospital");
 
         verify(departmentRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    // ── QA D281: department names and codes are unique per hospital, on create AND update ──
+
+    @Test
+    void createDepartment_duplicateCode_throwsConflict_D281() {
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setHospitalId(hospitalId);
+        dto.setName("Cardiologie 2");
+        dto.setCode("card");
+
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Cardiologie 2", hospitalId)).thenReturn(false);
+        // Codes are normalised to upper case before the check.
+        when(departmentRepository.existsByCodeIgnoreCaseAndHospitalId("CARD", hospitalId)).thenReturn(true);
+        when(messageSource.getMessage(eq("department.code.duplicate"), any(), any(Locale.class))).thenReturn("Duplicate code");
+
+        assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
+            .isInstanceOf(ConflictException.class);
+        verify(departmentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateDepartment_renameOntoAnotherDepartmentsName_throwsConflict_D281() {
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setName("Pediatrie");
+        dto.setHospitalId(hospitalId);
+        dto.setCode("CARD");
+
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByNameIgnoreCaseAndHospitalIdAndIdNot("Pediatrie", hospitalId, deptId)).thenReturn(true);
+        when(messageSource.getMessage(eq("department.duplicate"), any(), any(Locale.class))).thenReturn("Duplicate");
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, locale))
+            .isInstanceOf(ConflictException.class);
+        verify(departmentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateDepartment_codeOfAnotherDepartment_throwsConflict_D281() {
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setName("Cardiology");
+        dto.setHospitalId(hospitalId);
+        dto.setCode("ped");
+
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByCodeIgnoreCaseAndHospitalIdAndIdNot("PED", hospitalId, deptId)).thenReturn(true);
+        when(messageSource.getMessage(eq("department.code.duplicate"), any(), any(Locale.class))).thenReturn("Duplicate code");
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, locale))
+            .isInstanceOf(ConflictException.class);
+        verify(departmentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateDepartmentHead_ofAnotherHospitalsDepartment_isNotFound() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> departmentService.updateDepartmentHead(deptId, staffId, locale))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(departmentRepository, never()).save(any());
+    }
+
+    // ========== R48: an edit never drops what it does not touch ==========
+
+    private com.example.hms.model.DepartmentTranslation translation(String language, String name) {
+        com.example.hms.model.DepartmentTranslation t = new com.example.hms.model.DepartmentTranslation();
+        t.setLanguageCode(language);
+        t.setLanguage(language);
+        t.setName(name);
+        t.setDepartment(department);
+        return t;
+    }
+
+    /** The portal's edit form: name, code, phone, active; no head, no translations, no bed capacity. */
+    private DepartmentRequestDTO portalPhoneEdit() {
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setName("Médecine générale");
+        dto.setHospitalId(hospitalId);
+        dto.setCode("MG");
+        dto.setPhoneNumber("+22625361240");
+        return dto;
+    }
+
+    private void stubEditWithTheRealMapper() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.save(department)).thenReturn(department);
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class)))
+            .thenReturn(new DepartmentResponseDTO());
+        org.mockito.Mockito.doAnswer(invocation -> {
+            new DepartmentMapper().updateDepartmentFromDto(invocation.getArgument(0), invocation.getArgument(1),
+                invocation.getArgument(2), invocation.getArgument(3));
+            return null;
+        }).when(departmentMapper).updateDepartmentFromDto(any(), any(), any(), any());
+    }
+
+    @Test
+    void updateDepartment_phoneEdit_keepsTranslationsHeadAndBeds_R48() {
+        department.setName("Médecine générale");
+        department.setBedCapacity(24);
+        department.getDepartmentTranslations().add(translation("fr", "Médecine générale"));
+        department.getDepartmentTranslations().add(translation("en", "General medicine"));
+        stubEditWithTheRealMapper();
+
+        departmentService.updateDepartment(deptId, portalPhoneEdit(), Locale.FRENCH);
+
+        assertThat(department.getPhoneNumber()).isEqualTo("+22625361240");
+        assertThat(department.getDepartmentTranslations())
+            .extracting(com.example.hms.model.DepartmentTranslation::getLanguageCode,
+                com.example.hms.model.DepartmentTranslation::getName)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple("fr", "Médecine générale"),
+                org.assertj.core.groups.Tuple.tuple("en", "General medicine"));
+        assertThat(department.getHeadOfDepartment()).isSameAs(staff);
+        assertThat(department.getBedCapacity()).isEqualTo(24);
+    }
+
+    @Test
+    void updateDepartment_unchangedFrenchSave_keepsBaseNameAndOtherTranslations_D1790() {
+        department.setName("Cardiology base");
+        department.setDescription("Base description");
+        department.getDepartmentTranslations().add(translation("fr", "Cardiologie"));
+        department.getDepartmentTranslations().add(translation("en", "Cardiology"));
+        department.getDepartmentTranslations().add(translation("es", "Cardiologia"));
+        stubEditWithTheRealMapper();
+        DepartmentRequestDTO dto = portalPhoneEdit();
+        dto.setName("Cardiologie");
+
+        departmentService.updateDepartment(deptId, dto, Locale.FRENCH);
+
+        assertThat(department.getName()).isEqualTo("Cardiology base");
+        assertThat(department.getDescription()).isEqualTo("Base description");
+        assertThat(department.getDepartmentTranslations())
+            .extracting(com.example.hms.model.DepartmentTranslation::getLanguageCode,
+                com.example.hms.model.DepartmentTranslation::getName)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple("fr", "Cardiologie"),
+                org.assertj.core.groups.Tuple.tuple("en", "Cardiology"),
+                org.assertj.core.groups.Tuple.tuple("es", "Cardiologia"));
+    }
+
+    @Test
+    void updateDepartment_rename_rewritesOnlyTheCallersLanguage_R48() {
+        department.getDepartmentTranslations().add(translation("fr", "Cardiologie"));
+        department.getDepartmentTranslations().add(translation("en", "Cardiology"));
+        stubEditWithTheRealMapper();
+        DepartmentRequestDTO dto = portalPhoneEdit();
+        dto.setName("Cardiologie adulte");
+
+        departmentService.updateDepartment(deptId, dto, Locale.FRENCH);
+
+        assertThat(department.getDepartmentTranslations())
+            .extracting(com.example.hms.model.DepartmentTranslation::getLanguageCode,
+                com.example.hms.model.DepartmentTranslation::getName)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple("fr", "Cardiologie adulte"),
+                org.assertj.core.groups.Tuple.tuple("en", "Cardiology"));
+    }
+
+    @Test
+    void updateDepartment_sentTranslationsReplaceThem_andABlankHeadClearsIt_R48() {
+        department.getDepartmentTranslations().add(translation("fr", "Cardiologie"));
+        stubEditWithTheRealMapper();
+        DepartmentRequestDTO dto = portalPhoneEdit();
+        dto.setHeadOfDepartmentEmail("");
+        com.example.hms.payload.dto.DepartmentTranslationRequestDTO es =
+            new com.example.hms.payload.dto.DepartmentTranslationRequestDTO();
+        es.setLanguageCode("es");
+        es.setName("Cardiología");
+        dto.setTranslations(List.of(es));
+
+        departmentService.updateDepartment(deptId, dto, Locale.FRENCH);
+
+        assertThat(department.getDepartmentTranslations())
+            .extracting(com.example.hms.model.DepartmentTranslation::getLanguageCode)
+            .containsExactly("es");
+        assertThat(department.getHeadOfDepartment()).isNull();
+    }
+
+    @Test
+    void updateDepartment_movedToAnotherHospital_isRefusedOnTheHospitalField_D1790() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName("Other");
+        other.setCode("OT");
+        department.setHospital(other);
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId, portalPhoneEdit(), Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("hospitalId");
+                assertThat(e.getMessage()).contains("department.hospital.immutable");
+            });
+        assertThat(department.getHospital()).isSameAs(other);
+        assertThat(department.getHeadOfDepartment()).isSameAs(staff);
+    }
+
+    @Test
+    void updateDepartment_translationsSent_stillKeepBaseNameOfTheCallersLanguage_D1790() {
+        department.setName("Cardiology base");
+        department.getDepartmentTranslations().add(translation("fr", "Cardiologie"));
+        stubEditWithTheRealMapper();
+        DepartmentRequestDTO dto = portalPhoneEdit();
+        dto.setName("Cardiologie adulte");
+        com.example.hms.payload.dto.DepartmentTranslationRequestDTO fr =
+            new com.example.hms.payload.dto.DepartmentTranslationRequestDTO();
+        fr.setLanguageCode("fr");
+        fr.setName("Cardiologie adulte");
+        dto.setTranslations(List.of(fr));
+
+        departmentService.updateDepartment(deptId, dto, Locale.FRENCH);
+
+        assertThat(department.getName()).isEqualTo("Cardiology base");
+        assertThat(department.getDepartmentTranslations())
+            .extracting(com.example.hms.model.DepartmentTranslation::getName)
+            .containsExactly("Cardiologie adulte");
+    }
+
+    @Test
+    void updateDepartment_headEmailMatchingNoStaffHere_isRefusedOnTheField_R48() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        StaffResponseDTO elsewhere = new StaffResponseDTO();
+        elsewhere.setId(UUID.randomUUID().toString());
+        elsewhere.setHospitalId(UUID.randomUUID().toString());
+        when(staffService.getStaffByUserEmail("typo@test.com", Locale.FRENCH)).thenReturn(List.of(elsewhere));
+        DepartmentRequestDTO dto = portalPhoneEdit();
+        dto.setHeadOfDepartmentEmail("typo@test.com");
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(ex -> assertThat(((com.example.hms.exception.FieldBusinessException) ex).getField())
+                .isEqualTo("headOfDepartmentEmail"));
+        assertThat(department.getHeadOfDepartment()).isSameAs(staff);
+        verify(departmentRepository, never()).save(any());
     }
 }

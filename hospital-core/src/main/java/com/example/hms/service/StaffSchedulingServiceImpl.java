@@ -2,6 +2,9 @@ package com.example.hms.service;
 
 import com.example.hms.enums.StaffLeaveStatus;
 import com.example.hms.enums.StaffShiftStatus;
+import com.example.hms.enums.StaffShiftType;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.StaffSchedulingMapper;
@@ -36,6 +39,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -53,9 +57,15 @@ import java.util.UUID;
 @Slf4j
 public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
+    private static final String SHIFT_TIME_RANGE_INVALID_KEY = "schedule.shift.timeRange.invalid";
+
+    private static final String DATE_RANGE_INVALID_KEY = "schedule.dateRange.invalid";
     private static final Set<StaffLeaveStatus> ACTIVE_LEAVE_STATUSES =
         EnumSet.of(StaffLeaveStatus.PENDING, StaffLeaveStatus.APPROVED);
 
+    /** QA D635: the shift types that may end on the next day. */
+    private static final Set<StaffShiftType> CROSS_MIDNIGHT_TYPES =
+        EnumSet.of(StaffShiftType.EVENING, StaffShiftType.NIGHT, StaffShiftType.ON_CALL, StaffShiftType.FLEX);
     private static final Set<StaffShiftStatus> MUTABLE_SHIFT_STATUSES =
         EnumSet.of(StaffShiftStatus.SCHEDULED);
 
@@ -69,6 +79,12 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     private final RoleValidator roleValidator;
     private final MessageSource messageSource;
     private final UserRepository userRepository;
+    /**
+     * The rota clock: "today" for the past-date guards and the default listing
+     * window, and the {@code statusChangedAt}/{@code reviewedAt} stamps, which
+     * only the mapper reads back.
+     */
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -98,14 +114,15 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
         // ── Resolve & validate shared context ────────────────────────────────
         if (dto.endDate().isBefore(dto.startDate())) {
-            throw new BusinessRuleException(message("schedule.dateRange.invalid", effectiveLocale));
+            throw new BusinessRuleException(message(DATE_RANGE_INVALID_KEY, effectiveLocale));
         }
         if (dto.daysOfWeek() == null || dto.daysOfWeek().isEmpty()) {
-            throw new BusinessRuleException(message("schedule.bulk.daysOfWeek.required", effectiveLocale));
+            throw new com.example.hms.exception.FieldBusinessException("daysOfWeek", "schedule.bulk.daysOfWeek.required");
         }
         if (dto.endTime().equals(dto.startTime())) {
-            throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", effectiveLocale));
+            throw new com.example.hms.exception.FieldBusinessException("endTime", SHIFT_TIME_RANGE_INVALID_KEY);
         }
+        ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime());
 
         Staff staff = findStaff(dto.staffId(), effectiveLocale);
         Hospital hospital = findHospital(dto.hospitalId(), effectiveLocale);
@@ -159,7 +176,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         try {
             validateShiftWindow(perDayDto, ctx.staff(), ctx.locale(), null);
         } catch (BusinessRuleException | IllegalStateException ex) {
-            if (dto.skipConflicts()) {
+            if (Boolean.TRUE.equals(dto.skipConflicts())) {
                 skipped.add(new BulkShiftSkipDTO(date, ex.getMessage()));
                 log.debug("[bulk-schedule] skipped date={} reason={}", date, ex.getMessage());
                 return;
@@ -194,7 +211,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             .notes(dto.notes())
             .scheduledBy(actor)
             .lastModifiedBy(actor)
-            .statusChangedAt(LocalDateTime.now())
+            .statusChangedAt(LocalDateTime.now(clock))
             .build();
         return shiftRepository.save(shift);
     }
@@ -204,6 +221,13 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     public StaffShiftResponseDTO updateShift(UUID shiftId, StaffShiftRequestDTO dto, Locale locale) {
         Locale effectiveLocale = safeLocale(locale);
         StaffShift existing = loadShift(shiftId, effectiveLocale);
+        // QA D602: the owner of the shift decides who may edit it, not the body.
+        // A hospital B admin naming B in the body moved a hospital A shift into B.
+        ensureSchedulerPermissions(existing.getStaff(), existing.getHospital().getId(),
+            existing.getDepartment(), effectiveLocale);
+        if (!Objects.equals(dto.hospitalId(), existing.getHospital().getId())) {
+            throw new BusinessRuleException(message("schedule.shift.hospital.immutable", effectiveLocale));
+        }
         ensureShiftMutable(existing, effectiveLocale);
 
         Staff staff = findStaff(dto.staffId(), effectiveLocale);
@@ -211,6 +235,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         Department department = resolveDepartment(dto.departmentId(), staff, hospital, effectiveLocale);
 
         ensureStaffBelongsToHospital(staff, hospital, effectiveLocale);
+        ensureStaffActive(staff, effectiveLocale);
         ensureSchedulerPermissions(staff, hospital.getId(), department, effectiveLocale);
 
         validateShiftWindow(dto, staff, effectiveLocale, existing.getId());
@@ -224,7 +249,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         existing.setShiftType(dto.shiftType());
         existing.setNotes(dto.notes());
         existing.setLastModifiedBy(getCurrentUser(effectiveLocale));
-        existing.setStatusChangedAt(LocalDateTime.now());
+        existing.setStatusChangedAt(LocalDateTime.now(clock));
 
         StaffShift saved = shiftRepository.save(existing);
         log.info("[schedule] shift updated id={} staff={} date={}", shiftId, staff.getId(), dto.shiftDate());
@@ -240,19 +265,19 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
         StaffShiftStatus newStatus = dto.status();
         if (newStatus == null) {
-            throw new BusinessRuleException(message("schedule.shift.status.required", effectiveLocale));
+            throw new com.example.hms.exception.FieldBusinessException("status", "schedule.shift.status.required");
         }
         if (shift.getStatus() == newStatus) {
             return mapper.toShiftDto(shift);
         }
         if (newStatus == StaffShiftStatus.CANCELLED && (dto.cancellationReason() == null || dto.cancellationReason().isBlank())) {
-            throw new BusinessRuleException(message("schedule.shift.cancellation.reason.required", effectiveLocale));
+            throw new com.example.hms.exception.FieldBusinessException("cancellationReason", "schedule.shift.cancellation.reason.required");
         }
 
         shift.setStatus(newStatus);
         shift.setCancellationReason(newStatus == StaffShiftStatus.CANCELLED ? dto.cancellationReason() : null);
         shift.setLastModifiedBy(getCurrentUser(effectiveLocale));
-        shift.setStatusChangedAt(LocalDateTime.now());
+        shift.setStatusChangedAt(LocalDateTime.now(clock));
 
         StaffShift saved = shiftRepository.save(shift);
         log.info("[schedule] shift status change id={} status={}", shiftId, newStatus);
@@ -350,7 +375,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
         StaffLeaveStatus newStatus = dto.status();
         if (newStatus == null) {
-            throw new BusinessRuleException(message("schedule.leave.status.required", effectiveLocale));
+            throw new com.example.hms.exception.FieldBusinessException("status", "schedule.leave.status.required");
         }
         if (newStatus == StaffLeaveStatus.CANCELLED) {
             throw new BusinessRuleException(message("schedule.leave.status.invalid", effectiveLocale));
@@ -358,7 +383,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         leave.setStatus(newStatus);
         leave.setManagerNote(dto.managerNote());
         leave.setReviewedBy(getCurrentUser(effectiveLocale));
-        leave.setReviewedAt(LocalDateTime.now());
+        leave.setReviewedAt(LocalDateTime.now(clock));
 
         if (newStatus == StaffLeaveStatus.APPROVED) {
             cancelOverlappingShiftsForLeave(leave, effectiveLocale);
@@ -381,7 +406,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
         leave.setStatus(StaffLeaveStatus.CANCELLED);
         leave.setReviewedBy(getCurrentUser(effectiveLocale));
-        leave.setReviewedAt(LocalDateTime.now());
+        leave.setReviewedAt(LocalDateTime.now(clock));
         StaffLeaveRequest saved = leaveRepository.save(leave);
         log.info("[leave] cancelled leaveId={}", leaveId);
         return mapper.toLeaveDto(saved);
@@ -396,7 +421,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                                                   LocalDate endDate,
                                                   Locale locale) {
         Locale effectiveLocale = safeLocale(locale);
-        DateRange range = resolveDateRange(startDate, endDate, effectiveLocale);
+        DateRange range = resolveLeaveRange(startDate, endDate, effectiveLocale);
         List<StaffLeaveRequest> leaves;
         if (staffId != null) {
             leaves = leaveRepository.findByStaff_IdAndStartDateBetweenOrderByStartDateAsc(
@@ -417,14 +442,30 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         return leaves.stream().map(mapper::toLeaveDto).toList();
     }
 
+    /**
+     * QA D602: a shift is loaded by id AND the acting hospital. A row of another
+     * hospital is a 404, exactly like a missing one, so its existence is not
+     * confirmed. Global view (verified super-admin) reaches every hospital.
+     */
     private StaffShift loadShift(UUID id, Locale locale) {
         return shiftRepository.findDetailedById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.shift.notFound", locale)));
+            .filter(shift -> hospitalInScope(shift.getHospital()))
+            .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.shift.notFound"));
     }
 
     private StaffLeaveRequest loadLeave(UUID id, Locale locale) {
         return leaveRepository.findDetailedById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.leave.notFound", locale)));
+            .filter(leave -> hospitalInScope(leave.getHospital()))
+            .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.leave.notFound"));
+    }
+
+    private static boolean hospitalInScope(Hospital owner) {
+        ActingScope scope = ActingScopeResolver.currentScope();
+        if (scope instanceof ActingScope.Global) {
+            return true;
+        }
+        return scope instanceof ActingScope.Pinned pinned
+            && owner != null && pinned.hospitalId().equals(owner.getId());
     }
 
     private void ensureShiftMutable(StaffShift shift, Locale locale) {
@@ -438,7 +479,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                                             Department department,
                                             Locale locale) {
         UUID currentUserId = requireCurrentUserId(locale);
-        if (roleValidator.isSuperAdminFromAuth() || roleValidator.isHospitalAdmin(currentUserId, hospitalId)) {
+        if (isSchedulingAdministrator(currentUserId, hospitalId)) {
             return;
         }
         Optional<Staff> actorStaffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId);
@@ -448,7 +489,37 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                 return;
             }
         }
-        throw new BusinessRuleException(message("schedule.staff.permissionDenied", locale));
+        // QA D541: a permission refusal is a 403, as on every other cross-hospital write,
+        // not a 400 that reads like a validation error.
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(message("schedule.staff.permissionDenied", locale));
+    }
+
+    /** A verified super-admin, or a hospital administrator of the hospital (when one is known). */
+    private boolean isSchedulingAdministrator(UUID userId, UUID hospitalId) {
+        return roleValidator.isSuperAdminFromAuth()
+            || (hospitalId != null && roleValidator.isHospitalAdmin(userId, hospitalId));
+    }
+
+    /**
+     * QA D878: whether the caller may plan other people's shifts at all, so the
+     * portal offers bulk planning only to someone whose writes
+     * {@link #ensureSchedulerPermissions} accepts: an administrator of the
+     * acting hospital, or the head of a department (who plans that department).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public boolean canManageSchedules() {
+        UUID userId = roleValidator.getCurrentUserId();
+        if (userId == null) {
+            return false;
+        }
+        if (isSchedulingAdministrator(userId, com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull())) {
+            return true;
+        }
+        // The same actor row the write check reads.
+        return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId)
+            .map(actor -> departmentRepository.existsByHeadOfDepartmentId(actor.getId()))
+            .orElse(false);
     }
 
     private void ensureLeaveRequestPermissions(Staff staff,
@@ -478,13 +549,17 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                                      Staff staff,
                                      Locale locale,
                                      UUID excludeShiftId) {
-        if (dto.shiftDate().isBefore(LocalDate.now())) {
+        if (dto.shiftDate().isBefore(LocalDate.now(clock))) {
             throw new BusinessRuleException(message("schedule.shift.pastDate", locale));
         }
         // Allow cross-midnight shifts where endTime < startTime (e.g. NIGHT: 16:30 → 01:30 next day)
         if (dto.endTime().equals(dto.startTime())) {
-            throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", locale));
+            throw new com.example.hms.exception.FieldBusinessException("endTime", SHIFT_TIME_RANGE_INVALID_KEY);
         }
+        ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime());
+        // QA D282: two concurrent submits both passed the check below and both
+        // saved. Serialise on the staff row first; the lock lasts to commit.
+        staffRepository.findLockedById(staff.getId());
         if (shiftRepository.existsOverlappingShift(staff.getId(), dto.shiftDate(), dto.startTime(), dto.endTime(), excludeShiftId)) {
             throw new BusinessRuleException(message("schedule.shift.overlap", locale));
         }
@@ -560,6 +635,16 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
     }
 
+    /**
+     * QA D635: only shift types that can run past midnight may end before they
+     * start. A MORNING shift from 16:00 to 08:00 is a typo, not a night shift.
+     */
+    private static void ensureCrossMidnightAllowed(StaffShiftType type, LocalTime start, LocalTime end) {
+        if (isCrossMidnight(start, end) && type != null && !CROSS_MIDNIGHT_TYPES.contains(type)) {
+            throw new com.example.hms.exception.FieldBusinessException("endTime", SHIFT_TIME_RANGE_INVALID_KEY);
+        }
+    }
+
     /** @return true when {@code end} is strictly before {@code start} (cross-midnight window). */
     private static boolean isCrossMidnight(LocalTime start, LocalTime end) {
         return end.isBefore(start);
@@ -574,7 +659,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                                      Staff staff,
                                      Locale locale,
                                      UUID excludeLeaveId) {
-        if (dto.startDate().isBefore(LocalDate.now())) {
+        if (dto.startDate().isBefore(LocalDate.now(clock))) {
             throw new BusinessRuleException(message("schedule.leave.request.past", locale));
         }
         if (dto.endDate().isBefore(dto.startDate())) {
@@ -609,7 +694,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             return;
         }
         User actor = getCurrentUser(locale);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         for (StaffShift shift : shifts) {
             shift.setStatus(StaffShiftStatus.CANCELLED);
             shift.setCancellationReason(message("schedule.shift.cancelled.leave", locale));
@@ -625,20 +710,29 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
     }
 
+    /**
+     * Only someone who can actually work may be rostered (QA D117, D166): the
+     * staff row, the account and the assignment behind it must all be live.
+     * A staff row stays active while its account is switched off or its
+     * invitation was never verified, and such a member was being given shifts.
+     */
     private void ensureStaffActive(Staff staff, Locale locale) {
-        if (!staff.isActive()) {
+        boolean accountLive = staff.getUser() != null && staff.getUser().isActive() && !staff.getUser().isDeleted();
+        boolean assignmentLive = staff.getAssignment() == null
+            || Boolean.TRUE.equals(staff.getAssignment().getActive());
+        if (!staff.isActive() || !accountLive || !assignmentLive) {
             throw new BusinessRuleException(message("schedule.staff.inactive", locale));
         }
     }
 
     private Staff findStaff(UUID staffId, Locale locale) {
         return staffRepository.findById(staffId)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.staff.notFound", locale)));
+            .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.staff.notFound"));
     }
 
     private Hospital findHospital(UUID hospitalId, Locale locale) {
-        return hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.hospital.notFound", locale)));
+        return hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.hospital.notFound"));
     }
 
     private Department resolveDepartment(UUID departmentId,
@@ -649,7 +743,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             return staff.getDepartment();
         }
         Department department = departmentRepository.findById(departmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.department.notFound", locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("schedule.department.notFound"));
         if (department.getHospital() == null || !Objects.equals(department.getHospital().getId(), hospital.getId())) {
             throw new BusinessRuleException(message("schedule.department.hospital.mismatch", locale));
         }
@@ -662,7 +756,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     private User getCurrentUser(Locale locale) {
         UUID currentUserId = requireCurrentUserId(locale);
         return userRepository.findById(currentUserId)
-            .orElseThrow(() -> new ResourceNotFoundException(message("schedule.user.notFound", locale)));
+            .orElseThrow(() -> new ResourceNotFoundException("schedule.user.notFound"));
     }
 
     private UUID requireCurrentUserId(Locale locale) {
@@ -690,13 +784,32 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     }
 
     private DateRange resolveDateRange(LocalDate start, LocalDate end, Locale locale) {
-        LocalDate effectiveStart = start != null ? start : LocalDate.now();
+        LocalDate effectiveStart = start != null ? start : LocalDate.now(clock);
         LocalDate effectiveEnd = end != null ? end : effectiveStart.plusDays(14);
         if (effectiveEnd.isBefore(effectiveStart)) {
-            throw new BusinessRuleException(message("schedule.dateRange.invalid", locale));
+            throw new BusinessRuleException(message(DATE_RANGE_INVALID_KEY, locale));
         }
         return new DateRange(effectiveStart, effectiveEnd);
     }
+
+    /**
+     * Leave is requested weeks or months ahead: the shift window (today plus
+     * 14 days) hid every request starting later, so an admin never saw it to
+     * decide on it (QA D117). With no dates given, the leave list reaches
+     * back a month (leave already under way) and a year ahead.
+     */
+    private DateRange resolveLeaveRange(LocalDate start, LocalDate end, Locale locale) {
+        LocalDate today = LocalDate.now(clock);
+        LocalDate effectiveStart = start != null ? start : today.minusDays(LEAVE_LOOKBACK_DAYS);
+        LocalDate effectiveEnd = end != null ? end : today.plusDays(LEAVE_LOOKAHEAD_DAYS);
+        if (effectiveEnd.isBefore(effectiveStart)) {
+            throw new BusinessRuleException(message(DATE_RANGE_INVALID_KEY, locale));
+        }
+        return new DateRange(effectiveStart, effectiveEnd);
+    }
+
+    private static final long LEAVE_LOOKBACK_DAYS = 31;
+    private static final long LEAVE_LOOKAHEAD_DAYS = 366;
 
     private record DateRange(LocalDate start, LocalDate end) { }
 }

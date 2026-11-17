@@ -15,7 +15,6 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.repository.StaffRepository;
-import com.example.hms.service.NotificationService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -27,7 +26,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.example.hms.i18n.TestMessageSources;
 
 /**
  * The nightly licence sweep (Tier 2 item 40).
@@ -43,7 +41,7 @@ class LicenseExpirySweepServiceTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 8, 26);
 
     @Mock private StaffRepository staffRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
 
     private LicenseExpirySweepService service;
 
@@ -54,8 +52,7 @@ class LicenseExpirySweepServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(
             TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
-        service = new LicenseExpirySweepService(staffRepository, notificationService, clock,
-            TestMessageSources.bundles());
+        service = new LicenseExpirySweepService(staffRepository, notificationService, clock);
 
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();
@@ -92,11 +89,11 @@ class LicenseExpirySweepServiceTest {
 
         // The practitioner is the only person who can actually obtain the
         // renewal; telling only the enforcer makes this an argument instead.
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("dr.traore"), eq(LicenseExpirySweepService.NOTIFICATION_TYPE));
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("hadmin1"), eq(LicenseExpirySweepService.NOTIFICATION_TYPE));
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("hadmin2"), eq(LicenseExpirySweepService.NOTIFICATION_TYPE));
 
         assertThat(s.getLicenseAlertStage()).isEqualTo(LicenseAlertStage.WARNING);
@@ -124,7 +121,7 @@ class LicenseExpirySweepServiceTest {
         assertThat(service.sweep()).isEqualTo(1);
 
         assertThat(s.getLicenseAlertStage()).isEqualTo(LicenseAlertStage.CRITICAL);
-        verify(notificationService, times(2)).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, times(2)).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -137,7 +134,7 @@ class LicenseExpirySweepServiceTest {
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService, times(2))
-            .createNotification(message.capture(), anyString(), anyString());
+            .created(message.capture(), anyString(), anyString());
         assertThat(message.getValue()).contains("a expiré le");
         assertThat(message.getValue()).doesNotContain("-3");
     }
@@ -150,7 +147,7 @@ class LicenseExpirySweepServiceTest {
 
         service.sweep();
 
-        verify(notificationService, times(1)).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, times(1)).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -211,7 +208,7 @@ class LicenseExpirySweepServiceTest {
 
         assertThat(service.sweep()).isEqualTo(1);
 
-        verify(notificationService, times(1)).createNotification(
+        verify(notificationService, times(1)).created(
             anyString(), eq("dr.traore"), anyString());
         verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), anyString());
     }
@@ -226,7 +223,7 @@ class LicenseExpirySweepServiceTest {
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService, times(2))
-            .createNotification(message.capture(), anyString(), anyString());
+            .created(message.capture(), anyString(), anyString());
         // An administrator with forty staff needs to know WHICH licence
         // without opening anything.
         assertThat(message.getValue()).contains("dr.traore");

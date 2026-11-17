@@ -16,6 +16,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.FhirBulkExportFileRepository;
 import com.example.hms.repository.FhirBulkExportJobRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
@@ -257,7 +258,9 @@ public class FhirBulkExportRunner {
         }
         UUID patientId = patient.getId();
         if (types.contains(TYPE_PATIENT) && passesSince(patient.getUpdatedAt(), since)) {
-            sink.write(TYPE_PATIENT, patientMapper.toFhir(patient));
+            // The job's hospital's MRN only (the kickoff refuses a job
+            // without one) — never where else the patient is registered.
+            sink.write(TYPE_PATIENT, patientMapper.toFhir(patient, hospitalId));
         }
         if (types.contains(TYPE_ENCOUNTER)) {
             pageThrough(p -> encounterRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, p),
@@ -276,24 +279,42 @@ public class FhirBulkExportRunner {
                         observationMapper.toFhir(v).forEach(o -> sink.write(TYPE_OBSERVATION, o));
                     }
                 });
+            // QA D741: a row is current only against the other rows of its
+            // order (legacy duplicates and forward-link-only corrections).
+            java.util.Map<UUID, List<com.example.hms.model.LabResult>> siblingsByOrder = new java.util.HashMap<>();
             pageThrough(p -> labResultRepository
                     .findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patientId, hospitalId, p),
                 r -> {
-                    if (passesSince(r.getUpdatedAt(), since)) {
+                    // QA D740/D741: released, current results only.
+                    List<com.example.hms.model.LabResult> siblings = r.getLabOrder() == null || r.getLabOrder().getId() == null
+                        ? List.of()
+                        : siblingsByOrder.computeIfAbsent(r.getLabOrder().getId(), labResultRepository::findByLabOrder_Id);
+                    if (ClinicalLabResultView.isReleasedAndCurrent(r, siblings) && passesSince(r.getUpdatedAt(), since)) {
                         sink.write(TYPE_OBSERVATION, observationMapper.toFhir(r));
                     }
                 });
         }
         if (types.contains(TYPE_CONDITION)) {
             patientProblemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+                // QA D1240 (round 25): a problem removed as entered in error is not exported.
+                .filter(c -> !c.isEnteredInError())
                 .filter(c -> passesSince(c.getUpdatedAt(), since))
                 .forEach(c -> sink.write(TYPE_CONDITION, conditionMapper.toFhir(c)));
         }
         if (types.contains(TYPE_MEDICATION_REQUEST)) {
-            pageThrough(p -> prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, p),
+            // QA D1537: an export carries the orders that were issued, never a draft or a discarded one,
+            // chosen in the query. The patient's discharged stays are read once, on the first order (the
+            // course status the portal shows), never for a patient with none.
+            java.util.concurrent.atomic.AtomicReference<List<com.example.hms.model.Admission>> closedStays =
+                new java.util.concurrent.atomic.AtomicReference<>();
+            pageThrough(p -> prescriptionRepository.findIssuedByPatientIdAndHospitalIdIn(patientId, java.util.Set.of(hospitalId),
+                    com.example.hms.service.support.PrescriptionIssuance.PROPOSALS, p),
                 rx -> {
                     if (passesSince(rx.getUpdatedAt(), since)) {
-                        sink.write(TYPE_MEDICATION_REQUEST, medicationRequestMapper.toFhir(rx));
+                        if (closedStays.get() == null) {
+                            closedStays.set(medicationRequestMapper.closedStaysOf(patientId));
+                        }
+                        sink.write(TYPE_MEDICATION_REQUEST, medicationRequestMapper.toFhir(rx, closedStays.get()));
                     }
                 });
         }

@@ -1,5 +1,6 @@
 package com.example.hms.fhir.write;
 
+import com.example.hms.security.tenant.ActingScopeResolver;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
@@ -46,8 +47,10 @@ import java.util.UUID;
  *
  * <p>Cross-tenant: the active hospital id is read from
  * {@link HospitalContextHolder}; the lab result is fetched by id and
- * its parent {@code labOrder.hospital} must match. A missing active
- * hospital is rejected as 403.
+ * its order must be handled by that hospital (ordering or performing).
+ * A result it does not handle gets the same 404, with the same body, as a
+ * result that does not exist. A missing active hospital is rejected as 403
+ * — "pin a hospital" names no identifier.
  *
  * <p>Feature-flagged via {@link FhirWriteProperties#isEnabled()};
  * disabled state surfaces as {@code 405 Method Not Allowed} from the
@@ -111,7 +114,7 @@ public class ObservationFhirWriteService {
         }
 
         UUID labResultId = parseLabResultUuid(fhirIdPart);
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
             throw forbidden(
                 "FHIR PUT /Observation requires an active hospital scope; supply X-Hospital-Id "
@@ -119,19 +122,20 @@ public class ObservationFhirWriteService {
             );
         }
 
+        // B1: same predicate as REST PUT /lab-results/{id} — the ordering
+        // hospital and the performing laboratory may both amend the result.
+        // A result neither of them is answers exactly like a result that does
+        // not exist: LabResult is not TenantScoped, so findById reaches every
+        // tenant, and a 403 beside a 404 let a writer sort candidate ids into
+        // "real at another hospital" and "not real". The filter runs on the
+        // row the one findById query already fetched (its entity graph carries
+        // the order), so both refusals also cost the same.
         LabResult existing = labResultRepository.findById(labResultId)
+            .filter(r -> r.getLabOrder() != null && r.getLabOrder().isHandledBy(hospitalId))
             .orElseThrow(() -> notFoundWith(
                 OBSERVATION_REF + fhirIdPart + " not found.",
                 OperationOutcome.IssueType.NOTFOUND
             ));
-
-        // B1: same predicate as REST PUT /lab-results/{id} — the ordering
-        // hospital and the performing laboratory may both amend the result.
-        if (existing.getLabOrder() == null || !existing.getLabOrder().isHandledBy(hospitalId)) {
-            throw forbidden(
-                "LabResult " + labResultId + " does not belong to the active hospital scope."
-            );
-        }
 
         observationMapper.applyFhirLabResultUpdates(existing, fhirIn);
         LabResult saved = labResultRepository.save(existing);

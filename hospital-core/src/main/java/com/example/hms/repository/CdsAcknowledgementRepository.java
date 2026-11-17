@@ -20,4 +20,15 @@ public interface CdsAcknowledgementRepository extends JpaRepository<CdsAcknowled
         """)
     List<CdsAcknowledgement> findActiveForPatient(@Param("patientId") UUID patientId,
                                                   @Param("now") LocalDateTime now);
+
+    /** QA D1194 (round 22): one clinician's live acknowledgements on one patient. */
+    @Query("""
+        SELECT a FROM CdsAcknowledgement a
+        WHERE a.patient.id = :patientId
+          AND a.user.id = :userId
+          AND a.expiresAt > :now
+        """)
+    List<CdsAcknowledgement> findActiveForPatientAndUser(@Param("patientId") UUID patientId,
+                                                         @Param("userId") UUID userId,
+                                                         @Param("now") LocalDateTime now);
 }

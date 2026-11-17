@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -34,8 +36,23 @@ public class Hl7v2MessageBuilder {
     private static final String OBX_STATUS_FINAL = "F";
     /** OBX-11: recorded but not released — the bench is not finished with it. */
     private static final String OBX_STATUS_PRELIMINARY = "P";
+    /** QA D1016: HL7 v2 OBX-11 "C" - a correction of a final result, replacing it. */
+    private static final String OBX_STATUS_CORRECTED = "C";
 
     // ── Outbound OML^O21 – New Lab Order sent to instrument ──────────────────
+
+    /**
+     * PID-5 (XPN): family^given^middle. QA D1036: the middle name travels in
+     * its own component; it used to be dropped from every outbound order.
+     */
+    private String pid5(com.example.hms.model.Patient patient) {
+        if (patient == null) {
+            return "UNKNOWN^UNKNOWN";
+        }
+        String xpn = encodeEscapes(patient.getLastName()) + "^" + encodeEscapes(patient.getFirstName());
+        String middle = patient.getMiddleName();
+        return middle != null && !middle.isBlank() ? xpn + "^" + encodeEscapes(middle.trim()) : xpn;
+    }
 
     /**
      * Builds an OML^O21 (laboratory order) message for the given specimen.
@@ -46,15 +63,15 @@ public class Hl7v2MessageBuilder {
         String now = LocalDateTime.now().format(HL7_DT);
         String msgId = "HMS-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
 
-        String patientName = order.getPatient() != null
-            ? order.getPatient().getLastName() + "^" + order.getPatient().getFirstName()
-            : "UNKNOWN^UNKNOWN";
-        String patientId = order.getPatient() != null ? order.getPatient().getId().toString() : "";
-        String testCode = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getTestCode() : "";
-        String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : "";
-        String priority = order.getPriority() != null ? order.getPriority() : "ROUTINE";
+        String patientName = pid5(order.getPatient());
+        String patientId = order.getPatient() != null ? encodeEscapes(order.getPatient().getId().toString()) : "";
+        String testCode = order.getLabTestDefinition() != null
+            ? encodeEscapes(order.getLabTestDefinition().getTestCode()) : "";
+        String testName = order.getLabTestDefinition() != null
+            ? encodeEscapes(order.getLabTestDefinition().getName()) : "";
+        String priority = encodeEscapes(order.getPriority() != null ? order.getPriority() : "ROUTINE");
         String collectedAt = specimen.getCollectedAt() != null ? specimen.getCollectedAt().format(HL7_DT) : now;
-        String accession = specimen.getAccessionNumber();
+        String accession = encodeEscapes(specimen.getAccessionNumber());
 
         return msh("OML^O21^OML_O21", msgId, now) +
             pid(patientId, patientName) +
@@ -81,34 +98,53 @@ public class Hl7v2MessageBuilder {
      * {@code LabResultServiceImpl.createLabResult} enqueues an outbound
      * ORU for every result, released or not, so a hard-coded {@code F}
      * published unverified values as final — the outbound mirror of the
-     * ingest bug fixed alongside it. {@code C} (corrected) is not emitted
-     * because the model has no correction concept: nothing on
-     * {@code LabResult} distinguishes an amended result from a first one.
-     * A release enqueues a second ORU, so a receiver that saw the {@code P}
-     * gets the {@code F}.
+     * ingest bug fixed alongside it. QA D1016: a released correction (a
+     * result that names the released one it replaces, supersedesResultId) is
+     * sent {@code C}, so the receiver replaces the value instead of filing a
+     * second final one. A release enqueues a second ORU, so a receiver that
+     * saw the {@code P} gets the {@code F} (or the {@code C}).
      */
     public String buildOruR01(LabResult result) {
         LabOrder order = result.getLabOrder();
         String now = LocalDateTime.now().format(HL7_DT);
         String msgId = "HMS-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
 
-        String patientName = order.getPatient() != null
-            ? order.getPatient().getLastName() + "^" + order.getPatient().getFirstName()
-            : "UNKNOWN^UNKNOWN";
-        String patientId = order.getPatient() != null ? order.getPatient().getId().toString() : "";
-        String testCode = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getTestCode() : "";
-        String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : "";
+        // Every stored text is escaped on its own (a CE field's parts one by
+        // one, never the joined field), so a delimiter inside it - the caret
+        // in 10^9/L, a pipe in a value - is data to the receiver, not a split.
+        String patientName = pid5(order.getPatient());
+        String patientId = order.getPatient() != null ? encodeEscapes(order.getPatient().getId().toString()) : "";
+        String testCode = order.getLabTestDefinition() != null
+            ? encodeEscapes(order.getLabTestDefinition().getTestCode()) : "";
+        String testName = order.getLabTestDefinition() != null
+            ? encodeEscapes(order.getLabTestDefinition().getName()) : "";
         String resultDate = result.getResultDate() != null ? result.getResultDate().format(HL7_DT) : now;
         String abnormalFlag = toHl7AbnormalFlag(result.getAbnormalFlag());
-        String resultStatus = result.isReleased() ? OBX_STATUS_FINAL : OBX_STATUS_PRELIMINARY;
-        String orderId = order.getId() != null ? order.getId().toString() : "";
+        String resultStatus;
+        if (!result.isReleased()) {
+            resultStatus = OBX_STATUS_PRELIMINARY;
+        } else if (com.example.hms.service.lab.LabResultCorrections.isCorrection(result)) {
+            resultStatus = OBX_STATUS_CORRECTED;
+        } else {
+            resultStatus = OBX_STATUS_FINAL;
+        }
+        String orderId = order.getId() != null ? encodeEscapes(order.getId().toString()) : "";
 
         return msh("ORU^R01^ORU_R01", msgId, now) +
             pid(patientId, patientName) +
             "OBR|1|" + orderId + "||" + testCode + "^" + testName + "|||" + resultDate + SEG_TERM +
-            "OBX|1|ST|" + testCode + "^" + testName + "||" + blankIfNull(result.getResultValue()) + "|" +
-            blankIfNull(result.getResultUnit()) + "||" + abnormalFlag + "|||" + resultStatus
+            "OBX|1|" + valueType(result.getResultValue()) + "|" + testCode + "^" + testName + "||"
+            + encodeEscapes(result.getResultValue()) + "|" +
+            encodeEscapes(com.example.hms.mapper.LabResultMapper.unitOf(result)) + "||" + abnormalFlag + "|||" + resultStatus
             + "|||" + resultDate + SEG_TERM;
+    }
+
+    /**
+     * OBX-2 for a stored value: FT (formatted text, where the line-break
+     * escape is defined) when the value spans lines, ST otherwise.
+     */
+    private static String valueType(String value) {
+        return value != null && (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0) ? "FT" : "ST";
     }
 
     // ── Inbound ORU^R01 parser ────────────────────────────────────────────────
@@ -180,13 +216,31 @@ public class Hl7v2MessageBuilder {
         }
     }
 
+    /**
+     * OBX-2 value types whose OBX-5 is one piece of text, so its escapes are
+     * decoded as a whole. A coded or structured value (CE, CWE, CNE, SN, ...) has components of
+     * its own, and decoding the whole field would turn an escaped caret inside
+     * a component into a component separator; it is stored as received.
+     */
+    private static final Set<String> TEXT_VALUE_TYPES = Set.of("ST", "TX", "FT", "NM");
+
+    /**
+     * OBX-5 as stored: decoded for a text value type, as received otherwise.
+     * Rows written from now on hold decoded text; no stored value carried an
+     * escape before this, in any environment, as of 2026-10-06.
+     */
+    private static String observationValue(String obx2, String obx5) {
+        String type = obx2 == null ? "" : obx2.trim().toUpperCase(Locale.ROOT);
+        return TEXT_VALUE_TYPES.contains(type) ? decodeEscapes(obx5) : obx5;
+    }
+
     private ParsedObservation parseObxSegment(String seg, String patientId,
                                               String placer, String filler) {
         String[] f = seg.split("\\|", -1);
         String setId    = f.length > 1  ? f[1].trim()          : "";
         String testCode = f.length > 3  ? firstComponent(f[3]) : "";
-        String value    = f.length > 5  ? f[5]                 : "";
-        String unit     = f.length > 6  ? f[6]                 : "";
+        String value    = f.length > 5  ? observationValue(f[2], f[5]) : "";
+        String unit     = f.length > 6  ? unitIdentifier(f[6]) : "";
         String refRange = f.length > 7  ? f[7]                 : "";
         String abnFlag  = f.length > 8  ? f[8]                 : "N";
         String status   = f.length > 11 ? f[11].trim()         : "";
@@ -268,6 +322,15 @@ public class Hl7v2MessageBuilder {
             String[] prior = parseIdentifierList(field(mrg, 1));
             if (prior[0] == null || prior[0].isBlank()) return null;
 
+            // Held to the EMPI alias width here, so nothing downstream has to
+            // make either identifier safe. Rejected, not truncated: a cut MRN
+            // could resolve to a different patient. See Hl7FieldBounds.
+            // Trimmed, as the merge service trims them before resolving.
+            if (!Hl7FieldBounds.fits(surviving[0].trim(), Hl7FieldBounds.MRN_MAX)
+                    || !Hl7FieldBounds.fits(prior[0].trim(), Hl7FieldBounds.MRN_MAX)) {
+                return null;
+            }
+
             return new ParsedMergeMessage(
                 surviving[0], surviving[1],
                 prior[0], prior[1]);
@@ -305,9 +368,19 @@ public class Hl7v2MessageBuilder {
             String[] pv1 = findSegment(segments, "PV1");
             String patientClass = field(pv1, 2);
             String assignedLocation = field(pv1, 3);
-            String visitNumber = firstComponent(field(pv1, 19));
+            String visitNumber = rawFirstComponent(field(pv1, 19));
             LocalDateTime admit = parseHl7DateTimeOrNull(field(pv1, 44));
             LocalDateTime discharge = parseHl7DateTimeOrNull(field(pv1, 45));
+
+            // PID-3 is what the whole message is resolved on, held to the EMPI
+            // alias width. Rejected, not truncated: a cut MRN could resolve to
+            // a different patient. PV1-19 and PV1-3 are NOT bounded here: only
+            // the visit projection reads them, it is off by default, and
+            // refusing the message for them would drop the demographic update
+            // it also carries. The projection bounds them. See Hl7FieldBounds.
+            if (!Hl7FieldBounds.fits(mrnParts[0].trim(), Hl7FieldBounds.MRN_MAX)) {
+                return null;
+            }
 
             return new ParsedAdtMessage(
                 triggerEvent,
@@ -408,9 +481,159 @@ public class Hl7v2MessageBuilder {
         return "PID|1||" + patientId + "|||" + patientName + SEG_TERM;
     }
 
-    private String firstComponent(String field) {
+    /**
+     * OBX-6 as a unit: its identifier (first component) with HL7 escapes
+     * decoded. Analysers send it coded, {@code mmol/L^millimole per liter^UCUM},
+     * and a unit that itself contains a caret travels escaped,
+     * {@code 10\S\9/L^...^UCUM}; split first, then decode, so the caret
+     * inside the unit survives and {@code 10^9/L} stays distinct from
+     * {@code 10^12/L}.
+     */
+    static String unitIdentifier(String field) {
+        return firstComponent(field);
+    }
+
+    /**
+     * HL7 escapes to plain text. Stored values are plain text, so this is the
+     * inverse of {@link #encodeEscapes}, for the default encoding characters
+     * this parser assumes:
+     * <ul>
+     *   <li>\F\ \S\ \T\ \R\ \E\ become | ^ &amp; ~ and the escape character;</li>
+     *   <li>\.br\ becomes a line feed, and \Xhh..\ made only of 0D and 0A
+     *       becomes those carriage returns and line feeds;</li>
+     *   <li>any other escape sequence (\H\, \.sp\, \Z..\, other hex, ...) is
+     *       kept whole as literal text, and an unterminated escape character
+     *       is a literal backslash.</li>
+     * </ul>
+     */
+    static String decodeEscapes(String text) {
+        if (text == null || text.indexOf(ESC) < 0) {
+            return text;
+        }
+        StringBuilder out = new StringBuilder(text.length());
+        int i = 0;
+        while (i < text.length()) {
+            int close = text.charAt(i) == ESC ? text.indexOf(ESC, i + 1) : -1;
+            if (close < 0) {
+                out.append(text.charAt(i));
+                i++;
+            } else {
+                String sequence = text.substring(i + 1, close);
+                String decoded = decodedSequence(sequence);
+                out.append(decoded != null ? decoded : text.substring(i, close + 1));
+                i = close + 1;
+            }
+        }
+        return out.toString();
+    }
+
+    /** What one escape sequence stands for, or null when it is kept as literal text. */
+    private static String decodedSequence(String sequence) {
+        if (".br".equals(sequence)) {
+            return "\n";
+        }
+        if (sequence.length() == 1) {
+            return delimiterFor(sequence.charAt(0));
+        }
+        return sequence.startsWith("X") ? lineBreaksFromHex(sequence.substring(1)) : null;
+    }
+
+    /** Hex pairs that are all 0D or 0A as the characters they encode, else null. */
+    private static String lineBreaksFromHex(String hex) {
+        if (hex.isEmpty() || hex.length() % 2 != 0) {
+            return null;
+        }
+        StringBuilder out = new StringBuilder(hex.length() / 2);
+        for (int k = 0; k < hex.length(); k += 2) {
+            String pair = hex.substring(k, k + 2).toUpperCase(Locale.ROOT);
+            if ("0D".equals(pair)) {
+                out.append('\r');
+            } else if ("0A".equals(pair)) {
+                out.append('\n');
+            } else {
+                return null;
+            }
+        }
+        return out.toString();
+    }
+
+    /**
+     * Plain text into a field. Every escape character is escaped (\E\) -
+     * nothing passes through - and so is every delimiter (\F\ \S\ \T\
+     * \R\). A line feed goes out as \.br\ and a carriage return as
+     * \X0D\, so no stored value can end a segment on the wire, and
+     * {@code decodeEscapes(encodeEscapes(x))} is {@code x} for every string.
+     * Null is an empty field.
+     */
+    static String encodeEscapes(String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            String code = escapeCodeFor(c);
+            if (code != null) {
+                out.append(ESC).append(code).append(ESC);
+            } else {
+                out.append(c);
+            }
+        }
+        return out.toString();
+    }
+
+    private static String escapeCodeFor(char c) {
+        return switch (c) {
+            case ESC -> "E";
+            case '|' -> "F";
+            case '^' -> "S";
+            case '&' -> "T";
+            case '~' -> "R";
+            case '\n' -> ".br";
+            case '\r' -> "X0D";
+            default -> null;
+        };
+    }
+
+    /** The HL7 v2 default escape character. */
+    private static final char ESC = '\\';
+
+    private static String delimiterFor(char code) {
+        return switch (code) {
+            case 'F' -> "|";
+            case 'S' -> "^";
+            case 'R' -> "~";
+            case 'T' -> "&";
+            case 'E' -> String.valueOf(ESC);
+            default -> null;
+        };
+    }
+
+    /**
+     * The ADT parser's split, exactly as before HL7 escapes were decoded on the
+     * lab paths: the first component as received, nothing decoded. ADT MRNs,
+     * names and merge ids are all read raw, and a visit number decoded here
+     * would stop matching the one already stored for the same visit.
+     */
+    private static String rawFirstComponent(String field) {
         int idx = field.indexOf('^');
         return idx >= 0 ? field.substring(0, idx) : field;
+    }
+
+    /**
+     * A field's first component as plain text: split on the component
+     * separator first, then decode, so an escaped caret inside the component
+     * ({@code WBC\S\1}) is data and not a split. Every identifier the
+     * outbound builders escape (PID-3, OBR-2/OBR-3 order and accession
+     * numbers, OBX-3 test code) is read back through this. Lab ORU paths
+     * only: the ADT parser keeps {@link #rawFirstComponent}.
+     */
+    private static String firstComponent(String field) {
+        if (field == null) {
+            return "";
+        }
+        int idx = field.indexOf('^');
+        return decodeEscapes(idx >= 0 ? field.substring(0, idx) : field);
     }
 
     private String extractPid(String[] segments) {
@@ -431,16 +654,6 @@ public class Hl7v2MessageBuilder {
         } catch (Exception e) {
             return LocalDateTime.now();
         }
-    }
-
-    /**
-     * An absent field is empty, never the four characters {@code null}.
-     * {@code resultUnit} is nullable on the entity and a concatenation would
-     * put the word into OBX-6 for any unitless result; the release ORU means
-     * every result is built twice, so it went out twice.
-     */
-    private static String blankIfNull(String value) {
-        return value == null ? "" : value;
     }
 
     /**

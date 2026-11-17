@@ -191,7 +191,7 @@ export class AuditSavedSearchService {
 }
 
 function toClient(row: SavedAuditSearchResponse): SavedAuditSearch {
-  let filter: AuditSearchFilter = {};
+  let filter: AuditSearchFilter;
   try {
     filter = row.filterJson ? (JSON.parse(row.filterJson) as AuditSearchFilter) : {};
   } catch {
