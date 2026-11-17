@@ -120,12 +120,7 @@ public class ActingScopeResolver {
         for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
             if (assignment.active()) {
                 collect(assignment, hospitals, organizations, roles, hospitalOrganizations);
-                String role = roleCode(assignment);
-                if (role != null && assignment.hospitalId() != null) {
-                    hospitalRoles.computeIfAbsent(assignment.hospitalId(), id -> new LinkedHashSet<>()).add(role);
-                } else if (role != null) {
-                    globalRoles.add(role);
-                }
+                collectWhere(assignment, hospitalRoles, globalRoles);
                 if (assignment.hospitalId() != null) {
                     // Never null at a facility (TenantRoleAssignment refuses it).
                     hospitalFacilityTypes.putIfAbsent(assignment.hospitalId(), assignment.facilityType());
@@ -207,6 +202,20 @@ public class ActingScopeResolver {
     }
 
     /** One active assignment's contribution to the live context. */
+    /** QA D2120 review: where each role is held (a hospital, or none), for ClinicalActor. */
+    private static void collectWhere(TenantRoleAssignment assignment, Map<UUID, Set<String>> hospitalRoles,
+                                     Set<String> globalRoles) {
+        String role = roleCode(assignment);
+        if (role == null) {
+            return;
+        }
+        if (assignment.hospitalId() != null) {
+            hospitalRoles.computeIfAbsent(assignment.hospitalId(), id -> new LinkedHashSet<>()).add(role);
+        } else {
+            globalRoles.add(role);
+        }
+    }
+
     private static void collect(TenantRoleAssignment assignment, Set<UUID> hospitals, Set<UUID> organizations,
                                 Set<String> roles, Map<UUID, UUID> hospitalOrganizations) {
         String role = roleCode(assignment);

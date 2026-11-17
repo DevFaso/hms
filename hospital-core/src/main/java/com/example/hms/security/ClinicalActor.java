@@ -55,14 +55,15 @@ public final class ClinicalActor {
      * Writes the audit row of a clinical act refused during a support session; set once at start-up
      * by {@code ClinicalActorAuditRegistrar}. Null in a test without a context: nothing is written.
      */
-    private static volatile Consumer<String> impersonationAudit;
+    private static final java.util.concurrent.atomic.AtomicReference<Consumer<String>> IMPERSONATION_AUDIT =
+        new java.util.concurrent.atomic.AtomicReference<>();
 
     private ClinicalActor() {
     }
 
     /** Called by the registrar bean at start-up (and by tests). */
     public static void setImpersonationAudit(Consumer<String> audit) {
-        impersonationAudit = audit;
+        IMPERSONATION_AUDIT.set(audit);
     }
 
     /**
@@ -73,7 +74,7 @@ public final class ClinicalActor {
         // QA D2120 review: a support session acting as a clinician never acts clinically for them.
         if (ImpersonationContextHolder.isImpersonating()) {
             markRefused(REFUSED_IMPERSONATION);
-            Consumer<String> audit = impersonationAudit;
+            Consumer<String> audit = IMPERSONATION_AUDIT.get();
             if (audit != null) {
                 audit.accept(String.join(",", roles));
             }
