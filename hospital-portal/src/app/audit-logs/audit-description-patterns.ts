@@ -212,6 +212,31 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.LOCK_SCREEN_REFUSED_LOCKED',
     re: /^Lock-screen unlock refused: account locked; session ended$/,
   },
+  // QA D2020: a refused current password on a password change or the forced setup.
+  {
+    key: 'AUDIT.DESC.PASSWORD_CHANGE_WRONG_CURRENT',
+    re: /^Password change refused: current password incorrect$/,
+  },
+  {
+    key: 'AUDIT.DESC.PASSWORD_CHANGE_LOCKED_NOW',
+    re: /^Password change failed too many times: account locked$/,
+  },
+  {
+    key: 'AUDIT.DESC.PASSWORD_CHANGE_REFUSED_LOCKED',
+    re: /^Password change refused: account locked$/,
+  },
+  {
+    key: 'AUDIT.DESC.ACCOUNT_SETUP_WRONG_CURRENT',
+    re: /^Account setup refused: current password incorrect$/,
+  },
+  {
+    key: 'AUDIT.DESC.ACCOUNT_SETUP_LOCKED_NOW',
+    re: /^Account setup failed too many times: account locked$/,
+  },
+  {
+    key: 'AUDIT.DESC.ACCOUNT_SETUP_REFUSED_LOCKED',
+    re: /^Account setup refused: account locked$/,
+  },
   {
     key: 'AUDIT.DESC.ACCESS_TOKEN_REVOKED_LOCKOUT',
     re: /^Access token revoked on lock-screen lockout \(jti=[^)]*\)$/,
