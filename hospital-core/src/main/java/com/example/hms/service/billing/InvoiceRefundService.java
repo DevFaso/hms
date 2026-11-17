@@ -63,7 +63,7 @@ import java.util.function.BiPredicate;
  * <p><b>Steps.</b> REQUESTED (a cashier, a receptionist, an accountant or a hospital admin, with the method and the
  * reason), then APPROVED or REJECTED by ANOTHER person holding HOSPITAL_ADMIN or ACCOUNTANT (owner decision D-3, no
  * self-approval), then PAID when the cashier hands it over. A request not yet paid can be CANCELLED with a reason.
- * Every move is a conditional UPDATE ({@code transitionStatus}) under the invoice row lock, so a refund is decided
+ * Every move is a conditional UPDATE (decide, markPaid, markCancelled) under the invoice row lock, so a refund is decided
  * once and paid once, and two requests together never ask for more than is due.
  *
  * <p><b>Who.</b> The roles are checked on the assignment at the acting hospital (never global view), before any
@@ -229,12 +229,13 @@ public class InvoiceRefundService {
         if (refund.getAmount().compareTo(room) > 0) {
             throw new ConflictException(MessageUtil.resolve("billing.refund.noLongerDue", francs(room)));
         }
-        claim(refund, InvoiceRefundStatus.REQUESTED, InvoiceRefundStatus.APPROVED, "billing.refund.notRequested");
+        LocalDateTime at = now();
+        claimed(refundRepository.decide(refund.getId(), refund.getHospitalId(), InvoiceRefundStatus.APPROVED,
+            actor.userId(), at, note), "billing.refund.notRequested");
         refund.setStatus(InvoiceRefundStatus.APPROVED);
         refund.setDecidedBy(actor.userId());
-        refund.setDecidedAt(now());
+        refund.setDecidedAt(at);
         refund.setDecisionReason(note);
-        refundRepository.save(refund);
         auditAfterCommit(AuditEventType.REFUND_APPROVED, actor.userId(), invoice.getId(), refund.getId(),
             "Refund approved");
         return toDto(refund, actor.userId(), null);
@@ -252,12 +253,13 @@ public class InvoiceRefundService {
             .require(reason != null, FIELD_REASON, "billing.refund.rejectReasonRequired")
             .orThrow();
         requireText(reason, FIELD_REASON);
-        claim(refund, InvoiceRefundStatus.REQUESTED, InvoiceRefundStatus.REJECTED, "billing.refund.notRequested");
+        LocalDateTime at = now();
+        claimed(refundRepository.decide(refund.getId(), refund.getHospitalId(), InvoiceRefundStatus.REJECTED,
+            actor.userId(), at, reason), "billing.refund.notRequested");
         refund.setStatus(InvoiceRefundStatus.REJECTED);
         refund.setDecidedBy(actor.userId());
-        refund.setDecidedAt(now());
+        refund.setDecidedAt(at);
         refund.setDecisionReason(reason);
-        refundRepository.save(refund);
         auditAfterCommit(AuditEventType.REFUND_REJECTED, actor.userId(), invoice.getId(), refund.getId(),
             "Refund rejected");
         return toDto(refund, actor.userId(), null);
@@ -279,14 +281,15 @@ public class InvoiceRefundService {
         if (refund.getAmount().compareTo(due) > 0) {
             throw new ConflictException(MessageUtil.resolve("billing.refund.noLongerDue", francs(due)));
         }
-        claim(refund, InvoiceRefundStatus.APPROVED, InvoiceRefundStatus.PAID, "billing.refund.notApproved");
+        LocalDateTime at = now();
+        claimed(refundRepository.markPaid(refund.getId(), refund.getHospitalId(), actor.userId(), at),
+            "billing.refund.notApproved");
         BigDecimal refunded = invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO;
         invoice.setAmountRefunded(refunded.add(refund.getAmount()));
         invoiceRepository.save(invoice);
         refund.setStatus(InvoiceRefundStatus.PAID);
         refund.setPaidBy(actor.userId());
-        refund.setPaidAt(now());
-        refundRepository.save(refund);
+        refund.setPaidAt(at);
         auditAfterCommit(AuditEventType.REFUND_ISSUED, actor.userId(), invoice.getId(), refund.getId(),
             "Refund paid out");
         return toDto(refund, actor.userId(), null);
@@ -317,12 +320,13 @@ public class InvoiceRefundService {
             .require(reason != null, FIELD_REASON, "billing.refund.cancelReasonRequired")
             .orThrow();
         requireText(reason, FIELD_REASON);
-        claim(refund, from, InvoiceRefundStatus.CANCELLED, "billing.refund.notCancellable");
+        LocalDateTime at = now();
+        claimed(refundRepository.markCancelled(refund.getId(), refund.getHospitalId(), from, actor.userId(), at,
+            reason), "billing.refund.notCancellable");
         refund.setStatus(InvoiceRefundStatus.CANCELLED);
         refund.setCancelledBy(actor.userId());
-        refund.setCancelledAt(now());
+        refund.setCancelledAt(at);
         refund.setCancelReason(reason);
-        refundRepository.save(refund);
         auditAfterCommit(AuditEventType.REFUND_CANCELLED, actor.userId(), invoice.getId(), refund.getId(),
             "Refund cancelled");
         return toDto(refund, actor.userId(), null);
@@ -463,9 +467,12 @@ public class InvoiceRefundService {
         }
     }
 
-    /** The conditional UPDATE is the guarantee: a concurrent or repeated step updates nothing and is refused. */
-    private void claim(InvoiceRefund refund, InvoiceRefundStatus from, InvoiceRefundStatus to, String refusalKey) {
-        if (refundRepository.transitionStatus(refund.getId(), refund.getHospitalId(), from, to) != 1) {
+    /**
+     * The conditional UPDATE is the guarantee: a concurrent or repeated step updates nothing and is refused. The
+     * managed row is then set to what the statement wrote, so the rest of the transaction reads it as stored.
+     */
+    private static void claimed(int updated, String refusalKey) {
+        if (updated != 1) {
             throw new ConflictException(MessageUtil.resolve(refusalKey));
         }
     }

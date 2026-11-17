@@ -72,8 +72,9 @@ CREATE TABLE IF NOT EXISTS billing.invoice_refunds (
     CONSTRAINT fk_refund_hospital          FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals (id),
     CONSTRAINT ck_refund_amount            CHECK (amount > 0 AND amount = trunc(amount)),
     CONSTRAINT ck_refund_status            CHECK (status IN ('REQUESTED', 'APPROVED', 'REJECTED', 'PAID', 'CANCELLED')),
-    CONSTRAINT ck_refund_method            CHECK (method IN ('CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'BANK_TRANSFER', 'CHECK',
-                                                             'CARD', 'MOBILE_MONEY', 'OTHER')),
+    -- Every PaymentMethod constant (EntitySchemaValidationIT); the service refuses INSURANCE, never money at a till.
+    CONSTRAINT ck_refund_method            CHECK (method IN ('CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'INSURANCE',
+                                                             'BANK_TRANSFER', 'CHECK', 'CARD', 'MOBILE_MONEY', 'OTHER')),
     CONSTRAINT ck_refund_operator          CHECK (mobile_money_operator IS NULL
                                                   OR mobile_money_operator IN ('ORANGE_MONEY', 'MOOV_MONEY', 'AUTRE')),
     CONSTRAINT ck_refund_mobile_money      CHECK (method <> 'MOBILE_MONEY'

@@ -114,15 +114,12 @@ class InvoiceRefundServiceTest {
         // The in-memory ledger: saved refunds get an id; the conditional UPDATE wins only from the stated status.
         when(refunds.saveAndFlush(any(InvoiceRefund.class))).thenAnswer(call -> store(call.getArgument(0)));
         when(refunds.save(any(InvoiceRefund.class))).thenAnswer(call -> store(call.getArgument(0)));
-        when(refunds.transitionStatus(any(), any(), any(), any())).thenAnswer(call -> {
-            InvoiceRefund row = ledger.get(call.<UUID>getArgument(0));
-            if (row == null || !row.getHospitalId().equals(call.getArgument(1))
-                    || row.getStatus() != call.getArgument(2)) {
-                return 0;
-            }
-            row.setStatus(call.getArgument(3));
-            return 1;
-        });
+        when(refunds.decide(any(), any(), any(), any(), any(), any())).thenAnswer(call ->
+            move(call.getArgument(0), call.getArgument(1), InvoiceRefundStatus.REQUESTED, call.getArgument(2)));
+        when(refunds.markPaid(any(), any(), any(), any())).thenAnswer(call ->
+            move(call.getArgument(0), call.getArgument(1), InvoiceRefundStatus.APPROVED, InvoiceRefundStatus.PAID));
+        when(refunds.markCancelled(any(), any(), any(), any(), any(), any())).thenAnswer(call ->
+            move(call.getArgument(0), call.getArgument(1), call.getArgument(2), InvoiceRefundStatus.CANCELLED));
         when(refunds.findByIdAndInvoice_IdAndHospitalId(any(), any(), any())).thenAnswer(call ->
             Optional.ofNullable(ledger.get(call.<UUID>getArgument(0)))
                 .filter(r -> r.getInvoice().getId().equals(call.getArgument(1))
@@ -143,6 +140,16 @@ class InvoiceRefundServiceTest {
     @AfterEach
     void tearDown() {
         LocaleContextHolder.resetLocaleContext();
+    }
+
+    /** The conditional UPDATE: moves the row only from {@code from}; 1 when it moved, 0 otherwise. */
+    private int move(UUID id, UUID hospitalId, InvoiceRefundStatus from, InvoiceRefundStatus to) {
+        InvoiceRefund row = ledger.get(id);
+        if (row == null || !row.getHospitalId().equals(hospitalId) || row.getStatus() != from) {
+            return 0;
+        }
+        row.setStatus(to);
+        return 1;
     }
 
     private InvoiceRefund store(InvoiceRefund refund) {
@@ -461,8 +468,7 @@ class InvoiceRefundServiceTest {
     @DisplayName("a refund that lost the race to a concurrent payout moves no money")
     void aLostRaceMovesNoMoney() {
         InvoiceRefundDTO approved = approved("500");
-        when(refunds.transitionStatus(any(), any(), eq(InvoiceRefundStatus.APPROVED), eq(InvoiceRefundStatus.PAID)))
-            .thenReturn(0);
+        when(refunds.markPaid(any(), any(), any(), any())).thenReturn(0);
         actAs(BILLING_A);
         UUID invoiceId = invoice.getId();
         UUID refundId = approved.getId();

@@ -50,20 +50,51 @@ public interface InvoiceRefundRepository extends JpaRepository<InvoiceRefund, UU
                                        @Param("statuses") Collection<InvoiceRefundStatus> statuses,
                                        @Param("excludedId") UUID excludedId);
 
-    /**
-     * Moves a refund from one status to another only if it is still in {@code from}: 1 for the request that wins,
-     * 0 for a concurrent or repeated one, so a refund is decided once and paid once.
+    /*
+     * The conditional UPDATEs: each moves a refund only from the status it must be in and stamps who and when in the
+     * same statement (the V307 CHECKs require the stamps with the status). 1 for the request that wins, 0 for a
+     * concurrent or repeated one, so a refund is decided once, paid once and cancelled once.
      */
+
+    /** REQUESTED to APPROVED or REJECTED, by {@code decidedBy}. */
     @Modifying(flushAutomatically = true)
     @Query("""
            UPDATE InvoiceRefund r
-              SET r.status = :to
+              SET r.status = :to, r.decidedBy = :decidedBy, r.decidedAt = :decidedAt,
+                  r.decisionReason = :decisionReason
+            WHERE r.id = :id
+              AND r.hospitalId = :hospitalId
+              AND r.status = com.example.hms.enums.InvoiceRefundStatus.REQUESTED
+           """)
+    int decide(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId, @Param("to") InvoiceRefundStatus to,
+               @Param("decidedBy") UUID decidedBy, @Param("decidedAt") LocalDateTime decidedAt,
+               @Param("decisionReason") String decisionReason);
+
+    /** APPROVED to PAID, handed over by {@code paidBy}. */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+           UPDATE InvoiceRefund r
+              SET r.status = com.example.hms.enums.InvoiceRefundStatus.PAID, r.paidBy = :paidBy, r.paidAt = :paidAt
+            WHERE r.id = :id
+              AND r.hospitalId = :hospitalId
+              AND r.status = com.example.hms.enums.InvoiceRefundStatus.APPROVED
+           """)
+    int markPaid(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId, @Param("paidBy") UUID paidBy,
+                 @Param("paidAt") LocalDateTime paidAt);
+
+    /** {@code from} (REQUESTED or APPROVED) to CANCELLED, by {@code cancelledBy}, with the reason. */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+           UPDATE InvoiceRefund r
+              SET r.status = com.example.hms.enums.InvoiceRefundStatus.CANCELLED, r.cancelledBy = :cancelledBy,
+                  r.cancelledAt = :cancelledAt, r.cancelReason = :cancelReason
             WHERE r.id = :id
               AND r.hospitalId = :hospitalId
               AND r.status = :from
            """)
-    int transitionStatus(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId,
-                         @Param("from") InvoiceRefundStatus from, @Param("to") InvoiceRefundStatus to);
+    int markCancelled(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId,
+                      @Param("from") InvoiceRefundStatus from, @Param("cancelledBy") UUID cancelledBy,
+                      @Param("cancelledAt") LocalDateTime cancelledAt, @Param("cancelReason") String cancelReason);
 
     /**
      * The cash closing's money out: the refunds one cashier paid out in [{@code start}, {@code end}) at the hospital
