@@ -17,6 +17,17 @@ import java.util.UUID;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
 
+    interface ClinicalActorName {
+        UUID getId();
+        String getFirstName();
+        String getLastName();
+        String getUsername();
+    }
+
+    @Query("SELECT u.id AS id, u.firstName AS firstName, u.lastName AS lastName, u.username AS username "
+        + "FROM User u WHERE u.id IN :ids")
+    java.util.List<ClinicalActorName> findClinicalActorNames(@Param("ids") java.util.Collection<UUID> ids);
+
   /* ---------- Lightweight counts for dashboards ---------- */
   long countByIsDeletedFalse();
   long countByIsActiveTrueAndIsDeletedFalse();

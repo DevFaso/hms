@@ -46,7 +46,14 @@ class ClinicalActorDisplayGuardTest {
         for (var file : List.of("service/impl/DeathDisputeServiceImpl.java", "service/impl/OrderReviewHoldServiceImpl.java", "mapper/MortalityMapper.java")) {
             String code = Files.readString(MAIN.resolve("com/example/hms").resolve(file));
             assertThat(code).contains("actorNames.display(");
+            assertThat(code).as(file + " batches list actor lookups").contains("actorNames.batch(");
         }
+        String mortality = Files.readString(MAIN.resolve("com/example/hms/service/impl/MortalityServiceImpl.java"));
+        assertThat(mortality).contains("setEnteredInErrorByName(actorNames.display(actorId, actorName))", "mapper.toDtos(all)");
+        String disputes = Files.readString(MAIN.resolve("com/example/hms/service/impl/DeathDisputeServiceImpl.java"));
+        assertThat(disputes).doesNotContain("actorId, currentUsername(), reason");
+        assertThat(Files.readString(MAIN.resolve("com/example/hms/service/support/ClinicalActorNames.java")))
+            .contains("users.findClinicalActorNames(unique)");
     }
 
     @Test

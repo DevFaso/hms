@@ -650,13 +650,11 @@ public class MortalityServiceImpl implements MortalityService {
             .stillbirthRows(stillbirths.rows())
             .earlyNeonatalDeaths(countOfType(all, PerinatalDeathType.EARLY_NEONATAL))
             .lateNeonatalDeaths(countOfType(all, PerinatalDeathType.LATE_NEONATAL))
-            .deaths(all.stream().map(death -> {
-                DeathRecordResponseDTO dto = mapper.toDto(death);
-                dto.setDisputed(disputed.contains(death.getId()));
+            .deaths(mapper.toDtos(all).stream().map(dto -> {
+                dto.setDisputed(disputed.contains(dto.getId()));
                 return dto;
             }).toList())
-            .enteredInError(deathRecordRepository.findEnteredInError(hospitalId, start, end).stream()
-                .map(mapper::toDto).toList())
+            .enteredInError(mapper.toDtos(deathRecordRepository.findEnteredInError(hospitalId, start, end)))
             .build();
     }
 
