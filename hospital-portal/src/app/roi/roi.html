@@ -231,7 +231,7 @@
   >
     <h2>{{ 'ROI.LOG_REQUEST' | translate }}</h2>
     <p class="hospital-context">
-      {{ 'ROI.TARGET_HOSPITAL' | translate }}:
+      {{ 'ROI.TARGET_HOSPITAL' | translate }}{{ 'COMMON.COLON' | translate }}
       {{ 'ROI.HOSPITAL_SELECTED' | translate }}
     </p>
     <p class="hint">{{ 'ROI.LOG_HINT' | translate }}</p>
@@ -354,7 +354,7 @@
   >
     <h2>{{ decisionActionKey(d.kind) | translate }} — {{ d.row.patientName }}</h2>
     <p class="hospital-context">
-      {{ 'ROI.TARGET_HOSPITAL' | translate }}:
+      {{ 'ROI.TARGET_HOSPITAL' | translate }}{{ 'COMMON.COLON' | translate }}
       {{ d.row.hospitalName || ('ROI.HOSPITAL_SELECTED' | translate) }}
     </p>
     <p class="hint">{{ 'ROI.ACTOR_HELP' | translate }}</p>

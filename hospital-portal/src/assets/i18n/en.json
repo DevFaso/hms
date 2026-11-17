@@ -8990,6 +8990,7 @@
       "BULK_FAILED": "Bulk scheduling failed. Please try again.",
       "SHIFTS_LOAD_FAILED": "Failed to load shifts",
       "LEAVE_LOAD_FAILED": "Failed to load leave requests",
+      "SHIFT_TIME_RANGE": "Start and end times must be different.",
       "SHIFT_FIELDS_REQUIRED": "Select a date and different start and end times.",
       "SHIFT_CREATED": "Shift created.",
       "SHIFT_FAILED": "Unable to create the shift. Please try again."

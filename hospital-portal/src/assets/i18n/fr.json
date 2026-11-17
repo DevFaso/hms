@@ -8990,6 +8990,7 @@
       "BULK_FAILED": "La planification en masse a échoué. Veuillez réessayer.",
       "SHIFTS_LOAD_FAILED": "Échec du chargement des quarts",
       "LEAVE_LOAD_FAILED": "Échec du chargement des demandes de congé",
+      "SHIFT_TIME_RANGE": "Les heures de début et de fin doivent être différentes.",
       "SHIFT_FIELDS_REQUIRED": "Sélectionnez une date et des heures de début et de fin différentes.",
       "SHIFT_CREATED": "Quart créé.",
       "SHIFT_FAILED": "Impossible de créer le quart. Veuillez réessayer."
@@ -9171,7 +9172,7 @@
     "SIGNABLE_LOAD_ERROR": "Impossible de charger vos rapports à signer.",
     "VERIFY_UNAVAILABLE": "La vérification n’a pas pu aboutir. Veuillez réessayer ; la validité de la signature n’a pas été déterminée.",
     "LOOKUP_TITLE": "Consulter les signatures d’un rapport",
-    "LOOKUP_HELP": "Consultez les signatures d’un rapport et leurs signataires. Utilisez l’action Vérifier sur une signature pour vérifier son texte original.",
+    "LOOKUP_HELP": "Consultez les signatures d’un rapport et leurs signataires. Utilisez l’action vérifier sur une signature pour vérifier son texte original.",
     "KNOWN_REPORTS": "Rapports de la liste de signatures chargée",
     "LOOKUP_LOADING": "Recherche en cours...",
     "INVALID_REPORT_ID": "Saisissez un UUID de rapport valide (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",

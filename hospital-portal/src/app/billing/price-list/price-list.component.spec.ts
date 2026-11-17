@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
+import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 import fr from '../../../assets/i18n/fr.json';
 import { PriceListComponent } from './price-list.component';
 import { PriceListItem, PriceListLinkOptions } from '../../services/price-list.service';
@@ -78,6 +79,13 @@ const OPTIONS: PriceListLinkOptions = {
 describe('PriceListComponent (billing-money plan PR 2)', () => {
   let fixture: ComponentFixture<PriceListComponent>;
   let http: HttpTestingController;
+  let previousLang: string | null;
+
+  beforeEach(() => {
+    previousLang = localStorage.getItem('lang');
+    localStorage.setItem('lang', 'fr');
+    resetStoredLangForTests();
+  });
 
   function setup(roles: string[], superAdmin = false): HTMLElement {
     TestBed.configureTestingModule({
@@ -109,6 +117,9 @@ describe('PriceListComponent (billing-money plan PR 2)', () => {
   }
 
   afterEach(() => {
+    if (previousLang === null) localStorage.removeItem('lang');
+    else localStorage.setItem('lang', previousLang);
+    resetStoredLangForTests();
     http?.verify();
     (fixture?.nativeElement as HTMLElement | undefined)?.remove();
   });

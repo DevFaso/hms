@@ -8990,6 +8990,7 @@
       "BULK_FAILED": "La programación en bloque falló. Inténtelo de nuevo.",
       "SHIFTS_LOAD_FAILED": "Error al cargar los turnos",
       "LEAVE_LOAD_FAILED": "Error al cargar las solicitudes de licencia",
+      "SHIFT_TIME_RANGE": "Las horas de inicio y fin deben ser diferentes.",
       "SHIFT_FIELDS_REQUIRED": "Seleccione una fecha y horas de inicio y fin diferentes.",
       "SHIFT_CREATED": "Turno creado.",
       "SHIFT_FAILED": "No se pudo crear el turno. Inténtelo de nuevo."
@@ -9171,7 +9172,7 @@
     "SIGNABLE_LOAD_ERROR": "No se pudieron cargar sus informes para firmar.",
     "VERIFY_UNAVAILABLE": "No se pudo completar la verificación. Inténtelo de nuevo; no se ha determinado la validez de la firma.",
     "LOOKUP_TITLE": "Consultar firmas de un informe",
-    "LOOKUP_HELP": "Consulte si un informe tiene firmas y quién lo firmó. Use Verificar en una firma para verificar su texto original.",
+    "LOOKUP_HELP": "Consulte si un informe tiene firmas y quién lo firmó. Use verificar en una firma para verificar su texto original.",
     "KNOWN_REPORTS": "Informes de la lista de firmas cargada",
     "LOOKUP_LOADING": "Consultando...",
     "INVALID_REPORT_ID": "Introduzca un UUID de informe válido (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",

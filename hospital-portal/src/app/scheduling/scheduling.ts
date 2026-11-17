@@ -31,7 +31,8 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
-import { refusedFieldReasons } from '../shared/refusal-reason';
+import { missingRequiredMessage } from '../shared/required-fields';
+import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 @Component({
   selector: 'app-scheduling',
@@ -291,13 +292,14 @@ export class SchedulingComponent implements OnInit {
         !this.bulk.startTime ? 'bulk-startTime' : '',
         !this.bulk.endTime || this.bulk.startTime === this.bulk.endTime ? 'bulk-endTime' : '',
       ].filter(Boolean);
-      refuseFields(
-        this.host.nativeElement,
-        invalid,
-        Object.values(this.shiftFields),
-        this.translate.instant('SCHEDULING.TOAST.SHIFT_FIELDS_REQUIRED'),
-      );
-      this.toast.error(this.translate.instant('SCHEDULING.TOAST.SHIFT_FIELDS_REQUIRED'));
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'SCHEDULING.START_DATE', value: this.bulk.startDate },
+          { labelKey: 'SCHEDULING.START_TIME', value: this.bulk.startTime },
+          { labelKey: 'SCHEDULING.END_TIME', value: this.bulk.endTime },
+        ]) ?? this.translate.instant('SCHEDULING.TOAST.SHIFT_TIME_RANGE');
+      refuseFields(this.host.nativeElement, invalid, Object.values(this.shiftFields), message);
+      this.toast.error(message);
       return;
     }
     const request: StaffShiftRequest = {
@@ -326,7 +328,7 @@ export class SchedulingComponent implements OnInit {
           Object.values(this.shiftFields),
         );
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('SCHEDULING.TOAST.SHIFT_FAILED'),
+          refusalReason(err) ?? this.translate.instant('SCHEDULING.TOAST.SHIFT_FAILED'),
         );
       },
     });
@@ -370,7 +372,7 @@ export class SchedulingComponent implements OnInit {
       },
       error: (err) => {
         this.bulkSubmitting.set(false);
-        const msg = err?.error?.message ?? this.translate.instant('SCHEDULING.TOAST.BULK_FAILED');
+        const msg = refusalReason(err) ?? this.translate.instant('SCHEDULING.TOAST.BULK_FAILED');
         this.toast.error(msg);
       },
     });
