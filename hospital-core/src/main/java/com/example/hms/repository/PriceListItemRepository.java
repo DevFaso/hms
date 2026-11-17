@@ -62,4 +62,18 @@ public interface PriceListItemRepository extends JpaRepository<PriceListItem, UU
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM PriceListItem i WHERE i.id = :id AND i.hospitalId = :hospitalId")
     Optional<PriceListItem> lockByIdAtHospital(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId);
+
+    /**
+     * Billing-money plan PR 4: the items of these codes at this hospital, locked (SELECT ... FOR UPDATE) in code
+     * order, as the CSV import applies a file: the same lock {@link #lockByIdAtHospital} takes, so a screen edit and
+     * an import of the same item are serialised, and two imports take their locks in the same order.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT i FROM PriceListItem i
+        WHERE i.hospitalId = :hospitalId AND i.code IN :codes
+        ORDER BY i.code
+        """)
+    List<PriceListItem> lockByHospitalIdAndCodes(@Param("hospitalId") UUID hospitalId,
+                                                 @Param("codes") java.util.Collection<String> codes);
 }
