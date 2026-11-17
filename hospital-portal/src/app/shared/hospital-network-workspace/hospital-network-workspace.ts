@@ -30,6 +30,15 @@ export class HospitalNetworkWorkspaceComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   readonly moduleTitleKey = input('HOSPITAL_NETWORK.TITLE');
+  readonly moduleHelpKey = computed(
+    () =>
+      ({
+        'NAV.PROCEDURE_ORDERS': 'PROCEDURES.NETWORK_HELP',
+        'PROCEDURES.TITLE': 'PROCEDURES.NETWORK_HELP',
+        'NAV.REGISTRIES': 'REGISTRIES.NETWORK_HELP',
+        'REGISTRIES.TITLE': 'REGISTRIES.NETWORK_HELP',
+      })[this.moduleTitleKey()] ?? 'HOSPITAL_NETWORK.SUBTITLE',
+  );
   readonly hospitals = signal<HospitalResponse[]>([]);
   readonly loading = signal(false);
   readonly failed = signal(false);

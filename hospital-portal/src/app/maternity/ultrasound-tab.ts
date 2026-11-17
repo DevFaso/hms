@@ -426,7 +426,7 @@ export class UltrasoundTabComponent implements OnInit {
   reportActionBusy = signal(false);
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    this.hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     this.load();
   }
 

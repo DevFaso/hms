@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 
 import { ProcedureOrdersComponent } from './procedure-orders';
 import { ProcedureOrderResponse, ProcedureOrderService } from '../services/procedure-order.service';
@@ -28,6 +28,7 @@ describe('ProcedureOrdersComponent', () => {
 
   beforeEach(() => {
     service = jasmine.createSpyObj<ProcedureOrderService>('ProcedureOrderService', [
+      'create',
       'update',
       'cancel',
       'byHospital',
@@ -43,7 +44,11 @@ describe('ProcedureOrdersComponent', () => {
         },
         {
           provide: RoleContextService,
-          useValue: { activeHospitalId: 'h1', hasAnyActiveRole: () => true },
+          useValue: roleContextStub({
+            superAdmin: false,
+            hospitalId: 'h1',
+            roles: ['ROLE_DOCTOR'],
+          }),
         },
         { provide: ToastService, useValue: { success: () => undefined, error: () => undefined } },
         { provide: TranslateService, useValue: { instant: (k: string) => k } },
@@ -56,6 +61,59 @@ describe('ProcedureOrdersComponent', () => {
   });
 
   afterEach(() => jasmine.clock().uninstall());
+
+  it('uses the selected hospital for list and creation when it differs from the primary hospital', () => {
+    const scope = TestBed.inject(RoleContextService);
+    (scope as ReturnType<typeof roleContextStub>).set({
+      superAdmin: true,
+      roles: ['ROLE_SUPER_ADMIN'],
+    });
+    scope.scopeToHospital('h2');
+    service.byHospital.and.returnValue(of([]));
+    service.create.and.returnValue(of({ ...order, hospitalId: 'h2' }));
+    component.ngOnInit();
+    expect(service.byHospital).toHaveBeenCalledWith('h2', undefined);
+    component.orderForm = {
+      ...component.emptyOrderForm(),
+      patientId: 'p1',
+      procedureName: 'Act',
+      indication: 'Reason',
+    };
+    component.submitOrder();
+    expect(service.create).toHaveBeenCalledWith(jasmine.objectContaining({ hospitalId: 'h2' }));
+    expect(scope.activeHospitalId).toBe('h1');
+  });
+
+  it('makes no procedure request in global view and drops a response from a previous hospital', () => {
+    const scope = TestBed.inject(RoleContextService) as ReturnType<typeof roleContextStub>;
+    scope.set({ superAdmin: true, roles: ['ROLE_SUPER_ADMIN'] });
+    const pending = new Subject<ProcedureOrderResponse[]>();
+    service.byHospital.and.returnValue(pending);
+    component.ngOnInit();
+    scope.enableGlobalView();
+    service.byHospital.calls.reset();
+    component.load();
+    pending.next([order]);
+    expect(service.byHospital).not.toHaveBeenCalled();
+    expect(component.orders()).toEqual([]);
+    component.openCreate();
+    expect(component.showOrderModal()).toBeFalse();
+  });
+
+  it('filters loaded requests without fetching or changing the loaded total', () => {
+    component.orders.set([
+      { ...order, patientName: 'Seydou Traore', patientMrn: 'CHW1' },
+      { ...order, id: 'other', urgency: 'ROUTINE' },
+    ]);
+    component.search.set('Seydou');
+    component.urgencyFilter.set('URGENT');
+    expect(component.visibleOrders().map((row) => row.id)).toEqual(['o1']);
+    expect(component.orders().length).toBe(2);
+    expect(service.byHospital).not.toHaveBeenCalled();
+    expect(component.worklists).toContain('POSTPONED');
+    expect(component.worklists).toContain('READY_FOR_PROCEDURE');
+    expect(component.worklists).toContain('PRE_OP_CLEARANCE_PENDING');
+  });
 
   it('sends the consent time on the server UTC clock, whatever the browser zone (#948 review)', () => {
     // 14:00 UTC. Sent as the browser's wall clock, a New York workstation
@@ -202,6 +260,12 @@ describe('ProcedureOrdersComponent — inline steps keep Escape (QA D1155)', () 
   });
 
   afterEach(() => host().remove());
+
+  it('shows consent as not recorded before cancellation rather than pending', () => {
+    fixture.componentInstance.openOrder({ ...order, status: 'CANCELLED', consentObtained: false });
+    fixture.detectChanges();
+    expect(host().textContent).toContain('PROCEDURES.CONSENT_NOT_RECORDED_CANCELLED');
+  });
 
   it('the cancel step: Escape closes only the step, asks over a typed reason, and the keyboard returns to its button', fakeAsync(() => {
     const cmp = fixture.componentInstance;

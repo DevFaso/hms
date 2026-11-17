@@ -74,7 +74,7 @@
         type="button"
         class="btn-secondary"
         (click)="runLookup()"
-        [disabled]="lookupLoading() || !lookupReportType() || !lookupReportId().trim()"
+        [disabled]="lookupLoading()"
       >
         {{ (lookupLoading() ? 'SIGNATURES.LOOKUP_LOADING' : 'SIGNATURES.LOOKUP') | translate }}
       </button>

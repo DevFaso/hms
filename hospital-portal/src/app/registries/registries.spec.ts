@@ -104,6 +104,43 @@ describe('RegistriesComponent', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
+  it('combines explicit status pages for All because an omitted status defaults to ACTIVE on the server', () => {
+    fixture.detectChanges();
+    registryService.registry.calls.reset();
+    registryService.registry.and.callFake((_program, status) =>
+      of(page([enrollment({ id: status!, status: status! })])),
+    );
+    component.setStatusFilter('ALL');
+    expect(registryService.registry.calls.count()).toBe(6);
+    expect(
+      registryService.registry.calls.allArgs().every((args) => args[1] !== undefined),
+    ).toBeTrue();
+    expect(component.rows().length).toBe(6);
+    expect(component.totalRows()).toBe(6);
+  });
+
+  it('filters overdue loaded patients and sorts dates only when selected, retaining source totals', () => {
+    registryService.registry.and.returnValue(
+      of(
+        page(
+          [
+            enrollment({ id: 'later', nextExpectedVisit: '2026-10-20', overdueDays: 1 }),
+            enrollment({ id: 'earlier', nextExpectedVisit: '2026-10-01', overdueDays: 10 }),
+            enrollment({ id: 'ontime', overdueDays: 0 }),
+          ],
+          300,
+        ),
+      ),
+    );
+    fixture.detectChanges();
+    expect(component.visibleRows()[0].id).toBe('later');
+    component.overdueOnly.set(true);
+    component.sortBy.set('nextVisit');
+    expect(component.visibleRows().map((row) => row.id)).toEqual(['earlier', 'later']);
+    expect(component.totalRows()).toBe(300);
+    expect(component.rows().length).toBe(3);
+  });
+
   it('carries no scope chip or hint of its own: the route gate owns them', () => {
     // The route is flagged requiresHospitalScope: the shell shows the one
     // chip and builds this page only with a hospital pinned.

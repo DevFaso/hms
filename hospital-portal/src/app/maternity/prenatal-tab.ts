@@ -133,7 +133,7 @@ export class PrenatalTabComponent implements OnInit {
   reminderBusy = signal(false);
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    this.hospitalId = this.roleContext.effectiveHospitalIdForRequest();
   }
 
   onPatientPicked(p: PatientResponse | null): void {

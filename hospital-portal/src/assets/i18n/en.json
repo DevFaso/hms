@@ -8990,6 +8990,7 @@
       "BULK_FAILED": "Bulk scheduling failed. Please try again.",
       "SHIFTS_LOAD_FAILED": "Failed to load shifts",
       "LEAVE_LOAD_FAILED": "Failed to load leave requests",
+      "SHIFT_TIME_RANGE": "Start and end times must be different.",
       "SHIFT_FIELDS_REQUIRED": "Select a date and different start and end times.",
       "SHIFT_CREATED": "Shift created.",
       "SHIFT_FAILED": "Unable to create the shift. Please try again."
@@ -10773,7 +10774,16 @@
     "URGENCY_ELECTIVE": "Elective",
     "URGENCY_URGENT": "Urgent",
     "URGENCY_EMERGENT": "Emergent",
-    "PAST_DATE": "The planned date and time cannot be in the past."
+    "PAST_DATE": "The planned date and time cannot be in the past.",
+    "SEARCH": "Search patient, record number, procedure or code",
+    "ALL_URGENCIES": "All urgencies",
+    "VISIBLE_COUNT": "{{shown}} / {{total}} requests loaded",
+    "NO_MATCHES": "No requests match these filters.",
+    "CONSENT_NOT_RECORDED_CANCELLED": "Consent was not recorded before cancellation.",
+    "WORKLIST_PRE_OP_CLEARANCE_PENDING": "Preoperative clearance pending",
+    "WORKLIST_READY_FOR_PROCEDURE": "Ready for procedure",
+    "WORKLIST_POSTPONED": "Postponed",
+    "NETWORK_HELP": "Choose a hospital to view its procedure requests, consent records and schedules."
   },
   "REGISTRATIONS": {
     "DEACTIVATE_TITLE": "Deactivate this registration?",
@@ -12025,7 +12035,13 @@
     "STATUS_COMPLETED": "Completed",
     "STATUS_CONFIRMED_UNDERSTANDING": "Understanding confirmed",
     "STATUS_NEEDS_CLARIFICATION": "Needs clarification",
-    "STATUS_FEEDBACK_PROVIDED": "Feedback provided"
+    "STATUS_FEEDBACK_PROVIDED": "Feedback provided",
+    "HOSPITAL_SCOPE": "Resources and assignments for the selected hospital.",
+    "NETWORK_SCOPE": "Network library. Select a hospital to manage resources or assign them to a patient.",
+    "PICK_HOSPITAL": "Select a hospital to view patient progress.",
+    "SEARCH_SCOPE": "Search and filters apply to the loaded resources.",
+    "NO_MATCHES": "No resources match these filters.",
+    "EMPTY_HELP": "Add a resource at the selected hospital, or clear the filters to see the available library."
   },
   "ON_CALL": {
     "TITLE": "On-Call Rota",
@@ -13081,7 +13097,16 @@
     "STATUS_UPDATED": "Status updated.",
     "ACTION_FAILED": "The action could not be completed.",
     "COUNTS_UNAVAILABLE": "Counts unavailable — showing the last known values.",
-    "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} enrolments."
+    "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} enrolments.",
+    "ALL_STATUSES": "All statuses",
+    "OVERDUE_ONLY": "Overdue visits only",
+    "SORT": "Sort loaded patients",
+    "SORT_PRIORITY": "Registry order",
+    "SORT_NAME": "Patient name A–Z",
+    "SORT_NEXT_VISIT": "Next visit: earliest first",
+    "SEARCH_SCOPE": "Search, overdue filtering and sorting apply to loaded patients. Totals describe the selected programme and status.",
+    "EMPTY_SELECTED": "No patients in {{program}} with status: {{status}}, at this hospital.",
+    "NETWORK_HELP": "Choose a hospital to view programme cohorts, enrolments and overdue follow-up visits."
   },
   "RECORD_ACCESS": {
     "RESTRICTED_ARIA": "Restricted records",

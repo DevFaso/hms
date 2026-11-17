@@ -189,7 +189,7 @@ export class MedicalHistoryTabComponent implements OnInit {
   }
 
   private hospitalId(): string {
-    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
+    return this.roleContext.effectiveHospitalIdForRequest() ?? '';
   }
 
   private todayIso(): string {

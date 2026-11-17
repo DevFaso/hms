@@ -8990,6 +8990,7 @@
       "BULK_FAILED": "La planification en masse a échoué. Veuillez réessayer.",
       "SHIFTS_LOAD_FAILED": "Échec du chargement des quarts",
       "LEAVE_LOAD_FAILED": "Échec du chargement des demandes de congé",
+      "SHIFT_TIME_RANGE": "Les heures de début et de fin doivent être différentes.",
       "SHIFT_FIELDS_REQUIRED": "Sélectionnez une date et des heures de début et de fin différentes.",
       "SHIFT_CREATED": "Quart créé.",
       "SHIFT_FAILED": "Impossible de créer le quart. Veuillez réessayer."
@@ -9171,7 +9172,7 @@
     "SIGNABLE_LOAD_ERROR": "Impossible de charger vos rapports à signer.",
     "VERIFY_UNAVAILABLE": "La vérification n’a pas pu aboutir. Veuillez réessayer ; la validité de la signature n’a pas été déterminée.",
     "LOOKUP_TITLE": "Consulter les signatures d’un rapport",
-    "LOOKUP_HELP": "Consultez les signatures d’un rapport et leurs signataires. Utilisez l’action Vérifier sur une signature pour vérifier son texte original.",
+    "LOOKUP_HELP": "Consultez les signatures d’un rapport et leurs signataires. Utilisez l’action vérifier sur une signature pour vérifier son texte original.",
     "KNOWN_REPORTS": "Rapports de la liste de signatures chargée",
     "LOOKUP_LOADING": "Recherche en cours...",
     "INVALID_REPORT_ID": "Saisissez un UUID de rapport valide (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
@@ -10773,7 +10774,16 @@
     "URGENCY_ELECTIVE": "Élective",
     "URGENCY_URGENT": "Urgente",
     "URGENCY_EMERGENT": "Urgence vitale",
-    "PAST_DATE": "La date et l'heure prévues ne peuvent pas être dans le passé."
+    "PAST_DATE": "La date et l'heure prévues ne peuvent pas être dans le passé.",
+    "SEARCH": "Rechercher patient, dossier, acte ou code",
+    "ALL_URGENCIES": "Toutes les urgences",
+    "VISIBLE_COUNT": "{{shown}} / {{total}} demandes chargées",
+    "NO_MATCHES": "Aucune demande ne correspond aux filtres.",
+    "CONSENT_NOT_RECORDED_CANCELLED": "Consentement non recueilli avant annulation.",
+    "WORKLIST_PRE_OP_CLEARANCE_PENDING": "Évaluation préopératoire en attente",
+    "WORKLIST_READY_FOR_PROCEDURE": "Prêt pour l’acte",
+    "WORKLIST_POSTPONED": "Reportés",
+    "NETWORK_HELP": "Choisissez un établissement pour consulter ses demandes d’actes, consentements et plannings."
   },
   "REGISTRATIONS": {
     "DEACTIVATE_TITLE": "Désactiver cet enregistrement ?",
@@ -12025,7 +12035,13 @@
     "STATUS_COMPLETED": "Terminé",
     "STATUS_CONFIRMED_UNDERSTANDING": "Compréhension confirmée",
     "STATUS_NEEDS_CLARIFICATION": "Clarification requise",
-    "STATUS_FEEDBACK_PROVIDED": "Retour fourni"
+    "STATUS_FEEDBACK_PROVIDED": "Retour fourni",
+    "HOSPITAL_SCOPE": "Ressources et assignations de l’établissement sélectionné.",
+    "NETWORK_SCOPE": "Bibliothèque du réseau. Sélectionnez un établissement pour gérer les ressources ou les assigner à un patient.",
+    "PICK_HOSPITAL": "Sélectionnez un établissement pour consulter la progression des patients.",
+    "SEARCH_SCOPE": "La recherche et les filtres portent sur les ressources chargées.",
+    "NO_MATCHES": "Aucune ressource ne correspond aux filtres.",
+    "EMPTY_HELP": "Ajoutez une ressource dans l’établissement sélectionné ou effacez les filtres pour consulter la bibliothèque disponible."
   },
   "ON_CALL": {
     "TITLE": "Tableau de garde",
@@ -13081,7 +13097,16 @@
     "STATUS_UPDATED": "Statut mis à jour.",
     "ACTION_FAILED": "L'action n'a pas pu être effectuée.",
     "COUNTS_UNAVAILABLE": "Comptes indisponibles — dernières valeurs connues affichées.",
-    "SHOWING_FIRST": "Affichage des {{shown}} premières inscriptions sur {{total}}."
+    "SHOWING_FIRST": "Affichage des {{shown}} premières inscriptions sur {{total}}.",
+    "ALL_STATUSES": "Tous les statuts",
+    "OVERDUE_ONLY": "Visites en retard uniquement",
+    "SORT": "Trier les patients chargés",
+    "SORT_PRIORITY": "Ordre du registre",
+    "SORT_NAME": "Nom du patient A–Z",
+    "SORT_NEXT_VISIT": "Prochaine visite : les plus proches",
+    "SEARCH_SCOPE": "La recherche, le filtre des retards et le tri portent sur les patients chargés. Les totaux concernent le programme et le statut sélectionnés.",
+    "EMPTY_SELECTED": "Aucun patient dans le programme {{program}}, statut : {{status}}, pour cet établissement.",
+    "NETWORK_HELP": "Choisissez un établissement pour consulter ses cohortes, inscriptions et visites de suivi en retard."
   },
   "RECORD_ACCESS": {
     "RESTRICTED_ARIA": "Dossiers restreints",

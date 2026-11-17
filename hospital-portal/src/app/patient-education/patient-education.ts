@@ -3,9 +3,14 @@ import {
   Component,
   OnInit,
   computed,
+  effect,
+  Injector,
+  untracked,
   inject,
   signal,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -29,6 +34,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { refusalReason } from '../shared/refusal-reason';
 /**
  * Patient-education workspace (Phase 3 task 18): resource library + assign/
@@ -42,6 +48,7 @@ import { refusalReason } from '../shared/refusal-reason';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    HospitalScopeChipComponent,
     SubmitGuardDirective,
     MeasurePipe,
     ModalDialogDirective,
@@ -59,6 +66,20 @@ export class PatientEducationComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+
+  private readonly injector = inject(Injector);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+  readonly roleHospitalId = this.roleContext.effectiveHospitalIdForRequest;
+  readonly hasScope = computed(() => this.roleContext.effectiveHospitalIdForRequest() != null);
+  readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  private resourceVersion = 0;
+  private progressVersion = 0;
+  resetResourceFilters(): void {
+    this.searchTerm.set('');
+    this.categoryFilter.set('');
+    this.typeFilter.set('');
+  }
 
   readonly canManageResources = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
@@ -159,7 +180,36 @@ export class PatientEducationComponent implements OnInit {
   progressSaving = signal(false);
 
   ngOnInit(): void {
+    this.scopeUrl.applyUrlScopeSync(this.route);
     this.loadResources();
+    let first = true;
+    effect(
+      () => {
+        this.roleContext.effectiveHospitalIdForRequest();
+        if (first) {
+          first = false;
+          return;
+        }
+        untracked(() => {
+          this.progressVersion++;
+          this.resourceSaving.set(false);
+          this.assignBusy.set(false);
+          this.deleteBusy.set(false);
+          this.progressSaving.set(false);
+          this.progressPatient.set(null);
+          this.progressEntries.set([]);
+          this.progressLoading.set(false);
+          this.closeResourceModal();
+          this.closeAssign();
+          this.closeDelete();
+          this.showProgressModal.set(false);
+          if (!this.hasScope()) this.activeTab.set('resources');
+          this.resources.set([]);
+          this.loadResources();
+        });
+      },
+      { injector: this.injector },
+    );
   }
 
   setTab(tab: 'resources' | 'progress'): void {
@@ -167,14 +217,26 @@ export class PatientEducationComponent implements OnInit {
   }
 
   loadResources(): void {
+    const version = ++this.resourceVersion;
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     this.resourcesLoading.set(true);
     this.resourcesError.set(false);
     this.educationService.listResources().subscribe({
       next: (resources) => {
+        if (
+          version !== this.resourceVersion ||
+          hospitalId !== this.roleContext.effectiveHospitalIdForRequest()
+        )
+          return;
         this.resources.set(resources ?? []);
         this.resourcesLoading.set(false);
       },
       error: () => {
+        if (
+          version !== this.resourceVersion ||
+          hospitalId !== this.roleContext.effectiveHospitalIdForRequest()
+        )
+          return;
         this.resourcesError.set(true);
         this.resourcesLoading.set(false);
         this.toast.error(this.translate.instant('EDUCATION.LOAD_ERROR'));
@@ -216,12 +278,14 @@ export class PatientEducationComponent implements OnInit {
   }
 
   openCreateResource(): void {
+    if (!this.hasScope()) return;
     this.resourceForm = this.emptyResourceForm();
     this.editingResourceId.set(null);
     this.showResourceModal.set(true);
   }
 
   openEditResource(resource: EducationResource): void {
+    if (!this.hasScope()) return;
     this.resourceForm = {
       title: resource.title,
       description: resource.description ?? '',
@@ -246,6 +310,8 @@ export class PatientEducationComponent implements OnInit {
   }
 
   submitResource(): void {
+    if (!this.hasScope()) return;
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     if (!this.resourceForm.title.trim()) {
       this.toast.error(this.translate.instant('EDUCATION.TITLE_REQUIRED'));
       return;
@@ -257,6 +323,7 @@ export class PatientEducationComponent implements OnInit {
       : this.educationService.createResource(this.resourceForm);
     op.subscribe({
       next: (saved) => {
+        if (hospitalId !== this.roleContext.effectiveHospitalIdForRequest()) return;
         this.toast.success(
           this.translate.instant(editingId ? 'EDUCATION.UPDATED' : 'EDUCATION.CREATED'),
         );
@@ -267,6 +334,7 @@ export class PatientEducationComponent implements OnInit {
         );
       },
       error: (err: unknown) => {
+        if (hospitalId !== this.roleContext.effectiveHospitalIdForRequest()) return;
         this.toast.error(refusalReason(err) ?? this.translate.instant('EDUCATION.SAVE_ERROR'));
         this.resourceSaving.set(false);
       },
@@ -274,6 +342,7 @@ export class PatientEducationComponent implements OnInit {
   }
 
   confirmDelete(resource: EducationResource): void {
+    if (!this.hasScope()) return;
     this.deleteTarget.set(resource);
   }
 
@@ -282,11 +351,14 @@ export class PatientEducationComponent implements OnInit {
   }
 
   submitDelete(): void {
+    if (!this.hasScope()) return;
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     const target = this.deleteTarget();
     if (!target) return;
     this.deleteBusy.set(true);
     this.educationService.deleteResource(target.id).subscribe({
       next: () => {
+        if (hospitalId !== this.roleContext.effectiveHospitalIdForRequest()) return;
         this.toast.success(this.translate.instant('EDUCATION.DELETED'));
         this.deleteBusy.set(false);
         this.closeDelete();
@@ -294,6 +366,7 @@ export class PatientEducationComponent implements OnInit {
         this.resources.update((list) => list.filter((r) => r.id !== target.id));
       },
       error: (err: unknown) => {
+        if (hospitalId !== this.roleContext.effectiveHospitalIdForRequest()) return;
         this.toast.error(refusalReason(err) ?? this.translate.instant('EDUCATION.DELETE_ERROR'));
         this.deleteBusy.set(false);
       },
@@ -309,15 +382,28 @@ export class PatientEducationComponent implements OnInit {
   }
 
   loadProgress(): void {
+    if (!this.hasScope()) return;
+    const version = ++this.progressVersion;
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     const patient = this.progressPatient();
     if (!patient) return;
     this.progressLoading.set(true);
     this.educationService.progressForPatient(patient.id).subscribe({
       next: (entries) => {
+        if (
+          version !== this.progressVersion ||
+          hospitalId !== this.roleContext.effectiveHospitalIdForRequest()
+        )
+          return;
         this.progressEntries.set(entries ?? []);
         this.progressLoading.set(false);
       },
       error: () => {
+        if (
+          version !== this.progressVersion ||
+          hospitalId !== this.roleContext.effectiveHospitalIdForRequest()
+        )
+          return;
         this.progressEntries.set([]);
         this.progressLoading.set(false);
         this.toast.error(this.translate.instant('EDUCATION.PROGRESS_LOAD_ERROR'));
@@ -326,6 +412,7 @@ export class PatientEducationComponent implements OnInit {
   }
 
   openAssign(): void {
+    if (!this.hasScope()) return;
     this.assignResourceId = '';
     this.showAssignModal.set(true);
   }
@@ -335,6 +422,8 @@ export class PatientEducationComponent implements OnInit {
   }
 
   submitAssign(): void {
+    if (!this.hasScope()) return;
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     const patient = this.progressPatient();
     if (!patient || !this.assignResourceId) return;
     this.assignBusy.set(true);
@@ -345,6 +434,7 @@ export class PatientEducationComponent implements OnInit {
       })
       .subscribe({
         next: (created) => {
+          if (hospitalId !== this.roleContext.effectiveHospitalIdForRequest()) return;
           this.toast.success(this.translate.instant('EDUCATION.ASSIGNED'));
           this.assignBusy.set(false);
           this.closeAssign();
@@ -356,6 +446,7 @@ export class PatientEducationComponent implements OnInit {
           });
         },
         error: (err: unknown) => {
+          if (hospitalId !== this.roleContext.effectiveHospitalIdForRequest()) return;
           this.toast.error(refusalReason(err) ?? this.translate.instant('EDUCATION.ASSIGN_ERROR'));
           this.assignBusy.set(false);
         },
@@ -363,6 +454,7 @@ export class PatientEducationComponent implements OnInit {
   }
 
   openProgressUpdate(entry: EducationProgress): void {
+    if (!this.hasScope()) return;
     this.editingProgress.set(entry);
     this.progressForm = {
       resourceId: entry.resourceId,
@@ -383,17 +475,21 @@ export class PatientEducationComponent implements OnInit {
   }
 
   submitProgressUpdate(): void {
+    if (!this.hasScope()) return;
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     const entry = this.editingProgress();
     if (!entry) return;
     this.progressSaving.set(true);
     this.educationService.updateProgress(entry.id, this.progressForm).subscribe({
       next: (updated) => {
+        if (hospitalId !== this.roleContext.effectiveHospitalIdForRequest()) return;
         this.toast.success(this.translate.instant('EDUCATION.PROGRESS_UPDATED'));
         this.progressSaving.set(false);
         this.closeProgressModal();
         this.progressEntries.update((list) => list.map((e) => (e.id === updated.id ? updated : e)));
       },
       error: (err: unknown) => {
+        if (hospitalId !== this.roleContext.effectiveHospitalIdForRequest()) return;
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('EDUCATION.PROGRESS_UPDATE_ERROR'),
         );

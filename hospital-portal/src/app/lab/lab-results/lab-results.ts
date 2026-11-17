@@ -402,7 +402,7 @@ export class LabResultsComponent implements OnInit {
   }
 
   private hospitalId(): string | null {
-    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    return this.roleContext.effectiveHospitalIdForRequest();
   }
 
   /** The orders "New result" offers (QA D1176), plus the order of a result being edited or corrected. */

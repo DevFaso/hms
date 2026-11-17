@@ -1,3 +1,7 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
+import { HospitalService } from '../services/hospital.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
@@ -20,11 +24,24 @@ describe('PatientEducationComponent dashboard metrics', () => {
   ];
 
   beforeEach(async () => {
-    service = jasmine.createSpyObj<EducationService>('EducationService', ['listResources']);
+    service = jasmine.createSpyObj<EducationService>('EducationService', [
+      'listResources',
+      'createResource',
+    ]);
     service.listResources.and.returnValue(of(resources));
     await TestBed.configureTestingModule({
       imports: [PatientEducationComponent, TranslateModule.forRoot()],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: HospitalService,
+          useValue: {
+            getById: () => of({ id: 'h2', name: 'Selected hospital' }),
+            list: () => of([]),
+          },
+        },
         { provide: EducationService, useValue: service },
         { provide: PatientService, useValue: { search: () => of([]), lookup: () => of([]) } },
         {
@@ -41,6 +58,38 @@ describe('PatientEducationComponent dashboard metrics', () => {
     const root = fixture.nativeElement as HTMLElement;
     return Array.from(root.querySelectorAll('.care-metric strong'), (el) => el.textContent!.trim());
   }
+
+  it('requires a selected hospital for resource creation even for a super-admin', () => {
+    const scope = TestBed.inject(RoleContextService) as ReturnType<typeof roleContextStub>;
+    scope.set({ superAdmin: true, roles: ['ROLE_SUPER_ADMIN'] });
+    scope.enableGlobalView();
+    fixture.detectChanges();
+    const c = fixture.componentInstance;
+    c.openCreateResource();
+    c.resourceForm.title = 'Resource';
+    c.submitResource();
+    expect(c.showResourceModal()).toBeFalse();
+    expect(service.createResource).not.toHaveBeenCalled();
+    scope.scopeToHospital('h2');
+    fixture.detectChanges();
+    c.openCreateResource();
+    expect(c.showResourceModal()).toBeTrue();
+  });
+
+  it('clears progress and drops late library results when a super-admin changes hospitals', () => {
+    const scope = TestBed.inject(RoleContextService) as ReturnType<typeof roleContextStub>;
+    scope.set({ superAdmin: true, roles: ['ROLE_SUPER_ADMIN'] });
+    const old = new Subject<EducationResource[]>();
+    service.listResources.and.returnValue(old);
+    fixture.detectChanges();
+    service.listResources.and.returnValue(of([]));
+    scope.scopeToHospital('h2');
+    fixture.detectChanges();
+    old.next(resources);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.resources()).toEqual([]);
+    expect(fixture.componentInstance.progressPatient()).toBeNull();
+  });
 
   it('counts distinct loaded categories independently of visible resource filters', () => {
     fixture.detectChanges();

@@ -352,7 +352,7 @@ export class MaternityComponent implements OnInit {
   );
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    this.hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     if (!this.canManageHistory) {
       this.activeTab.set(
         this.canSeeReferrals ? 'referrals' : this.canSeePrenatal ? 'prenatal' : 'board',

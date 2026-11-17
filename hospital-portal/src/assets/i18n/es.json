@@ -8990,6 +8990,7 @@
       "BULK_FAILED": "La programación en bloque falló. Inténtelo de nuevo.",
       "SHIFTS_LOAD_FAILED": "Error al cargar los turnos",
       "LEAVE_LOAD_FAILED": "Error al cargar las solicitudes de licencia",
+      "SHIFT_TIME_RANGE": "Las horas de inicio y fin deben ser diferentes.",
       "SHIFT_FIELDS_REQUIRED": "Seleccione una fecha y horas de inicio y fin diferentes.",
       "SHIFT_CREATED": "Turno creado.",
       "SHIFT_FAILED": "No se pudo crear el turno. Inténtelo de nuevo."
@@ -9171,7 +9172,7 @@
     "SIGNABLE_LOAD_ERROR": "No se pudieron cargar sus informes para firmar.",
     "VERIFY_UNAVAILABLE": "No se pudo completar la verificación. Inténtelo de nuevo; no se ha determinado la validez de la firma.",
     "LOOKUP_TITLE": "Consultar firmas de un informe",
-    "LOOKUP_HELP": "Consulte si un informe tiene firmas y quién lo firmó. Use Verificar en una firma para verificar su texto original.",
+    "LOOKUP_HELP": "Consulte si un informe tiene firmas y quién lo firmó. Use verificar en una firma para verificar su texto original.",
     "KNOWN_REPORTS": "Informes de la lista de firmas cargada",
     "LOOKUP_LOADING": "Consultando...",
     "INVALID_REPORT_ID": "Introduzca un UUID de informe válido (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
@@ -10773,7 +10774,16 @@
     "URGENCY_ELECTIVE": "Electivo",
     "URGENCY_URGENT": "Urgente",
     "URGENCY_EMERGENT": "Emergencia",
-    "PAST_DATE": "La fecha y la hora previstas no pueden estar en el pasado."
+    "PAST_DATE": "La fecha y la hora previstas no pueden estar en el pasado.",
+    "SEARCH": "Buscar paciente, expediente, procedimiento o código",
+    "ALL_URGENCIES": "Todas las prioridades",
+    "VISIBLE_COUNT": "{{shown}} / {{total}} solicitudes cargadas",
+    "NO_MATCHES": "Ninguna solicitud coincide con los filtros.",
+    "CONSENT_NOT_RECORDED_CANCELLED": "No se registró consentimiento antes de la cancelación.",
+    "WORKLIST_PRE_OP_CLEARANCE_PENDING": "Evaluación preoperatoria pendiente",
+    "WORKLIST_READY_FOR_PROCEDURE": "Listo para el procedimiento",
+    "WORKLIST_POSTPONED": "Pospuestos",
+    "NETWORK_HELP": "Elija un hospital para consultar sus solicitudes, consentimientos y programaciones."
   },
   "REGISTRATIONS": {
     "DEACTIVATE_TITLE": "¿Desactivar este registro?",
@@ -12025,7 +12035,13 @@
     "STATUS_COMPLETED": "Completado",
     "STATUS_CONFIRMED_UNDERSTANDING": "Comprensión confirmada",
     "STATUS_NEEDS_CLARIFICATION": "Requiere aclaración",
-    "STATUS_FEEDBACK_PROVIDED": "Comentarios proporcionados"
+    "STATUS_FEEDBACK_PROVIDED": "Comentarios proporcionados",
+    "HOSPITAL_SCOPE": "Recursos y asignaciones del hospital seleccionado.",
+    "NETWORK_SCOPE": "Biblioteca de la red. Seleccione un hospital para gestionar recursos o asignarlos a un paciente.",
+    "PICK_HOSPITAL": "Seleccione un hospital para consultar el progreso de los pacientes.",
+    "SEARCH_SCOPE": "La búsqueda y los filtros se aplican a los recursos cargados.",
+    "NO_MATCHES": "Ningún recurso coincide con los filtros.",
+    "EMPTY_HELP": "Añada un recurso en el hospital seleccionado o borre los filtros para consultar la biblioteca disponible."
   },
   "ON_CALL": {
     "TITLE": "Turnos de guardia",
@@ -13081,7 +13097,16 @@
     "STATUS_UPDATED": "Estado actualizado.",
     "ACTION_FAILED": "No se pudo completar la acción.",
     "COUNTS_UNAVAILABLE": "Recuentos no disponibles — se muestran los últimos valores conocidos.",
-    "SHOWING_FIRST": "Mostrando las primeras {{shown}} inscripciones de {{total}}."
+    "SHOWING_FIRST": "Mostrando las primeras {{shown}} inscripciones de {{total}}.",
+    "ALL_STATUSES": "Todos los estados",
+    "OVERDUE_ONLY": "Solo visitas atrasadas",
+    "SORT": "Ordenar pacientes cargados",
+    "SORT_PRIORITY": "Orden del registro",
+    "SORT_NAME": "Nombre del paciente A–Z",
+    "SORT_NEXT_VISIT": "Próxima visita: más cercanas primero",
+    "SEARCH_SCOPE": "La búsqueda, los atrasos y el orden se aplican a los pacientes cargados. Los totales corresponden al programa y estado seleccionados.",
+    "EMPTY_SELECTED": "No hay pacientes en {{program}} con estado: {{status}}, en este hospital.",
+    "NETWORK_HELP": "Elija un hospital para consultar cohortes, inscripciones y visitas de seguimiento atrasadas."
   },
   "RECORD_ACCESS": {
     "RESTRICTED_ARIA": "Historiales restringidos",

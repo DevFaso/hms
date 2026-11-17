@@ -507,7 +507,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * `isForeignRow` reads this raw, and is safe because `!!mine` rejects `''`.
    */
   private hospitalId(): string {
-    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
+    return this.roleContext.effectiveHospitalIdForRequest() ?? '';
   }
 
   /**
