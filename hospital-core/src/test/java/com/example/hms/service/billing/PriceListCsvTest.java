@@ -74,8 +74,10 @@ class PriceListCsvTest {
     @Test
     @DisplayName("',' separator, quoted cells, columns in another order and the optional ones left out")
     void commaSeparatorAndReorderedHeader() {
-        PriceListCsv.Parsed parsed = PriceListCsv.parse(utf8("Prix,Code,Libellé,Catégorie\n"
-            + "\"2 500\",LAB-NFS,\"NFS, numération\",LAB_TEST\n"));
+        PriceListCsv.Parsed parsed = PriceListCsv.parse(utf8("""
+            Prix,Code,Libellé,Catégorie
+            "2 500",LAB-NFS,"NFS, numération",LAB_TEST
+            """));
         assertThat(parsed.separator()).isEqualTo(',');
         PriceListCsv.Row row = parsed.rows().get(0);
         assertThat(row.get("code")).isEqualTo("LAB-NFS");

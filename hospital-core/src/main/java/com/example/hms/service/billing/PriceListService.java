@@ -393,6 +393,7 @@ public class PriceListService {
      * Writes a planned version of a locked item (the screen's "Nouveau prix" and the CSV import): closes what the
      * plan closes, then inserts the version. {@code importId} is the CSV import that writes it, null on the screen.
      */
+    @SuppressWarnings("java:S107") // the plan and every value of the version it writes; a holder would only hide them
     public PriceListPrice insertVersion(PriceListItem item, Maintainer actor, List<PriceListPrice> versions,
                                  PriceVersionRules.Plan plan, BigDecimal unitPrice, LocalDate from, String reason,
                                  UUID importId) {

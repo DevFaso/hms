@@ -89,7 +89,7 @@ public final class PriceListCsv {
     /** Digits, then at most one decimal part after a comma or a dot (thousand spaces already removed). */
     private static final Pattern NUMBER = Pattern.compile("(-?)(\\d{1,15})(?:[.,](\\d+))?");
     private static final Pattern ZEROS = Pattern.compile("0{1,2}");
-    private static final Pattern EDGE_SPACES = Pattern.compile("^[\\s\u00A0\u202F]++|[\\s\u00A0\u202F]++$");
+    private static final Pattern EDGE_SPACES = Pattern.compile("(?:^[\\s\u00A0\u202F]++)|(?:[\\s\u00A0\u202F]++$)");
 
     private PriceListCsv() {
     }
@@ -136,22 +136,9 @@ public final class PriceListCsv {
             .setIgnoreEmptyLines(false)
             .setTrim(false)
             .get();
-        List<Row> rows = new ArrayList<>();
-        Map<String, Integer> columns = null;
+        List<Row> rows;
         try (CSVParser parser = CSVParser.parse(new StringReader(text), format)) {
-            for (CSVRecord csvRecord : parser) {
-                if (columns == null) {
-                    columns = headerOf(csvRecord);
-                    continue;
-                }
-                if (isBlank(csvRecord)) {
-                    continue;
-                }
-                if (rows.size() >= MAX_ROWS) {
-                    throw new FieldBusinessException(FIELD_FILE, "billing.priceList.import.tooManyRows", MAX_ROWS);
-                }
-                rows.add(rowOf(csvRecord, columns));
-            }
+            rows = rowsOf(parser.iterator());
         } catch (IOException | UncheckedIOException | IllegalStateException unreadable) {
             throw new FieldBusinessException(FIELD_FILE, "billing.priceList.import.unreadable");
         }
@@ -159,6 +146,25 @@ public final class PriceListCsv {
             throw new FieldBusinessException(FIELD_FILE, "billing.priceList.import.noRows");
         }
         return new Parsed(separator, charset, rows);
+    }
+
+    /** The header record, then every non-blank data row (at most {@link #MAX_ROWS}). */
+    private static List<Row> rowsOf(java.util.Iterator<CSVRecord> records) {
+        List<Row> rows = new ArrayList<>();
+        if (!records.hasNext()) {
+            return rows;
+        }
+        Map<String, Integer> columns = headerOf(records.next());
+        while (records.hasNext()) {
+            CSVRecord csvRecord = records.next();
+            if (!isBlank(csvRecord)) {
+                if (rows.size() >= MAX_ROWS) {
+                    throw new FieldBusinessException(FIELD_FILE, "billing.priceList.import.tooManyRows", MAX_ROWS);
+                }
+                rows.add(rowOf(csvRecord, columns));
+            }
+        }
+        return rows;
     }
 
     /** UTF-8 when the bytes are valid UTF-8 (with or without a BOM), else Windows-1252. */

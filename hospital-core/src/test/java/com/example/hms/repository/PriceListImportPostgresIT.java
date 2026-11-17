@@ -275,6 +275,12 @@ class PriceListImportPostgresIT {
         assertThat(grid.get("IMG-ECHO-OBS").getLinkKey()).isEqualTo("ULTRASOUND:echographie obstetricale");
         assertThat(grid.get("ACT-HERNIE").getNextPrice().getUnitPrice()).isEqualByComparingTo("125000");
 
+    }
+
+    @Test
+    @DisplayName("the same file applied again writes nothing; a dry run of it says so; one audit row")
+    void theSameFileAgainWritesNothing() {
+        PriceListImportReportDTO applied = apply(fixture(), FIXTURE);
         PriceListImportReportDTO again = apply(fixture(), "copie.csv");
         assertThat(again.getResult()).isEqualTo(PriceListImportResult.ALREADY_IMPORTED);
         assertThat(again.getImportId()).isEqualTo(applied.getImportId());
@@ -481,10 +487,11 @@ class PriceListImportPostgresIT {
     @DisplayName("without HOSPITAL_ADMIN or ACCOUNTANT at the hospital the file is not even read")
     void aNonMaintainerIsRefusedBeforeTheFileIsRead() {
         when(roles.canMaintainPriceList(eq(actor), any())).thenReturn(false);
-        assertThatThrownBy(() -> check(fixture(), FIXTURE)).isInstanceOf(ClientSafeAccessDeniedException.class);
+        byte[] file = fixture();
+        assertThatThrownBy(() -> check(file, FIXTURE)).isInstanceOf(ClientSafeAccessDeniedException.class);
         assertThatThrownBy(() -> apply(new byte[0], FIXTURE)).isInstanceOf(ClientSafeAccessDeniedException.class);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM billing.price_list_imports WHERE hospital_id = ?",
             Integer.class, hospitalA)).isZero();
-        assertThat(new ArrayList<>(List.of(itemCount(hospitalA)))).containsExactly(0);
+        assertThat(itemCount(hospitalA)).isZero();
     }
 }

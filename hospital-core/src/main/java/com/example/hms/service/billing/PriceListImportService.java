@@ -344,6 +344,7 @@ public class PriceListImportService {
             : newPrice(row, grid, existing, label, category, link, price, from, replaceScheduled);
     }
 
+    @SuppressWarnings("java:S107") // the row's checked cells, one per column
     private Planned newItem(PriceListImportReportDTO.Row row, Grid grid, String code, String label,
                             PriceListCategory category, ResolvedLink link, BigDecimal price, LocalDate from) {
         List<PriceListImportReportDTO.Refusal> refusals = row.getRefusals();
