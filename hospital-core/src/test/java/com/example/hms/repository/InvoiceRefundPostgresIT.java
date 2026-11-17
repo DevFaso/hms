@@ -121,7 +121,7 @@ class InvoiceRefundPostgresIT {
         when(roles.requireActiveHospitalId()).thenReturn(hospitalA);
         when(roles.canRequestRefund(any(), eq(hospitalA))).thenReturn(true);
         when(roles.canPayRefund(any(), eq(hospitalA))).thenReturn(true);
-        when(roles.canApproveRefund(eq(admin), eq(hospitalA))).thenReturn(true);
+        when(roles.canApproveRefund(admin, hospitalA)).thenReturn(true);
     }
 
     private <T> T inTx(Supplier<T> call) {
@@ -153,6 +153,11 @@ class InvoiceRefundPostgresIT {
     private BigDecimal refunded(UUID invoice) {
         return jdbc.queryForObject("SELECT amount_refunded FROM billing.billing_invoices WHERE id = ?",
             BigDecimal.class, invoice);
+    }
+
+    /** The database refuses {@code sql} with these arguments (the arguments are built before the statement runs). */
+    private void refusedBy(String sql, Object... args) {
+        assertThatThrownBy(() -> jdbc.update(sql, args)).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     /** Runs {@code call} on two threads at once; returns what each threw (null when it succeeded). */
@@ -244,7 +249,8 @@ class InvoiceRefundPostgresIT {
         when(roles.canRequestRefund(any(), eq(hospitalB))).thenReturn(true);
         when(roles.canApproveRefund(any(), eq(hospitalB))).thenReturn(true);
         assertThatThrownBy(() -> inTx(() -> service.list(invoice))).isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> inTx(() -> service.cancel(invoice, asked.getId(), null)))
+        UUID askedId = asked.getId();
+        assertThatThrownBy(() -> inTx(() -> service.cancel(invoice, askedId, null)))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThat(inTx(() -> refunds.findByHospitalIdAndStatusInOrderByCreatedAtAsc(hospitalB,
             List.of(InvoiceRefundStatus.values())))).isEmpty();
@@ -261,14 +267,13 @@ class InvoiceRefundPostgresIT {
             VALUES (gen_random_uuid(), ?, ?, ?, ?, ?, ?, 'Trop-perçu', ?, ?, now(), ?, ?)
             """;
         // D-3: the person who decides is never the person who asked.
-        assertThatThrownBy(() -> jdbc.update(insert, invoice, hospitalA, new BigDecimal("500"), "CASH", null, null,
-            "APPROVED", same, same, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now())))
-            .isInstanceOf(DataIntegrityViolationException.class);
+        refusedBy(insert, invoice, hospitalA, new BigDecimal("500"), "CASH", null, null,
+            "APPROVED", same, same, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now()));
         // Whole francs, more than 0.
-        assertThatThrownBy(() -> jdbc.update(insert, invoice, hospitalA, new BigDecimal("500.50"), "CASH", null, null,
-            "REQUESTED", same, null, null)).isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbc.update(insert, invoice, hospitalA, BigDecimal.ZERO, "CASH", null, null,
-            "REQUESTED", same, null, null)).isInstanceOf(DataIntegrityViolationException.class);
+        refusedBy(insert, invoice, hospitalA, new BigDecimal("500.50"), "CASH", null, null,
+            "REQUESTED", same, null, null);
+        refusedBy(insert, invoice, hospitalA, BigDecimal.ZERO, "CASH", null, null,
+            "REQUESTED", same, null, null);
         // PR 8 review: mobile money is asked for without its reference, but never PAID without operator and reference,
         // a bank transfer never PAID without its reference, and an operator only on mobile money.
         jdbc.update(insert, invoice, hospitalA, new BigDecimal("100"), "MOBILE_MONEY", null, null, "REQUESTED", same,
@@ -280,30 +285,30 @@ class InvoiceRefundPostgresIT {
             VALUES (gen_random_uuid(), ?, ?, 100, ?, ?, ?, 'Trop-perçu', 'PAID', ?, now(), ?, now(), ?, now(), ?, ?)
             """;
         UUID other = UUID.randomUUID();
-        assertThatThrownBy(() -> jdbc.update(paid, invoice, hospitalA, "MOBILE_MONEY", null, "OM-9", same, other, same,
-            1, "RB-1")).isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbc.update(paid, invoice, hospitalA, "MOBILE_MONEY", "ORANGE_MONEY", null, same,
-            other, same, 1, "RB-1")).isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbc.update(paid, invoice, hospitalA, "BANK_TRANSFER", null, " ", same, other, same,
-            1, "RB-1")).isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbc.update(insert, invoice, hospitalA, new BigDecimal("100"), "CASH", "ORANGE_MONEY",
-            null, "REQUESTED", same, null, null)).isInstanceOf(DataIntegrityViolationException.class);
+        refusedBy(paid, invoice, hospitalA, "MOBILE_MONEY", null, "OM-9", same, other, same,
+            1, "RB-1");
+        refusedBy(paid, invoice, hospitalA, "MOBILE_MONEY", "ORANGE_MONEY", null, same,
+            other, same, 1, "RB-1");
+        refusedBy(paid, invoice, hospitalA, "BANK_TRANSFER", null, " ", same, other, same,
+            1, "RB-1");
+        refusedBy(insert, invoice, hospitalA, new BigDecimal("100"), "CASH", "ORANGE_MONEY",
+            null, "REQUESTED", same, null, null);
         // A paid refund carries its receipt number; one rank per invoice.
-        assertThatThrownBy(() -> jdbc.update(paid, invoice, hospitalA, "CASH", null, null, same, other, same, null,
-            null)).isInstanceOf(DataIntegrityViolationException.class);
+        refusedBy(paid, invoice, hospitalA, "CASH", null, null, same, other, same, null,
+            null);
         jdbc.update(paid, invoice, hospitalA, "CASH", null, null, same, other, same, 1, "RB-1");
-        assertThatThrownBy(() -> jdbc.update(paid, invoice, hospitalA, "CASH", null, null, same, other, same, 1,
-            "RB-1")).isInstanceOf(DataIntegrityViolationException.class);
+        refusedBy(paid, invoice, hospitalA, "CASH", null, null, same, other, same, 1,
+            "RB-1");
         // An unknown method is refused (INSURANCE is a PaymentMethod constant: the service refuses it).
-        assertThatThrownBy(() -> jdbc.update(insert, invoice, hospitalA, new BigDecimal("500"), "CRYPTO", null,
-            null, "REQUESTED", same, null, null)).isInstanceOf(DataIntegrityViolationException.class);
+        refusedBy(insert, invoice, hospitalA, new BigDecimal("500"), "CRYPTO", null,
+            null, "REQUESTED", same, null, null);
         // A decided refund names its decider; a well-formed request passes.
-        assertThatThrownBy(() -> jdbc.update(insert, invoice, hospitalA, new BigDecimal("500"), "CASH", null, null,
-            "APPROVED", same, null, null)).isInstanceOf(DataIntegrityViolationException.class);
+        refusedBy(insert, invoice, hospitalA, new BigDecimal("500"), "CASH", null, null,
+            "APPROVED", same, null, null);
         jdbc.update(insert, invoice, hospitalA, new BigDecimal("500"), "MOBILE_MONEY", "ORANGE_MONEY", "OM-OUT-1",
             "REQUESTED", same, null, null);
         // amount_refunded is whole and never negative.
-        assertThatThrownBy(() -> jdbc.update("UPDATE billing.billing_invoices SET amount_refunded = -1 WHERE id = ?",
-            invoice)).isInstanceOf(DataIntegrityViolationException.class);
+        refusedBy("UPDATE billing.billing_invoices SET amount_refunded = -1 WHERE id = ?",
+            invoice);
     }
 }

@@ -2538,7 +2538,7 @@ class BillingInvoiceServiceImplTest {
     /** Billing-money plan PR 8: a reversal is audited as PAYMENT_REVERSED, never as a refund (REFUND_ISSUED). */
     @Test
     void reversePayment_isAuditedAsAReversalNotARefund() {
-        AuditEventLogService audit = org.mockito.Mockito.mock(AuditEventLogService.class);
+        AuditEventLogService audit = mock(AuditEventLogService.class);
         billingInvoiceService.setAuditEventLogService(audit);
         BillingInvoice invoice = payableInvoice(UUID.randomUUID());
         invoice.setAmountPaid(new BigDecimal("100.00"));

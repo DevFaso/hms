@@ -217,7 +217,8 @@ class InvoiceRefundServiceTest {
         // The same person cannot approve it (a cashier has no approver role; a requesting admin is refused too).
         actAs(BILLING_A);
         UUID refundId = asked.getId();
-        assertThatThrownBy(() -> service.approve(invoice.getId(), refundId))
+        UUID invoiceId = invoice.getId();
+        assertThatThrownBy(() -> service.approve(invoiceId, refundId))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
 
         actAs(ADMIN_A);
@@ -242,11 +243,13 @@ class InvoiceRefundServiceTest {
         actAs(ADMIN_A);
         InvoiceRefundDTO asked = service.request(invoice.getId(), cash("500", "Trop-perçu"));
         UUID refundId = asked.getId();
+        UUID invoiceId = invoice.getId();
+        InvoiceRefundReasonRequestDTO no = because("Non");
 
-        assertThatThrownBy(() -> service.approve(invoice.getId(), refundId))
+        assertThatThrownBy(() -> service.approve(invoiceId, refundId))
             .isInstanceOf(ConflictException.class)
             .hasMessageContaining("Un autre responsable doit approuver");
-        assertThatThrownBy(() -> service.reject(invoice.getId(), refundId, because("Non")))
+        assertThatThrownBy(() -> service.reject(invoiceId, refundId, no))
             .isInstanceOf(ConflictException.class)
             .hasMessageContaining("Un autre responsable doit approuver");
         assertThat(ledger.get(refundId).getStatus()).isEqualTo(InvoiceRefundStatus.REQUESTED);
@@ -418,7 +421,8 @@ class InvoiceRefundServiceTest {
         actAs(ADMIN_A);
         UUID invoiceId = invoice.getId();
         UUID refundId = asked.getId();
-        assertThatThrownBy(() -> service.reject(invoiceId, refundId, because("  ")))
+        InvoiceRefundReasonRequestDTO blank = because("  ");
+        assertThatThrownBy(() -> service.reject(invoiceId, refundId, blank))
             .isInstanceOfSatisfying(FieldBusinessException.class, refusal ->
                 assertThat(refusal.getFieldErrors()).containsOnlyKeys("reason"));
 
@@ -428,7 +432,8 @@ class InvoiceRefundServiceTest {
 
         actAs(ACCOUNTANT_A);
         assertThatThrownBy(() -> service.approve(invoiceId, refundId)).isInstanceOf(ConflictException.class);
-        assertThatThrownBy(() -> service.reject(invoiceId, refundId, because("Encore")))
+        InvoiceRefundReasonRequestDTO again = because("Encore");
+        assertThatThrownBy(() -> service.reject(invoiceId, refundId, again))
             .isInstanceOf(ConflictException.class);
     }
 
@@ -467,11 +472,13 @@ class InvoiceRefundServiceTest {
         actAs("approve".equals(step) || "reject".equals(step) ? ADMIN_A : BILLING_A);
         UUID invoiceId = invoice.getId();
         UUID refundId = refund.getId();
+        InvoiceRefundReasonRequestDTO rejection = because("Non justifié");
+        InvoiceRefundReasonRequestDTO withdrawal = because("Patient parti");
         Runnable call = switch (step) {
             case "approve" -> () -> service.approve(invoiceId, refundId);
-            case "reject" -> () -> service.reject(invoiceId, refundId, because("Non justifié"));
+            case "reject" -> () -> service.reject(invoiceId, refundId, rejection);
             case "pay" -> () -> service.pay(invoiceId, refundId, null);
-            default -> () -> service.cancel(invoiceId, refundId, because("Patient parti"));
+            default -> () -> service.cancel(invoiceId, refundId, withdrawal);
         };
         if (expected.startsWith("billing.")) {
             String text = MessageUtil.resolve(expected);
@@ -492,7 +499,8 @@ class InvoiceRefundServiceTest {
         UUID refundId = approved.getId();
         service.pay(invoiceId, refundId, null);
         assertThatThrownBy(() -> service.pay(invoiceId, refundId, null)).isInstanceOf(ConflictException.class);
-        assertThatThrownBy(() -> service.cancel(invoiceId, refundId, because("Erreur")))
+        InvoiceRefundReasonRequestDTO error = because("Erreur");
+        assertThatThrownBy(() -> service.cancel(invoiceId, refundId, error))
             .isInstanceOf(ConflictException.class);
         assertThat(invoice.getAmountRefunded()).isEqualByComparingTo("500");
     }
@@ -529,10 +537,12 @@ class InvoiceRefundServiceTest {
         actAs(RECEPTION_A);
         UUID invoiceId = invoice.getId();
         UUID askedId = asked.getId();
-        assertThatThrownBy(() -> service.cancel(invoiceId, askedId, because("Erreur")))
+        InvoiceRefundReasonRequestDTO error = because("Erreur");
+        InvoiceRefundReasonRequestDTO blank = because(" ");
+        assertThatThrownBy(() -> service.cancel(invoiceId, askedId, error))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
         actAs(BILLING_A);
-        assertThatThrownBy(() -> service.cancel(invoiceId, askedId, because(" ")))
+        assertThatThrownBy(() -> service.cancel(invoiceId, askedId, blank))
             .isInstanceOfSatisfying(FieldBusinessException.class, refusal ->
                 assertThat(refusal.getFieldErrors()).containsOnlyKeys("reason"));
         assertThat(service.cancel(invoiceId, askedId, because("Saisie en double")).getStatus())
@@ -554,10 +564,11 @@ class InvoiceRefundServiceTest {
         UUID invoiceId = invoice.getId();
         InvoiceRefundRequestDTO body = cash("500", "x");
         assertThatThrownBy(() -> service.request(invoiceId, body)).isInstanceOf(ClientSafeAccessDeniedException.class);
-        assertThatThrownBy(() -> service.pay(invoiceId, UUID.randomUUID(), null))
+        UUID anyRefund = UUID.randomUUID();
+        assertThatThrownBy(() -> service.pay(invoiceId, anyRefund, null))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
         actAs(RECEPTION_A);
-        assertThatThrownBy(() -> service.approve(invoiceId, UUID.randomUUID()))
+        assertThatThrownBy(() -> service.approve(invoiceId, anyRefund))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
         verify(invoices, never()).findLockedById(any());
     }
@@ -576,12 +587,14 @@ class InvoiceRefundServiceTest {
         when(roles.canPayRefund(billingB, HOSPITAL_B)).thenReturn(true);
         actAs(billingB);
 
+        InvoiceRefundRequestDTO body = cash("500", "x");
+        InvoiceRefundReasonRequestDTO reason = because("x");
         List<Runnable> routes = new ArrayList<>(List.of(
-            () -> service.request(invoiceId, cash("500", "x")),
+            () -> service.request(invoiceId, body),
             () -> service.approve(invoiceId, refundId),
-            () -> service.reject(invoiceId, refundId, because("x")),
+            () -> service.reject(invoiceId, refundId, reason),
             () -> service.pay(invoiceId, refundId, null),
-            () -> service.cancel(invoiceId, refundId, because("x")),
+            () -> service.cancel(invoiceId, refundId, reason),
             () -> service.list(invoiceId),
             () -> service.receipt(invoiceId, refundId, Locale.FRENCH)));
         for (Runnable route : routes) {
@@ -697,12 +710,14 @@ class InvoiceRefundServiceTest {
             com.example.hms.security.context.ImpersonationContext.of(UUID.randomUUID(), "support.agent"));
         try {
             actAs(ADMIN_A);
+            InvoiceRefundRequestDTO body = cash("100", "x");
+            InvoiceRefundReasonRequestDTO reason = because("x");
             Runnable call = switch (step) {
-                case "request" -> () -> service.request(invoiceId, cash("100", "x"));
+                case "request" -> () -> service.request(invoiceId, body);
                 case "approve" -> () -> service.approve(invoiceId, refundId);
-                case "reject" -> () -> service.reject(invoiceId, refundId, because("x"));
+                case "reject" -> () -> service.reject(invoiceId, refundId, reason);
                 case "pay" -> () -> service.pay(invoiceId, refundId, null);
-                default -> () -> service.cancel(invoiceId, refundId, because("x"));
+                default -> () -> service.cancel(invoiceId, refundId, reason);
             };
             assertThatThrownBy(call::run).isInstanceOf(ClientSafeAccessDeniedException.class);
         } finally {

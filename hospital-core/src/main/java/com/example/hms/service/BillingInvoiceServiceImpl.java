@@ -905,12 +905,18 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             ? List.of()
             : refundRepository.findByInvoice_IdAndStatusInOrderByCreatedAtAsc(invoiceId,
                     List.of(com.example.hms.enums.InvoiceRefundStatus.PAID)).stream()
-                .map(r -> new com.example.hms.payload.dto.portal.PortalRefundDTO(r.getId(), r.getAmount(),
-                    r.getMethod() != null ? r.getMethod().name() : null,
-                    r.getMobileMoneyOperator() != null ? r.getMobileMoneyOperator().name() : null, r.getPaidAt()))
+                .map(BillingInvoiceServiceImpl::portalRefund)
                 .toList();
         return new com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO(toPortalResponse(invoice), items, payments,
             adjustments, refunds);
+    }
+
+    /** Billing-money plan PR 8: a refund handed back, as the patient sees it (amount, how, when). */
+    private static com.example.hms.payload.dto.portal.PortalRefundDTO portalRefund(com.example.hms.model.InvoiceRefund r) {
+        String method = r.getMethod() != null ? r.getMethod().name() : null;
+        String operator = r.getMobileMoneyOperator() != null ? r.getMobileMoneyOperator().name() : null;
+        return new com.example.hms.payload.dto.portal.PortalRefundDTO(r.getId(), r.getAmount(), method, operator,
+            r.getPaidAt());
     }
 
     @Override

@@ -85,6 +85,8 @@ public class InvoiceRefundService {
 
     static final String INVOICE_NOT_FOUND = "billinginvoice.notfound";
     static final String REFUND_NOT_FOUND = "billing.refund.notFound";
+    /** The refusal of a decision on a refund that no longer awaits one. */
+    static final String NOT_REQUESTED = "billing.refund.notRequested";
     static final String AUDIT_ENTITY = "BillingInvoice";
     static final int TEXT_MAX = 500;
     static final int REFERENCE_MAX = 120;
@@ -142,18 +144,11 @@ public class InvoiceRefundService {
         InvoiceRefundRequestDTO request = body != null ? body : new InvoiceRefundRequestDTO();
         BillingInvoice invoice = lockInScope(invoiceId, actor.hospitalId());
 
-        // A retried submit with the same key returns the refund already asked for (checked under the invoice lock).
-        if (request.getClientRequestId() != null) {
-            InvoiceRefund replay = refundRepository
-                .findByHospitalIdAndClientRequestId(actor.hospitalId(), request.getClientRequestId()).orElse(null);
-            if (replay != null) {
-                if (!Objects.equals(replay.getInvoice().getId(), invoice.getId()) || !sameRequest(replay, request)) {
-                    // PR 8 review: a key reused for another invoice, or for another amount or method, is refused,
-                    // never answered with the refund it first named.
-                    throw new ConflictException(MessageUtil.resolve("billing.refund.clientRequestReused"));
-                }
-                return toDto(replay, actor.userId(), null);
-            }
+        // A retried submit carrying the same key is answered with the refund already asked for, checked under
+        // the invoice lock.
+        InvoiceRefund replay = replayOf(request, invoice, actor.hospitalId());
+        if (replay != null) {
+            return toDto(replay, actor.userId(), null);
         }
 
         String reason = trimToNull(request.getReason());
@@ -226,7 +221,7 @@ public class InvoiceRefundService {
         }
         LocalDateTime at = now();
         claimed(refundRepository.decide(refund.getId(), refund.getHospitalId(), InvoiceRefundStatus.APPROVED,
-            actor.userId(), at, null), "billing.refund.notRequested");
+            actor.userId(), at, null), NOT_REQUESTED);
         refund.setStatus(InvoiceRefundStatus.APPROVED);
         refund.setDecidedBy(actor.userId());
         refund.setDecidedAt(at);
@@ -249,7 +244,7 @@ public class InvoiceRefundService {
         requireText(reason, FIELD_REASON);
         LocalDateTime at = now();
         claimed(refundRepository.decide(refund.getId(), refund.getHospitalId(), InvoiceRefundStatus.REJECTED,
-            actor.userId(), at, reason), "billing.refund.notRequested");
+            actor.userId(), at, reason), NOT_REQUESTED);
         refund.setStatus(InvoiceRefundStatus.REJECTED);
         refund.setDecidedBy(actor.userId());
         refund.setDecidedAt(at);
@@ -459,7 +454,7 @@ public class InvoiceRefundService {
     /** A requested refund, decided by someone other than the person who asked (D-3). */
     private static void requireDecidable(InvoiceRefund refund, Actor actor) {
         if (refund.getStatus() != InvoiceRefundStatus.REQUESTED) {
-            throw new ConflictException(MessageUtil.resolve("billing.refund.notRequested"));
+            throw new ConflictException(MessageUtil.resolve(NOT_REQUESTED));
         }
         if (actor.userId().equals(refund.getRequestedBy())) {
             throw new ConflictException(MessageUtil.resolve("billing.refund.selfApproval"));
@@ -507,6 +502,23 @@ public class InvoiceRefundService {
             }
         }
         return new Handover(reference, operator);
+    }
+
+    /**
+     * The refund a retried submit repeats, or null for a new request. PR 8 review: a key reused for another invoice,
+     * or for another amount or method, is refused, never answered with the refund it first named.
+     */
+    private InvoiceRefund replayOf(InvoiceRefundRequestDTO request, BillingInvoice invoice, UUID hospitalId) {
+        if (request.getClientRequestId() == null) {
+            return null;
+        }
+        InvoiceRefund replay = refundRepository
+            .findByHospitalIdAndClientRequestId(hospitalId, request.getClientRequestId()).orElse(null);
+        if (replay != null
+                && (!Objects.equals(replay.getInvoice().getId(), invoice.getId()) || !sameRequest(replay, request))) {
+            throw new ConflictException(MessageUtil.resolve("billing.refund.clientRequestReused"));
+        }
+        return replay;
     }
 
     /** A replay names the same amount and method as the request it repeats. */
@@ -574,7 +586,7 @@ public class InvoiceRefundService {
         java.text.NumberFormat format = java.text.NumberFormat.getIntegerInstance(LocaleContextHolder.getLocale());
         format.setGroupingUsed(true);
         return format.format(amount.setScale(0, RoundingMode.HALF_UP).longValueExact())
-            .replace(' ', ' ').replace(' ', ' ');
+            .replace('\u00a0', ' ').replace('\u202f', ' ');
     }
 
     private LocalDateTime now() {
