@@ -298,6 +298,10 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
      */
     private static final Map<String, String> NOT_A_FIELD_ONCE_FILLED = Map.ofEntries(
         Map.entry("POST /auth/me/complete-setup", "state: the account has no pending username or password change"),
+        // QA D2051: a sample token names no live reset link; refused 400, one message for every bad link.
+        Map.entry("POST /auth/password/confirm", "state: the sample token is no live reset link"),
+        Map.entry("POST /auth/password/reset-password", "state: the sample token is no live reset link"),
+        Map.entry("POST /auth/reset-password", "state: the sample token is no live reset link"),
         Map.entry("POST /high-risk-care-plans", "role: the sweep's caller is not obstetric clinical staff"),
         Map.entry("PUT /high-risk-care-plans/{planId}", "role: the sweep's caller is not obstetric clinical staff"),
         Map.entry("POST /high-risk-care-plans/{planId}/care-team-notes", "role: limited to the care team or the patient"),
