@@ -18,7 +18,11 @@ import java.nio.charset.Charset;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.chrono.IsoChronology;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.SignStyle;
+import java.time.temporal.ChronoField;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.util.ArrayList;
@@ -68,9 +72,20 @@ public final class PriceListCsv {
     private static final List<String> REQUIRED = List.of(COL_CODE, COL_LABEL, COL_CATEGORY, COL_PRICE);
 
     private static final Charset WINDOWS_1252 = Charset.forName("windows-1252");
-    private static final DateTimeFormatter FR_DATE = DateTimeFormatter.ofPattern("d/M/uuuu")
-        .withResolverStyle(ResolverStyle.STRICT);
-    private static final DateTimeFormatter FR_DATE_OUT = DateTimeFormatter.ofPattern("dd/MM/uuuu");
+    /**
+     * The file's date cell, JJ/MM/AAAA (one-digit day and month accepted). A wire format fixed by the plan for every
+     * reader, not a display: built field by field, so no locale reorders it.
+     */
+    private static final DateTimeFormatter FR_DATE = new DateTimeFormatterBuilder()
+        .appendValue(ChronoField.DAY_OF_MONTH, 1, 2, SignStyle.NOT_NEGATIVE).appendLiteral('/')
+        .appendValue(ChronoField.MONTH_OF_YEAR, 1, 2, SignStyle.NOT_NEGATIVE).appendLiteral('/')
+        .appendValue(ChronoField.YEAR, 4)
+        .toFormatter().withChronology(IsoChronology.INSTANCE).withResolverStyle(ResolverStyle.STRICT);
+    private static final DateTimeFormatter FR_DATE_OUT = new DateTimeFormatterBuilder()
+        .appendValue(ChronoField.DAY_OF_MONTH, 2).appendLiteral('/')
+        .appendValue(ChronoField.MONTH_OF_YEAR, 2).appendLiteral('/')
+        .appendValue(ChronoField.YEAR, 4)
+        .toFormatter();
     /** Digits, then at most one decimal part after a comma or a dot (thousand spaces already removed). */
     private static final Pattern NUMBER = Pattern.compile("(-?)(\\d{1,15})(?:[.,](\\d+))?");
     private static final Pattern ZEROS = Pattern.compile("0{1,2}");
@@ -291,7 +306,7 @@ public final class PriceListCsv {
                     CsvCells.safe(row.code()),
                     CsvCells.safe(row.label()),
                     CsvCells.safe(row.category()),
-                    row.price().setScale(0, java.math.RoundingMode.UNNECESSARY).toPlainString(),
+                    Long.toString(row.price().longValueExact()), // whole francs, no grouping: the import's number
                     row.effectiveFrom().format(FR_DATE_OUT),
                     CsvCells.safe(row.linkType()),
                     CsvCells.safe(row.linkKey()));

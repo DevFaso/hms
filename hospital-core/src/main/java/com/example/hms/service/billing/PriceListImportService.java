@@ -474,13 +474,15 @@ public class PriceListImportService {
 
     /** A refusal of the version rules, said for a file (no confirmation dialog: the "replace" option instead). */
     private static PriceListImportReportDTO.Refusal planRefusal(FieldBusinessException refusal) {
-        String key = refusal.getMessageKey();
-        if ("billing.priceList.scheduledExists".equals(key) || "billing.priceList.correctToday".equals(key)) {
-            return PriceListImportReportDTO.Refusal.builder()
-                .column(PriceListCsv.COL_DATE)
-                .message(MessageUtil.resolve(key.replace("billing.priceList.", "billing.priceList.import."),
-                    refusal.getArgs()))
-                .build();
+        // The screen asks to confirm; a file says to tick the "replace" option instead (same arguments).
+        String message = null;
+        if ("billing.priceList.scheduledExists".equals(refusal.getMessageKey())) {
+            message = MessageUtil.resolve("billing.priceList.import.scheduledExists", refusal.getArgs());
+        } else if ("billing.priceList.correctToday".equals(refusal.getMessageKey())) {
+            message = MessageUtil.resolve("billing.priceList.import.correctToday", refusal.getArgs());
+        }
+        if (message != null) {
+            return PriceListImportReportDTO.Refusal.builder().column(PriceListCsv.COL_DATE).message(message).build();
         }
         return refusal(PriceListCsv.COL_DATE, refusal);
     }
@@ -541,7 +543,8 @@ public class PriceListImportService {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
         } catch (NoSuchAlgorithmException cannotHappen) {
-            throw new IllegalStateException("SHA-256 is part of every JRE", cannotHappen);
+            // SHA-256 is part of every JRE.
+            throw new IllegalStateException(cannotHappen);
         }
     }
 
