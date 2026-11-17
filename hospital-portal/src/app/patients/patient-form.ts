@@ -46,6 +46,8 @@ import {
 } from '../shared/patient-identity';
 import { bornLabelKey, genderedKey } from '../shared/i18n/born-label';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { NationalUniqueIdEditorComponent } from './national-unique-id-editor.component';
+import { NationalUniqueIdChange } from './national-unique-id';
 
 /**
  * QA D1118: the card names what the match is really on. A record found by the
@@ -82,6 +84,7 @@ export function matchBasisSuffix(matches: readonly Pick<RegistrationMatch, 'matc
   selector: 'app-patient-form',
   standalone: true,
   imports: [
+    NationalUniqueIdEditorComponent,
     DashPipe,
     PhoneFieldDirective,
     SubmitGuardDirective,
@@ -123,6 +126,12 @@ export class PatientFormComponent implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   saving = false;
+  nationalUniqueIdChange: NationalUniqueIdChange = {};
+  nationalUniqueIdReady = true;
+  onNationalUniqueIdUpdated(change: NationalUniqueIdChange): void {
+    this.nationalUniqueIdChange = change;
+    delete this.serverFieldErrors['nationalUniqueId'];
+  }
   hospitals: HospitalResponse[] = [];
   /** true when the logged-in user already has a hospital in their JWT / context */
   hasContextHospital = false;
@@ -580,6 +589,7 @@ export class PatientFormComponent implements OnInit {
   }
 
   private submitRegistration(): void {
+    if (!this.nationalUniqueIdReady) return;
     this.saving = true;
     this.serverFieldErrors = {};
 
@@ -594,6 +604,7 @@ export class PatientFormComponent implements OnInit {
     let deliveryReport: NotificationDeliveryStatus[] = [];
     const patient: PatientCreateRequest = {
       ...this.form,
+      ...this.nationalUniqueIdChange,
       phoneNumberPrimary: this.effectivePhone,
       email,
       phoneVerificationId:

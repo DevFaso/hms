@@ -55,6 +55,7 @@ class PartialUniqueReleaseFlushGuardTest {
     private static final Map<String, String> ENTITY_OF_TABLE = Map.ofEntries(
         // X2 (V320): cancelling a formerly-live legacy booking releases its request identity.
         Map.entry("appointments", "Appointment"),
+        Map.entry("identity_aliases", "EmpiIdentityAlias"),
         Map.entry("death_records", "DeathRecord"),
         Map.entry("fetal_death_events", "FetalDeathEvent"),
         // r53: one open safeguarding review per patient and hospital; recording it releases the slot.
@@ -165,6 +166,26 @@ class PartialUniqueReleaseFlushGuardTest {
             """, sites, new ArrayList<>());
         assertThat(sites).containsOnlyKeys("probe.java#PatientBloodGroup");
         assertThat(sites.get("probe.java#PatientBloodGroup")).isOne();
+    }
+
+    @Test
+    void identityAliasReleaseIsScannedAndRequiresAFlushBeforeReplacement() {
+        Map<String, Integer> sites = new TreeMap<>();
+        scan("empi-alias-probe.java", """
+            class P {
+                public void unflushed() {
+                    repository.delete(previous);
+                    repository.save(EmpiIdentityAlias.builder().build());
+                }
+                public void flushed() {
+                    repository.delete(previous);
+                    repository.flush();
+                    repository.save(EmpiIdentityAlias.builder().build());
+                }
+            }
+            """, sites, new ArrayList<>());
+        assertThat(sites).containsOnlyKeys("empi-alias-probe.java#EmpiIdentityAlias");
+        assertThat(sites.get("empi-alias-probe.java#EmpiIdentityAlias")).isOne();
     }
 
     @Test

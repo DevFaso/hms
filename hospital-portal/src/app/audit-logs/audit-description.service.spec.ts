@@ -32,6 +32,26 @@ describe('AuditDescriptionService (QA D894)', () => {
     return service.describe({ eventDescription, entityType });
   };
 
+  const nationalIuOperations = {
+    en: ['created', 'updated', 'cleared', 'shown in full'],
+    fr: ['ajouté', 'modifié', 'effacé', 'affiché en entier'],
+    es: ['añadido', 'modificado', 'borrado', 'mostrado completo'],
+  };
+  for (const [lang, labels] of Object.entries(nationalIuOperations)) {
+    for (const [index, operation] of ['CREATE', 'UPDATE', 'CLEAR', 'SHOW_FULL'].entries()) {
+      it(`reads the national IU ${operation} audit in ${lang} without the stored operation code`, () => {
+        const prefixes: Record<string, string> = {
+          en: 'Patient unique identifier: ',
+          fr: 'Identifiant unique du patient : ',
+          es: 'Identificador único del paciente: ',
+        };
+        expect(describeIn(lang, `Patient identity: ${operation}`)).toBe(
+          prefixes[lang] + labels[index],
+        );
+      });
+    }
+  }
+
   it('localizes the email-change refusal when sign-in has locked the account', () => {
     const description =
       'Own email change refused: the account is locked after repeated wrong passwords';

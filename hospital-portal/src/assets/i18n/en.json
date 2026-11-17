@@ -1958,7 +1958,8 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "Delivery records as born alive a baby a death certificate declares stillborn",
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Duplicate warning overridden (\"Order anyway\", reason: {{reason}}): imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
-      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists"
+      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
+      "NATIONAL_IU_ACTION": "Patient unique identifier: {{operation}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2241,6 +2242,12 @@
       "PASSWORD_LOCKED": "too many wrong passwords",
       "SIGNING_IMPERSONATION": "support session",
       "SIGNING_NOT_ENROLLED": "authenticator required for this account"
+    },
+    "NATIONAL_IU_ACTION": {
+      "CREATE": "created",
+      "UPDATE": "updated",
+      "CLEAR": "cleared",
+      "SHOW_FULL": "shown in full"
     }
   },
   "BILLING": {
@@ -13831,5 +13838,20 @@
     "RECORD_BY_PHYSICIAN": "The review is recorded by a doctor or surgeon of this hospital.",
     "RECORDED": "Review recorded",
     "RECORD_FAILED": "The review could not be recorded."
+  },
+  "NATIONAL_IU": {
+    "LABEL": "Unique identifier (UI)",
+    "HINT": "Optional. Exactly 12 digits; spaces and dashes are accepted.",
+    "SHOW_FULL": "Show full identifier (audited)",
+    "HIDE": "Hide identifier",
+    "CLEAR": "Clear identifier",
+    "CHECKING": "Checking for an existing record…",
+    "INVALID": "Enter exactly 12 digits, or leave this field empty.",
+    "UNAVAILABLE": "The identifier could not be checked or displayed. Please try again.",
+    "EXISTS_HERE": "A patient with this identifier already exists. Open the record.",
+    "EXISTS_ELSEWHERE": "This identifier may already be registered elsewhere. Please check with the patient.",
+    "SAVE_ANYWAY": "Save anyway",
+    "REASON": "Reason for saving a duplicate identifier",
+    "SEARCH_EXACT": "Search by exact unique identifier (12 digits)"
   }
 }

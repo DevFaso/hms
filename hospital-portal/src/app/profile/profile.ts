@@ -78,6 +78,7 @@ export class ProfileComponent implements OnInit {
   private readonly oidcAuth = inject(OidcAuthService);
   private readonly auditDescriptions = inject(AuditDescriptionService);
   private readonly patientPortal = inject(PatientPortalService);
+  readonly nationalUniqueIdMasked = signal<string | null>(null);
 
   private static readonly VALID_TABS: readonly ProfileTab[] = [
     'overview',
@@ -724,6 +725,14 @@ export class ProfileComponent implements OnInit {
     this.profileService.getUserProfile(userId).subscribe({
       next: (profile) => {
         this.user.set(profile);
+        this.nationalUniqueIdMasked.set(null);
+        if (this.isPatientOnly()) {
+          this.patientPortal.getMyProfile().subscribe({
+            next: (patient) =>
+              this.nationalUniqueIdMasked.set(patient.nationalUniqueIdMasked ?? null),
+            error: () => this.nationalUniqueIdMasked.set(null),
+          });
+        }
         this.resetEditForm(profile);
 
         // Sync stored profile ID if stale

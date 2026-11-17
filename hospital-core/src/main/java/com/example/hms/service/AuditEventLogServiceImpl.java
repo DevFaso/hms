@@ -42,7 +42,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AuditEventLogServiceImpl implements AuditEventLogService {
+public class AuditEventLogServiceImpl implements AuditEventLogService, RequiredAuditEventLogPort {
 
     private final UserRepository userRepository;
     private final AuditEventLogRepository auditRepository;
@@ -61,6 +61,15 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
      * page for a single unlucky row.
      */
     private static final int REPLAY_FAILURE_LIMIT = 3;
+
+    /** Existing fail-open callers are unchanged; explicit IU operations require atomic auditing. */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AuditEventLogResponseDTO logRequiredEvent(AuditEventRequestDTO request) {
+        User actor = resolveUser(request);
+        if (actor == null) throw new org.springframework.security.access.AccessDeniedException("Access denied");
+        return doLogEvent(request, actor);
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -211,7 +220,10 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
      * Separated from {@link #logEvent} so the outer method can swallow exceptions.
      */
     private AuditEventLogResponseDTO doLogEvent(AuditEventRequestDTO requestDTO) {
-        User user = resolveUser(requestDTO);
+        return doLogEvent(requestDTO, resolveUser(requestDTO));
+    }
+
+    private AuditEventLogResponseDTO doLogEvent(AuditEventRequestDTO requestDTO, User user) {
         UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO, user);
         ActorContext actor = resolveActorContext(requestDTO, user);
         String hospitalName = resolveHospitalName(requestDTO, assignment);

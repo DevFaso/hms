@@ -21,6 +21,8 @@ public class PatientResponseDTO {
     public static final UUID ZERO = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     private UUID id;
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private String nationalUniqueIdMasked;
     private String firstName;
     private String lastName;
     private String middleName;

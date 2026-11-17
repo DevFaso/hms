@@ -20,6 +20,16 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class PatientRequestDTO {
+    /** Optional; null/omitted retains an existing IU, explicit empty clears it. */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    private String nationalUniqueId;
+
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    private boolean allowNationalUniqueIdDuplicate;
+
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    private String nationalUniqueIdDuplicateReason;
+
     // Optional: Insurance info for patient intake
     private PatientInsuranceRequestDTO insurance;
 

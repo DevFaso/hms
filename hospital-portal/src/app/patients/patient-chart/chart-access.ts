@@ -18,6 +18,16 @@ import {
  */
 const DOCTOR_ROLES: string[] = ['ROLE_DOCTOR', ...DOCTOR_EQUIVALENT_ROLES];
 
+/** Same authority set as the patient identity PATCH and audited IU disclosure. */
+export const PATIENT_IDENTITY_EDIT_ROLES = [
+  'ROLE_HOSPITAL_ADMIN',
+  'ROLE_RECEPTIONIST',
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  ...DOCTOR_ROLES,
+  'ROLE_SUPER_ADMIN',
+];
+
 /*
  * Every list in this file that names a doctor uses DOCTOR_ROLES. Leaving any
  * one of them on the bare name made the surgeon's patient page half-populated

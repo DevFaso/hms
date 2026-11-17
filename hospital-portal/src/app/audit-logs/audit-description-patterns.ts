@@ -35,6 +35,12 @@ export interface AuditDescriptionPattern {
 
 export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
+    key: 'AUDIT.DESC.NATIONAL_IU_ACTION',
+    re: /^Patient identity: (.+)$/,
+    params: ['operation'],
+    localise: { operation: 'phrase:NATIONAL_IU_ACTION' },
+  },
+  {
     key: 'AUDIT.DESC.PATIENT_RECORD_VIEWED',
     re: /^Patient record viewed$/,
   },

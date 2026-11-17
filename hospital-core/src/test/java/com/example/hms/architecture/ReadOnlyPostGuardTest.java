@@ -82,6 +82,9 @@ class ReadOnlyPostGuardTest {
         "EmpiProbabilisticController#candidates",
         "PatientController#getDoctorRecord",
         "PatientController#getDoctorTimeline",
+        "PatientNationalUniqueIdController#check",
+        "PatientNationalUniqueIdController#search",
+        "PatientNationalUniqueIdController#reveal",
         "PrenatalSchedulingController#generateSchedule",
         "SuperAdminSecurityRuleController#simulatePolicyImpact");
 

@@ -136,6 +136,10 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
     private static final Map<String, String> NO_REQUIRED_FIELD = Map.ofEntries(
         Map.entry("POST /appointments/search",
             SEARCH_FILTER),
+        Map.entry("POST /patients/national-unique-id/check",
+            "optional identity read: an absent IU means no duplicate; PostgreSQL empty-query regression checks no patient, alias or audit write"),
+        Map.entry("POST /patients/national-unique-id/search",
+            "optional exact identity read: an absent IU returns no matches; PostgreSQL empty-query regression checks no patient, alias or audit write"),
         Map.entry("POST /billing-invoices/search",
             SEARCH_FILTER),
         Map.entry("POST /departments/filter",
