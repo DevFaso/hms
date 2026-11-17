@@ -1974,7 +1974,16 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradiction entre acte de mortinaissance et accouchement rapprochée",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerte de doublon outrepassée (« Commander quand même », motif : {{reason}}) : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Doublon possible, sans « Commander quand même » : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
-      "NATIONAL_IU_ACTION": "Identifiant unique du patient : {{operation}}"
+      "NATIONAL_IU_ACTION": "Identifiant unique du patient : {{operation}}",
+      "PAYER_CREATED": "Organisme payeur {{payer}} créé",
+      "PAYER_UPDATED": "Organisme payeur {{payer}} modifié",
+      "PAYER_DEACTIVATED": "Organisme payeur {{payer}} désactivé, motif enregistré",
+      "PAYER_PLAN_CREATED": "Formule {{plan}} de l’organisme {{payer}} créée",
+      "PAYER_PLAN_UPDATED": "Formule {{plan}} de l’organisme {{payer}} modifiée",
+      "PAYER_RULE_ADDED": "Règle {{rule}} ajoutée à la formule {{plan}}, en vigueur le {{from}}",
+      "PAYER_RULE_ENDED": "Règle {{rule}} de la formule {{plan}} terminée, motif enregistré",
+      "COVERAGE_PLAN_LINKED": "Couverture du patient {{insurance}} liée à la formule {{plan}}",
+      "COVERAGE_PLAN_UNLINKED": "Couverture du patient {{insurance}} détachée de sa formule"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2529,6 +2538,74 @@
       "PRICE_SAVED": "Nouveau prix enregistré.",
       "SAVE_FAILED": "L’enregistrement a échoué.",
       "DEACTIVATE_REASON": "Motif de la désactivation"
+    },
+    "PAYERS": {
+      "TITLE": "Organismes payeurs",
+      "SUBTITLE": "Les mutuelles, assureurs, employeurs et programmes qui prennent en charge une part des soins, avec leurs formules et leurs règles. Rien n’est encore appliqué aux factures.",
+      "BACK_TO_BILLING": "Retour à la facturation",
+      "NEW_PAYER": "Nouvel organisme payeur",
+      "EDIT": "Modifier l’organisme payeur",
+      "DEACTIVATE": "Désactiver",
+      "DEACTIVATE_CONFIRM": "Désactiver cet organisme payeur ?",
+      "DEACTIVATE_NOTE": "Ses formules ne pourront plus être liées à un patient. Son historique et les liens existants sont conservés.",
+      "DEACTIVATE_REASON": "Motif de la désactivation",
+      "DEACTIVATED": "Organisme payeur désactivé.",
+      "SHOW_INACTIVE": "Afficher les organismes désactivés",
+      "LOADING": "Chargement des organismes payeurs…",
+      "LOAD_FAILED": "Les organismes payeurs n’ont pas pu être chargés.",
+      "EMPTY": "Aucun organisme payeur.",
+      "CODE": "Code de l’organisme",
+      "CODE_HINT": "Le code de l’établissement (ex. MUT-TEST-A). Il ne change plus une fois créé.",
+      "NAME": "Nom",
+      "TYPE": "Type d’organisme",
+      "PLANS": "Formules",
+      "NO_PLAN": "Aucune formule",
+      "STATE": "État",
+      "ACTIVE": "Actif",
+      "INACTIVE": "Désactivé",
+      "NEW_PLAN": "Nouvelle formule",
+      "EDIT_PLAN": "Modifier la formule",
+      "PLAN_CODE": "Code de la formule",
+      "PLAN_NAME": "Nom de la formule",
+      "DEFAULT_RATE": "Taux de prise en charge (%)",
+      "INVOICE_CEILING": "Plafond par facture (F CFA)",
+      "ANNUAL_CEILING": "Plafond annuel par bénéficiaire (F CFA)",
+      "ANNUAL_CEILING_HINT": "Par patient couvert et par année civile.",
+      "NO_CEILING": "Pas de plafond",
+      "PERIOD": "Période",
+      "EFFECTIVE_FROM": "Date d’effet",
+      "EFFECTIVE_TO": "Dernier jour (facultatif)",
+      "RULES": "Exclusions et taux particuliers",
+      "NO_RULES": "Aucune règle : le taux de la formule s’applique à tout.",
+      "NEW_RULE": "Nouvelle règle",
+      "RULE_NOTE": "Une règle porte sur une catégorie entière ou sur un article de la grille. Elle remplace la règle en vigueur pour la même cible à partir de sa date ; les factures déjà établies ne changent pas.",
+      "RULE_TARGET": "Porte sur",
+      "TARGET_CATEGORY": "Une catégorie",
+      "TARGET_ITEM": "Un article de la grille",
+      "CATEGORY": "Catégorie",
+      "ITEM": "Article de la grille",
+      "EXCLUDE": "Exclu : l’organisme ne prend rien en charge",
+      "EXCLUDED": "Exclu",
+      "RULE_RATE": "Taux de prise en charge (%)",
+      "RULE_RATE_HINT": "Laissez vide pour garder le taux de la formule.",
+      "ACT_CEILING": "Plafond par acte (F CFA)",
+      "RULE_TERMS": "Prise en charge",
+      "RATE_VALUE": "{{rate}} %",
+      "RATE_DEFAULT": "Taux de la formule",
+      "ACT_CEILING_VALUE": "au plus {{amount}} par acte",
+      "FROM": "Du",
+      "TO": "Au",
+      "STATUS": "Statut",
+      "END_REASON": "Motif de la fin",
+      "END_RULE": "Mettre fin à la règle",
+      "END_RULE_CONFIRM": "Mettre fin à cette règle ?",
+      "END_RULE_NOTE": "La règle cesse de s’appliquer à partir d’aujourd’hui (une règle pas encore commencée est retirée). Elle reste dans l’historique.",
+      "REPLACE_SCHEDULED": "Remplacer la règle prévue",
+      "SAVED": "Organisme payeur enregistré.",
+      "PLAN_SAVED": "Formule enregistrée.",
+      "RULE_SAVED": "Règle enregistrée.",
+      "RULE_ENDED": "Règle terminée.",
+      "SAVE_FAILED": "L’enregistrement a échoué."
     }
   },
   "CHAT": {
@@ -4707,7 +4784,8 @@
     "DHIS2": "Export DHIS2",
     "ADT_INTAKE": "Admissions ADT automatiques",
     "UNSIGNED_NOTES": "Notes non signées",
-    "PRICE_LIST": "Grille tarifaire"
+    "PRICE_LIST": "Grille tarifaire",
+    "PAYERS": "Organismes payeurs"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -7009,7 +7087,10 @@
         "PRICE_VERSION_ADDED": "Nouveau prix ajouté",
         "INVOICE_LINE_PRICE_RESTORED": "Prix de la grille rétabli",
         "INVOICE_LINE_DELETED": "Ligne de facture supprimée",
-        "INVOICE_LINE_PRICE_OVERRIDDEN": "Prix de la grille modifié"
+        "INVOICE_LINE_PRICE_OVERRIDDEN": "Prix de la grille modifié",
+        "PAYER_CHANGED": "Organisme payeur modifié",
+        "PAYER_PLAN_CHANGED": "Formule d’organisme payeur modifiée",
+        "PATIENT_COVERAGE_PLAN_LINKED": "Couverture du patient liée à une formule"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7541,7 +7622,9 @@
         "WARD": "Unité de soins",
         "WEBHOOK": "Webhook partenaire",
         "FETAL_DEATH_EVENT": "Événement de décès fœtal",
-        "IMAGING_ORDER": "Demande d'imagerie"
+        "IMAGING_ORDER": "Demande d'imagerie",
+        "PAYER": "Organisme payeur",
+        "PAYER_PLAN": "Formule d’organisme payeur"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -7708,6 +7791,19 @@
         "BED_DAY": "Journée d’hospitalisation",
         "DELIVERY_VAGINAL": "Accouchement par voie basse",
         "DELIVERY_CAESAREAN": "Césarienne"
+      },
+      "PAYER_TYPE": {
+        "AMU": "Assurance maladie universelle",
+        "MUTUELLE": "Mutuelle",
+        "ASSUREUR_PRIVE": "Assureur privé",
+        "EMPLOYEUR": "Employeur",
+        "ONG_PROGRAMME": "ONG ou programme"
+      },
+      "PAYER_COVERAGE_STATUS": {
+        "SCHEDULED": "Prévue",
+        "IN_FORCE": "En vigueur",
+        "ENDED": "Terminée",
+        "CANCELLED": "Retirée avant application"
       }
     },
     "DOCUMENTS": {
@@ -10958,7 +11054,13 @@
     "DEACTIVATE_GUARANTOR_MESSAGE": "Le garant reste au dossier, marqué inactif. Indiquez pourquoi ; le motif est conservé dans la piste d’audit.",
     "GUARANTOR_DEACTIVATED": "{{name}} n’est plus un garant actif.",
     "GUARANTOR_REACTIVATED": "{{name}} est de nouveau un garant actif.",
-    "DEACTIVATION_REASON": "Motif"
+    "DEACTIVATION_REASON": "Motif",
+    "PLAN": "Formule",
+    "NO_PLAN": "Aucune formule (texte libre)",
+    "PICK_PLAN": "Choisir la formule",
+    "PLAN_HINT": "La formule de l’organisme payeur au titre de laquelle cette couverture est facturée. Sans formule, le patient paie toute la facture.",
+    "PLAN_SAVED": "Formule enregistrée.",
+    "PLAN_SAVE_ERROR": "La formule n’a pas pu être enregistrée."
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",

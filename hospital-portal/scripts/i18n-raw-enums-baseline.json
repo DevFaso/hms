@@ -248,7 +248,9 @@
     "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::a.reaction",
     "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::m.frequency",
     "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::h.relationship",
-    "src/app/billing/price-list/price-list.component.html::p.changeReason"
+    "src/app/billing/price-list/price-list.component.html::p.changeReason",
+    "src/app/billing/payers/payers.component.html::payer.deactivationReason",
+    "src/app/billing/payers/payers.component.html::rule.endReason"
   ],
   "reasons": {
     "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
@@ -262,6 +264,8 @@
     "src/app/mortality/mortality.html::e.enteredInErrorReason": "free text the administrator typed (QA D1488), not a wire token",
     "src/app/mortality/mortality.html::x.reason": "free text the doctor typed when disputing a death, not a wire token",
     "src/app/patients/order-review-panel/order-review-panel.component.html::row.reason": "free text the prescriber typed on a held order, not a wire token",
-    "src/app/billing/price-list/price-list.component.html::p.changeReason": "Billing-money plan PR 2: PriceListPriceDTO.changeReason is the free text the hospital admin or accountant typed for a price change (owner-approved pin, 2026-11-16), shown as typed; not a wire token."
+    "src/app/billing/price-list/price-list.component.html::p.changeReason": "Billing-money plan PR 2: PriceListPriceDTO.changeReason is the free text the hospital admin or accountant typed for a price change (owner-approved pin, 2026-11-16), shown as typed; not a wire token.",
+    "src/app/billing/payers/payers.component.html::payer.deactivationReason": "Billing-money plan PR 6: PayerDTO.deactivationReason is the free text the hospital admin or accountant typed when retiring a payer, shown as typed; not a wire token.",
+    "src/app/billing/payers/payers.component.html::rule.endReason": "Billing-money plan PR 6: PayerPlanRuleDTO.endReason is the free text the hospital admin or accountant typed when ending a coverage rule, shown as typed; not a wire token."
   }
 }

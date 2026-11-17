@@ -1,0 +1,702 @@
+<div class="page-container payers">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'BILLING.PAYERS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'BILLING.PAYERS.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      <a class="btn-secondary" routerLink="/billing">
+        <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+        {{ 'BILLING.PAYERS.BACK_TO_BILLING' | translate }}
+      </a>
+      @if (canCreate) {
+        <button type="button" class="btn-primary" data-testid="payers-new" (click)="openCreate()">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          {{ 'BILLING.PAYERS.NEW_PAYER' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="payers-filters">
+    <label class="checkbox-inline" for="py-filter-inactive">
+      <input
+        id="py-filter-inactive"
+        type="checkbox"
+        data-testid="payers-include-inactive"
+        [ngModel]="includeInactive()"
+        (ngModelChange)="toggleInactive($event)"
+      />
+      {{ 'BILLING.PAYERS.SHOW_INACTIVE' | translate }}
+    </label>
+  </div>
+
+  @if (loading()) {
+    <p class="field-hint" role="status">{{ 'BILLING.PAYERS.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="field-hint" role="alert">{{ 'BILLING.PAYERS.LOAD_FAILED' | translate }}</p>
+  } @else if (payers().length === 0) {
+    <p class="field-hint" data-testid="payers-empty">{{ 'BILLING.PAYERS.EMPTY' | translate }}</p>
+  } @else {
+    <table class="data-table" data-testid="payers-table">
+      <caption class="sr-only">
+        {{
+          'BILLING.PAYERS.TITLE' | translate
+        }}
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ 'BILLING.PAYERS.CODE' | translate }}</th>
+          <th scope="col">{{ 'BILLING.PAYERS.NAME' | translate }}</th>
+          <th scope="col">{{ 'BILLING.PAYERS.TYPE' | translate }}</th>
+          <th scope="col">{{ 'BILLING.PAYERS.PLANS' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (payer of payers(); track payer.id) {
+          <tr [class.inactive]="!payer.active" [attr.data-testid]="'payers-row-' + payer.code">
+            <td>
+              <button type="button" class="link-button" (click)="open(payer)">
+                {{ payer.code }}
+              </button>
+            </td>
+            <td>
+              {{ payer.name }}
+              @if (!payer.active) {
+                <span class="badge badge-muted">{{ 'BILLING.PAYERS.INACTIVE' | translate }}</span>
+              }
+            </td>
+            <td>{{ payer.payerType | enumLabel: 'payerType' }}</td>
+            <td>
+              @for (plan of payer.plans; track plan.id; let last = $last) {
+                {{ plan.name }} ({{ plan.defaultCoveragePercent }} %){{ last ? '' : ', ' }}
+              } @empty {
+                <span class="muted">{{ 'BILLING.PAYERS.NO_PLAN' | translate }}</span>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  <!-- ═══ PAYER DETAIL: PLANS AND RULES ═══ -->
+  @if (selected(); as payer) {
+    <section
+      class="payers-detail card"
+      data-testid="payers-detail"
+      aria-labelledby="py-detail-title"
+    >
+      <div class="detail-head">
+        <h2 id="py-detail-title">{{ payer.code }} — {{ payer.name }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeDetail()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <dl class="detail-grid">
+        <dt>{{ 'BILLING.PAYERS.TYPE' | translate }}</dt>
+        <dd>{{ payer.payerType | enumLabel: 'payerType' }}</dd>
+        <dt>{{ 'BILLING.PAYERS.STATE' | translate }}</dt>
+        <dd>
+          {{ (payer.active ? 'BILLING.PAYERS.ACTIVE' : 'BILLING.PAYERS.INACTIVE') | translate }}
+          @if (!payer.active && payer.deactivationReason) {
+            — {{ payer.deactivationReason }}
+          }
+        </dd>
+      </dl>
+      @if (payer.active) {
+        <div class="detail-actions">
+          @if (canEditPlans) {
+            <button
+              type="button"
+              class="btn-primary"
+              data-testid="payers-new-plan"
+              (click)="openPlan(null)"
+            >
+              {{ 'BILLING.PAYERS.NEW_PLAN' | translate }}
+            </button>
+          }
+          @if (canUpdate) {
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="payers-edit"
+              (click)="openEdit(payer)"
+            >
+              {{ 'BILLING.PAYERS.EDIT' | translate }}
+            </button>
+          }
+          @if (canDeactivate) {
+            <button
+              type="button"
+              class="btn-danger"
+              data-testid="payers-deactivate"
+              (click)="askDeactivate(payer)"
+            >
+              {{ 'BILLING.PAYERS.DEACTIVATE' | translate }}
+            </button>
+          }
+        </div>
+      }
+
+      <h3>{{ 'BILLING.PAYERS.PLANS' | translate }}</h3>
+      @for (plan of payer.plans; track plan.id) {
+        <article class="plan card-inset" [attr.data-testid]="'payers-plan-' + plan.code">
+          <div class="plan-head">
+            <h4>{{ plan.code }} — {{ plan.name }}</h4>
+            <span class="badge">{{ plan.status | enumLabel: 'payerCoverageStatus' }}</span>
+          </div>
+          <dl class="detail-grid">
+            <dt>{{ 'BILLING.PAYERS.DEFAULT_RATE' | translate }}</dt>
+            <dd>{{ plan.defaultCoveragePercent }} %</dd>
+            <dt>{{ 'BILLING.PAYERS.INVOICE_CEILING' | translate }}</dt>
+            <dd>
+              {{
+                plan.perInvoiceCeiling
+                  ? (plan.perInvoiceCeiling | cfa)
+                  : ('BILLING.PAYERS.NO_CEILING' | translate)
+              }}
+            </dd>
+            <dt>{{ 'BILLING.PAYERS.ANNUAL_CEILING' | translate }}</dt>
+            <dd>
+              {{
+                plan.annualCeilingPerBeneficiary
+                  ? (plan.annualCeilingPerBeneficiary | cfa)
+                  : ('BILLING.PAYERS.NO_CEILING' | translate)
+              }}
+            </dd>
+            <dt>{{ 'BILLING.PAYERS.PERIOD' | translate }}</dt>
+            <dd>
+              {{ plan.effectiveFrom | serverTime | date: 'mediumDate' }} —
+              {{ plan.effectiveTo ? (plan.effectiveTo | serverTime | date: 'mediumDate') : '…' }}
+            </dd>
+          </dl>
+          @if (payer.active && plan.status !== 'ENDED' && plan.status !== 'CANCELLED') {
+            <div class="detail-actions">
+              @if (canEditRules) {
+                <button
+                  type="button"
+                  class="btn-primary btn-sm"
+                  [attr.data-testid]="'payers-new-rule-' + plan.code"
+                  (click)="openRule(plan)"
+                >
+                  {{ 'BILLING.PAYERS.NEW_RULE' | translate }}
+                </button>
+              }
+              @if (canEditPlans) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [attr.data-testid]="'payers-edit-plan-' + plan.code"
+                  (click)="openPlan(plan)"
+                >
+                  {{ 'BILLING.PAYERS.EDIT_PLAN' | translate }}
+                </button>
+              }
+            </div>
+          }
+          <h5>{{ 'BILLING.PAYERS.RULES' | translate }}</h5>
+          @if (plan.rules.length === 0) {
+            <p class="field-hint">{{ 'BILLING.PAYERS.NO_RULES' | translate }}</p>
+          } @else {
+            <table class="data-table" [attr.data-testid]="'payers-rules-' + plan.code">
+              <caption class="sr-only">
+                {{
+                  'BILLING.PAYERS.RULES' | translate
+                }}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">{{ 'BILLING.PAYERS.RULE_TARGET' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.RULE_TERMS' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.FROM' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.TO' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.STATUS' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.END_REASON' | translate }}</th>
+                  <th scope="col">
+                    <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (rule of plan.rules; track rule.id) {
+                  <tr>
+                    <td>
+                      @if (ruleTargetIsItem(rule)) {
+                        {{ rule.priceListItemCode }} — {{ rule.priceListItemLabel }}
+                      } @else {
+                        {{ rule.category | enumLabel: 'priceListCategory' }}
+                      }
+                    </td>
+                    <td>
+                      @if (rule.excluded) {
+                        <strong>{{ 'BILLING.PAYERS.EXCLUDED' | translate }}</strong>
+                      } @else {
+                        @if ((rule.coveragePercent ?? null) !== null) {
+                          {{
+                            'BILLING.PAYERS.RATE_VALUE' | translate: { rate: rule.coveragePercent }
+                          }}
+                        } @else {
+                          {{ 'BILLING.PAYERS.RATE_DEFAULT' | translate }}
+                        }
+                        @if (rule.perActCeiling) {
+                          ·
+                          {{
+                            'BILLING.PAYERS.ACT_CEILING_VALUE'
+                              | translate: { amount: (rule.perActCeiling | cfa) }
+                          }}
+                        }
+                      }
+                    </td>
+                    <td>{{ rule.effectiveFrom | serverTime | date: 'mediumDate' }}</td>
+                    <td>
+                      {{
+                        rule.effectiveTo
+                          ? (rule.effectiveTo | serverTime | date: 'mediumDate')
+                          : '—'
+                      }}
+                    </td>
+                    <td>{{ rule.status | enumLabel: 'payerCoverageStatus' }}</td>
+                    <td>
+                      @if (rule.endReason) {
+                        {{ rule.endReason }}
+                        @if (rule.endedByName) {
+                          · {{ rule.endedByName }}
+                        }
+                      } @else {
+                        —
+                      }
+                    </td>
+                    <td>
+                      @if (canEditRules && payer.active && canEnd(rule)) {
+                        <button
+                          type="button"
+                          class="btn-secondary btn-sm"
+                          [attr.data-testid]="'payers-end-rule-' + rule.id"
+                          (click)="askEndRule(plan, rule)"
+                        >
+                          {{ 'BILLING.PAYERS.END_RULE' | translate }}
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </article>
+      } @empty {
+        <p class="field-hint">{{ 'BILLING.PAYERS.NO_PLAN' | translate }}</p>
+      }
+    </section>
+  }
+</div>
+
+<!-- ═══ DEACTIVATE A PAYER (asks why first) ═══ -->
+@if (deactivating(); as payer) {
+  <app-reason-dialog
+    titleKey="BILLING.PAYERS.DEACTIVATE_CONFIRM"
+    messageKey="BILLING.PAYERS.DEACTIVATE_NOTE"
+    labelKey="BILLING.PAYERS.DEACTIVATE_REASON"
+    confirmKey="BILLING.PAYERS.DEACTIVATE"
+    [busy]="deactivateBusy()"
+    (confirmed)="deactivate(payer, $event)"
+    (cancelled)="deactivating.set(null)"
+  >
+    <p>{{ payer.code }} — {{ payer.name }}</p>
+  </app-reason-dialog>
+}
+
+<!-- ═══ END A RULE (asks why first) ═══ -->
+@if (ending(); as target) {
+  <app-reason-dialog
+    titleKey="BILLING.PAYERS.END_RULE_CONFIRM"
+    messageKey="BILLING.PAYERS.END_RULE_NOTE"
+    labelKey="BILLING.PAYERS.END_REASON"
+    confirmKey="BILLING.PAYERS.END_RULE"
+    [busy]="endBusy()"
+    (confirmed)="endRule(target.plan, target.rule, $event)"
+    (cancelled)="ending.set(null)"
+  >
+    <p>{{ target.plan.code }} — {{ target.plan.name }}</p>
+  </app-reason-dialog>
+}
+
+<!-- ═══ CREATE / EDIT A PAYER ═══ -->
+@if (payerDialog(); as mode) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closePayerDialog()"
+    (keydown.escape)="closePayerDialog()"
+  >
+    <div
+      class="modal"
+      appDialogA11y
+      tabindex="-1"
+      aria-labelledby="py-payer-title"
+      (dialogClose)="closePayerDialog()"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2 id="py-payer-title">
+          {{ (mode === 'create' ? 'BILLING.PAYERS.NEW_PAYER' : 'BILLING.PAYERS.EDIT') | translate }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closePayerDialog()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <form class="modal-body" (ngSubmit)="savePayer()" novalidate>
+        <div class="field">
+          <label for="py-code">
+            {{ 'BILLING.PAYERS.CODE' | translate }}{{ mode === 'create' ? ' *' : '' }}
+          </label>
+          <input
+            id="py-code"
+            name="code"
+            maxlength="40"
+            autocomplete="off"
+            [required]="mode === 'create'"
+            [disabled]="mode !== 'create'"
+            [(ngModel)]="payerForm.code"
+          />
+          @if (mode === 'create') {
+            <small class="field-hint">{{ 'BILLING.PAYERS.CODE_HINT' | translate }}</small>
+          }
+        </div>
+        <div class="field">
+          <label for="py-name">{{ 'BILLING.PAYERS.NAME' | translate }} *</label>
+          <input id="py-name" name="name" maxlength="150" required [(ngModel)]="payerForm.name" />
+        </div>
+        <div class="field">
+          <label for="py-type">{{ 'BILLING.PAYERS.TYPE' | translate }} *</label>
+          <select id="py-type" name="payerType" required [(ngModel)]="payerForm.payerType">
+            <option [ngValue]="null"></option>
+            @for (t of payerTypes; track t) {
+              <option [ngValue]="t">{{ t | enumLabel: 'payerType' }}</option>
+            }
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closePayerDialog()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="submit"
+            class="btn-primary"
+            data-testid="payers-save"
+            [disabled]="payerSaving()"
+            appSubmitGuard
+            submitGuardRequired
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ═══ CREATE / EDIT A PLAN ═══ -->
+@if (planDialog(); as dialog) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closePlanDialog()"
+    (keydown.escape)="closePlanDialog()"
+  >
+    <div
+      class="modal"
+      appDialogA11y
+      tabindex="-1"
+      aria-labelledby="py-plan-title"
+      (dialogClose)="closePlanDialog()"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2 id="py-plan-title">
+          {{ (dialog.plan ? 'BILLING.PAYERS.EDIT_PLAN' : 'BILLING.PAYERS.NEW_PLAN') | translate }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closePlanDialog()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <form class="modal-body" (ngSubmit)="savePlan()" novalidate>
+        <div class="field">
+          <label for="pp-code">
+            {{ 'BILLING.PAYERS.PLAN_CODE' | translate }}{{ dialog.plan ? '' : ' *' }}
+          </label>
+          <input
+            id="pp-code"
+            name="code"
+            maxlength="40"
+            autocomplete="off"
+            [required]="!dialog.plan"
+            [disabled]="!!dialog.plan"
+            [(ngModel)]="planForm.code"
+          />
+        </div>
+        <div class="field">
+          <label for="pp-name">{{ 'BILLING.PAYERS.PLAN_NAME' | translate }} *</label>
+          <input id="pp-name" name="name" maxlength="150" required [(ngModel)]="planForm.name" />
+        </div>
+        <div class="field">
+          <label for="pp-percent">{{ 'BILLING.PAYERS.DEFAULT_RATE' | translate }} *</label>
+          <input
+            id="pp-percent"
+            name="defaultCoveragePercent"
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            inputmode="numeric"
+            required
+            [(ngModel)]="planForm.defaultCoveragePercent"
+          />
+        </div>
+        <div class="field">
+          <label for="pp-invoice-ceiling">{{ 'BILLING.PAYERS.INVOICE_CEILING' | translate }}</label>
+          <input
+            id="pp-invoice-ceiling"
+            name="perInvoiceCeiling"
+            type="number"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            [(ngModel)]="planForm.perInvoiceCeiling"
+          />
+        </div>
+        <div class="field">
+          <label for="pp-annual-ceiling">{{ 'BILLING.PAYERS.ANNUAL_CEILING' | translate }}</label>
+          <input
+            id="pp-annual-ceiling"
+            name="annualCeilingPerBeneficiary"
+            type="number"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            [(ngModel)]="planForm.annualCeilingPerBeneficiary"
+          />
+          <small class="field-hint">{{ 'BILLING.PAYERS.ANNUAL_CEILING_HINT' | translate }}</small>
+        </div>
+        <div class="field">
+          <label for="pp-from">{{ 'BILLING.PAYERS.EFFECTIVE_FROM' | translate }} *</label>
+          <input
+            id="pp-from"
+            name="effectiveFrom"
+            type="date"
+            required
+            [min]="today"
+            [ngModel]="planForm.effectiveFrom"
+            (ngModelChange)="planDateChanged($event)"
+          />
+        </div>
+        <div class="field">
+          <label for="pp-to">{{ 'BILLING.PAYERS.EFFECTIVE_TO' | translate }}</label>
+          <input id="pp-to" name="effectiveTo" type="date" [(ngModel)]="planForm.effectiveTo" />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closePlanDialog()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="submit"
+            class="btn-primary"
+            data-testid="payers-plan-save"
+            [disabled]="planSaving()"
+            appSubmitGuard
+            submitGuardRequired
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ═══ NEW RULE ═══ -->
+@if (ruleDialog(); as plan) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeRuleDialog()"
+    (keydown.escape)="closeRuleDialog()"
+  >
+    <div
+      class="modal"
+      appDialogA11y
+      tabindex="-1"
+      aria-labelledby="py-rule-title"
+      (dialogClose)="closeRuleDialog()"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2 id="py-rule-title">{{ 'BILLING.PAYERS.NEW_RULE' | translate }} — {{ plan.name }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeRuleDialog()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <form class="modal-body" (ngSubmit)="saveRule()" novalidate>
+        <p class="muted-note">{{ 'BILLING.PAYERS.RULE_NOTE' | translate }}</p>
+        <fieldset class="field">
+          <legend>{{ 'BILLING.PAYERS.RULE_TARGET' | translate }} *</legend>
+          <label class="checkbox-inline" for="pr-target-category">
+            <input
+              id="pr-target-category"
+              type="radio"
+              name="target"
+              value="CATEGORY"
+              [ngModel]="ruleForm.target"
+              (ngModelChange)="pickTarget($event)"
+            />
+            {{ 'BILLING.PAYERS.TARGET_CATEGORY' | translate }}
+          </label>
+          <label class="checkbox-inline" for="pr-target-item">
+            <input
+              id="pr-target-item"
+              type="radio"
+              name="target"
+              value="ITEM"
+              [ngModel]="ruleForm.target"
+              (ngModelChange)="pickTarget($event)"
+            />
+            {{ 'BILLING.PAYERS.TARGET_ITEM' | translate }}
+          </label>
+        </fieldset>
+        @if (ruleForm.target === 'CATEGORY') {
+          <div class="field">
+            <label for="pr-category">{{ 'BILLING.PAYERS.CATEGORY' | translate }} *</label>
+            <select
+              id="pr-category"
+              name="category"
+              required
+              [(ngModel)]="ruleForm.category"
+              (ngModelChange)="resetReplace()"
+            >
+              <option [ngValue]="null"></option>
+              @for (c of categories; track c) {
+                <option [ngValue]="c">{{ c | enumLabel: 'priceListCategory' }}</option>
+              }
+            </select>
+          </div>
+        } @else {
+          <div class="field">
+            <label for="pr-item">{{ 'BILLING.PAYERS.ITEM' | translate }} *</label>
+            <select
+              id="pr-item"
+              name="priceListItemId"
+              required
+              [(ngModel)]="ruleForm.priceListItemId"
+              (ngModelChange)="resetReplace()"
+            >
+              <option [ngValue]="null"></option>
+              @for (i of priceItems(); track i.id) {
+                <option [ngValue]="i.id">{{ i.code }} — {{ i.label }}</option>
+              }
+            </select>
+          </div>
+        }
+        <label class="checkbox-inline" for="pr-excluded">
+          <input
+            id="pr-excluded"
+            name="excluded"
+            type="checkbox"
+            [ngModel]="ruleForm.excluded"
+            (ngModelChange)="pickExcluded($event)"
+          />
+          {{ 'BILLING.PAYERS.EXCLUDE' | translate }}
+        </label>
+        @if (!ruleForm.excluded) {
+          <div class="field">
+            <label for="pr-percent">{{ 'BILLING.PAYERS.RULE_RATE' | translate }}</label>
+            <input
+              id="pr-percent"
+              name="coveragePercent"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              inputmode="numeric"
+              [(ngModel)]="ruleForm.coveragePercent"
+            />
+            <small class="field-hint">{{ 'BILLING.PAYERS.RULE_RATE_HINT' | translate }}</small>
+          </div>
+          <div class="field">
+            <label for="pr-act-ceiling">{{ 'BILLING.PAYERS.ACT_CEILING' | translate }}</label>
+            <input
+              id="pr-act-ceiling"
+              name="perActCeiling"
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              [(ngModel)]="ruleForm.perActCeiling"
+            />
+          </div>
+        }
+        <div class="field">
+          <label for="pr-from">{{ 'BILLING.PAYERS.EFFECTIVE_FROM' | translate }} *</label>
+          <input
+            id="pr-from"
+            name="effectiveFrom"
+            type="date"
+            required
+            [min]="today"
+            [ngModel]="ruleForm.effectiveFrom"
+            (ngModelChange)="ruleDateChanged($event)"
+          />
+        </div>
+        @if (replaceQuestion(); as question) {
+          <div class="replace-question" role="alert" data-testid="payers-replace-question">
+            <p>{{ question }}</p>
+            <label class="checkbox-inline" for="pr-replace">
+              <input
+                id="pr-replace"
+                name="replaceScheduled"
+                type="checkbox"
+                [(ngModel)]="ruleForm.replaceScheduled"
+              />
+              {{ 'BILLING.PAYERS.REPLACE_SCHEDULED' | translate }}
+            </label>
+          </div>
+        }
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeRuleDialog()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="submit"
+            class="btn-primary"
+            data-testid="payers-rule-save"
+            [disabled]="ruleSaving()"
+            appSubmitGuard
+            submitGuardRequired
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

@@ -31,6 +31,7 @@ export const GUARDED_PAGES = [
   'src/app/referrals/referrals.ts',
   'src/app/patients/patient-chart/patient-chart.component.ts',
   'src/app/billing/price-list/price-list.component.ts',
+  'src/app/billing/payers/payers.component.ts',
 ];
 
 const CHECK = /\b(hasAnyActiveRole|hasAnyActiveRoleExactly|hasAnyRole|hasRole)\s*\(/g;

@@ -1426,6 +1426,52 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['version', 'item', 'from'],
   },
   {
+    // Billing-money plan PR 6: the payer catalogue (ids only; names, rates and reasons stay on the rows).
+    key: 'AUDIT.DESC.PAYER_CREATED',
+    re: /^Payer (\S+) created$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_UPDATED',
+    re: /^Payer (\S+) updated$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_DEACTIVATED',
+    re: /^Payer (\S+) deactivated$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_PLAN_CREATED',
+    re: /^Payer plan (\S+) of payer (\S+) created$/,
+    params: ['plan', 'payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_PLAN_UPDATED',
+    re: /^Payer plan (\S+) of payer (\S+) updated$/,
+    params: ['plan', 'payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_RULE_ADDED',
+    re: /^Rule (\S+) added to payer plan (\S+), effective (\S+)$/,
+    params: ['rule', 'plan', 'from'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_RULE_ENDED',
+    re: /^Rule (\S+) of payer plan (\S+) ended$/,
+    params: ['rule', 'plan'],
+  },
+  {
+    key: 'AUDIT.DESC.COVERAGE_PLAN_LINKED',
+    re: /^Patient insurance (\S+) linked to payer plan (\S+)$/,
+    params: ['insurance', 'plan'],
+  },
+  {
+    key: 'AUDIT.DESC.COVERAGE_PLAN_UNLINKED',
+    re: /^Patient insurance (\S+) unlinked from its payer plan$/,
+    params: ['insurance'],
+  },
+  {
     // Billing-money plan PR 3 (D-2): a price-list price overridden on a draft line (ids only; the prices and the
     // reason stay on the line).
     key: 'AUDIT.DESC.INVOICE_LINE_PRICE_OVERRIDDEN',

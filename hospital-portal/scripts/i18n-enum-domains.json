@@ -77,6 +77,12 @@
       "hospital-core/src/main/java/com/example/hms/enums/PermissionMatrixAuditAction.java"
     ]
   },
+  "payerCoverageStatus": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PayerCoverageStatus.java"
+  },
+  "payerType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PayerType.java"
+  },
   "priceListCategory": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListCategory.java"
   },

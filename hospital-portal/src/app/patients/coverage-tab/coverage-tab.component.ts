@@ -28,6 +28,12 @@ import {
   TreatmentConsentMethod,
 } from '../../services/registration-extras.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { actionRoles } from '../../core/action-permissions';
+import {
+  PayerCatalogueService,
+  PayerPlanOption,
+  linkablePlanOptions,
+} from '../../services/payer-catalogue.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
@@ -72,6 +78,7 @@ export class CoverageTabComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly payerCatalogue = inject(PayerCatalogueService);
 
   readonly canEdit = this.roleContext.hasAnyActiveRole([
     'ROLE_HOSPITAL_ADMIN',
@@ -79,6 +86,21 @@ export class CoverageTabComponent implements OnInit {
     'ROLE_NURSE',
     'ROLE_DOCTOR',
   ]);
+
+  /**
+   * Billing-money plan PR 6 (plan section 3.8): who links a coverage to a
+   * payer plan ("Formule") — the API's own role list.
+   */
+  readonly canLinkPlan = this.roleContext.hasAnyActiveRole(
+    actionRoles('patientInsuranceSetPayerPlan'),
+  );
+  /** The plans of this hospital a coverage can be linked to today (read once, when a picker opens). */
+  planOptions = signal<PayerPlanOption[]>([]);
+  planOptionsLoaded = signal(false);
+  /** The coverage whose plan is being chosen (the "Formule" dialog is open). */
+  planTarget = signal<PatientInsurance | null>(null);
+  planChoice: string | null = null;
+  planSaving = signal(false);
 
   insurances = signal<PatientInsurance[]>([]);
   insurancesLoading = signal(false);
@@ -376,7 +398,59 @@ export class CoverageTabComponent implements OnInit {
   openLink(): void {
     this.linkForm = { patientId: this.patientId, payerCode: '', policyNumber: '' };
     this.linkPrimary = false;
+    this.linkPlan = null;
+    if (this.canLinkPlan) this.loadPlanOptions();
     this.showLinkModal.set(true);
+  }
+
+  /** Billing-money plan PR 6: the plan picked in the link dialog (optional). */
+  linkPlan: string | null = null;
+
+  private loadPlanOptions(): void {
+    if (this.planOptionsLoaded()) return;
+    this.payerCatalogue.list(false).subscribe({
+      next: (payers) => {
+        this.planOptions.set(linkablePlanOptions(payers ?? []));
+        this.planOptionsLoaded.set(true);
+      },
+      error: () => this.planOptions.set([]),
+    });
+  }
+
+  /* ── Formule (billing-money plan PR 6) ── */
+
+  openPlan(insurance: PatientInsurance): void {
+    this.planChoice = insurance.payerPlanId ?? null;
+    this.loadPlanOptions();
+    this.planTarget.set(insurance);
+  }
+
+  /** Whether the picker already lists this plan (an ended plan stays shown while it is the current one). */
+  hasPlanOption(planId: string): boolean {
+    return this.planOptions().some((o) => o.id === planId);
+  }
+
+  closePlan(): void {
+    if (this.planSaving()) return;
+    this.planTarget.set(null);
+  }
+
+  submitPlan(): void {
+    const target = this.planTarget();
+    if (!target || this.planSaving()) return;
+    this.planSaving.set(true);
+    this.insuranceService.setPayerPlan(target.id, this.planChoice || null).subscribe({
+      next: (updated) => {
+        this.planSaving.set(false);
+        this.planTarget.set(null);
+        this.toast.success(this.translate.instant('COVERAGE.PLAN_SAVED'));
+        this.insurances.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+      },
+      error: (err: unknown) => {
+        this.planSaving.set(false);
+        this.toast.error(refusalReason(err) ?? this.translate.instant('COVERAGE.PLAN_SAVE_ERROR'));
+      },
+    });
   }
 
   closeLink(): void {
@@ -400,6 +474,7 @@ export class CoverageTabComponent implements OnInit {
         ...this.linkForm,
         hospitalId: this.roleContext.activeHospitalId ?? undefined,
         primary: this.linkPrimary ? true : undefined,
+        payerPlanId: (this.canLinkPlan && this.linkPlan) || undefined,
       })
       .subscribe({
         next: () => {

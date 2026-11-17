@@ -408,6 +408,20 @@ export class EnumLabelService implements OnDestroy {
       ENDED: 'Ended',
       REPLACED: 'Replaced before it applied',
     },
+    /* Billing-money plan PR 6: the payer catalogue (fallbacks; the locales hold the labels). */
+    payerType: {
+      AMU: 'Universal health insurance',
+      MUTUELLE: 'Mutual insurer',
+      ASSUREUR_PRIVE: 'Private insurer',
+      EMPLOYEUR: 'Employer',
+      ONG_PROGRAMME: 'NGO or programme',
+    },
+    payerCoverageStatus: {
+      SCHEDULED: 'Planned',
+      IN_FORCE: 'In force',
+      ENDED: 'Ended',
+      CANCELLED: 'Withdrawn before it applied',
+    },
     priceListSystemKey: {
       CONSULTATION_DEFAULT: 'Default consultation',
       BED_DAY: 'Bed day',

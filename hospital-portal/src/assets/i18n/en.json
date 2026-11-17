@@ -1974,7 +1974,16 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Duplicate warning overridden (\"Order anyway\", reason: {{reason}}): imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
-      "NATIONAL_IU_ACTION": "Patient unique identifier: {{operation}}"
+      "NATIONAL_IU_ACTION": "Patient unique identifier: {{operation}}",
+      "PAYER_CREATED": "Payer {{payer}} created",
+      "PAYER_UPDATED": "Payer {{payer}} updated",
+      "PAYER_DEACTIVATED": "Payer {{payer}} deactivated, reason recorded",
+      "PAYER_PLAN_CREATED": "Plan {{plan}} of payer {{payer}} created",
+      "PAYER_PLAN_UPDATED": "Plan {{plan}} of payer {{payer}} updated",
+      "PAYER_RULE_ADDED": "Rule {{rule}} added to plan {{plan}}, effective {{from}}",
+      "PAYER_RULE_ENDED": "Rule {{rule}} of plan {{plan}} ended, reason recorded",
+      "COVERAGE_PLAN_LINKED": "Patient coverage {{insurance}} linked to plan {{plan}}",
+      "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2529,6 +2538,74 @@
       "PRICE_SAVED": "New price saved.",
       "SAVE_FAILED": "Saving failed.",
       "DEACTIVATE_REASON": "Reason for deactivating"
+    },
+    "PAYERS": {
+      "TITLE": "Payers",
+      "SUBTITLE": "The mutuelles, insurers, employers and programmes that pay a share of a visit, with their plans and coverage rules. Nothing is applied to an invoice yet.",
+      "BACK_TO_BILLING": "Back to billing",
+      "NEW_PAYER": "New payer",
+      "EDIT": "Edit the payer",
+      "DEACTIVATE": "Deactivate",
+      "DEACTIVATE_CONFIRM": "Deactivate this payer?",
+      "DEACTIVATE_NOTE": "Its plans can no longer be linked to a patient. Its history and existing links are kept.",
+      "DEACTIVATE_REASON": "Reason for deactivating",
+      "DEACTIVATED": "Payer deactivated.",
+      "SHOW_INACTIVE": "Show deactivated payers",
+      "LOADING": "Loading the payers…",
+      "LOAD_FAILED": "The payers could not be loaded.",
+      "EMPTY": "No payer yet.",
+      "CODE": "Payer code",
+      "CODE_HINT": "The hospital’s own code (e.g. MUT-TEST-A). It never changes once created.",
+      "NAME": "Name",
+      "TYPE": "Type",
+      "PLANS": "Plans",
+      "NO_PLAN": "No plan",
+      "STATE": "State",
+      "ACTIVE": "Active",
+      "INACTIVE": "Deactivated",
+      "NEW_PLAN": "New plan",
+      "EDIT_PLAN": "Edit the plan",
+      "PLAN_CODE": "Plan code",
+      "PLAN_NAME": "Plan name",
+      "DEFAULT_RATE": "Coverage rate (%)",
+      "INVOICE_CEILING": "Ceiling per invoice (F CFA)",
+      "ANNUAL_CEILING": "Annual ceiling per beneficiary (F CFA)",
+      "ANNUAL_CEILING_HINT": "Per patient covered and per calendar year.",
+      "NO_CEILING": "No ceiling",
+      "PERIOD": "Offered",
+      "EFFECTIVE_FROM": "Effective from",
+      "EFFECTIVE_TO": "Last day (optional)",
+      "RULES": "Exclusions and specific rates",
+      "NO_RULES": "No rule: the plan rate applies to everything.",
+      "NEW_RULE": "New rule",
+      "RULE_NOTE": "A rule applies to a whole category or to one price list item. It replaces the rule in force for the same target from its date; the invoices already issued do not change.",
+      "RULE_TARGET": "Applies to",
+      "TARGET_CATEGORY": "A category",
+      "TARGET_ITEM": "A price list item",
+      "CATEGORY": "Category",
+      "ITEM": "Price list item",
+      "EXCLUDE": "Excluded: the payer pays nothing",
+      "EXCLUDED": "Excluded",
+      "RULE_RATE": "Coverage rate (%)",
+      "RULE_RATE_HINT": "Leave empty to keep the plan rate.",
+      "ACT_CEILING": "Ceiling per act (F CFA)",
+      "RULE_TERMS": "Coverage",
+      "RATE_VALUE": "{{rate}} %",
+      "RATE_DEFAULT": "Plan rate",
+      "ACT_CEILING_VALUE": "at most {{amount}} per act",
+      "FROM": "From",
+      "TO": "To",
+      "STATUS": "Status",
+      "END_REASON": "Reason for ending",
+      "END_RULE": "End the rule",
+      "END_RULE_CONFIRM": "End this rule?",
+      "END_RULE_NOTE": "The rule stops applying from today (a rule not started yet is withdrawn). It stays in the history.",
+      "REPLACE_SCHEDULED": "Replace the planned rule",
+      "SAVED": "Payer saved.",
+      "PLAN_SAVED": "Plan saved.",
+      "RULE_SAVED": "Rule saved.",
+      "RULE_ENDED": "Rule ended.",
+      "SAVE_FAILED": "The change could not be saved."
     }
   },
   "CHAT": {
@@ -4707,7 +4784,8 @@
     "DHIS2": "DHIS2 export",
     "ADT_INTAKE": "ADT intake",
     "UNSIGNED_NOTES": "Unsigned notes",
-    "PRICE_LIST": "Price list"
+    "PRICE_LIST": "Price list",
+    "PAYERS": "Payers"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -7043,7 +7121,10 @@
         "PRICE_VERSION_ADDED": "New price added",
         "INVOICE_LINE_PRICE_RESTORED": "Price-list price restored",
         "INVOICE_LINE_DELETED": "Invoice line deleted",
-        "INVOICE_LINE_PRICE_OVERRIDDEN": "Price-list price overridden"
+        "INVOICE_LINE_PRICE_OVERRIDDEN": "Price-list price overridden",
+        "PAYER_CHANGED": "Payer changed",
+        "PAYER_PLAN_CHANGED": "Payer plan changed",
+        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7575,7 +7656,9 @@
         "WARD": "Ward",
         "WEBHOOK": "Partner webhook",
         "FETAL_DEATH_EVENT": "Fetal-death event",
-        "IMAGING_ORDER": "Imaging order"
+        "IMAGING_ORDER": "Imaging order",
+        "PAYER": "Payer",
+        "PAYER_PLAN": "Payer plan"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -7742,6 +7825,19 @@
         "BED_DAY": "Bed day",
         "DELIVERY_VAGINAL": "Vaginal delivery",
         "DELIVERY_CAESAREAN": "Caesarean section"
+      },
+      "PAYER_TYPE": {
+        "AMU": "Universal health insurance",
+        "MUTUELLE": "Mutual insurer",
+        "ASSUREUR_PRIVE": "Private insurer",
+        "EMPLOYEUR": "Employer",
+        "ONG_PROGRAMME": "NGO or programme"
+      },
+      "PAYER_COVERAGE_STATUS": {
+        "SCHEDULED": "Planned",
+        "IN_FORCE": "In force",
+        "ENDED": "Ended",
+        "CANCELLED": "Withdrawn before it applied"
       }
     },
     "DOCUMENTS": {
@@ -10958,7 +11054,13 @@
     "DEACTIVATE_GUARANTOR_MESSAGE": "The guarantor stays on file, marked inactive. Say why; the reason is kept in the audit trail.",
     "GUARANTOR_DEACTIVATED": "{{name}} is no longer an active guarantor.",
     "GUARANTOR_REACTIVATED": "{{name}} is an active guarantor again.",
-    "DEACTIVATION_REASON": "Reason"
+    "DEACTIVATION_REASON": "Reason",
+    "PLAN": "Plan (formule)",
+    "NO_PLAN": "No plan (free text)",
+    "PICK_PLAN": "Choose the plan",
+    "PLAN_HINT": "The payer plan this coverage is billed under. Without a plan, the patient pays the whole invoice.",
+    "PLAN_SAVED": "Plan saved.",
+    "PLAN_SAVE_ERROR": "The plan could not be saved."
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",
