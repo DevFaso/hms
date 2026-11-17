@@ -1,3 +1,4 @@
+import { ElapsedPipe } from '../../shared/pipes/elapsed.pipe';
 import {
   Component,
   Input,
@@ -34,7 +35,7 @@ type ColKey = keyof FlowBoard;
 @Component({
   selector: 'app-flow-board',
   standalone: true,
-  imports: [CommonModule, DragDropModule, TranslateModule],
+  imports: [ElapsedPipe, CommonModule, DragDropModule, TranslateModule],
   templateUrl: './flow-board.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './flow-board.component.scss',

@@ -314,6 +314,29 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PriceListController#deactivate',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
   },
+  // Review #1196/#1198 L4: the digital-signatures page gates every panel from
+  // here (the report lookup was offered to admins the endpoint refuses). The
+  // list, lookup and audit entries are reads, mirrored for the same reason.
+  signatureSign: {
+    endpoint: 'DigitalSignatureController#signReport',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST', 'ROLE_PHARMACIST'],
+  },
+  signatureRevoke: {
+    endpoint: 'DigitalSignatureController#revokeSignature',
+    roles: ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+  },
+  signatureListAll: {
+    endpoint: 'DigitalSignatureController#getAllSignatures',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+  },
+  signatureReportLookup: {
+    endpoint: 'DigitalSignatureController#getSignaturesByReport',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST', 'ROLE_PHARMACIST'],
+  },
+  signatureAuditTrail: {
+    endpoint: 'DigitalSignatureController#getSignatureAuditTrail',
+    roles: ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+  },
   // Billing-money plan PR 6 (owner decision D-1): the payer catalogue is kept
   // by the hospital admin and the accountant only (never the cashier or the
   // super-admin).

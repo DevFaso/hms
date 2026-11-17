@@ -48,6 +48,17 @@ export class RoleContextService {
   private readonly _globalView = signal<boolean>(false);
   private readonly _selectedHospitalId = signal<string | null>(null);
 
+  /**
+   * QA D2121: the super-admin (or a `?hospitalId=` link the scope gate
+   * honoured) has made an explicit scope choice in this session. The session
+   * bootstrap answers asynchronously, usually AFTER the first navigation has
+   * applied the URL's hospital, so its "land in global view" default must
+   * not overwrite that choice: a reload of `/procedure-orders?hospitalId=B`
+   * showed the all-hospitals directory while the URL and X-Hospital-Id still
+   * named B.
+   */
+  private superAdminScopeChosen = false;
+
   readonly activeHospitalIdSignal = computed(() => this._activeHospitalId());
 
   private readonly _providerUser = signal<boolean>(false);
@@ -82,6 +93,7 @@ export class RoleContextService {
     this._sessionResolved.set(false);
     this.setHeldRoles([]);
     this._refusedRoles.set(null);
+    this.superAdminScopeChosen = false;
   }
 
   /**
@@ -219,6 +231,7 @@ export class RoleContextService {
     if (!roles.includes('ROLE_SUPER_ADMIN')) {
       this._globalView.set(false);
       this._selectedHospitalId.set(null);
+      this.superAdminScopeChosen = false;
     }
   }
 
@@ -269,6 +282,7 @@ export class RoleContextService {
    * (e.g. URL query-param sync) doesn't re-pin to the previous tenant.
    */
   enableGlobalView(): void {
+    this.superAdminScopeChosen = true;
     this._globalView.set(true);
     this._selectedHospitalId.set(null);
   }
@@ -281,6 +295,7 @@ export class RoleContextService {
     if (!hospitalId) {
       return;
     }
+    this.superAdminScopeChosen = true;
     this._globalView.set(false);
     this._selectedHospitalId.set(hospitalId);
   }
@@ -292,9 +307,23 @@ export class RoleContextService {
    * preserve their existing single-tenant behaviour.
    */
   markSuperAdminGlobalDefaults(): void {
+    if (this.superAdminScopeChosen) {
+      // QA D2121: a re-hydration (app bootstrap reply, impersonation stop,
+      // scope re-read) never undoes a choice the URL or the chip made.
+      return;
+    }
     if (this._activeRoles().includes('ROLE_SUPER_ADMIN')) {
       this._globalView.set(true);
       this._selectedHospitalId.set(null);
     }
+  }
+
+  /**
+   * A brand-new login: forget any earlier scope choice and land in global
+   * view (design call #5), whatever the previous session in this tab picked.
+   */
+  resetSuperAdminScope(): void {
+    this.superAdminScopeChosen = false;
+    this.markSuperAdminGlobalDefaults();
   }
 }

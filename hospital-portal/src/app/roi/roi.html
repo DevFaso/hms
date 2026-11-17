@@ -51,7 +51,9 @@
     <div class="directory-heading">
       <div>
         <h2>{{ 'ROI.REQUEST_DIRECTORY' | translate }}</h2>
-        <p>{{ 'ROI.QUEUE_HELP' | translate }}</p>
+        <p>
+          {{ (activeStatus() === 'ALL' ? 'ROI.ALL_ORDER_HELP' : 'ROI.QUEUE_HELP') | translate }}
+        </p>
       </div>
       <span class="material-symbols-outlined directory-icon" aria-hidden="true">folder_shared</span>
     </div>

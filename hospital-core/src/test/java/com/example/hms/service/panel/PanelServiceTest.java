@@ -275,7 +275,7 @@ class PanelServiceTest {
 
         assertThatThrownBy(() -> service.assign(patientId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("landed at the same time");
+            .extracting("messageKey").isEqualTo("panel.concurrentChange.patient");
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -415,7 +415,7 @@ class PanelServiceTest {
 
         assertThatThrownBy(() -> service.end(patientId, assignmentId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reload and retry");
+            .extracting("messageKey").isEqualTo("panel.concurrentChange.assignment");
     }
 
     @Test
@@ -451,7 +451,7 @@ class PanelServiceTest {
 
         assertThatThrownBy(() -> service.myPanel(0, 50))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no staff profile");
+            .extracting("messageKey").isEqualTo("panel.my.noStaffProfile");
     }
 
     @Test
@@ -573,6 +573,6 @@ class PanelServiceTest {
         PanelAssignmentRequestDTO request = assignRequest();
         assertThatThrownBy(() -> service.assign(patientId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital context");
+            .extracting("messageKey").isEqualTo("panel.hospitalRequired");
     }
 }

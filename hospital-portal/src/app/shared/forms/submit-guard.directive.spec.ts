@@ -123,6 +123,24 @@ describe('SubmitGuardDirective (QA D1124 / D1089)', () => {
     );
   });
 
+  for (const [what, noise] of [
+    ['a Material Symbols icon (QA D2123)', '<span class="material-symbols-outlined">badge</span>'],
+    ['a Material Icons icon (QA D2123)', '<i class="material-icons">event</i>'],
+    ['a decorative aria-hidden mark', '<span aria-hidden="true">●</span>'],
+    ['help text (QA D2125)', '<small class="hint">Selon le protocole du programme</small>'],
+    ['a field-help paragraph', '<p class="field-help">Exemple : 30</p>'],
+  ]) {
+    it(`names a field by its label alone, without ${what}`, () => {
+      const label = el.querySelector('label[for="med"]') as HTMLLabelElement;
+      label.innerHTML = `${noise} Médicament <span class="required">*</span>`;
+      if (what.startsWith('help') || what.startsWith('a field-help')) {
+        label.innerHTML = `Médicament * ${noise}`;
+      }
+      button().click();
+      expect(reason()?.textContent).toBe('Champs obligatoires manquants : Médicament');
+    });
+  }
+
   it('without listed fields it marks nothing (a secondary action never flags the whole form)', () => {
     host.fields.set(null);
     fixture.detectChanges();

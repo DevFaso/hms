@@ -183,7 +183,13 @@ export class PanelComponent implements OnInit {
   ngOnInit(): void {
     // The route gate builds this page only with a hospital pinned, and
     // rebuilds it on a scope change, so every load starts from empty state.
-    this.loadMyPanel();
+    // QA D2127: a super-admin acting as such has no staff row at the scoped
+    // hospital, so « my panel » is not asked for: it could only be refused.
+    if (this.roleCtx.hasAnyActiveRoleExactly(['ROLE_SUPER_ADMIN'])) {
+      this.noStaffProfile.set(true);
+    } else {
+      this.loadMyPanel();
+    }
     if (this.isAdmin()) {
       this.loadOverview();
     }

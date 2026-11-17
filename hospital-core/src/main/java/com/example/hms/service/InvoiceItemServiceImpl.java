@@ -218,7 +218,10 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.overrideReasonTooLong",
                 OVERRIDE_REASON_MAX);
         }
-        requireTariffWriter(invoice);
+        if (!isTariffWriter(invoice)) {
+            throw new ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolve("billing.item.overrideNotAllowed"));
+        }
         item.setUnitPrice(newPrice);
         item.setPriceSource(InvoiceLinePriceSource.MANUAL);
         item.setTariffUnitPrice(tariff);
@@ -229,13 +232,13 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     /** What a line edit did to a price-list price. */
     private enum PriceChange { NONE, OVERRIDDEN, RESTORED }
 
-    /** D-1/D-2: a billing specialist or a hospital admin of the invoice's hospital, never the super-admin alone. */
-    private void requireTariffWriter(BillingInvoice invoice) {
+    /**
+     * D-1/D-2: a billing specialist or a hospital admin of the invoice's hospital, never the super-admin alone.
+     * QA D2101: each caller refuses with the message that names its own action (change a price, remove a line).
+     */
+    private boolean isTariffWriter(BillingInvoice invoice) {
         UUID userId = roleValidator.getCurrentUserId();
-        if (userId == null || !roleValidator.canOverrideTariff(userId, invoice.getHospital().getId())) {
-            throw new ClientSafeAccessDeniedException(
-                com.example.hms.utility.MessageUtil.resolve("billing.item.overrideNotAllowed"));
-        }
+        return userId != null && roleValidator.canOverrideTariff(userId, invoice.getHospital().getId());
     }
 
     /**
@@ -292,7 +295,11 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             if (reason.isEmpty()) {
                 throw new FieldBusinessException(FIELD_DELETE_REASON, "billing.item.deleteReasonRequired");
             }
-            requireTariffWriter(invoice);
+            // QA D2101: a refused removal names the removal, not a price change.
+            if (!isTariffWriter(invoice)) {
+                throw new ClientSafeAccessDeniedException(
+                    com.example.hms.utility.MessageUtil.resolve("billing.item.deleteNotAllowed"));
+            }
         }
         if (reason.length() > OVERRIDE_REASON_MAX) {
             throw new FieldBusinessException(FIELD_DELETE_REASON, "billing.item.overrideReasonTooLong",

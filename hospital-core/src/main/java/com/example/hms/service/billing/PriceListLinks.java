@@ -76,6 +76,35 @@ public class PriceListLinks {
     }
 
     /**
+     * QA D2070 (round 58): a link named the way the form shows it, for a refusal — « Consultation par défaut »,
+     * « concentré de globules rouges », « NFS · Numération formule sanguine », a service's name — never the stored
+     * key (« CONSULTATION_DEFAULT », « PACKED_RED_CELLS », a lab test's id). Procedure and imaging keys are already
+     * what the user typed, folded. A key that no longer resolves is shown as stored.
+     */
+    public String label(UUID hospitalId, PriceListLinkType type, String storedKey) {
+        if (type == null || storedKey == null) {
+            return storedKey;
+        }
+        return switch (type) {
+            case SYSTEM -> com.example.hms.utility.MessageUtil.resolveOrRaw("billing.priceList.systemKey." + storedKey);
+            case TRANSFUSION_PRODUCT ->
+                com.example.hms.utility.MessageUtil.resolveOrRaw("transfusion.productType." + storedKey);
+            case LAB_TEST_DEFINITION -> parseUuid(storedKey)
+                .flatMap(labTestDefinitionRepository::findById)
+                .filter(d -> d.getHospital() == null || hospitalId.equals(d.getHospital().getId()))
+                .map(d -> d.getTestCode() == null || d.getTestCode().isBlank()
+                    ? d.getName() : d.getTestCode() + " · " + d.getName())
+                .orElse(storedKey);
+            case TREATMENT -> parseUuid(storedKey)
+                .flatMap(treatmentRepository::findById)
+                .filter(t -> t.getHospital() != null && hospitalId.equals(t.getHospital().getId()))
+                .map(Treatment::getName)
+                .orElse(storedKey);
+            case PROCEDURE_CODE, IMAGING_STUDY -> storedKey;
+        };
+    }
+
+    /**
      * PR 3: the key a charge source looks up, written the way {@link #normalise} stored it; empty when the raw value
      * cannot be a key of that type (a blank code, an imaging study with no modality, an unknown product). Never
      * throws: an unmatched charge falls back to the next pricing rule, it is not refused.
