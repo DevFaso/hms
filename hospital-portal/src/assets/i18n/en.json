@@ -7612,7 +7612,8 @@
         "WARD": "Ward",
         "WEBHOOK": "Partner webhook",
         "FETAL_DEATH_EVENT": "Fetal-death event",
-        "IMAGING_ORDER": "Imaging order"
+        "IMAGING_ORDER": "Imaging order",
+        "PRICE_LIST_IMPORT": "Price list import"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",

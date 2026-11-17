@@ -7578,7 +7578,8 @@
         "WARD": "Unité de soins",
         "WEBHOOK": "Webhook partenaire",
         "FETAL_DEATH_EVENT": "Événement de décès fœtal",
-        "IMAGING_ORDER": "Demande d'imagerie"
+        "IMAGING_ORDER": "Demande d'imagerie",
+        "PRICE_LIST_IMPORT": "Import de grille tarifaire"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",

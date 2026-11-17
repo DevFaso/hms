@@ -23,8 +23,10 @@ import { ToastService } from '../../core/toast.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
-import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { saveBlob } from '../../shared/download-file';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 
@@ -60,7 +62,9 @@ export function priceListTemplate(): Blob {
     CfaPipe,
     EnumLabelPipe,
     ServerTimePipe,
+    DateTimePipe,
     DialogA11yDirective,
+    SubmitGuardDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './price-list-import.component.html',
@@ -194,6 +198,16 @@ export class PriceListImportComponent {
             return;
           }
           this.report.set(null);
+          // A refusal of the whole file names the field "file": it is marked under the picker.
+          const refused = refusedFieldReasons(err, { file: FILE_FIELD_ID });
+          if (refused.length > 0) {
+            refuseFields(
+              this.host.nativeElement,
+              refused.map(([id, message]) => ({ id, message })),
+              [FILE_FIELD_ID],
+            );
+            return;
+          }
           this.fileError.set(
             refusalReason(err) ?? this.translate.instant('BILLING.PRICE_LIST.IMPORT.FAILED'),
           );

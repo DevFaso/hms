@@ -7612,7 +7612,8 @@
         "WARD": "Planta",
         "WEBHOOK": "Webhook de socio",
         "FETAL_DEATH_EVENT": "Evento de muerte fetal",
-        "IMAGING_ORDER": "Solicitud de imagen"
+        "IMAGING_ORDER": "Solicitud de imagen",
+        "PRICE_LIST_IMPORT": "Importación de lista de precios"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",

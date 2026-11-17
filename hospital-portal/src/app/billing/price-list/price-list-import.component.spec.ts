@@ -8,6 +8,11 @@ import fr from '../../../assets/i18n/fr.json';
 import { PriceListImportComponent, priceListTemplate } from './price-list-import.component';
 import { PRICE_LIST_CSV_HEADER, PriceListImportReport } from '../../services/price-list.service';
 import { ToastService } from '../../core/toast.service';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../../testing/form-refusal-behaviour';
 
 const URL_IMPORT = '/billing/price-list/import';
 
@@ -101,6 +106,11 @@ describe('PriceListImportComponent (billing-money plan PR 4)', () => {
     return el().querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)!;
   }
 
+  /** "Appliquer l’import" lets a click through (its guard holds no reason). */
+  function applyEnabled(): boolean {
+    return fixture.componentInstance.canApply() && !button('price-list-import-apply').disabled;
+  }
+
   function pick(file: File): void {
     const input = el().querySelector<HTMLInputElement>('[data-testid="price-list-import-file"]')!;
     const files = new DataTransfer();
@@ -114,13 +124,20 @@ describe('PriceListImportComponent (billing-money plan PR 4)', () => {
     return new File([PRICE_LIST_CSV_HEADER + '\n'], name, { type: 'text/csv' });
   }
 
-  it('shows the French labels and keeps "Appliquer l’import" disabled before any check', () => {
+  it('shows the French labels; with no file and no check, neither button sends anything', () => {
     expect(el().textContent).toContain('Importer une grille (CSV)');
     expect(el().textContent).toContain('Modèle à télécharger');
     expect(button('price-list-import-check').textContent).toContain('Vérifier le fichier');
-    expect(button('price-list-import-check').disabled).toBeTrue();
-    expect(button('price-list-import-apply').textContent).toContain('Appliquer l’import');
-    expect(button('price-list-import-apply').disabled).toBeTrue();
+    // Pressed with no file: the picker is marked and nothing is sent, for both buttons.
+    expect(
+      expectEmptySubmitRefusal(fixture, { button: '[data-testid="price-list-import-check"]' }),
+    ).toEqual(['pl-import-file']);
+    expect(
+      expectEmptySubmitRefusal(fixture, { button: '[data-testid="price-list-import-apply"]' }),
+    ).toEqual(['pl-import-file']);
+    http.expectNone(URL_IMPORT);
+    expect(el().textContent).toContain('Vérifiez d’abord le fichier');
+    expect(applyEnabled()).toBeFalse();
   });
 
   it('lists each refused row with its line, column and reason, and does not enable the apply', () => {
@@ -148,7 +165,9 @@ describe('PriceListImportComponent (billing-money plan PR 4)', () => {
     expect(el().querySelector('[data-testid="price-list-import-row-2"]')!.textContent).toContain(
       'Nouvel article',
     );
-    expect(button('price-list-import-apply').disabled).toBeTrue();
+    expect(applyEnabled()).toBeFalse();
+    button('price-list-import-apply').click();
+    http.expectNone(URL_IMPORT);
   });
 
   it('enables the apply only after a clean check, and a new file or option takes it back', () => {
@@ -156,28 +175,24 @@ describe('PriceListImportComponent (billing-money plan PR 4)', () => {
     button('price-list-import-check').click();
     http.expectOne((r) => r.url === URL_IMPORT).flush(DRY_RUN_CLEAN);
     fixture.detectChanges();
-    expect(button('price-list-import-apply').disabled).toBeFalse();
+    expect(applyEnabled()).toBeTrue();
 
     const replace = el().querySelector<HTMLInputElement>(
       '[data-testid="price-list-import-replace"]',
     )!;
     replace.click();
     fixture.detectChanges();
-    expect(button('price-list-import-apply').disabled)
-      .withContext('the option changed: check again')
-      .toBeTrue();
+    expect(applyEnabled()).withContext('the option changed: check again').toBeFalse();
 
     button('price-list-import-check').click();
     const again = http.expectOne((r) => r.url === URL_IMPORT);
     expect(again.request.params.get('replaceScheduled')).toBe('true');
     again.flush(DRY_RUN_CLEAN);
     fixture.detectChanges();
-    expect(button('price-list-import-apply').disabled).toBeFalse();
+    expect(applyEnabled()).toBeTrue();
 
     pick(csv('autre.csv'));
-    expect(button('price-list-import-apply').disabled)
-      .withContext('another file: check again')
-      .toBeTrue();
+    expect(applyEnabled()).withContext('another file: check again').toBeFalse();
   });
 
   it('applies with dryRun=false and tells the page', () => {
@@ -194,7 +209,7 @@ describe('PriceListImportComponent (billing-money plan PR 4)', () => {
     fixture.detectChanges();
     expect(applied.length).toBe(1);
     expect(toast.success).toHaveBeenCalled();
-    expect(button('price-list-import-apply').disabled).withContext('applied once').toBeTrue();
+    expect(applyEnabled()).withContext('applied once').toBeFalse();
   });
 
   it('shows the report of an apply refused as a whole (422)', () => {
@@ -218,22 +233,37 @@ describe('PriceListImportComponent (billing-money plan PR 4)', () => {
     expect(el().querySelector('[data-testid="price-list-import-row-2"]'))
       .withContext('only the refused rows are shown first')
       .toBeNull();
-    expect(button('price-list-import-apply').disabled).toBeTrue();
+    expect(applyEnabled()).toBeFalse();
   });
 
-  it('shows a refusal of the whole file in the server’s words', () => {
+  it('marks the file picker with the server’s reason when the whole file is refused', () => {
+    pick(csv());
+    button('price-list-import-check').click();
+    const reason = 'La ligne d’en-tête n’a pas de colonne « prix ».';
+    const refusal = fieldErrorsResponse({ file: reason });
+    http
+      .expectOne((r) => r.url === URL_IMPORT)
+      .flush(refusal.error, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'pl-import-file': reason });
+  });
+
+  it('shows a refusal that names no field in the server’s words', () => {
     pick(csv());
     button('price-list-import-check').click();
     http
       .expectOne((r) => r.url === URL_IMPORT)
       .flush(
-        { message: 'La ligne d’en-tête n’a pas de colonne « prix ».' },
-        { status: 400, statusText: 'Bad Request' },
+        {
+          message:
+            'Seuls l’administrateur de l’établissement et le comptable modifient la grille tarifaire.',
+        },
+        { status: 403, statusText: 'Forbidden' },
       );
     fixture.detectChanges();
     expect(
       el().querySelector('[data-testid="price-list-import-file-error"]')!.textContent,
-    ).toContain('La ligne d’en-tête n’a pas de colonne « prix ».');
+    ).toContain('Seuls l’administrateur');
   });
 
   it('refuses a file over 1 MB before sending it', () => {

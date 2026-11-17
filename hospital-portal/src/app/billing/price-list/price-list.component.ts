@@ -431,9 +431,11 @@ export class PriceListComponent implements OnInit {
           this.exporting.set(false);
           saveResponse(response, `grille-tarifaire-${businessToday()}.csv`);
         },
-        error: () => {
+        error: (err) => {
           this.exporting.set(false);
-          this.toast.error(this.translate.instant('BILLING.PRICE_LIST.EXPORT_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('BILLING.PRICE_LIST.EXPORT_FAILED'),
+          );
         },
       });
   }

@@ -39,6 +39,7 @@
           id="pl-import-file"
           type="file"
           accept=".csv,text/csv"
+          required
           data-testid="price-list-import-file"
           [attr.aria-describedby]="fileError() ? 'pl-import-file-error' : null"
           (change)="pickFile($event)"
@@ -71,7 +72,7 @@
             <p class="muted-note" data-testid="price-list-import-already">
               {{
                 'BILLING.PRICE_LIST.IMPORT.ALREADY_IMPORTED'
-                  | translate: { date: (r.alreadyImportedAt | serverTime | date: 'medium') }
+                  | translate: { date: (r.alreadyImportedAt | serverTime | dateTime) }
               }}
             </p>
           }
@@ -194,7 +195,10 @@
           type="button"
           class="btn-secondary"
           data-testid="price-list-import-check"
-          [disabled]="busy() !== null || !file()"
+          [disabled]="busy() !== null"
+          appSubmitGuard
+          submitGuardRequired
+          [submitGuardFields]="['pl-import-file']"
           (click)="check()"
         >
           {{
@@ -208,7 +212,10 @@
           type="button"
           class="btn-primary"
           data-testid="price-list-import-apply"
-          [disabled]="!canApply()"
+          [disabled]="busy() !== null"
+          [appSubmitGuard]="
+            canApply() ? false : ('BILLING.PRICE_LIST.IMPORT.APPLY_HINT' | translate)
+          "
           (click)="apply()"
         >
           {{
