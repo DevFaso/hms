@@ -45,7 +45,7 @@ public class CdsAcknowledgementController {
 
     @Operation(summary = "Record an acknowledgement / override of a CDS card")
     @PostMapping
-    @PreAuthorize(CLINICIAN_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')")
     public ResponseEntity<ApiResponseWrapper<CdsAcknowledgementResponseDTO>> acknowledge(
             Authentication auth,
             @Valid @RequestBody CdsAcknowledgementRequestDTO request) {

@@ -36,7 +36,7 @@ public class TreatmentController {
     private final TreatmentService treatmentService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Create a new treatment",
             description = "Creates a new medical treatment. Requires the DOCTOR role.")
     public ResponseEntity<TreatmentResponseDTO> createTreatment(
@@ -72,7 +72,7 @@ public class TreatmentController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('DOCTOR') and @treatmentSecurityService.isTreatmentCreator(authentication, #id)")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR') and @treatmentSecurityService.isTreatmentCreator(authentication, #id)")
     @Operation(summary = "Update a treatment",
             description = "Updates an existing treatment. Requires being the creator DOCTOR.")
     public ResponseEntity<TreatmentResponseDTO> updateTreatment(

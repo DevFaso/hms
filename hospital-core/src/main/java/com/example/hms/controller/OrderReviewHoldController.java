@@ -33,8 +33,9 @@ import java.util.UUID;
 @Tag(name = "Order review", description = "Orders held for a prescriber's review after a recorded death was disputed")
 public class OrderReviewHoldController {
 
-    private static final String PRESCRIBER = "hasAnyRole('DOCTOR','SURGEON','MIDWIFE')";
-    private static final String CLINICIAN = "hasAnyRole('DOCTOR','SURGEON','MIDWIFE','NURSE')";
+    private static final String PRESCRIBER =
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','MIDWIFE')";
+    private static final String CLINICIAN = "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','MIDWIFE','NURSE')";
 
     private final OrderReviewHoldService service;
 

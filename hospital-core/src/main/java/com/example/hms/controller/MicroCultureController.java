@@ -53,11 +53,10 @@ import java.util.UUID;
 public class MicroCultureController {
 
     private static final String ENTRY_ROLES =
-        "hasAnyAuthority('ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR',"
-            + "'ROLE_QUALITY_MANAGER','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')";
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR','QUALITY_MANAGER','DOCTOR','NURSE','MIDWIFE')";
 
     private static final String FINALIZE_ROLES =
-        "hasAnyAuthority('ROLE_LAB_SCIENTIST','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR','ROLE_SUPER_ADMIN')";
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_MANAGER','LAB_DIRECTOR')";
 
     private static final String READ_ROLES =
         "hasAnyAuthority('ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR',"

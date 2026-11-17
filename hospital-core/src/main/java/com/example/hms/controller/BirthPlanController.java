@@ -61,7 +61,7 @@ public class BirthPlanController {
      * @return Created birth plan with HTTP 201 status
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE','NURSE','PATIENT')")
     @Operation(summary = "Create a new birth plan", 
                description = "Allows patients to create their own birth plans or providers to create on behalf of patients.")
     public ResponseEntity<BirthPlanResponseDTO> createBirthPlan(
@@ -83,7 +83,7 @@ public class BirthPlanController {
      * @return Updated birth plan with HTTP 200 status
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE', 'NURSE', 'PATIENT')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE','NURSE','PATIENT')")
     @Operation(summary = "Update a birth plan", 
                description = "Updates an existing birth plan. If the plan was previously reviewed, the review status will be reset.")
     public ResponseEntity<BirthPlanResponseDTO> updateBirthPlan(
@@ -238,7 +238,7 @@ public class BirthPlanController {
      * @return Updated birth plan with review information with HTTP 200 status
      */
     @PostMapping("/{id}/review")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE')")
     @Operation(summary = "Provider review and co-sign birth plan", 
                description = "Allows doctors and midwives to review and co-sign a birth plan with their signature and comments.")
     public ResponseEntity<BirthPlanResponseDTO> providerReview(
@@ -260,7 +260,7 @@ public class BirthPlanController {
      * @return HTTP 204 No Content on successful deletion
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'MIDWIFE', 'PATIENT')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE','PATIENT')")
     @Operation(summary = "Delete a birth plan", 
                description = "Deletes a birth plan. Access is controlled based on user role and ownership.")
     public ResponseEntity<Void> deleteBirthPlan(

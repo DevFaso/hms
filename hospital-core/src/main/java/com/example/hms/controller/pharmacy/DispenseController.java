@@ -55,7 +55,7 @@ public class DispenseController {
     }
 
     @PostMapping("/work-queue/{prescriptionId}/claim")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Claim a work-queue prescription",
             description = "Say that the caller is preparing this order (G13). Advisory: nothing else is "
                     + "refused because of it. Claiming one's own active claim renews it.")
@@ -67,7 +67,7 @@ public class DispenseController {
     }
 
     @PostMapping("/work-queue/{prescriptionId}/claim/take-over")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Take a work-queue claim over",
             description = "Take a colleague's claim over, audited with the previous holder (G13)")
     @ApiResponse(responseCode = "200", description = "Taken over (or claimed, when nobody held it)")
@@ -78,7 +78,7 @@ public class DispenseController {
     }
 
     @PostMapping("/work-queue/{prescriptionId}/claim/release")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Release a work-queue claim",
             description = "Release one's own claim (G13). Nothing to release answers the same.")
     @ApiResponse(responseCode = "200", description = "Released, or nothing to release")
@@ -90,7 +90,7 @@ public class DispenseController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Dispense medication",
             description = "Create a dispense record, decrement stock, and update prescription status")
     @ApiResponse(responseCode = "201", description = "Medication dispensed")
@@ -118,7 +118,7 @@ public class DispenseController {
     }
 
     @PostMapping("/ready")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Mark ready for collection",
             description = "Prepare a fill (stock set aside, status PENDING) and text the patient that it is ready")
     @ApiResponse(responseCode = "201", description = "Fill prepared")
@@ -132,7 +132,7 @@ public class DispenseController {
     }
 
     @PostMapping("/{id}/hand-over")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Hand over a prepared fill",
             description = "Complete a fill prepared for collection: the patient has it")
     @ApiResponse(responseCode = "200", description = "Handed over (a repeat answers the same)")
@@ -145,7 +145,7 @@ public class DispenseController {
     }
 
     @PostMapping("/{id}/cancel-ready")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Cancel a preparation",
             description = "Cancel a fill prepared for collection; the stock is returned and the patient told")
     @ApiResponse(responseCode = "200", description = "Preparation cancelled")
@@ -216,7 +216,7 @@ public class DispenseController {
     }
 
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Cancel dispense",
             description = "Cancel a dispense and reverse stock changes. QA D1069: a reason is required.")
     @ApiResponse(responseCode = "200", description = "Dispense cancelled and stock reversed")
