@@ -14,7 +14,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Subject, Subscription, of, switchMap } from 'rxjs';
+import { Subject, Subscription, of, switchMap, forkJoin } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 
 import {
@@ -32,6 +32,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+type WorklistStatus = RoiRequestStatus | 'ALL';
 type DecisionKind = 'fulfil' | 'deny' | 'cancel';
 
 /**
@@ -70,13 +71,13 @@ export class RoiComponent implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
-  readonly statuses: RoiRequestStatus[] = ['PENDING', 'FULFILLED', 'DENIED', 'CANCELLED'];
+  readonly statuses: WorklistStatus[] = ['ALL', 'PENDING', 'FULFILLED', 'DENIED', 'CANCELLED'];
   readonly requesterTypes: RoiRequesterType[] = ['THIRD_PARTY', 'PATIENT'];
 
   /** One server page; the server caps at 200 anyway. */
   private static readonly PAGE_SIZE = 200;
 
-  activeStatus = signal<RoiRequestStatus>('PENDING');
+  activeStatus = signal<WorklistStatus>('PENDING');
   rows = signal<RoiRequest[]>([]);
   total = signal(0);
   loading = signal(false);
@@ -138,7 +139,7 @@ export class RoiComponent implements OnInit, OnDestroy {
 
   readonly truncated = computed(() => this.total() > this.rows().length);
 
-  private readonly load$ = new Subject<RoiRequestStatus>();
+  private readonly load$ = new Subject<WorklistStatus>();
   private loadSub?: Subscription;
 
   ngOnInit(): void {
@@ -150,7 +151,26 @@ export class RoiComponent implements OnInit, OnDestroy {
         switchMap((status) => {
           this.loading.set(true);
           this.loadFailed.set(false);
-          return this.roiService.worklist(status, 0, RoiComponent.PAGE_SIZE).pipe(
+          const source =
+            status === 'ALL'
+              ? forkJoin(
+                  (['PENDING', 'FULFILLED', 'DENIED', 'CANCELLED'] as RoiRequestStatus[]).map(
+                    (value) => this.roiService.worklist(value, 0, RoiComponent.PAGE_SIZE),
+                  ),
+                ).pipe(
+                  map((pages) => ({
+                    content: pages
+                      .flatMap((page) => page.content ?? [])
+                      .sort(
+                        (a, b) =>
+                          a.requestedOn.localeCompare(b.requestedOn) || a.id.localeCompare(b.id),
+                      )
+                      .slice(0, RoiComponent.PAGE_SIZE),
+                    totalElements: pages.reduce((sum, page) => sum + (page.totalElements ?? 0), 0),
+                  })),
+                )
+              : this.roiService.worklist(status, 0, RoiComponent.PAGE_SIZE);
+          return source.pipe(
             map((page) => ({
               rows: page.content ?? [],
               total: page.totalElements ?? 0,
@@ -175,7 +195,7 @@ export class RoiComponent implements OnInit, OnDestroy {
     this.loadSub?.unsubscribe();
   }
 
-  setStatus(status: RoiRequestStatus): void {
+  setStatus(status: WorklistStatus): void {
     this.activeStatus.set(status);
     this.clearFilters();
     this.load$.next(status);
@@ -306,8 +326,10 @@ export class RoiComponent implements OnInit, OnDestroy {
     return RoiComponent.ACTION_KEYS[kind];
   }
 
-  statusKey(status: RoiRequestStatus): string {
+  statusKey(status: WorklistStatus): string {
     switch (status) {
+      case 'ALL':
+        return 'ROI.STATUS_ALL';
       case 'PENDING':
         return 'ROI.STATUS_PENDING';
       case 'FULFILLED':

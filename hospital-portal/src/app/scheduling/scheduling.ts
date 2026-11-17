@@ -5,6 +5,7 @@ import { debounceTime, Subject, switchMap, of } from 'rxjs';
 import {
   StaffSchedulingService,
   StaffShiftResponse,
+  StaffShiftRequest,
   StaffLeaveResponse,
   StaffLeaveStatus,
   BulkShiftRequest,
@@ -74,6 +75,7 @@ export class SchedulingComponent implements OnInit {
   leaveFilter = signal<'ALL' | StaffLeaveStatus>('ALL');
 
   // ── Bulk Schedule Modal ──────────────────────────────────────────────────
+  singleShiftMode = signal(false);
   bulkModalOpen = signal(false);
   bulkSubmitting = signal(false);
   bulkResult = signal<BulkShiftResult | null>(null);
@@ -179,8 +181,23 @@ export class SchedulingComponent implements OnInit {
     'SUNDAY',
   ];
 
+  openShiftModal(
+    date = this.weekOffset() === 0 ? this.toISODate(new Date()) : this.getWeekRange().start,
+  ): void {
+    if (!this.canManageSchedules() || this.bulkSubmitting()) return;
+    this.openBulkModal();
+    this.singleShiftMode.set(true);
+    this.bulk.startDate = date;
+    this.bulk.endDate = date;
+    this.bulk.startTime = '08:00';
+    this.bulk.endTime = '16:00';
+    this.bulk.shiftType = 'MORNING';
+    this.bulk.notes = '';
+  }
+
   openBulkModal(): void {
     if (!this.canManageSchedules()) return;
+    this.singleShiftMode.set(false);
     this.bulkResult.set(null);
     this.clearStaff();
     this.bulkModalOpen.set(true);
@@ -201,6 +218,7 @@ export class SchedulingComponent implements OnInit {
   }
 
   closeBulkModal(): void {
+    if (this.bulkSubmitting()) return;
     this.bulkModalOpen.set(false);
   }
 
@@ -228,7 +246,49 @@ export class SchedulingComponent implements OnInit {
     this.bulk.daysOfWeek = [...this.allDays];
   }
 
+  submitShift(): void {
+    if (!this.canManageSchedules() || this.bulkSubmitting()) return;
+    if (!this.bulk.staffId || !this.bulk.hospitalId) {
+      this.toast.error(this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'));
+      return;
+    }
+    if (
+      !this.bulk.startDate ||
+      !this.bulk.startTime ||
+      !this.bulk.endTime ||
+      this.bulk.startTime === this.bulk.endTime
+    ) {
+      this.toast.error(this.translate.instant('SCHEDULING.TOAST.SHIFT_FIELDS_REQUIRED'));
+      return;
+    }
+    const request: StaffShiftRequest = {
+      staffId: this.bulk.staffId,
+      hospitalId: this.bulk.hospitalId,
+      shiftDate: this.bulk.startDate,
+      startTime: this.bulk.startTime,
+      endTime: this.bulk.endTime,
+      shiftType: this.bulk.shiftType,
+      notes: this.bulk.notes,
+    };
+    this.bulkSubmitting.set(true);
+    this.schedulingService.createShift(request).subscribe({
+      next: () => {
+        this.bulkSubmitting.set(false);
+        this.closeBulkModal();
+        this.toast.success(this.translate.instant('SCHEDULING.TOAST.SHIFT_CREATED'));
+        this.loadShifts();
+      },
+      error: (err) => {
+        this.bulkSubmitting.set(false);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('SCHEDULING.TOAST.SHIFT_FAILED'),
+        );
+      },
+    });
+  }
+
   submitBulk(): void {
+    if (!this.canManageSchedules() || this.bulkSubmitting()) return;
     if (!this.bulk.staffId || !this.bulk.hospitalId) {
       this.toast.error(this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'));
       return;

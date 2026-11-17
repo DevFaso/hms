@@ -152,6 +152,24 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   readonly searchTerm = signal('');
   readonly departmentFilter = signal('');
   readonly stageFilter = signal('');
+  readonly providerFilter = signal('');
+  readonly longestFirst = signal(false);
+  readonly providers = computed(() =>
+    [
+      ...new Set(
+        this.columns
+          .flatMap((c) => this.getColumnItems(c.key))
+          .map((i) => i.assignedProvider)
+          .filter((v): v is string => !!v),
+      ),
+    ].sort(),
+  );
+  readonly longestElapsed = computed(() =>
+    Math.max(
+      0,
+      ...this.columns.flatMap((c) => this.getColumnItems(c.key)).map((i) => i.currentWaitMinutes),
+    ),
+  );
   readonly visibleColumns = computed(() =>
     this.columns.filter((c) => !this.stageFilter() || c.key === this.stageFilter()),
   );
@@ -171,9 +189,10 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   );
   getVisibleColumnItems(key: string): PatientTrackerItem[] {
     const term = this.searchTerm().trim().toLocaleLowerCase();
-    return this.getColumnItems(key).filter(
+    const items = this.getColumnItems(key).filter(
       (item) =>
         (!this.departmentFilter() || item.departmentName === this.departmentFilter()) &&
+        (!this.providerFilter() || item.assignedProvider === this.providerFilter()) &&
         (!term ||
           [
             item.patientName,
@@ -183,11 +202,16 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
             item.departmentName,
           ].some((v) => v?.toLocaleLowerCase().includes(term))),
     );
+    return this.longestFirst()
+      ? items.sort((a, b) => b.currentWaitMinutes - a.currentWaitMinutes)
+      : items;
   }
   clearFilters(): void {
     this.searchTerm.set('');
     this.departmentFilter.set('');
     this.stageFilter.set('');
+    this.providerFilter.set('');
+    this.longestFirst.set(false);
   }
   formatWait(minutes: number): string {
     const value = Math.round(minutes);

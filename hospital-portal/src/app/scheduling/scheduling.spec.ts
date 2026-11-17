@@ -54,6 +54,7 @@ describe('SchedulingComponent', () => {
 
   beforeEach(async () => {
     schedulingSpy = jasmine.createSpyObj('StaffSchedulingService', [
+      'createShift',
       'listShifts',
       'listLeaves',
       'bulkScheduleShifts',
@@ -94,6 +95,30 @@ describe('SchedulingComponent', () => {
 
     fixture = TestBed.createComponent(SchedulingComponent);
     component = fixture.componentInstance;
+  });
+
+  it('creates a single shift without calling bulk scheduling and resets the next bulk mode', () => {
+    fixture.detectChanges();
+    schedulingSpy.createShift.and.returnValue(of(mockShift()));
+    component.openShiftModal('2026-11-16');
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    component.submitShift();
+    expect(schedulingSpy.createShift).toHaveBeenCalledWith(
+      jasmine.objectContaining({ shiftDate: '2026-11-16', hospitalId: 'h1' }),
+    );
+    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+    expect(component.bulkModalOpen()).toBeFalse();
+    component.openBulkModal();
+    expect(component.singleShiftMode()).toBeFalse();
+  });
+
+  it('refuses single-shift opening and submission when scheduling capability is absent', () => {
+    component.canManageSchedules.set(false);
+    component.openShiftModal();
+    component.submitShift();
+    expect(component.bulkModalOpen()).toBeFalse();
+    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
   });
 
   it('should create', () => {
@@ -192,6 +217,7 @@ describe('SchedulingComponent', () => {
   });
 
   it('submitBulk validates staff, date range, and days of week', () => {
+    fixture.detectChanges();
     component.bulk.staffId = '';
     component.submitBulk();
     expect(toastSpy.error).toHaveBeenCalledTimes(1);
@@ -227,6 +253,7 @@ describe('SchedulingComponent', () => {
   });
 
   it('submitBulk flags an all-skipped result as an error', () => {
+    fixture.detectChanges();
     component.bulk.staffId = 'st1';
     component.bulk.hospitalId = 'h1';
     component.bulk.startDate = '2026-08-17';

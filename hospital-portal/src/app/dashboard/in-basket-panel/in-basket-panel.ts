@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   signal,
+  input,
   computed,
   untracked,
 } from '@angular/core';
@@ -50,6 +51,7 @@ export class InBasketPanelComponent {
   private loadRequest = 0;
 
   /* ── state ── */
+  readonly showTitle = input(true);
   items = signal<InBasketItem[]>([]);
   summary = signal<InBasketSummary>({
     totalUnread: 0,
@@ -59,6 +61,8 @@ export class InBasketPanelComponent {
     taskUnread: 0,
   });
   loading = signal(false);
+  loadError = signal(false);
+  lastUpdated = signal<string | null>(null);
   activeFilter = signal<string | null>(null);
 
   /* ── derived ── */
@@ -112,6 +116,7 @@ export class InBasketPanelComponent {
     effect(() => {
       this.roleContext.effectiveHospitalIdForRequest();
       untracked(() => {
+        this.lastUpdated.set(null);
         this.items.set([]);
         this.summary.set({
           totalUnread: 0,
@@ -178,18 +183,13 @@ export class InBasketPanelComponent {
   }
 
   typeIcon(type: string): string {
-    switch (type) {
-      case 'RESULT':
-        return '🧪';
-      case 'ORDER':
-        return '📋';
-      case 'MESSAGE':
-        return '✉️';
-      case 'TASK':
-        return '✅';
-      default:
-        return '📌';
-    }
+    const icons: Record<string, string> = {
+      RESULT: 'science',
+      ORDER: 'prescriptions',
+      MESSAGE: 'mail',
+      TASK: 'task_alt',
+    };
+    return icons[type] ?? 'inbox';
   }
 
   formatDate(iso: string | null): string {
@@ -215,6 +215,7 @@ export class InBasketPanelComponent {
   private loadData(): void {
     const request = ++this.loadRequest;
     this.loading.set(true);
+    this.loadError.set(false);
     // QA D1347: every in-basket item (all pages), not the server's first 20.
     allRows((page, size) =>
       this.inBasketService.getItems(undefined, undefined, undefined, page, size),
@@ -222,10 +223,14 @@ export class InBasketPanelComponent {
       next: (items) => {
         if (request !== this.loadRequest) return;
         this.items.set(items);
+        this.lastUpdated.set(new Date().toISOString());
         this.loading.set(false);
       },
       error: () => {
-        if (request === this.loadRequest) this.loading.set(false);
+        if (request === this.loadRequest) {
+          this.loading.set(false);
+          this.loadError.set(true);
+        }
       },
     });
     this.loadSummary();
@@ -236,6 +241,9 @@ export class InBasketPanelComponent {
     this.inBasketService.getSummary().subscribe({
       next: (s) => {
         if (request === this.loadRequest) this.summary.set(s);
+      },
+      error: () => {
+        if (request === this.loadRequest) this.loadError.set(true);
       },
     });
   }

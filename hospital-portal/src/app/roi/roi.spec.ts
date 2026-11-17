@@ -110,6 +110,37 @@ describe('RoiComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('loads every status for All and merges by request date while retaining the server total', () => {
+    fixture.detectChanges();
+    roiService.worklist.calls.reset();
+    roiService.worklist.and.callFake((status) =>
+      of(
+        page([
+          request({
+            id: status!,
+            status: status!,
+            requestedOn: status === 'DENIED' ? '2026-08-01' : '2026-09-01',
+          }),
+        ]),
+      ),
+    );
+    component.setStatus('ALL');
+    expect(roiService.worklist.calls.count()).toBe(4);
+    expect(component.rows().length).toBe(4);
+    expect(component.rows()[0].status).toBe('DENIED');
+    expect(component.total()).toBe(4);
+  });
+
+  it('does not present a partial All queue as complete when one status fails', () => {
+    fixture.detectChanges();
+    roiService.worklist.and.callFake((status) =>
+      status === 'DENIED' ? throwError(() => new Error('offline')) : of(page([request()])),
+    );
+    component.setStatus('ALL');
+    expect(component.loadFailed()).toBeTrue();
+    expect(component.rows()).toEqual([]);
+  });
+
   it('loads the PENDING queue on init', () => {
     fixture.detectChanges();
     expect(roiService.worklist).toHaveBeenCalledWith('PENDING', 0, 200);

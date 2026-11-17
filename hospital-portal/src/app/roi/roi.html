@@ -230,6 +230,10 @@
     data-testid="intake-modal"
   >
     <h2>{{ 'ROI.LOG_REQUEST' | translate }}</h2>
+    <p class="hospital-context">
+      {{ 'ROI.TARGET_HOSPITAL' | translate }}:
+      {{ 'ROI.HOSPITAL_SELECTED' | translate }}
+    </p>
     <p class="hint">{{ 'ROI.LOG_HINT' | translate }}</p>
 
     <label class="field" for="roi-patient-picker">
@@ -349,6 +353,11 @@
     data-testid="decision-modal"
   >
     <h2>{{ decisionActionKey(d.kind) | translate }} — {{ d.row.patientName }}</h2>
+    <p class="hospital-context">
+      {{ 'ROI.TARGET_HOSPITAL' | translate }}:
+      {{ d.row.hospitalName || ('ROI.HOSPITAL_SELECTED' | translate) }}
+    </p>
+    <p class="hint">{{ 'ROI.ACTOR_HELP' | translate }}</p>
     @if (d.kind === 'fulfil') {
       <p class="hint">{{ 'ROI.FULFIL_HINT' | translate }}</p>
     } @else if (d.kind === 'deny') {

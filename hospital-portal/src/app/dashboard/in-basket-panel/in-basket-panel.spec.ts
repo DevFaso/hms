@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 import { InBasketPanelComponent } from './in-basket-panel';
 import {
   InBasketService,
@@ -181,11 +181,11 @@ describe('InBasketPanelComponent', () => {
   });
 
   it('should return correct type icon', () => {
-    expect(component.typeIcon('RESULT')).toBe('🧪');
-    expect(component.typeIcon('ORDER')).toBe('📋');
-    expect(component.typeIcon('MESSAGE')).toBe('✉️');
-    expect(component.typeIcon('TASK')).toBe('✅');
-    expect(component.typeIcon('UNKNOWN')).toBe('📌');
+    expect(component.typeIcon('RESULT')).toBe('science');
+    expect(component.typeIcon('ORDER')).toBe('prescriptions');
+    expect(component.typeIcon('MESSAGE')).toBe('mail');
+    expect(component.typeIcon('TASK')).toBe('task_alt');
+    expect(component.typeIcon('UNKNOWN')).toBe('inbox');
   });
 
   it('formats dates in the product language by default — French, 24-hour', () => {

@@ -141,7 +141,14 @@
     "SORT_BY": "Ordenar por",
     "SORT_NAME": "Nombre de unidad A–Z",
     "SORT_AVAILABLE": "Más camas disponibles",
-    "SORT_OCCUPIED": "Más camas ocupadas"
+    "SORT_OCCUPIED": "Más camas ocupadas",
+    "CAPACITY_TITLE": "Resumen de capacidad",
+    "CAPACITY_SCOPE_HELP": "Los recuentos incluyen camas activas de unidades activas y no dependen del filtro de unidades.",
+    "OTHER_STATES": "Otros estados de cama",
+    "CAPACITY_FILTER_HELP": "Unidades activas con camas que coinciden con la disponibilidad seleccionada.",
+    "NO_MATCHING_UNITS": "Ninguna unidad coincide con este filtro de disponibilidad.",
+    "OCCUPANCY": "Ocupación",
+    "OCCUPIED_RATIO": "{{occupied}} / {{total}} ocupadas"
   },
   "ERROR_403": {
     "BACK": "Volver al panel",
@@ -1422,7 +1429,11 @@
     "NO_ROOM_ASSIGNED": "Sin habitación asignada",
     "DIAGNOSIS_FROM_SUMMARY": "El diagnóstico redactado en el resumen de alta de esta estancia. Modifíquelo en el resumen.",
     "INSTRUCTIONS_IN_SUMMARY": "Ya en el resumen de alta",
-    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "El resumen de alta de esta estancia está finalizado: sus instrucciones son las que recibe el paciente."
+    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "El resumen de alta de esta estancia está finalizado: sus instrucciones son las que recibe el paciente.",
+    "OVERVIEW_TITLE": "Admisiones cargadas",
+    "MATCHING_COUNT": "Admisiones coincidentes: {{count}}",
+    "MISSING_BED_SUBSET": "Activas sin datos de cama",
+    "MISSING_BED_HINT": "Los datos de cama faltantes corresponden a un subconjunto de admisiones activas ya incluido en su total."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "No se pudieron cargar los indicadores. Inténtelo de nuevo.",
@@ -3520,7 +3531,18 @@
     "ROWS_PER_PAGE": "Filas por página",
     "PREVIOUS_PAGE": "Página anterior",
     "NEXT_PAGE": "Página siguiente",
-    "PAGE_OF": "Página {{page}} de {{total}}"
+    "PAGE_OF": "Página {{page}} de {{total}}",
+    "HISTORY_NOTE_CREATED": "Creada",
+    "HISTORY_NOTE_UPDATED": "Actualizada",
+    "HISTORY_NOTE_ADDENDUM": "Adenda registrada",
+    "HISTORY_NOTE_SIGNED": "Firmada",
+    "HISTORY_NOTE_COSIGNED": "Cofirmada",
+    "OVERVIEW_TITLE": "Consultas cargadas",
+    "LIST_TITLE": "Lista de consultas",
+    "MATCHING_COUNT": "Consultas coincidentes: {{count}}",
+    "CURRENT_NOTE": "Nota clínica actual",
+    "NOTE_STATUS_SIGNED": "Nota firmada",
+    "NOTE_STATUS_UNSIGNED": "Nota sin firmar"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmar contraseña",
@@ -5312,7 +5334,14 @@
     "EMPTY_HELP": "Elija otro estado o registre una nueva solicitud.",
     "REQUEST_DETAILS": "Motivo y alcance",
     "RESULTS": "Mostradas: {{shown}} / {{loaded}} solicitudes cargadas",
-    "LOADED_SEARCH": "La búsqueda se aplica solo a las solicitudes cargadas"
+    "LOADED_SEARCH": "La búsqueda se aplica solo a las solicitudes cargadas",
+    "STATUS_ALL": "Todos los estados",
+    "LOADED": "Solicitudes cargadas",
+    "COUNT_SCOPE_HELP": "Los recuentos por solicitante corresponden a solicitudes cargadas del estado y hospital seleccionados.",
+    "SHOW_ALL": "Ver todas las solicitudes",
+    "TARGET_HOSPITAL": "Hospital destinatario",
+    "HOSPITAL_SELECTED": "Hospital seleccionado",
+    "ACTOR_HELP": "La decisión se registra con su cuenta autenticada. Seleccionar un hospital no cambia su identidad de actuación."
   },
   "PATIENTS": {
     "DECEASED": "Fallecido",
@@ -5596,7 +5625,8 @@
     "STANDARD_ACCESS": "Se aplican los controles de acceso habituales a este expediente.",
     "MANAGE_ACCESS": "Gestionar accesos",
     "CLINICAL_ESSENTIALS": "Resumen clínico",
-    "CLINICAL_SUMMARY_HELP": "Las alertas clínicas permanecen visibles arriba. Abra el expediente detallado para revisar la atención documentada."
+    "CLINICAL_SUMMARY_HELP": "Las alertas clínicas permanecen visibles arriba. Abra el expediente detallado para revisar la atención documentada.",
+    "RECORD_ACTIONS": "Más acciones"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",
@@ -8959,8 +8989,16 @@
       "BULK_ALL_SKIPPED": "No se crearon turnos. Todas las fechas candidatas fueron omitidas.",
       "BULK_FAILED": "La programación en bloque falló. Inténtelo de nuevo.",
       "SHIFTS_LOAD_FAILED": "Error al cargar los turnos",
-      "LEAVE_LOAD_FAILED": "Error al cargar las solicitudes de licencia"
-    }
+      "LEAVE_LOAD_FAILED": "Error al cargar las solicitudes de licencia",
+      "SHIFT_FIELDS_REQUIRED": "Seleccione una fecha y horas de inicio y fin diferentes.",
+      "SHIFT_CREATED": "Turno creado.",
+      "SHIFT_FAILED": "No se pudo crear el turno. Inténtelo de nuevo."
+    },
+    "ADD_SHIFT": "Agregar turno",
+    "SINGLE_SUBTITLE": "Asigne un miembro del personal a un turno.",
+    "EMPTY_WEEK_TITLE": "No hay turnos programados esta semana",
+    "EMPTY_WEEK_HINT": "Agregue el primer turno o use la programación masiva para completar la semana.",
+    "NO_SHIFTS_PLANNED": "No hay turnos programados"
   },
   "SETUP": {
     "CHOOSE_USERNAME": "Elegir nombre de usuario",
@@ -9130,7 +9168,19 @@
     "PICK_REPORT": "Elija un informe para firmar",
     "SIGNABLE_LOADING": "Cargando sus informes…",
     "NO_SIGNABLE_REPORTS": "No tiene ningún informe sin firmar en este hospital.",
-    "SIGNABLE_LOAD_ERROR": "No se pudieron cargar sus informes para firmar."
+    "SIGNABLE_LOAD_ERROR": "No se pudieron cargar sus informes para firmar.",
+    "VERIFY_UNAVAILABLE": "No se pudo completar la verificación. Inténtelo de nuevo; no se ha determinado la validez de la firma.",
+    "LOOKUP_TITLE": "Consultar firmas de un informe",
+    "LOOKUP_HELP": "Consulte si un informe tiene firmas y quién lo firmó. Use Verificar en una firma para verificar su texto original.",
+    "KNOWN_REPORTS": "Informes de la lista de firmas cargada",
+    "LOOKUP_LOADING": "Consultando...",
+    "INVALID_REPORT_ID": "Introduzca un UUID de informe válido (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
+    "RETRY": "Reintentar",
+    "MATCHING_COUNT": "Firmas coincidentes: {{count}}",
+    "RESET_FILTERS": "Restablecer filtros",
+    "LOAD_ERROR": "No se pudieron cargar las firmas. Inténtelo de nuevo.",
+    "NO_MATCHES": "Ninguna firma coincide con estos filtros.",
+    "EMPTY_HELP": "Las firmas aparecerán aquí cuando se firmen informes. También puede consultar un informe por su referencia."
   },
   "STAFF": {
     "ADD_STAFF": "Agregar personal",
@@ -9550,7 +9600,16 @@
     "NO_PATIENTS": "Sin pacientes",
     "COLUMN_PATIENTS": "Pacientes: {{column}}",
     "START_VISIT": "Iniciar la consulta",
-    "START_FAILED": "No se pudo iniciar la consulta."
+    "START_FAILED": "No se pudo iniciar la consulta.",
+    "AVG_ELAPSED": "Tiempo transcurrido medio",
+    "ELAPSED_HELP": "El tiempo se mide desde la llegada o desde la fecha de consulta si falta la llegada. La media incluye a todos los pacientes activos de este tablero hospitalario.",
+    "LONGEST_ELAPSED": "Mayor tiempo transcurrido",
+    "ALL_PROVIDERS": "Todos los profesionales",
+    "ACUITY_FILTER": "Urgencia",
+    "ALL_ACUITIES": "Todos los niveles de urgencia",
+    "LONGEST_FIRST": "Mayor tiempo transcurrido primero",
+    "ELAPSED": "Desde la llegada / fecha de consulta",
+    "STAGE_TIME_UNAVAILABLE": "El tiempo en la etapa actual no está disponible."
   },
   "CHECKOUT": {
     "TITLE": "Alta del paciente",
@@ -9634,7 +9693,18 @@
     "title": "Bandeja de entrada",
     "unreadCount": "Número de elementos no leídos",
     "urgent": "Urgente",
-    "openVisitToSign": "Abrir la visita para firmar"
+    "openVisitToSign": "Abrir la visita para firmar",
+    "lastUpdated": "Última actualización: {{time}}",
+    "refreshing": "Actualizando...",
+    "loadFailed": "No se pudo actualizar su bandeja de entrada. Inténtelo de nuevo.",
+    "staleData": "Los elementos y recuentos cargados anteriormente pueden estar desactualizados.",
+    "retry": "Reintentar",
+    "emptyTitle": "Su bandeja de entrada está vacía",
+    "emptyHint": "Los resultados, prescripciones, mensajes y tareas dirigidos a usted aparecerán aquí.",
+    "emptyCategory": "No hay elementos en esta categoría",
+    "emptyCategoryHint": "Elija otra categoría o vea todos los elementos.",
+    "showAll": "Ver todos",
+    "summaryLoadFailed": "No se pudieron actualizar los recuentos de elementos no leídos. Actualice la bandeja para reintentar."
   },
   "common": {
     "loading": "Cargando…"
@@ -9784,7 +9854,12 @@
     "TITLE": "Alta",
     "WARNING_SIGNS": "Signos de alarma",
     "WOUND_CARE": "Cuidado de heridas",
-    "NOT_ADMITTED": "Este paciente no tiene ninguna hospitalización en curso aquí: el alta solo se solicita para un paciente hospitalizado."
+    "NOT_ADMITTED": "Este paciente no tiene ninguna hospitalización en curso aquí: el alta solo se solicita para un paciente hospitalizado.",
+    "OVERVIEW_TITLE": "Resumen de altas",
+    "COUNT_SCOPE_HELP": "Los recuentos corresponden a solicitudes y resúmenes cargados según sus filtros respectivos. La aprobación de solicitudes y la finalización de resúmenes son pasos distintos.",
+    "REQUESTS_LOADED": "Solicitudes cargadas",
+    "NO_FILTERED_APPROVALS": "No hay solicitudes con estado: {{status}}",
+    "SHOW_ALL_REQUESTS": "Ver todas las solicitudes"
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Las alergias registradas en otros hospitales no se muestran: este paciente rechazó compartir su historial. Esta lista puede estar incompleta.",
@@ -10758,7 +10833,14 @@
     "LIMIT_NOTICE": "Se cargaron 200 registros. Puede haber más; la búsqueda y los contadores solo cubren este conjunto.",
     "RESULT_RANGE": "{{start}}–{{end}} de {{total}} registros cargados",
     "ROWS_PER_PAGE": "Filas por página",
-    "PAGE_OF": "Página {{page}} de {{total}}"
+    "PAGE_OF": "Página {{page}} de {{total}}",
+    "OVERVIEW_TITLE": "Inscripciones y estancias",
+    "COUNT_SCOPE_HELP": "Se cargan hasta {{limit}} inscripciones para el filtro de actividad seleccionado. Los recuentos de estancia corresponden a este conjunto; una inscripción activa no significa que el paciente esté ingresado.",
+    "LOADED_COUNT": "Inscripciones cargadas",
+    "LOAD_LIMIT_NOTICE": "Se muestran las primeras {{limit}} inscripciones. Puede haber más coincidencias.",
+    "REGISTRATION_STATUS": "Estado de inscripción",
+    "NOT_RECORDED": "Sin registrar",
+    "OPEN_PATIENT_RECORD": "Abrir expediente"
   },
   "COVERAGE": {
     "PROVIDER_DEFAULTS_TO_PAYER": "Por defecto, el código de la aseguradora",

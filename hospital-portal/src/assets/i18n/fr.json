@@ -141,7 +141,14 @@
     "SORT_BY": "Trier par",
     "SORT_NAME": "Nom de l’unité A–Z",
     "SORT_AVAILABLE": "Plus de lits disponibles",
-    "SORT_OCCUPIED": "Plus de lits occupés"
+    "SORT_OCCUPIED": "Plus de lits occupés",
+    "CAPACITY_TITLE": "Vue d’ensemble des capacités",
+    "CAPACITY_SCOPE_HELP": "Les compteurs incluent les lits actifs des unités actives et restent indépendants du filtre des unités.",
+    "OTHER_STATES": "Autres états des lits",
+    "CAPACITY_FILTER_HELP": "Unités actives ayant des lits correspondant à la disponibilité choisie.",
+    "NO_MATCHING_UNITS": "Aucune unité ne correspond à ce filtre de disponibilité.",
+    "OCCUPANCY": "Occupation",
+    "OCCUPIED_RATIO": "{{occupied}} / {{total}} occupés"
   },
   "ERROR_403": {
     "BACK": "Retour au tableau de bord",
@@ -1422,7 +1429,11 @@
     "NO_ROOM_ASSIGNED": "Aucune chambre attribuée",
     "DIAGNOSIS_FROM_SUMMARY": "Le diagnostic rédigé dans le résumé de sortie de ce séjour. Modifiez-le dans le résumé.",
     "INSTRUCTIONS_IN_SUMMARY": "Déjà dans le résumé de sortie",
-    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "Le résumé de sortie de ce séjour est finalisé : ses consignes sont celles que reçoit le patient."
+    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "Le résumé de sortie de ce séjour est finalisé : ses consignes sont celles que reçoit le patient.",
+    "OVERVIEW_TITLE": "Admissions chargées",
+    "MATCHING_COUNT": "Admissions correspondantes : {{count}}",
+    "MISSING_BED_SUBSET": "Actifs : lit non renseigné",
+    "MISSING_BED_HINT": "Les lits non renseignés concernent un sous-ensemble des admissions actives, déjà compris dans leur total."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "Impossible de charger les indicateurs. Réessayez.",
@@ -3520,7 +3531,18 @@
     "ROWS_PER_PAGE": "Lignes par page",
     "PREVIOUS_PAGE": "Page précédente",
     "NEXT_PAGE": "Page suivante",
-    "PAGE_OF": "Page {{page}} sur {{total}}"
+    "PAGE_OF": "Page {{page}} sur {{total}}",
+    "HISTORY_NOTE_CREATED": "Créée",
+    "HISTORY_NOTE_UPDATED": "Modifiée",
+    "HISTORY_NOTE_ADDENDUM": "Addendum enregistré",
+    "HISTORY_NOTE_SIGNED": "Signée",
+    "HISTORY_NOTE_COSIGNED": "Cosignée",
+    "OVERVIEW_TITLE": "Consultations chargées",
+    "LIST_TITLE": "Liste des consultations",
+    "MATCHING_COUNT": "Consultations correspondantes : {{count}}",
+    "CURRENT_NOTE": "Note clinique actuelle",
+    "NOTE_STATUS_SIGNED": "Note signée",
+    "NOTE_STATUS_UNSIGNED": "Note non signée"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
@@ -5312,7 +5334,14 @@
     "EMPTY_HELP": "Choisissez un autre statut ou enregistrez une nouvelle demande.",
     "REQUEST_DETAILS": "Motif et périmètre",
     "RESULTS": "Affichées : {{shown}} / {{loaded}} demandes chargées",
-    "LOADED_SEARCH": "La recherche porte sur les demandes chargées uniquement"
+    "LOADED_SEARCH": "La recherche porte sur les demandes chargées uniquement",
+    "STATUS_ALL": "Tous les statuts",
+    "LOADED": "Demandes chargées",
+    "COUNT_SCOPE_HELP": "Les compteurs par demandeur portent sur les demandes chargées pour le statut et l’hôpital sélectionnés.",
+    "SHOW_ALL": "Voir toutes les demandes",
+    "TARGET_HOSPITAL": "Hôpital concerné",
+    "HOSPITAL_SELECTED": "Hôpital sélectionné",
+    "ACTOR_HELP": "La décision est enregistrée sous votre compte authentifié. Le choix d’un hôpital ne change pas votre identité d’intervention."
   },
   "PATIENTS": {
     "DECEASED": "Décédé",
@@ -5596,7 +5625,8 @@
     "STANDARD_ACCESS": "Les contrôles d’accès habituels s’appliquent à ce dossier.",
     "MANAGE_ACCESS": "Gérer les accès",
     "CLINICAL_ESSENTIALS": "L’essentiel clinique",
-    "CLINICAL_SUMMARY_HELP": "Les alertes cliniques restent visibles ci-dessus. Ouvrez le dossier détaillé pour consulter les soins documentés."
+    "CLINICAL_SUMMARY_HELP": "Les alertes cliniques restent visibles ci-dessus. Ouvrez le dossier détaillé pour consulter les soins documentés.",
+    "RECORD_ACTIONS": "Plus d’actions"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",
@@ -8959,8 +8989,16 @@
       "BULK_ALL_SKIPPED": "Aucun quart n'a été créé. Toutes les dates candidates ont été ignorées.",
       "BULK_FAILED": "La planification en masse a échoué. Veuillez réessayer.",
       "SHIFTS_LOAD_FAILED": "Échec du chargement des quarts",
-      "LEAVE_LOAD_FAILED": "Échec du chargement des demandes de congé"
-    }
+      "LEAVE_LOAD_FAILED": "Échec du chargement des demandes de congé",
+      "SHIFT_FIELDS_REQUIRED": "Sélectionnez une date et des heures de début et de fin différentes.",
+      "SHIFT_CREATED": "Quart créé.",
+      "SHIFT_FAILED": "Impossible de créer le quart. Veuillez réessayer."
+    },
+    "ADD_SHIFT": "Ajouter un quart",
+    "SINGLE_SUBTITLE": "Affectez un membre du personnel à un quart.",
+    "EMPTY_WEEK_TITLE": "Aucun quart planifié cette semaine",
+    "EMPTY_WEEK_HINT": "Ajoutez un premier quart ou utilisez la planification en masse pour remplir la semaine.",
+    "NO_SHIFTS_PLANNED": "Aucun quart planifié"
   },
   "SETUP": {
     "CHOOSE_USERNAME": "Choisir un nom d'utilisateur",
@@ -9090,7 +9128,7 @@
     "SIGNED_AT": "Signé le",
     "SIGNED_BY": "Signé par",
     "SIGNER": "Signataire",
-    "SUBTITLE": "Gérer les signatures électroniques et les certificats",
+    "SUBTITLE": "Gérer les signatures des rapports et leur vérification",
     "TITLE": "Signatures électroniques",
     "VALID": "Valide",
     "VALID_RESULT": "Valide",
@@ -9130,7 +9168,19 @@
     "PICK_REPORT": "Choisissez un rapport à signer",
     "SIGNABLE_LOADING": "Chargement de vos rapports…",
     "NO_SIGNABLE_REPORTS": "Vous n’avez aucun rapport non signé à signer dans cet établissement.",
-    "SIGNABLE_LOAD_ERROR": "Impossible de charger vos rapports à signer."
+    "SIGNABLE_LOAD_ERROR": "Impossible de charger vos rapports à signer.",
+    "VERIFY_UNAVAILABLE": "La vérification n’a pas pu aboutir. Veuillez réessayer ; la validité de la signature n’a pas été déterminée.",
+    "LOOKUP_TITLE": "Consulter les signatures d’un rapport",
+    "LOOKUP_HELP": "Consultez les signatures d’un rapport et leurs signataires. Utilisez l’action Vérifier sur une signature pour vérifier son texte original.",
+    "KNOWN_REPORTS": "Rapports de la liste de signatures chargée",
+    "LOOKUP_LOADING": "Recherche en cours...",
+    "INVALID_REPORT_ID": "Saisissez un UUID de rapport valide (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
+    "RETRY": "Réessayer",
+    "MATCHING_COUNT": "Signatures correspondantes : {{count}}",
+    "RESET_FILTERS": "Réinitialiser les filtres",
+    "LOAD_ERROR": "Impossible de charger les signatures. Veuillez réessayer.",
+    "NO_MATCHES": "Aucune signature ne correspond à ces filtres.",
+    "EMPTY_HELP": "Les signatures apparaîtront ici après la signature des rapports. Vous pouvez aussi consulter un rapport avec sa référence."
   },
   "STAFF": {
     "ADD_STAFF": "Ajouter un membre",
@@ -9550,7 +9600,16 @@
     "NO_PATIENTS": "Aucun patient",
     "COLUMN_PATIENTS": "Patients : {{column}}",
     "START_VISIT": "Démarrer la consultation",
-    "START_FAILED": "La consultation n’a pas pu être démarrée."
+    "START_FAILED": "La consultation n’a pas pu être démarrée.",
+    "AVG_ELAPSED": "Durée écoulée moyenne",
+    "ELAPSED_HELP": "La durée part de l’arrivée, ou de la date de consultation si l’arrivée manque. La moyenne porte sur tous les patients actifs de ce tableau hospitalier.",
+    "LONGEST_ELAPSED": "Durée écoulée la plus longue",
+    "ALL_PROVIDERS": "Tous les praticiens",
+    "ACUITY_FILTER": "Urgence",
+    "ALL_ACUITIES": "Tous les niveaux d’urgence",
+    "LONGEST_FIRST": "Durées les plus longues en premier",
+    "ELAPSED": "Depuis l’arrivée / la date de consultation",
+    "STAGE_TIME_UNAVAILABLE": "La durée dans l’étape actuelle n’est pas renseignée."
   },
   "CHECKOUT": {
     "TITLE": "Sortie du patient",
@@ -9634,7 +9693,18 @@
     "title": "Boîte de réception",
     "unreadCount": "Nombre d'éléments non lus",
     "urgent": "Urgent",
-    "openVisitToSign": "Ouvrir la visite pour signer"
+    "openVisitToSign": "Ouvrir la visite pour signer",
+    "lastUpdated": "Dernière actualisation : {{time}}",
+    "refreshing": "Actualisation...",
+    "loadFailed": "Impossible d’actualiser votre boîte de réception. Veuillez réessayer.",
+    "staleData": "Les éléments et compteurs précédemment chargés peuvent ne plus être à jour.",
+    "retry": "Réessayer",
+    "emptyTitle": "Votre boîte de réception est vide",
+    "emptyHint": "Les résultats, prescriptions, messages et tâches qui vous sont adressés apparaîtront ici.",
+    "emptyCategory": "Aucun élément dans cette catégorie",
+    "emptyCategoryHint": "Choisissez une autre catégorie ou affichez tous les éléments.",
+    "showAll": "Tout afficher",
+    "summaryLoadFailed": "Impossible de mettre à jour les compteurs non lus. Actualisez votre boîte de réception pour réessayer."
   },
   "common": {
     "loading": "Chargement…"
@@ -9781,10 +9851,15 @@
     "TEST_TYPE_IMAGING": "Imagerie",
     "TEST_TYPE_LAB": "Laboratoire",
     "TEST_TYPE_PATHOLOGY": "Anatomopathologie",
-    "TITLE": "Sortie",
+    "TITLE": "Sorties",
     "WARNING_SIGNS": "Signes d'alerte",
     "WOUND_CARE": "Soins des plaies",
-    "NOT_ADMITTED": "Ce patient n’a aucune hospitalisation en cours ici : une sortie ne se demande que pour un patient hospitalisé."
+    "NOT_ADMITTED": "Ce patient n’a aucune hospitalisation en cours ici : une sortie ne se demande que pour un patient hospitalisé.",
+    "OVERVIEW_TITLE": "Pilotage des sorties",
+    "COUNT_SCOPE_HELP": "Les compteurs portent sur les demandes et résumés chargés selon leurs filtres respectifs. L’approbation d’une demande et la finalisation d’un résumé sont deux étapes distinctes.",
+    "REQUESTS_LOADED": "Demandes chargées",
+    "NO_FILTERED_APPROVALS": "Aucune demande au statut : {{status}}",
+    "SHOW_ALL_REQUESTS": "Voir toutes les demandes"
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Les allergies enregistrées dans d'autres hôpitaux ne sont pas affichées : ce patient a refusé le partage de son dossier. Cette liste peut être incomplète.",
@@ -10758,7 +10833,14 @@
     "LIMIT_NOTICE": "200 inscriptions ont été chargées. D’autres peuvent exister ; la recherche et les compteurs portent uniquement sur cet ensemble.",
     "RESULT_RANGE": "{{start}}–{{end}} sur {{total}} inscriptions chargées",
     "ROWS_PER_PAGE": "Lignes par page",
-    "PAGE_OF": "Page {{page}} sur {{total}}"
+    "PAGE_OF": "Page {{page}} sur {{total}}",
+    "OVERVIEW_TITLE": "Vue des inscriptions et séjours",
+    "COUNT_SCOPE_HELP": "Jusqu’à {{limit}} inscriptions chargées pour le filtre d’activité choisi. Les compteurs de séjour portent sur cet ensemble ; une inscription active ne signifie pas que le patient est admis.",
+    "LOADED_COUNT": "Inscriptions chargées",
+    "LOAD_LIMIT_NOTICE": "Les {{limit}} premières inscriptions sont affichées. D’autres inscriptions correspondantes peuvent exister.",
+    "REGISTRATION_STATUS": "Statut de l’inscription",
+    "NOT_RECORDED": "Non renseigné",
+    "OPEN_PATIENT_RECORD": "Ouvrir le dossier"
   },
   "COVERAGE": {
     "PROVIDER_DEFAULTS_TO_PAYER": "Par défaut, le code de l’organisme",

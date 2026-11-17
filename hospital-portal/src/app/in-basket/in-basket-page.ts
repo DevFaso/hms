@@ -25,7 +25,7 @@ import { RoleContextService } from '../core/role-context.service';
       @if (canReviewLabResults()) {
         <app-lab-results-inbox />
       }
-      <app-in-basket-panel />
+      <app-in-basket-panel [showTitle]="false" />
     </div>
   `,
   styles: `
@@ -35,6 +35,10 @@ import { RoleContextService } from '../core/role-context.service';
       padding: 24px 16px;
     }
     .page-header {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
       margin-bottom: 20px;
     }
     .page-header h1 {

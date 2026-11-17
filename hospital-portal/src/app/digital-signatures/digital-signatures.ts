@@ -6,8 +6,11 @@ import {
   signal,
   computed,
   ChangeDetectionStrategy,
+  DestroyRef,
 } from '@angular/core';
 
+import { Subscription } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -47,6 +50,8 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
   styleUrl: './digital-signatures.scss',
 })
 export class DigitalSignaturesComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+  private lookupRequest?: Subscription;
   private readonly service = inject(DigitalSignatureService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
@@ -79,7 +84,8 @@ export class DigitalSignaturesComponent implements OnInit {
   /** Audit trail is DOCTOR/HOSPITAL_ADMIN/SUPER_ADMIN — same list as revoke. */
   readonly canViewAudit = this.canRevoke;
 
-  loading = signal(true);
+  loading = signal(false);
+  loadError = signal(false);
   signatures = signal<SignatureResponse[]>([]);
   search = signal('');
   statusFilter = signal('ALL');
@@ -111,6 +117,7 @@ export class DigitalSignaturesComponent implements OnInit {
   verifyReportId = signal('');
   verifyValue = signal('');
   verifying = signal(false);
+  verifyError = signal(false);
   verifyResult = signal<{ valid: boolean; message: string } | null>(null);
 
   // Revoke modal
@@ -124,6 +131,8 @@ export class DigitalSignaturesComponent implements OnInit {
   lookupReportId = signal('');
   lookupLoading = signal(false);
   lookupDone = signal(false);
+  lookupError = signal(false);
+  lookupValidation = signal(false);
   lookupSigned = signal<boolean | null>(null);
   lookupSignatures = signal<SignatureResponse[]>([]);
 
@@ -134,7 +143,7 @@ export class DigitalSignaturesComponent implements OnInit {
 
   filteredSignatures = computed(() => {
     let list = this.signatures();
-    const q = this.search().toLowerCase();
+    const q = this.search().trim().toLowerCase();
     const st = this.statusFilter();
     const tp = this.typeFilter();
 
@@ -143,7 +152,8 @@ export class DigitalSignaturesComponent implements OnInit {
         (s) =>
           textMatches(s.signedByName, q) ||
           s.hospitalName?.toLowerCase().includes(q) ||
-          s.reportType?.toLowerCase().includes(q),
+          s.reportType?.toLowerCase().includes(q) ||
+          s.reportId?.toLowerCase().includes(q),
       );
     }
     if (st !== 'ALL') {
@@ -155,6 +165,33 @@ export class DigitalSignaturesComponent implements OnInit {
     return list;
   });
 
+  hasFilters = computed(
+    () => !!this.search().trim() || this.statusFilter() !== 'ALL' || this.typeFilter() !== 'ALL',
+  );
+
+  resetFilters(): void {
+    this.search.set('');
+    this.statusFilter.set('ALL');
+    this.typeFilter.set('ALL');
+  }
+
+  knownReports = computed(() =>
+    this.signatures().filter(
+      (s, i, list) =>
+        list.findIndex(
+          (other) => other.reportType === s.reportType && other.reportId === s.reportId,
+        ) === i,
+    ),
+  );
+
+  chooseKnownReport(signatureId: string): void {
+    const signature = this.signatures().find((s) => s.id === signatureId);
+    if (!signature) return;
+    this.onLookupChange();
+    this.lookupReportType.set(signature.reportType);
+    this.lookupReportId.set(signature.reportId);
+  }
+
   signedCount = computed(() => this.signatures().filter((s) => s.status === 'SIGNED').length);
   revokedCount = computed(() => this.signatures().filter((s) => s.status === 'REVOKED').length);
 
@@ -163,6 +200,8 @@ export class DigitalSignaturesComponent implements OnInit {
   }
 
   loadSignatures(): void {
+    if (this.loading()) return;
+    this.loadError.set(false);
     this.loading.set(true);
     // Admins see the hospital-wide list; clinicians are limited to their own
     // signatures (calling /signatures/all as DOCTOR hard-403s the page).
@@ -177,13 +216,13 @@ export class DigitalSignaturesComponent implements OnInit {
       this.loading.set(false);
       return;
     }
-    call.subscribe({
+    call.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (data) => {
         this.signatures.set(data ?? []);
         this.loading.set(false);
       },
       error: () => {
-        this.signatures.set([]);
+        this.loadError.set(true);
         this.loading.set(false);
       },
     });
@@ -300,6 +339,8 @@ export class DigitalSignaturesComponent implements OnInit {
   /* ── Verify ── */
 
   openVerify(sig: SignatureResponse): void {
+    if (this.verifying()) return;
+    this.verifyError.set(false);
     this.verifySignatureId.set(sig.id);
     this.verifyReportType.set(sig.reportType);
     this.verifyReportId.set(sig.reportId);
@@ -309,15 +350,19 @@ export class DigitalSignaturesComponent implements OnInit {
   }
 
   closeVerify(): void {
+    if (this.verifying()) return;
     this.showVerifyModal.set(false);
   }
 
   doVerify(): void {
+    if (this.verifying()) return;
     const reportType = this.verifyReportType();
     if (!reportType || !this.verifyValue().trim()) {
       this.toast.error(this.translate.instant('SIGNATURES.VERIFY_VALUE_REQUIRED'));
       return;
     }
+    this.verifyError.set(false);
+    this.verifyResult.set(null);
     this.verifying.set(true);
     this.service
       .verify({
@@ -338,10 +383,7 @@ export class DigitalSignaturesComponent implements OnInit {
           this.loadSignatures();
         },
         error: () => {
-          this.verifyResult.set({
-            valid: false,
-            message: this.translate.instant('SIGNATURES.VERIFY_FAILED'),
-          });
+          this.verifyError.set(true);
           this.verifying.set(false);
         },
       });
@@ -381,33 +423,55 @@ export class DigitalSignaturesComponent implements OnInit {
 
   /* ── Report lookup ── */
 
+  onLookupChange(): void {
+    this.lookupRequest?.unsubscribe();
+    this.lookupLoading.set(false);
+    this.lookupDone.set(false);
+    this.lookupError.set(false);
+    this.lookupValidation.set(false);
+    this.lookupSignatures.set([]);
+    this.lookupSigned.set(null);
+  }
+
   runLookup(): void {
+    if (this.lookupLoading()) return;
     const reportType = this.lookupReportType();
     const reportId = this.lookupReportId().trim();
     if (!reportType || !reportId) {
       this.toast.error(this.translate.instant('SIGNATURES.LOOKUP_REQUIRED'));
       return;
     }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reportId)) {
+      this.lookupValidation.set(true);
+      return;
+    }
+    this.lookupValidation.set(false);
+    this.lookupError.set(false);
     this.lookupLoading.set(true);
     this.lookupDone.set(false);
-    this.service.listByReport(reportType, reportId).subscribe({
-      next: (list) => {
-        this.lookupSignatures.set(list ?? []);
-        this.lookupSigned.set(list.some((s) => s.status === 'SIGNED'));
-        this.lookupLoading.set(false);
-        this.lookupDone.set(true);
-      },
-      error: (err: unknown) => {
-        this.lookupSignatures.set([]);
-        this.lookupSigned.set(null);
-        this.lookupLoading.set(false);
-        this.lookupDone.set(true);
-        this.toast.error(refusalReason(err) ?? this.translate.instant('SIGNATURES.LOOKUP_ERROR'));
-      },
-    });
+    this.lookupRequest = this.service
+      .listByReport(reportType, reportId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => {
+          this.lookupSignatures.set(list ?? []);
+          this.lookupSigned.set((list ?? []).some((s) => s.status === 'SIGNED'));
+          this.lookupLoading.set(false);
+          this.lookupDone.set(true);
+        },
+        error: (err: unknown) => {
+          this.lookupError.set(true);
+          this.lookupSignatures.set([]);
+          this.lookupSigned.set(null);
+          this.lookupLoading.set(false);
+          this.lookupDone.set(true);
+          this.toast.error(refusalReason(err) ?? this.translate.instant('SIGNATURES.LOOKUP_ERROR'));
+        },
+      });
   }
 
   clearLookup(): void {
+    this.onLookupChange();
     this.lookupReportType.set('');
     this.lookupReportId.set('');
     this.lookupSignatures.set([]);

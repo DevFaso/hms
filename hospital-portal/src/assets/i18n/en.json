@@ -141,7 +141,14 @@
     "SORT_BY": "Sort by",
     "SORT_NAME": "Unit name A–Z",
     "SORT_AVAILABLE": "Most available beds first",
-    "SORT_OCCUPIED": "Most occupied beds first"
+    "SORT_OCCUPIED": "Most occupied beds first",
+    "CAPACITY_TITLE": "Capacity overview",
+    "CAPACITY_SCOPE_HELP": "Counts include active beds in active units and remain independent of the unit filter.",
+    "OTHER_STATES": "Other bed states",
+    "CAPACITY_FILTER_HELP": "Showing active units with beds matching the selected availability.",
+    "NO_MATCHING_UNITS": "No units match this availability filter.",
+    "OCCUPANCY": "Occupancy",
+    "OCCUPIED_RATIO": "{{occupied}} / {{total}} occupied"
   },
   "ERROR_403": {
     "BACK": "Back to dashboard",
@@ -1422,7 +1429,11 @@
     "NO_ROOM_ASSIGNED": "No room assigned",
     "DIAGNOSIS_FROM_SUMMARY": "The diagnosis written in the discharge summary of this stay. Change it on the summary.",
     "INSTRUCTIONS_IN_SUMMARY": "Already in the discharge summary",
-    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "The discharge summary of this stay is finalized: its instructions are the ones the patient receives."
+    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "The discharge summary of this stay is finalized: its instructions are the ones the patient receives.",
+    "OVERVIEW_TITLE": "Loaded admissions",
+    "MATCHING_COUNT": "Matching admissions: {{count}}",
+    "MISSING_BED_SUBSET": "Active with bed details missing",
+    "MISSING_BED_HINT": "Missing bed details are a subset of active admissions and are already included in that count."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "The analytics could not be loaded. Try again.",
@@ -3520,7 +3531,18 @@
     "ROWS_PER_PAGE": "Rows per page",
     "PREVIOUS_PAGE": "Previous page",
     "NEXT_PAGE": "Next page",
-    "PAGE_OF": "Page {{page}} of {{total}}"
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "HISTORY_NOTE_CREATED": "Created",
+    "HISTORY_NOTE_UPDATED": "Updated",
+    "HISTORY_NOTE_ADDENDUM": "Addendum recorded",
+    "HISTORY_NOTE_SIGNED": "Signed",
+    "HISTORY_NOTE_COSIGNED": "Co-signed",
+    "OVERVIEW_TITLE": "Loaded consultations",
+    "LIST_TITLE": "Consultation list",
+    "MATCHING_COUNT": "Matching consultations: {{count}}",
+    "CURRENT_NOTE": "Current clinical note",
+    "NOTE_STATUS_SIGNED": "Note signed",
+    "NOTE_STATUS_UNSIGNED": "Note unsigned"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -5312,7 +5334,14 @@
     "EMPTY_HELP": "Choose another status or log a new request.",
     "REQUEST_DETAILS": "Purpose and scope",
     "RESULTS": "Shown: {{shown}} / {{loaded}} loaded requests",
-    "LOADED_SEARCH": "Search applies to loaded requests only"
+    "LOADED_SEARCH": "Search applies to loaded requests only",
+    "STATUS_ALL": "All statuses",
+    "LOADED": "Requests loaded",
+    "COUNT_SCOPE_HELP": "Requester counts cover loaded requests in the selected status and hospital.",
+    "SHOW_ALL": "View all requests",
+    "TARGET_HOSPITAL": "Target hospital",
+    "HOSPITAL_SELECTED": "Selected hospital",
+    "ACTOR_HELP": "The decision is recorded under your authenticated account. Selecting a hospital does not change your acting identity."
   },
   "PATIENTS": {
     "DECEASED": "Deceased",
@@ -5596,7 +5625,8 @@
     "STANDARD_ACCESS": "Standard access controls apply to this record.",
     "MANAGE_ACCESS": "Manage access",
     "CLINICAL_ESSENTIALS": "Clinical essentials",
-    "CLINICAL_SUMMARY_HELP": "Clinical alerts remain visible above. Open the detailed record to review documented care."
+    "CLINICAL_SUMMARY_HELP": "Clinical alerts remain visible above. Open the detailed record to review documented care.",
+    "RECORD_ACTIONS": "More actions"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -8959,8 +8989,16 @@
       "BULK_ALL_SKIPPED": "No shifts were created. All candidate dates were skipped.",
       "BULK_FAILED": "Bulk scheduling failed. Please try again.",
       "SHIFTS_LOAD_FAILED": "Failed to load shifts",
-      "LEAVE_LOAD_FAILED": "Failed to load leave requests"
-    }
+      "LEAVE_LOAD_FAILED": "Failed to load leave requests",
+      "SHIFT_FIELDS_REQUIRED": "Select a date and different start and end times.",
+      "SHIFT_CREATED": "Shift created.",
+      "SHIFT_FAILED": "Unable to create the shift. Please try again."
+    },
+    "ADD_SHIFT": "Add shift",
+    "SINGLE_SUBTITLE": "Assign a staff member to a shift.",
+    "EMPTY_WEEK_TITLE": "No shifts planned this week",
+    "EMPTY_WEEK_HINT": "Add your first shift or use bulk scheduling to fill the week.",
+    "NO_SHIFTS_PLANNED": "No shift planned"
   },
   "SETUP": {
     "CHOOSE_USERNAME": "Choose Username",
@@ -9090,7 +9128,7 @@
     "SIGNED_AT": "Signed At",
     "SIGNED_BY": "Signed By",
     "SIGNER": "Signer",
-    "SUBTITLE": "Manage digital signatures and certificates",
+    "SUBTITLE": "Manage report signatures and verification",
     "TITLE": "Digital Signatures",
     "VALID": "Valid",
     "VALID_RESULT": "Valid",
@@ -9130,7 +9168,19 @@
     "PICK_REPORT": "Choose a report to sign",
     "SIGNABLE_LOADING": "Loading your reports…",
     "NO_SIGNABLE_REPORTS": "You have no unsigned report to sign in this hospital.",
-    "SIGNABLE_LOAD_ERROR": "Could not load your reports to sign."
+    "SIGNABLE_LOAD_ERROR": "Could not load your reports to sign.",
+    "VERIFY_UNAVAILABLE": "Verification could not be completed. Please try again; signature validity has not been determined.",
+    "LOOKUP_TITLE": "Check report signatures",
+    "LOOKUP_HELP": "Check whether a report has signatures and who signed it. Use the Verify action on a signature to verify its original signature text.",
+    "KNOWN_REPORTS": "Reports in the loaded signature list",
+    "LOOKUP_LOADING": "Checking...",
+    "INVALID_REPORT_ID": "Enter a valid report UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
+    "RETRY": "Try again",
+    "MATCHING_COUNT": "Matching signatures: {{count}}",
+    "RESET_FILTERS": "Reset filters",
+    "LOAD_ERROR": "Unable to load signatures. Please try again.",
+    "NO_MATCHES": "No signatures match these filters.",
+    "EMPTY_HELP": "Signatures will appear here after reports are signed. You can also check a report using its reference."
   },
   "STAFF": {
     "ADD_STAFF": "Add Staff",
@@ -9550,7 +9600,16 @@
     "NO_PATIENTS": "No patients",
     "COLUMN_PATIENTS": "{{column}} patients",
     "START_VISIT": "Start the visit",
-    "START_FAILED": "The visit could not be started."
+    "START_FAILED": "The visit could not be started.",
+    "AVG_ELAPSED": "Average elapsed time",
+    "ELAPSED_HELP": "Elapsed time is measured from arrival, or from the encounter date when arrival is missing. The average covers all active patients on this hospital board.",
+    "LONGEST_ELAPSED": "Longest elapsed time",
+    "ALL_PROVIDERS": "All providers",
+    "ACUITY_FILTER": "Urgency",
+    "ALL_ACUITIES": "All urgency levels",
+    "LONGEST_FIRST": "Longest elapsed first",
+    "ELAPSED": "Since arrival / encounter date",
+    "STAGE_TIME_UNAVAILABLE": "Time in the current stage is unavailable."
   },
   "CHECKOUT": {
     "TITLE": "Check-Out Patient",
@@ -9634,7 +9693,18 @@
     "title": "In-Basket",
     "unreadCount": "Unread count",
     "urgent": "Urgent",
-    "openVisitToSign": "Open the visit to sign"
+    "openVisitToSign": "Open the visit to sign",
+    "lastUpdated": "Last updated: {{time}}",
+    "refreshing": "Refreshing...",
+    "loadFailed": "Unable to refresh your inbox. Please try again.",
+    "staleData": "Previously loaded items and counts may be out of date.",
+    "retry": "Try again",
+    "emptyTitle": "Your inbox is empty",
+    "emptyHint": "Results, prescriptions, messages and tasks addressed to you will appear here.",
+    "emptyCategory": "No items in this category",
+    "emptyCategoryHint": "Choose another category or view all inbox items.",
+    "showAll": "View all items",
+    "summaryLoadFailed": "Unable to update unread counts. Refresh your inbox to try again."
   },
   "common": {
     "loading": "Loading…"
@@ -9784,7 +9854,12 @@
     "TITLE": "Discharge",
     "WARNING_SIGNS": "Warning signs",
     "WOUND_CARE": "Wound care",
-    "NOT_ADMITTED": "This patient has no open hospital stay here: a discharge is requested only for an admitted patient."
+    "NOT_ADMITTED": "This patient has no open hospital stay here: a discharge is requested only for an admitted patient.",
+    "OVERVIEW_TITLE": "Discharge overview",
+    "COUNT_SCOPE_HELP": "Counts reflect loaded requests and summaries under their respective filters. Request approval and summary finalization are separate workflow steps.",
+    "REQUESTS_LOADED": "Requests loaded",
+    "NO_FILTERED_APPROVALS": "No requests with status: {{status}}",
+    "SHOW_ALL_REQUESTS": "View all requests"
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Allergies recorded at other hospitals are withheld: this patient has opted out of record sharing. This list may be incomplete.",
@@ -10758,7 +10833,14 @@
     "LIMIT_NOTICE": "200 records were loaded. More records may exist; local search and totals cover only this loaded set.",
     "RESULT_RANGE": "{{start}}–{{end}} of {{total}} loaded records",
     "ROWS_PER_PAGE": "Rows per page",
-    "PAGE_OF": "Page {{page}} of {{total}}"
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "OVERVIEW_TITLE": "Registrations and stays",
+    "COUNT_SCOPE_HELP": "Up to {{limit}} registrations are loaded for the selected activity filter. Stay counts describe this set; an active registration does not mean an admitted patient.",
+    "LOADED_COUNT": "Registrations loaded",
+    "LOAD_LIMIT_NOTICE": "The first {{limit}} registrations are shown. More matching registrations may exist.",
+    "REGISTRATION_STATUS": "Registration status",
+    "NOT_RECORDED": "Not recorded",
+    "OPEN_PATIENT_RECORD": "Open patient record"
   },
   "COVERAGE": {
     "PROVIDER_DEFAULTS_TO_PAYER": "Defaults to the payer code",

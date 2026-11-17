@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { DigitalSignaturesComponent } from './digital-signatures';
 import {
@@ -33,6 +33,7 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
       'listSignable',
       'listByProvider',
       'listAll',
+      'listByReport',
       'sign',
     ]);
     svc.listSignable.and.returnValue(of(list));
@@ -61,6 +62,33 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
+
+  it('cancels an obsolete lookup and separates an unavailable result from unsigned', () => {
+    setup([]);
+    const component = fixture.componentInstance;
+    const pending = new Subject<SignatureResponse[]>();
+    svc.listByReport.and.returnValue(pending);
+    component.lookupReportType.set('DISCHARGE_SUMMARY');
+    component.lookupReportId.set(reportId);
+    component.runLookup();
+    component.onLookupChange();
+    pending.next([]);
+    expect(component.lookupDone()).toBeFalse();
+    svc.listByReport.and.returnValue(throwError(() => new Error('offline')));
+    component.runLookup();
+    expect(component.lookupError()).toBeTrue();
+    expect(component.lookupSigned()).toBeNull();
+  });
+
+  it('rejects an invalid report UUID before requesting a lookup', () => {
+    setup([]);
+    const component = fixture.componentInstance;
+    component.lookupReportType.set('DISCHARGE_SUMMARY');
+    component.lookupReportId.set('bad-id');
+    component.runLookup();
+    expect(component.lookupValidation()).toBeTrue();
+    expect(svc.listByReport).not.toHaveBeenCalled();
+  });
 
   it('lists the signable reports by type and patient, with no id field and no id text', () => {
     const el = setup(rows);

@@ -27,7 +27,7 @@
     <div class="flow-metric">
       <span class="material-symbols-outlined" aria-hidden="true">schedule</span
       ><strong>{{ board() ? formatWait(averageWait()) : '—' }}</strong
-      ><span>{{ 'TRACKER.AVG_WAIT' | translate }}</span>
+      ><span>{{ 'TRACKER.AVG_ELAPSED' | translate }}</span>
     </div>
     <div class="flow-metric">
       <span class="material-symbols-outlined" aria-hidden="true">stethoscope</span
@@ -75,7 +75,26 @@
         }
       </select></label
     >
-    @if (searchTerm() || departmentFilter() || stageFilter()) {
+    <label>
+      <span class="sr-only">{{ 'TRACKER.ALL_PROVIDERS' | translate }}</span>
+      <select [ngModel]="providerFilter()" (ngModelChange)="providerFilter.set($event)">
+        <option value="">{{ 'TRACKER.ALL_PROVIDERS' | translate }}</option>
+        @for (provider of providers(); track provider) {
+          <option [value]="provider">{{ provider }}</option>
+        }
+      </select>
+    </label>
+    <label
+      ><input
+        type="checkbox"
+        [ngModel]="longestFirst()"
+        (ngModelChange)="longestFirst.set($event)"
+      />
+      {{ 'TRACKER.LONGEST_FIRST' | translate }}</label
+    >
+    @if (
+      searchTerm() || departmentFilter() || stageFilter() || providerFilter() || longestFirst()
+    ) {
       <button type="button" class="btn-clear" (click)="clearFilters()">
         {{ 'TRACKER.CLEAR_FILTERS' | translate }}
       </button>
@@ -83,6 +102,7 @@
   </div>
   @if (board()) {
     <p class="board-caption">
+      {{ 'TRACKER.ELAPSED_HELP' | translate }}<br />
       {{ 'TRACKER.FILTER_SCOPE' | translate: { count: visibleCount(), total: totalPatients() } }}
     </p>
   }
