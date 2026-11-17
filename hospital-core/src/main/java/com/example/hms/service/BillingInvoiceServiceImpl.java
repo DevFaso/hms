@@ -1786,8 +1786,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         requirePayable(invoice, patientId, declared);
         rejectReusedReference(invoice, method, payment.getTransactionReference(), "transactionReference");
-        savePaymentRow(invoice, payment.getAmount(), method,
-            payment.getTransactionReference(), operator, payment.getNotes(), recordedBy, PaymentStatus.PENDING);
+        savePaymentRow(invoice, payment.getAmount(), new Tender(method, payment.getTransactionReference(), operator),
+            payment.getNotes(), recordedBy, PaymentStatus.PENDING);
         BillingInvoiceResponseDTO response = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
         response.setPendingDeclaredAmount(open.add(payment.getAmount()));
         return response;
@@ -1814,18 +1814,24 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         referenceRegistry.requireUnused(invoice.getHospital().getId(), reference, field);
     }
 
+    /**
+     * How the money came in: the method, the operator's or terminal's reference, and (billing plan
+     * PR 9) the Mobile Money operator, null for any other method.
+     */
+    private record Tender(PaymentMethod method, String reference, com.example.hms.enums.MobileMoneyOperator operator) {
+    }
+
     /** The ledger row a cashier reconciles against: one per recorded payment, patient or staff. */
-    private PaymentTransaction savePaymentRow(BillingInvoice invoice, BigDecimal amount, PaymentMethod method,
-            String reference, com.example.hms.enums.MobileMoneyOperator operator, String notes, UUID recordedBy,
-            PaymentStatus status) {
+    private PaymentTransaction savePaymentRow(BillingInvoice invoice, BigDecimal amount, Tender tender,
+            String notes, UUID recordedBy, PaymentStatus status) {
         boolean confirmed = status == PaymentStatus.CONFIRMED;
         PaymentTransaction row = PaymentTransaction.builder()
             .invoice(invoice)
             .amount(amount)
             .paymentDate(LocalDate.now(java.time.ZoneId.systemDefault()))
-            .paymentMethod(method)
-            .referenceNumber(blankToNull(reference))
-            .mobileMoneyOperator(operator)
+            .paymentMethod(tender.method())
+            .referenceNumber(blankToNull(tender.reference()))
+            .mobileMoneyOperator(tender.operator())
             .notes(blankToNull(notes))
             .recordedBy(recordedBy)
             .status(status)
@@ -1967,8 +1973,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         requireRoomBesidePendingDeclarations(invoice, payment.getAmount());
         BillingInvoice saved = applyPayment(invoiceId, invoice.getPatient().getId(), payment.getAmount());
-        PaymentTransaction row = savePaymentRow(saved, payment.getAmount(), method, payment.getReference(),
-            operator, payment.getNotes(), recordedBy, PaymentStatus.CONFIRMED);
+        PaymentTransaction row = savePaymentRow(saved, payment.getAmount(),
+            new Tender(method, payment.getReference(), operator), payment.getNotes(), recordedBy,
+            PaymentStatus.CONFIRMED);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, recordedBy, saved, row.getId(), "Payment recorded");
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
@@ -2229,8 +2236,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // One operator transaction pays once: the same rule as the desk payment.
         rejectReusedReference(saved, copayMethod, copayReference, "copayReference");
         BillingInvoice settled = settle(saved, amount);
-        PaymentTransaction row = savePaymentRow(settled, amount, copayMethod, copayReference, copayOperator, null,
-            recordedBy, PaymentStatus.CONFIRMED);
+        PaymentTransaction row = savePaymentRow(settled, amount, new Tender(copayMethod, copayReference, copayOperator),
+            null, recordedBy, PaymentStatus.CONFIRMED);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, recordedBy, settled, row.getId(), "Check-in copay recorded");
         return row;
     }
