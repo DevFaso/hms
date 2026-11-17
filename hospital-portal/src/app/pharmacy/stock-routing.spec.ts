@@ -23,7 +23,12 @@ describe('StockRoutingComponent', () => {
   let printSvc: jasmine.SpyObj<PrintLabelService>;
   /** Only the scope gate is read here; a writable signal so a test can flip it. */
   const hasHospitalScope = signal(true);
-  const roleContextStub = { hasHospitalScope } as unknown as RoleContextService;
+  /** QA D2120: the routing actions are the pharmacy's; a writable signal so a test can flip it. */
+  const canAct = signal(true);
+  const roleContextStub = {
+    hasHospitalScope,
+    hasAnyActiveRole: () => canAct(),
+  } as unknown as RoleContextService;
 
   const stockCheckResponse = {
     data: {
@@ -133,6 +138,7 @@ describe('StockRoutingComponent', () => {
     }).compileComponents();
 
     hasHospitalScope.set(true);
+    canAct.set(true);
     fixture = TestBed.createComponent(StockRoutingComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -627,6 +633,20 @@ describe('StockRoutingComponent', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]').disabled,
     ).toBeFalse();
+  });
+
+  it('QA D2120: shows a super-admin the stock check with no routing action', () => {
+    canAct.set(false);
+    const readOnly = TestBed.createComponent(StockRoutingComponent);
+    readOnly.componentInstance.prescriptionId = 'rx-1';
+    readOnly.componentInstance.checkStock();
+    readOnly.detectChanges();
+
+    const el: HTMLElement = readOnly.nativeElement;
+    expect(el.textContent).toContain('Amoxicillin');
+    expect(el.querySelector('[data-testid="open-back-order"]')).toBeNull();
+    expect(el.querySelector('[data-testid="print-for-patient"]')).toBeNull();
+    expect(el.querySelector('[data-testid="route-here-partner-1"]')).toBeNull();
   });
 
   it('should return expected badge classes', () => {

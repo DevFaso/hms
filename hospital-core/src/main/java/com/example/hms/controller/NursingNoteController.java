@@ -40,7 +40,7 @@ public class NursingNoteController {
     private final NursingNoteService nursingNoteService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Document a structured nursing note for a patient")
     public ResponseEntity<NursingNoteResponseDTO> createNote(
         @Valid @RequestBody NursingNoteCreateRequestDTO request,
@@ -51,7 +51,7 @@ public class NursingNoteController {
     }
 
     @PostMapping("/{noteId}/addenda")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Append an auditable addendum to an existing nursing note")
     public ResponseEntity<NursingNoteResponseDTO> appendAddendum(
         @PathVariable UUID noteId,

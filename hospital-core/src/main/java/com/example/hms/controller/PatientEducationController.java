@@ -154,7 +154,7 @@ public class PatientEducationController {
     // ==================== Patient Progress Endpoints ====================
 
     @PostMapping("/progress")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_RECEPTIONIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE','RECEPTIONIST')")
     @Operation(summary = "Track patient education progress",
                description = "Record patient interaction with an education resource")
     public ResponseEntity<PatientEducationProgressResponseDTO> trackProgress(
@@ -167,7 +167,7 @@ public class PatientEducationController {
     }
 
     @PutMapping("/progress/{progressId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Update patient education progress")
     public ResponseEntity<PatientEducationProgressResponseDTO> updateProgress(
             @PathVariable UUID progressId,
@@ -231,7 +231,7 @@ public class PatientEducationController {
     // ==================== Visit Documentation Endpoints ====================
 
     @PostMapping("/visit-documentation")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Document education provided during visit",
                description = "Record topics discussed and resources provided during prenatal visit")
     public ResponseEntity<VisitEducationDocumentationResponseDTO> documentVisitEducation(
@@ -245,7 +245,7 @@ public class PatientEducationController {
     }
 
     @PutMapping("/visit-documentation/{documentationId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Update visit education documentation")
     public ResponseEntity<VisitEducationDocumentationResponseDTO> updateVisitDocumentation(
             @PathVariable UUID documentationId,
@@ -295,7 +295,7 @@ public class PatientEducationController {
     // ==================== Patient Question Endpoints ====================
 
     @PostMapping("/questions")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_RECEPTIONIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE','RECEPTIONIST')")
     @Operation(summary = "Submit a patient question",
                description = "Patient submits a question about educational content")
     public ResponseEntity<PatientEducationQuestionResponseDTO> submitQuestion(
@@ -308,7 +308,7 @@ public class PatientEducationController {
     }
 
     @PutMapping("/questions/{questionId}/answer")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Answer a patient question")
     public ResponseEntity<PatientEducationQuestionResponseDTO> answerQuestion(
             @PathVariable UUID questionId,
@@ -320,7 +320,7 @@ public class PatientEducationController {
     }
 
     @PutMapping("/questions/{questionId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE')")
     @Operation(summary = "Update a patient question")
     public ResponseEntity<PatientEducationQuestionResponseDTO> updateQuestion(
             @PathVariable UUID questionId,

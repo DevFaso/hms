@@ -39,14 +39,14 @@ public class MtmReviewController {
     private final MtmReviewService mtmReviewService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST')")
     @Operation(summary = "Start a new MTM review")
     public ResponseEntity<MtmReviewResponseDTO> start(@Valid @RequestBody MtmReviewRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(mtmReviewService.startReview(dto));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST')")
     @Operation(summary = "Update an in-progress MTM review (intervention, status, follow-up)")
     public ResponseEntity<MtmReviewResponseDTO> update(
             @PathVariable UUID id,

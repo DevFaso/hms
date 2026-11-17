@@ -40,7 +40,7 @@ public class MaternalHistoryController {
     private final MaternalHistoryService maternalHistoryService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Create a new maternal history record",
                description = "Creates a comprehensive maternal history record for a patient with version 1")
     public ResponseEntity<MaternalHistoryResponseDTO> createMaternalHistory(
@@ -53,7 +53,7 @@ public class MaternalHistoryController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Update a maternal history record",
                description = "Creates a new version of the maternal history record")
     public ResponseEntity<MaternalHistoryResponseDTO> updateMaternalHistory(
@@ -218,7 +218,7 @@ public class MaternalHistoryController {
     }
 
     @PostMapping("/{id}/mark-reviewed")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Mark maternal history as reviewed",
                description = "Marks a maternal history record as reviewed by a provider")
     public ResponseEntity<MaternalHistoryResponseDTO> markAsReviewed(
@@ -233,7 +233,7 @@ public class MaternalHistoryController {
     // Stores the score on the existing history, so an update: a POST is DATA_CREATE by default.
     @com.example.hms.security.audit.WriteAudited(eventType = com.example.hms.enums.AuditEventType.DATA_UPDATE)
     @PostMapping("/{id}/calculate-risk")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Calculate risk score",
                description = "Manually calculates/recalculates the risk score for a maternal history record")
     public ResponseEntity<MaternalHistoryResponseDTO> calculateRiskScore(

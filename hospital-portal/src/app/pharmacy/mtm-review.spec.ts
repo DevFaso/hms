@@ -71,7 +71,7 @@ describe('MtmReviewComponent (QA D886)', () => {
         { provide: PatientService, useValue: patients },
         {
           provide: RoleContextService,
-          useValue: { effectiveHospitalIdForRequest: () => 'h-1' },
+          useValue: { effectiveHospitalIdForRequest: () => 'h-1', hasAnyActiveRole: () => true },
         },
       ],
     });

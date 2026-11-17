@@ -54,7 +54,7 @@ public class LabOrderController {
      * Doctors, Nurses, Staff, and Admins can create.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @WriteAudited(entity = "LAB_ORDER", eventType = AuditEventType.LAB_ORDER_CREATED)
     @Operation(summary = "Create Lab Order", description = "Creates a new lab order capturing ICD-10 diagnosis, order channel, documentation, and signature metadata")
     @ApiResponse(responseCode = "201", description = "Lab order created successfully")
@@ -152,7 +152,7 @@ public class LabOrderController {
      * Doctors, Nurses, Staff, and Admins can update.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Update Lab Order", description = "Updates a lab order by ID, including diagnosis, order-channel, and standing-order attestations")
     @ApiResponse(responseCode = "200", description = "Lab order updated successfully")
     @ApiResponse(responseCode = "404", description = "Lab order not found")
@@ -189,7 +189,7 @@ public class LabOrderController {
      * Allowed roles vary by target status (see LabOrderServiceImpl for rules).
      */
     @PostMapping("/{id}/transition")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','LAB_TECHNICIAN','LAB_SCIENTIST','LAB_MANAGER','LAB_DIRECTOR','QUALITY_MANAGER')")
     @Operation(summary = "Transition Lab Order Status",
                description = "Advances a lab order through its lifecycle: ORDERED → PENDING → COLLECTED → RECEIVED → IN_PROGRESS → RESULTED → VERIFIED → COMPLETED. Role-based guards are enforced per transition.")
     @ApiResponse(responseCode = "200", description = "Lab order transitioned successfully")

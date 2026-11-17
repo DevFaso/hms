@@ -42,7 +42,7 @@ public class ProResponseController {
     private final ControllerAuthUtils authUtils;
 
     @PostMapping
-    @PreAuthorize(CLINICAL_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Record an administered instrument",
         description = "Scores server-side from the instrument's option scores, links the response to the "
             + "patient's open postpartum plan, and alerts the care team on a positive screen or a "
@@ -73,7 +73,7 @@ public class ProResponseController {
     }
 
     @PostMapping("/{responseId}/acknowledge")
-    @PreAuthorize(CLINICAL_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Acknowledge a safety-item-positive response",
         description = "Stops the escalation chain. Records who acted and what was done.",
         security = @SecurityRequirement(name = "bearerAuth"))

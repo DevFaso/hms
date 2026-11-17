@@ -57,6 +57,7 @@ public class ProgramEnrollmentController {
         description = "One ACTIVE enrolment per programme per hospital; a second is refused, "
             + "not merged. The visit cadence comes from the clinician — the server has no "
             + "per-programme default on purpose.")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     public ResponseEntity<ProgramEnrollmentResponseDTO> enroll(
         @PathVariable UUID patientId,
         @Valid @RequestBody ProgramEnrollmentRequestDTO request) {
@@ -74,6 +75,7 @@ public class ProgramEnrollmentController {
     @Operation(summary = "Move an enrolment between ACTIVE and a closed state",
         description = "Closing needs a reason — it is the outcome the programme reports. "
             + "Re-opening refuses one, and refuses to create a second ACTIVE enrolment.")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     public ResponseEntity<ProgramEnrollmentResponseDTO> updateStatus(
         @PathVariable UUID patientId,
         @PathVariable UUID enrollmentId,
@@ -85,6 +87,7 @@ public class ProgramEnrollmentController {
     @Operation(summary = "Record that a programme visit happened",
         description = "Advances the next expected visit by the enrolment's cadence. Records a "
             + "visit that happened — it books nothing.")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     public ResponseEntity<ProgramEnrollmentResponseDTO> recordVisit(
         @PathVariable UUID patientId,
         @PathVariable UUID enrollmentId,

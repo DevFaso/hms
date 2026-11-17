@@ -110,21 +110,18 @@ export class TransfusionComponent implements OnInit {
     'ROLE_DOCTOR',
     'ROLE_SURGEON',
     'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
   ]);
   readonly canLab = this.roleContext.hasAnyActiveRole([
     'ROLE_LAB_SCIENTIST',
     'ROLE_LAB_TECHNICIAN',
     'ROLE_LAB_MANAGER',
     'ROLE_LAB_DIRECTOR',
-    'ROLE_SUPER_ADMIN',
   ]);
   readonly canBedside = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_SURGEON',
     'ROLE_MIDWIFE',
     'ROLE_NURSE',
-    'ROLE_SUPER_ADMIN',
   ]);
 
   readonly aboGroups: AboGroup[] = ['A', 'B', 'AB', 'O'];

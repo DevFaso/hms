@@ -10,6 +10,8 @@
  *
  * Imaging writes (user decision 2026-11-14) need a clinical role the caller
  * holds on their own: SUPER_ADMIN and the admin roles never act on imaging.
+ * QA D2120 extended the rule to every clinical write (encounters, lab orders,
+ * specimens, …): no clinical action lists ROLE_SUPER_ADMIN.
  *
  * Role-level only: a service-layer rule (the acting hospital, the author of a
  * draft) is checked by the page on top of the role gate.
@@ -22,11 +24,11 @@ export interface ActionPermission {
 export const ACTION_PERMISSIONS = {
   labOrderCreate: {
     endpoint: 'LabOrderController#createLabOrder',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE'],
   },
   labOrderUpdate: {
     endpoint: 'LabOrderController#updateLabOrder',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE'],
   },
   labOrderDelete: {
     endpoint: 'LabOrderController#deleteLabOrder',
@@ -60,7 +62,6 @@ export const ACTION_PERMISSIONS = {
       'ROLE_LAB_MANAGER',
       'ROLE_LAB_DIRECTOR',
       'ROLE_QUALITY_MANAGER',
-      'ROLE_SUPER_ADMIN',
     ],
   },
   labSpecimenReceive: {
@@ -71,7 +72,6 @@ export const ACTION_PERMISSIONS = {
       'ROLE_LAB_MANAGER',
       'ROLE_LAB_DIRECTOR',
       'ROLE_QUALITY_MANAGER',
-      'ROLE_SUPER_ADMIN',
     ],
   },
   labSpecimenReject: {
@@ -82,7 +82,6 @@ export const ACTION_PERMISSIONS = {
       'ROLE_LAB_MANAGER',
       'ROLE_LAB_DIRECTOR',
       'ROLE_QUALITY_MANAGER',
-      'ROLE_SUPER_ADMIN',
     ],
   },
   imagingReportsByHospital: {
@@ -138,11 +137,11 @@ export const ACTION_PERMISSIONS = {
   },
   encounterCreate: {
     endpoint: 'EncounterController#create',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_RECEPTIONIST', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_RECEPTIONIST', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   encounterUpdate: {
     endpoint: 'EncounterController#update',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   encounterDelete: {
     endpoint: 'EncounterController#delete',
@@ -167,34 +166,34 @@ export const ACTION_PERMISSIONS = {
   },
   encounterTriage: {
     endpoint: 'EncounterController#submitTriage',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+    roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
   },
   encounterCompleteTriage: {
     endpoint: 'EncounterController#completeTriage',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+    roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
   },
   encounterCompleteExamination: {
     endpoint: 'EncounterController#completeExamination',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   encounterReadyForDischarge: {
     endpoint: 'EncounterController#markReadyForDischarge',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   encounterCheckout: {
     endpoint: 'EncounterController#checkOut',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   // QA D1015: the midwife starts the visits booked with her (the service
   // refuses her any other one).
   encounterStart: {
     endpoint: 'EncounterController#startEncounter',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
   },
   // QA D954: closing a visit nobody has seen (LWBS / cancelled).
   encounterCloseUnseen: {
     endpoint: 'EncounterController#closeUnseen',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST'],
   },
   // QA D961: a medical certificate is a physician's act. Product decision
   // 2026-10-28: any licensed physician (general practitioner, physician,
@@ -323,7 +322,7 @@ export const ACTION_PERMISSIONS = {
   },
   signatureRevoke: {
     endpoint: 'DigitalSignatureController#revokeSignature',
-    roles: ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+    roles: ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN'],
   },
   signatureListAll: {
     endpoint: 'DigitalSignatureController#getAllSignatures',

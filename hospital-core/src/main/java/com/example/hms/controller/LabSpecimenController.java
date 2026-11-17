@@ -38,7 +38,7 @@ public class LabSpecimenController {
      * POST /lab-orders/{id}/specimens
      */
     @PostMapping("/lab-orders/{id}/specimens")
-    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_TECHNICIAN','LAB_SCIENTIST','LAB_MANAGER','LAB_DIRECTOR','QUALITY_MANAGER')")
     @Operation(summary = "Collect Specimen",
                description = "Creates a new specimen record for the given lab order, generating an accession number and barcode.")
     @ApiResponse(responseCode = "201", description = "Specimen created successfully")
@@ -96,7 +96,7 @@ public class LabSpecimenController {
      * POST /lab-specimens/{id}/receive
      */
     @PostMapping("/lab-specimens/{id}/receive")
-    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_TECHNICIAN','LAB_SCIENTIST','LAB_MANAGER','LAB_DIRECTOR','QUALITY_MANAGER')")
     @Operation(summary = "Receive Specimen at Lab",
                description = "Records the specimen as received at the laboratory, updating status to RECEIVED and capturing receiving user and timestamp.")
     @ApiResponse(responseCode = "200", description = "Specimen received successfully")
@@ -118,7 +118,7 @@ public class LabSpecimenController {
      * POST /lab-specimens/{id}/reject
      */
     @PostMapping("/lab-specimens/{id}/reject")
-    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_TECHNICIAN','LAB_SCIENTIST','LAB_MANAGER','LAB_DIRECTOR','QUALITY_MANAGER')")
     @Operation(summary = "Reject Specimen",
                description = "Marks the specimen REJECTED with a required reason, sends the order back to awaiting "
                    + "collection and notifies the ordering clinician.")

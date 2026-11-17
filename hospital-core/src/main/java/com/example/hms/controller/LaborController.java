@@ -44,7 +44,8 @@ public class LaborController {
         "hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')";
 
     /** Labour transfer: those who may admit a labour (doctors; midwives, #1102). The service checks the hospital. */
-    private static final String TRANSFER_ROLES = "hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR')";
+    private static final String TRANSFER_ROLES =
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'MIDWIFE','DOCTOR')";
 
     private static final int DEFAULT_EPISODE_LIMIT = 10;
     private static final int MAX_EPISODE_LIMIT = 50;
@@ -53,7 +54,7 @@ public class LaborController {
     private final ControllerAuthUtils authUtils;
 
     @PostMapping("/episodes")
-    @PreAuthorize(CLINICAL_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Admit a patient in labor (start an episode)",
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<LaborEpisodeResponseDTO> startEpisode(
@@ -89,7 +90,7 @@ public class LaborController {
     }
 
     @PostMapping("/episodes/{episodeId}/entries")
-    @PreAuthorize(CLINICAL_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Record a WHO partograph timepoint",
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<PartographEntryResponseDTO> addEntry(
@@ -125,7 +126,7 @@ public class LaborController {
     }
 
     @PostMapping("/episodes/{episodeId}/delivery")
-    @PreAuthorize(CLINICAL_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "File the delivery record and close the episode",
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<DeliveryRecordResponseDTO> recordDelivery(
@@ -196,7 +197,7 @@ public class LaborController {
      * fetal-death event is superseded or created, never deleted, and the change is audited.
      */
     @org.springframework.web.bind.annotation.PutMapping("/episodes/{episodeId}/delivery/baby-outcome")
-    @PreAuthorize(CLINICAL_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Correct one baby's recorded outcome on a delivery record",
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<DeliveryRecordResponseDTO> correctBabyOutcome(

@@ -9,15 +9,17 @@
       <button type="button" class="btn-secondary" (click)="load()" [disabled]="loading()">
         {{ 'COMMON.REFRESH' | translate }}
       </button>
-      <button
-        type="button"
-        class="btn-primary"
-        (click)="openEnrollForm($event)"
-        data-testid="open-enroll"
-      >
-        <span class="material-symbols-outlined">person_add</span>
-        {{ 'REGISTRIES.ENROLL' | translate }}
-      </button>
+      @if (canAct) {
+        <button
+          type="button"
+          class="btn-primary"
+          (click)="openEnrollForm($event)"
+          data-testid="open-enroll"
+        >
+          <span class="material-symbols-outlined">person_add</span>
+          {{ 'REGISTRIES.ENROLL' | translate }}
+        </button>
+      }
     </div>
   </div>
 
@@ -267,7 +269,7 @@
                   }
                 </td>
                 <td class="col-actions">
-                  @if (row.status === 'ACTIVE') {
+                  @if (canAct && row.status === 'ACTIVE') {
                     <button
                       type="button"
                       class="btn-row"
@@ -279,16 +281,18 @@
                       {{ 'REGISTRIES.RECORD_VISIT' | translate }}
                     </button>
                   }
-                  <button
-                    type="button"
-                    class="btn-row"
-                    [disabled]="actingOnId() !== null"
-                    (click)="openStatusModal(row, $event)"
-                    data-testid="change-status"
-                  >
-                    <span class="material-symbols-outlined">swap_horiz</span>
-                    {{ 'REGISTRIES.CHANGE_STATUS' | translate }}
-                  </button>
+                  @if (canAct) {
+                    <button
+                      type="button"
+                      class="btn-row"
+                      [disabled]="actingOnId() !== null"
+                      (click)="openStatusModal(row, $event)"
+                      data-testid="change-status"
+                    >
+                      <span class="material-symbols-outlined">swap_horiz</span>
+                      {{ 'REGISTRIES.CHANGE_STATUS' | translate }}
+                    </button>
+                  }
                 </td>
               </tr>
             }

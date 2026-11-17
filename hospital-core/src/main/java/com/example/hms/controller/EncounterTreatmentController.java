@@ -63,7 +63,7 @@ public class EncounterTreatmentController {
             }
     )
         @PostMapping
-        @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+        @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
         public ResponseEntity<EncounterTreatmentResponseDTO> addTreatmentToEncounter(
             @Valid @RequestBody EncounterTreatmentRequestDTO dto) {
         return ResponseEntity.ok(encounterTreatmentService.addTreatmentToEncounter(dto));

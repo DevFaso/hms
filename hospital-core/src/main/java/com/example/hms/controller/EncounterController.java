@@ -69,7 +69,7 @@ public class EncounterController {
      * do not open visits.
      */
     private static final String ENCOUNTER_CREATE_ROLES =
-        "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')";
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RECEPTIONIST','DOCTOR','NURSE','MIDWIFE')";
 
     /**
      * Encounter list READ — the visit history panel on the patient chart. This
@@ -216,8 +216,8 @@ public class EncounterController {
     // Update
     // ----------------------------------------------------------
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
-    @Operation(summary = "Update an encounter (super-admin, doctor, nurse, midwife, hospital-admin)")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
+    @Operation(summary = "Update an encounter (doctor, nurse, midwife)")
     public ResponseEntity<EncounterResponseDTO> update(
         @PathVariable UUID id,
         @Valid @RequestBody EncounterRequestDTO dto,
@@ -268,7 +268,7 @@ public class EncounterController {
     // QA D933: the midwife triages her own ANC patients (BP, weight), as the
     // tracker already offers her; vitals elsewhere admit ROLE_MIDWIFE too.
     @PostMapping(value = "/{encounterId}/triage", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(
         summary = "Submit triage data for an encounter (MVP 2)",
         description = "Atomically records vitals, chief complaint, ESI acuity, room assignment, "
@@ -295,7 +295,7 @@ public class EncounterController {
     // Product decision 2026-10-28: any licensed physician (RoleValidator.
     // LICENSED_PHYSICIAN_ROLE_CODES); the service also requires the role at
     // the visit's hospital and that the caller treated the visit.
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_ANESTHESIOLOGIST','ROLE_RADIOLOGIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','PHYSICIAN','SURGEON','ANESTHESIOLOGIST','RADIOLOGIST')")
     @Operation(
         summary = "Issue a medical certificate or sick-leave note for a visit",
         description = "Generates a dated, signed PDF in FR/EN/ES from the visit, files it in the "
@@ -315,7 +315,7 @@ public class EncounterController {
     // Start Encounter — Doctor picks up a WAITING_FOR_PHYSICIAN patient
     // ----------------------------------------------------------
     @PostMapping("/{encounterId}/start")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE')")
     @Operation(
         summary = "Start an encounter (the assigned clinician picks up the patient)",
         description = "Transitions a WAITING_FOR_PHYSICIAN encounter to IN_PROGRESS. A doctor may "
@@ -340,7 +340,7 @@ public class EncounterController {
     // ----------------------------------------------------------
     // QA D1431 (RCPT-CLIN): ending a triage is a clinical act; the desk neither reads nor records one.
     @PostMapping("/{encounterId}/complete-triage")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(
         summary = "Complete triage (advance to waiting for physician)",
         description = "Transitions an ARRIVED or TRIAGE encounter to WAITING_FOR_PHYSICIAN."
@@ -361,7 +361,7 @@ public class EncounterController {
     // Complete Examination — Doctor finishes examining, advances flow
     // ----------------------------------------------------------
     @PostMapping("/{encounterId}/complete-examination")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(
         summary = "Complete examination (advance patient flow)",
         description = "Transitions IN_PROGRESS → AWAITING_RESULTS (if pending orders exist) "
@@ -384,7 +384,7 @@ public class EncounterController {
     // ----------------------------------------------------------
     // QA D1431 sibling (RCPT-CLIN): so is declaring a patient ready to leave.
     @PostMapping("/{encounterId}/ready-for-discharge")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(
         summary = "Mark encounter ready for discharge",
         description = "Transitions AWAITING_RESULTS → READY_FOR_DISCHARGE; from IN_PROGRESS for a doctor, nurse or midwife only."
@@ -405,7 +405,7 @@ public class EncounterController {
     // MVP 3 — Nursing Intake Flowsheet
     // ----------------------------------------------------------
     @PostMapping(value = "/{encounterId}/nursing-intake", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','DOCTOR')")
     @Operation(
         summary = "Submit nursing intake data for an encounter (MVP 3)",
         description = "Atomically records allergy reconciliation, medication reconciliation, "
@@ -435,7 +435,7 @@ public class EncounterController {
     // RCPT-CLIN: the check-out writes the discharge diagnoses and the instructions, which the
     // desk can no longer read; a receptionist closes only a visit nobody saw (/close-unseen).
     @PostMapping(value = "/{encounterId}/checkout", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(
         summary = "Check out a patient and generate After-Visit Summary (MVP 6)",
         description = "Only once the clinician has completed the examination (AWAITING_RESULTS or "
@@ -462,7 +462,7 @@ public class EncounterController {
     // QA D788 — close a visit no clinician has seen (never a consultation)
     // ----------------------------------------------------------
     @PostMapping(value = "/{encounterId}/close-unseen", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','RECEPTIONIST')")
     @Operation(
         summary = "Close a visit no clinician has seen (left without being seen, or cancelled)",
         description = "Only from SCHEDULED, ARRIVED, TRIAGE or WAITING_FOR_PHYSICIAN. The outcome sets the "
@@ -507,8 +507,8 @@ public class EncounterController {
         return ResponseEntity.ok(avs);
     }
     @PostMapping(value = "/{encounterId}/notes", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
-    @Operation(summary = "Create or update encounter note (super-admin, doctor, nurse, midwife, hospital-admin)", 
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
+    @Operation(summary = "Create or update encounter note (doctor, nurse, midwife)", 
                description = "Creates or updates the encounter note with SOAP/narrative documentation")
     public ResponseEntity<EncounterNoteResponseDTO> upsertEncounterNote(
         @PathVariable UUID encounterId,
@@ -525,7 +525,7 @@ public class EncounterController {
     }
 
     @PostMapping(value = "/{encounterId}/notes/addendums", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Add addendum to encounter note",
                description = "Appends a late entry/addendum to an encounter note with timestamp and reason. " +
                            "Original note remains unchanged; addendum is clearly marked.")
@@ -555,7 +555,7 @@ public class EncounterController {
      * annotation can only establish the caller holds an authoring role).
      */
     @PostMapping(value = "/{encounterId}/notes/sign", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Sign the encounter note (author-only ceremony)",
                description = "Server-resolved signer + SHA-256 digest over a canonical payload. "
                    + "Signing locks the note; content changes go through addenda. "
@@ -576,7 +576,7 @@ public class EncounterController {
      * service; the co-signer's staff profile must be at the note's hospital.
      */
     @PostMapping(value = "/{encounterId}/notes/cosign", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Co-sign a signed encounter note (attending attestation)",
                description = "Requires the note to have declared requiresCosign and to be signed "
                    + "by its author. The co-signer must be a different clinician with a staff "
