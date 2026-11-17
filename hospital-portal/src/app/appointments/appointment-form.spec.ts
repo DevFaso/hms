@@ -1,12 +1,12 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 
 import { AppointmentFormComponent } from './appointment-form';
-import { AppointmentService } from '../services/appointment.service';
+import { AppointmentResponse, AppointmentService } from '../services/appointment.service';
 import { PatientResponse, PatientService } from '../services/patient.service';
 import { StaffService } from '../services/staff.service';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
@@ -282,6 +282,56 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     component.submit();
     expect(service.create).toHaveBeenCalledTimes(2);
     expect(service.create.calls.mostRecent().args[0].bookingRequestId).toBe(key);
+  });
+
+  it('X2: an older browser without randomUUID can construct and submit the form', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(crypto, 'randomUUID');
+    Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: undefined });
+    try {
+      const component = create({ date: inDays(5), time: '08:20' });
+      const service = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+      service.create.and.returnValue(throwError(() => ({ status: 503 })));
+      component.form.patientId = 'p-1';
+      component.form.staffId = 's-1';
+      component.submit();
+      expect(service.create.calls.first().args[0].bookingRequestId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
+    } finally {
+      if (descriptor) Object.defineProperty(crypto, 'randomUUID', descriptor);
+      else Reflect.deleteProperty(crypto, 'randomUUID');
+    }
+  });
+
+  it('X2: a completed form cannot submit again if navigation is cancelled', () => {
+    const component = create({ date: inDays(5), time: '08:20' });
+    const service = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+    spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(false);
+    service.create.and.returnValue(of({ id: 'booked' } as AppointmentResponse));
+    component.form.patientId = 'p-1';
+    component.form.staffId = 's-1';
+    component.submit();
+    component.form.startTime = '09:20';
+    component.submit();
+    expect(service.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('X2: a hidden booking identity refusal still shows the server-translated reason', () => {
+    const component = create({ date: inDays(5), time: '08:20' });
+    const service = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+    const message = 'La demande de rendez-vous a chang\u00e9.';
+    service.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { error: 'Bad Request', field: 'bookingRequestId', message },
+      })),
+    );
+    component.form.patientId = 'p-1';
+    component.form.staffId = 's-1';
+    component.submit();
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+    expect(toast.error).toHaveBeenCalledWith(message);
+    expect(component.saving()).toBeFalse();
   });
 
   it('QA D1060: the calendar duration is not turned into an end time, and none is sent', () => {

@@ -55,7 +55,45 @@ public class Appointment extends BaseEntity {
     }
 
     public void setDepartment(Department department) {
+        if (!Objects.equals(entityId(this.department), entityId(department))) releaseLegacyBookingIdentity();
         this.department = department;
+    }
+
+    public void setStaff(Staff staff) {
+        if (!Objects.equals(entityId(this.staff), entityId(staff))) releaseLegacyBookingIdentity();
+        this.staff = staff;
+    }
+
+    public void setAppointmentDate(LocalDate appointmentDate) {
+        if (!Objects.equals(this.appointmentDate, appointmentDate)) releaseLegacyBookingIdentity();
+        this.appointmentDate = appointmentDate;
+    }
+
+    public void setStartTime(LocalTime startTime) {
+        if (!Objects.equals(this.startTime, startTime)) releaseLegacyBookingIdentity();
+        this.startTime = startTime;
+    }
+
+    public void setStatus(AppointmentStatus status) {
+        // Closing a legacy booking releases its intent permanently, including if
+        // the visit is later reinstated after a replacement has been booked.
+        if (AppointmentStatus.holdsSlot(this.status) != AppointmentStatus.holdsSlot(status)) {
+            releaseLegacyBookingIdentity();
+        }
+        this.status = status;
+    }
+
+    private static java.util.UUID entityId(BaseEntity entity) {
+        return entity == null ? null : entity.getId();
+    }
+
+    private void releaseLegacyBookingIdentity() {
+        // Explicit request IDs (and requests initially creating closed visits)
+        // identify one operation forever. Legacy identities describe the slot.
+        if (!bookingRequestDurable) {
+            bookingRequestKey = null;
+            bookingRequestFingerprint = null;
+        }
     }
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

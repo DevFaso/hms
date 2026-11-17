@@ -324,12 +324,8 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       .toBeNull();
   });
 
-  it('still seeds globalView=true when sessionBootstrap returns roles the JWT did not carry', () => {
-    // Edge case: JWT issued without SUPER_ADMIN, but the DB-authoritative
-    // sessionBootstrap response upgrades the user to SUPER_ADMIN. The
-    // login flow MUST re-seed global view after bootstrap-setRoles,
-    // otherwise a freshly-promoted super-admin would still be chip-
-    // scoped to their primary hospital on first login.
+  it('keeps the selected hospital-admin role when bootstrap lists a super-admin assignment', () => {
+    // D1973: account assignments cannot upgrade the role selected at login.
     authSpy.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN']); // JWT only
 
     const upgradedBootstrap: SessionBootstrapResponse = {
@@ -337,7 +333,7 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       username: 'tchico1er',
       email: 'tchico1er@example.com',
       authSource: 'internal',
-      roles: ['ROLE_SUPER_ADMIN'], // upgraded from HOSPITAL_ADMIN in JWT
+      roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'], // account holds both; JWT selected HA
       superAdmin: true,
       hospitalAdmin: false,
       primaryHospitalId,
@@ -359,18 +355,13 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       hospitalIds: [primaryHospitalId],
     });
 
-    // After both setRoles + bootstrap-setRoles + the SECOND
-    // markSuperAdminGlobalDefaults call, the upgraded SUPER_ADMIN
-    // MUST be in global view. (The first markSuperAdminGlobalDefaults
-    // call right after setRoles(jwtRoles) is a no-op because the JWT
-    // only carried HOSPITAL_ADMIN — but the SECOND call after
-    // bootstrap-setRoles(bsRoles) sees SUPER_ADMIN and fires.)
+    expect(roleContext.activeRole).toBe('ROLE_HOSPITAL_ADMIN');
     expect(roleContext.globalView())
-      .withContext('post-bootstrap: bootstrap-upgraded SUPER_ADMIN MUST land in global view')
-      .toBeTrue();
+      .withContext('the selected role has no global super-admin view')
+      .toBeFalse();
     expect(roleContext.effectiveHospitalIdForRequest())
-      .withContext('post-bootstrap: interceptor scope MUST be null for upgraded super-admin')
-      .toBeNull();
+      .withContext('the selected role keeps its live primary hospital')
+      .toBe(primaryHospitalId);
   });
 
   it('does NOT flip globalView for non-super-admin logins', () => {
