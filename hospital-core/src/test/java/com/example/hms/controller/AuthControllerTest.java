@@ -205,7 +205,7 @@ class AuthControllerTest {
         var principal = org.springframework.security.core.userdetails.User
                 .withUsername("sa").password("x").authorities(raw).build();
         var widened = com.example.hms.security.RoleExpansion.authoritiesMapper().mapAuthorities(raw);
-        org.mockito.Mockito.when(authenticationManager.authenticate(org.mockito.ArgumentMatchers.any()))
+        when(authenticationManager.authenticate(any()))
                 .thenReturn(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                         principal, "password", widened));
 
@@ -236,7 +236,7 @@ class AuthControllerTest {
                 // One held role: straight in as super-admin, no picker of inherited roles.
                 .andExpect(jsonPath("$.roleSelectionRequired").value(false));
         var descriptor = org.mockito.ArgumentCaptor.forClass(com.example.hms.security.TokenUserDescriptor.class);
-        org.mockito.Mockito.verify(jwtTokenProvider).generateAccessToken(descriptor.capture());
+        verify(jwtTokenProvider).generateAccessToken(descriptor.capture());
         org.assertj.core.api.Assertions.assertThat(descriptor.getValue().roles()).containsExactly("ROLE_SUPER_ADMIN");
     }
 

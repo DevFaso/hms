@@ -37,9 +37,6 @@ class PasswordCheckFailuresAuditedGuardTest {
     private static final Pattern AUDITS = Pattern.compile(
         "\\bauditOwnPasswordCheck\\s*\\(|\\bauditLoginFailure\\s*\\(|\\bauditEventLogService\\s*\\.\\s*logEvent\\s*\\("
             + "|\\brefused\\s*\\(|\\brefusedOn\\s*\\(");
-    private static final Pattern METHOD = Pattern.compile(
-        "(?m)^\\s*(?:@\\w+(?:\\([^)]*\\))?\\s*)*(?:public|protected|private)\\s[^;=(]*?\\b(\\w+)\\s*\\([^;{]*?\\)"
-            + "\\s*(?:throws\\s+[\\w.,\\s]+)?\\{");
 
     @Test
     @DisplayName("each method that checks a user's own password audits a refusal")
@@ -86,14 +83,11 @@ class PasswordCheckFailuresAuditedGuardTest {
     /** The methods of a source that call {@code checkPassword(} with no audit after the call. */
     static List<String> silentChecks(String source) {
         List<String> silent = new ArrayList<>();
-        Matcher method = METHOD.matcher(source);
-        while (method.find()) {
-            int open = method.end() - 1;
-            int close = closingBrace(source, open);
-            String body = source.substring(open, close + 1);
+        for (Declared method : declaredMethods(source)) {
+            String body = source.substring(method.open(), closingBrace(source, method.open()) + 1);
             Matcher call = CALL.matcher(body);
             if (call.find() && !AUDITS.matcher(body.substring(call.end())).find()) {
-                silent.add(method.group(1));
+                silent.add(method.name());
             }
         }
         return silent;
@@ -106,6 +100,65 @@ class PasswordCheckFailuresAuditedGuardTest {
             if (c == '{') {
                 depth++;
             } else if (c == '}' && --depth == 0) {
+                return i;
+            }
+        }
+        return source.length() - 1;
+    }
+
+    /** A method declared in a source: its name and the index of its body's opening brace. */
+    record Declared(String name, int open) {
+    }
+
+    private static final Pattern MODIFIER_LINE = Pattern.compile("(?m)^[ \t]*+(?:public|protected|private) ");
+
+    /**
+     * Every method body of a source, without a backtracking regex: a line opening with an access modifier whose
+     * first {@code (} comes before any {@code ;} or {@code =}, its name the identifier before that {@code (}, its
+     * body the {@code {} after the matching {@code )} (a {@code ;} first means no body).
+     */
+    static List<Declared> declaredMethods(String source) {
+        List<Declared> out = new ArrayList<>();
+        Matcher line = MODIFIER_LINE.matcher(source);
+        while (line.find()) {
+            int paren = source.indexOf('(', line.end());
+            int stop = firstOf(source, line.end(), ";=\n");
+            if (paren < 0 || (stop >= 0 && stop < paren)) {
+                continue;
+            }
+            int nameEnd = paren;
+            while (nameEnd > line.end() && Character.isWhitespace(source.charAt(nameEnd - 1))) {
+                nameEnd--;
+            }
+            int nameStart = nameEnd;
+            while (nameStart > line.end() && Character.isJavaIdentifierPart(source.charAt(nameStart - 1))) {
+                nameStart--;
+            }
+            int close = matching(source, paren, '(', ')');
+            int brace = firstOf(source, close + 1, "{;");
+            if (nameStart < nameEnd && brace >= 0 && source.charAt(brace) == '{') {
+                out.add(new Declared(source.substring(nameStart, nameEnd), brace));
+            }
+        }
+        return out;
+    }
+
+    private static int firstOf(String source, int from, String chars) {
+        for (int i = from; i < source.length(); i++) {
+            if (chars.indexOf(source.charAt(i)) >= 0) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int matching(String source, int open, char opening, char closing) {
+        int depth = 0;
+        for (int i = open; i < source.length(); i++) {
+            char c = source.charAt(i);
+            if (c == opening) {
+                depth++;
+            } else if (c == closing && --depth == 0) {
                 return i;
             }
         }

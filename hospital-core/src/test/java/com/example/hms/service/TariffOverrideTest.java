@@ -245,12 +245,13 @@ class TariffOverrideTest {
         for (Locale locale : java.util.List.of(Locale.FRENCH, Locale.ENGLISH, Locale.forLanguageTag("es"))) {
             org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
             try {
-                assertThatThrownBy(() -> service.deleteInvoiceItem(line.getId(), "Doublon", locale))
+                String removal = MessageUtil.resolve(locale, "billing.item.deleteNotAllowed");
+                String priceChange = MessageUtil.resolve(locale, "billing.item.overrideNotAllowed");
+                assertThat(removal).isNotEqualTo(priceChange).doesNotContain("[Missing translation]");
+                java.util.UUID lineId = line.getId();
+                assertThatThrownBy(() -> service.deleteInvoiceItem(lineId, "Doublon", locale))
                     .isInstanceOf(AccessDeniedException.class)
-                    .hasMessage(MessageUtil.resolve(locale, "billing.item.deleteNotAllowed"))
-                    .hasMessageNotContaining("[Missing translation]")
-                    .satisfies(e -> assertThat(e.getMessage())
-                        .isNotEqualTo(MessageUtil.resolve(locale, "billing.item.overrideNotAllowed")));
+                    .hasMessage(removal);
             } finally {
                 org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
             }
