@@ -163,7 +163,8 @@ export class RoiComponent implements OnInit, OnDestroy {
                       .flatMap((page) => page.content ?? [])
                       .sort(
                         (a, b) =>
-                          a.requestedOn.localeCompare(b.requestedOn) || a.id.localeCompare(b.id),
+                          (a.requestedOn ?? '').localeCompare(b.requestedOn ?? '') ||
+                          a.id.localeCompare(b.id),
                       )
                       .slice(0, RoiComponent.PAGE_SIZE),
                     totalElements: pages.reduce((sum, page) => sum + (page.totalElements ?? 0), 0),
