@@ -6314,6 +6314,13 @@
       "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature"
     },
     "ENUM": {
+      "RECOVERY_CONTACT_TYPE": {
+        "EMAIL": "Email",
+        "PHONE": "Phone",
+        "SECURITY_KEY": "Security key",
+        "PERSONAL_CONTACT": "Personal contact",
+        "OTHER": "Other contact"
+      },
       "LAB_ORDER_CHANNEL": {
         "ELECTRONIC": "Electronic",
         "EMAIL": "Email",
@@ -8052,6 +8059,11 @@
     "PRN_MIN_INTERVAL_VALUE": "At least {{hours}} h between doses"
   },
   "PROFILE": {
+    "RECOVERY_CONFIRM_TITLE": "Confirm your recovery contact",
+    "RECOVERY_CONFIRM_ADDRESS": "Read this address or number carefully: {{contact}}. Confirm that it is correct and that you can receive a code there.",
+    "RECOVERY_SEND_CODE": "Confirm and send code",
+    "RECOVERY_PHONE_EXAMPLE": "+226 70 12 34 56",
+    "RECOVERY_TYPE_UNVERIFIABLE": "Verification codes cannot be sent to this contact type.",
     "RECOVERY_REMOVE_CONFIRM": "Remove this recovery contact?",
     "ACCOUNT_AGE": "Account Age",
     "ACCOUNT_DETAILS": "Account Details",

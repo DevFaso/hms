@@ -14,7 +14,6 @@
   "pinned": [
     "src/app/lab/shared/result-evolution.component.ts::<option>u",
     "src/app/encounters/encounters.html::<option>department",
-    "src/app/admin-governance/credentials-tab.html::contact.contactType",
     "src/app/admin-governance/credentials-tab.html::mfa.channel",
     "src/app/admin-governance/credentials-tab.html::mfa.method",
     "src/app/admin-governance/policies-tab.html::rule.priority",
@@ -219,7 +218,6 @@
     "src/app/profile/profile.html::event.eventType",
     "src/app/profile/profile.html::mfa.channel",
     "src/app/profile/profile.html::mfa.method",
-    "src/app/profile/profile.html::rc.contactType",
     "src/app/reception/insurance-issues-panel/insurance-issues-panel.component.html::issue.issueType",
     "src/app/reception/recalls-panel/recalls-panel.component.html::recall.reason",
     "src/app/reception/reception-cockpit/reception-cockpit.component.html::item.appointmentReason",

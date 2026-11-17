@@ -19,6 +19,10 @@ import {
 import { PatientPortalService, PatientProfileDTO } from '../services/patient-portal.service';
 import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 import { fieldControlFor, markServerFieldErrors } from '../shared/forms/server-field-errors';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import en from '../../assets/i18n/en.json';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 
 const profile = (email: string, firstName = 'Awa'): UserProfile => ({
   id: 'u1',
@@ -626,6 +630,52 @@ describe('ProfileComponent — editing the profile', () => {
   });
 
   describe('recovery contacts (D2000)', () => {
+    for (const status of [429, 503]) {
+      it(`X7 preserves D2005: a confirmed address keeps its usable code after resend ${status}`, async () => {
+        spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+        const contact = health(true).recoveryContacts[0];
+        component.credentials.set(health(true));
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          of({ message: 'sent', contactType: 'PHONE' }),
+        );
+        await component.confirmRecoveryContact(contact);
+        component.verificationCode.set('123456');
+        profiles.sendRecoveryVerificationCode.and.returnValue(
+          throwError(
+            () =>
+              new HttpErrorResponse({
+                status,
+                error: { message: 'Please wait before resending.' },
+              }),
+          ),
+        );
+        component.sendVerificationCode(contact);
+        fixture.detectChanges();
+        expect(
+          (fixture.nativeElement as HTMLElement).querySelector('#verification-code'),
+        ).not.toBeNull();
+        expect(component.verificationCode()).toBe('123456');
+        profiles.verifyRecoveryContact.and.returnValue(of({ ...contact, verified: true }));
+        profiles.getCredentialHealth.and.returnValue(of(health(true)));
+        component.submitVerificationCode();
+        expect(profiles.verifyRecoveryContact).toHaveBeenCalledWith('rc1', '123456');
+      });
+    }
+
+    it('X7 preserves D2005: an accepted confirmation cannot dispatch twice while pending', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      const contact = health(true).recoveryContacts[0];
+      component.credentials.set(health(true));
+      const pending = new Subject<{ message: string; contactType: string }>();
+      profiles.sendRecoveryVerificationCode.and.returnValue(pending);
+      await component.confirmRecoveryContact(contact);
+      component.sendVerificationCode(contact);
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(1);
+      pending.next({ message: 'sent', contactType: 'PHONE' });
+      pending.complete();
+      expect(component.verificationCodeSent()).toBeTrue();
+    });
+
     const health = (phoneRecoveryAvailable: boolean | undefined): CredentialHealth =>
       ({
         recoveryContacts: [
@@ -664,7 +714,72 @@ describe('ProfileComponent — editing the profile', () => {
       expect(byId('recovery-phone-unavailable')).toBeNull();
     });
 
-    it('an existing phone contact cannot ask for a code that would never be texted', () => {
+    for (const [language, bundle, phoneLabel, emailLabel] of [
+      ['en', en, 'Phone', 'Email'],
+      ['fr', fr, 'Téléphone', 'E-mail'],
+      ['es', es, 'Teléfono', 'Correo electrónico'],
+    ] as const) {
+      for (const type of ['PHONE', 'EMAIL'] as const) {
+        it(`X7: ${language} ${type} reads back the exact address and sends only after confirmation`, async () => {
+          const translate = TestBed.inject(TranslateService);
+          translate.setTranslation(language, bundle);
+          translate.use(language);
+          const contact = {
+            ...health(true).recoveryContacts[0],
+            contactType: type,
+            contactValue: type === 'PHONE' ? '+22676000000' : 'backup@example.test',
+          };
+          component.credentials.set({ ...health(true), recoveryContacts: [contact] });
+          profiles.sendRecoveryVerificationCode.and.returnValue(
+            of({ message: 'sent', contactType: type }),
+          );
+          fixture.detectChanges();
+          const host = fixture.nativeElement as HTMLElement;
+          expect(host.querySelector('.recovery-type')?.textContent?.trim()).toBe(
+            type === 'PHONE' ? phoneLabel : emailLabel,
+          );
+          component.sendVerificationCode(contact);
+          expect(profiles.sendRecoveryVerificationCode).not.toHaveBeenCalled();
+          host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
+          expect(profiles.sendRecoveryVerificationCode).not.toHaveBeenCalled();
+          let dialog = document.querySelector<HTMLElement>('[data-testid="confirm-dialog"]')!;
+          expect(dialog.textContent).toContain(contact.contactValue);
+          expect(dialog.textContent).not.toContain('PROFILE.RECOVERY_CONFIRM');
+          dialog.querySelector<HTMLButtonElement>('[data-testid="confirm-dialog-cancel"]')!.click();
+          await fixture.whenStable();
+          expect(profiles.sendRecoveryVerificationCode).not.toHaveBeenCalled();
+          host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
+          dialog = document.querySelector<HTMLElement>('[data-testid="confirm-dialog"]')!;
+          dialog
+            .querySelector<HTMLButtonElement>('[data-testid="confirm-dialog-confirm"]')!
+            .click();
+          await fixture.whenStable();
+          expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledOnceWith(
+            contact.id!,
+            contact.contactValue,
+          );
+          component.sendVerificationCode({ ...contact, contactValue: `${contact.contactValue}0` });
+          expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(1);
+          component.cancelVerification();
+          component.sendVerificationCode(contact);
+          expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(1);
+        });
+      }
+    }
+
+    it('D2007: offers the local international phone example', () => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', fr);
+      translate.use('fr');
+      component.credentials.set(health(true));
+      component.openAddRecovery();
+      component.newRecoveryType.set('PHONE');
+      fixture.detectChanges();
+      expect((byId('recovery-value') as HTMLInputElement).placeholder).toBe('+226 70 12 34 56');
+    });
+
+    it('an existing phone contact cannot ask for a code that would never be texted', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
       const host = fixture.nativeElement as HTMLElement;
       component.credentials.set(health(false));
       fixture.detectChanges();
@@ -680,11 +795,13 @@ describe('ProfileComponent — editing the profile', () => {
         of({ message: 'sent', contactType: 'PHONE' }),
       );
       host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
-      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledWith('rc1');
+      await fixture.whenStable();
+      expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledWith('rc1', '+22676000000');
       expect(host.querySelector('[data-testid="recovery-phone-unverifiable"]')).toBeNull();
     });
 
-    it('a refused FIRST send (429, 503) says why and offers a retry and a cancel', () => {
+    it('a refused FIRST send (429, 503) says why and offers a retry and a cancel', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
       const host = fixture.nativeElement as HTMLElement;
       component.credentials.set(health(true));
       fixture.detectChanges();
@@ -696,6 +813,7 @@ describe('ProfileComponent — editing the profile', () => {
           throwError(() => new HttpErrorResponse({ status, error: { message } })),
         );
         host.querySelector<HTMLButtonElement>('.recovery-badges .btn-sm-primary')!.click();
+        await fixture.whenStable();
         fixture.detectChanges();
 
         const alert = host.querySelector('[data-testid="recovery-send-refused"] [role="alert"]');
@@ -719,14 +837,15 @@ describe('ProfileComponent — editing the profile', () => {
     });
 
     for (const status of [429, 503]) {
-      it(`D2005: a refused resend (${status}) keeps the first code form and typed code usable`, () => {
+      it(`D2005: a refused resend (${status}) keeps the first code form and typed code usable`, async () => {
+        spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
         const host = fixture.nativeElement as HTMLElement;
         const contact = health(true).recoveryContacts[0];
         component.credentials.set(health(true));
         profiles.sendRecoveryVerificationCode.and.returnValue(
           of({ message: 'sent', contactType: 'PHONE' }),
         );
-        component.sendVerificationCode(contact);
+        await component.confirmRecoveryContact(contact);
         fixture.detectChanges();
         component.verificationCode.set('123456');
         profiles.sendRecoveryVerificationCode.and.returnValue(
@@ -747,11 +866,13 @@ describe('ProfileComponent — editing the profile', () => {
       });
     }
 
-    it('does not dispatch a second recovery request while the first is pending', () => {
+    it('does not dispatch a second recovery request while the first is pending', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
       const pending = new Subject<{ message: string; contactType: string }>();
       profiles.sendRecoveryVerificationCode.and.returnValue(pending);
       const contact = health(true).recoveryContacts[0];
-      component.sendVerificationCode(contact);
+      component.credentials.set(health(true));
+      await component.confirmRecoveryContact(contact);
       component.sendVerificationCode(contact);
       expect(profiles.sendRecoveryVerificationCode).toHaveBeenCalledTimes(1);
       pending.next({ message: 'sent', contactType: 'PHONE' });

@@ -116,14 +116,14 @@ class UserCredentialLifecycleServiceImplTest {
                 if (verify) {
                     service.verifyRecoveryContact(caller, foreign.getId(), "123456");
                 } else {
-                    service.sendRecoveryContactVerificationCode(caller, foreign.getId());
+                    service.sendRecoveryContactVerificationCode(caller, foreign.getId(), foreign.getContactValue());
                 }
             });
             Throwable asUnknown = catchThrowable(() -> {
                 if (verify) {
                     service.verifyRecoveryContact(caller, unknownId, "123456");
                 } else {
-                    service.sendRecoveryContactVerificationCode(caller, unknownId);
+                    service.sendRecoveryContactVerificationCode(caller, unknownId, "unknown");
                 }
             });
             assertThat(asForeign).isInstanceOf(ResourceNotFoundException.class)
@@ -141,7 +141,7 @@ class UserCredentialLifecycleServiceImplTest {
         when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
 
-        service.sendRecoveryContactVerificationCode(userId, contact.getId());
+        service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue());
 
         assertThat(contact.getVerificationCodeExpiresAt()).isEqualTo(NOW.plusMinutes(15));
     }
@@ -795,6 +795,30 @@ class UserCredentialLifecycleServiceImplTest {
         return contact;
     }
 
+    @ParameterizedTest
+    @EnumSource(value = RecoveryContactType.class, names = {"EMAIL", "PHONE"})
+    void missingOrWrongReadBackNeverReplacesAnExistingChallengeOrDispatches(RecoveryContactType type) {
+        UUID userId = UUID.randomUUID();
+        UserRecoveryContact contact = pendingContact(userId);
+        contact.setContactType(type);
+        contact.setContactValue(type == RecoveryContactType.PHONE ? "+22670123456" : "backup@example.test");
+        contact.setVerificationCodeHash("existing-hash");
+        var expiry = java.time.LocalDateTime.of(2026, 11, 15, 18, 0);
+        contact.setVerificationCodeExpiresAt(expiry);
+        contact.setVerificationAttempts(2);
+        when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+        for (String readBack : new String[]{null, "", " ", "typo@example.test", "+22670123457"}) {
+            assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId(), readBack))
+                .isInstanceOfSatisfying(FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("confirmedContactValue"));
+            assertThat(contact.getVerificationCodeHash()).isEqualTo("existing-hash");
+            assertThat(contact.getVerificationCodeExpiresAt()).isEqualTo(expiry);
+            assertThat(contact.getVerificationAttempts()).isEqualTo(2);
+        }
+        verify(recoveryContactRepository, never()).save(any());
+        verifyNoInteractions(passwordEncoder, emailService, smsGateway);
+    }
+
     @Test
     void phoneRecoveryCodeIsSentBySmsInFrenchToTheGatewayNumber() {
         UUID userId = UUID.randomUUID();
@@ -807,7 +831,7 @@ class UserCredentialLifecycleServiceImplTest {
         when(smsGateway.sendSms(anyList(), anyString(), anyString()))
             .thenReturn(new IkoddiGateway.SmsDispatch(true, "{}"));
 
-        String type = service.sendRecoveryContactVerificationCode(userId, contact.getId());
+        String type = service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue());
 
         assertThat(type).isEqualTo("PHONE");
         verify(smsGateway).sendSms(List.of("+22670123456"), "e-Keneya : votre code",
@@ -829,7 +853,7 @@ class UserCredentialLifecycleServiceImplTest {
         when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
         when(smsGateway.isConfigured()).thenReturn(false);
 
-        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()))
+        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue()))
             .isInstanceOf(NotificationTransportUnavailableException.class)
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.smsUnavailable"));
 
@@ -856,14 +880,14 @@ class UserCredentialLifecycleServiceImplTest {
         List<String> keys = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
             contact.setVerificationCodeExpiresAt(null); // what the rollback of the refused send restores
-            Throwable thrown = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()));
+            Throwable thrown = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue()));
             assertThat(thrown).isInstanceOf(BusinessException.class);
             keys.add(((BusinessException) thrown).getMessageKey());
         }
         assertThat(keys).containsExactly("users.recovery.smsFailed", "sms.recipient.notAllowlisted",
             "users.recovery.smsFailed");
         contact.setVerificationCodeExpiresAt(null);
-        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()))
+        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue()))
             .isInstanceOf(NotificationTransportUnavailableException.class)
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.smsUnavailable"));
     }
@@ -875,7 +899,7 @@ class UserCredentialLifecycleServiceImplTest {
         when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
         when(smsGateway.isConfigured()).thenReturn(true);
 
-        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()))
+        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue()))
             .isInstanceOfSatisfying(FieldBusinessException.class, ex -> {
                 assertThat(ex.getField()).isEqualTo("contactValue");
                 assertThat(ex.getMessageKey()).isEqualTo("users.recovery.phoneInvalid");
@@ -893,7 +917,7 @@ class UserCredentialLifecycleServiceImplTest {
         doThrow(new NotificationTransportUnavailableException("Mail transport is not configured on this deployment"))
             .when(emailService).sendRecoveryContactVerificationEmail(anyString(), anyString());
 
-        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()))
+        assertThatThrownBy(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue()))
             .isInstanceOf(NotificationTransportUnavailableException.class)
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.emailUnavailable"));
     }
@@ -918,7 +942,7 @@ class UserCredentialLifecycleServiceImplTest {
         org.mockito.Mockito.lenient().when(smsGateway.sendSms(anyList(), anyString(), anyString()))
             .thenReturn(new IkoddiGateway.SmsDispatch(true, "{}"));
 
-        Throwable thrown = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()));
+        Throwable thrown = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue()));
 
         int emails = org.mockito.Mockito.mockingDetails(emailService).getInvocations().size();
         int texts = (int) org.mockito.Mockito.mockingDetails(smsGateway).getInvocations().stream()
@@ -954,8 +978,8 @@ class UserCredentialLifecycleServiceImplTest {
         when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
         stubAcceptedSms();
 
-        service.sendRecoveryContactVerificationCode(userId, contact.getId());
-        Throwable again = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()));
+        service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue());
+        Throwable again = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue()));
 
         assertThat(again).isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class, ex -> {
             assertThat(ex.getStatusCode().value()).isEqualTo(429);
@@ -966,7 +990,7 @@ class UserCredentialLifecycleServiceImplTest {
         // Past the desk's cooldown (60 s) the contact can be sent a fresh code.
         contact.setVerificationCodeExpiresAt(NOW.plusMinutes(15)
             .minusSeconds(PhoneVerificationServiceImpl.RESEND_COOLDOWN_SECONDS));
-        service.sendRecoveryContactVerificationCode(userId, contact.getId());
+        service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue());
         verify(smsGateway, org.mockito.Mockito.times(2)).sendSms(anyList(), anyString(), anyString());
     }
 
@@ -978,7 +1002,7 @@ class UserCredentialLifecycleServiceImplTest {
         for (int i = 0; i <= cap; i++) {
             UserRecoveryContact contact = pendingPhoneContact(userId, "+2267012345" + (i % 10));
             when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
-            Throwable thrown = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId()));
+            Throwable thrown = catchThrowable(() -> service.sendRecoveryContactVerificationCode(userId, contact.getId(), contact.getContactValue()));
             if (i < cap) {
                 assertThat(thrown).as("send %d", i + 1).isNull();
             } else {
@@ -994,7 +1018,7 @@ class UserCredentialLifecycleServiceImplTest {
         UUID other = UUID.randomUUID();
         UserRecoveryContact theirs = pendingPhoneContact(other, "+22670999999");
         when(recoveryContactRepository.findById(theirs.getId())).thenReturn(Optional.of(theirs));
-        service.sendRecoveryContactVerificationCode(other, theirs.getId());
+        service.sendRecoveryContactVerificationCode(other, theirs.getId(), theirs.getContactValue());
     }
 
     // ── D2000 (owner request): a recovery contact is not the sign-in email or phone ──

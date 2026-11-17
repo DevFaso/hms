@@ -918,7 +918,9 @@
                       class="form-control"
                       [type]="newRecoveryType() === 'EMAIL' ? 'email' : 'tel'"
                       [placeholder]="
-                        newRecoveryType() === 'EMAIL' ? 'recovery@example.com' : '+1234567890'
+                        newRecoveryType() === 'EMAIL'
+                          ? 'recovery@example.com'
+                          : ('PROFILE.RECOVERY_PHONE_EXAMPLE' | translate)
                       "
                       [ngModel]="newRecoveryValue()"
                       (ngModelChange)="newRecoveryValue.set($event)"
@@ -959,7 +961,9 @@
                           {{ rc.contactType === 'EMAIL' ? 'mail' : 'phone' }}
                         </span>
                         <div class="recovery-details">
-                          <span class="recovery-type">{{ rc.contactType }}</span>
+                          <span class="recovery-type">{{
+                            rc.contactType | enumLabel: 'recoveryContactType'
+                          }}</span>
                           <span class="recovery-value">{{ rc.contactValue }}</span>
                         </div>
                         <div class="recovery-badges">
@@ -969,7 +973,12 @@
                             <span class="badge-unverified">{{
                               'PROFILE.UNVERIFIED' | translate
                             }}</span>
-                            @if (rc.contactType === 'PHONE' && !phoneRecoveryAvailable()) {
+                            @if (rc.contactType !== 'PHONE' && rc.contactType !== 'EMAIL') {
+                              {{ ' '
+                              }}<span class="form-hint">{{
+                                'PROFILE.RECOVERY_TYPE_UNVERIFIABLE' | translate
+                              }}</span>
+                            } @else if (rc.contactType === 'PHONE' && !phoneRecoveryAvailable()) {
                               <!-- D2000: no SMS transport, so no code to promise; the reason is shown instead of Verify. -->
                               {{ ' '
                               }}<span class="form-hint" data-testid="recovery-phone-unverifiable">{{
@@ -978,7 +987,7 @@
                             } @else if (verifyingContactId() !== rc.id) {
                               <button
                                 class="btn-sm-primary"
-                                (click)="sendVerificationCode(rc)"
+                                (click)="confirmRecoveryContact(rc)"
                                 [disabled]="verificationSending()"
                               >
                                 {{ 'PROFILE.VERIFY' | translate }}
