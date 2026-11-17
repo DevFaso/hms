@@ -131,10 +131,8 @@ public class PatientNotificationRenderer {
             }
             args = new Object[] {hospitalName};
         } else {
-            Appointment appointment = appointmentRepository.findById(row.getSubjectId()).orElse(null);
-            LocalDateTime startsAt = startOf(appointment);
-            if (startsAt == null || !AppointmentReminderService.REMINDABLE_STATUSES.contains(appointment.getStatus())
-                || startsAt.isBefore(LocalDateTime.now(clock))) {
+            LocalDateTime startsAt = liveAppointmentStart(row.getSubjectId());
+            if (startsAt == null) {
                 return skip(row, PatientNotificationErrorCode.SUBJECT_WITHDRAWN);
             }
             args = new Object[] {
@@ -185,6 +183,17 @@ public class PatientNotificationRenderer {
                 .map(UltrasoundReport::isReleasedToPatient).orElse(false);
             default -> false;
         };
+    }
+
+    /** The start of a still-booked, still-ahead appointment; null when it is cancelled, past or gone. */
+    private LocalDateTime liveAppointmentStart(UUID appointmentId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId).orElse(null);
+        LocalDateTime startsAt = startOf(appointment);
+        if (startsAt == null || !AppointmentReminderService.REMINDABLE_STATUSES.contains(appointment.getStatus())
+            || startsAt.isBefore(LocalDateTime.now(clock))) {
+            return null;
+        }
+        return startsAt;
     }
 
     private static LocalDateTime startOf(Appointment appointment) {

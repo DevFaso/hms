@@ -106,8 +106,10 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("PatientNotificationDispatchService.recordOutcome#findById", "V312 sweep: the ledger row it claimed"),
         entry("PatientNotificationLedger.eligibleChannels#findByIdUnscoped", "V312 queue: the patient of a booking or"
             + " release that was tenant-checked; reads contact presence and consent only"),
-        entry("PatientNotificationRenderer.prepare#findById", "V312 sweep: the claimed ledger row, its hospital and"
-            + " its appointment, all named by the row"),
+        entry("PatientNotificationRenderer.prepare#findById", "V312 sweep: the claimed ledger row and its hospital,"
+            + " named by the row"),
+        entry("PatientNotificationRenderer.liveAppointmentStart#findById", "V312 sweep: the appointment named by the"
+            + " claimed row; only its status and start are read"),
         entry("PatientNotificationRenderer.prepare#findByIdUnscoped", "V312 sweep: the patient named by the claimed row"),
         entry("PatientNotificationRenderer.resultStillReleased#findById", "V312 sweep: is the subject named by the"
             + " claimed row still released; nothing is returned"),

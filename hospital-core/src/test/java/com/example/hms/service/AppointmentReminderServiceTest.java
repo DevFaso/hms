@@ -138,7 +138,7 @@ class AppointmentReminderServiceTest {
 
         service.sendDueReminders();
 
-        verify(patientLocaleResolver).resolve(eq(patient), eq(Locale.forLanguageTag("fr")));
+        verify(patientLocaleResolver).resolve(patient, Locale.forLanguageTag("fr"));
         verify(notificationService).created(
             contains(com.example.hms.utility.DisplayDates.date(appointment.getAppointmentDate(), english)),
             eq("awa.traore"), eq("APPOINTMENT_REMINDER"));
@@ -152,7 +152,7 @@ class AppointmentReminderServiceTest {
 
         service.sendDueReminders();
 
-        verify(patientLocaleResolver).resolve(eq(patient), eq(Locale.forLanguageTag("fr")));
+        verify(patientLocaleResolver).resolve(patient, Locale.forLanguageTag("fr"));
     }
 
     @Test
@@ -177,8 +177,8 @@ class AppointmentReminderServiceTest {
                 .channel(NotificationChannel.SMS)
                 .enabled(false)
                 .build()));
-        // The ledger honours the SMS preference (PatientNotificationLedgerTest);
-        // the bell still fires.
+        // V312: the SMS preference is honoured by the ledger, whose own test
+        // covers it, and the in-app bell still fires here.
         when(ledger.enqueue(any(), any(), any(), any())).thenReturn(List.of());
         feed(appointment);
 

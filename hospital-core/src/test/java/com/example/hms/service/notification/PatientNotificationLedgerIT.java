@@ -149,7 +149,8 @@ class PatientNotificationLedgerIT extends BaseIT {
         UUID subject = UUID.randomUUID();
         repository.saveAndFlush(row(subject, hospital.getId()));
 
-        assertThatThrownBy(() -> repository.saveAndFlush(row(subject, hospital.getId())))
+        PatientNotificationDelivery duplicate = row(subject, hospital.getId());
+        assertThatThrownBy(() -> repository.saveAndFlush(duplicate))
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 

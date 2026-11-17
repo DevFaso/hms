@@ -123,7 +123,8 @@ class PatientNotificationDeliveryAdminServiceTest {
     void otherHospitalIsNotFound() {
         when(repository.findByIdAndHospitalId(failed.getId(), hospitalId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.retry(failed.getId())).isInstanceOf(ResourceNotFoundException.class);
+        UUID id = failed.getId();
+        assertThatThrownBy(() -> service.retry(id)).isInstanceOf(ResourceNotFoundException.class);
         verify(repository, never()).requeueFailed(any(), any(), any(), any(), any(), any());
     }
 
@@ -133,7 +134,8 @@ class PatientNotificationDeliveryAdminServiceTest {
         failed.setStatus(NotificationDeliveryStatus.SENT);
         when(repository.findByIdAndHospitalId(failed.getId(), hospitalId)).thenReturn(Optional.of(failed));
 
-        assertThatThrownBy(() -> service.retry(failed.getId())).isInstanceOf(BusinessException.class);
+        UUID id = failed.getId();
+        assertThatThrownBy(() -> service.retry(id)).isInstanceOf(BusinessException.class);
         verify(repository, never()).requeueFailed(any(), any(), any(), any(), any(), any());
     }
 
@@ -143,6 +145,7 @@ class PatientNotificationDeliveryAdminServiceTest {
         when(repository.findByIdAndHospitalId(failed.getId(), hospitalId)).thenReturn(Optional.of(failed));
         when(repository.requeueFailed(any(), any(), any(), any(), any(), any())).thenReturn(0);
 
-        assertThatThrownBy(() -> service.retry(failed.getId())).isInstanceOf(BusinessException.class);
+        UUID id = failed.getId();
+        assertThatThrownBy(() -> service.retry(id)).isInstanceOf(BusinessException.class);
     }
 }

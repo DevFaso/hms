@@ -71,7 +71,7 @@ public class PatientNotificationDeliveryAdminService {
             .collect(Collectors.toSet());
         Map<UUID, String> names = patientIds.isEmpty() ? Map.of()
             : patientRepository.findAllById(patientIds).stream()
-                .collect(Collectors.toMap(Patient::getId, p -> p.getFullName() == null ? "" : p.getFullName(),
+                .collect(Collectors.toMap(Patient::getId, PatientNotificationDeliveryAdminService::nameOf,
                     (a, b) -> a));
 
         Map<String, Long> counts = new LinkedHashMap<>();
@@ -115,9 +115,13 @@ public class PatientNotificationDeliveryAdminService {
         PatientNotificationDelivery fresh = repository.findByIdAndHospitalId(id, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_KEY));
         Map<UUID, String> names = patientRepository.findById(fresh.getPatientId())
-            .map(p -> Map.of(p.getId(), p.getFullName() == null ? "" : p.getFullName()))
+            .map(p -> Map.of(p.getId(), nameOf(p)))
             .orElse(Map.of());
         return toDto(fresh, names);
+    }
+
+    private static String nameOf(Patient patient) {
+        return patient.getFullName() == null ? "" : patient.getFullName();
     }
 
     static Collection<NotificationDeliveryStatus> parseStatuses(String status) {

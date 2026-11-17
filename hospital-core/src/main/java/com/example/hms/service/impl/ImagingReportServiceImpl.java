@@ -291,9 +291,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         // V312: the signature releases the read to the patient: tell them a
         // result is available (SMS / email, after commit, once per order: an
         // addendum signed later is not a second notice). Never its content.
-        ImagingOrder signedOrder = notificationLedger != null && saved != null ? saved.getImagingOrder() : null;
-        if (signedOrder != null && saved.isReleasedToPatient() && signedOrder.getPatient() != null
-            && hospital != null) {
+        ImagingOrder signedOrder = notificationLedger != null ? saved.getImagingOrder() : null;
+        if (signedOrder != null && saved.isReleasedToPatient() && signedOrder.getPatient() != null) {
             notificationLedger.requestAfterCommit(
                 com.example.hms.enums.PatientNotificationEvent.IMAGING_RESULT_AVAILABLE,
                 hospital.getId(), signedOrder.getPatient().getId(), signedOrder.getId());
