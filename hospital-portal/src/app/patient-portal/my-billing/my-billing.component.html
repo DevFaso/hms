@@ -229,6 +229,11 @@
                             >· {{ p.paymentMethod | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</span
                           >
                         }
+                        @if (isMobileMoney(p.paymentMethod)) {
+                          <span data-testid="payment-operator"
+                            >· {{ operatorLabelKey(p.mobileMoneyOperator) | translate }}</span
+                          >
+                        }
                         <span class="pli-status" [attr.data-status]="p.status">{{
                           p.status | keyLabel: 'BILLING.PAYMENT_STATUSES.'
                         }}</span>
@@ -352,6 +357,25 @@
               </select>
             </div>
 
+            @if (isMobileMoney(payMethod)) {
+              <!-- Billing plan PR 9: the cashier totals Orange Money and Moov Money apart. -->
+              <div class="pay-field">
+                <label for="payOperator">{{ 'MOBILE_MONEY.OPERATOR_LABEL' | translate }} *</label>
+                <select
+                  required
+                  aria-required="true"
+                  id="payOperator"
+                  data-server-field="mobileMoneyOperator"
+                  [(ngModel)]="payOperator"
+                >
+                  <option [ngValue]="null">{{ 'MOBILE_MONEY.OPERATOR_CHOOSE' | translate }}</option>
+                  @for (o of mobileMoneyOperators; track o.value) {
+                    <option [ngValue]="o.value">{{ o.labelKey | translate }}</option>
+                  }
+                </select>
+              </div>
+            }
+
             <div class="pay-field">
               <!-- QA D1007: optional only for cash; the label no longer says so for the others. -->
               <label for="payRef"
@@ -372,6 +396,9 @@
                 [placeholder]="'PORTAL.BILLING.REFERENCE_PLACEHOLDER' | translate"
                 maxlength="120"
               />
+              <p class="pay-hint" data-testid="pay-no-card-details">
+                {{ 'MOBILE_MONEY.NO_CARD_DETAILS' | translate }}
+              </p>
             </div>
 
             <div class="pay-actions">

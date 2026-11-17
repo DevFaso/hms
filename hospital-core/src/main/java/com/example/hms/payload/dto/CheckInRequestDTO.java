@@ -41,7 +41,14 @@ public class CheckInRequestDTO {
 
     /** QA D975: the operator or terminal reference of a non-cash copay. */
     @jakarta.validation.constraints.Size(max = 100, message = "{reception.checkin.copayReference.size}")
+    @com.example.hms.validation.NoCardNumber
     private String copayReference;
+
+    /**
+     * Billing plan PR 9: the operator of a Mobile Money copay (Orange Money,
+     * Moov Money or another). Required when {@link #copayMethod} is MOBILE_MONEY.
+     */
+    private com.example.hms.enums.MobileMoneyOperator copayMobileMoneyOperator;
 
     /** Whether the receptionist confirmed patient identity (photo ID, DOB, etc.). */
     @jakarta.validation.constraints.AssertTrue(message = "{reception.checkin.identityRequired}")

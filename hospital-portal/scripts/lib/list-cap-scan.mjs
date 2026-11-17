@@ -122,7 +122,19 @@ export function listCapFindings(source, relFile) {
     .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
     .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, (m, lead) => lead + ' '.repeat(m.length - lead.length));
 
+  // A page immediately projected to its server total is a count query, not
+  // a truncated list. The exact return shape excludes content projections,
+  // subscriptions and other uses of the page; all row reads still use the gate.
+  const totalQueries = [
+    ...code.matchAll(
+      /\bconst\s+([\w$]+)\s*=\s*([^;]+);\s*return\s+\1\.pipe\(\s*map\(\s*\(?(\w+)\)?\s*=>\s*\3\.totalElements\s*\)\s*\)\s*;/g,
+    ),
+  ].filter((match) => !/\bcontent\b|\bsubscribe\b/.test(match[2]));
+  const isTotalQuery = (offset) =>
+    totalQueries.some((match) => offset >= match.index && offset < match.index + match[0].length);
+
   for (const m of code.matchAll(FIXED_SIZE_OBJECT)) {
+    if (isTotalQuery(m.index)) continue;
     push(
       m.index,
       'fixed-size',
@@ -131,6 +143,7 @@ export function listCapFindings(source, relFile) {
     );
   }
   for (const m of code.matchAll(FIXED_SIZE_PARAM)) {
+    if (isTotalQuery(m.index)) continue;
     push(
       m.index,
       'fixed-size',
@@ -139,6 +152,7 @@ export function listCapFindings(source, relFile) {
     );
   }
   for (const m of code.matchAll(FIXED_SIZE_POSITIONAL)) {
+    if (isTotalQuery(m.index)) continue;
     push(
       m.index,
       'fixed-size',

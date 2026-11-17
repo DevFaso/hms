@@ -137,10 +137,26 @@ class PharmacySaleServiceImplTest {
     }
 
     @Test
+    @DisplayName("Billing plan PR 9: a Mobile Money counter sale without an operator is refused on mobileMoneyOperator")
+    void mobileMoneyWithoutOperatorIsRefused() {
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+        dto.setPaymentMethod(PharmacyPaymentMethod.MOBILE_MONEY);
+        dto.setReferenceNumber("OM-R20-55124");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("field", "messageKey")
+                .containsExactly("mobileMoneyOperator", "billing.payment.operatorRequired");
+        verify(saleRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("QA D1129: a mobile-money sale whose reference is already recorded is refused")
     void d1129_aReusedReferenceIsRefused() {
         PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
         dto.setPaymentMethod(PharmacyPaymentMethod.MOBILE_MONEY);
+        dto.setMobileMoneyOperator(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY);
         dto.setReferenceNumber("OM-R20-55123");
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         doThrow(new BusinessException("billing.payment.duplicateReference"))

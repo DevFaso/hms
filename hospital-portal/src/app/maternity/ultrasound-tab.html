@@ -6,6 +6,9 @@
     @for (w of worklists; track w) {
       <button class="tab-btn" [class.active]="worklist() === w" (click)="setWorklist(w)">
         {{ 'ULTRASOUND.WORKLIST_' + w.toUpperCase().replaceAll('-', '_') | translate }}
+        <span class="worklist-count" [title]="'MATERNITY.WORKLIST_COUNT_HELP' | translate">{{
+          counts.values()[w] ?? '—'
+        }}</span>
       </button>
     }
   </div>

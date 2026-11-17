@@ -126,10 +126,31 @@ class PharmacyPaymentServiceImplTest {
                 .patientId(patientId)
                 .hospitalId(hospitalId)
                 .paymentMethod(method)
+                // Billing plan PR 9: a Mobile Money payment names its operator.
+                .mobileMoneyOperator(method == PharmacyPaymentMethod.MOBILE_MONEY
+                        ? com.example.hms.enums.MobileMoneyOperator.MOOV_MONEY : null)
                 .amount(new BigDecimal("2500"))
                 .currency("XOF")
                 .receivedBy(userId)
                 .build();
+    }
+
+    @Test
+    @DisplayName("Billing plan PR 9: a Mobile Money checkout without an operator is refused on mobileMoneyOperator")
+    void mobileMoneyWithoutOperatorIsRefused() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.MOBILE_MONEY);
+        dto.setReferenceNumber("MOOV-778812");
+        dto.setMobileMoneyOperator(null);
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(e -> {
+                    com.example.hms.exception.FieldBusinessException f = (com.example.hms.exception.FieldBusinessException) e;
+                    org.assertj.core.api.Assertions.assertThat(f.getField()).isEqualTo("mobileMoneyOperator");
+                    org.assertj.core.api.Assertions.assertThat(f.getMessageKey()).isEqualTo("billing.payment.operatorRequired");
+                });
+        verify(paymentRepository, never()).save(any());
     }
 
     @Test

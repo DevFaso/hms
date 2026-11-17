@@ -329,6 +329,20 @@
     "BABY_OUTCOMES": "Issue de chaque bébé",
     "FETAL_DEATH_EVENT_RECORDED": "Mortinaissance enregistrée comme événement de décès fœtal (sans dossier patient) : elle est comptée dans le registre de mortalité."
   },
+  "MOBILE_MONEY": {
+    "OPERATOR_LABEL": "Opérateur",
+    "OPERATOR_CHOOSE": "Choisir l’opérateur",
+    "OPERATOR_REQUIRED": "Choisissez l’opérateur du paiement mobile money (Orange Money, Moov Money ou autre opérateur).",
+    "OPERATOR": {
+      "ORANGE_MONEY": "Orange Money",
+      "MOOV_MONEY": "Moov Money",
+      "AUTRE": "Autre opérateur",
+      "NOT_STATED": "Opérateur non précisé"
+    },
+    "MANUAL_ENTRY_NOTICE": "Paiement saisi manuellement — vérifiez la référence sur le relevé de l’opérateur.",
+    "NO_CARD_DETAILS": "Ne saisissez jamais de numéro de carte bancaire, de cryptogramme ni de code PIN : seulement la référence de la transaction.",
+    "CARD_NUMBER_REFUSED": "Ce champ semble contenir un numéro de carte bancaire. e-Keneya n’enregistre jamais de numéro de carte : saisissez seulement la référence de la transaction."
+  },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Retour aux organisations",
     "LOADING": "Chargement du cycle de vie…",
@@ -11236,6 +11250,7 @@
     "SOCIAL_EMPTY": "Saisissez au moins un élément (habitudes, profession, conditions de vie ou notes) avant d'enregistrer une nouvelle version."
   },
   "MATERNITY": {
+    "WORKLIST_COUNT_HELP": "Nombre dans la liste pour l’hôpital et la patiente sélectionnés. — indique un chargement ou un nombre indisponible. La recherche textuelle ne modifie pas ces nombres.",
     "NETWORK_HELP": "Sélectionnez un hôpital pour les antécédents, les orientations et les listes de soins maternels.",
     "FOREIGN_RECORDED_AT": "Enregistré à {{hospital}}, lecture seule ici",
     "GA": "Terme",
