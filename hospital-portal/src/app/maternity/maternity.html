@@ -526,7 +526,7 @@
                   {{ r.slaDueAt ? (r.slaDueAt | serverTime | date: 'short') : '—' }}
                   @if (isOverdue(r)) {
                     <span class="risk-badge risk-high">{{
-                      'CARE_DASH.OVERDUE_MINUTES' | translate: { count: overdueMinutes(r) }
+                      'CARE_DASH.OVERDUE_BY' | translate: { duration: overdueMinutes(r) | elapsed }
                     }}</span>
                   }
                 </td>
@@ -1312,7 +1312,7 @@
               {{ r.slaDueAt | serverTime | dateTime }}
               @if (isOverdue(r)) {
                 <span class="risk-badge risk-high">{{
-                  'CARE_DASH.OVERDUE_MINUTES' | translate: { count: overdueMinutes(r) }
+                  'CARE_DASH.OVERDUE_BY' | translate: { duration: overdueMinutes(r) | elapsed }
                 }}</span>
               }
             </p>

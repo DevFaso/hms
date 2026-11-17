@@ -1,3 +1,4 @@
+import { ElapsedPipe } from '../shared/pipes/elapsed.pipe';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -176,7 +177,7 @@ type MaternityTab =
 @Component({
   selector: 'app-maternity',
   standalone: true,
-  imports: [
+  imports: [ElapsedPipe, 
     DateTimePipe,
     InlineDiscardAskComponent,
     InlineSubFormDirective,

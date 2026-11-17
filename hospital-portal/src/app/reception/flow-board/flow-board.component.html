@@ -57,7 +57,7 @@
               @if (item.waitMinutes > 0) {
                 <div class="card-wait">
                   <!-- QA D1200 (round 22): "706Attente min." read as a minimum wait. -->
-                  {{ 'RECEPTION.WAIT_DURATION' | translate: { minutes: item.waitMinutes } }}
+                  {{ 'RECEPTION.WAIT_ELAPSED' | translate: { duration: item.waitMinutes | elapsed } }}
                 </div>
               }
               <div class="card-flags">
