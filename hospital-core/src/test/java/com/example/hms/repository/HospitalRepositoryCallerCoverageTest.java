@@ -77,6 +77,7 @@ class HospitalRepositoryCallerCoverageTest {
     /** Class.method#by-id read of a hospital → why it is not findClinicalById. Frozen: it only shrinks. */
     private static final Map<String, String> BY_ID_RECORDED = Map.ofEntries(
         entry("MeController.myHospital#findById", LABEL + " (the caller's own facility)"),
+        entry("PatientNotificationRenderer.prepare#findById", LABEL + " (V312: the hospital named in a patient SMS / email)"),
         entry("AuthBootstrapServiceImpl.resolveCurrentSession#findById", LABEL + " (the caller's own primary facility)"),
         entry("MorbidityAnalyticsServiceImpl.hospitalView#findById", LABEL),
         entry("PatientPortalServiceImpl.toProfileDTO#findById", LABEL + " (a hospital on the patient's own record)"),
