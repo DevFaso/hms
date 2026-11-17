@@ -78,7 +78,7 @@ public class LabResultController {
     // result depends on the TEST being point-of-care, and the annotation runs
     // before the test is loaded. LabResultEntryGuard makes that call in the
     // service. This stays broad on purpose.
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR','QUALITY_MANAGER')")
+    @PreAuthorize(LabResultAuthority.ENTRY_EXPRESSION)
     @WriteAudited(entity = "LAB_RESULT", eventType = AuditEventType.LAB_RESULT_CREATED)
     @Operation(summary = "Create Lab Result", description = "Creates a new lab result.")
     public ResponseEntity<LabResultResponseDTO> createLabResult(
@@ -130,7 +130,7 @@ public class LabResultController {
     // result depends on the TEST being point-of-care, and the annotation runs
     // before the test is loaded. LabResultEntryGuard makes that call in the
     // service. This stays broad on purpose.
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR','QUALITY_MANAGER')")
+    @PreAuthorize(LabResultAuthority.ENTRY_EXPRESSION)
     @Operation(summary = "Update Lab Result", description = "Updates an existing lab result.")
     public ResponseEntity<LabResultResponseDTO> updateLabResult(
             @PathVariable UUID id,
@@ -148,7 +148,7 @@ public class LabResultController {
     // chemistry panel they had no part in — while `sign`, the lesser act, was
     // already narrower than release.
     @PostMapping("/{id}/release")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_MANAGER','LAB_DIRECTOR')")
+    @PreAuthorize(LabResultAuthority.RELEASE_EXPRESSION)
     @Operation(summary = "Release Lab Result",
         description = "Marks the lab result as released and ready for downstream workflows. "
             + "Laboratory staff only — mirrors microbiology's finalize authority.")
