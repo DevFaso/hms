@@ -14,6 +14,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,13 +24,21 @@ import java.util.UUID;
  * <ol>
  *   <li>a short transaction lists due ids (PENDING, or RETRYING whose backoff ran out);</li>
  *   <li>each row is claimed by a conditional update in its own short transaction, so a concurrent
- *       sweep on another instance gets 0 rows and skips it: nothing is sent twice by two sweeps;</li>
+ *       sweep on another instance gets 0 rows and skips it: two sweeps never send the same due row
+ *       at the same time;</li>
  *   <li>the message is prepared in a third short transaction ({@link PatientNotificationRenderer}):
  *       the subject still stands, the patient still consents and still has a number or address,
  *       else the row is SKIPPED and nothing is sent;</li>
  *   <li>the SMS gateway or SMTP runs with NO transaction open;</li>
- *   <li>the outcome is recorded in a last short transaction.</li>
+ *   <li>the outcome is recorded in a last short transaction, conditionally on the claim token
+ *       ({@code lastAttemptAt}): a sweep that lost its claim never overwrites a newer attempt.</li>
  * </ol>
+ *
+ * <p><b>What this does not prevent.</b> Delivery is at least once, as in the mail outbox. If this
+ * instance dies after the provider accepted the message and before step 5, or the send outlives the
+ * claim lease ({@code claim-lease-seconds}, well above the transport timeouts), the row becomes due
+ * again and the patient can receive the message twice. The idempotency key stops a second ROW (a
+ * re-run, a second release path); it cannot stop a crash between "accepted" and "recorded".
  *
  * <p><b>Bounded retry.</b> A transient failure (provider unreachable, refused credentials, no
  * transport, SMTP down) is RETRYING with a doubling backoff up to the attempt ceiling, then FAILED.
@@ -107,7 +116,9 @@ public class PatientNotificationDispatchService {
 
     private boolean dispatchOne(UUID id) {
         try {
-            LocalDateTime now = LocalDateTime.now(clock);
+            // Microseconds: the claim time is the claim token, compared after a round trip
+            // through a TIMESTAMP column that keeps no nanoseconds.
+            LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
             LocalDateTime leaseUntil = now.plusSeconds(properties.getClaimLeaseSeconds());
             Integer claimed = transactionTemplate.execute(status ->
                 repository.claim(id, OPEN, properties.getMaxAttempts(), now, leaseUntil));
@@ -119,7 +130,7 @@ public class PatientNotificationDispatchService {
                 return false; // skipped (recorded by the renderer) or gone
             }
             RuntimeException failure = send(prepared);
-            Boolean sent = transactionTemplate.execute(status -> recordOutcome(id, failure));
+            Boolean sent = transactionTemplate.execute(status -> recordOutcome(id, now, failure));
             return Boolean.TRUE.equals(sent);
         } catch (RuntimeException ex) {
             // A database step failed: the lease brings the row back. Never let one row stop the batch.
@@ -147,39 +158,44 @@ public class PatientNotificationDispatchService {
         }
     }
 
-    /** Runs inside a short transaction; the attempt was counted by the claim. */
-    private boolean recordOutcome(UUID id, RuntimeException failure) {
+    /**
+     * Runs inside a short transaction; the attempt was counted by the claim. Written only while this
+     * sweep still holds the claim made at {@code claimedAt}.
+     */
+    private boolean recordOutcome(UUID id, LocalDateTime claimedAt, RuntimeException failure) {
         PatientNotificationDelivery row = repository.findById(id).orElse(null);
         if (row == null) {
             return false;
         }
         LocalDateTime now = LocalDateTime.now(clock);
         if (failure == null) {
-            row.setStatus(NotificationDeliveryStatus.SENT);
-            row.setSentAt(now);
-            row.setErrorCode(null);
-            repository.save(row);
-            log.info("Patient notification {} ({} {}) sent on attempt {}", row.getId(), row.getEventType(),
+            if (repository.markSent(id, claimedAt, OPEN, NotificationDeliveryStatus.SENT, now) != 1) {
+                log.warn("Patient notification {} ({} {}) was sent, but its claim had moved on; the newer "
+                    + "attempt's state is kept", id, row.getEventType(), row.getChannel());
+                return true;
+            }
+            log.info("Patient notification {} ({} {}) sent on attempt {}", id, row.getEventType(),
                 row.getChannel(), row.getAttempts());
             return true;
         }
-        PatientNotificationErrorCode code = PatientNotificationErrorCode.of(failure);
-        row.setErrorCode(code.name());
+        PatientNotificationErrorCode code = PatientNotificationErrorCode.of(failure, row.getChannel());
+        NotificationDeliveryStatus status;
+        LocalDateTime nextAttemptAt = row.getNextAttemptAt();
         if (code == PatientNotificationErrorCode.RECIPIENT_NOT_ALLOWED) {
-            row.setStatus(NotificationDeliveryStatus.SKIPPED);
-            log.info("Patient notification {} ({} {}) skipped: {}", row.getId(), row.getEventType(),
-                row.getChannel(), code);
+            status = NotificationDeliveryStatus.SKIPPED;
         } else if (code.retryable() && row.getAttempts() < properties.getMaxAttempts()) {
-            row.setStatus(NotificationDeliveryStatus.RETRYING);
-            row.setNextAttemptAt(now.plusSeconds(backoffSeconds(row.getAttempts())));
-            log.warn("Patient notification {} ({} {}) attempt {}/{} failed, will retry: {}", row.getId(),
-                row.getEventType(), row.getChannel(), row.getAttempts(), properties.getMaxAttempts(), code);
+            status = NotificationDeliveryStatus.RETRYING;
+            nextAttemptAt = now.plusSeconds(backoffSeconds(row.getAttempts()));
         } else {
-            row.setStatus(NotificationDeliveryStatus.FAILED);
-            log.error("Patient notification {} ({} {}) failed after {} attempt(s): {}", row.getId(),
-                row.getEventType(), row.getChannel(), row.getAttempts(), code);
+            status = NotificationDeliveryStatus.FAILED;
         }
-        repository.save(row);
+        if (repository.markFailure(id, claimedAt, OPEN, status, code.name(), nextAttemptAt, now) != 1) {
+            log.warn("Patient notification {} ({} {}) attempt failed ({}), but its claim had moved on; the newer "
+                + "attempt's state is kept", id, row.getEventType(), row.getChannel(), code);
+            return false;
+        }
+        log.warn("Patient notification {} ({} {}) attempt {}/{}: {} ({})", id, row.getEventType(), row.getChannel(),
+            row.getAttempts(), properties.getMaxAttempts(), status, code);
         return false;
     }
 

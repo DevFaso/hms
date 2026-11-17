@@ -50,6 +50,34 @@ public interface PatientNotificationDeliveryRepository extends JpaRepository<Pat
               @Param("now") LocalDateTime now,
               @Param("leaseUntil") LocalDateTime leaseUntil);
 
+    /**
+     * The outcome of a send, recorded only by the sweep that still holds the claim: the claim
+     * stamped {@code lastAttemptAt}, which is the claim token. A sweep whose send outlived its lease
+     * finds the row claimed again by another one (a later {@code lastAttemptAt}) and gets 0 back, so
+     * it never overwrites the newer attempt's state.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update PatientNotificationDelivery d set d.status = :sent, d.sentAt = :now, d.errorCode = null, "
+        + "d.updatedAt = :now where d.id = :id and d.lastAttemptAt = :claimedAt and d.status in :open")
+    int markSent(@Param("id") UUID id,
+                 @Param("claimedAt") LocalDateTime claimedAt,
+                 @Param("open") Collection<NotificationDeliveryStatus> open,
+                 @Param("sent") NotificationDeliveryStatus sent,
+                 @Param("now") LocalDateTime now);
+
+    /** A failed send's state (RETRYING, FAILED or SKIPPED), under the same claim-token rule as {@link #markSent}. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update PatientNotificationDelivery d set d.status = :status, d.errorCode = :code, "
+        + "d.nextAttemptAt = :nextAttemptAt, d.updatedAt = :now "
+        + "where d.id = :id and d.lastAttemptAt = :claimedAt and d.status in :open")
+    int markFailure(@Param("id") UUID id,
+                    @Param("claimedAt") LocalDateTime claimedAt,
+                    @Param("open") Collection<NotificationDeliveryStatus> open,
+                    @Param("status") NotificationDeliveryStatus status,
+                    @Param("code") String code,
+                    @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
+                    @Param("now") LocalDateTime now);
+
     /** Rows whose last claim never reported back: closed as FAILED once the lease is over. */
     @Modifying
     @Query("update PatientNotificationDelivery d set d.status = :failed, d.errorCode = :code, d.updatedAt = :now "
