@@ -151,6 +151,64 @@ describe('SchedulingComponent', () => {
     expect(schedulingSpy.createShift).not.toHaveBeenCalled();
   });
 
+  it('keeps leave reading available when scheduling writes are refused', () => {
+    schedulingSpy.capabilities.and.returnValue(of({ canManageSchedules: false }));
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tabs = el.querySelectorAll<HTMLButtonElement>('.tabs button');
+    expect(tabs.length).toBe(2);
+    expect(el.querySelector('.page-actions')).toBeNull();
+    tabs[1].click();
+    fixture.detectChanges();
+    expect(component.activeView()).toBe('leaves');
+    expect(el.textContent).toContain('Ama Owusu');
+  });
+
+  it('marks missing bulk identity, date and weekday fields rather than refusing with a toast alone', () => {
+    fixture.detectChanges();
+    component.openBulkModal();
+    fixture.detectChanges();
+    component.submitBulk();
+    expectFieldsMarked(fixture, {
+      'bulk-staffSearch': 'SCHEDULING.TOAST.IDS_REQUIRED',
+      'bulk-hospitalId': 'SCHEDULING.TOAST.IDS_REQUIRED',
+    });
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    component.submitBulk();
+    expectFieldsMarked(fixture, {
+      'bulk-startDate': 'SCHEDULING.TOAST.DATE_RANGE_REQUIRED',
+      'bulk-endDate': 'SCHEDULING.TOAST.DATE_RANGE_REQUIRED',
+    });
+    component.bulk.startDate = '2026-11-16';
+    component.bulk.endDate = '2026-11-17';
+    component.bulk.daysOfWeek = [];
+    component.submitBulk();
+    expectFieldsMarked(fixture, { 'bulk-daysOfWeek': 'SCHEDULING.TOAST.DOW_REQUIRED' });
+    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+  });
+
+  it('marks server field errors in the bulk form as well as the single shift form', () => {
+    fixture.detectChanges();
+    component.openBulkModal();
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    component.bulk.startDate = '2026-11-16';
+    component.bulk.endDate = '2026-11-17';
+    schedulingSpy.bulkScheduleShifts.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({ endDate: 'Choose a later end date', daysOfWeek: 'Choose weekdays' }),
+      ),
+    );
+    fixture.detectChanges();
+    component.submitBulk();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, {
+      'bulk-endDate': 'Choose a later end date',
+      'bulk-daysOfWeek': 'Choose weekdays',
+    });
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });

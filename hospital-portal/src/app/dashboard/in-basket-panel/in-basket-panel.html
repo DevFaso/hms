@@ -81,6 +81,9 @@
       <span class="tab-count">{{ summary().taskUnread }}</span>
     </button>
   </nav>
+  @if (summaryError()) {
+    <p class="summary-error" role="status">{{ 'inBasket.summaryLoadFailed' | translate }}</p>
+  }
 
   <!-- Loading -->
   @if (loading()) {

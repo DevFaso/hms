@@ -80,6 +80,19 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
     expect(component.lookupSigned()).toBeNull();
   });
 
+  it('restarts an in-flight signature read so an obsolete response cannot replace a requested refresh', () => {
+    setup([]);
+    const component = fixture.componentInstance;
+    const old = new Subject<SignatureResponse[]>();
+    svc.listAll.and.returnValue(old);
+    component.loadSignatures();
+    svc.listAll.and.returnValue(of([{ id: 'fresh' } as SignatureResponse]));
+    component.loadSignatures();
+    old.next([{ id: 'obsolete' } as SignatureResponse]);
+    expect(component.signatures().map((s) => s.id)).toEqual(['fresh']);
+    expect(component.loading()).toBeFalse();
+  });
+
   it('rejects an invalid report UUID before requesting a lookup', () => {
     setup([]);
     const component = fixture.componentInstance;

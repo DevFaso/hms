@@ -117,6 +117,33 @@ describe('InBasketPanelComponent', () => {
     expect(component.items().length).toBe(0);
   });
 
+  it('keeps a successful empty inbox visible when only counts fail, then clears the summary warning on retry', () => {
+    inBasketSpy.getItems.and.returnValue(of(mockPage([])));
+    inBasketSpy.getSummary.and.returnValue(throwError(() => new Error('counts offline')));
+    fixture.detectChanges();
+    expect(component.loadError()).toBeFalse();
+    expect(component.summaryError()).toBeTrue();
+    expect(component.lastUpdated()).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.empty-state')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.summary-error').textContent).toContain(
+      'inBasket.summaryLoadFailed',
+    );
+    inBasketSpy.getSummary.and.returnValue(of(mockSummary()));
+    component.refresh();
+    fixture.detectChanges();
+    expect(component.summaryError()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.summary-error')).toBeNull();
+  });
+
+  it('keeps the inbox error when only the items call fails', () => {
+    inBasketSpy.getItems.and.returnValue(throwError(() => new Error('items offline')));
+    fixture.detectChanges();
+    expect(component.loadError()).toBeTrue();
+    expect(component.summaryError()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
+  });
+
   it('should filter items by type', () => {
     const items = [
       mockItem({ id: '1', itemType: 'RESULT' }),

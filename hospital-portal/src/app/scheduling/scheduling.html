@@ -3,14 +3,14 @@
     <div class="page-title-group">
       <h1>
         <span class="material-symbols-outlined">calendar_month</span>
-        @if (isSchedulingAdmin && canManageSchedules()) {
+        @if (isSchedulingAdmin) {
           {{ 'SCHEDULING.TITLE' | translate }}
         } @else {
           {{ 'SCHEDULING.PROVIDER_AVAILABILITY' | translate }}
         }
       </h1>
       <p class="subtitle">
-        @if (isSchedulingAdmin && canManageSchedules()) {
+        @if (isSchedulingAdmin) {
           {{ 'SCHEDULING.SUBTITLE' | translate }}
         } @else {
           {{ 'SCHEDULING.SUBTITLE_PROVIDER' | translate }}
@@ -32,7 +32,7 @@
   </div>
 
   <!-- Summary Cards -->
-  @if (isSchedulingAdmin && canManageSchedules()) {
+  @if (isSchedulingAdmin) {
     <div class="summary-row">
       <div class="summary-card shifts-card">
         <span class="material-symbols-outlined">event_note</span>
@@ -76,7 +76,7 @@
   }
 
   <!-- View Toggle -->
-  @if (isSchedulingAdmin && canManageSchedules()) {
+  @if (isSchedulingAdmin) {
     <div class="tabs">
       <button class="tab" [class.active]="activeView() === 'shifts'" (click)="setView('shifts')">
         <span class="material-symbols-outlined">event_note</span>
@@ -98,7 +98,7 @@
       <div class="schedule-header">
         <h3>
           <span class="material-symbols-outlined">view_week</span>
-          @if (isSchedulingAdmin && canManageSchedules()) {
+          @if (isSchedulingAdmin) {
             {{ 'SCHEDULING.WEEKLY_SCHEDULE' | translate }}
           } @else {
             {{ 'SCHEDULING.WEEKLY_STAFF_AVAILABILITY' | translate }}
@@ -569,7 +569,11 @@
 
       <!-- Days of Week -->
       @if (!singleShiftMode()) {
-        <fieldset class="form-group form-group--full dow-fieldset">
+        <fieldset
+          id="bulk-daysOfWeek"
+          tabindex="-1"
+          class="form-group form-group--full dow-fieldset"
+        >
           <legend class="form-label">
             <span class="material-symbols-outlined">view_week</span>
             {{ 'SCHEDULING.DAYS_OF_WEEK' | translate }} <span class="required">*</span>
