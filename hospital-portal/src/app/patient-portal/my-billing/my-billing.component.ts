@@ -32,9 +32,16 @@ import {
 } from '../../shared/cfa-amount';
 import { FieldRefusal, refuseFields } from '../../shared/forms/invalid-fields';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import {
+  MOBILE_MONEY_OPERATORS,
+  MobileMoneyOperator,
+  containsCardNumber,
+  isMobileMoney,
+  mobileMoneyOperatorLabelKey,
+} from '../../shared/mobile-money-operator';
 
 /** The pay dialog's fields a refusal can mark (QA D1245). */
-const PAY_FIELDS = ['payAmount', 'payRef'];
+const PAY_FIELDS = ['payAmount', 'payOperator', 'payRef'];
 
 @Component({
   selector: 'app-my-billing',
@@ -139,6 +146,11 @@ export class MyBillingComponent implements OnInit {
   payAmount = 0;
   payMethod = 'CARD';
   payReference = '';
+  /** Billing plan PR 9: the operator of a Mobile Money declaration (Orange Money, Moov Money, other). */
+  payOperator: MobileMoneyOperator | null = null;
+  readonly mobileMoneyOperators = MOBILE_MONEY_OPERATORS;
+  readonly operatorLabelKey = mobileMoneyOperatorLabelKey;
+  readonly isMobileMoney = isMobileMoney;
   payProcessing = signal(false);
   payError = signal('');
   paySuccess = signal('');
@@ -209,6 +221,7 @@ export class MyBillingComponent implements OnInit {
     this.payAmount = this.declarable(inv);
     this.payMethod = 'CARD';
     this.payReference = '';
+    this.payOperator = null;
     this.payError.set('');
     this.paySuccess.set('');
   }
@@ -223,11 +236,23 @@ export class MyBillingComponent implements OnInit {
       ? this.translate.instant(cfaAmountMessageKey(amountProblem, CFA_AMOUNT_REQUIRED_KEY))
       : this.amountRangeMessage(inv);
     if (amountMessage) refusals.push({ id: 'payAmount', message: amountMessage });
+    if (isMobileMoney(this.payMethod) && !this.payOperator) {
+      refusals.push({
+        id: 'payOperator',
+        message: this.translate.instant('MOBILE_MONEY.OPERATOR_REQUIRED'),
+      });
+    }
     // QA D433: only cash is declared without a reference staff can check.
     if (this.payMethod !== 'CASH' && !this.payReference.trim()) {
       refusals.push({
         id: 'payRef',
         message: this.translate.instant('PORTAL.BILLING.REFERENCE_REQUIRED'),
+      });
+    } else if (containsCardNumber(this.payReference)) {
+      // Owner decision D-15: never a card number (the server refuses it too).
+      refusals.push({
+        id: 'payRef',
+        message: this.translate.instant('MOBILE_MONEY.CARD_NUMBER_REFUSED'),
       });
     }
     return refusals;
@@ -276,6 +301,9 @@ export class MyBillingComponent implements OnInit {
       amount: this.payAmount,
       paymentMethod: this.payMethod,
       transactionReference: this.payReference || undefined,
+      ...(isMobileMoney(this.payMethod) && this.payOperator
+        ? { mobileMoneyOperator: this.payOperator }
+        : {}),
     };
 
     this.portal.payInvoice(inv.id, req).subscribe({

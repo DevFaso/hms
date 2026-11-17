@@ -11,6 +11,8 @@ public record PaymentTransactionResponseDTO(
     String paymentDate,
     String paymentMethod,
     String referenceNumber,
+    /** Billing plan PR 9: ORANGE_MONEY / MOOV_MONEY / AUTRE; null when not stated or not Mobile Money. */
+    String mobileMoneyOperator,
     String notes,
     String status,
     String reversalReason,
@@ -24,6 +26,7 @@ public record PaymentTransactionResponseDTO(
             row.getPaymentDate() != null ? row.getPaymentDate().toString() : null,
             row.getPaymentMethod() != null ? row.getPaymentMethod().name() : null,
             row.getReferenceNumber(),
+            row.getMobileMoneyOperator() != null ? row.getMobileMoneyOperator().name() : null,
             row.getNotes(),
             row.getStatus() != null ? row.getStatus().name() : null,
             row.getReversalReason(),

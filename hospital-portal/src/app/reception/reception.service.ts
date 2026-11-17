@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { MobileMoneyOperator } from '../shared/mobile-money-operator';
 
 export interface ReceptionDashboardSummary {
   date: string;
@@ -210,6 +211,8 @@ export interface CheckInRequest {
   /** QA D975: how the copay was paid (cash when absent) and its reference. */
   copayMethod?: string | null;
   copayReference?: string | null;
+  /** Billing plan PR 9: Orange Money, Moov Money or another operator, for a Mobile Money copay. */
+  copayMobileMoneyOperator?: MobileMoneyOperator | null;
   /** QA D1415: required by the server, so required here: a caller cannot forget the attestation. */
   identityConfirmed: boolean;
   insuranceVerified?: boolean;
@@ -290,11 +293,13 @@ export class ReceptionService {
     amount: number,
     method = 'CASH',
     reference?: string,
+    mobileMoneyOperator?: MobileMoneyOperator,
   ): Observable<unknown> {
     return this.http.post(`/billing-invoices/${invoiceId}/payments`, {
       amount,
       method,
       ...(reference ? { reference } : {}),
+      ...(mobileMoneyOperator ? { mobileMoneyOperator } : {}),
     });
   }
 

@@ -686,6 +686,33 @@ class BillingInvoiceServiceImplTest {
         verify(paymentTransactionRepository, times(4)).save(any());
     }
 
+    /**
+     * Billing plan PR 9: a patient's Mobile Money declaration keeps the operator it names; the
+     * mobile apps send none yet, so a missing one is stored as "not stated", never refused.
+     */
+    @Test
+    void recordPatientPayment_keepsTheOperator_andAcceptsNone() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        var withOperator = payment("MOBILE_MONEY");
+        withOperator.setMobileMoneyOperator(com.example.hms.enums.MobileMoneyOperator.MOOV_MONEY);
+        billingInvoiceService.recordPatientPayment(invoice.getId(), patientId, UUID.randomUUID(), withOperator,
+            Locale.FRENCH);
+        var card = payment("CARD");
+        card.setMobileMoneyOperator(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY);
+        billingInvoiceService.recordPatientPayment(invoice.getId(), patientId, UUID.randomUUID(), card, Locale.FRENCH);
+        billingInvoiceService.recordPatientPayment(invoice.getId(), patientId, UUID.randomUUID(),
+            payment("MOBILE_MONEY"), Locale.FRENCH);
+
+        ArgumentCaptor<com.example.hms.model.PaymentTransaction> rows =
+            ArgumentCaptor.forClass(com.example.hms.model.PaymentTransaction.class);
+        verify(paymentTransactionRepository, times(3)).save(rows.capture());
+        assertEquals(com.example.hms.enums.MobileMoneyOperator.MOOV_MONEY, rows.getAllValues().get(0).getMobileMoneyOperator());
+        assertNull(rows.getAllValues().get(1).getMobileMoneyOperator(), "a card payment has no operator");
+        assertNull(rows.getAllValues().get(2).getMobileMoneyOperator(), "not stated by the app");
+    }
+
     /** QA D1611 (round 44): an insurer's share is claimed, never declared as paid. */
     @Test
     void recordPatientPayment_insuranceIsRefusedOnTheMethod_D1611() {
@@ -705,6 +732,42 @@ class BillingInvoiceServiceImplTest {
     }
 
     /** QA D1611 (round 44): the cashier's INSURANCE counted the insurer's share as collected. */
+    @Test
+    void recordStaffPayment_mobileMoneyWithoutOperatorIsRefusedOnItsField() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        UUID invoiceId = invoice.getId();
+        com.example.hms.payload.dto.StaffPaymentRequestDTO noOperator =
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("10"), "MOBILE_MONEY", "OM-1", null);
+
+        com.example.hms.exception.FieldBusinessException refused = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, noOperator, null, Locale.FRENCH));
+
+        assertEquals("mobileMoneyOperator", refused.getField());
+        assertEquals("billing.payment.operatorRequired", refused.getMessageKey());
+        verify(paymentTransactionRepository, never()).save(any());
+        assertEquals(BigDecimal.ZERO, invoice.getAmountPaid());
+    }
+
+    @Test
+    void recordStaffPayment_storesTheOperatorOfMobileMoneyOnly() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentTransactionRepository.save(any(PaymentTransaction.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        billingInvoiceService.recordStaffPayment(invoice.getId(), new com.example.hms.payload.dto.StaffPaymentRequestDTO(
+            new BigDecimal("10"), "MOBILE_MONEY", "OM-1", null, com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY), null, Locale.FRENCH);
+        billingInvoiceService.recordStaffPayment(invoice.getId(), new com.example.hms.payload.dto.StaffPaymentRequestDTO(
+            new BigDecimal("10"), "CASH", null, null, com.example.hms.enums.MobileMoneyOperator.MOOV_MONEY), null, Locale.FRENCH);
+
+        ArgumentCaptor<PaymentTransaction> rows = ArgumentCaptor.forClass(PaymentTransaction.class);
+        verify(paymentTransactionRepository, times(2)).save(rows.capture());
+        assertEquals(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY, rows.getAllValues().get(0).getMobileMoneyOperator());
+        assertNull(rows.getAllValues().get(1).getMobileMoneyOperator(), "cash has no operator");
+    }
+
     @Test
     void recordStaffPayment_insuranceIsRefusedOnTheMethod_D1611() {
         BillingInvoice invoice = payableInvoice(UUID.randomUUID());
@@ -1746,7 +1809,7 @@ class BillingInvoiceServiceImplTest {
 
         com.example.hms.exception.FieldBusinessException refused = assertThrows(
             com.example.hms.exception.FieldBusinessException.class,
-            () -> billingInvoiceService.recordCheckInCopay(encounter, copay, null, null, receptionist));
+            () -> billingInvoiceService.recordCheckInCopay(encounter, copay, null, null, null, receptionist));
 
         assertEquals("copayMethod", refused.getField());
         assertEquals("billing.payment.methodRequired", refused.getMessageKey());
@@ -1764,7 +1827,7 @@ class BillingInvoiceServiceImplTest {
         com.example.hms.exception.FieldBusinessException refused = assertThrows(
             com.example.hms.exception.FieldBusinessException.class,
             () -> billingInvoiceService.recordCheckInCopay(encounter, copay,
-                com.example.hms.enums.PaymentMethod.INSURANCE, "MUT-1", receptionist));
+                com.example.hms.enums.PaymentMethod.INSURANCE, "MUT-1", null, receptionist));
 
         assertEquals("copayMethod", refused.getField());
         assertEquals("billing.payment.insuranceNotAPayment", refused.getMessageKey());
@@ -1783,7 +1846,15 @@ class BillingInvoiceServiceImplTest {
         encounter.setPatient(patient);
 
         assertThrows(com.example.hms.exception.BusinessException.class, () -> billingInvoiceService.recordCheckInCopay(
-            encounter, new BigDecimal("1500"), com.example.hms.enums.PaymentMethod.MOBILE_MONEY, " ", UUID.randomUUID()));
+            encounter, new BigDecimal("1500"), com.example.hms.enums.PaymentMethod.MOBILE_MONEY, " ", com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY,
+            UUID.randomUUID()));
+        // Billing plan PR 9: a Mobile Money copay with no operator is refused on copayMobileMoneyOperator.
+        com.example.hms.exception.FieldBusinessException noOperator = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class, () -> billingInvoiceService.recordCheckInCopay(
+                encounter, new BigDecimal("1500"), com.example.hms.enums.PaymentMethod.MOBILE_MONEY, "OM-778812", null,
+                UUID.randomUUID()));
+        assertEquals("copayMobileMoneyOperator", noOperator.getField());
+        assertEquals("billing.payment.operatorRequired", noOperator.getMessageKey());
         verify(invoiceRepository, never()).saveAndFlush(any(BillingInvoice.class));
 
         when(invoiceNumberAllocator.next(any(), any())).thenReturn("GH-2026-000043");
@@ -1797,13 +1868,14 @@ class BillingInvoiceServiceImplTest {
             .thenAnswer(inv -> inv.getArgument(0));
 
         billingInvoiceService.recordCheckInCopay(encounter, new BigDecimal("1500"),
-            com.example.hms.enums.PaymentMethod.MOBILE_MONEY, "OM-778812", UUID.randomUUID());
+            com.example.hms.enums.PaymentMethod.MOBILE_MONEY, "OM-778812", com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY, UUID.randomUUID());
 
         ArgumentCaptor<com.example.hms.model.PaymentTransaction> row =
             ArgumentCaptor.forClass(com.example.hms.model.PaymentTransaction.class);
         verify(paymentTransactionRepository).save(row.capture());
         assertEquals(com.example.hms.enums.PaymentMethod.MOBILE_MONEY, row.getValue().getPaymentMethod());
         assertEquals("OM-778812", row.getValue().getReferenceNumber());
+        assertEquals(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY, row.getValue().getMobileMoneyOperator());
     }
 
     // ---- QA round 4 (billing) ----
@@ -2386,6 +2458,46 @@ class BillingInvoiceServiceImplTest {
         assertEquals(0, new BigDecimal("500").compareTo(closing.getReversedAmount()));
         assertEquals(2, closing.getByMethod().size());
         assertEquals(3, closing.getEntries().size());
+    }
+
+    /** Billing plan PR 9: Orange Money and Moov Money are totalled apart; an older row is "not stated". */
+    @Test
+    void cashClosing_totalsOrangeMoneyAndMoovMoneyApart() {
+        UUID cashier = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(cashier);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(HOSPITAL_ID);
+        LocalDate day = LocalDate.of(2026, 11, 17);
+        List<PaymentTransaction> rows = new java.util.ArrayList<>();
+        Object[][] taken = {
+            {com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY, "1000"}, {com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY, "2000"},
+            {com.example.hms.enums.MobileMoneyOperator.MOOV_MONEY, "500"}, {null, "700"}};
+        int hour = 8;
+        for (Object[] t : taken) {
+            PaymentTransaction p = PaymentTransaction.builder().amount(new BigDecimal((String) t[1]))
+                .paymentMethod(PaymentMethod.MOBILE_MONEY).mobileMoneyOperator((com.example.hms.enums.MobileMoneyOperator) t[0])
+                .referenceNumber("MM-" + hour).status(PaymentStatus.CONFIRMED).build();
+            p.setCreatedAt(day.atTime(hour++, 0));
+            rows.add(p);
+        }
+        when(paymentTransactionRepository.findReceivedByCashier(cashier, HOSPITAL_ID, day.atStartOfDay(),
+            day.plusDays(1).atStartOfDay())).thenReturn(rows);
+
+        com.example.hms.payload.dto.CashClosingDTO closing = billingInvoiceService.cashClosing(day, Locale.FRENCH);
+
+        java.util.Map<String, BigDecimal> byOperator = new java.util.HashMap<>();
+        java.util.Map<String, Long> countByOperator = new java.util.HashMap<>();
+        for (var t : closing.getByMethod()) {
+            assertEquals("MOBILE_MONEY", t.getMethod());
+            byOperator.put(String.valueOf(t.getOperator()), t.getAmount());
+            countByOperator.put(String.valueOf(t.getOperator()), t.getCount());
+        }
+        assertEquals(3, closing.getByMethod().size());
+        assertEquals(0, new BigDecimal("3000").compareTo(byOperator.get("ORANGE_MONEY")));
+        assertEquals(2L, countByOperator.get("ORANGE_MONEY"));
+        assertEquals(0, new BigDecimal("500").compareTo(byOperator.get("MOOV_MONEY")));
+        assertEquals(0, new BigDecimal("700").compareTo(byOperator.get("null")));
+        assertEquals("ORANGE_MONEY", closing.getEntries().get(0).getOperator());
+        assertNull(closing.getEntries().get(3).getOperator());
     }
 
     @Test

@@ -26,6 +26,7 @@ public class PharmacyPaymentMapper {
             .amount(entity.getAmount())
             .currency(entity.getCurrency())
             .referenceNumber(entity.getReferenceNumber())
+            .mobileMoneyOperator(entity.getMobileMoneyOperator() != null ? entity.getMobileMoneyOperator().name() : null)
             .receivedBy(entity.getReceivedByUser() != null ? entity.getReceivedByUser().getId() : null)
             .notes(entity.getNotes())
             .status(entity.getStatus() != null ? entity.getStatus().name() : null)

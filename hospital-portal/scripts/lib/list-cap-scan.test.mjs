@@ -249,3 +249,34 @@ test('server-query-top: a derived findTopN query is a cut; findFirst alone and a
     ['server-query-top:findTop50ByLot_IdOrderByCreatedAtDesc'],
   );
 });
+
+test('one-row count queries return server totals, never the page length', () => {
+  assert.deepEqual(
+    rules(`class Counts {
+  load() {
+    const source = this.service.search({ page: 0, size: 1 });
+    return source.pipe(map((page) => page.totalElements));
+  }
+}`),
+    [],
+  );
+  assert.deepEqual(
+    rules(`class Counts {
+  load() {
+    const source = this.service.search({ page: 0, size: 1 });
+    return source.pipe(map((page) => page.content.length));
+  }
+}`),
+    ['fixed-size:load:search:size=1', 'page-content:load:page'],
+  );
+  assert.deepEqual(
+    rules(`class Counts {
+  load() {
+    const source = this.service.search({ page: 0, size: 1 });
+    this.rows.set(source.content);
+    return source.pipe(map((page) => page.totalElements));
+  }
+}`),
+    ['fixed-size:load:search:size=1'],
+  );
+});

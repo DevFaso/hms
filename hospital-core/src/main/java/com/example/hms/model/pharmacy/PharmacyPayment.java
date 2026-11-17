@@ -88,6 +88,15 @@ public class PharmacyPayment extends BaseEntity {
     private String referenceNumber;
 
     /**
+     * Billing plan PR 9 (V308): the operator of a Mobile Money payment, typed by
+     * the cashier (no operator integration). Null on older rows and for every
+     * other method ("Opérateur non précisé").
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mobile_money_operator", length = 20)
+    private com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator;
+
+    /**
      * QA D1032: the readable receipt number ({@code CODE-PH-YYYY-000001}),
      * allocated once when the payment is recorded and never recomputed, so a
      * reprint shows the number first printed. Rows recorded before V246 were

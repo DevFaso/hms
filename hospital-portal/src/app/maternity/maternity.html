@@ -136,6 +136,9 @@
             (click)="setWorklist(w)"
           >
             {{ 'MATERNITY.WORKLIST_' + w.toUpperCase().replaceAll('-', '_') | translate }}
+            <span class="worklist-count" [title]="'MATERNITY.WORKLIST_COUNT_HELP' | translate">{{
+              boardCounts.values()[w] ?? '—'
+            }}</span>
           </button>
         }
       </div>
