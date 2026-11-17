@@ -217,6 +217,17 @@ public class PatientServiceImpl implements PatientService {
     private static final String LOG_UNKNOWN = "UNKNOWN";
 
     private final PatientRepository patientRepository;
+    private final org.springframework.beans.factory.ObjectProvider<PatientNationalUniqueIdService> nationalUniqueIds;
+
+    private PatientNationalUniqueIdService.Change prepareNationalUniqueId(Patient patient, String input,
+                                                                         boolean allowDuplicate, String reason) {
+        if (input == null) return new PatientNationalUniqueIdService.Change(false, "", null);
+        return nationalUniqueIds.getObject().prepare(patient, input, allowDuplicate, reason);
+    }
+
+    private void completeNationalUniqueId(Patient patient, PatientNationalUniqueIdService.Change change, UUID hospitalId) {
+        if (change.changed()) nationalUniqueIds.getObject().complete(patient, change, hospitalId);
+    }
     private final com.example.hms.repository.PatientAddressHistoryRepository addressHistoryRepository;
     private final PatientAddressHistoryRecorder addressHistoryRecorder;
     private final PhoneVerificationService phoneVerificationService;
@@ -365,6 +376,8 @@ public class PatientServiceImpl implements PatientService {
         accountLinkGuard.requireLinkable(user, null);
         Patient mapped = patientMapper.toPatient(dto, user);
         normalizePhones(mapped, hospital);
+        var identityChange = prepareNationalUniqueId(mapped, dto.getNationalUniqueId(),
+            dto.isAllowNationalUniqueIdDuplicate(), dto.getNationalUniqueIdDuplicateReason());
         Patient patient = patientRepository.save(mapped);
 
         // The record's active flag is its administrative soft-delete, not the
@@ -373,6 +386,8 @@ public class PatientServiceImpl implements PatientService {
         // live record the clinical pickers must find (QA D27, V188).
 
         ensurePatientRegistration(patient, hospital);
+
+        completeNationalUniqueId(patient, identityChange, hospital.getId());
 
         // E9 #56 — the registration form's free-text allergies become structured
         // rows at the registering hospital; the column is a derived summary now.
@@ -428,6 +443,9 @@ public class PatientServiceImpl implements PatientService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
         requirePossibleIdentity(dto, patient);
 
+        var identityChange = prepareNationalUniqueId(patient, dto.getNationalUniqueId(),
+            dto.isAllowNationalUniqueIdDuplicate(), dto.getNationalUniqueIdDuplicateReason());
+
         if (dto.getHospitalId() != null) {
             ensurePatientRegistered(id, dto.getHospitalId());
         }
@@ -461,6 +479,7 @@ public class PatientServiceImpl implements PatientService {
             : hospitalRepository.findById(phoneHospitalId).orElse(null));
         addressHistoryRecorder.recordIfMoved(patient, before);
         Patient updatedPatient = patientRepository.save(patient);
+        completeNationalUniqueId(updatedPatient, identityChange, phoneHospitalId);
         // QA D926: the full replace is audited like the PATCH (the controller
         // opts out of the generic write audit on the strength of this row).
         auditPatientUpdate(updatedPatient, phoneHospitalId, "Patient demographics replaced");
@@ -485,6 +504,9 @@ public class PatientServiceImpl implements PatientService {
         String country = countryFor(hospitalId != null ? hospitalId : patient.getHospitalId());
         Map<String, Object> stored = demographicsOf(patient);
 
+        var identityChange = prepareNationalUniqueId(patient, request.getNationalUniqueId(),
+            request.isAllowNationalUniqueIdDuplicate(), request.getNationalUniqueIdDuplicateReason());
+
         patchIdentity(patient, request);
         patchContacts(patient, request, country);
         patchAddress(patient, request, before);
@@ -498,8 +520,11 @@ public class PatientServiceImpl implements PatientService {
         List<String> changedFields = stored.keySet().stream()
             .filter(field -> !Objects.equals(stored.get(field), now.get(field)))
             .toList();
-        if (!changedFields.isEmpty()) {
+        if (!changedFields.isEmpty() || identityChange.changed()) {
             patientRepository.save(patient);
+            completeNationalUniqueId(patient, identityChange, hospitalId != null ? hospitalId : patient.getHospitalId());
+        }
+        if (!changedFields.isEmpty()) {
             auditPatientUpdate(patient, hospitalId != null ? hospitalId : patient.getHospitalId(),
                 "Patient demographics updated: " + String.join(", ", changedFields));
         }
@@ -957,6 +982,8 @@ public class PatientServiceImpl implements PatientService {
         // differs outside Burkina Faso (trunk zero dropped; review round 16).
         String typedPrimaryPhone = mapped.getPhoneNumberPrimary();
         normalizePhones(mapped, hospital);
+        var identityChange = prepareNationalUniqueId(mapped, dto.getNationalUniqueId(),
+            dto.isAllowNationalUniqueIdDuplicate(), dto.getNationalUniqueIdDuplicateReason());
         Patient patient = patientRepository.save(mapped);
 
         // Phone-first: stamp the patient when the desk confirmed an SMS OTP for
@@ -976,6 +1003,8 @@ public class PatientServiceImpl implements PatientService {
         // live record the clinical pickers must find (QA D27, V188).
 
         ensurePatientRegistration(patient, hospital);
+
+        completeNationalUniqueId(patient, identityChange, hospital.getId());
 
         // E9 #56 — see createPatient: free-text allergies become structured rows.
         if (dto.getAllergies() != null && !dto.getAllergies().isBlank()) {

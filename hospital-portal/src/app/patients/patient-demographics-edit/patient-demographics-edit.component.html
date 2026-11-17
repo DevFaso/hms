@@ -23,6 +23,15 @@
   <form class="dialog-body" (ngSubmit)="submit()">
     <fieldset class="edit-section">
       <legend>{{ 'PATIENTS.PERSONAL_INFO' | translate }}</legend>
+      <app-national-unique-id-editor
+        [patientId]="patient.id"
+        [masked]="patient.nationalUniqueIdMasked"
+        [scope]="identityScope"
+        inputId="demoNationalUniqueId"
+        [serverError]="nationalUniqueIdError"
+        (updated)="onNationalUniqueIdUpdated($event)"
+        (ready)="nationalUniqueIdReady = $event"
+      />
       <div class="edit-grid">
         <div class="field-group">
           <label for="demoFirstName"

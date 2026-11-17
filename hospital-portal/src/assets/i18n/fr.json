@@ -1959,7 +1959,8 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "L’accouchement enregistre comme né vivant un bébé qu’un acte de décès déclare mort-né",
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradiction entre acte de mortinaissance et accouchement rapprochée",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerte de doublon outrepassée (« Commander quand même », motif : {{reason}}) : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
-      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Doublon possible, sans « Commander quand même » : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe"
+      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Doublon possible, sans « Commander quand même » : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
+      "NATIONAL_IU_ACTION": "Identifiant unique du patient : {{operation}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2242,6 +2243,12 @@
       "PASSWORD_LOCKED": "trop de mots de passe erronés",
       "SIGNING_IMPERSONATION": "session de support",
       "SIGNING_NOT_ENROLLED": "application d’authentification requise pour ce compte"
+    },
+    "NATIONAL_IU_ACTION": {
+      "CREATE": "ajouté",
+      "UPDATE": "modifié",
+      "CLEAR": "effacé",
+      "SHOW_FULL": "affiché en entier"
     }
   },
   "BILLING": {
@@ -6286,6 +6293,13 @@
       "PENDING_SIGNATURE": "Non finalisé — en attente de signature du praticien"
     },
     "ENUM": {
+      "RECOVERY_CONTACT_TYPE": {
+        "EMAIL": "E-mail",
+        "PHONE": "Téléphone",
+        "SECURITY_KEY": "Clé de sécurité",
+        "PERSONAL_CONTACT": "Contact personnel",
+        "OTHER": "Autre contact"
+      },
       "LAB_ORDER_CHANNEL": {
         "ELECTRONIC": "Électronique",
         "EMAIL": "E-mail",
@@ -8059,6 +8073,11 @@
     "PRN_MIN_INTERVAL_VALUE": "Au moins {{hours}} h entre deux doses"
   },
   "PROFILE": {
+    "RECOVERY_CONFIRM_TITLE": "Confirmez votre contact de récupération",
+    "RECOVERY_CONFIRM_ADDRESS": "Relisez attentivement cette adresse ou ce numéro : {{contact}}. Confirmez qu’il est correct et que vous pouvez y recevoir un code.",
+    "RECOVERY_SEND_CODE": "Confirmer et envoyer le code",
+    "RECOVERY_PHONE_EXAMPLE": "+226 70 12 34 56",
+    "RECOVERY_TYPE_UNVERIFIABLE": "Les codes de vérification ne peuvent pas être envoyés à ce type de contact.",
     "RECOVERY_REMOVE_CONFIRM": "Retirer ce contact de récupération ?",
     "ACCOUNT_AGE": "Ancienneté du compte",
     "ACCOUNT_DETAILS": "Détails du compte",
@@ -13826,5 +13845,20 @@
     "RECORD_BY_PHYSICIAN": "La revue est consignée par un médecin ou un chirurgien de cet hôpital.",
     "RECORDED": "Revue consignée",
     "RECORD_FAILED": "La revue n'a pas pu être consignée."
+  },
+  "NATIONAL_IU": {
+    "LABEL": "Identifiant unique (IU)",
+    "HINT": "Facultatif. Exactement 12 chiffres ; espaces et tirets acceptés.",
+    "SHOW_FULL": "Afficher le numéro complet (accès audité)",
+    "HIDE": "Masquer le numéro",
+    "CLEAR": "Effacer l’identifiant",
+    "CHECKING": "Recherche d’un dossier existant…",
+    "INVALID": "Saisissez exactement 12 chiffres ou laissez ce champ vide.",
+    "UNAVAILABLE": "Impossible de vérifier ou d’afficher l’identifiant. Réessayez.",
+    "EXISTS_HERE": "Un patient avec cet identifiant existe déjà. Ouvrir le dossier.",
+    "EXISTS_ELSEWHERE": "Cet identifiant est peut-être déjà enregistré ailleurs. Vérifiez auprès du patient.",
+    "SAVE_ANYWAY": "Enregistrer quand même",
+    "REASON": "Motif d’enregistrement d’un identifiant en double",
+    "SEARCH_EXACT": "Rechercher par identifiant unique exact (12 chiffres)"
   }
 }

@@ -3580,6 +3580,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- X8 / P1: optional encrypted national IU with keyed lookup; private
+         per-patient EMPI hash aliases allow reasoned duplicates. V320 is
+         already used by the merged X2 booking-idempotency task. Legacy
+         alias uniqueness is replaced before its blanket constraint is removed. -->
+    <changeSet id="V321-patient-national-unique-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V321__patient_national_unique_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
     <!-- =================================================================
          V303 (billing-money plan PR 3, scorecard M1) - a checkout line is
          priced from the hospital's price list: billing.invoice_items gains

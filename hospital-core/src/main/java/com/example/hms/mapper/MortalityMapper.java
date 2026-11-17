@@ -21,6 +21,16 @@ public class MortalityMapper {
     private final com.example.hms.service.support.ClinicalActorNames actorNames;
 
     public DeathRecordResponseDTO toDto(DeathRecord deathRecord) {
+        return toDto(deathRecord, (id, snapshot) -> actorNames.display(id, snapshot));
+    }
+
+    public java.util.List<DeathRecordResponseDTO> toDtos(java.util.List<DeathRecord> records) {
+        var names = actorNames.batch(records.stream().map(DeathRecord::getEnteredInErrorById).toList());
+        return records.stream().map(record -> toDto(record, names)).toList();
+    }
+
+    private DeathRecordResponseDTO toDto(DeathRecord deathRecord,
+            java.util.function.BiFunction<UUID, String, String> names) {
         if (deathRecord == null) {
             return null;
         }
@@ -40,7 +50,7 @@ public class MortalityMapper {
             .diedAt(deathRecord.getDiedAt())
             .enteredInError(deathRecord.isEnteredInError())
             .enteredInErrorAt(deathRecord.getEnteredInErrorAt())
-            .enteredInErrorByName(actorNames.display(deathRecord.getEnteredInErrorById(), deathRecord.getEnteredInErrorByName()))
+            .enteredInErrorByName(names.apply(deathRecord.getEnteredInErrorById(), deathRecord.getEnteredInErrorByName()))
             .enteredInErrorReason(deathRecord.getEnteredInErrorReason())
             .placeOfDeath(deathRecord.getPlaceOfDeath())
             .mannerOfDeath(deathRecord.getMannerOfDeath())

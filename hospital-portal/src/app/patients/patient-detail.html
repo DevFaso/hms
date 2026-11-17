@@ -112,6 +112,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <app-national-unique-id-view [patientId]="p.id" [masked]="p.nationalUniqueIdMasked" />
         @if (canEditDemographics()) {
           <!-- QA D926: the desk corrects the identity, contact and guardian. -->
           <button

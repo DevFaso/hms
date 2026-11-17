@@ -18,6 +18,14 @@
     </button>
   </div>
 } @else {
+  <label>
+    <input
+      type="checkbox"
+      [checked]="nationalUniqueIdMode()"
+      (change)="setNationalUniqueIdMode($any($event.target).checked)"
+    />
+    {{ 'NATIONAL_IU.SEARCH_EXACT' | translate }}
+  </label>
   <div class="patient-picker-wrap">
     <span class="material-symbols-outlined picker-search-icon">person_search</span>
     <input

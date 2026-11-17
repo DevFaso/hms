@@ -27,6 +27,7 @@ import { CoverageTabComponent } from '../patients/coverage-tab/coverage-tab.comp
 import { DocumentsTabComponent } from '../patients/documents-tab/documents-tab.component';
 import { FluidBalanceTabComponent } from '../patients/fluid-balance/fluid-balance-tab.component';
 import { MedicalHistoryTabComponent } from '../patients/medical-history-tab/medical-history-tab.component';
+import { NationalUniqueIdEditorComponent } from '../patients/national-unique-id-editor.component';
 import { OrderReviewPanelComponent } from '../patients/order-review-panel/order-review-panel.component';
 import { PatientChartComponent } from '../patients/patient-chart/patient-chart.component';
 import { PatientDemographicsEditComponent } from '../patients/patient-demographics-edit/patient-demographics-edit.component';
@@ -193,6 +194,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'MedicalHistoryTabComponent',
     file: 'patients/medical-history-tab/medical-history-tab.component',
     type: MedicalHistoryTabComponent,
+  },
+  {
+    name: 'NationalUniqueIdEditorComponent',
+    file: 'patients/national-unique-id-editor.component',
+    type: NationalUniqueIdEditorComponent,
   },
   {
     name: 'OrderReviewPanelComponent',

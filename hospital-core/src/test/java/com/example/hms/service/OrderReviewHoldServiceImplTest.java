@@ -403,7 +403,11 @@ class OrderReviewHoldServiceImplTest {
         var display = new com.example.hms.model.User();
         display.setFirstName("Awa");
         display.setLastName("Ouédraogo");
-        when(displayUsers.findById(actor)).thenReturn(Optional.of(display));
+        var name = org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.ClinicalActorName.class);
+        when(name.getId()).thenReturn(actor);
+        when(name.getFirstName()).thenReturn(display.getFirstName());
+        when(name.getLastName()).thenReturn(display.getLastName());
+        when(displayUsers.findClinicalActorNames(List.of(actor))).thenReturn(List.of(name));
         when(roles.isClinicianOrPharmacist(actor, hospital)).thenReturn(true);
         when(holds.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patient, hospital)).thenReturn(List.of(hold));
         assertThat(service.forPatient(patient)).singleElement().satisfies(row -> {

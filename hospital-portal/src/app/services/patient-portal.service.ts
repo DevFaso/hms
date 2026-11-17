@@ -8,6 +8,7 @@ import type { AfterVisitSummary as EncounterAfterVisitSummary } from './encounte
 /* ── DTOs matching backend PatientPortalController ── */
 
 export interface PatientProfileDTO {
+  nationalUniqueIdMasked?: string | null;
   /** The patient id, as the backend sends it. */
   id: string;
   firstName: string;

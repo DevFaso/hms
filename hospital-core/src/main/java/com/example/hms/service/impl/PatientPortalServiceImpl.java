@@ -1437,6 +1437,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         return PatientProfileDTO.builder()
                 .id(p.getId())
+                .nationalUniqueIdMasked(com.example.hms.security.PatientNationalUniqueId.masked(p.getNationalUniqueId()))
                 .firstName(p.getFirstName())
                 .lastName(p.getLastName())
                 .middleName(p.getMiddleName())

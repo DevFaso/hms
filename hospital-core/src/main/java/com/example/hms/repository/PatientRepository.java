@@ -16,6 +16,20 @@ import java.util.UUID;
 @Repository
 public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
+    @Query("""
+        SELECT DISTINCT p FROM PatientHospitalRegistration r JOIN r.patient p
+        WHERE p.nationalUniqueIdHash = :hash AND r.active = true
+          AND (:#{@tenantContext.isGlobalView()} = true OR (
+            :#{@tenantContext.hasHospitalScope()} = true AND (
+              p.hospitalId IN :#{@tenantContext.effectiveHospitalIdsOrNone()}
+              OR r.hospital.id IN :#{@tenantContext.effectiveHospitalIdsOrNone()})))
+        """)
+    List<Patient> findByNationalUniqueIdHashInScope(@Param("hash") String hash);
+
+    @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM Patient p "
+        + "WHERE p.nationalUniqueIdHash = :hash AND (:exclude IS NULL OR p.id <> :exclude)")
+    boolean existsOtherNationalUniqueIdHash(@Param("hash") String hash, @Param("exclude") UUID exclude);
+
     // -- QA D924/D942/D943: the stored side of every name and phone comparison --
     // Folded exactly like PatientMatchKeys folds the typed side: names
     // lower-cased with accents removed, phone numbers reduced to their digits.

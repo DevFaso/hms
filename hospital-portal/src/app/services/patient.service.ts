@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, forkJoin, map, of } from 'rxjs';
 
 import { birthDateQuery, emailQuery, isCompactDate } from '../shared/patient-query';
+import type { NationalUniqueIdChange } from '../patients/national-unique-id';
 
 export interface PatientAddressHistoryEntry {
   id: string;
@@ -41,6 +42,7 @@ export interface PatientDemographicsPatch {
 }
 
 export interface PatientResponse {
+  nationalUniqueIdMasked?: string | null;
   id: string;
   /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
   allergiesWithheld?: boolean;
@@ -101,7 +103,7 @@ export interface PatientResponse {
   lastLocation?: string;
 }
 
-export interface PatientCreateRequest {
+export interface PatientCreateRequest extends NationalUniqueIdChange {
   userId: string;
   hospitalId: string;
   firstName: string;
@@ -519,6 +521,26 @@ export function searchPatientsByTerm(
 export class PatientService {
   private readonly http = inject(HttpClient);
 
+  checkNationalUniqueId(nationalUniqueId: string, excludePatientId?: string) {
+    return this.http.post<import('../patients/national-unique-id').NationalUniqueIdWarning>(
+      '/patients/national-unique-id/check',
+      { nationalUniqueId, excludePatientId },
+    );
+  }
+
+  searchNationalUniqueId(nationalUniqueId: string): Observable<PatientResponse[]> {
+    return this.http.post<PatientResponse[]>('/patients/national-unique-id/search', {
+      nationalUniqueId,
+    });
+  }
+
+  revealNationalUniqueId(patientId: string) {
+    return this.http.post<{ nationalUniqueId: string | null }>(
+      `/patients/national-unique-id/${patientId}/reveal`,
+      {},
+    );
+  }
+
   list(hospitalId?: string, search?: string): Observable<PatientResponse[]> {
     let params = new HttpParams();
     if (hospitalId) params = params.set('hospitalId', hospitalId);
@@ -569,7 +591,10 @@ export class PatientService {
    * QA D926: the desk corrects a chart's identity, contact and guardian.
    * PATCH: a field left out is unchanged; a required one sent blank is refused.
    */
-  patchDemographics(id: string, req: PatientDemographicsPatch): Observable<PatientResponse> {
+  patchDemographics(
+    id: string,
+    req: PatientDemographicsPatch & NationalUniqueIdChange,
+  ): Observable<PatientResponse> {
     return this.http.patch<PatientResponse>(`/patients/${id}`, req);
   }
 
