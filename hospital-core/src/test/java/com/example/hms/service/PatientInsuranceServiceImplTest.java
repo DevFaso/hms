@@ -54,6 +54,7 @@ class PatientInsuranceServiceImplTest {
     @Mock private PatientSubjectReadGuard subjectReadGuard;
     /** A staff caller's scope: these cases resolve the hospital through the adapter. */
     @Mock private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
+    @Mock private com.example.hms.service.billing.PayerCatalogueService payerCatalogueService;
 
     @InjectMocks private PatientInsuranceServiceImpl service;
 
@@ -681,6 +682,160 @@ class PatientInsuranceServiceImplTest {
         String missing = catchThrowableOfType(ResourceNotFoundException.class,
             () -> service.addInsuranceToPatient(dto, locale)).getMessage();
         assertThat(refused).isEqualTo(missing);
+        verify(patientInsuranceRepository, never()).save(any());
+    }
+
+    // ── Billing-money plan PR 6: the "Formule" picker (PUT /patient-insurances/{id}/payer-plan) ──
+
+    private PatientInsurance rowAtThisHospital() {
+        com.example.hms.model.Hospital here = new com.example.hms.model.Hospital();
+        here.setId(hospitalId);
+        UserRoleHospitalAssignment desk = new UserRoleHospitalAssignment();
+        desk.setHospital(here);
+        PatientInsurance row = new PatientInsurance();
+        row.setId(insuranceId);
+        row.setPatient(patient);
+        row.setAssignment(desk);
+        return row;
+    }
+
+    private void receptionAtThisHospital(boolean mayLinkPlans) {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(subjectReadGuard.callerUserId()).thenReturn(Optional.of(userId));
+        when(roleValidator.canLinkPayerPlan(userId, hospitalId)).thenReturn(mayLinkPlans);
+    }
+
+    @Test
+    void setPayerPlan_linksAPlanOfTheHospitalAndAuditsIt() {
+        PatientInsurance row = rowAtThisHospital();
+        UUID planId = UUID.randomUUID();
+        receptionAtThisHospital(true);
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(row));
+        when(patientInsuranceRepository.save(row)).thenReturn(row);
+        PatientInsuranceResponseDTO dto = new PatientInsuranceResponseDTO();
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(row)).thenReturn(dto);
+
+        assertThat(service.setPayerPlan(insuranceId, planId, locale)).isSameAs(dto);
+
+        assertThat(row.getPayerPlanId()).isEqualTo(planId);
+        verify(payerCatalogueService).requireLinkablePlan(planId, hospitalId);
+        verify(payerCatalogueService).auditCoverageLink(insuranceId, planId, hospitalId, userId);
+    }
+
+    @Test
+    void setPayerPlan_aPlanOfAnotherHospitalAnswersAsAMissingOne() {
+        PatientInsurance row = rowAtThisHospital();
+        UUID foreignPlan = UUID.randomUUID();
+        receptionAtThisHospital(true);
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(row));
+        when(payerCatalogueService.requireLinkablePlan(foreignPlan, hospitalId))
+            .thenThrow(new ResourceNotFoundException("billing.payerPlan.notFound", foreignPlan));
+
+        assertThatThrownBy(() -> service.setPayerPlan(insuranceId, foreignPlan, locale))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(row.getPayerPlanId()).isNull();
+        verify(patientInsuranceRepository, never()).save(any());
+        verify(payerCatalogueService, never()).auditCoverageLink(any(), any(), any(), any());
+    }
+
+    @Test
+    void setPayerPlan_aCallerWithoutThePlanLinkRoleIsRefusedBeforeAnyLookup() {
+        receptionAtThisHospital(false);
+        assertThatThrownBy(() -> service.setPayerPlan(insuranceId, UUID.randomUUID(), locale))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(patientInsuranceRepository, never()).findById(any());
+        verify(payerCatalogueService, never()).requireLinkablePlan(any(), any());
+    }
+
+    @Test
+    void setPayerPlan_anotherHospitalsRowAnswersAsAMissingOne() {
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment atB = new UserRoleHospitalAssignment();
+        atB.setHospital(elsewhere);
+        PatientInsurance rowB = new PatientInsurance();
+        rowB.setId(insuranceId);
+        rowB.setAssignment(atB);
+        receptionAtThisHospital(true);
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(rowB));
+
+        assertThatThrownBy(() -> service.setPayerPlan(insuranceId, UUID.randomUUID(), locale))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(rowB.getPayerPlanId()).isNull();
+        verify(payerCatalogueService, never()).requireLinkablePlan(any(), any());
+    }
+
+    @Test
+    void setPayerPlan_anUntaggedRowIsTaggedToTheActingHospital() {
+        PatientInsurance legacy = new PatientInsurance();
+        legacy.setId(insuranceId);
+        legacy.setPatient(patient);
+        UUID planId = UUID.randomUUID();
+        com.example.hms.model.Hospital here = new com.example.hms.model.Hospital();
+        here.setId(hospitalId);
+        UserRoleHospitalAssignment desk = new UserRoleHospitalAssignment();
+        desk.setHospital(here);
+        receptionAtThisHospital(true);
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(legacy));
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+            .thenReturn(Optional.of(desk));
+        when(patientInsuranceRepository.save(legacy)).thenReturn(legacy);
+
+        service.setPayerPlan(insuranceId, planId, locale);
+
+        assertThat(legacy.getAssignment()).isSameAs(desk);
+        assertThat(legacy.getPayerPlanId()).isEqualTo(planId);
+    }
+
+    @Test
+    void setPayerPlan_nullRemovesTheLinkAndAuditsIt() {
+        PatientInsurance row = rowAtThisHospital();
+        UUID oldPlan = UUID.randomUUID();
+        row.setPayerPlanId(oldPlan);
+        receptionAtThisHospital(true);
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(row));
+        when(patientInsuranceRepository.save(row)).thenReturn(row);
+
+        service.setPayerPlan(insuranceId, null, locale);
+
+        assertThat(row.getPayerPlanId()).isNull();
+        verify(payerCatalogueService, never()).requireLinkablePlan(any(), any());
+        verify(payerCatalogueService).auditCoverageLink(insuranceId, null, hospitalId, userId);
+    }
+
+    @Test
+    void aPatientNeverPicksThePlanTheirCoverageIsBilledUnder() {
+        LinkPatientInsuranceRequestDTO req = LinkPatientInsuranceRequestDTO.builder()
+            .patientId(patientId).payerCode("MUT-TEST-A").policyNumber("MTA-TEST-0002")
+            .payerPlanId(UUID.randomUUID()).build();
+        ActingContext ctx = new ActingContext(userId, null, ActingMode.PATIENT, null);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(subjectReadGuard.callerOwns(patient)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.upsertAndLinkByNaturalKey(req, ctx, locale))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("payerPlanId"));
+        verify(patientInsuranceRepository, never()).save(any());
+    }
+
+    @Test
+    void anEditNamingAPlanNeedsThePlanLinkRole() {
+        PatientInsurance row = rowAtThisHospital();
+        receptionAtThisHospital(false);
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(row));
+        PatientInsuranceRequestDTO edit = new PatientInsuranceRequestDTO();
+        edit.setPayerPlanId(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.updatePatientInsurance(insuranceId, edit, locale))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(row.getPayerPlanId()).isNull();
         verify(patientInsuranceRepository, never()).save(any());
     }
 }

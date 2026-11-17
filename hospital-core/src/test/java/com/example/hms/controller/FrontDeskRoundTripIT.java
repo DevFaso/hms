@@ -160,6 +160,10 @@ class FrontDeskRoundTripIT extends BaseIT {
         slotRepository.deleteAll();
         recallRepository.deleteAll();
         insuranceRepository.deleteAll();
+        // Billing-money plan PR 6: the payer catalogue the coverage round trip writes.
+        applicationContext.getBean(com.example.hms.repository.PayerPlanRuleRepository.class).deleteAll();
+        applicationContext.getBean(com.example.hms.repository.PayerPlanRepository.class).deleteAll();
+        applicationContext.getBean(com.example.hms.repository.PayerRepository.class).deleteAll();
         // The flow-board round trip writes an encounter (and its history).
         org.springframework.jdbc.core.JdbcTemplate jdbc =
             applicationContext.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
@@ -898,6 +902,70 @@ class FrontDeskRoundTripIT extends BaseIT {
         var stored = insuranceRepository.findById(insuranceId).orElseThrow();
         assertThat(stored.getProviderName()).isEqualTo("Caisse Nationale AMU");
         assertThat(stored.getPolicyNumber()).isEqualTo("AMU-2");
+    }
+
+    /**
+     * Billing-money plan PR 6: reception links a coverage to a plan of its own hospital (the "Formule" picker); the
+     * link is stored and read back with the plan's and the payer's names, a plan of another hospital answers 404,
+     * and null removes the link. Fictional payers only (docs/plan/test-hospital).
+     */
+    @Test
+    @DisplayName("PUT /patient-insurances/{id}/payer-plan round trip: a plan of the hospital is stored, another's is 404")
+    void aCoverageIsLinkedToAPayerPlanOfItsHospital() throws Exception {
+        var payers = applicationContext.getBean(com.example.hms.repository.PayerRepository.class);
+        var plans = applicationContext.getBean(com.example.hms.repository.PayerPlanRepository.class);
+        var payerA = payers.save(com.example.hms.model.Payer.builder().hospitalId(hospital.getId())
+            .code("AMU-TEST").name("Assurance maladie test (FICTIVE)")
+            .payerType(com.example.hms.enums.PayerType.AMU).active(true).build());
+        var planA = plans.save(com.example.hms.model.PayerPlan.builder().hospitalId(hospital.getId())
+            .payerId(payerA.getId()).code("AMU-BASE").name("Formule Base").defaultCoveragePercent(80)
+            .annualCeilingPerBeneficiary(new java.math.BigDecimal("150000")).effectiveFrom(LocalDate.now()).build());
+        // Hospital B's plan: a plain id is enough here (the entity-built test schema carries no hospital FK).
+        UUID hospitalB = UUID.randomUUID();
+        var payerB = payers.save(com.example.hms.model.Payer.builder().hospitalId(hospitalB)
+            .code("MUT-TEST-B").name("Mutuelle Test B (FICTIVE)")
+            .payerType(com.example.hms.enums.PayerType.MUTUELLE).active(true).build());
+        var planB = plans.save(com.example.hms.model.PayerPlan.builder().hospitalId(hospitalB)
+            .payerId(payerB.getId()).code("MTB-ESS").name("Formule B").defaultCoveragePercent(75)
+            .effectiveFrom(LocalDate.now()).build());
+
+        mockMvc.perform(put(API + "/patient-insurances/link").contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"patientId":"%s","hospitalId":"%s","payerCode":"AMU-TEST","policyNumber":"BC2-0001"}
+                    """.formatted(aicha.getId(), hospital.getId()))
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+        UUID insuranceId = insuranceRepository.findAll().get(0).getId();
+
+        mockMvc.perform(put(API + "/patient-insurances/{id}/payer-plan", insuranceId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"payerPlanId\":\"%s\"}".formatted(planB.getId()))
+                .with(asReceptionist()))
+            .andExpect(status().isNotFound());
+        assertThat(insuranceRepository.findById(insuranceId).orElseThrow().getPayerPlanId()).isNull();
+
+        mockMvc.perform(put(API + "/patient-insurances/{id}/payer-plan", insuranceId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"payerPlanId\":\"%s\"}".formatted(planA.getId()))
+                .with(asReceptionist()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.payerPlanName").value("Formule Base"))
+            .andExpect(jsonPath("$.planPayerName").value("Assurance maladie test (FICTIVE)"));
+        assertThat(insuranceRepository.findById(insuranceId).orElseThrow().getPayerPlanId())
+            .isEqualTo(planA.getId());
+        mockMvc.perform(get(API + "/patient-insurances/patient/{id}", aicha.getId()).contextPath(API)
+                .with(asReceptionist()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].payerPlanId").value(planA.getId().toString()))
+            .andExpect(jsonPath("$[0].payerPlanCode").value("AMU-BASE"));
+
+        mockMvc.perform(put(API + "/patient-insurances/{id}/payer-plan", insuranceId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"payerPlanId\":null}")
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+        assertThat(insuranceRepository.findById(insuranceId).orElseThrow().getPayerPlanId()).isNull();
     }
 
     @Test

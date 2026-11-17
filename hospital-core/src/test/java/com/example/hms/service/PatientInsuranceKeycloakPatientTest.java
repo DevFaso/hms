@@ -77,7 +77,7 @@ class PatientInsuranceKeycloakPatientTest {
         when(actingScopeResolver.current()).thenReturn(new ActingScope.PatientOwned(callerUserId));
         service = new PatientInsuranceServiceImpl(insuranceRepository, patientRepository,
             mock(UserRoleHospitalAssignmentRepository.class), mapper, messageSource, roleValidator, chartAccess, guard,
-            actingScopeResolver);
+            actingScopeResolver, mock(com.example.hms.service.billing.PayerCatalogueService.class));
 
         Jwt jwt = Jwt.withTokenValue("t").header("alg", "RS256")
             .claim("sub", "keycloak-subject").claim("appUserId", callerUserId.toString()).build();

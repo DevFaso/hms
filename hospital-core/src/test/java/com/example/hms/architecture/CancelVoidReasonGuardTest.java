@@ -437,6 +437,9 @@ class CancelVoidReasonGuardTest {
         // Billing-money plan PR 2: retiring a price-list item keeps its history with who, when and why.
         CLINICAL_HANDLERS.put("POST /billing/price-list/{id}/deactivate",
             "PriceListDeactivateRequestDTO.reason -> service/billing/PriceListServiceTest#deactivatingNeedsAReason");
+        // Billing-money plan PR 6: retiring a payer keeps who, when and why (ending a rule too: PayerCatalogueServiceTest).
+        CLINICAL_HANDLERS.put("POST /billing/payers/{payerId}/deactivate",
+            "PayerReasonRequestDTO.reason -> service/billing/PayerCatalogueServiceTest#deactivatingAPayerNeedsAReason");
         CLINICAL_HANDLERS.put("POST /admissions/order-sets/{orderSetId}/deactivate",
             "NOT A CLINICAL RECORD: retires an order-set template; no patient's order changes");
         CLINICAL_HANDLERS.put("PUT /drug-interactions/{id}/deactivate",
