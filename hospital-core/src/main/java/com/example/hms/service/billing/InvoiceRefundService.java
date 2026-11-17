@@ -214,15 +214,11 @@ public class InvoiceRefundService {
 
     /** Another hospital admin or accountant approves a requested refund (owner decision D-3). */
     @Transactional
-    public InvoiceRefundDTO approve(UUID invoiceId, UUID refundId, InvoiceRefundReasonRequestDTO body) {
+    public InvoiceRefundDTO approve(UUID invoiceId, UUID refundId) {
         Actor actor = requireActor(roleValidator::canApproveRefund, "billing.refund.approversOnly");
         BillingInvoice invoice = lockInScope(invoiceId, actor.hospitalId());
         InvoiceRefund refund = loadRefund(refundId, invoice, actor.hospitalId());
         requireDecidable(refund, actor);
-        String note = trimToNull(body != null ? body.getReason() : null);
-        if (note != null) {
-            requireText(note, FIELD_REASON);
-        }
         // The balance may have moved since the request (a reversal, a line added): the request must still fit.
         BigDecimal others = refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, refund.getId());
         BigDecimal room = InvoiceBalance.refundableOf(invoice, others);
@@ -231,11 +227,10 @@ public class InvoiceRefundService {
         }
         LocalDateTime at = now();
         claimed(refundRepository.decide(refund.getId(), refund.getHospitalId(), InvoiceRefundStatus.APPROVED,
-            actor.userId(), at, note), "billing.refund.notRequested");
+            actor.userId(), at, null), "billing.refund.notRequested");
         refund.setStatus(InvoiceRefundStatus.APPROVED);
         refund.setDecidedBy(actor.userId());
         refund.setDecidedAt(at);
-        refund.setDecisionReason(note);
         auditAfterCommit(AuditEventType.REFUND_APPROVED, actor.userId(), invoice.getId(), refund.getId(),
             "Refund approved");
         return toDto(refund, actor.userId(), null);
@@ -306,7 +301,8 @@ public class InvoiceRefundService {
         BillingInvoice invoice = lockInScope(invoiceId, actor.hospitalId());
         InvoiceRefund refund = loadRefund(refundId, invoice, actor.hospitalId());
         InvoiceRefundStatus from = refund.getStatus();
-        if (from == null || !from.isOpen()) {
+        // A paid, rejected or cancelled refund keeps its outcome and its reason (QA D1186 class).
+        if (refund.getStatus() != InvoiceRefundStatus.REQUESTED && refund.getStatus() != InvoiceRefundStatus.APPROVED) {
             throw new ConflictException(MessageUtil.resolve("billing.refund.notCancellable"));
         }
         boolean requester = actor.userId().equals(refund.getRequestedBy());
@@ -510,7 +506,7 @@ public class InvoiceRefundService {
         throw new FieldBusinessException(FIELD_OPERATOR, "billing.refund.operatorUnsupported");
     }
 
-    /** A reason or a note: at most 500 characters, never a card number. */
+    /** A reason: at most 500 characters, never a card number. */
     private static void requireText(String text, String field) {
         if (text.length() > TEXT_MAX) {
             throw new FieldBusinessException(field, "billing.refund.reasonTooLong");

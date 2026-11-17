@@ -292,14 +292,11 @@ public class PdfInvoiceService {
             w.text(BODY, 11, MARGIN, t.get("pdf.refund.date",
                 refund.getPaidAt() != null ? t.fmt(refund.getPaidAt()) : ""));
             w.down(15);
-            String method = refund.getMethod() != null
-                ? t.getOrCode("pdf.payment.method." + refund.getMethod().name(), refund.getMethod().name()) : "";
-            w.text(BODY, 11, MARGIN, t.get("pdf.refund.method", method));
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.method", methodLabel(t, refund.getMethod())));
             if (refund.getMobileMoneyOperator() != null) {
                 w.down(15);
-                String operator = refund.getMobileMoneyOperator().name();
                 w.text(BODY, 11, MARGIN, t.get("pdf.refund.operator",
-                    t.getOrCode("pdf.refund.operatorValue." + operator, operator)));
+                    operatorLabel(t, refund.getMobileMoneyOperator())));
             }
             if (refund.getReference() != null && !refund.getReference().isBlank()) {
                 w.down(15);
@@ -317,7 +314,8 @@ public class PdfInvoiceService {
             w.text(BODY, 11, MARGIN, t.get("pdf.refund.patientSignature"));
             return w.finish();
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to generate refund receipt PDF", e);
+            // No new English sentence (ExceptionProseRatchetTest): the I/O failure itself.
+            throw new java.io.UncheckedIOException(e);
         }
     }
 
@@ -374,11 +372,21 @@ public class PdfInvoiceService {
     }
 
     private static String methodLabel(PdfLabels t, PaymentTransaction p) {
-        if (p.getPaymentMethod() == null) {
+        return methodLabel(t, p.getPaymentMethod());
+    }
+
+    private static String methodLabel(PdfLabels t, com.example.hms.enums.PaymentMethod method) {
+        if (method == null) {
             return "";
         }
-        String code = p.getPaymentMethod().name();
+        String code = method.name();
         return t.getOrCode("pdf.payment.method." + code, code);
+    }
+
+    /** Billing-money plan PR 8: the mobile-money operator of a refund, in the paper's language. */
+    private static String operatorLabel(PdfLabels t, com.example.hms.enums.MobileMoneyOperator operator) {
+        String code = operator.name();
+        return t.getOrCode("pdf.refund.operatorValue." + code, code);
     }
 
     /** The line's own description; the category label only when the line has none. */

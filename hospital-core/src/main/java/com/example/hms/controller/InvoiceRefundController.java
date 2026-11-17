@@ -78,11 +78,8 @@ public class InvoiceRefundController {
     @PostMapping("/{invoiceId}/refunds/{refundId}/approve")
     @PreAuthorize(APPROVERS)
     @Operation(summary = "Approve a refund someone else asked for")
-    public ResponseEntity<InvoiceRefundDTO> approve(
-        @PathVariable UUID invoiceId,
-        @PathVariable UUID refundId,
-        @Valid @RequestBody(required = false) InvoiceRefundReasonRequestDTO body) {
-        return ResponseEntity.ok(refundService.approve(invoiceId, refundId, body));
+    public ResponseEntity<InvoiceRefundDTO> approve(@PathVariable UUID invoiceId, @PathVariable UUID refundId) {
+        return ResponseEntity.ok(refundService.approve(invoiceId, refundId));
     }
 
     @PostMapping("/{invoiceId}/refunds/{refundId}/reject")
@@ -91,7 +88,7 @@ public class InvoiceRefundController {
     public ResponseEntity<InvoiceRefundDTO> reject(
         @PathVariable UUID invoiceId,
         @PathVariable UUID refundId,
-        @Valid @RequestBody(required = false) InvoiceRefundReasonRequestDTO body) {
+        @Valid @RequestBody InvoiceRefundReasonRequestDTO body) {
         return ResponseEntity.ok(refundService.reject(invoiceId, refundId, body));
     }
 
@@ -108,7 +105,7 @@ public class InvoiceRefundController {
     public ResponseEntity<InvoiceRefundDTO> cancel(
         @PathVariable UUID invoiceId,
         @PathVariable UUID refundId,
-        @Valid @RequestBody(required = false) InvoiceRefundReasonRequestDTO body) {
+        @Valid @RequestBody InvoiceRefundReasonRequestDTO body) {
         return ResponseEntity.ok(refundService.cancel(invoiceId, refundId, body));
     }
 

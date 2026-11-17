@@ -9,6 +9,7 @@ import { AppointmentListComponent } from '../appointments/appointment-list';
 import { BillingComponent } from '../billing/billing';
 import { CashClosingComponent } from '../billing/cash-closing/cash-closing.component';
 import { PriceListComponent } from '../billing/price-list/price-list.component';
+import { InvoiceRefundsComponent } from '../billing/refunds/invoice-refunds.component';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 import { FeatureFlagsComponent } from '../feature-flags/feature-flags';
 import { MyAppointmentsComponent } from '../patient-portal/my-appointments/my-appointments.component';
@@ -104,6 +105,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'PriceListComponent',
     file: 'billing/price-list/price-list.component',
     type: PriceListComponent,
+  },
+  {
+    name: 'InvoiceRefundsComponent',
+    file: 'billing/refunds/invoice-refunds.component',
+    type: InvoiceRefundsComponent,
   },
   {
     name: 'CheckoutDialogComponent',

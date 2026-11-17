@@ -33,6 +33,7 @@ import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { markServerFieldErrors } from '../../shared/forms/server-field-errors';
 import { refusalReason } from '../../shared/refusal-reason';
+import { joinReasons } from '../../shared/required-fields';
 import { saveResponse } from '../../shared/download-file';
 import { cfaAmountMessageKey, cfaAmountProblem } from '../../shared/cfa-amount';
 
@@ -235,7 +236,9 @@ export class InvoiceRefundsComponent {
     }
     if (refused.length > 0) {
       // The submit is never dead: every missing field is marked where it is typed, the first one focused.
+      // QA D1256 class: every reason said at once, in one message too.
       refuseFields(this.host.nativeElement, refused, REQUEST_FIELD_IDS);
+      this.toast.error(joinReasons(refused.map((r) => r.message)) ?? '');
       return;
     }
     const invoiceId = this.invoice().id;

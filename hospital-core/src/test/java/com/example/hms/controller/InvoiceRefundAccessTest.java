@@ -90,7 +90,7 @@ class InvoiceRefundAccessTest {
             new Step("receipt", get(BASE + "/" + REFUND + "/receipt"), readers),
             new Step("request", json(post(BASE), "{\"amount\":500,\"method\":\"CASH\",\"reason\":\"Trop-perçu\"}"),
                 requesters),
-            new Step("approve", json(post(BASE + "/" + REFUND + "/approve"), "{}"), approvers),
+            new Step("approve", post(BASE + "/" + REFUND + "/approve"), approvers),
             new Step("reject", json(post(BASE + "/" + REFUND + "/reject"), "{\"reason\":\"Non\"}"), approvers),
             new Step("pay", post(BASE + "/" + REFUND + "/pay"), payers),
             new Step("cancel", json(post(BASE + "/" + REFUND + "/cancel"), "{\"reason\":\"Erreur\"}"), requesters));

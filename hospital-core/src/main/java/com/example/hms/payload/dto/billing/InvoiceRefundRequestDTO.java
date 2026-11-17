@@ -13,7 +13,7 @@ import java.util.UUID;
 
 /**
  * Billing-money plan PR 8 (QA D1900): a request to give money back to the patient on an invoice. The amount, the
- * method and the reason are required (checked together by the service, every missing field named in one refusal);
+ * method and the reason are required (named together at the edge, and again by the service);
  * mobile money also needs the operator and the operator's reference. No text field may hold a card number.
  */
 @Getter
@@ -24,9 +24,11 @@ import java.util.UUID;
 public class InvoiceRefundRequestDTO {
 
     /** Whole francs, more than 0, at most what is left to refund. */
+    @jakarta.validation.constraints.NotNull(message = "{billing.refund.amountRequired}")
     private BigDecimal amount;
 
     /** A {@code PaymentMethod} code: how the money is handed back (never INSURANCE). */
+    @jakarta.validation.constraints.NotBlank(message = "{billing.payment.methodRequired}")
     @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.PaymentMethod.CODES,
         flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE,
         message = "{billing.payment.methodUnsupported}")
@@ -43,6 +45,7 @@ public class InvoiceRefundRequestDTO {
     @NoCardNumber
     private String reference;
 
+    @jakarta.validation.constraints.NotBlank(message = "{billing.refund.reasonRequired}")
     @Size(max = 500, message = "{billing.refund.reasonTooLong}")
     @NoCardNumber
     private String reason;

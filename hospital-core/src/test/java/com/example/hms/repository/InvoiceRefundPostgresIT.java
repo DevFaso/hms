@@ -147,7 +147,7 @@ class InvoiceRefundPostgresIT {
 
     private InvoiceRefundDTO approve(UUID invoice, UUID refund) {
         when(roles.getCurrentUserId()).thenReturn(admin);
-        return inTx(() -> service.approve(invoice, refund, null));
+        return inTx(() -> service.approve(invoice, refund));
     }
 
     private BigDecimal refunded(UUID invoice) {

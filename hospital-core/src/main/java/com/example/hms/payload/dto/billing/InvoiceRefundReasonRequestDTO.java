@@ -8,10 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Billing-money plan PR 8: why a refund is rejected or cancelled (required there; checked by the service so the
- * field is named), or an optional note on an approval. Never a card number.
- */
+/** Billing-money plan PR 8: why a refund is rejected or cancelled (required, named at the edge). Never a card number. */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -19,6 +16,7 @@ import lombok.Setter;
 @Builder
 public class InvoiceRefundReasonRequestDTO {
 
+    @jakarta.validation.constraints.NotBlank(message = "{billing.payment.reasonRequired}")
     @Size(max = 500, message = "{billing.refund.reasonTooLong}")
     @NoCardNumber
     private String reason;

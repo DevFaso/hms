@@ -195,7 +195,7 @@ class InvoiceRefundServiceTest {
     private InvoiceRefundDTO approved(String amount) {
         InvoiceRefundDTO asked = requested(amount);
         actAs(ADMIN_A);
-        return service.approve(invoice.getId(), asked.getId(), null);
+        return service.approve(invoice.getId(), asked.getId());
     }
 
     // ───────────────────────── the D1900 scenario ─────────────────────────
@@ -212,11 +212,11 @@ class InvoiceRefundServiceTest {
         // The same person cannot approve it (a cashier has no approver role; a requesting admin is refused too).
         actAs(BILLING_A);
         UUID refundId = asked.getId();
-        assertThatThrownBy(() -> service.approve(invoice.getId(), refundId, null))
+        assertThatThrownBy(() -> service.approve(invoice.getId(), refundId))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
 
         actAs(ADMIN_A);
-        assertThat(service.approve(invoice.getId(), refundId, null).getStatus()).isEqualTo("APPROVED");
+        assertThat(service.approve(invoice.getId(), refundId).getStatus()).isEqualTo("APPROVED");
 
         actAs(BILLING_A);
         InvoiceRefundDTO paid = service.pay(invoice.getId(), refundId);
@@ -238,7 +238,7 @@ class InvoiceRefundServiceTest {
         InvoiceRefundDTO asked = service.request(invoice.getId(), cash("500", "Trop-perçu"));
         UUID refundId = asked.getId();
 
-        assertThatThrownBy(() -> service.approve(invoice.getId(), refundId, null))
+        assertThatThrownBy(() -> service.approve(invoice.getId(), refundId))
             .isInstanceOf(ConflictException.class)
             .hasMessageContaining("Un autre responsable doit approuver");
         assertThatThrownBy(() -> service.reject(invoice.getId(), refundId, because("Non")))
@@ -247,7 +247,7 @@ class InvoiceRefundServiceTest {
         assertThat(ledger.get(refundId).getStatus()).isEqualTo(InvoiceRefundStatus.REQUESTED);
 
         actAs(ACCOUNTANT_A);
-        assertThat(service.approve(invoice.getId(), refundId, null).getDecidedBy()).isEqualTo(ACCOUNTANT_A);
+        assertThat(service.approve(invoice.getId(), refundId).getDecidedBy()).isEqualTo(ACCOUNTANT_A);
     }
 
     // ───────────────────────── amounts and fields ─────────────────────────
@@ -394,7 +394,7 @@ class InvoiceRefundServiceTest {
         assertThat(rejected.getDecisionReason()).isEqualTo("Déjà rendu en espèces hier");
 
         actAs(ACCOUNTANT_A);
-        assertThatThrownBy(() -> service.approve(invoiceId, refundId, null)).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> service.approve(invoiceId, refundId)).isInstanceOf(ConflictException.class);
         assertThatThrownBy(() -> service.reject(invoiceId, refundId, because("Encore")))
             .isInstanceOf(ConflictException.class);
     }
@@ -435,7 +435,7 @@ class InvoiceRefundServiceTest {
         UUID invoiceId = invoice.getId();
         UUID refundId = refund.getId();
         Runnable call = switch (step) {
-            case "approve" -> () -> service.approve(invoiceId, refundId, null);
+            case "approve" -> () -> service.approve(invoiceId, refundId);
             case "reject" -> () -> service.reject(invoiceId, refundId, because("Non justifié"));
             case "pay" -> () -> service.pay(invoiceId, refundId);
             default -> () -> service.cancel(invoiceId, refundId, because("Patient parti"));
@@ -524,7 +524,7 @@ class InvoiceRefundServiceTest {
         assertThatThrownBy(() -> service.pay(invoiceId, UUID.randomUUID()))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
         actAs(RECEPTION_A);
-        assertThatThrownBy(() -> service.approve(invoiceId, UUID.randomUUID(), null))
+        assertThatThrownBy(() -> service.approve(invoiceId, UUID.randomUUID()))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
         verify(invoices, never()).findLockedById(any());
     }
@@ -545,7 +545,7 @@ class InvoiceRefundServiceTest {
 
         List<Runnable> routes = new ArrayList<>(List.of(
             () -> service.request(invoiceId, cash("500", "x")),
-            () -> service.approve(invoiceId, refundId, null),
+            () -> service.approve(invoiceId, refundId),
             () -> service.reject(invoiceId, refundId, because("x")),
             () -> service.pay(invoiceId, refundId),
             () -> service.cancel(invoiceId, refundId, because("x")),
@@ -605,7 +605,7 @@ class InvoiceRefundServiceTest {
             .isInstanceOf(ConflictException.class);
 
         actAs(ADMIN_A);
-        service.approve(invoiceId, refundId, null);
+        service.approve(invoiceId, refundId);
         actAs(BILLING_A);
         service.pay(invoiceId, refundId);
         when(refunds.findByInvoice_IdAndStatusInOrderByCreatedAtAsc(eq(invoiceId), any()))
