@@ -15,16 +15,16 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Billing-money plan PR 6 (V305): one plan ("formule") of a {@link Payer}: the default coverage rate (whole percent),
- * an optional ceiling per invoice and per beneficiary per calendar year (whole francs), and the days it is offered
- * ({@link #effectiveFrom} .. {@link #effectiveTo}, inclusive; open-ended while null; {@code effectiveTo =
- * effectiveFrom - 1} marks a plan withdrawn before it started). Its exceptions are {@link PayerPlanRule} rows. A
- * patient's coverage names one through {@code PatientInsurance.payerPlanId}. Nothing reads it at invoicing yet (PR 7).
+ * Billing-money plan PR 6 (V305): one plan ("formule") of a {@link Payer}: its code, its name and the days it is
+ * offered ({@link #effectiveFrom} .. {@link #effectiveTo}, inclusive; open-ended while null; {@code effectiveTo =
+ * effectiveFrom - 1} marks a plan withdrawn before it started). Its terms (rate and ceilings) are dated
+ * {@link PayerPlanTerms} versions (review of #1202: never rewritten in place); its exceptions are
+ * {@link PayerPlanRule} rows. A patient's coverage names one through {@code PatientInsurance.payerPlanId}. Nothing
+ * reads it at invoicing yet (PR 7).
  */
 @Entity
 @Table(
@@ -55,18 +55,6 @@ public class PayerPlan extends BaseEntity implements TenantScoped {
 
     @Column(name = "name", nullable = false, length = 150)
     private String name;
-
-    /** 0 to 100. */
-    @Column(name = "default_coverage_percent", nullable = false)
-    private Integer defaultCoveragePercent;
-
-    /** Whole francs, more than 0; null when the plan has no ceiling per invoice. */
-    @Column(name = "per_invoice_ceiling", precision = 12, scale = 2)
-    private BigDecimal perInvoiceCeiling;
-
-    /** Whole francs, more than 0, per beneficiary and calendar year (D-13); null when none. */
-    @Column(name = "annual_ceiling_per_beneficiary", precision = 12, scale = 2)
-    private BigDecimal annualCeilingPerBeneficiary;
 
     @Column(name = "effective_from", nullable = false)
     private LocalDate effectiveFrom;

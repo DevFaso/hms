@@ -10,6 +10,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Payer;
 import com.example.hms.model.PayerPlan;
 import com.example.hms.model.PayerPlanRule;
+import com.example.hms.model.PayerPlanTerms;
 import com.example.hms.model.PriceListItem;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
@@ -18,12 +19,15 @@ import com.example.hms.payload.dto.billing.PayerPlanDTO;
 import com.example.hms.payload.dto.billing.PayerPlanRequestDTO;
 import com.example.hms.payload.dto.billing.PayerPlanRuleDTO;
 import com.example.hms.payload.dto.billing.PayerPlanRuleRequestDTO;
+import com.example.hms.payload.dto.billing.PayerPlanTermsDTO;
+import com.example.hms.payload.dto.billing.PayerPlanTermsRequestDTO;
 import com.example.hms.payload.dto.billing.PayerPlanUpdateRequestDTO;
 import com.example.hms.payload.dto.billing.PayerReasonRequestDTO;
 import com.example.hms.payload.dto.billing.PayerRequestDTO;
 import com.example.hms.payload.dto.billing.PayerUpdateRequestDTO;
 import com.example.hms.repository.PayerPlanRepository;
 import com.example.hms.repository.PayerPlanRuleRepository;
+import com.example.hms.repository.PayerPlanTermsRepository;
 import com.example.hms.repository.PayerRepository;
 import com.example.hms.repository.PriceListItemRepository;
 import com.example.hms.repository.UserRepository;
@@ -52,6 +56,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -72,10 +77,9 @@ import java.util.stream.Collectors;
  * plan to its payer's hospital and a rule to its plan's and its item's. A row of another hospital answers exactly as a
  * missing one (404); the role is checked before any lookup.
  *
- * <p><b>History.</b> A rule changes only by adding one (see {@link PayerCoverageRules}); the one update is closing
- * {@code effective_to}. A plan's name, rate and ceilings are edited in place and audited: nothing is applied to an
- * invoice yet, and PR 7 will copy the payer's share onto the invoice when it is issued, so an edit never rewrites an
- * issued invoice.
+ * <p><b>History.</b> A plan's terms (rate, ceilings) and its rules change only by adding a dated version (see
+ * {@link PayerCoverageRules}); the one update is closing {@code effective_to}. The version in force on the service
+ * date applies (D-4). Only a plan's name and its offered dates are edited in place (review of #1202).
  *
  * <p><b>Audit.</b> Every write leaves one row after commit, ids only (no name, no rate, no reason text).
  */
@@ -108,6 +112,7 @@ public class PayerCatalogueService {
     private final PayerRepository payerRepository;
     private final PayerPlanRepository planRepository;
     private final PayerPlanRuleRepository ruleRepository;
+    private final PayerPlanTermsRepository termsRepository;
     private final PriceListItemRepository priceListItemRepository;
     private final UserRepository userRepository;
     private final RoleValidator roleValidator;
@@ -120,6 +125,7 @@ public class PayerCatalogueService {
     public PayerCatalogueService(PayerRepository payerRepository,
                                  PayerPlanRepository planRepository,
                                  PayerPlanRuleRepository ruleRepository,
+                                 PayerPlanTermsRepository termsRepository,
                                  PriceListItemRepository priceListItemRepository,
                                  UserRepository userRepository,
                                  RoleValidator roleValidator,
@@ -130,6 +136,7 @@ public class PayerCatalogueService {
         this.payerRepository = payerRepository;
         this.planRepository = planRepository;
         this.ruleRepository = ruleRepository;
+        this.termsRepository = termsRepository;
         this.priceListItemRepository = priceListItemRepository;
         this.userRepository = userRepository;
         this.roleValidator = roleValidator;
@@ -278,9 +285,6 @@ public class PayerCatalogueService {
                 .payerId(payer.getId())
                 .code(code)
                 .name(name)
-                .defaultCoveragePercent(terms.percent())
-                .perInvoiceCeiling(terms.perInvoice())
-                .annualCeilingPerBeneficiary(terms.annual())
                 .effectiveFrom(from)
                 .effectiveTo(to)
                 .createdBy(actor.userId())
@@ -289,15 +293,25 @@ public class PayerCatalogueService {
         } catch (DataIntegrityViolationException race) {
             throw new FieldBusinessException(FIELD_CODE, "billing.payerPlan.codeDuplicate", code);
         }
+        // The first terms version starts with the plan.
+        termsRepository.saveAndFlush(PayerPlanTerms.builder()
+            .hospitalId(actor.hospitalId())
+            .planId(saved.getId())
+            .defaultCoveragePercent(terms.percent())
+            .perInvoiceCeiling(terms.perInvoice())
+            .annualCeilingPerBeneficiary(terms.annual())
+            .effectiveFrom(from)
+            .createdBy(actor.userId())
+            .build());
         audit(AuditEventType.PAYER_PLAN_CHANGED, actor,
             "Payer plan " + saved.getId() + " of payer " + payer.getId() + " created", AUDIT_ENTITY_PLAN, saved.getId());
         return toDtos(List.of(payer)).get(0);
     }
 
     /**
-     * The plan's name, rate, ceilings and dates; never its code. The start moves only while the plan has not
-     * started, and never into the past; the plan may be ended from today at the earliest. An ended plan takes no
-     * change.
+     * The plan's name and dates; never its code, never its terms (those change by {@link #addTerms}, a dated
+     * version). The start moves only while the plan has not started, never into the past and never before its first
+     * terms; the plan may be ended from today at the earliest. An ended plan takes no change.
      */
     @Transactional
     public PayerDTO updatePlan(UUID payerId, UUID planId, PayerPlanUpdateRequestDTO request) {
@@ -313,12 +327,8 @@ public class PayerCatalogueService {
         String name = trimmed(body.getName());
         RequiredFields.check()
             .require(!name.isEmpty(), FIELD_NAME, "billing.payerPlan.nameRequired")
-            .require(body.getDefaultCoveragePercent() != null, FIELD_DEFAULT_PERCENT,
-                "billing.payerPlan.percentRequired")
             .orThrow();
         requireNameLength(name);
-        Terms terms = termsOf(body.getDefaultCoveragePercent(), body.getPerInvoiceCeiling(),
-            body.getAnnualCeilingPerBeneficiary());
         LocalDate from = plan.getEffectiveFrom();
         if (body.getEffectiveFrom() != null && !body.getEffectiveFrom().equals(from)) {
             if (!from.isAfter(today)) {
@@ -326,6 +336,15 @@ public class PayerCatalogueService {
                     "billing.payerPlan.startedStartFixed");
             }
             from = PayerCoverageRules.startOf(body.getEffectiveFrom(), today);
+            // Every day of the plan has terms: it never starts before its first terms version.
+            LocalDate firstTerms = termsRepository
+                .findByPlanIdAndHospitalIdOrderByEffectiveFromAscCreatedAtAsc(plan.getId(), actor.hospitalId())
+                .stream().filter(version -> !version.isCancelled()).map(PayerPlanTerms::getEffectiveFrom)
+                .min(LocalDate::compareTo).orElse(from);
+            if (from.isBefore(firstTerms)) {
+                throw new FieldBusinessException(PayerCoverageRules.FIELD_EFFECTIVE_FROM,
+                    "billing.payerPlan.startBeforeTerms", com.example.hms.utility.DisplayDates.date(firstTerms));
+            }
         }
         LocalDate to = body.getEffectiveTo();
         // The last day may be yesterday at the earliest (the plan stops today), or the day before its own start
@@ -337,9 +356,6 @@ public class PayerCatalogueService {
             throw new FieldBusinessException(PayerCoverageRules.FIELD_EFFECTIVE_TO, "billing.payerPlan.endBeforeStart");
         }
         plan.setName(name);
-        plan.setDefaultCoveragePercent(terms.percent());
-        plan.setPerInvoiceCeiling(terms.perInvoice());
-        plan.setAnnualCeilingPerBeneficiary(terms.annual());
         plan.setEffectiveFrom(from);
         plan.setEffectiveTo(to);
         plan.setUpdatedBy(actor.userId());
@@ -347,6 +363,82 @@ public class PayerCatalogueService {
         audit(AuditEventType.PAYER_PLAN_CHANGED, actor,
             "Payer plan " + plan.getId() + " of payer " + payer.getId() + " updated", AUDIT_ENTITY_PLAN, plan.getId());
         return toDtos(List.of(payer)).get(0);
+    }
+
+    /**
+     * Review of #1202: new terms of a plan (rate, ceilings) from a date, today or later. Under the payer's lock: the
+     * terms in force are closed on the day before, and terms planned on or after that day are replaced only when the
+     * caller confirms it. Nothing is rewritten: the version in force on a service date stays what it was (D-4).
+     */
+    @Transactional
+    public PayerDTO addTerms(UUID payerId, UUID planId, PayerPlanTermsRequestDTO request) {
+        Maintainer actor = requireMaintainer();
+        Payer payer = lockPayer(payerId, actor);
+        requireNotWithdrawn(payer);
+        PayerPlan plan = planAtPayer(planId, payer, actor);
+        LocalDate today = today();
+        if (plan.endedBefore(today)) {
+            throw new BusinessException("billing.payerPlan.ended");
+        }
+        PayerPlanTermsRequestDTO body = request != null ? request : new PayerPlanTermsRequestDTO();
+        RequiredFields.check()
+            .require(body.getDefaultCoveragePercent() != null, FIELD_DEFAULT_PERCENT,
+                "billing.payerPlan.percentRequired")
+            .orThrow();
+        Terms terms = termsOf(body.getDefaultCoveragePercent(), body.getPerInvoiceCeiling(),
+            body.getAnnualCeilingPerBeneficiary());
+        String reason = body.getChangeReason() == null ? "" : body.getChangeReason().trim();
+        if (reason.length() > REASON_MAX) {
+            throw new FieldBusinessException("changeReason", "billing.payer.reasonTooLong", REASON_MAX);
+        }
+        LocalDate from = PayerCoverageRules.startOf(body.getEffectiveFrom(), today);
+        if (plan.getEffectiveTo() != null && from.isAfter(plan.getEffectiveTo())) {
+            throw new FieldBusinessException(PayerCoverageRules.FIELD_EFFECTIVE_FROM, "billing.payer.ruleAfterPlanEnd");
+        }
+        List<PayerPlanTerms> versions = termsRepository
+            .findByPlanIdAndHospitalIdOrderByEffectiveFromAscCreatedAtAsc(plan.getId(), actor.hospitalId());
+        PayerCoverageRules.TermsPlan change = PayerCoverageRules.planTerms(versions, from, body.isReplaceScheduled());
+
+        // Close first, then insert: the partial unique indexes hold at every statement.
+        List<PayerPlanTerms> touched = new ArrayList<>();
+        for (PayerPlanTerms replaced : change.toReplace()) {
+            replaced.setEffectiveTo(replaced.getEffectiveFrom().minusDays(1));
+            touched.add(replaced);
+        }
+        change.predecessor().ifPresent(previous -> {
+            previous.setEffectiveTo(from.minusDays(1));
+            touched.add(previous);
+        });
+        termsRepository.saveAll(touched);
+        termsRepository.flush();
+        PayerPlanTerms version = termsRepository.saveAndFlush(PayerPlanTerms.builder()
+            .hospitalId(actor.hospitalId())
+            .planId(plan.getId())
+            .defaultCoveragePercent(terms.percent())
+            .perInvoiceCeiling(terms.perInvoice())
+            .annualCeilingPerBeneficiary(terms.annual())
+            .effectiveFrom(from)
+            .changeReason(reason.isEmpty() ? null : reason)
+            .createdBy(actor.userId())
+            .build());
+        plan.setUpdatedBy(actor.userId());
+        planRepository.save(plan);
+        audit(AuditEventType.PAYER_PLAN_CHANGED, actor,
+            "Terms " + version.getId() + " added to payer plan " + plan.getId() + ", effective " + from
+                + ", closed " + idsOf(change.predecessor().map(PayerPlanTerms::getId).stream().toList())
+                + ", replaced " + idsOf(change.toReplace().stream().map(PayerPlanTerms::getId).toList()),
+            AUDIT_ENTITY_PLAN, plan.getId());
+        return toDtos(List.of(payer)).get(0);
+    }
+
+    /**
+     * The terms of a plan in force on {@code day} (the service date, D-4), at the plan's own hospital; empty when the
+     * plan has none that day. For the coverage calculator (PR 7).
+     */
+    @Transactional(readOnly = true)
+    public Optional<PayerPlanTerms> termsOn(UUID planId, UUID hospitalId, LocalDate day) {
+        return termsRepository.findByPlanIdAndHospitalIdOrderByEffectiveFromAscCreatedAtAsc(planId, hospitalId)
+            .stream().filter(version -> version.coversDay(day)).findFirst();
     }
 
     // ───────────────────────────── rules ─────────────────────────────
@@ -415,7 +507,9 @@ public class PayerCatalogueService {
         plan.setUpdatedBy(actor.userId());
         planRepository.save(plan);
         audit(AuditEventType.PAYER_PLAN_CHANGED, actor,
-            "Rule " + rule.getId() + " added to payer plan " + plan.getId() + ", effective " + from,
+            "Rule " + rule.getId() + " added to payer plan " + plan.getId() + ", effective " + from
+                + ", closed " + idsOf(change.predecessor().map(PayerPlanRule::getId).stream().toList())
+                + ", replaced " + idsOf(change.toReplace().stream().map(PayerPlanRule::getId).toList()),
             AUDIT_ENTITY_PLAN, plan.getId());
         return toDtos(List.of(payer)).get(0);
     }
@@ -439,18 +533,63 @@ public class PayerCatalogueService {
             throw new BusinessException("billing.payerRule.alreadyEnded");
         }
         String reason = requiredReason(request, "billing.payerRule.endReasonRequired");
-        rule.setEffectiveTo(rule.getEffectiveFrom().isBefore(today)
-            ? today.minusDays(1)
-            : rule.getEffectiveFrom().minusDays(1));
+        boolean withdrawn = rule.getEffectiveFrom().isAfter(today);
+        LocalDate lastDay;
+        if (rule.getEffectiveFrom().isBefore(today)) {
+            lastDay = today.minusDays(1);
+        } else if (withdrawn) {
+            lastDay = rule.getEffectiveFrom().minusDays(1);
+        } else {
+            // Review of #1202: a rule that started today has applied today; it ends tonight.
+            lastDay = today;
+        }
+        rule.setEffectiveTo(lastDay);
         rule.setEndedAt(LocalDateTime.now(clock));
         rule.setEndedBy(actor.userId());
         rule.setEndReason(reason);
         ruleRepository.saveAndFlush(rule);
+        if (withdrawn) {
+            reopenPredecessorOf(rule, actor);
+        }
         plan.setUpdatedBy(actor.userId());
         planRepository.save(plan);
         audit(AuditEventType.PAYER_PLAN_CHANGED, actor,
             "Rule " + rule.getId() + " of payer plan " + plan.getId() + " ended", AUDIT_ENTITY_PLAN, plan.getId());
         return toDtos(List.of(payer)).get(0);
+    }
+
+    /**
+     * Review of #1202: a planned rule withdrawn before it applied gives its days back to the rule it had closed (same
+     * target, closed on the day before the withdrawn one's start, not ended on purpose). That rule runs again to the
+     * day before the next live rule of the target, or open-ended. Called under the payer's lock, after the withdrawn
+     * rule's own close was flushed (the open-ended index holds).
+     */
+    private void reopenPredecessorOf(PayerPlanRule withdrawn, Maintainer actor) {
+        List<PayerPlanRule> sameTarget = ruleRepository
+            .findByPlanIdAndHospitalIdOrderByEffectiveFromAscCreatedAtAsc(withdrawn.getPlanId(), actor.hospitalId())
+            .stream()
+            .filter(other -> !other.getId().equals(withdrawn.getId()) && !other.isCancelled())
+            .filter(other -> other.hasTarget(withdrawn.getCategory(), withdrawn.getPriceListItemId()))
+            .toList();
+        LocalDate closedOn = withdrawn.getEffectiveFrom().minusDays(1);
+        sameTarget.stream()
+            .filter(other -> other.getEndedAt() == null && closedOn.equals(other.getEffectiveTo()))
+            .findFirst()
+            .ifPresent(predecessor -> {
+                LocalDate until = sameTarget.stream()
+                    .map(PayerPlanRule::getEffectiveFrom)
+                    .filter(start -> start.isAfter(withdrawn.getEffectiveFrom()))
+                    .min(LocalDate::compareTo)
+                    .map(next -> next.minusDays(1))
+                    .orElse(null);
+                predecessor.setEffectiveTo(until);
+                ruleRepository.saveAndFlush(predecessor);
+            });
+    }
+
+    /** Ids for an audit sentence: "[a, b]", "[]" when none. */
+    private static String idsOf(List<UUID> ids) {
+        return ids.stream().map(String::valueOf).collect(Collectors.joining(", ", "[", "]"));
     }
 
     // ───────────────────────────── coverage link ─────────────────────────────
@@ -667,13 +806,19 @@ public class PayerCatalogueService {
             rules.addAll(ruleRepository.findByPlanIds(chunk));
         }
         rules.forEach(rule -> rulesByPlan.computeIfAbsent(rule.getPlanId(), id -> new ArrayList<>()).add(rule));
+        Map<UUID, List<PayerPlanTerms>> termsByPlan = new HashMap<>();
+        List<PayerPlanTerms> terms = new ArrayList<>();
+        for (List<UUID> chunk : PriceListService.chunksOf(plans.stream().map(PayerPlan::getId).toList())) {
+            terms.addAll(termsRepository.findByPlanIds(chunk));
+        }
+        terms.forEach(version -> termsByPlan.computeIfAbsent(version.getPlanId(), id -> new ArrayList<>()).add(version));
         Map<UUID, PriceListItem> items = new HashMap<>();
         List<UUID> itemIds = rules.stream().map(PayerPlanRule::getPriceListItemId).filter(Objects::nonNull)
             .distinct().toList();
         for (List<UUID> chunk : PriceListService.chunksOf(itemIds)) {
             priceListItemRepository.findAllById(chunk).forEach(item -> items.put(item.getId(), item));
         }
-        Names names = names(payers, plans, rules);
+        Names names = names(payers, plans, rules, terms);
         LocalDate today = today();
         return payers.stream().map(payer -> PayerDTO.builder()
             .id(payer.getId())
@@ -690,21 +835,36 @@ public class PayerCatalogueService {
             .updatedAt(payer.getUpdatedAt())
             .updatedByName(names.of(payer.getUpdatedBy()))
             .plans(plansByPayer.getOrDefault(payer.getId(), List.of()).stream()
-                .map(plan -> toDto(plan, payer, rulesByPlan.getOrDefault(plan.getId(), List.of()), items, names, today))
+                .map(plan -> toDto(plan, payer, new PlanRows(rulesByPlan.getOrDefault(plan.getId(), List.of()),
+                    termsByPlan.getOrDefault(plan.getId(), List.of())), items, names, today))
                 .toList())
             .build()).toList();
     }
 
-    private static PayerPlanDTO toDto(PayerPlan plan, Payer payer, List<PayerPlanRule> rules,
+    /** A plan's rules and terms versions, oldest start first. */
+    private record PlanRows(List<PayerPlanRule> rules, List<PayerPlanTerms> terms) {
+    }
+
+    private static PayerPlanDTO toDto(PayerPlan plan, Payer payer, PlanRows rows,
                                       Map<UUID, PriceListItem> items, Names names, LocalDate today) {
+        List<PayerPlanTerms> live = rows.terms().stream().filter(version -> !version.isCancelled()).toList();
+        // The terms shown on the plan: those in force today, else the first planned (a plan not started yet).
+        PayerPlanTerms shown = live.stream().filter(version -> version.coversDay(today)).findFirst()
+            .or(() -> live.stream().filter(version -> version.getEffectiveFrom().isAfter(today)).findFirst())
+            .orElse(null);
+        PayerPlanTerms next = live.stream()
+            .filter(version -> version.getEffectiveFrom().isAfter(today) && version != shown)
+            .findFirst().orElse(null);
         return PayerPlanDTO.builder()
             .id(plan.getId())
             .payerId(plan.getPayerId())
             .code(plan.getCode())
             .name(plan.getName())
-            .defaultCoveragePercent(plan.getDefaultCoveragePercent())
-            .perInvoiceCeiling(plan.getPerInvoiceCeiling())
-            .annualCeilingPerBeneficiary(plan.getAnnualCeilingPerBeneficiary())
+            .defaultCoveragePercent(shown == null ? null : shown.getDefaultCoveragePercent())
+            .perInvoiceCeiling(shown == null ? null : shown.getPerInvoiceCeiling())
+            .annualCeilingPerBeneficiary(shown == null ? null : shown.getAnnualCeilingPerBeneficiary())
+            .nextTerms(next == null ? null : toDto(next, names, today))
+            .terms(rows.terms().stream().map(version -> toDto(version, names, today)).toList())
             .effectiveFrom(plan.getEffectiveFrom())
             .effectiveTo(plan.isWithdrawn() ? null : plan.getEffectiveTo())
             .status(PayerCoverageRules.statusOf(plan, today))
@@ -713,7 +873,22 @@ public class PayerCatalogueService {
             .createdByName(names.of(plan.getCreatedBy()))
             .updatedAt(plan.getUpdatedAt())
             .updatedByName(names.of(plan.getUpdatedBy()))
-            .rules(rules.stream().map(rule -> toDto(rule, items, names, today)).toList())
+            .rules(rows.rules().stream().map(rule -> toDto(rule, items, names, today)).toList())
+            .build();
+    }
+
+    private static PayerPlanTermsDTO toDto(PayerPlanTerms version, Names names, LocalDate today) {
+        return PayerPlanTermsDTO.builder()
+            .id(version.getId())
+            .defaultCoveragePercent(version.getDefaultCoveragePercent())
+            .perInvoiceCeiling(version.getPerInvoiceCeiling())
+            .annualCeilingPerBeneficiary(version.getAnnualCeilingPerBeneficiary())
+            .effectiveFrom(version.getEffectiveFrom())
+            .effectiveTo(version.isCancelled() ? null : version.getEffectiveTo())
+            .status(PayerCoverageRules.statusOf(version, today))
+            .changeReason(version.getChangeReason())
+            .createdAt(version.getCreatedAt())
+            .createdByName(names.of(version.getCreatedBy()))
             .build();
     }
 
@@ -748,7 +923,8 @@ public class PayerCatalogueService {
         }
     }
 
-    private Names names(Collection<Payer> payers, Collection<PayerPlan> plans, Collection<PayerPlanRule> rules) {
+    private Names names(Collection<Payer> payers, Collection<PayerPlan> plans, Collection<PayerPlanRule> rules,
+                        Collection<PayerPlanTerms> terms) {
         Set<UUID> ids = new HashSet<>();
         payers.forEach(p -> {
             ids.add(p.getCreatedBy());
@@ -763,6 +939,7 @@ public class PayerCatalogueService {
             ids.add(r.getCreatedBy());
             ids.add(r.getEndedBy());
         });
+        terms.forEach(t -> ids.add(t.getCreatedBy()));
         ids.remove(null);
         if (ids.isEmpty()) {
             return new Names(Map.of());

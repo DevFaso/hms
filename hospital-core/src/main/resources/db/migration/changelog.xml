@@ -3612,8 +3612,9 @@
     <!-- =================================================================
          V305 (billing-money plan PR 6, scorecard M1) - each hospital's payer
          catalogue: billing.payers (code, name as typed, type), billing.
-         payer_plans (default coverage %, per-invoice and annual ceilings,
-         dates offered) and billing.payer_plan_rules (category- or item-level
+         payer_plans (code, name, dates offered), billing.payer_plan_terms
+         (default coverage %, per-invoice and annual ceilings; insert-only
+         dated versions) and billing.payer_plan_rules (category- or item-level
          rate, exclusion or per-act ceiling; effective-dated, insert-only like
          prices), plus clinical.patient_insurances.payer_plan_id (nullable FK;
          existing free-text coverage is untouched). Coverage is not applied

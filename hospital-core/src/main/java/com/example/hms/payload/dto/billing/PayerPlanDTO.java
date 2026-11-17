@@ -28,9 +28,14 @@ public class PayerPlanDTO {
     private String code;
     /** As the hospital typed it, never translated (D-8). */
     private String name;
+    /** The terms in force today (the first planned ones while the plan has not started); see {@link #terms}. */
     private Integer defaultCoveragePercent;
     private BigDecimal perInvoiceCeiling;
     private BigDecimal annualCeilingPerBeneficiary;
+    /** The next planned terms after today's, if any. */
+    private PayerPlanTermsDTO nextTerms;
+    /** Every version of the terms, oldest start first. */
+    private List<PayerPlanTermsDTO> terms;
     private LocalDate effectiveFrom;
     /** Null while open-ended, and for a plan withdrawn before it started (see {@link #status}). */
     private LocalDate effectiveTo;

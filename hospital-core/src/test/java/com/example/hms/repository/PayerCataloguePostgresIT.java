@@ -12,6 +12,7 @@ import com.example.hms.payload.dto.billing.PayerPlanDTO;
 import com.example.hms.payload.dto.billing.PayerPlanRequestDTO;
 import com.example.hms.payload.dto.billing.PayerPlanRuleDTO;
 import com.example.hms.payload.dto.billing.PayerPlanRuleRequestDTO;
+import com.example.hms.payload.dto.billing.PayerPlanTermsRequestDTO;
 import com.example.hms.payload.dto.billing.PayerRequestDTO;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.AuditEventLogService;
@@ -112,6 +113,7 @@ class PayerCataloguePostgresIT {
     @Autowired private PayerRepository payers;
     @Autowired private PayerPlanRepository plans;
     @Autowired private PayerPlanRuleRepository rules;
+    @Autowired private PayerPlanTermsRepository terms;
     @Autowired private PriceListItemRepository items;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private PlatformTransactionManager transactions;
@@ -131,13 +133,14 @@ class PayerCataloguePostgresIT {
         for (String fk : List.of("billing.payers DROP CONSTRAINT IF EXISTS fk_payer_hospital",
                 "billing.payer_plans DROP CONSTRAINT IF EXISTS fk_payer_plan_hospital",
                 "billing.payer_plan_rules DROP CONSTRAINT IF EXISTS fk_payer_rule_hospital",
+                "billing.payer_plan_terms DROP CONSTRAINT IF EXISTS fk_payer_terms_hospital",
                 "billing.price_list_items DROP CONSTRAINT IF EXISTS fk_price_list_item_hospital")) {
             jdbc.execute("ALTER TABLE " + fk);
         }
         hospitalA = UUID.randomUUID();
         hospitalB = UUID.randomUUID();
         actor = UUID.randomUUID();
-        service = new PayerCatalogueService(payers, plans, rules, items, mock(UserRepository.class), roles, scope,
+        service = new PayerCatalogueService(payers, plans, rules, terms, items, mock(UserRepository.class), roles, scope,
             mock(AuditEventLogService.class), CLOCK, "Africa/Ouagadougou");
         tx = new TransactionTemplate(transactions);
         actAt(hospitalA);
@@ -277,6 +280,32 @@ class PayerCataloguePostgresIT {
         assertThat(inTx(() -> service.requireLinkablePlan(planId, hospitalA)).getId()).isEqualTo(planId);
     }
 
+    @Test
+    @DisplayName("review of #1202: new terms add a dated version; the terms in force are closed, never rewritten")
+    void newTermsAreADatedVersion() {
+        PayerDTO payer = payer("MUT-TEST-A", PayerType.MUTUELLE);
+        UUID planId = inTx(() -> service.createPlan(payer.getId(), PayerPlanRequestDTO.builder().code("MTA-ESS")
+            .name("Formule Test Essentielle").defaultCoveragePercent(new BigDecimal("75")).build()))
+            .getPlans().get(0).getId();
+        PayerDTO changed = inTx(() -> service.addTerms(payer.getId(), planId, PayerPlanTermsRequestDTO.builder()
+            .defaultCoveragePercent(new BigDecimal("70")).effectiveFrom(GO_LIVE).build()));
+        PayerPlanDTO plan = changed.getPlans().get(0);
+        assertThat(plan.getDefaultCoveragePercent()).as("today's terms").isEqualTo(75);
+        assertThat(plan.getNextTerms().getDefaultCoveragePercent()).isEqualTo(70);
+        assertThat(plan.getTerms()).hasSize(2);
+        assertThat(jdbc.queryForObject("SELECT effective_to FROM billing.payer_plan_terms WHERE plan_id = ? "
+            + "AND default_coverage_percent = 75", LocalDate.class, planId)).isEqualTo(GO_LIVE.minusDays(1));
+        assertThat(inTx(() -> service.termsOn(planId, hospitalA, GO_LIVE)).orElseThrow().getDefaultCoveragePercent())
+            .isEqualTo(70);
+        assertThat(inTx(() -> service.termsOn(planId, hospitalA, GO_LIVE.minusDays(1))).orElseThrow()
+            .getDefaultCoveragePercent()).isEqualTo(75);
+        // A planned version is replaced only on confirmation, and the partial unique indexes hold.
+        PayerPlanTermsRequestDTO again = PayerPlanTermsRequestDTO.builder()
+            .defaultCoveragePercent(new BigDecimal("80")).effectiveFrom(GO_LIVE).replaceScheduled(true).build();
+        UUID payerId = payer.getId();
+        assertThat(inTx(() -> service.addTerms(payerId, planId, again)).getPlans().get(0).getTerms()).hasSize(3);
+    }
+
     // ───────────────────────── the constraints ─────────────────────────
 
     @Test
@@ -303,12 +332,16 @@ class PayerCataloguePostgresIT {
         assertThatThrownBy(() -> jdbc.update(insert, hospitalB, planId, "IMAGING", null, 50, false, null, day))
             .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("fk_payer_rule_plan");
         UUID payerId = payer.getId();
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO billing.payer_plan_terms (hospital_id, plan_id, "
+                + "default_coverage_percent, per_invoice_ceiling, effective_from) VALUES (?, ?, 50, 100.5, ?)",
+            hospitalA, planId, day))
+            .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_payer_terms_invoice_cap");
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO billing.payer_plan_terms (hospital_id, plan_id, "
+                + "default_coverage_percent, effective_from, effective_to) VALUES (?, ?, 50, ?, ?)", hospitalB, planId,
+                day.plusDays(5), day.plusDays(6)))
+            .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("fk_payer_terms_plan");
         assertThatThrownBy(() -> jdbc.update("INSERT INTO billing.payer_plans (hospital_id, payer_id, code, name, "
-                + "default_coverage_percent, per_invoice_ceiling, effective_from) VALUES (?, ?, 'X', 'X', 50, 100.5, ?)",
-            hospitalA, payerId, day))
-            .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_payer_plan_invoice_cap");
-        assertThatThrownBy(() -> jdbc.update("INSERT INTO billing.payer_plans (hospital_id, payer_id, code, name, "
-                + "default_coverage_percent, effective_from) VALUES (?, ?, 'Y', 'Y', 50, ?)",
+                + "effective_from) VALUES (?, ?, 'Y', 'Y', ?)",
             hospitalB, payerId, day))
             .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("fk_payer_plan_payer");
 

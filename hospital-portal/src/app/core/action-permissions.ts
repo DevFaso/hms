@@ -337,6 +337,10 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PayerController#updatePlan',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
   },
+  payerTermsAdd: {
+    endpoint: 'PayerController#addTerms',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
   payerRuleAdd: {
     endpoint: 'PayerController#addRule',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],

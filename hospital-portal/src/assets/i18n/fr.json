@@ -1980,10 +1980,11 @@
       "PAYER_DEACTIVATED": "Organisme payeur {{payer}} désactivé, motif enregistré",
       "PAYER_PLAN_CREATED": "Formule {{plan}} de l’organisme {{payer}} créée",
       "PAYER_PLAN_UPDATED": "Formule {{plan}} de l’organisme {{payer}} modifiée",
-      "PAYER_RULE_ADDED": "Règle {{rule}} ajoutée à la formule {{plan}}, en vigueur le {{from}}",
+      "PAYER_RULE_ADDED": "Règle {{rule}} ajoutée à la formule {{plan}}, en vigueur le {{from}} ; fermée : [{{closed}}] ; remplacées : [{{replaced}}]",
       "PAYER_RULE_ENDED": "Règle {{rule}} de la formule {{plan}} terminée, motif enregistré",
       "COVERAGE_PLAN_LINKED": "Couverture du patient {{insurance}} liée à la formule {{plan}}",
-      "COVERAGE_PLAN_UNLINKED": "Couverture du patient {{insurance}} détachée de sa formule"
+      "COVERAGE_PLAN_UNLINKED": "Couverture du patient {{insurance}} détachée de sa formule",
+      "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2605,7 +2606,15 @@
       "PLAN_SAVED": "Formule enregistrée.",
       "RULE_SAVED": "Règle enregistrée.",
       "RULE_ENDED": "Règle terminée.",
-      "SAVE_FAILED": "L’enregistrement a échoué."
+      "SAVE_FAILED": "L’enregistrement a échoué.",
+      "NEW_TERMS": "Nouveaux taux et plafonds",
+      "TERMS_HISTORY": "Historique des taux et plafonds",
+      "TERMS_NOTE": "Les nouveaux taux et plafonds s’appliquent à partir de leur date ; les actuels jusqu’à la veille. Les factures déjà établies ne changent pas.",
+      "TERMS_EDIT_NOTE": "Les taux et plafonds changent par « Nouveaux taux et plafonds », à partir d’une date.",
+      "TERMS_REASON": "Motif du changement (facultatif)",
+      "TERMS_SAVED": "Nouveaux taux et plafonds enregistrés.",
+      "NEXT_TERMS": "Prévu à partir du {{date}} : {{rate}} %",
+      "REPLACE_TERMS": "Remplacer les taux et plafonds prévus"
     }
   },
   "CHAT": {

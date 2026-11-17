@@ -1453,8 +1453,14 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   },
   {
     key: 'AUDIT.DESC.PAYER_RULE_ADDED',
-    re: /^Rule (\S+) added to payer plan (\S+), effective (\S+)$/,
-    params: ['rule', 'plan', 'from'],
+    re: /^Rule (\S+) added to payer plan (\S+), effective (\S+), closed \[([^\]]*)\], replaced \[([^\]]*)\]$/,
+    params: ['rule', 'plan', 'from', 'closed', 'replaced'],
+  },
+  {
+    // Review of #1202: plan terms are dated versions (ids only).
+    key: 'AUDIT.DESC.PAYER_TERMS_ADDED',
+    re: /^Terms (\S+) added to payer plan (\S+), effective (\S+), closed \[([^\]]*)\], replaced \[([^\]]*)\]$/,
+    params: ['terms', 'plan', 'from', 'closed', 'replaced'],
   },
   {
     key: 'AUDIT.DESC.PAYER_RULE_ENDED',

@@ -93,7 +93,9 @@ class PartialUniqueReleaseFlushGuardTest {
         Map.entry("price_list_prices", "PriceListPrice"),
         // Billing-money plan PR 6 (V305): one live rule per target and start / one open-ended rule per target
         // (closing effective_to releases it; the service flushes the closes before the insert).
-        Map.entry("payer_plan_rules", "PayerPlanRule"));
+        Map.entry("payer_plan_rules", "PayerPlanRule"),
+        // Review of #1202: plan terms versioned like prices (one live version per start, one open-ended).
+        Map.entry("payer_plan_terms", "PayerPlanTerms"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =

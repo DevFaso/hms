@@ -190,6 +190,16 @@
                   {{ 'BILLING.PAYERS.NEW_RULE' | translate }}
                 </button>
               }
+              @if (canAddTerms) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [attr.data-testid]="'payers-new-terms-' + plan.code"
+                  (click)="openTerms(plan)"
+                >
+                  {{ 'BILLING.PAYERS.NEW_TERMS' | translate }}
+                </button>
+              }
               @if (canEditPlans) {
                 <button
                   type="button"
@@ -201,6 +211,54 @@
                 </button>
               }
             </div>
+          }
+          @if (plan.terms && plan.terms.length > 0) {
+            <h5>{{ 'BILLING.PAYERS.TERMS_HISTORY' | translate }}</h5>
+            <table class="data-table" [attr.data-testid]="'payers-terms-' + plan.code">
+              <caption class="sr-only">
+                {{
+                  'BILLING.PAYERS.TERMS_HISTORY' | translate
+                }}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">{{ 'BILLING.PAYERS.DEFAULT_RATE' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.INVOICE_CEILING' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.ANNUAL_CEILING' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.FROM' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.TO' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.STATUS' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYERS.TERMS_REASON' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (t of plan.terms; track t.id) {
+                  <tr>
+                    <td>{{ t.defaultCoveragePercent | measure: '%' }}</td>
+                    <td>
+                      {{
+                        t.perInvoiceCeiling
+                          ? (t.perInvoiceCeiling | cfa)
+                          : ('BILLING.PAYERS.NO_CEILING' | translate)
+                      }}
+                    </td>
+                    <td>
+                      {{
+                        t.annualCeilingPerBeneficiary
+                          ? (t.annualCeilingPerBeneficiary | cfa)
+                          : ('BILLING.PAYERS.NO_CEILING' | translate)
+                      }}
+                    </td>
+                    <td>{{ t.effectiveFrom | serverTime | date: 'mediumDate' }}</td>
+                    <td>
+                      {{ t.effectiveTo ? (t.effectiveTo | serverTime | date: 'mediumDate') : '—' }}
+                    </td>
+                    <td>{{ t.status | enumLabel: 'payerCoverageStatus' }}</td>
+                    <td>{{ t.changeReason || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
           }
           <h5>{{ 'BILLING.PAYERS.RULES' | translate }}</h5>
           @if (plan.rules.length === 0) {
@@ -458,45 +516,51 @@
           <label for="pp-name">{{ 'BILLING.PAYERS.PLAN_NAME' | translate }} *</label>
           <input id="pp-name" name="name" maxlength="150" required [(ngModel)]="planForm.name" />
         </div>
-        <div class="field">
-          <label for="pp-percent">{{ 'BILLING.PAYERS.DEFAULT_RATE' | translate }} *</label>
-          <input
-            id="pp-percent"
-            name="defaultCoveragePercent"
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-            inputmode="numeric"
-            required
-            [(ngModel)]="planForm.defaultCoveragePercent"
-          />
-        </div>
-        <div class="field">
-          <label for="pp-invoice-ceiling">{{ 'BILLING.PAYERS.INVOICE_CEILING' | translate }}</label>
-          <input
-            id="pp-invoice-ceiling"
-            name="perInvoiceCeiling"
-            type="number"
-            min="1"
-            step="1"
-            inputmode="numeric"
-            [(ngModel)]="planForm.perInvoiceCeiling"
-          />
-        </div>
-        <div class="field">
-          <label for="pp-annual-ceiling">{{ 'BILLING.PAYERS.ANNUAL_CEILING' | translate }}</label>
-          <input
-            id="pp-annual-ceiling"
-            name="annualCeilingPerBeneficiary"
-            type="number"
-            min="1"
-            step="1"
-            inputmode="numeric"
-            [(ngModel)]="planForm.annualCeilingPerBeneficiary"
-          />
-          <small class="field-hint">{{ 'BILLING.PAYERS.ANNUAL_CEILING_HINT' | translate }}</small>
-        </div>
+        @if (dialog.plan) {
+          <p class="muted-note">{{ 'BILLING.PAYERS.TERMS_EDIT_NOTE' | translate }}</p>
+        } @else {
+          <div class="field">
+            <label for="pp-percent">{{ 'BILLING.PAYERS.DEFAULT_RATE' | translate }} *</label>
+            <input
+              id="pp-percent"
+              name="defaultCoveragePercent"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              inputmode="numeric"
+              required
+              [(ngModel)]="planForm.defaultCoveragePercent"
+            />
+          </div>
+          <div class="field">
+            <label for="pp-invoice-ceiling">{{
+              'BILLING.PAYERS.INVOICE_CEILING' | translate
+            }}</label>
+            <input
+              id="pp-invoice-ceiling"
+              name="perInvoiceCeiling"
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              [(ngModel)]="planForm.perInvoiceCeiling"
+            />
+          </div>
+          <div class="field">
+            <label for="pp-annual-ceiling">{{ 'BILLING.PAYERS.ANNUAL_CEILING' | translate }}</label>
+            <input
+              id="pp-annual-ceiling"
+              name="annualCeilingPerBeneficiary"
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              [(ngModel)]="planForm.annualCeilingPerBeneficiary"
+            />
+            <small class="field-hint">{{ 'BILLING.PAYERS.ANNUAL_CEILING_HINT' | translate }}</small>
+          </div>
+        }
         <div class="field">
           <label for="pp-from">{{ 'BILLING.PAYERS.EFFECTIVE_FROM' | translate }} *</label>
           <input
@@ -528,6 +592,128 @@
             class="btn-primary"
             data-testid="payers-plan-save"
             [disabled]="planSaving()"
+            appSubmitGuard
+            submitGuardRequired
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ═══ NEW TERMS (review of #1202: a dated version) ═══ -->
+@if (termsDialog(); as plan) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeTermsDialog()"
+    (keydown.escape)="closeTermsDialog()"
+  >
+    <div
+      class="modal"
+      appDialogA11y
+      tabindex="-1"
+      aria-labelledby="py-terms-title"
+      (dialogClose)="closeTermsDialog()"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2 id="py-terms-title">{{ 'BILLING.PAYERS.NEW_TERMS' | translate }} — {{ plan.name }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeTermsDialog()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <form class="modal-body" (ngSubmit)="saveTerms()" novalidate>
+        <p class="muted-note">{{ 'BILLING.PAYERS.TERMS_NOTE' | translate }}</p>
+        <div class="field">
+          <label for="pt-percent">{{ 'BILLING.PAYERS.DEFAULT_RATE' | translate }} *</label>
+          <input
+            id="pt-percent"
+            name="defaultCoveragePercent"
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            inputmode="numeric"
+            required
+            [(ngModel)]="termsForm.defaultCoveragePercent"
+          />
+        </div>
+        <div class="field">
+          <label for="pt-invoice-ceiling">{{ 'BILLING.PAYERS.INVOICE_CEILING' | translate }}</label>
+          <input
+            id="pt-invoice-ceiling"
+            name="perInvoiceCeiling"
+            type="number"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            [(ngModel)]="termsForm.perInvoiceCeiling"
+          />
+        </div>
+        <div class="field">
+          <label for="pt-annual-ceiling">{{ 'BILLING.PAYERS.ANNUAL_CEILING' | translate }}</label>
+          <input
+            id="pt-annual-ceiling"
+            name="annualCeilingPerBeneficiary"
+            type="number"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            [(ngModel)]="termsForm.annualCeilingPerBeneficiary"
+          />
+        </div>
+        <div class="field">
+          <label for="pt-from">{{ 'BILLING.PAYERS.EFFECTIVE_FROM' | translate }} *</label>
+          <input
+            id="pt-from"
+            name="effectiveFrom"
+            type="date"
+            required
+            [min]="today"
+            [ngModel]="termsForm.effectiveFrom"
+            (ngModelChange)="termsDateChanged($event)"
+          />
+        </div>
+        <div class="field">
+          <label for="pt-reason">{{ 'BILLING.PAYERS.TERMS_REASON' | translate }}</label>
+          <input
+            id="pt-reason"
+            name="changeReason"
+            maxlength="500"
+            [(ngModel)]="termsForm.changeReason"
+          />
+        </div>
+        @if (termsQuestion(); as question) {
+          <div class="replace-question" role="alert" data-testid="payers-terms-question">
+            <p>{{ question }}</p>
+            <label class="checkbox-inline" for="pt-replace">
+              <input
+                id="pt-replace"
+                name="replaceScheduled"
+                type="checkbox"
+                [(ngModel)]="termsForm.replaceScheduled"
+              />
+              {{ 'BILLING.PAYERS.REPLACE_TERMS' | translate }}
+            </label>
+          </div>
+        }
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeTermsDialog()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="submit"
+            class="btn-primary"
+            data-testid="payers-terms-save"
+            [disabled]="termsSaving()"
             appSubmitGuard
             submitGuardRequired
           >

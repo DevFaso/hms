@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.billing.PayerDTO;
 import com.example.hms.payload.dto.billing.PayerPlanRequestDTO;
 import com.example.hms.payload.dto.billing.PayerPlanRuleRequestDTO;
+import com.example.hms.payload.dto.billing.PayerPlanTermsRequestDTO;
 import com.example.hms.payload.dto.billing.PayerPlanUpdateRequestDTO;
 import com.example.hms.payload.dto.billing.PayerReasonRequestDTO;
 import com.example.hms.payload.dto.billing.PayerRequestDTO;
@@ -98,10 +99,18 @@ public class PayerController {
 
     @PutMapping("/{payerId}/plans/{planId}")
     @PreAuthorize(MAINTAINERS)
-    @Operation(summary = "Edit a plan's name, rate, ceilings and dates (never its code)")
+    @Operation(summary = "Edit a plan's name and dates (never its code, never its terms)")
     public PayerDTO updatePlan(@PathVariable UUID payerId, @PathVariable UUID planId,
                                @Valid @RequestBody(required = false) PayerPlanUpdateRequestDTO request) {
         return payerCatalogueService.updatePlan(payerId, planId, request);
+    }
+
+    @PostMapping("/{payerId}/plans/{planId}/terms")
+    @PreAuthorize(MAINTAINERS)
+    @Operation(summary = "Add new terms (rate, ceilings) to a plan from a date (today or later); nothing is rewritten")
+    public ResponseEntity<PayerDTO> addTerms(@PathVariable UUID payerId, @PathVariable UUID planId,
+                                             @Valid @RequestBody(required = false) PayerPlanTermsRequestDTO request) {
+        return new ResponseEntity<>(payerCatalogueService.addTerms(payerId, planId, request), HttpStatus.CREATED);
     }
 
     @PostMapping("/{payerId}/plans/{planId}/rules")

@@ -12,11 +12,18 @@
 --   (shown untranslated, D-8) and a type. Deactivating keeps the row, with who,
 --   when and why; an inactive payer's plans are no longer linked to anyone new.
 --
--- billing.payer_plans - a payer's plan ("formule"): the default coverage rate
---   (whole percent, 0-100), an optional ceiling per invoice and per beneficiary
---   per calendar year (whole francs, > 0), and the dates it is offered
---   (effective_from .. effective_to, inclusive; open-ended while null;
---   effective_to = effective_from - 1 marks a plan withdrawn before it started).
+-- billing.payer_plans - a payer's plan ("formule"): its code, its name and the
+--   dates it is offered (effective_from .. effective_to, inclusive; open-ended
+--   while null; effective_to = effective_from - 1 marks a plan withdrawn before
+--   it started).
+--
+-- billing.payer_plan_terms - a plan's terms, versioned like prices (V302): the
+--   default coverage rate (whole percent, 0-100) and an optional ceiling per
+--   invoice and per beneficiary per calendar year (whole francs, > 0), in force
+--   from effective_from to effective_to. Insert-only: a change adds a version
+--   from today or later and closes the one in force the day before; the version
+--   in force on the service date applies (D-4). Review of #1202: terms are never
+--   rewritten in place.
 --
 -- billing.payer_plan_rules - the exceptions to a plan's default, each on
 --   EXACTLY ONE target: a price-list category or one price-list item of the same
@@ -74,9 +81,6 @@ CREATE TABLE IF NOT EXISTS billing.payer_plans (
     payer_id                       UUID           NOT NULL,
     code                           VARCHAR(40)    NOT NULL,
     name                           VARCHAR(150)   NOT NULL,
-    default_coverage_percent       INTEGER        NOT NULL,
-    per_invoice_ceiling            NUMERIC(12, 2),
-    annual_ceiling_per_beneficiary NUMERIC(12, 2),
     effective_from                 DATE           NOT NULL,
     effective_to                   DATE,
     created_by                     UUID,
@@ -93,18 +97,53 @@ CREATE TABLE IF NOT EXISTS billing.payer_plans (
     CONSTRAINT uq_payer_plan_id_hospital    UNIQUE (id, hospital_id),
     CONSTRAINT ck_payer_plan_code           CHECK (code = upper(btrim(code)) AND length(code) > 0),
     CONSTRAINT ck_payer_plan_name           CHECK (length(btrim(name)) > 0),
-    CONSTRAINT ck_payer_plan_percent        CHECK (default_coverage_percent BETWEEN 0 AND 100),
-    CONSTRAINT ck_payer_plan_invoice_cap    CHECK (per_invoice_ceiling IS NULL
-        OR (per_invoice_ceiling > 0 AND per_invoice_ceiling = trunc(per_invoice_ceiling))),
-    CONSTRAINT ck_payer_plan_annual_cap     CHECK (annual_ceiling_per_beneficiary IS NULL
-        OR (annual_ceiling_per_beneficiary > 0
-            AND annual_ceiling_per_beneficiary = trunc(annual_ceiling_per_beneficiary))),
     -- effective_to = effective_from - 1 marks a plan withdrawn before it started.
     CONSTRAINT ck_payer_plan_range          CHECK (effective_to IS NULL OR effective_to >= effective_from - 1)
 );
 
 CREATE INDEX IF NOT EXISTS idx_payer_plan_hospital
     ON billing.payer_plans (hospital_id);
+
+CREATE TABLE IF NOT EXISTS billing.payer_plan_terms (
+    id                             UUID           NOT NULL DEFAULT gen_random_uuid(),
+    hospital_id                    UUID           NOT NULL,
+    plan_id                        UUID           NOT NULL,
+    default_coverage_percent       INTEGER        NOT NULL,
+    per_invoice_ceiling            NUMERIC(12, 2),
+    annual_ceiling_per_beneficiary NUMERIC(12, 2),
+    effective_from                 DATE           NOT NULL,
+    effective_to                   DATE,
+    change_reason                  VARCHAR(500),
+    created_by                     UUID,
+    created_at                     TIMESTAMP      NOT NULL DEFAULT now(),
+    updated_at                     TIMESTAMP      NOT NULL DEFAULT now(),
+
+    CONSTRAINT pk_payer_plan_terms          PRIMARY KEY (id),
+    CONSTRAINT fk_payer_terms_hospital      FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals (id),
+    CONSTRAINT fk_payer_terms_plan          FOREIGN KEY (plan_id, hospital_id)
+        REFERENCES billing.payer_plans (id, hospital_id),
+    CONSTRAINT ck_payer_terms_percent       CHECK (default_coverage_percent BETWEEN 0 AND 100),
+    CONSTRAINT ck_payer_terms_invoice_cap   CHECK (per_invoice_ceiling IS NULL
+        OR (per_invoice_ceiling > 0 AND per_invoice_ceiling = trunc(per_invoice_ceiling))),
+    CONSTRAINT ck_payer_terms_annual_cap    CHECK (annual_ceiling_per_beneficiary IS NULL
+        OR (annual_ceiling_per_beneficiary > 0
+            AND annual_ceiling_per_beneficiary = trunc(annual_ceiling_per_beneficiary))),
+    -- effective_to = effective_from - 1 marks a version replaced before it applied.
+    CONSTRAINT ck_payer_terms_range         CHECK (effective_to IS NULL OR effective_to >= effective_from - 1)
+);
+
+CREATE INDEX IF NOT EXISTS idx_payer_terms_plan
+    ON billing.payer_plan_terms (plan_id, effective_from);
+CREATE INDEX IF NOT EXISTS idx_payer_terms_hospital
+    ON billing.payer_plan_terms (hospital_id);
+
+-- One live version per plan and start day, and at most one open-ended version per plan.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payer_terms_plan_from
+    ON billing.payer_plan_terms (plan_id, effective_from)
+    WHERE effective_to IS NULL OR effective_to >= effective_from;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payer_terms_plan_open
+    ON billing.payer_plan_terms (plan_id)
+    WHERE effective_to IS NULL;
 
 CREATE TABLE IF NOT EXISTS billing.payer_plan_rules (
     id                  UUID           NOT NULL DEFAULT gen_random_uuid(),

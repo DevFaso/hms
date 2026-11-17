@@ -47,15 +47,35 @@ export interface PayerPlanRule {
   endReason?: string | null;
 }
 
+/** Review of #1202: one dated version of a plan's terms (insert-only). */
+export interface PayerPlanTerms {
+  id: string;
+  defaultCoveragePercent: number;
+  perInvoiceCeiling?: number | null;
+  annualCeilingPerBeneficiary?: number | null;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  status: PayerCoverageStatus;
+  /** As the admin or accountant typed it. */
+  changeReason?: string | null;
+  createdAt?: string | null;
+  createdByName?: string | null;
+}
+
 export interface PayerPlan {
   id: string;
   payerId: string;
   code: string;
   /** As the hospital typed it: never translated. */
   name: string;
+  /** The terms in force today (the first planned ones while the plan has not started). */
   defaultCoveragePercent: number;
   perInvoiceCeiling?: number | null;
   annualCeilingPerBeneficiary?: number | null;
+  /** The next planned terms after today's, if any. */
+  nextTerms?: PayerPlanTerms | null;
+  /** Every version of the terms, oldest start first. */
+  terms?: PayerPlanTerms[];
   effectiveFrom: string;
   effectiveTo?: string | null;
   status: PayerCoverageStatus;
@@ -105,6 +125,22 @@ export interface PayerPlanRequest {
   annualCeilingPerBeneficiary: number | null;
   effectiveFrom: string | null;
   effectiveTo: string | null;
+}
+
+/** A plan's name and dates; its terms change only by a new dated version. */
+export interface PayerPlanUpdateRequest {
+  name: string;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+}
+
+export interface PayerPlanTermsRequest {
+  defaultCoveragePercent: number | null;
+  perInvoiceCeiling: number | null;
+  annualCeilingPerBeneficiary: number | null;
+  effectiveFrom: string | null;
+  changeReason: string | null;
+  replaceScheduled: boolean;
 }
 
 export interface PayerPlanRuleRequest {
@@ -166,8 +202,13 @@ export class PayerCatalogueService {
     return this.http.post<Payer>(`${this.base}/${payerId}/plans`, body);
   }
 
-  updatePlan(payerId: string, planId: string, body: PayerPlanRequest): Observable<Payer> {
+  updatePlan(payerId: string, planId: string, body: PayerPlanUpdateRequest): Observable<Payer> {
     return this.http.put<Payer>(`${this.base}/${payerId}/plans/${planId}`, body);
+  }
+
+  /** New terms from a date (today or later): a dated version, nothing rewritten. */
+  addTerms(payerId: string, planId: string, body: PayerPlanTermsRequest): Observable<Payer> {
+    return this.http.post<Payer>(`${this.base}/${payerId}/plans/${planId}/terms`, body);
   }
 
   addRule(payerId: string, planId: string, body: PayerPlanRuleRequest): Observable<Payer> {

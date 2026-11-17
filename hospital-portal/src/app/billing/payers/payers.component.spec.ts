@@ -329,34 +329,86 @@ describe('PayersComponent (billing-money plan PR 6)', () => {
     expect(el().querySelector('#py-detail-title')!.textContent).toContain('MUT-TEST-A');
   });
 
-  it('edits a plan: rate and ceilings are sent, the start is left as it is', async () => {
+  it('edits a plan: name and dates only, never its rate or ceilings (review of #1202)', async () => {
     setup(['ROLE_ACCOUNTANT']);
     openDetail();
     el().querySelector<HTMLButtonElement>('[data-testid="payers-edit-plan-MTA-ESS"]')!.click();
     fixture.detectChanges();
     await fixture.whenStable();
-    type('pp-percent', '70');
-    type('pp-invoice-ceiling', '');
+    expect(el().querySelector('#pp-percent')).toBeNull();
+    type('pp-name', 'Formule Essentielle');
     el().querySelector<HTMLButtonElement>('[data-testid="payers-plan-save"]')!.click();
     fixture.detectChanges();
     const put = http.expectOne(
       (r) => r.method === 'PUT' && r.url === `${BASE}/payer-a/plans/plan-a`,
     );
-    expect(put.request.body).toEqual(
-      jasmine.objectContaining({
-        name: 'Formule Test Essentielle',
-        defaultCoveragePercent: 70,
-        perInvoiceCeiling: null,
-        annualCeilingPerBeneficiary: 150000,
-        effectiveFrom: null,
-        effectiveTo: null,
-      }),
-    );
-    expect(put.request.body.code).toBeUndefined();
+    expect(put.request.body).toEqual({
+      name: 'Formule Essentielle',
+      effectiveFrom: null,
+      effectiveTo: null,
+    });
     put.flush(MUT_A);
     http.expectOne((r) => r.method === 'GET' && r.url === BASE).flush([MUT_A]);
     fixture.detectChanges();
     expect(fixture.componentInstance.planDialog()).toBeNull();
+  });
+
+  it('new terms are a dated version; a planned one asks for confirmation (review of #1202)', async () => {
+    setup(['ROLE_HOSPITAL_ADMIN']);
+    openDetail();
+    el().querySelector<HTMLButtonElement>('[data-testid="payers-new-terms-MTA-ESS"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    expect(component.termsForm.defaultCoveragePercent).toBe(75);
+    type('pt-percent', '70');
+    component.termsDateChanged('2027-01-01');
+    el().querySelector<HTMLButtonElement>('[data-testid="payers-terms-save"]')!.click();
+    fixture.detectChanges();
+    const post = http.expectOne(
+      (r) => r.method === 'POST' && r.url === `${BASE}/payer-a/plans/plan-a/terms`,
+    );
+    expect(post.request.body).toEqual(
+      jasmine.objectContaining({
+        defaultCoveragePercent: 70,
+        perInvoiceCeiling: 30000,
+        effectiveFrom: '2027-01-01',
+        replaceScheduled: false,
+      }),
+    );
+    post.flush(
+      fieldErrorsResponse({
+        replaceScheduled: 'Des taux et plafonds sont déjà prévus à partir du 1 janv. 2027.',
+      }).error,
+      { status: 400, statusText: 'Bad Request' },
+    );
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="payers-terms-question"]')?.textContent).toContain(
+      'janv. 2027',
+    );
+    component.termsForm.replaceScheduled = true;
+    component.saveTerms();
+    const again = http.expectOne((r) => r.method === 'POST' && r.url.endsWith('/terms'));
+    expect(again.request.body.replaceScheduled).toBeTrue();
+    again.flush(MUT_A);
+    http.expectOne((r) => r.method === 'GET' && r.url === BASE).flush([MUT_A]);
+    expect(component.termsDialog()).toBeNull();
+    component.closeTermsDialog();
+  });
+
+  it('an empty new terms form is refused on the rate, and nothing is sent', async () => {
+    setup(['ROLE_ACCOUNTANT']);
+    openDetail();
+    el().querySelector<HTMLButtonElement>('[data-testid="payers-new-terms-MTA-ESS"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    type('pt-percent', '');
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="payers-terms-save"]',
+      notMarked: ['pt-from'],
+    });
+    expect(marked).toEqual(jasmine.arrayContaining(['pt-percent']));
+    http.expectNone((r) => r.method === 'POST');
   });
 
   it('a rule on a price list item sends the item, a rate and a ceiling per act', async () => {

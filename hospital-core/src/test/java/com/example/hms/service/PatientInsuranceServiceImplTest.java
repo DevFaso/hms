@@ -147,6 +147,10 @@ class PatientInsuranceServiceImplTest {
         when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
         when(patientInsuranceRepository.findByPatient_Id(patientId)).thenReturn(List.of(ins1));
         when(patientInsuranceMapper.toPatientInsuranceResponseDTO(ins1)).thenReturn(dto1);
+        // Review of #1202: a list maps in one call (its plans' names read once).
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTOs(org.mockito.ArgumentMatchers.anyList()))
+            .thenAnswer(call -> ((List<PatientInsurance>) call.getArgument(0)).stream()
+                .map(patientInsuranceMapper::toPatientInsuranceResponseDTO).toList());
 
         List<PatientInsuranceResponseDTO> result = service.getInsurancesByPatientId(patientId, locale);
         assertThat(result).hasSize(1).contains(dto1);
@@ -285,12 +289,18 @@ class PatientInsuranceServiceImplTest {
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
         when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
-        when(patientInsuranceRepository.save(insurance)).thenReturn(insurance);
-        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(insurance)).thenReturn(responseDTO);
+        when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(call -> call.getArgument(0));
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(any())).thenReturn(responseDTO);
 
         PatientInsuranceResponseDTO result = service.linkPatientInsurance(insuranceId, req, ctx, locale);
         assertThat(result).isEqualTo(responseDTO);
-        assertThat(insurance.getAssignment()).isEqualTo(assignment);
+        // Review of #1202: the shared (untagged) row is never re-tagged; this hospital gets its own copy.
+        assertThat(insurance.getAssignment()).isNull();
+        org.mockito.ArgumentCaptor<PatientInsurance> saved = org.mockito.ArgumentCaptor.forClass(PatientInsurance.class);
+        verify(patientInsuranceRepository).save(saved.capture());
+        assertThat(saved.getValue()).isNotSameAs(insurance);
+        assertThat(saved.getValue().getAssignment()).isEqualTo(assignment);
+        assertThat(saved.getValue().getPatient()).isEqualTo(patient);
     }
 
     @Test
@@ -343,11 +353,12 @@ class PatientInsuranceServiceImplTest {
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
         when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
-        when(patientInsuranceRepository.save(insurance)).thenReturn(insurance);
-        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(insurance)).thenReturn(responseDTO);
+        when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(call -> call.getArgument(0));
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(any())).thenReturn(responseDTO);
 
         PatientInsuranceResponseDTO result = service.upsertAndLinkByInsuranceId(insuranceId, req, ctx, locale);
         assertThat(result).isEqualTo(responseDTO);
+        assertThat(insurance.getAssignment()).as("the shared row stays shared").isNull();
     }
 
     @Test
@@ -602,6 +613,10 @@ class PatientInsuranceServiceImplTest {
         PatientInsuranceResponseDTO dtoLegacy = new PatientInsuranceResponseDTO();
         when(patientInsuranceMapper.toPatientInsuranceResponseDTO(rowB)).thenReturn(dtoB);
         when(patientInsuranceMapper.toPatientInsuranceResponseDTO(legacy)).thenReturn(dtoLegacy);
+        // Review of #1202: a list maps in one call (its plans' names read once).
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTOs(org.mockito.ArgumentMatchers.anyList()))
+            .thenAnswer(call -> ((List<PatientInsurance>) call.getArgument(0)).stream()
+                .map(patientInsuranceMapper::toPatientInsuranceResponseDTO).toList());
 
         assertThatThrownBy(() -> service.getPatientInsuranceById(insuranceId, locale))
             .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
@@ -770,7 +785,7 @@ class PatientInsuranceServiceImplTest {
     }
 
     @Test
-    void setPayerPlan_anUntaggedRowIsTaggedToTheActingHospital() {
+    void setPayerPlan_aSharedRowGetsACopyForTheActingHospital_andStaysShared() {
         PatientInsurance legacy = new PatientInsurance();
         legacy.setId(insuranceId);
         legacy.setPatient(patient);
@@ -784,12 +799,20 @@ class PatientInsuranceServiceImplTest {
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(legacy));
         when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(desk));
-        when(patientInsuranceRepository.save(legacy)).thenReturn(legacy);
+        when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(call -> call.getArgument(0));
 
         service.setPayerPlan(insuranceId, planId, locale);
 
-        assertThat(legacy.getAssignment()).isSameAs(desk);
-        assertThat(legacy.getPayerPlanId()).isEqualTo(planId);
+        // Review of #1202: hospital B still sees the shared row as it was; A's plan is on A's own copy.
+        assertThat(legacy.getAssignment()).isNull();
+        assertThat(legacy.getPayerPlanId()).isNull();
+        org.mockito.ArgumentCaptor<PatientInsurance> saved = org.mockito.ArgumentCaptor.forClass(PatientInsurance.class);
+        verify(patientInsuranceRepository).save(saved.capture());
+        assertThat(saved.getValue()).isNotSameAs(legacy);
+        assertThat(saved.getValue().getAssignment()).isSameAs(desk);
+        assertThat(saved.getValue().getPayerPlanId()).isEqualTo(planId);
+        assertThat(saved.getValue().getPatient()).isSameAs(patient);
+        verify(patientChartAccess).require(patientId, hospitalId);
     }
 
     @Test
@@ -838,5 +861,62 @@ class PatientInsuranceServiceImplTest {
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         assertThat(row.getPayerPlanId()).isNull();
         verify(patientInsuranceRepository, never()).save(any());
+    }
+
+    // ── Review of #1202: tenancy of the plan link ──
+
+    @Test
+    void setPayerPlan_aPatientThisHospitalMayNotChartAnswersAsMissing() {
+        PatientInsurance legacy = new PatientInsurance();
+        legacy.setId(insuranceId);
+        legacy.setPatient(patient);
+        receptionAtThisHospital(true);
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(legacy));
+        when(patientChartAccess.require(patientId, hospitalId))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
+        UUID planId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.setPayerPlan(insuranceId, planId, locale))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(patientInsuranceRepository, never()).save(any());
+        verify(payerCatalogueService, never()).requireLinkablePlan(any(), any());
+        assertThat(legacy.getAssignment()).isNull();
+    }
+
+    @Test
+    void anEditNeverChangesTheHospitalTag_aSharedRowIsSentToThePicker() {
+        PatientInsurance legacy = new PatientInsurance();
+        legacy.setId(insuranceId);
+        legacy.setPatient(patient);
+        receptionAtThisHospital(true);
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(legacy));
+        PatientInsuranceRequestDTO edit = new PatientInsuranceRequestDTO();
+        edit.setPayerPlanId(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.updatePatientInsurance(insuranceId, edit, locale))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("payerPlanId"));
+        assertThat(legacy.getAssignment()).isNull();
+        verify(patientInsuranceRepository, never()).save(any());
+    }
+
+    @Test
+    void namingThePlanACoverageAlreadyHasNeedsNoPlanRole() {
+        PatientInsurance row = rowAtThisHospital();
+        UUID current = UUID.randomUUID();
+        row.setPayerPlanId(current);
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(row));
+        when(patientInsuranceRepository.save(row)).thenReturn(row);
+        PatientInsuranceRequestDTO edit = new PatientInsuranceRequestDTO();
+        edit.setPayerPlanId(current);
+
+        service.updatePatientInsurance(insuranceId, edit, locale);
+
+        verify(roleValidator, never()).canLinkPayerPlan(any(), any());
+        verify(payerCatalogueService, never()).auditCoverageLink(any(), any(), any(), any());
     }
 }

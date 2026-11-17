@@ -5,6 +5,7 @@ import com.example.hms.enums.PriceListCategory;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.PayerPlan;
 import com.example.hms.model.PayerPlanRule;
+import com.example.hms.model.PayerPlanTerms;
 import com.example.hms.utility.DisplayDates;
 
 import java.math.BigDecimal;
@@ -56,6 +57,13 @@ public final class PayerCoverageRules {
      * @param toReplace   the live rules starting on or after {@code from}: each closed on the day before its own start
      */
     public record RulePlan(Optional<PayerPlanRule> predecessor, List<PayerPlanRule> toReplace) {
+    }
+
+    /**
+     * Review of #1202: what adding plan terms starting {@code from} does to the plan's terms versions (the same rules
+     * as for a rule of one target).
+     */
+    public record TermsPlan(Optional<PayerPlanTerms> predecessor, List<PayerPlanTerms> toReplace) {
     }
 
     /** A whole percent from 0 to 100, or the refusal naming {@code field}. Null stays null (the caller requires it). */
@@ -147,6 +155,29 @@ public final class PayerCoverageRules {
             .filter(rule -> rule.getEffectiveTo() == null || !rule.getEffectiveTo().isBefore(from))
             .findFirst();
         return new RulePlan(predecessor, List.copyOf(later));
+    }
+
+    /** Plans new terms starting {@code from} against the plan's {@code versions}, read under the payer's lock. */
+    public static TermsPlan planTerms(List<PayerPlanTerms> versions, LocalDate from, boolean replaceScheduled) {
+        List<PayerPlanTerms> live = versions.stream().filter(version -> !version.isCancelled()).toList();
+        List<PayerPlanTerms> later = live.stream().filter(version -> !version.getEffectiveFrom().isBefore(from))
+            .toList();
+        if (!later.isEmpty() && !replaceScheduled) {
+            LocalDate first = later.stream().map(PayerPlanTerms::getEffectiveFrom).min(LocalDate::compareTo)
+                .orElse(from);
+            throw new FieldBusinessException(FIELD_REPLACE_SCHEDULED, "billing.payerPlan.termsScheduledExists",
+                DisplayDates.date(first));
+        }
+        Optional<PayerPlanTerms> predecessor = live.stream()
+            .filter(version -> version.getEffectiveFrom().isBefore(from))
+            .filter(version -> version.getEffectiveTo() == null || !version.getEffectiveTo().isBefore(from))
+            .findFirst();
+        return new TermsPlan(predecessor, List.copyOf(later));
+    }
+
+    /** Where a terms version stands on {@code today}. */
+    public static PayerCoverageStatus statusOf(PayerPlanTerms version, LocalDate today) {
+        return statusOf(version.isCancelled(), version.getEffectiveFrom(), version.getEffectiveTo(), today);
     }
 
     /** Where a plan stands on {@code today}. */

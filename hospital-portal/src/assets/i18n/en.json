@@ -1980,10 +1980,11 @@
       "PAYER_DEACTIVATED": "Payer {{payer}} deactivated, reason recorded",
       "PAYER_PLAN_CREATED": "Plan {{plan}} of payer {{payer}} created",
       "PAYER_PLAN_UPDATED": "Plan {{plan}} of payer {{payer}} updated",
-      "PAYER_RULE_ADDED": "Rule {{rule}} added to plan {{plan}}, effective {{from}}",
+      "PAYER_RULE_ADDED": "Rule {{rule}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
       "PAYER_RULE_ENDED": "Rule {{rule}} of plan {{plan}} ended, reason recorded",
       "COVERAGE_PLAN_LINKED": "Patient coverage {{insurance}} linked to plan {{plan}}",
-      "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan"
+      "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
+      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2605,7 +2606,15 @@
       "PLAN_SAVED": "Plan saved.",
       "RULE_SAVED": "Rule saved.",
       "RULE_ENDED": "Rule ended.",
-      "SAVE_FAILED": "The change could not be saved."
+      "SAVE_FAILED": "The change could not be saved.",
+      "NEW_TERMS": "New rate and ceilings",
+      "TERMS_HISTORY": "Rate and ceilings history",
+      "TERMS_NOTE": "The new terms apply from their date; those in force until the day before. Invoices already issued do not change.",
+      "TERMS_EDIT_NOTE": "The rate and ceilings change by “New rate and ceilings”, from a date.",
+      "TERMS_REASON": "Reason for the change (optional)",
+      "TERMS_SAVED": "New rate and ceilings saved.",
+      "NEXT_TERMS": "Planned from {{date}}: {{rate}} %",
+      "REPLACE_TERMS": "Replace the planned rate and ceilings"
     }
   },
   "CHAT": {

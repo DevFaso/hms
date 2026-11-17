@@ -67,7 +67,9 @@ public class PatientInsuranceController {
     // === Existing reads remain unchanged ===
 
     @GetMapping("/{insuranceId}")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR','PATIENT')")
+    // Billing-money plan PR 6 review: the billing specialist links a coverage to a plan, so reads it too (the
+    // service keeps the read to the acting hospital's rows and the patients it may chart).
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR','PATIENT','BILLING_SPECIALIST')")
     public ResponseEntity<PatientInsuranceResponseDTO> getPatientInsuranceById(
         @PathVariable UUID insuranceId,
         Locale locale
@@ -76,7 +78,9 @@ public class PatientInsuranceController {
     }
 
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR','PATIENT')")
+    // Billing-money plan PR 6 review: the billing specialist links a coverage to a plan, so reads it too (the
+    // service keeps the read to the acting hospital's rows and the patients it may chart).
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR','PATIENT','BILLING_SPECIALIST')")
     public ResponseEntity<List<PatientInsuranceResponseDTO>> getInsurancesByPatientId(
         @PathVariable UUID patientId,
         Locale locale

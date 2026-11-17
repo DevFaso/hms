@@ -60,6 +60,25 @@ const PLAN_FIELD_IDS: Readonly<Record<string, string>> = {
   effectiveTo: 'pp-to',
 };
 
+/** The new-terms dialog's controls (`replaceScheduled` is asked for, not marked). */
+const TERMS_FIELD_IDS: Readonly<Record<string, string>> = {
+  defaultCoveragePercent: 'pt-percent',
+  perInvoiceCeiling: 'pt-invoice-ceiling',
+  annualCeilingPerBeneficiary: 'pt-annual-ceiling',
+  effectiveFrom: 'pt-from',
+  changeReason: 'pt-reason',
+};
+
+interface TermsForm {
+  defaultCoveragePercent: number | null;
+  perInvoiceCeiling: number | null;
+  annualCeilingPerBeneficiary: number | null;
+  effectiveFrom: string;
+  effectiveFromChanged: boolean;
+  changeReason: string;
+  replaceScheduled: boolean;
+}
+
 /** `replaceScheduled` is asked for, not marked. */
 const RULE_FIELD_IDS: Readonly<Record<string, string>> = {
   category: 'pr-category',
@@ -156,6 +175,7 @@ export class PayersComponent implements OnInit {
   readonly canDeactivate = this.roleContext.hasAnyActiveRole(actionRoles('payerDeactivate'));
   readonly canEditPlans = this.roleContext.hasAnyActiveRole(actionRoles('payerPlanCreate'));
   readonly canEditRules = this.roleContext.hasAnyActiveRole(actionRoles('payerRuleAdd'));
+  readonly canAddTerms = this.roleContext.hasAnyActiveRole(actionRoles('payerTermsAdd'));
 
   readonly payers = signal<Payer[]>([]);
   readonly loading = signal(false);
@@ -173,6 +193,12 @@ export class PayersComponent implements OnInit {
   readonly planDialog = signal<{ plan: PayerPlan | null } | null>(null);
   readonly planSaving = signal(false);
   planForm: PlanForm = PayersComponent.blankPlan();
+
+  /** Review of #1202: the plan whose new terms are being entered (a dated version). */
+  readonly termsDialog = signal<PayerPlan | null>(null);
+  readonly termsSaving = signal(false);
+  readonly termsQuestion = signal<string | null>(null);
+  termsForm: TermsForm = PayersComponent.blankTerms(null);
 
   readonly ruleDialog = signal<PayerPlan | null>(null);
   readonly ruleSaving = signal(false);
@@ -204,6 +230,18 @@ export class PayersComponent implements OnInit {
       effectiveFrom: businessToday(),
       effectiveFromChanged: false,
       effectiveTo: '',
+    };
+  }
+
+  private static blankTerms(plan: PayerPlan | null): TermsForm {
+    return {
+      defaultCoveragePercent: plan?.defaultCoveragePercent ?? null,
+      perInvoiceCeiling: plan?.perInvoiceCeiling ?? null,
+      annualCeilingPerBeneficiary: plan?.annualCeilingPerBeneficiary ?? null,
+      effectiveFrom: businessToday(),
+      effectiveFromChanged: false,
+      changeReason: '',
+      replaceScheduled: false,
     };
   }
 
@@ -341,20 +379,86 @@ export class PayersComponent implements OnInit {
     if (!dialog || !payer || this.planSaving()) return;
     const form = this.planForm;
     this.planSaving.set(true);
-    const body = {
+    const dates = {
       name: form.name.trim(),
-      defaultCoveragePercent: numberOrNull(form.defaultCoveragePercent),
-      perInvoiceCeiling: numberOrNull(form.perInvoiceCeiling),
-      annualCeilingPerBeneficiary: numberOrNull(form.annualCeilingPerBeneficiary),
       effectiveFrom: (form.effectiveFromChanged && form.effectiveFrom) || null,
       effectiveTo: form.effectiveTo || null,
     };
+    // Review of #1202: an edit changes the name and dates only; the terms change by a new dated version.
     const request = dialog.plan
-      ? this.api.updatePlan(payer.id, dialog.plan.id, body)
-      : this.api.createPlan(payer.id, { ...body, code: form.code.trim() });
+      ? this.api.updatePlan(payer.id, dialog.plan.id, dates)
+      : this.api.createPlan(payer.id, {
+          ...dates,
+          code: form.code.trim(),
+          defaultCoveragePercent: numberOrNull(form.defaultCoveragePercent),
+          perInvoiceCeiling: numberOrNull(form.perInvoiceCeiling),
+          annualCeilingPerBeneficiary: numberOrNull(form.annualCeilingPerBeneficiary),
+        });
     this.run(request, this.planSaving, PLAN_FIELD_IDS, 'BILLING.PAYERS.PLAN_SAVED', () =>
       this.planDialog.set(null),
     );
+  }
+
+  // ── new terms (review of #1202) ─────────────────────────────────────
+
+  openTerms(plan: PayerPlan): void {
+    this.termsForm = PayersComponent.blankTerms(plan);
+    this.termsQuestion.set(null);
+    this.termsDialog.set(plan);
+  }
+
+  closeTermsDialog(): void {
+    this.termsDialog.set(null);
+    this.termsQuestion.set(null);
+  }
+
+  /** A new date needs its own confirmation: the question asked for the old one no longer applies. */
+  termsDateChanged(value: string): void {
+    this.termsForm.effectiveFrom = value;
+    this.termsForm.effectiveFromChanged = true;
+    this.termsForm.replaceScheduled = false;
+    this.termsQuestion.set(null);
+  }
+
+  saveTerms(): void {
+    const plan = this.termsDialog();
+    const payer = this.selected();
+    if (!plan || !payer || this.termsSaving()) return;
+    const form = this.termsForm;
+    this.termsSaving.set(true);
+    this.api
+      .addTerms(payer.id, plan.id, {
+        defaultCoveragePercent: numberOrNull(form.defaultCoveragePercent),
+        perInvoiceCeiling: numberOrNull(form.perInvoiceCeiling),
+        annualCeilingPerBeneficiary: numberOrNull(form.annualCeilingPerBeneficiary),
+        effectiveFrom: (form.effectiveFromChanged && form.effectiveFrom) || null,
+        changeReason: form.changeReason.trim() || null,
+        replaceScheduled: form.replaceScheduled,
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (saved) => {
+          this.termsSaving.set(false);
+          this.termsDialog.set(null);
+          this.termsQuestion.set(null);
+          this.selected.set(saved);
+          this.toast.success(this.translate.instant('BILLING.PAYERS.TERMS_SAVED'));
+          this.load();
+        },
+        error: (err) => {
+          this.termsSaving.set(false);
+          const ask = (err?.error?.fieldErrors as { replaceScheduled?: unknown } | undefined)
+            ?.replaceScheduled;
+          if (typeof ask === 'string' && ask.trim() !== '') {
+            this.termsQuestion.set(ask);
+            return;
+          }
+          this.markRefused(err, TERMS_FIELD_IDS);
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('BILLING.PAYERS.SAVE_FAILED'),
+          );
+        },
+      });
   }
 
   // ── rule dialog ──────────────────────────────────────────────────────

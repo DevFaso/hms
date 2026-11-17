@@ -20,6 +20,21 @@ public class PatientInsuranceMapper {
 
     public PatientInsuranceResponseDTO toPatientInsuranceResponseDTO(PatientInsurance insurance) {
         if (insurance == null) return null;
+        return toResponse(insurance, payerCatalogueService.labelOf(insurance.getPayerPlanId()));
+    }
+
+    /** Review of #1202: a list maps with its plans' names read once for the whole list, not once per row. */
+    public java.util.List<PatientInsuranceResponseDTO> toPatientInsuranceResponseDTOs(
+            java.util.List<PatientInsurance> insurances) {
+        java.util.Map<UUID, PayerCatalogueService.PlanLabel> labels = payerCatalogueService.labelsOf(
+            insurances.stream().map(PatientInsurance::getPayerPlanId).filter(java.util.Objects::nonNull).toList());
+        return insurances.stream()
+            .map(insurance -> toResponse(insurance,
+                insurance.getPayerPlanId() == null ? null : labels.get(insurance.getPayerPlanId())))
+            .toList();
+    }
+
+    private PatientInsuranceResponseDTO toResponse(PatientInsurance insurance, PayerCatalogueService.PlanLabel plan) {
 
         UUID hospitalId = null;
         UUID assignmentId = null;
@@ -31,8 +46,6 @@ public class PatientInsuranceMapper {
                 hospitalId = assignment.getHospital().getId();
             }
         }
-
-        PayerCatalogueService.PlanLabel plan = payerCatalogueService.labelOf(insurance.getPayerPlanId());
 
         return PatientInsuranceResponseDTO.builder()
             .id(insurance.getId())

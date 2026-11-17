@@ -70,6 +70,10 @@ class PatientInsuranceKeycloakPatientTest {
 
     @BeforeEach
     void setUp() {
+        // Review of #1202: a list maps in one call (its plans' names read once).
+        when(mapper.toPatientInsuranceResponseDTOs(org.mockito.ArgumentMatchers.anyList()))
+            .thenAnswer(call -> ((java.util.List<PatientInsurance>) call.getArgument(0)).stream()
+                .map(mapper::toPatientInsuranceResponseDTO).toList());
         PatientSubjectReadGuard guard = new PatientSubjectReadGuard(
             new ControllerAuthUtils(mock(ActingScopeResolver.class)), patientRepository);
         // The scope of a patient-only caller: bounded by ownership, no hospital.

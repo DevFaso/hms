@@ -13,15 +13,18 @@ import com.example.hms.model.BaseEntity;
 import com.example.hms.model.Payer;
 import com.example.hms.model.PayerPlan;
 import com.example.hms.model.PayerPlanRule;
+import com.example.hms.model.PayerPlanTerms;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.billing.PayerPlanRequestDTO;
 import com.example.hms.payload.dto.billing.PayerPlanRuleRequestDTO;
+import com.example.hms.payload.dto.billing.PayerPlanTermsRequestDTO;
 import com.example.hms.payload.dto.billing.PayerPlanUpdateRequestDTO;
 import com.example.hms.payload.dto.billing.PayerReasonRequestDTO;
 import com.example.hms.payload.dto.billing.PayerRequestDTO;
 import com.example.hms.payload.dto.billing.PayerUpdateRequestDTO;
 import com.example.hms.repository.PayerPlanRepository;
 import com.example.hms.repository.PayerPlanRuleRepository;
+import com.example.hms.repository.PayerPlanTermsRepository;
 import com.example.hms.repository.PayerRepository;
 import com.example.hms.repository.PriceListItemRepository;
 import com.example.hms.repository.UserRepository;
@@ -73,6 +76,7 @@ class PayerCatalogueServiceTest {
     private final PayerRepository payers = mock(PayerRepository.class);
     private final PayerPlanRepository plans = mock(PayerPlanRepository.class);
     private final PayerPlanRuleRepository rules = mock(PayerPlanRuleRepository.class);
+    private final PayerPlanTermsRepository terms = mock(PayerPlanTermsRepository.class);
     private final PriceListItemRepository items = mock(PriceListItemRepository.class);
     private final RoleValidator roles = mock(RoleValidator.class);
     private final ActingScopeResolver scope = mock(ActingScopeResolver.class);
@@ -83,7 +87,7 @@ class PayerCatalogueServiceTest {
     void setUp() {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.FRENCH);
-        service = new PayerCatalogueService(payers, plans, rules, items, mock(UserRepository.class), roles, scope,
+        service = new PayerCatalogueService(payers, plans, rules, terms, items, mock(UserRepository.class), roles, scope,
             audit, CLOCK, "Africa/Ouagadougou");
         when(scope.requirePinned()).thenReturn(HOSPITAL);
         when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL);
@@ -91,6 +95,7 @@ class PayerCatalogueServiceTest {
         when(payers.saveAndFlush(any())).thenAnswer(call -> withId(call.getArgument(0)));
         when(plans.saveAndFlush(any())).thenAnswer(call -> withId(call.getArgument(0)));
         when(rules.saveAndFlush(any())).thenAnswer(call -> withId(call.getArgument(0)));
+        when(terms.saveAndFlush(any())).thenAnswer(call -> withId(call.getArgument(0)));
     }
 
     @AfterEach
@@ -118,7 +123,7 @@ class PayerCatalogueServiceTest {
 
     private PayerPlan plan(Payer payer, LocalDate from, LocalDate to) {
         PayerPlan plan = withId(PayerPlan.builder().hospitalId(HOSPITAL).payerId(payer.getId()).code("MTA-ESS")
-            .name("Formule Test Essentielle").defaultCoveragePercent(75).effectiveFrom(from).effectiveTo(to).build());
+            .name("Formule Test Essentielle").effectiveFrom(from).effectiveTo(to).build());
         when(plans.findByIdAndPayerIdAndHospitalId(plan.getId(), payer.getId(), HOSPITAL))
             .thenReturn(Optional.of(plan));
         return plan;
@@ -292,11 +297,16 @@ class PayerCatalogueServiceTest {
         verify(plans).saveAndFlush(saved.capture());
         PayerPlan plan = saved.getValue();
         assertThat(plan.getCode()).isEqualTo("AMU-BASE");
-        assertThat(plan.getDefaultCoveragePercent()).isEqualTo(80);
-        assertThat(plan.getAnnualCeilingPerBeneficiary()).isEqualByComparingTo("150000");
-        assertThat(plan.getPerInvoiceCeiling()).isNull();
         assertThat(plan.getEffectiveFrom()).isEqualTo(TODAY);
         assertThat(plan.getHospitalId()).isEqualTo(HOSPITAL);
+        // The terms are the plan's first dated version, starting with it.
+        ArgumentCaptor<PayerPlanTerms> first = ArgumentCaptor.forClass(PayerPlanTerms.class);
+        verify(terms).saveAndFlush(first.capture());
+        assertThat(first.getValue().getDefaultCoveragePercent()).isEqualTo(80);
+        assertThat(first.getValue().getAnnualCeilingPerBeneficiary()).isEqualByComparingTo("150000");
+        assertThat(first.getValue().getPerInvoiceCeiling()).isNull();
+        assertThat(first.getValue().getEffectiveFrom()).isEqualTo(TODAY);
+        assertThat(first.getValue().getPlanId()).isEqualTo(plan.getId());
         AuditEventRequestDTO row = auditRow();
         assertThat(row.getEventType()).isEqualTo(AuditEventType.PAYER_PLAN_CHANGED);
         // Ids only: the sentence is fixed, and holds no name, rate or ceiling.
@@ -337,24 +347,25 @@ class PayerCatalogueServiceTest {
         UUID payerId = payer.getId();
         UUID startedId = started.getId();
 
-        assertThatThrownBy(() -> service.updatePlan(payer.getId(), started.getId(), PayerPlanUpdateRequestDTO.builder()
-            .name("Formule").defaultCoveragePercent(BigDecimal.TEN).effectiveFrom(TODAY.plusDays(1)).build()))
+        PayerPlanUpdateRequestDTO moveStart = PayerPlanUpdateRequestDTO.builder()
+            .name("Formule").effectiveFrom(TODAY.plusDays(1)).build();
+        assertThatThrownBy(() -> service.updatePlan(payerId, startedId, moveStart))
             .isInstanceOfSatisfying(FieldBusinessException.class,
                 e -> assertThat(e.getField()).isEqualTo("effectiveFrom"));
-        assertThatThrownBy(() -> service.updatePlan(payer.getId(), started.getId(), PayerPlanUpdateRequestDTO.builder()
-            .name("Formule").defaultCoveragePercent(BigDecimal.TEN).effectiveTo(TODAY.minusDays(5)).build()))
+        PayerPlanUpdateRequestDTO endInPast = PayerPlanUpdateRequestDTO.builder()
+            .name("Formule").effectiveTo(TODAY.minusDays(5)).build();
+        assertThatThrownBy(() -> service.updatePlan(payerId, startedId, endInPast))
             .isInstanceOfSatisfying(FieldBusinessException.class,
                 e -> assertThat(e.getField()).isEqualTo("effectiveTo"));
 
-        service.updatePlan(payer.getId(), started.getId(), PayerPlanUpdateRequestDTO.builder()
-            .name("Formule Test Essentielle").defaultCoveragePercent(new BigDecimal("70"))
-            .effectiveTo(TODAY.minusDays(1)).build());
-        assertThat(started.getDefaultCoveragePercent()).isEqualTo(70);
+        service.updatePlan(payerId, startedId, PayerPlanUpdateRequestDTO.builder()
+            .name("Formule Test Essentielle").effectiveTo(TODAY.minusDays(1)).build());
         assertThat(started.getEffectiveTo()).isEqualTo(TODAY.minusDays(1));
         assertThat(started.getEffectiveFrom()).isEqualTo(TODAY.minusDays(30));
+        // The edit never writes terms: they change only by a new dated version.
+        verify(terms, never()).saveAndFlush(any());
 
-        PayerPlanUpdateRequestDTO afterEnd = PayerPlanUpdateRequestDTO.builder()
-            .name("Formule").defaultCoveragePercent(BigDecimal.TEN).build();
+        PayerPlanUpdateRequestDTO afterEnd = PayerPlanUpdateRequestDTO.builder().name("Formule").build();
         assertThatThrownBy(() -> service.updatePlan(payerId, startedId, afterEnd))
             .isInstanceOf(BusinessException.class);
     }
@@ -426,6 +437,8 @@ class PayerCatalogueServiceTest {
 
         assertThat(inForce.getEffectiveTo()).isEqualTo(TODAY.plusDays(15));
         assertThat(inForce.getEndedBy()).isNull();
+        // Review of #1202: the audit row names the rule it closed (ids only).
+        assertThat(auditRow().getEventDescription()).contains("closed [" + inForce.getId() + "]", "replaced []");
     }
 
     @Test
@@ -455,6 +468,105 @@ class PayerCatalogueServiceTest {
         PayerReasonRequestDTO again = new PayerReasonRequestDTO("Autre motif");
         assertThatThrownBy(() -> service.endRule(payerId, planId, ruleId, again)).isInstanceOf(BusinessException.class);
         assertThat(rule.getEndReason()).isEqualTo("Avenant 2026");
+    }
+
+    // ───────────────────────────── review of #1202 ─────────────────────────────
+
+    private PayerPlanTerms termsVersion(PayerPlan plan, int percent, LocalDate from, LocalDate to) {
+        return withId(PayerPlanTerms.builder().hospitalId(HOSPITAL).planId(plan.getId()).defaultCoveragePercent(percent)
+            .effectiveFrom(from).effectiveTo(to).build());
+    }
+
+    @Test
+    @DisplayName("new terms on a started plan add a dated version: the one in force is closed, never rewritten")
+    void newTermsAddAVersionAndNeverRewriteTheTermsInForce() {
+        maintainer();
+        Payer payer = payer(true);
+        PayerPlan plan = plan(payer, TODAY.minusDays(30), null);
+        PayerPlanTerms inForce = termsVersion(plan, 75, TODAY.minusDays(30), null);
+        when(terms.findByPlanIdAndHospitalIdOrderByEffectiveFromAscCreatedAtAsc(plan.getId(), HOSPITAL))
+            .thenReturn(List.of(inForce));
+
+        service.addTerms(payer.getId(), plan.getId(), PayerPlanTermsRequestDTO.builder()
+            .defaultCoveragePercent(new BigDecimal("70")).effectiveFrom(TODAY.plusDays(16))
+            .changeReason("Avenant 2027").build());
+
+        assertThat(inForce.getDefaultCoveragePercent()).isEqualTo(75);
+        assertThat(inForce.getEffectiveTo()).isEqualTo(TODAY.plusDays(15));
+        ArgumentCaptor<PayerPlanTerms> added = ArgumentCaptor.forClass(PayerPlanTerms.class);
+        verify(terms).saveAndFlush(added.capture());
+        assertThat(added.getValue().getDefaultCoveragePercent()).isEqualTo(70);
+        assertThat(added.getValue().getEffectiveFrom()).isEqualTo(TODAY.plusDays(16));
+        assertThat(added.getValue().getEffectiveTo()).isNull();
+        AuditEventRequestDTO row = auditRow();
+        assertThat(row.getEventDescription())
+            .contains("closed [" + inForce.getId() + "]", "replaced []")
+            .doesNotContain("Avenant", "70");
+    }
+
+    @Test
+    @DisplayName("terms planned on or after the new start are replaced only on confirmation; a past start is refused")
+    void plannedTermsAreReplacedOnlyOnConfirmation() {
+        maintainer();
+        Payer payer = payer(true);
+        PayerPlan plan = plan(payer, TODAY, null);
+        PayerPlanTerms planned = termsVersion(plan, 75, TODAY.plusDays(16), null);
+        when(terms.findByPlanIdAndHospitalIdOrderByEffectiveFromAscCreatedAtAsc(plan.getId(), HOSPITAL))
+            .thenReturn(List.of(planned));
+        UUID payerId = payer.getId();
+        UUID planId = plan.getId();
+        PayerPlanTermsRequestDTO unconfirmed = PayerPlanTermsRequestDTO.builder()
+            .defaultCoveragePercent(new BigDecimal("80")).effectiveFrom(TODAY.plusDays(16)).build();
+        assertThatThrownBy(() -> service.addTerms(payerId, planId, unconfirmed))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("replaceScheduled"));
+        PayerPlanTermsRequestDTO past = PayerPlanTermsRequestDTO.builder()
+            .defaultCoveragePercent(new BigDecimal("80")).effectiveFrom(TODAY.minusDays(1)).build();
+        assertThatThrownBy(() -> service.addTerms(payerId, planId, past))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("effectiveFrom"));
+
+        unconfirmed.setReplaceScheduled(true);
+        service.addTerms(payerId, planId, unconfirmed);
+        assertThat(planned.isCancelled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("withdrawing a planned rule reopens the rule it had closed")
+    void withdrawingAPlannedRuleReopensItsPredecessor() {
+        maintainer();
+        Payer payer = payer(true);
+        PayerPlan plan = plan(payer, TODAY.minusDays(60), null);
+        PayerPlanRule inForce = withId(PayerPlanRule.builder().hospitalId(HOSPITAL).planId(plan.getId())
+            .category(PriceListCategory.IMAGING).coveragePercent(50).effectiveFrom(TODAY.minusDays(60))
+            .effectiveTo(TODAY.plusDays(15)).build());
+        PayerPlanRule planned = withId(PayerPlanRule.builder().hospitalId(HOSPITAL).planId(plan.getId())
+            .category(PriceListCategory.IMAGING).coveragePercent(60).effectiveFrom(TODAY.plusDays(16)).build());
+        when(rules.findByIdAndPlanIdAndHospitalId(planned.getId(), plan.getId(), HOSPITAL))
+            .thenReturn(Optional.of(planned));
+        when(rules.findByPlanIdAndHospitalIdOrderByEffectiveFromAscCreatedAtAsc(plan.getId(), HOSPITAL))
+            .thenReturn(List.of(inForce, planned));
+
+        service.endRule(payer.getId(), plan.getId(), planned.getId(), new PayerReasonRequestDTO("Avenant annulé"));
+
+        assertThat(planned.isCancelled()).isTrue();
+        assertThat(inForce.getEffectiveTo()).as("the imaging rate in force runs on, open-ended").isNull();
+    }
+
+    @Test
+    @DisplayName("a rule that started today and is ended today applies until tonight")
+    void aRuleStartedTodayEndsTonight() {
+        maintainer();
+        Payer payer = payer(true);
+        PayerPlan plan = plan(payer, TODAY.minusDays(60), null);
+        PayerPlanRule today = withId(PayerPlanRule.builder().hospitalId(HOSPITAL).planId(plan.getId())
+            .category(PriceListCategory.LAB_TEST).excluded(true).effectiveFrom(TODAY).build());
+        when(rules.findByIdAndPlanIdAndHospitalId(today.getId(), plan.getId(), HOSPITAL)).thenReturn(Optional.of(today));
+
+        service.endRule(payer.getId(), plan.getId(), today.getId(), new PayerReasonRequestDTO("Saisie erronée"));
+
+        assertThat(today.getEffectiveTo()).isEqualTo(TODAY);
+        assertThat(today.isCancelled()).isFalse();
     }
 
     // ───────────────────────────── coverage link ─────────────────────────────

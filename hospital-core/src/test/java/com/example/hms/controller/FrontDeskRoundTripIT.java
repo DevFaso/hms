@@ -914,8 +914,7 @@ class FrontDeskRoundTripIT extends BaseIT {
             .code("AMU-TEST").name("Assurance maladie test (FICTIVE)")
             .payerType(com.example.hms.enums.PayerType.AMU).active(true).build());
         var planA = plans.save(com.example.hms.model.PayerPlan.builder().hospitalId(hospital.getId())
-            .payerId(payerA.getId()).code("AMU-BASE").name("Formule Base").defaultCoveragePercent(80)
-            .annualCeilingPerBeneficiary(new java.math.BigDecimal("150000")).effectiveFrom(LocalDate.now()).build());
+            .payerId(payerA.getId()).code("AMU-BASE").name("Formule Base").effectiveFrom(LocalDate.now()).build());
         // Hospital B: a real row, so the Postgres replay (AppointmentBookingEndpointPostgresIT) holds its FKs.
         UUID hospitalB = hospitalRepository.save(Hospital.builder()
             .name("R16 Desk Hospital B").code("R16DB" + nextId()).city("Ouagadougou").country("Burkina Faso")
@@ -925,8 +924,7 @@ class FrontDeskRoundTripIT extends BaseIT {
             .code("MUT-TEST-B").name("Mutuelle Test B (FICTIVE)")
             .payerType(com.example.hms.enums.PayerType.MUTUELLE).active(true).build());
         var planB = plans.save(com.example.hms.model.PayerPlan.builder().hospitalId(hospitalB)
-            .payerId(payerB.getId()).code("MTB-ESS").name("Formule B").defaultCoveragePercent(75)
-            .effectiveFrom(LocalDate.now()).build());
+            .payerId(payerB.getId()).code("MTB-ESS").name("Formule B").effectiveFrom(LocalDate.now()).build());
 
         mockMvc.perform(put(API + "/patient-insurances/link").contextPath(API)
                 .contentType(MediaType.APPLICATION_JSON)

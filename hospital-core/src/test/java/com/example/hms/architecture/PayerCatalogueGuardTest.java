@@ -2,8 +2,10 @@ package com.example.hms.architecture;
 
 import com.example.hms.controller.PayerController;
 import com.example.hms.model.PayerPlanRule;
+import com.example.hms.model.PayerPlanTerms;
 import com.example.hms.repository.PayerPlanRepository;
 import com.example.hms.repository.PayerPlanRuleRepository;
+import com.example.hms.repository.PayerPlanTermsRepository;
 import com.example.hms.repository.PayerRepository;
 import jakarta.persistence.Column;
 import org.junit.jupiter.api.DisplayName;
@@ -56,6 +58,8 @@ class PayerCatalogueGuardTest {
         "PayerPlanRepository#findByPayerIdInOrderByCodeAsc",
         // the rules of plans already read the same way
         "PayerPlanRuleRepository#findByPlanIds",
+        // the terms of plans already read the same way (review of #1202)
+        "PayerPlanTermsRepository#findByPlanIds",
         // the existence check of a code under a payer locked at the hospital first
         "PayerPlanRepository#existsByPayerIdAndCode");
 
@@ -66,7 +70,7 @@ class PayerCatalogueGuardTest {
     void everyCatalogueReadNamesTheHospital() {
         List<String> unscoped = new ArrayList<>();
         for (Class<?> repository : List.of(PayerRepository.class, PayerPlanRepository.class,
-                PayerPlanRuleRepository.class)) {
+                PayerPlanRuleRepository.class, PayerPlanTermsRepository.class)) {
             for (Method method : repository.getDeclaredMethods()) {
                 String key = repository.getSimpleName() + "#" + method.getName();
                 if (!method.getName().matches("(find|exists|lock|count|stream)\\w*")) {
@@ -148,6 +152,72 @@ class PayerCatalogueGuardTest {
         assertThat(rewrites).as("a plan rule is never rewritten or deleted").isEmpty();
         assertThat(closers).as("only PayerCatalogueService closes a rule")
             .containsExactly("service/billing/PayerCatalogueService.java");
+    }
+
+    /** Review of #1202: a plan's terms are dated versions; nothing rewrites one, and only the service closes one. */
+    @Test
+    void planTermsAreWrittenOnceButTheirEnd() throws NoSuchFieldException, IOException {
+        for (String name : List.of("hospitalId", "planId", "defaultCoveragePercent", "perInvoiceCeiling",
+                "annualCeilingPerBeneficiary", "effectiveFrom", "changeReason", "createdBy")) {
+            Field field = PayerPlanTerms.class.getDeclaredField(name);
+            assertThat(field.getAnnotation(Column.class).updatable()).as(name + " must be updatable = false")
+                .isFalse();
+        }
+        // No plan carries its own rate or ceilings any more: they were rewritten in place before #1202's review.
+        for (Field field : com.example.hms.model.PayerPlan.class.getDeclaredFields()) {
+            assertThat(field.getName()).doesNotContain("Percent", "Ceiling");
+        }
+        Pattern termsType = Pattern.compile("\\bPayerPlanTerms\\b");
+        Pattern rewrite = Pattern.compile(
+            "\\.set(DefaultCoveragePercent|PerInvoiceCeiling|AnnualCeilingPerBeneficiary|ChangeReason)\\(|"
+                + "[tT]ermsRepository\\.delete\\w*\\(");
+        List<String> rewrites = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String rel = MAIN.relativize(file).toString().replace('\\', '/');
+                String text = Files.readString(file, StandardCharsets.UTF_8);
+                if (rel.equals("model/PayerPlanTerms.java") || !termsType.matcher(text).find()) {
+                    continue;
+                }
+                String[] lines = text.split("\n", -1);
+                for (int i = 0; i < lines.length; i++) {
+                    if (rewrite.matcher(lines[i]).find()) {
+                        rewrites.add(rel + ":" + (i + 1) + " " + lines[i].trim());
+                    }
+                }
+            }
+        }
+        assertThat(rewrites).as("plan terms are never rewritten or deleted").isEmpty();
+    }
+
+    /**
+     * Review of #1202 (the re-tag class): a coverage row shared by every hospital (tagged to none) is never re-tagged
+     * to one hospital, which would take it away from the others; the hospital gets its own copy. The two places a
+     * row's hospital is set keep that rule: the staff tagger refuses an existing shared row, and the patient's
+     * pre-check-in copies one before tagging.
+     */
+    @Test
+    void aSharedCoverageRowIsCopiedNeverReTagged() throws IOException {
+        String service = Files.readString(MAIN.resolve("service/PatientInsuranceServiceImpl.java"),
+            StandardCharsets.UTF_8);
+        int tagger = service.indexOf("private static void tagForStaffHospital(");
+        String taggerBody = service.substring(tagger, service.indexOf("\n    }\n", tagger));
+        assertThat(taggerBody).contains("held == null && insurance.getId() != null");
+        int rowAt = service.indexOf("private PatientInsurance rowAtHospital(");
+        String rowAtBody = service.substring(rowAt, service.indexOf("\n    }\n", rowAt));
+        assertThat(rowAtBody).contains("copyOf(insurance)");
+        String portal = Files.readString(MAIN.resolve("service/impl/PatientPortalServiceImpl.java"),
+            StandardCharsets.UTF_8);
+        int preCheckIn = portal.indexOf("sharedRowCopy(insurance)");
+        assertThat(preCheckIn).as("pre-check-in copies a shared row").isPositive()
+            .isLessThan(portal.indexOf("insurance.setAssignment(assignment)", preCheckIn - 400));
+        // Every staff write that names a coverage row goes through rowAtHospital, never the bare tagger.
+        Matcher tags = Pattern.compile("\\btagForStaffHospital\\(").matcher(service);
+        int calls = 0;
+        while (tags.find()) {
+            calls++;
+        }
+        assertThat(calls).as("the tagger's declaration and its two calls inside rowAtHospital").isEqualTo(3);
     }
 
     @Test

@@ -444,7 +444,12 @@ export class CoverageTabComponent implements OnInit {
         this.planSaving.set(false);
         this.planTarget.set(null);
         this.toast.success(this.translate.instant('COVERAGE.PLAN_SAVED'));
-        this.insurances.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+        // Review of #1202: a shared row answers with this hospital's own copy (a new id): read the list again.
+        if (this.insurances().some((i) => i.id === updated.id)) {
+          this.insurances.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+        } else {
+          this.loadInsurances();
+        }
       },
       error: (err: unknown) => {
         this.planSaving.set(false);
