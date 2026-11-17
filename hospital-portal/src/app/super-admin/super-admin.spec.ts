@@ -14,6 +14,7 @@ import {
   SuperAdminSummary,
 } from '../services/dashboard.service';
 import { PlatformService, PlatformSummary } from '../services/platform.service';
+import { IntegrationHealthService } from '../services/integration-health.service';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
 
@@ -104,6 +105,7 @@ const auditEvent = (id: string, status: 'SUCCESS' | 'FAILURE' = 'SUCCESS'): Rece
 describe('SuperAdminComponent', () => {
   let dashboard: jasmine.SpyObj<DashboardService>;
   let platform: jasmine.SpyObj<PlatformService>;
+  let health: jasmine.SpyObj<IntegrationHealthService>;
   let fixture: ComponentFixture<SuperAdminComponent>;
 
   function stubAllRecent(): void {
@@ -123,6 +125,7 @@ describe('SuperAdminComponent', () => {
         provideRouter([]),
         { provide: DashboardService, useValue: dashboard },
         { provide: PlatformService, useValue: platform },
+        { provide: IntegrationHealthService, useValue: health },
       ],
     });
     fixture = TestBed.createComponent(SuperAdminComponent);
@@ -136,10 +139,119 @@ describe('SuperAdminComponent', () => {
       'getRecentActivity',
     ]);
     platform = jasmine.createSpyObj<PlatformService>('PlatformService', ['getSummary']);
+    health = jasmine.createSpyObj<IntegrationHealthService>('IntegrationHealthService', [
+      'getInventory',
+    ]);
+    health.getInventory.and.returnValue(
+      of({
+        totalIntegrations: 12,
+        healthyCount: 6,
+        degradedCount: 2,
+        failingCount: 3,
+        noHistoryCount: 1,
+        integrations: [],
+      }),
+    );
     stubAllRecent();
   });
 
   afterEach(() => TestBed.resetTestingModule());
+
+  it('keeps all administration destinations visible before the network overview', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    setup();
+    const dom: HTMLElement = fixture.nativeElement;
+    expect(dom.querySelectorAll('[data-test="links-grid"] a').length).toBe(13);
+    expect(dom.querySelector('details')).toBeNull();
+    expect(
+      dom
+        .querySelector('.admin-directory')!
+        .compareDocumentPosition(dom.querySelector('.network-overview')!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+  it('ignores an older health request after refresh', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const older = new Subject<
+      import('../services/integration-health.model').IntegrationHealthSummary
+    >();
+    health.getInventory.and.returnValue(older);
+    const component = setup();
+    health.getInventory.and.returnValue(throwError(() => new Error('latest request unavailable')));
+    component.loadAll();
+    older.next({
+      totalIntegrations: 1,
+      healthyCount: 1,
+      degradedCount: 0,
+      failingCount: 0,
+      noHistoryCount: 0,
+      integrations: [],
+    });
+    expect(component.healthUnavailable()).toBeTrue();
+    expect(component.health()).toBeNull();
+  });
+
+  it('does not show zero network totals when the summary source failed', () => {
+    dashboard.getSummary.and.returnValue(throwError(() => new Error('summary unavailable')));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    setup();
+    const values: HTMLElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('.network-overview .stat-value'),
+    );
+    expect(values.length).toBe(0);
+    expect(
+      fixture.nativeElement.querySelector('.network-overview .availability-note').textContent,
+    ).toContain('SUPER_ADMIN.SUMMARY_UNAVAILABLE');
+  });
+
+  it('uses server health counts independently of returned inventory rows', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const component = setup();
+    expect(component.healthCards().map((card) => card.count)).toEqual([3, 2, 1, 6]);
+    expect(fixture.nativeElement.querySelectorAll('.health-card.attention').length).toBe(2);
+  });
+  it('keeps health errors distinct from healthy zero counts', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    health.getInventory.and.returnValue(throwError(() => new Error('offline')));
+    const component = setup();
+    expect(component.healthUnavailable()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('[data-test="health-grid"]')).toBeNull();
+  });
+  it('hides successful token refresh noise while retaining failures and an opt-in', () => {
+    dashboard.getSummary.and.returnValue(
+      of(
+        fakeSummary({
+          recentAuditEvents: [
+            { ...auditEvent('routine'), eventType: 'TOKEN_REFRESH' },
+            { ...auditEvent('failed', 'FAILURE'), eventType: 'TOKEN_REFRESH' },
+            auditEvent('login'),
+          ],
+        }),
+      ),
+    );
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const component = setup();
+    expect(component.visibleAudit().map((event) => event.id)).toEqual(['failed', 'login']);
+    expect(component.routineAuditCount()).toBe(1);
+    component.showRoutineAudit.set(true);
+    expect(component.visibleAudit().length).toBe(3);
+    component.auditFailuresOnly.set(true);
+    expect(component.visibleAudit().map((event) => event.id)).toEqual(['failed']);
+  });
+  it('distinguishes an unavailable clinical feed from an empty feed', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentActivity.and.returnValue(of(null));
+    const component = setup();
+    expect(component.activityUnavailable()).toBeTrue();
+    expect(
+      fixture.nativeElement.querySelector('[data-test="activity-list"]').textContent,
+    ).toContain('SUPER_ADMIN.CONTROL.ACTIVITY_UNAVAILABLE');
+  });
 
   it('uses registered canonical destinations and warns only for nonzero attention counts', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
@@ -549,6 +661,7 @@ describe('SuperAdminComponent', () => {
         provideRouter([]),
         { provide: DashboardService, useValue: dashboard },
         { provide: PlatformService, useValue: platform },
+        { provide: IntegrationHealthService, useValue: health },
       ],
     });
     const fix = TestBed.createComponent(SuperAdminComponent);

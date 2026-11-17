@@ -463,7 +463,21 @@
     "AUDIT_ALL": "All recent events",
     "AUDIT_FAILURES": "Failures",
     "AUDIT_EMPTY": "No events in this recent sample match this filter.",
-    "TOOLS_HELP": "Manage organizations, access and platform settings"
+    "TOOLS_HELP": "Manage organizations, access and platform settings",
+    "CONTROL": {
+      "GROUP_NETWORK": "Network",
+      "GROUP_ACCESS": "Access",
+      "GROUP_PLATFORM": "Platform",
+      "GROUP_SECURITY": "Security",
+      "HEALTH_TITLE": "Integration health and attention",
+      "HEALTH_HELP": "Recorded integration states across organizations. No history means health is unknown.",
+      "OPEN_INTEGRATIONS": "Manage integrations",
+      "HEALTH_UNAVAILABLE": "Integration health unavailable. Refresh to retry.",
+      "CONFIGURATION": "Platform configuration",
+      "ACTIVITY_UNAVAILABLE": "Recent clinical activity unavailable. Refresh to retry.",
+      "AUDIT_SAMPLE": "Sample: latest {{count}} audit events received. Filters apply to this sample only.",
+      "ROUTINE_AUDIT": "Include successful token refreshes ({{count}})"
+    }
   },
   "AUDIT_SEARCH": {
     "TITLE": "Cross-Tenant Audit Search",

@@ -463,7 +463,21 @@
     "AUDIT_ALL": "Todos los eventos recientes",
     "AUDIT_FAILURES": "Fallos",
     "AUDIT_EMPTY": "Ningún evento de esta muestra reciente coincide con el filtro.",
-    "TOOLS_HELP": "Gestionar organizaciones, accesos y plataforma"
+    "TOOLS_HELP": "Gestionar organizaciones, accesos y plataforma",
+    "CONTROL": {
+      "GROUP_NETWORK": "Red",
+      "GROUP_ACCESS": "Acceso",
+      "GROUP_PLATFORM": "Plataforma",
+      "GROUP_SECURITY": "Seguridad",
+      "HEALTH_TITLE": "Estado de integraciones y puntos de atención",
+      "HEALTH_HELP": "Estados registrados de todas las organizaciones. Sin historial, su estado es desconocido.",
+      "OPEN_INTEGRATIONS": "Gestionar integraciones",
+      "HEALTH_UNAVAILABLE": "Estado de integraciones no disponible. Actualice para reintentar.",
+      "CONFIGURATION": "Configuración de la plataforma",
+      "ACTIVITY_UNAVAILABLE": "Actividad clínica reciente no disponible. Actualice para reintentar.",
+      "AUDIT_SAMPLE": "Muestra: los últimos {{count}} eventos de auditoría recibidos. Los filtros solo se aplican a esta muestra.",
+      "ROUTINE_AUDIT": "Incluir renovaciones de token correctas ({{count}})"
+    }
   },
   "AUDIT_SEARCH": {
     "TITLE": "Búsqueda de auditoría multi-inquilino",

@@ -32,6 +32,60 @@
       </button>
     </div>
   } @else {
+    <nav class="dashboard-panel admin-directory" aria-labelledby="tools-heading">
+      <h2 class="section-heading" id="tools-heading">
+        {{ 'SUPER_ADMIN.QUICK_LINKS' | translate }}
+      </h2>
+      <div class="admin-groups" data-test="links-grid">
+        @for (group of quickLinkGroups; track group.key) {
+          <section class="admin-group">
+            <h3>{{ group.key | keyLabel: 'SUPER_ADMIN.CONTROL.GROUP_' }}</h3>
+            @for (link of group.links; track link.route) {
+              <a [routerLink]="link.route" [title]="link.descKey | translate">
+                <span class="material-symbols-outlined" aria-hidden="true">{{ link.icon }}</span>
+                <span>{{ link.titleKey | translate }}</span>
+                <span class="material-symbols-outlined admin-arrow" aria-hidden="true"
+                  >arrow_forward</span
+                >
+              </a>
+            }
+          </section>
+        }
+      </div>
+    </nav>
+    <section class="dashboard-panel integration-overview" aria-labelledby="integration-heading">
+      <div class="panel-heading">
+        <div>
+          <h2 id="integration-heading">{{ 'SUPER_ADMIN.CONTROL.HEALTH_TITLE' | translate }}</h2>
+          <p>{{ 'SUPER_ADMIN.CONTROL.HEALTH_HELP' | translate }}</p>
+        </div>
+        <a routerLink="/super-admin/integrations">{{
+          'SUPER_ADMIN.CONTROL.OPEN_INTEGRATIONS' | translate
+        }}</a>
+      </div>
+      @if (healthLoading()) {
+        <p role="status">{{ 'COMMON.LOADING' | translate }}</p>
+      } @else if (healthUnavailable()) {
+        <p class="availability-note" role="status">
+          {{ 'SUPER_ADMIN.CONTROL.HEALTH_UNAVAILABLE' | translate }}
+        </p>
+      } @else {
+        <div class="health-grid" data-test="health-grid">
+          @for (card of healthCards(); track card.key) {
+            <div
+              class="health-card"
+              [class.attention]="
+                (card.key === 'FAILING' || card.key === 'DEGRADED') && (card.count ?? 0) > 0
+              "
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">{{ card.icon }}</span>
+              <strong>{{ card.count | dash }}</strong>
+              <span>{{ card.key | keyLabel: 'INTEGRATION_HEALTH.CHIP.' }}</span>
+            </div>
+          }
+        </div>
+      }
+    </section>
     <section class="network-overview" aria-labelledby="network-heading">
       <div class="panel-heading">
         <div>
@@ -60,12 +114,14 @@
               <span class="material-symbols-outlined" aria-hidden="true">{{ stat.icon }}</span>
             </div>
             <div class="stat-info">
-              <span class="stat-value">{{ stat.value | number }}</span>
+              <span class="stat-value">{{
+                (summaryUnavailable() ? null : stat.value) | number | dash
+              }}</span>
               <span class="stat-label">{{ stat.labelKey | translate }}</span>
               @if (stat.sublabelKey) {
                 {{ ' '
                 }}<span class="stat-sub">
-                  <em>{{ stat.subvalue }}</em>
+                  <em>{{ (summaryUnavailable() ? null : stat.subvalue) | dash }}</em>
                   {{ stat.sublabelKey | translate }}
                 </span>
               }
@@ -92,7 +148,9 @@
                   <span class="material-symbols-outlined" aria-hidden="true">{{ stat.icon }}</span>
                 </div>
                 <div class="stat-info">
-                  <span class="stat-value">{{ stat.value | number }}</span>
+                  <span class="stat-value">{{
+                    (summaryUnavailable() ? null : stat.value) | number | dash
+                  }}</span>
                   <span class="stat-label">{{ stat.labelKey | translate }}</span>
                 </div>
               </a>
@@ -107,7 +165,7 @@
       <section class="dashboard-panel platform-panel">
         <!-- Platform integrations strip -->
         @if (platformActions(); as actions) {
-          <h2 class="section-heading">{{ 'SUPER_ADMIN.PLATFORM_HEALTH' | translate }}</h2>
+          <h2 class="section-heading">{{ 'SUPER_ADMIN.CONTROL.CONFIGURATION' | translate }}</h2>
           <div class="platform-strip" data-test="platform-strip">
             <a class="strip-card" routerLink="/super-admin/platform">
               <span class="strip-value">{{ actions.totalIntegrations }}</span>
@@ -135,7 +193,7 @@
             </a>
           </div>
         } @else {
-          <h2 class="section-heading">{{ 'SUPER_ADMIN.PLATFORM_HEALTH' | translate }}</h2>
+          <h2 class="section-heading">{{ 'SUPER_ADMIN.CONTROL.CONFIGURATION' | translate }}</h2>
           <p class="availability-note" role="status">
             {{
               (platformUnavailable() ? 'SUPER_ADMIN.PLATFORM_UNAVAILABLE' : 'COMMON.LOADING')
@@ -177,7 +235,9 @@
               >
                 <span class="material-symbols-outlined" aria-hidden="true">{{ tab.icon }}</span>
                 <span>{{ tab.labelKey | translate }}</span>
-                <span class="activity-count">{{ countForTab(tab) }}</span>
+                <span class="activity-count">{{
+                  (summaryUnavailable() ? null : countForTab(tab)) | dash
+                }}</span>
               </button>
             }
           </div>
@@ -192,6 +252,10 @@
           >
             @if (activityLoading()) {
               <p class="activity-empty" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+            } @else if (activityUnavailable()) {
+              <p class="availability-note" role="status">
+                {{ 'SUPER_ADMIN.CONTROL.ACTIVITY_UNAVAILABLE' | translate }}
+              </p>
             } @else if (selectedActivityRows().length === 0) {
               <div class="activity-empty">
                 <span class="material-symbols-outlined" aria-hidden="true">inbox</span>
@@ -236,6 +300,19 @@
               {{ 'SUPER_ADMIN.AUDIT_FAILURES' | translate }}
             </button>
           </div>
+          <p class="audit-sample">
+            {{ 'SUPER_ADMIN.CONTROL.AUDIT_SAMPLE' | translate: { count: recentAudit().length } }}
+          </p>
+          @if (routineAuditCount() > 0) {
+            <button
+              type="button"
+              class="routine-toggle"
+              [attr.aria-pressed]="showRoutineAudit()"
+              (click)="showRoutineAudit.set(!showRoutineAudit())"
+            >
+              {{ 'SUPER_ADMIN.CONTROL.ROUTINE_AUDIT' | translate: { count: routineAuditCount() } }}
+            </button>
+          }
           <div
             class="audit-list"
             data-test="audit-list"
@@ -291,31 +368,5 @@
         }
       </section>
     </div>
-    <details class="dashboard-panel tools-directory">
-      <!-- Quick links grid -->
-      <summary>
-        <h2>{{ 'SUPER_ADMIN.QUICK_LINKS' | translate }}</h2>
-        <span>{{ 'SUPER_ADMIN.TOOLS_HELP' | translate }}</span
-        ><span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
-      </summary>
-      <div class="links-grid" data-test="links-grid">
-        @for (link of quickLinks; track link.route) {
-          <a class="link-card" [routerLink]="link.route">
-            <div
-              class="card-icon"
-              [style.background]="link.color + '14'"
-              [style.color]="link.color"
-            >
-              <span class="material-symbols-outlined" aria-hidden="true">{{ link.icon }}</span>
-            </div>
-            <div class="card-body">
-              <h3 class="card-title">{{ link.titleKey | translate }}</h3>
-              <p class="card-desc">{{ link.descKey | translate }}</p>
-            </div>
-            <span class="material-symbols-outlined card-arrow">arrow_forward</span>
-          </a>
-        }
-      </div>
-    </details>
   }
 </div>

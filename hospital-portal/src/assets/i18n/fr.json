@@ -463,7 +463,21 @@
     "AUDIT_ALL": "Tous les événements récents",
     "AUDIT_FAILURES": "Échecs",
     "AUDIT_EMPTY": "Aucun événement de cet échantillon récent ne correspond au filtre.",
-    "TOOLS_HELP": "Gérer les organisations, les accès et la plateforme"
+    "TOOLS_HELP": "Gérer les organisations, les accès et la plateforme",
+    "CONTROL": {
+      "GROUP_NETWORK": "Réseau",
+      "GROUP_ACCESS": "Accès",
+      "GROUP_PLATFORM": "Plateforme",
+      "GROUP_SECURITY": "Sécurité",
+      "HEALTH_TITLE": "Santé des intégrations et points de vigilance",
+      "HEALTH_HELP": "Statuts enregistrés pour toutes les organisations. Sans historique, leur santé reste inconnue.",
+      "OPEN_INTEGRATIONS": "Gérer les intégrations",
+      "HEALTH_UNAVAILABLE": "Santé des intégrations indisponible. Actualisez pour réessayer.",
+      "CONFIGURATION": "Configuration de la plateforme",
+      "ACTIVITY_UNAVAILABLE": "Activité clinique récente indisponible. Actualisez pour réessayer.",
+      "AUDIT_SAMPLE": "Échantillon : {{count}} derniers événements d’audit reçus. Les filtres portent uniquement sur cet échantillon.",
+      "ROUTINE_AUDIT": "Inclure les renouvellements de jeton réussis ({{count}})"
+    }
   },
   "AUDIT_SEARCH": {
     "TITLE": "Recherche d'audit multi-tenant",
