@@ -229,9 +229,9 @@ class PatientNotificationRoutingGuardTest {
         + "announceReleasedResult)\\s*+\\(");
     private static final Pattern THROWN =
         Pattern.compile("new\\s++(IllegalStateException|IllegalArgumentException)\\s*+\\(([^;]*?)\\)\\s*+;");
-    private static final Pattern METHOD_DECLARATION = Pattern.compile(
-        "(?:private|public|protected|static|final|synchronized|\\s)++[\\w<>\\[\\],.? ]+?\\s++(\\w++)\\s*+\\([^;{)]*+\\)"
-            + "\\s*+(?:throws\\s++[\\w., ]+)?\\{");
+    /** A method header: a type token, the name, a parameter list with no nested parentheses, the body's brace. */
+    private static final Pattern METHOD_DECLARATION =
+        Pattern.compile("[\\w>\\]]\\s++(\\w++)\\s*+\\([^;{)(]*+\\)\\s*+(?:throws\\s++[\\w.,\\s]++)?\\{");
 
     /** Every method declaration as {name, body}, overloads included (each overload has its own body). */
     private static List<String[]> declaredMethods(String source) {

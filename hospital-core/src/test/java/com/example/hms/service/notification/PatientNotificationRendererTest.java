@@ -41,6 +41,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -234,8 +235,8 @@ class PatientNotificationRendererTest {
     @DisplayName("only the latest imaging report version decides: a newer unsigned version is not announced")
     void latestImagingVersionDecides() {
         UUID imagingOrderId = UUID.randomUUID();
-        com.example.hms.model.ImagingReport signedOriginal = org.mockito.Mockito.mock(com.example.hms.model.ImagingReport.class);
-        com.example.hms.model.ImagingReport draftAddendum = org.mockito.Mockito.mock(com.example.hms.model.ImagingReport.class);
+        com.example.hms.model.ImagingReport signedOriginal = mock(com.example.hms.model.ImagingReport.class);
+        com.example.hms.model.ImagingReport draftAddendum = mock(com.example.hms.model.ImagingReport.class);
         lenient().when(signedOriginal.isReleasedToPatient()).thenReturn(true);
         when(draftAddendum.isReleasedToPatient()).thenReturn(false);
         when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId))

@@ -114,27 +114,11 @@ public class PatientNotificationRenderer {
             return null;
         }
         Patient patient = patientRepository.findByIdUnscoped(row.getPatientId()).orElse(null);
-        if (patient == null) {
-            return skip(row, PatientNotificationErrorCode.NO_CONTACT);
+        PatientNotificationErrorCode refusal = recipientRefusal(row, patient);
+        if (refusal != null) {
+            return skip(row, refusal);
         }
-        if (com.example.hms.service.support.DeceasedPatientGuard.careBlocked(patient)) {
-            // Never text a dead patient's phone about a visit or a result.
-            return skip(row, PatientNotificationErrorCode.PATIENT_DECEASED);
-        }
-        UUID userId = patient.getUser() != null ? patient.getUser().getId() : null;
-        if (!consent.allows(userId, row.getEventType().preferenceType(), row.getChannel())) {
-            return skip(row, PatientNotificationErrorCode.OPTED_OUT);
-        }
-        String recipient = row.getChannel() == NotificationChannel.SMS
-            ? patient.getPhoneNumberPrimary() : patient.getEmail();
-        if (!StringUtils.hasText(recipient)) {
-            return skip(row, PatientNotificationErrorCode.NO_CONTACT);
-        }
-        if (row.getChannel() == NotificationChannel.EMAIL
-            && !EmailRecipientAllowlist.parse(properties.getEmailRecipientAllowlist()).permits(recipient)) {
-            // Dev / uat: EMAIL_RECIPIENT_ALLOWLIST, the email twin of SMS_RECIPIENT_ALLOWLIST.
-            return skip(row, PatientNotificationErrorCode.RECIPIENT_NOT_ALLOWED);
-        }
+        String recipient = recipientOf(row, patient);
         Locale locale = localeResolver.resolve(patient, Locale.forLanguageTag(fallbackLocale));
         String hospitalName = hospitalRepository.findById(row.getHospitalId())
             .map(Hospital::getName).filter(StringUtils::hasText).orElse("");
@@ -183,6 +167,35 @@ public class PatientNotificationRenderer {
         String html = "<!DOCTYPE html><html lang=\"" + locale.getLanguage() + "\"><body><p>" + body
             + "</p></body></html>";
         return new Prepared(NotificationChannel.EMAIL, address, subject, html);
+    }
+
+    /** Why this patient must not get this send now, or null when they may. */
+    private PatientNotificationErrorCode recipientRefusal(PatientNotificationDelivery row, Patient patient) {
+        if (patient == null) {
+            return PatientNotificationErrorCode.NO_CONTACT;
+        }
+        if (com.example.hms.service.support.DeceasedPatientGuard.careBlocked(patient)) {
+            // Never text a dead patient's phone about a visit or a result.
+            return PatientNotificationErrorCode.PATIENT_DECEASED;
+        }
+        UUID userId = patient.getUser() != null ? patient.getUser().getId() : null;
+        if (!consent.allows(userId, row.getEventType().preferenceType(), row.getChannel())) {
+            return PatientNotificationErrorCode.OPTED_OUT;
+        }
+        String recipient = recipientOf(row, patient);
+        if (!StringUtils.hasText(recipient)) {
+            return PatientNotificationErrorCode.NO_CONTACT;
+        }
+        if (row.getChannel() == NotificationChannel.EMAIL
+            && !EmailRecipientAllowlist.parse(properties.getEmailRecipientAllowlist()).permits(recipient)) {
+            // Dev / uat: EMAIL_RECIPIENT_ALLOWLIST, the email twin of SMS_RECIPIENT_ALLOWLIST.
+            return PatientNotificationErrorCode.RECIPIENT_NOT_ALLOWED;
+        }
+        return null;
+    }
+
+    private static String recipientOf(PatientNotificationDelivery row, Patient patient) {
+        return row.getChannel() == NotificationChannel.SMS ? patient.getPhoneNumberPrimary() : patient.getEmail();
     }
 
     private boolean resultStillReleased(PatientNotificationEvent event, UUID subjectId) {

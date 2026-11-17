@@ -13,6 +13,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.MailSendException;
@@ -137,28 +139,6 @@ class PatientNotificationDispatchServiceTest {
     }
 
     @Test
-    @DisplayName("an unknown outcome is FAILED at once: the provider may have charged and delivered it")
-    void unknownOutcomeIsNotResent() {
-        doThrow(new IllegalStateException("sms.provider.unknownOutcome")).when(smsService).send(anyString(), anyString());
-
-        service.dispatchPending();
-
-        assertThat(row.getStatus()).isEqualTo(NotificationDeliveryStatus.FAILED);
-        assertThat(row.getErrorCode()).isEqualTo("OUTCOME_UNKNOWN");
-    }
-
-    @Test
-    @DisplayName("an SMS failure nobody classified is an unknown outcome: never resent automatically")
-    void unclassifiedSmsFailureIsUnknown() {
-        doThrow(new IllegalStateException("IKODDI exploded")).when(smsService).send(anyString(), anyString());
-
-        service.dispatchPending();
-
-        assertThat(row.getStatus()).isEqualTo(NotificationDeliveryStatus.FAILED);
-        assertThat(row.getErrorCode()).isEqualTo("OUTCOME_UNKNOWN");
-    }
-
-    @Test
     @DisplayName("an outcome is written with the claim token: a sweep that lost its claim never overwrites")
     void outcomeIsWrittenUnderTheClaim() {
         when(repository.markSent(eq(row.getId()), any(), any(), any(), any())).thenReturn(0);
@@ -171,15 +151,23 @@ class PatientNotificationDispatchServiceTest {
         assertThat(row.getStatus()).as("the newer attempt's state is untouched").isEqualTo(NotificationDeliveryStatus.PENDING);
     }
 
-    @Test
-    @DisplayName("a refused message is FAILED at once")
-    void rejectedIsPermanent() {
-        doThrow(new IllegalStateException("sms.provider.rejected")).when(smsService).send(anyString(), anyString());
+    @ParameterizedTest(name = "{0} -> FAILED {1}, never resent automatically")
+    @CsvSource({
+        // The provider may have accepted and charged it: an automatic resend could text the patient twice.
+        "sms.provider.unknownOutcome, OUTCOME_UNKNOWN",
+        // An SMS failure nobody classified is treated the same way.
+        "IKODDI exploded, OUTCOME_UNKNOWN",
+        // A refused message fails the same way every time.
+        "sms.provider.rejected, PROVIDER_REJECTED"
+    })
+    @DisplayName("a send that may have gone out, or was refused, is FAILED at once")
+    void failedAtOnce(String failure, String code) {
+        doThrow(new IllegalStateException(failure)).when(smsService).send(anyString(), anyString());
 
         service.dispatchPending();
 
         assertThat(row.getStatus()).isEqualTo(NotificationDeliveryStatus.FAILED);
-        assertThat(row.getErrorCode()).isEqualTo("PROVIDER_REJECTED");
+        assertThat(row.getErrorCode()).isEqualTo(code);
     }
 
     @Test
