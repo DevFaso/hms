@@ -88,22 +88,45 @@ describe('ResetPasswordComponent — a refused link is never shown as a reset (Q
 
     c.submit();
     expect(c.error).toBe('RESET.ERR_REQUIRED');
+    const host = fixture.nativeElement as HTMLElement;
+    const password = host.querySelector<HTMLInputElement>('#newPassword')!;
+    const confirm = host.querySelector<HTMLInputElement>('#confirmPassword')!;
+    expect(password.getAttribute('aria-invalid')).toBe('true');
+    expect(confirm.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(password);
+    expect(host.querySelector('#newPassword-invalid-msg')?.textContent).toBe(c.error);
 
     c.newPassword = 'short';
     c.confirmPassword = 'short';
     c.submit();
     expect(c.error).toBe('RESET.ERR_MIN_LENGTH');
+    expect(password.getAttribute('aria-invalid')).toBe('true');
+    expect(confirm.hasAttribute('aria-invalid')).toBeFalse();
+    expect(document.activeElement).toBe(password);
 
     c.newPassword = 'Valid-Pass-2026';
     c.confirmPassword = 'Other-Pass-2026';
     c.submit();
     expect(c.error).toBe('RESET.ERR_MISMATCH');
+    expect(password.hasAttribute('aria-invalid')).toBeFalse();
+    expect(confirm.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(confirm);
+
+    c.confirmPassword = c.newPassword;
+    c.submit();
+    expect(host.querySelector('[aria-invalid]')).toBeNull();
+    expect(host.querySelector('.invalid-field-msg')).toBeNull();
+    httpMock
+      .expectOne('/auth/password/confirm')
+      .flush(null, { status: 204, statusText: 'No Content' });
     httpMock.expectNone('/auth/password/confirm');
   });
 
   it('a link with no token is refused up front', () => {
     const fixture = open({});
-    expect(fixture.componentInstance.error).toBe('RESET.ERR_TOKEN_MISSING');
+    expect(fixture.nativeElement.querySelector('form')).toBeNull();
+    expect(text(fixture)).toContain('RESET.INVALID_MSG');
+    httpMock.expectNone('/auth/password/confirm');
     expect(text(fixture)).toContain('RESET.INVALID_TITLE');
   });
 });

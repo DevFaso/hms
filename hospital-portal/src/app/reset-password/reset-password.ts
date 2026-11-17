@@ -1,9 +1,17 @@
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { Component, inject, OnInit, PLATFORM_ID, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  inject,
+  ElementRef,
+  OnInit,
+  PLATFORM_ID,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
@@ -25,6 +33,8 @@ export class ResetPasswordComponent implements OnInit {
   currentYear = new Date().getFullYear();
 
   private token = '';
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly passwordFields = ['newPassword', 'confirmPassword'];
   private readonly http = inject(HttpClient);
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
@@ -34,9 +44,8 @@ export class ResetPasswordComponent implements OnInit {
 
   ngOnInit(): void {
     this.token = this.route.snapshot.queryParamMap.get('token') ?? '';
-    if (!this.token) {
-      this.error = this.translate.instant('RESET.ERR_TOKEN_MISSING');
-    }
+    // A missing URL token renders the translated invalid-link state, not a form.
+    // There is no editable token field to mark or focus.
   }
 
   get tokenMissing(): boolean {
@@ -54,17 +63,24 @@ export class ResetPasswordComponent implements OnInit {
   submit(): void {
     if (!this.isBrowser || this.loading) return;
     this.error = '';
+    refuseFields(this.host.nativeElement, [], this.passwordFields);
 
     if (!this.newPassword || !this.confirmPassword) {
       this.error = this.translate.instant('RESET.ERR_REQUIRED');
+      const missing = this.passwordFields.filter((id) =>
+        id === 'newPassword' ? !this.newPassword : !this.confirmPassword,
+      );
+      refuseFields(this.host.nativeElement, missing, this.passwordFields, this.error);
       return;
     }
     if (this.newPassword.length < 8) {
       this.error = this.translate.instant('RESET.ERR_MIN_LENGTH');
+      refuseFields(this.host.nativeElement, ['newPassword'], this.passwordFields, this.error);
       return;
     }
     if (this.newPassword !== this.confirmPassword) {
       this.error = this.translate.instant('RESET.ERR_MISMATCH');
+      refuseFields(this.host.nativeElement, ['confirmPassword'], this.passwordFields, this.error);
       return;
     }
 
