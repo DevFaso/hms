@@ -1,6 +1,8 @@
 package com.example.hms.payload.dto.billing;
 
 import com.example.hms.enums.PriceListCategory;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -33,4 +35,12 @@ public class PayerPlanRuleRequestDTO {
     private LocalDate effectiveFrom;
     /** Confirms replacing a rule planned for the same target on or after this start. */
     private boolean replaceScheduled;
+
+    /** A rule names a target: a category or an item (both named is refused by the service, naming the item). */
+    @com.example.hms.validation.ReportedOn("category")
+    @AssertTrue(message = "{billing.payer.ruleTargetRequired}")
+    @Schema(hidden = true)
+    public boolean isTargetNamed() {
+        return category != null || priceListItemId != null;
+    }
 }

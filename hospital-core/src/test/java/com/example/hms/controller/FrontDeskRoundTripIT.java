@@ -160,10 +160,6 @@ class FrontDeskRoundTripIT extends BaseIT {
         slotRepository.deleteAll();
         recallRepository.deleteAll();
         insuranceRepository.deleteAll();
-        // Billing-money plan PR 6: the payer catalogue the coverage round trip writes.
-        applicationContext.getBean(com.example.hms.repository.PayerPlanRuleRepository.class).deleteAll();
-        applicationContext.getBean(com.example.hms.repository.PayerPlanRepository.class).deleteAll();
-        applicationContext.getBean(com.example.hms.repository.PayerRepository.class).deleteAll();
         // The flow-board round trip writes an encounter (and its history).
         org.springframework.jdbc.core.JdbcTemplate jdbc =
             applicationContext.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
@@ -920,8 +916,11 @@ class FrontDeskRoundTripIT extends BaseIT {
         var planA = plans.save(com.example.hms.model.PayerPlan.builder().hospitalId(hospital.getId())
             .payerId(payerA.getId()).code("AMU-BASE").name("Formule Base").defaultCoveragePercent(80)
             .annualCeilingPerBeneficiary(new java.math.BigDecimal("150000")).effectiveFrom(LocalDate.now()).build());
-        // Hospital B's plan: a plain id is enough here (the entity-built test schema carries no hospital FK).
-        UUID hospitalB = UUID.randomUUID();
+        // Hospital B: a real row, so the Postgres replay (AppointmentBookingEndpointPostgresIT) holds its FKs.
+        UUID hospitalB = hospitalRepository.save(Hospital.builder()
+            .name("R16 Desk Hospital B").code("R16DB" + nextId()).city("Ouagadougou").country("Burkina Faso")
+            .address("2 Main St").phoneNumber("+226554" + nextId()).email("r16db" + nextId() + "@hospital.test")
+            .organization(organization).build()).getId();
         var payerB = payers.save(com.example.hms.model.Payer.builder().hospitalId(hospitalB)
             .code("MUT-TEST-B").name("Mutuelle Test B (FICTIVE)")
             .payerType(com.example.hms.enums.PayerType.MUTUELLE).active(true).build());

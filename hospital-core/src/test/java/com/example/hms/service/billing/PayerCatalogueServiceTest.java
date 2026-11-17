@@ -295,7 +295,9 @@ class PayerCatalogueServiceTest {
         assertThat(plan.getHospitalId()).isEqualTo(HOSPITAL);
         AuditEventRequestDTO row = auditRow();
         assertThat(row.getEventType()).isEqualTo(AuditEventType.PAYER_PLAN_CHANGED);
-        assertThat(row.getEventDescription()).doesNotContain("Formule", "80", "150");
+        // Ids only: the sentence is fixed, and holds no name, rate or ceiling.
+        assertThat(row.getEventDescription())
+            .matches("Payer plan [0-9a-f-]{36} of payer [0-9a-f-]{36} created");
     }
 
     @Test

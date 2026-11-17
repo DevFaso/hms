@@ -146,6 +146,11 @@ class PayerCataloguePostgresIT {
         when(roles.canReadPayers(eq(actor), any())).thenReturn(true);
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        LocaleContextHolder.resetLocaleContext();
+    }
+
     private void actAt(UUID hospitalId) {
         when(scope.requirePinned()).thenReturn(hospitalId);
         when(roles.requireActiveHospitalId()).thenReturn(hospitalId);

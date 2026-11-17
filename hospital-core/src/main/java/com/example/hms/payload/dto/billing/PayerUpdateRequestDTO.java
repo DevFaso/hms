@@ -1,6 +1,8 @@
 package com.example.hms.payload.dto.billing;
 
 import com.example.hms.enums.PayerType;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,7 +20,9 @@ import lombok.Setter;
 @Builder
 public class PayerUpdateRequestDTO {
 
+    @NotBlank(message = "{billing.payer.nameRequired}")
     @Size(max = 150, message = "{billing.payer.nameSize}")
     private String name;
+    @NotNull(message = "{billing.payer.typeRequired}")
     private PayerType payerType;
 }
