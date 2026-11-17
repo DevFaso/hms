@@ -69,7 +69,9 @@
             <td>{{ payer.payerType | enumLabel: 'payerType' }}</td>
             <td>
               @for (plan of payer.plans; track plan.id; let last = $last) {
-                {{ plan.name }} ({{ plan.defaultCoveragePercent }} %){{ last ? '' : ', ' }}
+                {{ plan.name }} ({{ plan.defaultCoveragePercent | measure: '%' }}){{
+                  last ? '' : ', '
+                }}
               } @empty {
                 <span class="muted">{{ 'BILLING.PAYERS.NO_PLAN' | translate }}</span>
               }
@@ -105,7 +107,7 @@
         <dd>
           {{ (payer.active ? 'BILLING.PAYERS.ACTIVE' : 'BILLING.PAYERS.INACTIVE') | translate }}
           @if (!payer.active && payer.deactivationReason) {
-            — {{ payer.deactivationReason }}
+            — {{ 'COMMON.REASON_VALUE' | translate: { reason: payer.deactivationReason } }}
           }
         </dd>
       </dl>
@@ -116,7 +118,7 @@
               type="button"
               class="btn-primary"
               data-testid="payers-new-plan"
-              (click)="openPlan(null)"
+              (click)="openNewPlan()"
             >
               {{ 'BILLING.PAYERS.NEW_PLAN' | translate }}
             </button>
@@ -153,7 +155,7 @@
           </div>
           <dl class="detail-grid">
             <dt>{{ 'BILLING.PAYERS.DEFAULT_RATE' | translate }}</dt>
-            <dd>{{ plan.defaultCoveragePercent }} %</dd>
+            <dd>{{ plan.defaultCoveragePercent | measure: '%' }}</dd>
             <dt>{{ 'BILLING.PAYERS.INVOICE_CEILING' | translate }}</dt>
             <dd>
               {{
@@ -239,7 +241,8 @@
                       } @else {
                         @if ((rule.coveragePercent ?? null) !== null) {
                           {{
-                            'BILLING.PAYERS.RATE_VALUE' | translate: { rate: rule.coveragePercent }
+                            'BILLING.PAYERS.RATE_VALUE'
+                              | translate: { rate: (rule.coveragePercent | number) }
                           }}
                         } @else {
                           {{ 'BILLING.PAYERS.RATE_DEFAULT' | translate }}
@@ -508,7 +511,13 @@
         </div>
         <div class="field">
           <label for="pp-to">{{ 'BILLING.PAYERS.EFFECTIVE_TO' | translate }}</label>
-          <input id="pp-to" name="effectiveTo" type="date" [(ngModel)]="planForm.effectiveTo" />
+          <input
+            id="pp-to"
+            name="effectiveTo"
+            type="date"
+            [attr.min]="planForm.effectiveFrom || null"
+            [(ngModel)]="planForm.effectiveTo"
+          />
         </div>
         <div class="modal-actions">
           <button type="button" class="btn-secondary" (click)="closePlanDialog()">

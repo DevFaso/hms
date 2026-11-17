@@ -34,6 +34,7 @@ import { actionRoles } from '../../core/action-permissions';
 import { ToastService } from '../../core/toast.service';
 import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
@@ -127,6 +128,7 @@ function numberOrNull(value: number | string | null | undefined): number | null 
     RouterLink,
     TranslateModule,
     CfaPipe,
+    MeasurePipe,
     EnumLabelPipe,
     ServerTimePipe,
     DialogA11yDirective,
@@ -317,6 +319,11 @@ export class PayersComponent implements OnInit {
         }
       : PayersComponent.blankPlan();
     this.planDialog.set({ plan });
+  }
+
+  /** "Nouvelle formule": the plan dialog with a blank plan. */
+  openNewPlan(): void {
+    this.openPlan(null);
   }
 
   planDateChanged(value: string): void {

@@ -8,8 +8,8 @@ import { AppointmentFormComponent } from '../appointments/appointment-form';
 import { AppointmentListComponent } from '../appointments/appointment-list';
 import { BillingComponent } from '../billing/billing';
 import { CashClosingComponent } from '../billing/cash-closing/cash-closing.component';
-import { PriceListComponent } from '../billing/price-list/price-list.component';
 import { PayersComponent } from '../billing/payers/payers.component';
+import { PriceListComponent } from '../billing/price-list/price-list.component';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 import { FeatureFlagsComponent } from '../feature-flags/feature-flags';
 import { MyAppointmentsComponent } from '../patient-portal/my-appointments/my-appointments.component';
@@ -101,15 +101,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     file: 'billing/cash-closing/cash-closing.component',
     type: CashClosingComponent,
   },
+  { name: 'PayersComponent', file: 'billing/payers/payers.component', type: PayersComponent },
   {
     name: 'PriceListComponent',
     file: 'billing/price-list/price-list.component',
     type: PriceListComponent,
-  },
-  {
-    name: 'PayersComponent',
-    file: 'billing/payers/payers.component',
-    type: PayersComponent,
   },
   {
     name: 'CheckoutDialogComponent',
