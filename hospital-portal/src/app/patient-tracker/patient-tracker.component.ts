@@ -154,22 +154,21 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   readonly stageFilter = signal('');
   readonly providerFilter = signal('');
   readonly longestFirst = signal(false);
-  readonly providers = computed(() =>
-    [
-      ...new Set(
-        this.columns
-          .flatMap((c) => this.getColumnItems(c.key))
-          .map((i) => i.assignedProvider)
-          .filter((v): v is string => !!v),
-      ),
-    ].sort(),
-  );
-  readonly longestElapsed = computed(() =>
-    Math.max(
-      0,
-      ...this.columns.flatMap((c) => this.getColumnItems(c.key)).map((i) => i.currentWaitMinutes),
-    ),
-  );
+  readonly providers = computed(() => {
+    const providers = new Map<string, string>();
+    for (const item of this.columns.flatMap((c) => this.getColumnItems(c.key))) {
+      if (item.assignedProvider) {
+        providers.set(this.providerKey(item), item.assignedProvider);
+      }
+    }
+    return [...providers.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  private providerKey(item: PatientTrackerItem): string {
+    return item.assignedProviderUserId ?? item.assignedProvider ?? '';
+  }
   readonly visibleColumns = computed(() =>
     this.columns.filter((c) => !this.stageFilter() || c.key === this.stageFilter()),
   );
@@ -192,7 +191,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     const items = this.getColumnItems(key).filter(
       (item) =>
         (!this.departmentFilter() || item.departmentName === this.departmentFilter()) &&
-        (!this.providerFilter() || item.assignedProvider === this.providerFilter()) &&
+        (!this.providerFilter() || this.providerKey(item) === this.providerFilter()) &&
         (!term ||
           [
             item.patientName,

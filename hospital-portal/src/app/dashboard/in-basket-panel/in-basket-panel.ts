@@ -62,6 +62,7 @@ export class InBasketPanelComponent {
   });
   loading = signal(false);
   loadError = signal(false);
+  summaryError = signal(false);
   lastUpdated = signal<string | null>(null);
   activeFilter = signal<string | null>(null);
 
@@ -238,12 +239,13 @@ export class InBasketPanelComponent {
 
   private loadSummary(): void {
     const request = this.loadRequest;
+    this.summaryError.set(false);
     this.inBasketService.getSummary().subscribe({
       next: (s) => {
         if (request === this.loadRequest) this.summary.set(s);
       },
       error: () => {
-        if (request === this.loadRequest) this.loadError.set(true);
+        if (request === this.loadRequest) this.summaryError.set(true);
       },
     });
   }

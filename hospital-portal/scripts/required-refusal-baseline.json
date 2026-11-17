@@ -309,18 +309,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/scheduling/scheduling.ts::unmarked-refusal::submitBulk::SCHEDULING.TOAST.DATE_RANGE_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/scheduling/scheduling.ts::unmarked-refusal::submitBulk::SCHEDULING.TOAST.DOW_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/scheduling/scheduling.ts::unmarked-refusal::submitBulk::SCHEDULING.TOAST.IDS_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/staff/staff-list.ts::unmarked-refusal::submitForm::STAFF.USER_AND_HOSPITAL_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"

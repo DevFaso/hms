@@ -61,6 +61,12 @@ export class SchedulingComponent implements OnInit {
     shiftType: 'bulk-shiftType',
     notes: 'bulk-notes',
   };
+  private readonly bulkFields: Record<string, string> = {
+    ...this.shiftFields,
+    startDate: 'bulk-startDate',
+    endDate: 'bulk-endDate',
+    daysOfWeek: 'bulk-daysOfWeek',
+  };
   private readonly schedulingService = inject(StaffSchedulingService);
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
@@ -335,14 +341,38 @@ export class SchedulingComponent implements OnInit {
   submitBulk(): void {
     if (!this.canManageSchedules() || this.bulkSubmitting()) return;
     if (!this.bulk.staffId || !this.bulk.hospitalId) {
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.bulk.staffId ? 'bulk-staffSearch' : '',
+          !this.bulk.hospitalId ? 'bulk-hospitalId' : '',
+        ].filter(Boolean),
+        Object.values(this.bulkFields),
+        this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'));
       return;
     }
     if (!this.bulk.startDate || !this.bulk.endDate) {
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.bulk.startDate ? 'bulk-startDate' : '',
+          !this.bulk.endDate ? 'bulk-endDate' : '',
+        ].filter(Boolean),
+        Object.values(this.bulkFields),
+        this.translate.instant('SCHEDULING.TOAST.DATE_RANGE_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('SCHEDULING.TOAST.DATE_RANGE_REQUIRED'));
       return;
     }
     if (this.bulk.daysOfWeek.length === 0) {
+      refuseFields(
+        this.host.nativeElement,
+        ['bulk-daysOfWeek'],
+        Object.values(this.bulkFields),
+        this.translate.instant('SCHEDULING.TOAST.DOW_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('SCHEDULING.TOAST.DOW_REQUIRED'));
       return;
     }
@@ -370,6 +400,12 @@ export class SchedulingComponent implements OnInit {
       },
       error: (err) => {
         this.bulkSubmitting.set(false);
+        const reasons = refusedFieldReasons(err, this.bulkFields);
+        refuseFields(
+          this.host.nativeElement,
+          reasons.map(([id, message]) => ({ id, message })),
+          Object.values(this.bulkFields),
+        );
         const msg = err?.error?.message ?? this.translate.instant('SCHEDULING.TOAST.BULK_FAILED');
         this.toast.error(msg);
       },

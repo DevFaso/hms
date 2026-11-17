@@ -247,8 +247,7 @@
     "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::a.reaction",
     "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::m.frequency",
     "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::h.relationship",
-    "src/app/billing/price-list/price-list.component.html::p.changeReason",
-    "src/app/patient-tracker/patient-tracker.component.html::<option>provider"
+    "src/app/billing/price-list/price-list.component.html::p.changeReason"
   ],
   "reasons": {
     "src/app/lab/shared/result-evolution.component.ts::<option>u": "LabResultTrendPointDTO.resultUnit is a String mapped from LabResult.resultUnit (varchar 50), falling back to the test unit. LabResultRequestDTO.resultUnit is a size-bounded String entered in lab-results.html input#lr-resultUnit and submitted by LabResultsComponent.submitForm; units are free text, not enum tokens, and must retain their measurement notation.",
@@ -261,7 +260,6 @@
     "src/app/mortality/mortality.html::e.enteredInErrorReason": "free text the administrator typed (QA D1488), not a wire token",
     "src/app/mortality/mortality.html::x.reason": "free text the doctor typed when disputing a death, not a wire token",
     "src/app/patients/order-review-panel/order-review-panel.component.html::row.reason": "free text the prescriber typed on a held order, not a wire token",
-    "src/app/billing/price-list/price-list.component.html::p.changeReason": "Billing-money plan PR 2: PriceListPriceDTO.changeReason is the free text the hospital admin or accountant typed for a price change (owner-approved pin, 2026-11-16), shown as typed; not a wire token.",
-    "src/app/patient-tracker/patient-tracker.component.html::<option>provider": "PatientTrackerItem.assignedProvider is a clinician display-name String. PatientTrackerMapper builds assignedProvider by concatenating Staff.user.firstName and lastName; the tracker providers() options collect those names. This is person-entered identity text, not a wire enum, and is displayed unchanged."
+    "src/app/billing/price-list/price-list.component.html::p.changeReason": "Billing-money plan PR 2: PriceListPriceDTO.changeReason is the free text the hospital admin or accountant typed for a price change (owner-approved pin, 2026-11-16), shown as typed; not a wire token."
   }
 }

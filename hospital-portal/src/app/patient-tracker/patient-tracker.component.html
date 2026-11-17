@@ -79,8 +79,8 @@
       <span class="sr-only">{{ 'TRACKER.ALL_PROVIDERS' | translate }}</span>
       <select [ngModel]="providerFilter()" (ngModelChange)="providerFilter.set($event)">
         <option value="">{{ 'TRACKER.ALL_PROVIDERS' | translate }}</option>
-        @for (provider of providers(); track provider) {
-          <option [value]="provider">{{ provider }}</option>
+        @for (provider of providers(); track provider.id) {
+          <option [value]="provider.id">{{ provider.name }}</option>
         }
       </select>
     </label>
