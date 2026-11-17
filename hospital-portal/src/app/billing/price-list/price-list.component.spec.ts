@@ -202,6 +202,11 @@ describe('PriceListComponent (billing-money plan PR 2)', () => {
     it(`${role} is offered every write`, () => {
       setup([role]);
       expect(el().querySelector('[data-testid="price-list-new"]')).not.toBeNull();
+      // PR 4: the CSV import opens its dialog; the export is there too.
+      expect(el().querySelector('[data-testid="price-list-export"]')).not.toBeNull();
+      el().querySelector<HTMLButtonElement>('[data-testid="price-list-import"]')!.click();
+      fixture.detectChanges();
+      expect(el().querySelector('[data-testid="price-list-import-dialog"]')).not.toBeNull();
       openDetail();
       expect(el().querySelector('[data-testid="price-list-add-price"]')).not.toBeNull();
       expect(el().querySelector('[data-testid="price-list-edit"]')).not.toBeNull();
@@ -219,6 +224,9 @@ describe('PriceListComponent (billing-money plan PR 2)', () => {
       setup([role], role === 'ROLE_SUPER_ADMIN');
       expect(el().querySelector('[data-testid="price-list-table"]')).not.toBeNull();
       expect(el().querySelector('[data-testid="price-list-new"]')).toBeNull();
+      // PR 4: whoever reads the list may export it; only the maintainers import.
+      expect(el().querySelector('[data-testid="price-list-import"]')).toBeNull();
+      expect(el().querySelector('[data-testid="price-list-export"]')).not.toBeNull();
       openDetail();
       expect(el().querySelector('[data-testid="price-list-add-price"]')).toBeNull();
       expect(el().querySelector('[data-testid="price-list-edit"]')).toBeNull();

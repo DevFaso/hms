@@ -1,5 +1,8 @@
 package com.example.hms.controller;
 
+import com.example.hms.enums.PriceListImportResult;
+import com.example.hms.payload.dto.billing.PriceListImportReportDTO;
+import com.example.hms.service.billing.PriceListImportService;
 import com.example.hms.service.billing.PriceListService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,18 +17,21 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.RequestBuilder;
 
 import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.verify;
@@ -33,6 +39,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -61,6 +68,7 @@ class PriceListAccessTest {
 
     @Autowired private MockMvc mockMvc;
     @MockitoBean private PriceListService service;
+    @MockitoBean private PriceListImportService importService;
 
     private static final UUID ITEM = UUID.randomUUID();
     private static final UUID VERSION = UUID.randomUUID();
@@ -74,7 +82,7 @@ class PriceListAccessTest {
         SecurityContextHolder.clearContext();
     }
 
-    private static List<MockHttpServletRequestBuilder> everyWrite() {
+    private static List<RequestBuilder> everyWrite() {
         return List.of(
             post("/billing/price-list").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"code\":\"CS-GEN\",\"label\":\"Consultation générale\",\"category\":\"CONSULTATION\","
@@ -84,15 +92,26 @@ class PriceListAccessTest {
             post("/billing/price-list/" + ITEM + "/prices").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"unitPrice\":2500,\"effectiveFrom\":\"2026-12-01\",\"changeReason\":\"Hausse\"}"),
             post("/billing/price-list/" + ITEM + "/deactivate").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"reason\":\"Retiré\"}"));
+                .content("{\"reason\":\"Retiré\"}"),
+            importRequest(true),
+            importRequest(false));
     }
 
-    private static List<MockHttpServletRequestBuilder> everyRead() {
+    private static RequestBuilder importRequest(boolean dryRun) {
+        return multipart("/billing/price-list/import")
+            .file(new MockMultipartFile("file", "grille.csv", "text/csv",
+                "code;libelle;categorie;prix\nCS-GEN;Consultation;CONSULTATION;2000\n".getBytes(
+                    java.nio.charset.StandardCharsets.UTF_8)))
+            .param("dryRun", String.valueOf(dryRun));
+    }
+
+    private static List<RequestBuilder> everyRead() {
         return List.of(
             get("/billing/price-list"),
             get("/billing/price-list").param("category", "LAB_TEST").param("includeInactive", "true"),
             get("/billing/price-list/link-options"),
-            get("/billing/price-list/" + ITEM));
+            get("/billing/price-list/" + ITEM),
+            get("/billing/price-list/export.csv"));
     }
 
     @ParameterizedTest(name = "{0} cannot write a price")
@@ -100,11 +119,11 @@ class PriceListAccessTest {
         "ROLE_NURSE", "ROLE_PHARMACIST", "ROLE_PATIENT", "ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_STAFF"})
     void everyoneButTheAdminAndTheAccountantIsRefusedEveryWrite(String role) throws Exception {
         clearInvocations(service);
-        for (MockHttpServletRequestBuilder request : everyWrite()) {
+        for (RequestBuilder request : everyWrite()) {
             actAs(role);
             mockMvc.perform(request).andExpect(status().isForbidden());
         }
-        verifyNoInteractions(service);
+        verifyNoInteractions(service, importService);
     }
 
     @ParameterizedTest(name = "{0} reaches every write")
@@ -122,6 +141,16 @@ class PriceListAccessTest {
         verify(service).update(eq(ITEM), any());
         verify(service).addPrice(eq(ITEM), any());
         verify(service).deactivate(eq(ITEM), any());
+        // PR 4: the CSV import, a dry run then an apply; an apply that refused a row answers 422.
+        when(importService.importFile(any(), anyString(), anyBoolean(), anyBoolean()))
+            .thenReturn(PriceListImportReportDTO.builder().result(PriceListImportResult.DRY_RUN).build());
+        actAs(role);
+        mockMvc.perform(importRequest(true)).andExpect(status().isOk());
+        verify(importService).importFile(any(), eq("grille.csv"), eq(true), eq(false));
+        when(importService.importFile(any(), anyString(), eq(false), anyBoolean()))
+            .thenReturn(PriceListImportReportDTO.builder().result(PriceListImportResult.REFUSED).build());
+        actAs(role);
+        mockMvc.perform(importRequest(false)).andExpect(status().is(422));
     }
 
     @ParameterizedTest(name = "{0} reads the price list")
@@ -129,7 +158,9 @@ class PriceListAccessTest {
         "ROLE_CLAIMS_REVIEWER", "ROLE_SUPER_ADMIN"})
     void theFinanceDeskAndTheSuperAdminRead(String role) throws Exception {
         when(service.list(any(), anyBoolean())).thenReturn(List.of());
-        for (MockHttpServletRequestBuilder request : everyRead()) {
+        when(importService.export()).thenReturn(new byte[] {'c'});
+        when(importService.exportFileName()).thenReturn("grille-tarifaire-2026-11-17.csv");
+        for (RequestBuilder request : everyRead()) {
             actAs(role);
             mockMvc.perform(request).andExpect(status().isOk());
         }
@@ -139,11 +170,11 @@ class PriceListAccessTest {
     @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE", "ROLE_PHARMACIST", "ROLE_PATIENT", "ROLE_LAB_SCIENTIST"})
     void cliniciansAndPatientsDoNotRead(String role) throws Exception {
         clearInvocations(service);
-        for (MockHttpServletRequestBuilder request : everyRead()) {
+        for (RequestBuilder request : everyRead()) {
             actAs(role);
             mockMvc.perform(request).andExpect(status().isForbidden());
         }
-        verifyNoInteractions(service);
+        verifyNoInteractions(service, importService);
     }
 
     @Test

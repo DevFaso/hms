@@ -408,6 +408,13 @@ export class EnumLabelService implements OnDestroy {
       ENDED: 'Ended',
       REPLACED: 'Replaced before it applied',
     },
+    /* Billing-money plan PR 4: what a row of an imported price list does. */
+    priceListImportRowOutcome: {
+      NEW_ITEM: 'New item',
+      NEW_PRICE: 'New price',
+      UNCHANGED: 'Unchanged',
+      REFUSED: 'Refused',
+    },
     priceListSystemKey: {
       CONSULTATION_DEFAULT: 'Default consultation',
       BED_DAY: 'Bed day',

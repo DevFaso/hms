@@ -4,15 +4,24 @@ import com.example.hms.enums.PriceListCategory;
 import com.example.hms.payload.dto.billing.PriceListDeactivateRequestDTO;
 import com.example.hms.payload.dto.billing.PriceListItemDTO;
 import com.example.hms.payload.dto.billing.PriceListItemRequestDTO;
+import com.example.hms.payload.dto.billing.PriceListImportReportDTO;
 import com.example.hms.payload.dto.billing.PriceListItemUpdateRequestDTO;
 import com.example.hms.payload.dto.billing.PriceListLinkOptionsDTO;
 import com.example.hms.payload.dto.billing.PriceListPriceRequestDTO;
+import com.example.hms.enums.PriceListImportResult;
+import com.example.hms.exception.FieldBusinessException;
+import com.example.hms.service.billing.PriceListCsv;
+import com.example.hms.service.billing.PriceListImportService;
 import com.example.hms.service.billing.PriceListService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +32,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,6 +47,10 @@ import java.util.UUID;
  * that role on an assignment AT the acting hospital, so the super-admin's inherited authority alone never writes.
  *
  * <p>There is deliberately no endpoint that edits or deletes a price version: a price changes only by adding one.
+ *
+ * <p>PR 4: the grid from and to a spreadsheet. {@code POST /import} (multipart {@code file}) checks the file by default
+ * ({@code dryRun=true}) and applies it all or nothing with {@code dryRun=false}; only the maintainers reach it.
+ * {@code GET /export.csv} writes the acting hospital's grid in the same format, for whoever reads the list.
  */
 @RestController
 @RequestMapping("/billing/price-list")
@@ -46,7 +62,10 @@ public class PriceListController {
         + "'ROLE_BILLING_SPECIALIST','ROLE_RECEPTIONIST','ROLE_CLAIMS_REVIEWER')";
     static final String MAINTAINERS = "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_ACCOUNTANT')";
 
+    private static final int UNPROCESSABLE = 422;
+
     private final PriceListService priceListService;
+    private final PriceListImportService priceListImportService;
 
     @GetMapping
     @PreAuthorize(READERS)
@@ -61,6 +80,40 @@ public class PriceListController {
     @Operation(summary = "What a price list item of the acting hospital can be linked to")
     public PriceListLinkOptionsDTO linkOptions() {
         return priceListService.linkOptions();
+    }
+
+    @GetMapping(value = "/export.csv", produces = "text/csv")
+    @PreAuthorize(READERS)
+    @Operation(summary = "The acting hospital's price list as a CSV file, in the import's format")
+    public ResponseEntity<byte[]> exportCsv() {
+        byte[] body = priceListImportService.export();
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                .filename(priceListImportService.exportFileName(), StandardCharsets.UTF_8).build().toString())
+            .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+            .body(body);
+    }
+
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize(MAINTAINERS)
+    @Operation(summary = "Check (dryRun=true, the default) or apply (dryRun=false) a price-list CSV file; "
+        + "an apply with any refused row writes nothing (422)")
+    public ResponseEntity<PriceListImportReportDTO> importCsv(
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestParam(defaultValue = "true") boolean dryRun,
+            @RequestParam(defaultValue = "false") boolean replaceScheduled) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new FieldBusinessException(PriceListCsv.FIELD_FILE, "billing.priceList.import.fileEmpty");
+        }
+        if (file.getSize() > PriceListCsv.MAX_BYTES) {
+            throw new FieldBusinessException(PriceListCsv.FIELD_FILE, "billing.priceList.import.fileTooLarge");
+        }
+        PriceListImportReportDTO report = priceListImportService.importFile(file.getBytes(),
+            file.getOriginalFilename(), dryRun, replaceScheduled);
+        // 422 when an apply refused a row and wrote nothing; the body is the same per-row report.
+        return ResponseEntity.status(report.getResult() == PriceListImportResult.REFUSED
+                ? HttpStatusCode.valueOf(UNPROCESSABLE) : HttpStatus.OK)
+            .body(report);
     }
 
     @GetMapping("/{id}")
