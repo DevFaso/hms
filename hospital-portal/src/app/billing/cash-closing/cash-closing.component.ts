@@ -85,7 +85,9 @@ function today(): string {
                   <td>
                     {{ t.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
                     @if (isOut(t.direction)) {
-                      <span class="out-tag">{{ 'BILLING.CASH_CLOSING.REFUND_TAG' | translate }}</span>
+                      <span class="out-tag">{{
+                        'BILLING.CASH_CLOSING.REFUND_TAG' | translate
+                      }}</span>
                     }
                   </td>
                   <td class="numeric">{{ t.count }}</td>
@@ -118,7 +120,9 @@ function today(): string {
                 <tr>
                   <th scope="row" colspan="2">{{ 'BILLING.CASH_CLOSING.NET' | translate }}</th>
                   <td></td>
-                  <td class="numeric" data-testid="cash-closing-net">{{ c.netAmount ?? 0 | cfa }}</td>
+                  <td class="numeric" data-testid="cash-closing-net">
+                    {{ c.netAmount ?? 0 | cfa }}
+                  </td>
                 </tr>
               }
             </tfoot>
@@ -150,7 +154,9 @@ function today(): string {
                   <td class="numeric">
                     {{ isOut(e.direction) ? '−' : '' }}{{ e.amount | cfa }}
                     @if (isOut(e.direction)) {
-                      <span class="out-tag">{{ 'BILLING.CASH_CLOSING.REFUND_TAG' | translate }}</span>
+                      <span class="out-tag">{{
+                        'BILLING.CASH_CLOSING.REFUND_TAG' | translate
+                      }}</span>
                     }
                     @if (isReversed(e.status)) {
                       <span class="reversed-tag">{{

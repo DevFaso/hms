@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  inject,
+  output,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
@@ -31,7 +38,11 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
         </p>
       } @else {
         <table class="queue-table">
-          <caption class="sr-only">{{ 'BILLING.REFUNDS.QUEUE_TITLE' | translate }}</caption>
+          <caption class="sr-only">
+            {{
+              'BILLING.REFUNDS.QUEUE_TITLE' | translate
+            }}
+          </caption>
           <thead>
             <tr>
               <th scope="col">{{ 'BILLING.REFUNDS.INVOICE' | translate }}</th>
@@ -39,7 +50,9 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
               <th scope="col" class="amount">{{ 'BILLING.REFUNDS.AMOUNT' | translate }}</th>
               <th scope="col">{{ 'BILLING.REFUNDS.REASON' | translate }}</th>
               <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-              <th scope="col"><span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span></th>
+              <th scope="col">
+                <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+              </th>
             </tr>
           </thead>
           <tbody>

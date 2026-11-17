@@ -61,8 +61,22 @@ describe('CashClosingComponent (QA D1059)', () => {
         { source: 'BILLING', method: 'CASH', direction: 'OUT', count: 1, amount: 500 },
       ],
       entries: [
-        { id: 'p1', source: 'BILLING', amount: 2000, status: 'CONFIRMED', method: 'CASH', direction: 'IN' },
-        { id: 'r1', source: 'BILLING', amount: 500, status: 'PAID', method: 'CASH', direction: 'OUT' },
+        {
+          id: 'p1',
+          source: 'BILLING',
+          amount: 2000,
+          status: 'CONFIRMED',
+          method: 'CASH',
+          direction: 'IN',
+        },
+        {
+          id: 'r1',
+          source: 'BILLING',
+          amount: 500,
+          status: 'PAID',
+          method: 'CASH',
+          direction: 'OUT',
+        },
       ],
       receivedCount: 1,
       receivedAmount: 2000,
@@ -73,7 +87,9 @@ describe('CashClosingComponent (QA D1059)', () => {
       netAmount: 1500,
     });
     expect(el.querySelectorAll('[data-testid="cash-closing-entries"] tr.money-out').length).toBe(1);
-    expect(el.querySelectorAll('[data-testid="cash-closing-totals"] tbody tr.money-out').length).toBe(1);
+    expect(
+      el.querySelectorAll('[data-testid="cash-closing-totals"] tbody tr.money-out').length,
+    ).toBe(1);
     expect(el.querySelector('[data-testid="cash-closing-refunded"]')?.textContent).toContain('−');
     expect(el.querySelector('[data-testid="cash-closing-net"]')?.textContent).toContain('1');
   });

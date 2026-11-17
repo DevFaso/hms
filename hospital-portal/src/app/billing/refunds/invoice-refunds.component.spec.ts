@@ -58,9 +58,14 @@ describe('InvoiceRefundsComponent (QA D1900)', () => {
         { provide: BillingService, useValue: billing },
         {
           provide: RoleContextService,
-          useValue: { hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => roles.includes(r)) },
+          useValue: {
+            hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => roles.includes(r)),
+          },
         },
-        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
       ],
     });
     fixture = TestBed.createComponent(InvoiceRefundsComponent);
@@ -96,12 +101,16 @@ describe('InvoiceRefundsComponent (QA D1900)', () => {
     tick(50);
     const dialog = host().querySelector('[data-testid="refund-request-dialog"]') as HTMLElement;
     expect(dialog).not.toBeNull();
-    expect(dialog.contains(document.activeElement)).withContext('focus inside the dialog').toBeTrue();
+    expect(dialog.contains(document.activeElement))
+      .withContext('focus inside the dialog')
+      .toBeTrue();
     // The amount starts at what is owed back, and the no-card notice is shown.
     expect(fixture.componentInstance.amount()).toBe(500);
     expect(host().querySelector('[data-testid="no-card-notice"]')).not.toBeNull();
 
-    dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
     fixture.detectChanges();
     tick(50);
     expect(host().querySelector('[data-testid="refund-request-dialog"]')).toBeNull();
@@ -145,17 +154,30 @@ describe('InvoiceRefundsComponent (QA D1900)', () => {
     c.submitRequest();
     expect(billing.requestRefund).toHaveBeenCalledWith(
       'inv-13',
-      jasmine.objectContaining({ amount: 500, method: 'CASH', reason: 'Trop-perçu du ticket modérateur' }),
+      jasmine.objectContaining({
+        amount: 500,
+        method: 'CASH',
+        reason: 'Trop-perçu du ticket modérateur',
+      }),
     );
     const sent = billing.requestRefund.calls.mostRecent().args[1];
     expect(sent.clientRequestId).toBeTruthy();
   });
 
   it('an approver decides a request someone else made, never their own (D-3)', () => {
-    render(['ROLE_HOSPITAL_ADMIN'], invoice(), [requested, { ...requested, id: 'rf-2', requestedByMe: true }]);
-    expect(host().querySelector('[data-testid="refund-rf-1"] [data-testid="refund-approve"]')).not.toBeNull();
-    expect(host().querySelector('[data-testid="refund-rf-2"] [data-testid="refund-approve"]')).toBeNull();
-    expect(host().querySelector('[data-testid="refund-rf-2"] [data-testid="refund-own-request"]')).not.toBeNull();
+    render(['ROLE_HOSPITAL_ADMIN'], invoice(), [
+      requested,
+      { ...requested, id: 'rf-2', requestedByMe: true },
+    ]);
+    expect(
+      host().querySelector('[data-testid="refund-rf-1"] [data-testid="refund-approve"]'),
+    ).not.toBeNull();
+    expect(
+      host().querySelector('[data-testid="refund-rf-2"] [data-testid="refund-approve"]'),
+    ).toBeNull();
+    expect(
+      host().querySelector('[data-testid="refund-rf-2"] [data-testid="refund-own-request"]'),
+    ).not.toBeNull();
   });
 
   it('a cashier hands over an approved refund but cannot approve one', () => {
@@ -164,7 +186,9 @@ describe('InvoiceRefundsComponent (QA D1900)', () => {
       { ...requested, id: 'rf-3', status: 'APPROVED' },
     ]);
     expect(host().querySelector('[data-testid="refund-approve"]')).toBeNull();
-    expect(host().querySelector('[data-testid="refund-rf-3"] [data-testid="refund-pay"]')).not.toBeNull();
+    expect(
+      host().querySelector('[data-testid="refund-rf-3"] [data-testid="refund-pay"]'),
+    ).not.toBeNull();
   });
 
   it('a handed-over refund shows when and by whom, with its receipt', () => {
@@ -184,7 +208,9 @@ describe('InvoiceRefundsComponent (QA D1900)', () => {
     (host().querySelector('[data-testid="refund-decision-submit"]') as HTMLButtonElement).click();
     fixture.detectChanges();
     tick();
-    expect(host().querySelector('#refund-decision-reason')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host().querySelector('#refund-decision-reason')?.getAttribute('aria-invalid')).toBe(
+      'true',
+    );
     expect(billing.rejectRefund).not.toHaveBeenCalled();
   }));
 });

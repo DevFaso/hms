@@ -50,7 +50,9 @@ const REFERENCE_REQUIRED: readonly string[] = ['MOBILE_MONEY', 'BANK_TRANSFER'];
 
 /** A fresh idempotency key for one refund request (kept across retries of the same dialog). */
 function newRequestKey(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return (
+    globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
 }
 
 /**
@@ -65,7 +67,15 @@ function newRequestKey(): string {
 @Component({
   selector: 'app-invoice-refunds',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, KeyLabelPipe, ServerTimePipe, DialogA11yDirective],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    KeyLabelPipe,
+    ServerTimePipe,
+    DialogA11yDirective,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './invoice-refunds.component.html',
   styleUrl: './invoice-refunds.component.scss',
@@ -206,7 +216,10 @@ export class InvoiceRefundsComponent {
       });
     }
     if (this.needsOperator() && !this.operator()) {
-      refused.push({ id: OPERATOR_ID, message: this.translate.instant('BILLING.REFUNDS.OPERATOR_REQUIRED') });
+      refused.push({
+        id: OPERATOR_ID,
+        message: this.translate.instant('BILLING.REFUNDS.OPERATOR_REQUIRED'),
+      });
     }
     if (this.needsReference() && !this.reference().trim()) {
       refused.push({
@@ -215,7 +228,10 @@ export class InvoiceRefundsComponent {
       });
     }
     if (!this.reason().trim()) {
-      refused.push({ id: REASON_ID, message: this.translate.instant('BILLING.REFUNDS.REASON_REQUIRED') });
+      refused.push({
+        id: REASON_ID,
+        message: this.translate.instant('BILLING.REFUNDS.REASON_REQUIRED'),
+      });
     }
     if (refused.length > 0) {
       // The submit is never dead: every missing field is marked where it is typed, the first one focused.
@@ -251,7 +267,9 @@ export class InvoiceRefundsComponent {
             reason: REASON_ID,
           });
           if (marked.length === 0) {
-            this.toast.error(refusalReason(err) ?? this.translate.instant('BILLING.REFUNDS.FAILED'));
+            this.toast.error(
+              refusalReason(err) ?? this.translate.instant('BILLING.REFUNDS.FAILED'),
+            );
           }
         },
       });
@@ -260,13 +278,17 @@ export class InvoiceRefundsComponent {
   approve(r: InvoiceRefund): void {
     if (this.busy()) return;
     this.busy.set(true);
-    this.billing.approveRefund(r.invoiceId, r.id).subscribe(this.stepObserver(r, 'BILLING.REFUNDS.APPROVED_TOAST'));
+    this.billing
+      .approveRefund(r.invoiceId, r.id)
+      .subscribe(this.stepObserver(r, 'BILLING.REFUNDS.APPROVED_TOAST'));
   }
 
   handOver(r: InvoiceRefund): void {
     if (this.busy()) return;
     this.busy.set(true);
-    this.billing.payRefund(r.invoiceId, r.id).subscribe(this.stepObserver(r, 'BILLING.REFUNDS.PAID_TOAST'));
+    this.billing
+      .payRefund(r.invoiceId, r.id)
+      .subscribe(this.stepObserver(r, 'BILLING.REFUNDS.PAID_TOAST'));
   }
 
   openDecision(r: InvoiceRefund, mode: 'reject' | 'cancel'): void {
@@ -303,14 +325,18 @@ export class InvoiceRefundsComponent {
         this.decision.set(null);
         this.toast.success(
           this.translate.instant(
-            open.mode === 'reject' ? 'BILLING.REFUNDS.REJECTED_TOAST' : 'BILLING.REFUNDS.CANCELLED_TOAST',
+            open.mode === 'reject'
+              ? 'BILLING.REFUNDS.REJECTED_TOAST'
+              : 'BILLING.REFUNDS.CANCELLED_TOAST',
           ),
         );
         this.afterStep(r.invoiceId);
       },
       error: (err: unknown) => {
         this.busy.set(false);
-        const marked = markServerFieldErrors(this.host.nativeElement, err, { reason: DECISION_REASON_ID });
+        const marked = markServerFieldErrors(this.host.nativeElement, err, {
+          reason: DECISION_REASON_ID,
+        });
         if (marked.length === 0) {
           this.toast.error(refusalReason(err) ?? this.translate.instant('BILLING.REFUNDS.FAILED'));
         }

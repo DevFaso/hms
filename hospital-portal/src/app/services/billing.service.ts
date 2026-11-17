@@ -497,7 +497,9 @@ export class BillingService {
   }
 
   /** The hospital's refunds awaiting a decision (REQUESTED) or a hand-over (APPROVED). */
-  getRefundQueue(statuses: InvoiceRefundStatus[] = ['REQUESTED', 'APPROVED']): Observable<InvoiceRefund[]> {
+  getRefundQueue(
+    statuses: InvoiceRefundStatus[] = ['REQUESTED', 'APPROVED'],
+  ): Observable<InvoiceRefund[]> {
     let params = new HttpParams();
     for (const status of statuses) params = params.append('status', status);
     return this.http.get<InvoiceRefund[]>('/billing-invoices/refunds', { params });

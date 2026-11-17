@@ -256,7 +256,9 @@
                             | translate
                               : {
                                   amount: (f.amount | cfa),
-                                  date: f.paidAt ? (f.paidAt | serverTime | date: 'mediumDate') : '—',
+                                  date: f.paidAt
+                                    ? (f.paidAt | serverTime | date: 'mediumDate')
+                                    : '—',
                                 }
                         }}</span>
                         @if (f.method) {

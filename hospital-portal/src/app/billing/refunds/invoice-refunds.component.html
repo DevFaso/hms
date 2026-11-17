@@ -15,7 +15,9 @@
   </div>
   @if (invoice().amountRefunded) {
     <p class="field-hint" data-testid="refunded-total">
-      {{ 'BILLING.REFUNDS.REFUNDED_TOTAL' | translate: { amount: (invoice().amountRefunded | cfa) } }}
+      {{
+        'BILLING.REFUNDS.REFUNDED_TOTAL' | translate: { amount: (invoice().amountRefunded | cfa) }
+      }}
     </p>
   }
 
@@ -27,7 +29,11 @@
     <p class="field-hint" data-testid="refunds-empty">{{ 'BILLING.REFUNDS.EMPTY' | translate }}</p>
   } @else {
     <table class="refunds-table">
-      <caption class="sr-only">{{ 'BILLING.REFUNDS.TITLE' | translate }}</caption>
+      <caption class="sr-only">
+        {{
+          'BILLING.REFUNDS.TITLE' | translate
+        }}
+      </caption>
       <thead>
         <tr>
           <th scope="col">{{ 'BILLING.REFUNDS.REQUESTED_ON' | translate }}</th>
@@ -164,7 +170,12 @@
 
 <!-- ═══ REQUEST A REFUND (QA D1900) ═══ -->
 @if (requestOpen()) {
-  <div class="modal-backdrop" tabindex="-1" (click)="closeRequest()" (keydown.escape)="closeRequest()">
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeRequest()"
+    (keydown.escape)="closeRequest()"
+  >
     <div
       class="modal"
       appDialogA11y
@@ -179,7 +190,11 @@
         <h2 id="refund-request-title">
           {{ 'BILLING.REFUNDS.REQUEST_TITLE' | translate }} — {{ invoice().invoiceNumber }}
         </h2>
-        <button class="modal-close" (click)="closeRequest()" [attr.aria-label]="'COMMON.CLOSE' | translate">
+        <button
+          class="modal-close"
+          (click)="closeRequest()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
@@ -202,7 +217,12 @@
         </div>
         <div class="field">
           <label for="refund-method">{{ 'BILLING.REFUNDS.METHOD' | translate }} *</label>
-          <select id="refund-method" required [ngModel]="method()" (ngModelChange)="method.set($event)">
+          <select
+            id="refund-method"
+            required
+            [ngModel]="method()"
+            (ngModelChange)="method.set($event)"
+          >
             @for (m of methods; track m) {
               <option [value]="m">{{ m | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</option>
             }
@@ -211,7 +231,12 @@
         @if (needsOperator()) {
           <div class="field">
             <label for="refund-operator">{{ 'BILLING.REFUNDS.OPERATOR' | translate }} *</label>
-            <select id="refund-operator" required [ngModel]="operator()" (ngModelChange)="operator.set($event)">
+            <select
+              id="refund-operator"
+              required
+              [ngModel]="operator()"
+              (ngModelChange)="operator.set($event)"
+            >
               <option value="">{{ 'BILLING.REFUNDS.OPERATOR_PICK' | translate }}</option>
               @for (o of operators; track o) {
                 <option [value]="o">{{ o | keyLabel: 'BILLING.REFUNDS.OPERATORS.' }}</option>
@@ -251,7 +276,9 @@
         <p class="muted-note">{{ 'BILLING.REFUNDS.APPROVAL_NOTE' | translate }}</p>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeRequest()">{{ 'COMMON.CANCEL' | translate }}</button>
+        <button class="btn-secondary" (click)="closeRequest()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button
           class="btn-primary"
           data-testid="refund-request-submit"
@@ -267,7 +294,12 @@
 
 <!-- ═══ REJECT OR CANCEL A REFUND ═══ -->
 @if (decision(); as d) {
-  <div class="modal-backdrop" tabindex="-1" (click)="closeDecision()" (keydown.escape)="closeDecision()">
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeDecision()"
+    (keydown.escape)="closeDecision()"
+  >
     <div
       class="modal"
       appDialogA11y
@@ -285,7 +317,11 @@
               | translate: { amount: (d.refund.amount | cfa) }
           }}
         </h2>
-        <button class="modal-close" (click)="closeDecision()" [attr.aria-label]="'COMMON.CLOSE' | translate">
+        <button
+          class="modal-close"
+          (click)="closeDecision()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
@@ -307,7 +343,9 @@
         </p>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeDecision()">{{ 'COMMON.CANCEL' | translate }}</button>
+        <button class="btn-secondary" (click)="closeDecision()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button
           class="btn-primary"
           data-testid="refund-decision-submit"
