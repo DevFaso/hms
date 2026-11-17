@@ -131,6 +131,23 @@ describe('RoiComponent', () => {
     expect(component.total()).toBe(4);
   });
 
+  it('keeps the merged All queue readable when a request date is missing', () => {
+    fixture.detectChanges();
+    roiService.worklist.and.returnValue(
+      of(page([request({ requestedOn: null as unknown as string })])),
+    );
+    component.setStatus('ALL');
+    expect(component.loadFailed()).toBeFalse();
+    expect(component.rows().length).toBe(4);
+  });
+
+  it('omits unknown hospital confirmation in the decision dialog', () => {
+    fixture.detectChanges();
+    component.openDecision(request(), 'fulfil');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.hospital-context')).toBeNull();
+  });
+
   it('does not present a partial All queue as complete when one status fails', () => {
     fixture.detectChanges();
     roiService.worklist.and.callFake((status) =>
