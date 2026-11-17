@@ -667,3 +667,50 @@
     }
   }
 }
+
+.workspace-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: end;
+  margin: 1rem 0;
+  padding: 1rem;
+  background: white;
+  border-radius: 12px;
+}
+.workspace-tools label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.workspace-tools input,
+.workspace-tools select {
+  padding: 0.65rem;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 8px;
+}
+details.care-maternity-guide {
+  display: block;
+  padding: 16px 24px;
+}
+details.care-maternity-guide summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+details.care-maternity-guide > .material-symbols-outlined {
+  display: none;
+}
+.summary-overdue {
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.summary-overdue[aria-pressed='true'] {
+  outline: 2px solid var(--primary);
+}
+.btn-primary {
+  background: var(--primary);
+}
+.btn-primary:hover {
+  background: var(--primary-dark, #0b6b60);
+}

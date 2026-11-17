@@ -102,6 +102,21 @@ describe('MaternityComponent — tabs', () => {
     });
   });
 
+  it('overdue, urgency and status filters narrow referral rows without changing the source', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    cmp.referrals.set([
+      { id: 'a', status: 'SUBMITTED', urgency: 'URGENT', slaDueAt: '2020-01-01T00:00:00Z' },
+      { id: 'b', status: 'COMPLETED', urgency: 'URGENT', slaDueAt: '2020-01-01T00:00:00Z' },
+    ]);
+    cmp.overdueOnly.set(true);
+    cmp.referralUrgency.set('URGENT');
+    cmp.referralStatus.set('SUBMITTED');
+    expect(cmp.visibleReferrals().map((row) => row.id)).toEqual(['a']);
+    expect(cmp.referrals().length).toBe(2);
+    expect(cmp.overdueMinutes(cmp.referrals()[0])).toBeGreaterThan(0);
+  });
+
   it('gives a receptionist the prenatal tab alone, and loads nothing it would be refused', () => {
     create(['ROLE_RECEPTIONIST']);
     expect(host().querySelector('h1')?.textContent?.trim()).toBe('Maternité');

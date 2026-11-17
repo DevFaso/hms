@@ -32,7 +32,7 @@
       <label class="lookup-field" for="known-report"
         >{{ 'SIGNATURES.KNOWN_REPORTS' | translate }}
         <select id="known-report" [ngModel]="''" (ngModelChange)="chooseKnownReport($event)">
-          <option value="">{{ 'SIGNATURES.REPORT_TYPE' | translate }}</option>
+          <option value="">{{ 'SIGNATURES.CHOOSE_REPORT' | translate }}</option>
           @for (report of knownReports(); track report.id) {
             <option [value]="report.id">
               {{ report.reportType | enumLabel: 'signatureType' }} &middot;

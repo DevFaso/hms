@@ -33,7 +33,7 @@
   @if (section() === 'social') {
     <div class="section-toolbar">
       <h3>{{ 'MED_HISTORY.SOCIAL_TITLE' | translate }}</h3>
-      @if (canEditSocialFamily) {
+      @if (canEditSocialFamily()) {
         <button type="button" class="btn-primary btn-sm" (click)="openSocialForm()">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'MED_HISTORY.NEW_SOCIAL_VERSION' | translate }}
@@ -183,7 +183,7 @@
           {{ 'MED_HISTORY.SCREENING_NEEDED' | translate }}
         </button>
       </div>
-      @if (canEditSocialFamily) {
+      @if (canEditSocialFamily()) {
         <button type="button" class="btn-primary btn-sm" (click)="openCreateFamily()">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'MED_HISTORY.ADD_FAMILY' | translate }}
@@ -246,7 +246,7 @@
                   }
                 </td>
                 <td>
-                  @if (canEditSocialFamily) {
+                  @if (canEditSocialFamily()) {
                     <button
                       [attr.aria-label]="'COMMON.EDIT' | translate"
                       type="button"
@@ -270,7 +270,7 @@
   @if (section() === 'immunizations') {
     <div class="section-toolbar">
       <h3>{{ 'MED_HISTORY.IMMUNIZATIONS_TITLE' | translate }}</h3>
-      @if (canEditImmunizations) {
+      @if (canEditImmunizations()) {
         <button type="button" class="btn-primary btn-sm" (click)="openCreateImmunization()">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'MED_HISTORY.ADD_IMMUNIZATION' | translate }}
@@ -337,7 +337,7 @@
                   }
                 </td>
                 <td class="actions-cell">
-                  @if (canEditImmunizations) {
+                  @if (canEditImmunizations()) {
                     <button
                       [attr.aria-label]="'COMMON.EDIT' | translate"
                       type="button"
@@ -348,7 +348,7 @@
                       <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
-                  @if (canMarkReminder && im.nextDoseDueDate && !im.reminderSent) {
+                  @if (canMarkReminder() && im.nextDoseDueDate && !im.reminderSent) {
                     <button
                       [attr.aria-label]="'MED_HISTORY.MARK_REMINDER' | translate"
                       type="button"

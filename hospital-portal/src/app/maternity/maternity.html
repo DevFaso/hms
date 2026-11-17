@@ -6,6 +6,11 @@
       <p class="page-subtitle">{{ 'MATERNITY.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      @if (activeTab() === 'board' || activeTab() === 'referrals') {
+        <button type="button" class="btn-secondary" (click)="refreshWorkspace()">
+          {{ 'COMMON.REFRESH' | translate }}
+        </button>
+      }
       @if (activeTab() === 'board' && canManageHistory) {
         <button class="btn-primary" (click)="openCreateHistory()">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
@@ -21,13 +26,13 @@
     </div>
   </div>
 
-  <aside class="care-maternity-guide">
+  <details class="care-maternity-guide">
+    <summary>{{ 'CARE_DASH.MATERNITY_GUIDE' | translate }}</summary>
     <span class="material-symbols-outlined" aria-hidden="true">pregnancy</span>
     <div>
-      <h2>{{ 'CARE_DASH.MATERNITY_GUIDE' | translate }}</h2>
       <p>{{ 'CARE_DASH.MATERNITY_HINT' | translate }}</p>
     </div>
-  </aside>
+  </details>
   <div class="filter-bar">
     <div class="tabs">
       @if (canManageHistory) {
@@ -137,20 +142,41 @@
       <span class="muted">{{ boardTotal() }} {{ 'MATERNITY.RECORDS' | translate }}</span>
     </div>
 
+    <div class="workspace-tools">
+      <label
+        >{{ 'COMMON.SEARCH_PATIENT' | translate
+        }}<input
+          type="search"
+          [ngModel]="boardSearch()"
+          (ngModelChange)="boardSearch.set($event)" /></label
+      ><span>{{ 'CARE_DASH.PAGE_FILTERS' | translate }}</span>
+    </div>
+    @if (boardSearch()) {
+      <button type="button" class="btn-secondary" (click)="boardSearch.set('')">
+        {{ 'COMMON.CLEAR' | translate }}
+      </button>
+    }
     @if (historiesLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
         <p>{{ 'COMMON.LOADING' | translate }}</p>
       </div>
     }
-    @if (!historiesLoading() && histories().length === 0) {
+    @if (!historiesLoading() && visibleHistories().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined empty-icon">pregnant_woman</span>
-        <h3>{{ 'MATERNITY.NO_HISTORIES' | translate }}</h3>
-        <p>{{ 'MATERNITY.NO_HISTORIES_HINT' | translate }}</p>
+        <h3>
+          {{ (histories().length ? 'CARE_DASH.NO_MATCHES' : 'MATERNITY.NO_HISTORIES') | translate }}
+        </h3>
+        <p>
+          {{
+            (histories().length ? 'CARE_DASH.PAGE_FILTERS' : 'MATERNITY.NO_HISTORIES_HINT')
+              | translate
+          }}
+        </p>
       </div>
     }
-    @if (!historiesLoading() && histories().length > 0) {
+    @if (!historiesLoading() && visibleHistories().length > 0) {
       <div
         class="data-table"
         tabindex="0"
@@ -172,7 +198,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (h of histories(); track h.id) {
+            @for (h of visibleHistories(); track h.id) {
               <tr class="data-row">
                 <td>{{ patientName(h.patientId) }}</td>
                 <td>{{ h.recordedDate | serverTime | dateTime }}</td>
@@ -332,10 +358,15 @@
           <span class="summary-value">{{ s.completed }}</span>
           <span class="summary-label">{{ 'MATERNITY.SUM_COMPLETED' | translate }}</span>
         </div>
-        <div class="summary-item summary-overdue">
+        <button
+          type="button"
+          class="summary-item summary-overdue"
+          [attr.aria-pressed]="overdueOnly()"
+          (click)="overdueOnly.set(!overdueOnly())"
+        >
           <span class="summary-value">{{ s.overdue }}</span>
           <span class="summary-label">{{ 'MATERNITY.SUM_OVERDUE' | translate }}</span>
-        </div>
+        </button>
       </div>
     }
 
@@ -373,6 +404,8 @@
       @if (referralMode() === 'patient') {
         <div class="mode-picker">
           <app-patient-picker
+            [showMrnHint]="true"
+            [hospitalId]="hospitalId"
             inputId="referral-filter-patient"
             [selected]="referralPatient()"
             (selectedChange)="onReferralPatientPicked($event)"
@@ -381,16 +414,70 @@
       }
     </div>
 
+    <div class="workspace-tools">
+      <label
+        >{{ 'CARE_DASH.SEARCH_PATIENT_RECORD' | translate
+        }}<input
+          type="search"
+          [ngModel]="referralSearch()"
+          (ngModelChange)="referralSearch.set($event)"
+      /></label>
+      <label
+        >{{ 'MATERNITY.URGENCY' | translate
+        }}<select [ngModel]="referralUrgency()" (ngModelChange)="referralUrgency.set($event)">
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
+          @for (value of ['ROUTINE', 'PRIORITY', 'URGENT']; track value) {
+            <option [value]="value">{{ 'MATERNITY.URGENCY_' + value | translate }}</option>
+          }
+        </select></label
+      >
+      <label
+        >{{ 'COMMON.STATUS' | translate
+        }}<select [ngModel]="referralStatus()" (ngModelChange)="referralStatus.set($event)">
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
+          @for (
+            value of ['SUBMITTED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+            track value
+          ) {
+            <option [value]="value">{{ 'MATERNITY.STATUS_' + value | translate }}</option>
+          }
+        </select></label
+      >
+      <label
+        ><input
+          type="checkbox"
+          [ngModel]="overdueOnly()"
+          (ngModelChange)="overdueOnly.set($event)"
+        />{{ 'MATERNITY.OVERDUE' | translate }}</label
+      >
+      <span>{{ 'CARE_DASH.PAGE_FILTERS' | translate }}</span>
+    </div>
+    @if (referralSearch() || referralStatus() || referralUrgency() || overdueOnly()) {
+      <button
+        type="button"
+        class="btn-secondary"
+        (click)="
+          referralSearch.set('');
+          referralStatus.set('');
+          referralUrgency.set('');
+          overdueOnly.set(false)
+        "
+      >
+        {{ 'COMMON.CLEAR' | translate }}
+      </button>
+    }
     @if (referralsLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
         <p>{{ 'COMMON.LOADING' | translate }}</p>
       </div>
     }
-    @if (!referralsLoading() && referrals().length === 0) {
+    @if (!referralsLoading() && visibleReferrals().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined empty-icon">outbound</span>
-        <h3>{{ 'MATERNITY.NO_REFERRALS' | translate }}</h3>
+        <h3>
+          {{ (referrals().length ? 'CARE_DASH.NO_MATCHES' : 'MATERNITY.NO_REFERRALS') | translate }}
+        </h3>
         <p>
           {{
             (referralMode() === 'patient' && !referralPatient()
@@ -401,7 +488,7 @@
         </p>
       </div>
     }
-    @if (!referralsLoading() && referrals().length > 0) {
+    @if (!referralsLoading() && visibleReferrals().length > 0) {
       <div
         class="data-table"
         tabindex="0"
@@ -412,6 +499,7 @@
           <thead>
             <tr>
               <th scope="col">{{ 'MATERNITY.PATIENT' | translate }}</th>
+              <th scope="col">{{ 'CARE_DASH.RECEIVING_TEAM' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.CARE_CONTEXT' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.URGENCY' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.TRANSFER_TYPE' | translate }}</th>
@@ -421,9 +509,12 @@
             </tr>
           </thead>
           <tbody>
-            @for (r of referrals(); track r.id) {
+            @for (r of visibleReferrals(); track r.id) {
               <tr class="data-row" [class.row-overdue]="isOverdue(r)">
-                <td>{{ patientDisplay(r) }}</td>
+                <td>
+                  {{ patientDisplay(r) }}<small>{{ r.patient?.mrn }}</small>
+                </td>
+                <td>{{ r.obgyn?.displayName || ('CARE_DASH.UNASSIGNED' | translate) }}</td>
                 <td>{{ 'MATERNITY.CONTEXT_' + r.careContext | translate }}</td>
                 <td>
                   <span class="{{ urgencyClass(r.urgency) }}">
@@ -434,7 +525,9 @@
                 <td>
                   {{ r.slaDueAt ? (r.slaDueAt | serverTime | date: 'short') : '—' }}
                   @if (isOverdue(r)) {
-                    <span class="risk-badge risk-high">{{ 'MATERNITY.OVERDUE' | translate }}</span>
+                    <span class="risk-badge risk-high">{{
+                      'CARE_DASH.OVERDUE_MINUTES' | translate: { count: overdueMinutes(r) }
+                    }}</span>
                   }
                 </td>
                 <td>
@@ -669,6 +762,8 @@
           <div class="field">
             <label for="history-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
             <app-patient-picker
+              [showMrnHint]="true"
+              [hospitalId]="hospitalId"
               required
               inputId="history-patient"
               [selected]="selectedPatient()"
@@ -1058,6 +1153,8 @@
         <div class="field">
           <label for="referral-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
           <app-patient-picker
+            [showMrnHint]="true"
+            [hospitalId]="hospitalId"
             required
             inputId="referral-patient"
             [selected]="referralFormPatient()"
@@ -1214,7 +1311,9 @@
               {{ 'MATERNITY.SLA_DUE' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ r.slaDueAt | serverTime | dateTime }}
               @if (isOverdue(r)) {
-                <span class="risk-badge risk-high">{{ 'MATERNITY.OVERDUE' | translate }}</span>
+                <span class="risk-badge risk-high">{{
+                  'CARE_DASH.OVERDUE_MINUTES' | translate: { count: overdueMinutes(r) }
+                }}</span>
               }
             </p>
           }

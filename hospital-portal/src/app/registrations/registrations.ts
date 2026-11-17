@@ -220,10 +220,7 @@ export class RegistrationsComponent implements OnInit {
   deleteBusy = signal(false);
 
   ngOnInit(): void {
-    this.hospitalId =
-      this.roleContext.effectiveHospitalIdForRequest() ??
-      this.roleContext.activeHospitalId ??
-      this.auth.getHospitalId();
+    this.hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     this.load();
   }
 

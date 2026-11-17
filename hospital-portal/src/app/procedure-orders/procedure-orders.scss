@@ -45,7 +45,7 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.6rem 1.25rem;
-    background: #6366f1;
+    background: var(--primary);
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -53,7 +53,7 @@
     cursor: pointer;
 
     &:hover {
-      background: #4f46e5;
+      background: var(--primary-dark, #0b6b60);
     }
 
     .material-symbols-outlined {
@@ -368,7 +368,7 @@
   }
 
   .btn-primary {
-    background: #6366f1;
+    background: var(--primary);
     border: none;
     color: #fff;
 
@@ -402,5 +402,22 @@
 
   .modal {
     width: 98vw;
+  }
+}
+
+.procedure-tools {
+  label:first-child {
+    flex: 1 1 20rem;
+  }
+  input,
+  select {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    padding: 0.65rem 0.8rem;
+    font: inherit;
+    box-sizing: border-box;
   }
 }

@@ -242,3 +242,10 @@ table {
 .card .hint.error-hint {
   color: #b45309;
 }
+
+.care-toolbar select {
+  margin-left: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 8px;
+}

@@ -18,6 +18,8 @@ import {
   ProScreeningService,
 } from '../services/pro-screening.service';
 import { AuthService } from '../auth/auth.service';
+import { RoleContextService } from '../core/role-context.service';
+import { roleContextStub } from '../testing/role-context.stub';
 import { ToastService } from '../core/toast.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 
@@ -138,6 +140,14 @@ describe('PostpartumTabComponent — screening', () => {
         { provide: ToastService, useValue: toastSpy },
         { provide: PatientService, useValue: patientSpy },
         { provide: AuthService, useValue: authSpy },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: true,
+            hospitalId: 'h1',
+            roles: ['ROLE_SUPER_ADMIN'],
+          }),
+        },
       ],
     }).compileComponents();
 
@@ -161,7 +171,8 @@ describe('PostpartumTabComponent — screening', () => {
     expect(text).not.toContain('MATERNITY.PICK_PATIENT_HINT');
   });
 
-  it('D86: the first postpartum observation carries the acting hospital', () => {
+  it('D86: the first postpartum observation carries the selected hospital instead of the primary', () => {
+    TestBed.inject(RoleContextService).scopeToHospital('h2');
     postpartumSpy.createObservation.and.returnValue(
       of({ alerts: [] } as unknown as PostpartumObservationResponse),
     );
@@ -171,7 +182,7 @@ describe('PostpartumTabComponent — screening', () => {
     component.observationForm.pulseBpm = 88;
     component.submitObservation();
     const body = postpartumSpy.createObservation.calls.mostRecent().args[1];
-    expect(body.hospitalId).toBe('h1');
+    expect(body.hospitalId).toBe('h2');
   });
 
   it('QA D1592: twins name the baby the assessment is for; a single birth asks nothing', () => {

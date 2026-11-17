@@ -7,8 +7,11 @@
         <p class="page-subtitle">{{ 'CARE_DASH.PANEL_SUBTITLE' | translate }}</p>
       }
     </div>
-    @if (canEmpanel()) {
-      <div class="header-actions">
+    <div class="header-actions">
+      <button type="button" class="btn-secondary" (click)="refresh()">
+        {{ 'COMMON.REFRESH' | translate }}
+      </button>
+      @if (canEmpanel()) {
         <button
           type="button"
           class="btn-primary"
@@ -18,8 +21,8 @@
           <span class="material-symbols-outlined">person_add</span>
           {{ 'PANEL.ASSIGN' | translate }}
         </button>
-      </div>
-    }
+      }
+    </div>
   </header>
   @if (isAdmin()) {
     <section class="care-overview">
@@ -43,81 +46,81 @@
         <div class="care-metric">
           <span class="material-symbols-outlined" aria-hidden="true">person</span>
           <div>
-            <strong>{{
-              myPanelLoading() || myPanelFailed() || noStaffProfile() ? '—' : myPanelTotal()
-            }}</strong
-            ><span>{{ 'CARE_DASH.PERSONAL_PANEL' | translate }}</span>
+            <strong>{{ overviewLoading() || overviewFailed() ? '—' : activeAssignments() }}</strong
+            ><span>{{ 'PANEL.ACTIVE_ASSIGNMENTS' | translate }}</span>
           </div>
         </div>
       </div>
-      <p class="care-scope-note">{{ 'CARE_DASH.LOADED_SCOPE' | translate }}</p>
+      <p class="care-scope-note">{{ 'CARE_DASH.LOCAL_FILTERS' | translate }}</p>
     </section>
   }
 
   <!-- ── My panel ─────────────────────────────────────────────────── -->
-  <section class="card">
-    <h2 id="my-panel-heading">{{ 'PANEL.MY_PANEL' | translate }}</h2>
-    @if (myPanelFailed()) {
-      <div role="alert">
-        <p class="hint error-hint">{{ 'PANEL.LOAD_FAILED' | translate }}</p>
-        <button type="button" class="btn-secondary" (click)="loadMyPanel()">
-          {{ 'COMMON.RETRY' | translate }}
-        </button>
-      </div>
-    } @else if (noStaffProfile()) {
-      <p class="hint">{{ 'PANEL.NO_STAFF_PROFILE' | translate }}</p>
-    } @else if (myPanelLoading()) {
-      <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
-    } @else if (myPanelRows().length === 0) {
-      <p class="hint">{{ 'PANEL.EMPTY' | translate }}</p>
-    } @else {
-      <p class="count-line">
-        {{ 'PANEL.COUNT' | translate: { count: myPanelTotal() } }}
-      </p>
-      @if (myPanelTruncated()) {
-        <p class="hint">
-          {{
-            'PANEL.SHOWING_FIRST'
-              | translate: { shown: myPanelRows().length, total: myPanelTotal() }
-          }}
+  @if (!isAdmin() || (!noStaffProfile() && !myPanelLoading())) {
+    <section class="card">
+      <h2 id="my-panel-heading">{{ 'PANEL.MY_PANEL' | translate }}</h2>
+      @if (myPanelFailed()) {
+        <div role="alert">
+          <p class="hint error-hint">{{ 'PANEL.LOAD_FAILED' | translate }}</p>
+          <button type="button" class="btn-secondary" (click)="loadMyPanel()">
+            {{ 'COMMON.RETRY' | translate }}
+          </button>
+        </div>
+      } @else if (noStaffProfile()) {
+        <p class="hint">{{ 'PANEL.NO_STAFF_PROFILE' | translate }}</p>
+      } @else if (myPanelLoading()) {
+        <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
+      } @else if (myPanelRows().length === 0) {
+        <p class="hint">{{ 'PANEL.EMPTY' | translate }}</p>
+      } @else {
+        <p class="count-line">
+          {{ 'PANEL.COUNT' | translate: { count: myPanelTotal() } }}
         </p>
-      }
-      <div class="table-scroll" tabindex="0" role="region" aria-labelledby="my-panel-heading">
-        <table>
-          <thead>
-            <tr>
-              <th>{{ 'PANEL.PATIENT' | translate }}</th>
-              <th>{{ 'PANEL.ROLE' | translate }}</th>
-              <th>{{ 'PANEL.SINCE' | translate }}</th>
-              <th>
-                <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of myPanelRows(); track row.id) {
+        @if (myPanelTruncated()) {
+          <p class="hint">
+            {{
+              'PANEL.SHOWING_FIRST'
+                | translate: { shown: myPanelRows().length, total: myPanelTotal() }
+            }}
+          </p>
+        }
+        <div class="table-scroll" tabindex="0" role="region" aria-labelledby="my-panel-heading">
+          <table>
+            <thead>
               <tr>
-                <td>
-                  <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
-                </td>
-                <td>{{ roleKey(row.panelRole) | translate }}</td>
-                <td>{{ row.assignedOn | serverTime | date: 'mediumDate' }}</td>
-                <td>
-                  @if (canEmpanel()) {
-                    <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
-                      {{ 'PANEL.END' | translate }}
-                    </button>
-                  }
-                </td>
+                <th>{{ 'PANEL.PATIENT' | translate }}</th>
+                <th>{{ 'PANEL.ROLE' | translate }}</th>
+                <th>{{ 'PANEL.SINCE' | translate }}</th>
+                <th>
+                  <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                </th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
-  </section>
+            </thead>
+            <tbody>
+              @for (row of myPanelRows(); track row.id) {
+                <tr>
+                  <td>
+                    <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
+                  </td>
+                  <td>{{ roleKey(row.panelRole) | translate }}</td>
+                  <td>{{ row.assignedOn | serverTime | date: 'mediumDate' }}</td>
+                  <td>
+                    @if (canEmpanel()) {
+                      <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
+                        {{ 'PANEL.END' | translate }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
 
-  <!-- ── Admin overview ───────────────────────────────────────────── -->
+    <!-- ── Admin overview ───────────────────────────────────────────── -->
+  }
   @if (isAdmin()) {
     <section class="card">
       <h2 id="panel-overview-heading">{{ 'PANEL.OVERVIEW' | translate }}</h2>
@@ -135,8 +138,24 @@
             'CARE_DASH.VISIBLE'
               | translate: { shown: visibleOverviewRows().length, total: overviewRows().length }
           }}</span>
-          @if (providerSearch()) {
-            <button type="button" class="btn-secondary" (click)="providerSearch.set('')">
+          <label
+            >{{ 'PANEL.ROLE' | translate
+            }}<select
+              [ngModel]="providerRoleFilter()"
+              (ngModelChange)="providerRoleFilter.set($event)"
+            >
+              <option value="">{{ 'COMMON.ALL' | translate }}</option>
+              @for (role of roles; track role) {
+                <option [value]="role">{{ roleKey(role) | translate }}</option>
+              }
+            </select></label
+          >
+          @if (providerSearch() || providerRoleFilter()) {
+            <button
+              type="button"
+              class="btn-secondary"
+              (click)="providerSearch.set(''); providerRoleFilter.set('')"
+            >
               {{ 'CARE_DASH.CLEAR_SEARCH' | translate }}
             </button>
           }
@@ -149,6 +168,11 @@
         <p class="hint error-hint">{{ 'PANEL.OVERVIEW_UNAVAILABLE' | translate }}</p>
       } @else if (overviewRows().length === 0 && !overviewLoading()) {
         <p class="hint">{{ 'PANEL.OVERVIEW_EMPTY' | translate }}</p>
+        @if (canEmpanel()) {
+          <button type="button" class="btn-secondary" (click)="openAssign($event)">
+            {{ 'PANEL.ASSIGN' | translate }}
+          </button>
+        }
       } @else if (overviewRows().length > 0 && visibleOverviewRows().length === 0) {
         <p class="care-no-matches" role="status">{{ 'CARE_DASH.NO_MATCHES' | translate }}</p>
       } @else if (overviewRows().length > 0) {

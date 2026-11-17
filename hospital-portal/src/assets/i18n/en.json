@@ -3624,6 +3624,8 @@
     "BACK_TO_LOGIN": "Back to sign in"
   },
   "HOSPITAL_SCOPE": {
+    "PREVIOUS_WRITE_SAVED": "The change was saved to the hospital selected when you submitted it. Return to that hospital to see it.",
+    "PREVIOUS_WRITE_FAILED": "The change submitted for the previously selected hospital failed. Return to that hospital to try again.",
     "ALL_HOSPITALS": "All hospitals",
     "CLEAR": "Clear hospital scope",
     "FILTER_BY_HOSPITAL": "Filter by hospital",
@@ -5191,6 +5193,8 @@
     "PHONE_PLACEHOLDER": "e.g. +226 25 30 00 00"
   },
   "PANEL": {
+    "NETWORK_HELP": "Select a hospital to manage care-team panels and patient assignments.",
+    "ACTIVE_ASSIGNMENTS": "Active assignments",
     "TITLE": "Panel Management",
     "ASSIGN": "Empanel a patient",
     "ASSIGN_HINT": "Assigning a new owner for a role automatically ends the previous one — the history is kept.",
@@ -9189,6 +9193,7 @@
     "LOOKUP_TITLE": "Check report signatures",
     "LOOKUP_HELP": "Check whether a report has signatures and who signed it. Use the Verify action on a signature to verify its original signature text.",
     "KNOWN_REPORTS": "Reports in the loaded signature list",
+    "CHOOSE_REPORT": "Choose a report",
     "LOOKUP_LOADING": "Checking...",
     "INVALID_REPORT_ID": "Enter a valid report UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
     "RETRY": "Try again",
@@ -9708,6 +9713,7 @@
     "tasks": "Tasks",
     "title": "In-Basket",
     "unreadCount": "Unread count",
+    "unread": "{{count}} unread",
     "urgent": "Urgent",
     "openVisitToSign": "Open the visit to sign",
     "lastUpdated": "Last updated: {{time}}",
@@ -10789,7 +10795,16 @@
     "URGENCY_ELECTIVE": "Elective",
     "URGENCY_URGENT": "Urgent",
     "URGENCY_EMERGENT": "Emergent",
-    "PAST_DATE": "The planned date and time cannot be in the past."
+    "PAST_DATE": "The planned date and time cannot be in the past.",
+    "SEARCH": "Search patient, record number, procedure or code",
+    "ALL_URGENCIES": "All urgencies",
+    "VISIBLE_COUNT": "{{shown}} / {{total}} requests loaded",
+    "NO_MATCHES": "No requests match these filters.",
+    "CONSENT_NOT_RECORDED_CANCELLED": "Consent was not recorded before cancellation.",
+    "WORKLIST_PRE_OP_CLEARANCE_PENDING": "Preoperative clearance pending",
+    "WORKLIST_READY_FOR_PROCEDURE": "Ready for procedure",
+    "WORKLIST_POSTPONED": "Postponed",
+    "NETWORK_HELP": "Choose a hospital to view its procedure requests, consent records and schedules."
   },
   "REGISTRATIONS": {
     "DEACTIVATE_TITLE": "Deactivate this registration?",
@@ -11104,6 +11119,7 @@
     "SOCIAL_EMPTY": "Record at least one item (habits, occupation, living situation or notes) before saving a new version."
   },
   "MATERNITY": {
+    "NETWORK_HELP": "Select a hospital for maternal histories, referrals and maternity worklists.",
     "FOREIGN_RECORDED_AT": "Recorded at {{hospital}}, read only here",
     "GA": "Gestational age",
     "GA_SHORT": "{{weeks}} wk {{days}} d",
@@ -12041,7 +12057,13 @@
     "STATUS_COMPLETED": "Completed",
     "STATUS_CONFIRMED_UNDERSTANDING": "Understanding confirmed",
     "STATUS_NEEDS_CLARIFICATION": "Needs clarification",
-    "STATUS_FEEDBACK_PROVIDED": "Feedback provided"
+    "STATUS_FEEDBACK_PROVIDED": "Feedback provided",
+    "HOSPITAL_SCOPE": "Resources and assignments for the selected hospital.",
+    "NETWORK_SCOPE": "Network library. Select a hospital to manage resources or assign them to a patient.",
+    "PICK_HOSPITAL": "Select a hospital to view patient progress.",
+    "SEARCH_SCOPE": "Search and filters apply to the loaded resources.",
+    "NO_MATCHES": "No resources match these filters.",
+    "EMPTY_HELP": "Add a resource at the selected hospital, or clear the filters to see the available library."
   },
   "ON_CALL": {
     "TITLE": "On-Call Rota",
@@ -13044,6 +13066,7 @@
     "NO_EXPIRY": "Does not expire"
   },
   "REGISTRIES": {
+    "ALL_MERGED_HINT": "All statuses combines the first loaded page of each status, sorted here by overdue days then name; at most 200 rows are displayed.",
     "TITLE": "Disease Registries",
     "SUBTITLE": "Who is enrolled in each care programme, and who is overdue for a visit.",
     "ENROLL": "Enrol patient",
@@ -13097,7 +13120,16 @@
     "STATUS_UPDATED": "Status updated.",
     "ACTION_FAILED": "The action could not be completed.",
     "COUNTS_UNAVAILABLE": "Counts unavailable — showing the last known values.",
-    "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} enrolments."
+    "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} enrolments.",
+    "ALL_STATUSES": "All statuses",
+    "OVERDUE_ONLY": "Overdue visits only",
+    "SORT": "Sort loaded patients",
+    "SORT_PRIORITY": "Registry order",
+    "SORT_NAME": "Patient name A–Z",
+    "SORT_NEXT_VISIT": "Next visit: earliest first",
+    "SEARCH_SCOPE": "Search, overdue filtering and sorting apply to loaded patients. Totals describe the selected programme and status.",
+    "EMPTY_SELECTED": "No patients in {{program}} with status: {{status}}, at this hospital.",
+    "NETWORK_HELP": "Choose a hospital to view programme cohorts, enrolments and overdue follow-up visits."
   },
   "RECORD_ACCESS": {
     "RESTRICTED_ARIA": "Restricted records",
@@ -13658,6 +13690,14 @@
     "RELOAD": "Reload page"
   },
   "CARE_DASH": {
+    "UNASSIGNED": "Not assigned",
+    "RECEIVING_TEAM": "Receiving clinician",
+    "OVERDUE_MINUTES": "Overdue by {{count}} min",
+    "MRN_HINT": "Record number: 4 digits can find candidates; confirm their full identity. Exact national ID: 12 digits.",
+    "SEARCH_PATIENT_MRN": "Name or record number (including 4 digits)",
+    "SEARCH_PATIENT_RECORD": "Search patient or record number",
+    "PAGE_FILTERS": "Filters apply to this loaded page.",
+    "LOCAL_FILTERS": "Filters apply to displayed assignments.",
     "EDUCATION_EYEBROW": "PATIENT LEARNING",
     "REGISTRY_EYEBROW": "CARE PROGRAMMES",
     "PANEL_EYEBROW": "CARE TEAM PANELS",

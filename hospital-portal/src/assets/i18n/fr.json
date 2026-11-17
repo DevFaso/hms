@@ -3624,6 +3624,8 @@
     "BACK_TO_LOGIN": "Retour à la connexion"
   },
   "HOSPITAL_SCOPE": {
+    "PREVIOUS_WRITE_SAVED": "La modification a été enregistrée dans l’hôpital sélectionné lors de l’envoi. Revenez à cet hôpital pour la consulter.",
+    "PREVIOUS_WRITE_FAILED": "La modification envoyée pour l’hôpital précédemment sélectionné a échoué. Revenez à cet hôpital pour réessayer.",
     "ALL_HOSPITALS": "Tous les hôpitaux",
     "CLEAR": "Effacer la portée hôpital",
     "FILTER_BY_HOSPITAL": "Filtrer par hôpital",
@@ -5191,6 +5193,8 @@
     "PHONE_PLACEHOLDER": "ex. +226 25 30 00 00"
   },
   "PANEL": {
+    "NETWORK_HELP": "Sélectionnez un hôpital pour gérer les panels des équipes et les rattachements des patients.",
+    "ACTIVE_ASSIGNMENTS": "Rattachements actifs",
     "TITLE": "Gestion des panels",
     "ASSIGN": "Rattacher un patient",
     "ASSIGN_HINT": "L'affectation d'un nouveau responsable pour un rôle met automatiquement fin à la précédente — l'historique est conservé.",
@@ -9189,6 +9193,7 @@
     "LOOKUP_TITLE": "Consulter les signatures d’un rapport",
     "LOOKUP_HELP": "Consultez les signatures d’un rapport et leurs signataires. Utilisez l’action vérifier sur une signature pour vérifier son texte original.",
     "KNOWN_REPORTS": "Rapports de la liste de signatures chargée",
+    "CHOOSE_REPORT": "Choisir un rapport",
     "LOOKUP_LOADING": "Recherche en cours...",
     "INVALID_REPORT_ID": "Saisissez un UUID de rapport valide (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
     "RETRY": "Réessayer",
@@ -9708,6 +9713,7 @@
     "tasks": "Tâches",
     "title": "Boîte de réception",
     "unreadCount": "Nombre d'éléments non lus",
+    "unread": "{{count}} non lus",
     "urgent": "Urgent",
     "openVisitToSign": "Ouvrir la visite pour signer",
     "lastUpdated": "Dernière actualisation : {{time}}",
@@ -10789,7 +10795,16 @@
     "URGENCY_ELECTIVE": "Élective",
     "URGENCY_URGENT": "Urgente",
     "URGENCY_EMERGENT": "Urgence vitale",
-    "PAST_DATE": "La date et l'heure prévues ne peuvent pas être dans le passé."
+    "PAST_DATE": "La date et l'heure prévues ne peuvent pas être dans le passé.",
+    "SEARCH": "Rechercher patient, dossier, acte ou code",
+    "ALL_URGENCIES": "Toutes les urgences",
+    "VISIBLE_COUNT": "{{shown}} / {{total}} demandes chargées",
+    "NO_MATCHES": "Aucune demande ne correspond aux filtres.",
+    "CONSENT_NOT_RECORDED_CANCELLED": "Consentement non recueilli avant annulation.",
+    "WORKLIST_PRE_OP_CLEARANCE_PENDING": "Évaluation préopératoire en attente",
+    "WORKLIST_READY_FOR_PROCEDURE": "Prêt pour l’acte",
+    "WORKLIST_POSTPONED": "Reportés",
+    "NETWORK_HELP": "Choisissez un établissement pour consulter ses demandes d’actes, consentements et plannings."
   },
   "REGISTRATIONS": {
     "DEACTIVATE_TITLE": "Désactiver cet enregistrement ?",
@@ -11104,6 +11119,7 @@
     "SOCIAL_EMPTY": "Saisissez au moins un élément (habitudes, profession, conditions de vie ou notes) avant d'enregistrer une nouvelle version."
   },
   "MATERNITY": {
+    "NETWORK_HELP": "Sélectionnez un hôpital pour les antécédents, les orientations et les listes de soins maternels.",
     "FOREIGN_RECORDED_AT": "Enregistré à {{hospital}}, lecture seule ici",
     "GA": "Terme",
     "GA_SHORT": "{{weeks}} SA {{days}} j",
@@ -12041,7 +12057,13 @@
     "STATUS_COMPLETED": "Terminé",
     "STATUS_CONFIRMED_UNDERSTANDING": "Compréhension confirmée",
     "STATUS_NEEDS_CLARIFICATION": "Clarification requise",
-    "STATUS_FEEDBACK_PROVIDED": "Retour fourni"
+    "STATUS_FEEDBACK_PROVIDED": "Retour fourni",
+    "HOSPITAL_SCOPE": "Ressources et assignations de l’établissement sélectionné.",
+    "NETWORK_SCOPE": "Bibliothèque du réseau. Sélectionnez un établissement pour gérer les ressources ou les assigner à un patient.",
+    "PICK_HOSPITAL": "Sélectionnez un établissement pour consulter la progression des patients.",
+    "SEARCH_SCOPE": "La recherche et les filtres portent sur les ressources chargées.",
+    "NO_MATCHES": "Aucune ressource ne correspond aux filtres.",
+    "EMPTY_HELP": "Ajoutez une ressource dans l’établissement sélectionné ou effacez les filtres pour consulter la bibliothèque disponible."
   },
   "ON_CALL": {
     "TITLE": "Tableau de garde",
@@ -13044,6 +13066,7 @@
     "NO_EXPIRY": "N'expire pas"
   },
   "REGISTRIES": {
+    "ALL_MERGED_HINT": "Tous les statuts combine la première page chargée de chaque statut, triée ici par jours de retard puis par nom ; 200 lignes au maximum sont affichées.",
     "TITLE": "Registres de maladies",
     "SUBTITLE": "Qui est inscrit dans chaque programme de soins, et qui est en retard pour une visite.",
     "ENROLL": "Inscrire un patient",
@@ -13097,7 +13120,16 @@
     "STATUS_UPDATED": "Statut mis à jour.",
     "ACTION_FAILED": "L'action n'a pas pu être effectuée.",
     "COUNTS_UNAVAILABLE": "Comptes indisponibles — dernières valeurs connues affichées.",
-    "SHOWING_FIRST": "Affichage des {{shown}} premières inscriptions sur {{total}}."
+    "SHOWING_FIRST": "Affichage des {{shown}} premières inscriptions sur {{total}}.",
+    "ALL_STATUSES": "Tous les statuts",
+    "OVERDUE_ONLY": "Visites en retard uniquement",
+    "SORT": "Trier les patients chargés",
+    "SORT_PRIORITY": "Ordre du registre",
+    "SORT_NAME": "Nom du patient A–Z",
+    "SORT_NEXT_VISIT": "Prochaine visite : les plus proches",
+    "SEARCH_SCOPE": "La recherche, le filtre des retards et le tri portent sur les patients chargés. Les totaux concernent le programme et le statut sélectionnés.",
+    "EMPTY_SELECTED": "Aucun patient dans le programme {{program}}, statut : {{status}}, pour cet établissement.",
+    "NETWORK_HELP": "Choisissez un établissement pour consulter ses cohortes, inscriptions et visites de suivi en retard."
   },
   "RECORD_ACCESS": {
     "RESTRICTED_ARIA": "Dossiers restreints",
@@ -13658,6 +13690,14 @@
     "RELOAD": "Recharger la page"
   },
   "CARE_DASH": {
+    "UNASSIGNED": "Non attribué",
+    "RECEIVING_TEAM": "Soignant destinataire",
+    "OVERDUE_MINUTES": "En retard de {{count}} min",
+    "MRN_HINT": "N° de dossier : 4 chiffres peuvent retrouver des personnes ; confirmez leur identité. Identifiant national exact : 12 chiffres.",
+    "SEARCH_PATIENT_MRN": "Nom ou n° de dossier (y compris 4 chiffres)",
+    "SEARCH_PATIENT_RECORD": "Rechercher une personne ou un n° de dossier",
+    "PAGE_FILTERS": "Les filtres portent sur cette page chargée.",
+    "LOCAL_FILTERS": "Les filtres portent sur les rattachements affichés.",
     "EDUCATION_EYEBROW": "APPRENTISSAGE DU PATIENT",
     "REGISTRY_EYEBROW": "PROGRAMMES DE SOINS",
     "PANEL_EYEBROW": "PANELS DES ÉQUIPES DE SOINS",

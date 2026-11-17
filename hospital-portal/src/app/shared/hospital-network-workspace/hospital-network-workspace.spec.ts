@@ -23,6 +23,18 @@ describe('HospitalNetworkWorkspaceComponent', () => {
     router = TestBed.inject(Router);
     c = TestBed.createComponent(HospitalNetworkWorkspaceComponent).componentInstance;
   });
+  it('explains the selected module without claiming hospital counts are clinical workload totals', () => {
+    const fixture = TestBed.createComponent(HospitalNetworkWorkspaceComponent);
+    fixture.componentRef.setInput('moduleTitleKey', 'NAV.PROCEDURE_ORDERS');
+    expect(fixture.componentInstance.moduleHelpKey()).toBe('PROCEDURES.NETWORK_HELP');
+    fixture.componentRef.setInput('moduleTitleKey', 'NAV.REGISTRIES');
+    expect(fixture.componentInstance.moduleHelpKey()).toBe('REGISTRIES.NETWORK_HELP');
+    fixture.componentRef.setInput('moduleTitleKey', 'NAV.PANELS');
+    expect(fixture.componentInstance.moduleHelpKey()).toBe('PANEL.NETWORK_HELP');
+    fixture.componentRef.setInput('moduleTitleKey', 'NAV.MATERNITY');
+    expect(fixture.componentInstance.moduleHelpKey()).toBe('MATERNITY.NETWORK_HELP');
+  });
+
   it('shows and searches all hospitals without firing module APIs', () => {
     c.ngOnInit();
     expect(c.filtered().length).toBe(2);

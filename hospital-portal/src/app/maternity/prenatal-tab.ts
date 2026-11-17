@@ -82,7 +82,7 @@ export class PrenatalTabComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  private hospitalId: string | null = null;
+  protected hospitalId: string | null = null;
 
   /** RCPT-CLIN: the desk books by the gestational week; the high-risk flag is not its to read or tick. */
   frontDeskOnly(): boolean {
@@ -133,7 +133,7 @@ export class PrenatalTabComponent implements OnInit {
   reminderBusy = signal(false);
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    this.hospitalId = this.roleContext.effectiveHospitalIdForRequest();
   }
 
   onPatientPicked(p: PatientResponse | null): void {

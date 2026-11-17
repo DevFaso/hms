@@ -20,7 +20,6 @@ import {
   EnrollRequest,
   ProgramEnrollment,
   ProgramEnrollmentStatus,
-  ProgramRegistryPage,
   ProgramRegistryService,
 } from '../services/program-registry.service';
 import { PatientResponse } from '../services/patient.service';
@@ -32,7 +31,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { joinReasons, missingRequiredMessage } from '../shared/required-fields';
-type StatusFilter = 'ACTIVE' | ProgramEnrollmentStatus;
+type StatusFilter = 'ALL' | ProgramEnrollmentStatus;
 
 interface RegistryLoad {
   rows: ProgramEnrollment[];
@@ -102,15 +101,26 @@ export class RegistriesComponent implements OnInit, OnDestroy {
   actingOnId = signal<string | null>(null);
 
   readonly patientSearch = signal('');
+  readonly overdueOnly = signal(false);
+  readonly sortBy = signal<'server' | 'name' | 'nextVisit'>('server');
   readonly visibleRows = computed(() => {
     const term = this.patientSearch().trim().toLocaleLowerCase();
-    return this.rows().filter(
-      (row) =>
-        !term ||
-        [row.patientName, row.mrn, row.phoneNumber].some((value) =>
-          value?.toLocaleLowerCase().includes(term),
-        ),
-    );
+    return this.rows()
+      .filter(
+        (row) =>
+          (!this.overdueOnly() || row.overdueDays > 0) &&
+          (!term ||
+            [row.patientName, row.mrn, row.phoneNumber].some((value) =>
+              value?.toLocaleLowerCase().includes(term),
+            )),
+      )
+      .sort((a, b) =>
+        this.sortBy() === 'nextVisit'
+          ? (a.nextExpectedVisit ?? '9999').localeCompare(b.nextExpectedVisit ?? '9999')
+          : this.sortBy() === 'name'
+            ? (a.patientName ?? '').localeCompare(b.patientName ?? '')
+            : 0,
+      );
   });
 
   overdueCount = computed(() => this.rows().filter((r) => r.overdueDays > 0).length);
@@ -149,16 +159,37 @@ export class RegistriesComponent implements OnInit, OnDestroy {
         switchMap(({ program, status }) => {
           this.loading.set(true);
           this.loadFailed.set(false);
-          const page = this.registryService
-            .registry(program, status, 0, RegistriesComponent.PAGE_SIZE)
-            .pipe(
-              map((p: ProgramRegistryPage) => ({
-                rows: p.content,
-                totalRows: p.totalElements,
-                rowsFailed: false,
-              })),
-              catchError(() => of({ rows: [], totalRows: 0, rowsFailed: true })),
-            );
+          const source =
+            status === 'ALL'
+              ? forkJoin(
+                  this.statuses.map((value) =>
+                    this.registryService.registry(program, value, 0, RegistriesComponent.PAGE_SIZE),
+                  ),
+                ).pipe(
+                  map((pages) => ({
+                    content: pages
+                      .flatMap((page) => page.content)
+                      .sort(
+                        (a, b) =>
+                          // Match findRegistry's ordering before truncating. Each
+                          // status page then contains every candidate for the
+                          // combined first page, even for cohorts over 200.
+                          a.nextExpectedVisit.localeCompare(b.nextExpectedVisit) ||
+                          a.enrolledOn.localeCompare(b.enrolledOn),
+                      )
+                      .slice(0, RegistriesComponent.PAGE_SIZE),
+                    totalElements: pages.reduce((sum, page) => sum + page.totalElements, 0),
+                  })),
+                )
+              : this.registryService.registry(program, status, 0, RegistriesComponent.PAGE_SIZE);
+          const page = source.pipe(
+            map((p) => ({
+              rows: p.content,
+              totalRows: p.totalElements,
+              rowsFailed: false,
+            })),
+            catchError(() => of({ rows: [], totalRows: 0, rowsFailed: true })),
+          );
           const counts = this.registryService.counts(program).pipe(
             map((c) => ({ counts: c, countsFailed: false })),
             catchError(() => of({ counts: {}, countsFailed: true })),
@@ -200,6 +231,10 @@ export class RegistriesComponent implements OnInit, OnDestroy {
 
   load(): void {
     this.load$.next({ program: this.activeProgram(), status: this.statusFilter() });
+  }
+
+  allCount(): number {
+    return this.statuses.reduce((sum, status) => sum + this.countFor(status), 0);
   }
 
   countFor(status: ProgramEnrollmentStatus): number {

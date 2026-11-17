@@ -3,11 +3,15 @@ import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
+  DestroyRef,
   ElementRef,
   OnInit,
   inject,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { textMatches } from '../shared/person-search';
 import { isOrderCancellable } from '../shared/order-lifecycle';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -88,7 +92,28 @@ export class ProcedureOrdersComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  private hospitalId: string | null = null;
+  private readonly destroyRef = inject(DestroyRef);
+  private loadVersion = 0;
+  private get hospitalId(): string | null {
+    return this.roleContext.effectiveHospitalIdForRequest();
+  }
+  readonly hasScope = computed(() => !!this.roleContext.effectiveHospitalIdForRequest());
+  readonly search = signal('');
+  readonly urgencyFilter = signal<ProcedureUrgency | ''>('');
+  readonly visibleOrders = computed(() =>
+    this.orders().filter(
+      (order) =>
+        (!this.urgencyFilter() || order.urgency === this.urgencyFilter()) &&
+        (!this.search().trim() ||
+          [order.patientName, order.patientMrn, order.procedureName, order.procedureCode].some(
+            (value) => textMatches(value, this.search().trim()),
+          )),
+    ),
+  );
+  resetFilters(): void {
+    this.search.set('');
+    this.urgencyFilter.set('');
+  }
 
   /** Create/update = DOCTOR/NURSE/SUPER_ADMIN; HOSPITAL_ADMIN is read-only. */
   readonly canManage = this.roleContext.hasAnyActiveRole([
@@ -116,6 +141,9 @@ export class ProcedureOrdersComponent implements OnInit {
     'all',
     'ORDERED',
     'SCHEDULED',
+    'PRE_OP_CLEARANCE_PENDING',
+    'READY_FOR_PROCEDURE',
+    'POSTPONED',
     'pending-consent',
     'IN_PROGRESS',
     'COMPLETED',
@@ -146,7 +174,6 @@ export class ProcedureOrdersComponent implements OnInit {
   cancelReason = '';
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
     this.load();
   }
 
@@ -156,8 +183,15 @@ export class ProcedureOrdersComponent implements OnInit {
   }
 
   load(): void {
-    if (!this.hospitalId) return;
+    const version = ++this.loadVersion;
     const hospitalId = this.hospitalId;
+    if (!hospitalId) {
+      this.orders.set([]);
+      this.loading.set(false);
+      this.closeOrder();
+      this.closeOrderModal();
+      return;
+    }
     const worklist = this.worklist();
     this.loading.set(true);
     this.loadError.set(false);
@@ -165,12 +199,14 @@ export class ProcedureOrdersComponent implements OnInit {
       worklist === 'pending-consent'
         ? this.orderService.pendingConsent(hospitalId)
         : this.orderService.byHospital(hospitalId, worklist === 'all' ? undefined : worklist);
-    source.subscribe({
+    source.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (orders) => {
+        if (version !== this.loadVersion || hospitalId !== this.hospitalId) return;
         this.orders.set(orders ?? []);
         this.loading.set(false);
       },
       error: () => {
+        if (version !== this.loadVersion || hospitalId !== this.hospitalId) return;
         this.loadError.set(true);
         this.loading.set(false);
         this.toast.error(this.translate.instant('PROCEDURES.LOAD_ERROR'));
@@ -243,6 +279,7 @@ export class ProcedureOrdersComponent implements OnInit {
   }
 
   openCreate(): void {
+    if (!this.hasScope()) return;
     this.orderForm = this.emptyOrderForm();
     this.orderPatient.set(null);
     this.showOrderModal.set(true);
@@ -288,20 +325,30 @@ export class ProcedureOrdersComponent implements OnInit {
       return;
     }
     refuseFields(root, [], PROC_ORDER_IDS, '');
-    form.hospitalId = this.hospitalId ?? '';
+    const hospitalId = this.hospitalId;
+    if (!hospitalId) return;
+    form.hospitalId = hospitalId;
     this.orderSaving.set(true);
     // #948 review: the datetime-local is the user's wall clock; the server keeps
     // UTC and the list reads it back through serverTime.
     this.orderService.create(withServerDateTimes(form, ['scheduledDatetime'])).subscribe({
       next: (created) => {
-        this.toast.success(this.translate.instant('PROCEDURES.CREATED'));
         this.orderSaving.set(false);
+        if (hospitalId !== this.hospitalId || this.destroyRef.destroyed) {
+          this.toast.success(this.translate.instant('HOSPITAL_SCOPE.PREVIOUS_WRITE_SAVED'));
+          return;
+        }
+        this.toast.success(this.translate.instant('PROCEDURES.CREATED'));
         this.closeOrderModal();
         this.orders.update((list) => [created, ...list]);
       },
       error: (err: unknown) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('PROCEDURES.SAVE_ERROR'));
         this.orderSaving.set(false);
+        this.toast.error(
+          hospitalId !== this.hospitalId || this.destroyRef.destroyed
+            ? this.translate.instant('HOSPITAL_SCOPE.PREVIOUS_WRITE_FAILED')
+            : (refusalReason(err) ?? this.translate.instant('PROCEDURES.SAVE_ERROR')),
+        );
       },
     });
   }

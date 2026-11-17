@@ -159,8 +159,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   readonly canViewAllergies = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewAllergies]),
   );
-  readonly canEditAllergies = computed(() =>
-    this.roleContext.hasAnyActiveRole(actionRoles('allergyCreate')),
+  readonly canEditAllergies = computed(
+    () => !!this.hospitalId() && this.roleContext.hasAnyActiveRole(actionRoles('allergyCreate')),
   );
   /**
    * QA D527: an allergy is written in the acting hospital, and the API refuses
@@ -176,19 +176,19 @@ export class PatientChartComponent implements OnInit, OnChanges {
   readonly canViewProblems = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewProblems]),
   );
-  readonly canEditProblems = computed(() =>
-    this.roleContext.hasAnyActiveRole([...CHART_ROLES.editProblems]),
+  readonly canEditProblems = computed(
+    () => !!this.hospitalId() && this.roleContext.hasAnyActiveRole([...CHART_ROLES.editProblems]),
   );
   /** QA D1224: removing a diagnosis (with a reason) is wider than recording one. */
-  readonly canRemoveProblems = computed(() =>
-    this.roleContext.hasAnyActiveRole(actionRoles('diagnosisRemove')),
+  readonly canRemoveProblems = computed(
+    () => !!this.hospitalId() && this.roleContext.hasAnyActiveRole(actionRoles('diagnosisRemove')),
   );
   readonly showProblemActions = computed(() => this.canEditProblems() || this.canRemoveProblems());
   readonly canViewUpdates = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewUpdates]),
   );
-  readonly canCreateUpdates = computed(() =>
-    this.roleContext.hasAnyActiveRole([...CHART_ROLES.createUpdates]),
+  readonly canCreateUpdates = computed(
+    () => !!this.hospitalId() && this.roleContext.hasAnyActiveRole([...CHART_ROLES.createUpdates]),
   );
   readonly canViewTimeline = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewTimeline]),
@@ -504,10 +504,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
    *    truly unscoped account either way, and the fix is a scope, not a
    *    serialization trick.
    *
-   * `isForeignRow` reads this raw, and is safe because `!!mine` rejects `''`.
+   * Unscoped chart reads remain available; writes and local-row actions require a selected hospital.
    */
   private hospitalId(): string {
-    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? '';
+    return this.roleContext.effectiveHospitalIdForRequest() ?? '';
   }
 
   /**
@@ -678,6 +678,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitAllergy(): void {
+    if (!this.hospitalId()) return;
     if (!this.allergyForm.allergenDisplay.trim()) {
       this.toast.error(this.translate.instant('CHART.ALLERGEN_REQUIRED'));
       return;
@@ -720,6 +721,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitDeactivateAllergy(): void {
+    if (!this.hospitalId()) return;
     const target = this.deactivatingAllergy();
     if (!target || !this.deactivateReason.trim()) {
       this.toast.error(this.translate.instant('CHART.REASON_REQUIRED'));
@@ -808,6 +810,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitProblem(): void {
+    if (!this.hospitalId()) return;
     if (!this.problemForm.problemDisplay.trim()) {
       this.toast.error(this.translate.instant('CHART.PROBLEM_REQUIRED'));
       return;
@@ -850,6 +853,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitDeleteProblem(): void {
+    if (!this.hospitalId()) return;
     const target = this.deletingProblem();
     if (!target || !this.problemDeleteReason.trim()) {
       this.toast.error(this.translate.instant('CHART.REASON_REQUIRED'));
@@ -929,6 +933,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   }
 
   submitUpdate(): void {
+    if (!this.hospitalId()) return;
     if (!this.updateForm.updateReason.trim()) {
       this.toast.error(this.translate.instant('CHART.UPDATE_REASON_REQUIRED'));
       return;
