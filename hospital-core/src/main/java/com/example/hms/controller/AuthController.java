@@ -5,7 +5,6 @@ import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
-import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
 import com.example.hms.payload.dto.SessionBootstrapResponseDTO;
@@ -1462,11 +1461,8 @@ public class AuthController {
 
     @PostMapping("/reset-password")
     public ResponseEntity<Void> legacyConfirmPasswordReset(@Valid @RequestBody PasswordResetConfirmDTO dto) {
-        try {
-            authNotification.passwordReset().confirmReset(dto.getToken(), dto.getNewPassword());
-        } catch (ResourceNotFoundException | IllegalStateException e) {
-            log.debug("Password reset confirm failed: {}", e.getMessage());
-        }
+        // QA D2051: a bad, expired or spent link is the service's 400, not a 204.
+        authNotification.passwordReset().confirmReset(dto.getToken(), dto.getNewPassword());
         return ResponseEntity.noContent().build();
     }
 

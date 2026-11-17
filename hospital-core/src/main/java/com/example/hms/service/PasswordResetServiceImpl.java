@@ -2,6 +2,8 @@ package com.example.hms.service;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.PasswordResetToken;
 import com.example.hms.model.User;
@@ -55,6 +57,10 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private String frontendBaseUrl;
 
     private static final int TOKEN_BYTES = 32; // 256-bit entropy
+    /** QA D2051: one message for an unknown, expired or already used reset link. */
+    public static final String TOKEN_INVALID = "passwordReset.token.invalid";
+    /** The change-password minimum ({@code auth.password.tooShort}), which the reset page also enforces. */
+    private static final int MIN_PASSWORD_LENGTH = 8;
     private static final Pattern HEX_64 = Pattern.compile("^[0-9a-fA-F]{64}$");
     /** QA D787: a phone number as typed: digits, an optional leading +, spaces, dots, dashes, brackets. */
     private static final Pattern PHONE_SHAPED = Pattern.compile("[+\\d][\\d\\s().-]*");
@@ -246,11 +252,17 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     public void confirmReset(String token, String newPassword) {
         String tokenHash = resolveTokenHash(token);
 
+        // QA D2051: an unknown, expired or spent link is refused (400), never
+        // answered as a success the password did not get. The SAME message for
+        // all three: a 256-bit token names no account, and the answer says
+        // nothing about which case it was.
         PasswordResetToken resetToken = tokenRepository.findByTokenHash(tokenHash)
-            .orElseThrow(() -> new ResourceNotFoundException("passwordReset.token.invalid"));
+            .filter(t -> t.isValidAt(LocalDateTime.now(clock)))
+            .orElseThrow(() -> new BusinessException(TOKEN_INVALID));
 
-        if (!resetToken.isValidAt(LocalDateTime.now(clock))) {
-            throw new IllegalStateException("Reset token is invalid (expired or already used).");
+        // Only a holder of a live link learns the policy; their link stays unspent.
+        if (newPassword == null || newPassword.length() < MIN_PASSWORD_LENGTH) {
+            throw new FieldBusinessException("newPassword", "auth.password.tooShort");
         }
 
         User user = resetToken.getUser();

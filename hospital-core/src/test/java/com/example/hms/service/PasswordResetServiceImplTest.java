@@ -423,7 +423,8 @@ class PasswordResetServiceImplTest {
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
 
         assertThatThrownBy(() -> service.confirmReset(rawToken, "newPassword"))
-            .isInstanceOf(IllegalStateException.class);
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo(PasswordResetServiceImpl.TOKEN_INVALID);
         verify(loginAttemptService, never()).resetAttempts(any());
     }
 
@@ -510,7 +511,8 @@ class PasswordResetServiceImplTest {
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
 
         assertThatThrownBy(() -> service.confirmReset(rawToken, "newPwd"))
-            .isInstanceOf(IllegalStateException.class);
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo(PasswordResetServiceImpl.TOKEN_INVALID);
 
         // no confirmation email should be sent when the token is already expired
         verify(emailService, never()).sendPasswordResetConfirmationEmail(anyString(), anyString());
@@ -522,7 +524,8 @@ class PasswordResetServiceImplTest {
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.confirmReset(rawToken, "newPwd"))
-            .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo(PasswordResetServiceImpl.TOKEN_INVALID);
     }
 
     @Test
@@ -537,7 +540,43 @@ class PasswordResetServiceImplTest {
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
 
         assertThatThrownBy(() -> service.confirmReset(rawToken, "newPwd"))
-            .isInstanceOf(IllegalStateException.class);
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo(PasswordResetServiceImpl.TOKEN_INVALID);
+    }
+
+    @Test
+    void confirmReset_spentToken_sameMessageAsUnknown() {
+        // QA D2051: a link already used is refused with the unknown-link message, password untouched.
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(rawToken.toLowerCase())
+            .expiration(NOW.plusHours(1))
+            .consumedAt(NOW.minusMinutes(5))
+            .build();
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+
+        assertThatThrownBy(() -> service.confirmReset(rawToken, "newPassword"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo(PasswordResetServiceImpl.TOKEN_INVALID);
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void confirmReset_shortPassword_keepsItsOwnMessageAndTheLinkUnspent() {
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(rawToken.toLowerCase())
+            .expiration(NOW.plusHours(1))
+            .build();
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+
+        assertThatThrownBy(() -> service.confirmReset(rawToken, "short"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("auth.password.tooShort");
+        assertThat(resetToken.getConsumedAt()).isNull();
+        verify(userRepository, never()).save(any());
     }
 
     @Test

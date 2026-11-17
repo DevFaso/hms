@@ -8796,6 +8796,11 @@
   "RESET": {
     "BACK_TO_LOGIN": "Retour à la connexion",
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
+    "ERR_LINK_INVALID": "Ce lien est invalide, a expiré ou a déjà été utilisé. Demandez-en un nouveau.",
+    "ERR_MIN_LENGTH": "Le mot de passe doit contenir au moins 8 caractères.",
+    "ERR_MISMATCH": "Les mots de passe ne correspondent pas.",
+    "ERR_REQUIRED": "Les deux champs sont obligatoires.",
+    "ERR_UNAVAILABLE": "Nous n'avons pas pu confirmer si votre mot de passe a été réinitialisé. Veuillez réessayer.",
     "INVALID_MSG": "Ce lien de réinitialisation est invalide ou a expiré.",
     "INVALID_TITLE": "Lien invalide",
     "MIN_CHARS": "8 caractères minimum",
@@ -8805,6 +8810,7 @@
     "SIGN_IN_NOW": "Se connecter maintenant",
     "SUBMIT": "Réinitialiser le mot de passe",
     "SUBTITLE": "Créez un nouveau mot de passe",
+    "SUCCESS_MSG": "Votre mot de passe a été réinitialisé. Vous pouvez maintenant vous connecter.",
     "SUCCESS_TITLE": "Mot de passe réinitialisé",
     "TITLE": "Réinitialiser le mot de passe"
   },
