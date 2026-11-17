@@ -86,6 +86,14 @@ export class RegistriesComponent implements OnInit, OnDestroy {
     'DECEASED',
   ];
 
+  /**
+   * QA D2120: enrolling, recording a visit and changing a status are clinical acts
+   * (ProgramEnrollmentController gates them with ClinicalActor.holdsOwnRole on NURSE,
+   * MIDWIFE, DOCTOR). A super-admin reads the registry and never records in it, so
+   * the actions are hidden from anyone without one of those roles.
+   */
+  readonly canAct = this.roleCtx.hasAnyActiveRole(['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR']);
+
   /** One page is plenty for a facility cohort; the server caps at 200 anyway. */
   private static readonly PAGE_SIZE = 200;
 

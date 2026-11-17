@@ -104,6 +104,28 @@ describe('RegistriesComponent', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
+  it('QA D2120: offers a clinician enrolment, visits and status changes', () => {
+    registryService.registry.and.returnValue(of(page([enrollment()])));
+    fixture.detectChanges();
+
+    expect(root().querySelector('[data-testid="open-enroll"]')).not.toBeNull();
+    expect(root().querySelector('[data-testid="record-visit"]')).not.toBeNull();
+    expect(root().querySelector('[data-testid="change-status"]')).not.toBeNull();
+  });
+
+  it('QA D2120: shows a super-admin the cohort and no clinical action on it', () => {
+    scope.set({ superAdmin: true, hospitalId: 'h1', roles: ['ROLE_SUPER_ADMIN'] });
+    registryService.registry.and.returnValue(of(page([enrollment()])));
+    const readOnly = TestBed.createComponent(RegistriesComponent);
+    readOnly.detectChanges();
+    const el = readOnly.nativeElement as HTMLElement;
+
+    expect(el.querySelectorAll('tbody tr').length).toBeGreaterThan(0);
+    expect(el.querySelector('[data-testid="open-enroll"]')).toBeNull();
+    expect(el.querySelector('[data-testid="record-visit"]')).toBeNull();
+    expect(el.querySelector('[data-testid="change-status"]')).toBeNull();
+  });
+
   it('combines explicit status pages for All because an omitted status defaults to ACTIVE on the server', () => {
     fixture.detectChanges();
     registryService.registry.calls.reset();

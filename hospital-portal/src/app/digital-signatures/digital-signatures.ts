@@ -75,15 +75,15 @@ export class DigitalSignaturesComponent implements OnInit {
     'ROLE_PHARMACIST',
   ]);
 
-  /** POST /signatures/{id}/revoke roles. */
-  readonly canRevoke = this.roleContext.hasAnyActiveRole([
+  /** POST /signatures/{id}/revoke roles (QA D2120: never a super-admin alone). */
+  readonly canRevoke = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN']);
+
+  /** Audit trail is DOCTOR/HOSPITAL_ADMIN/SUPER_ADMIN (a read: the super-admin keeps it, QA D2120). */
+  readonly canViewAudit = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
-
-  /** Audit trail is DOCTOR/HOSPITAL_ADMIN/SUPER_ADMIN — same list as revoke. */
-  readonly canViewAudit = this.canRevoke;
 
   loading = signal(false);
   loadError = signal(false);
