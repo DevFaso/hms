@@ -209,8 +209,8 @@ export class MaternityComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   /* ── Context ── */
-  private hospitalId: string | null = null;
-  private patientNames = new Map<string, string>();
+  protected hospitalId: string | null = null;
+  private patientNames = signal(new Map<string, string>());
 
   /* ── Role gates (effective backend roles — permission authorities are dead) ── */
   readonly canManageHistory = this.roleContext.hasAnyActiveRole([
@@ -278,6 +278,16 @@ export class MaternityComponent implements OnInit {
   /* ── Board (maternal histories) ── */
   worklist = signal<BoardWorklist>('high-risk');
   histories = signal<MaternalHistoryResponse[]>([]);
+  readonly boardSearch = signal('');
+  readonly visibleHistories = computed(() =>
+    this.histories().filter(
+      (row) =>
+        !this.boardSearch().trim() ||
+        this.patientName(row.patientId)
+          .toLocaleLowerCase()
+          .includes(this.boardSearch().trim().toLocaleLowerCase()),
+    ),
+  );
   historiesLoading = signal(false);
   boardPage = signal(0);
   boardTotalPages = signal(0);
@@ -311,6 +321,34 @@ export class MaternityComponent implements OnInit {
   /* ── Referrals ── */
   referralMode = signal<ReferralListMode>('patient');
   referrals = signal<ObgynReferralResponse[]>([]);
+  readonly referralSearch = signal('');
+  readonly referralUrgency = signal('');
+  readonly referralStatus = signal('');
+  readonly overdueOnly = signal(false);
+  readonly visibleReferrals = computed(() =>
+    this.referrals().filter(
+      (row) =>
+        (!this.referralSearch().trim() ||
+          [this.patientDisplay(row), row.patient?.mrn, row.obgyn?.displayName].some((value) =>
+            value?.toLocaleLowerCase().includes(this.referralSearch().trim().toLocaleLowerCase()),
+          )) &&
+        (!this.referralUrgency() || row.urgency === this.referralUrgency()) &&
+        (!this.referralStatus() || row.status === this.referralStatus()) &&
+        (!this.overdueOnly() || this.isOverdue(row)),
+    ),
+  );
+  refreshWorkspace(): void {
+    if (this.activeTab() === 'board') this.loadBoard();
+    if (this.activeTab() === 'referrals') {
+      this.loadReferrals();
+      this.loadSummary();
+    }
+  }
+  overdueMinutes(row: ObgynReferralResponse): number {
+    return row.slaDueAt && this.isOverdue(row)
+      ? Math.max(1, Math.floor((Date.now() - serverInstant(row.slaDueAt).getTime()) / 60000))
+      : 0;
+  }
   referralsLoading = signal(false);
   referralPage = signal(0);
   referralTotalPages = signal(0);
@@ -397,7 +435,7 @@ export class MaternityComponent implements OnInit {
     if (!this.hospitalId) return;
     this.patientService.list(this.hospitalId).subscribe({
       next: (patients) => {
-        this.patientNames = new Map((patients ?? []).map((p) => [p.id, personName(p)]));
+        this.patientNames.set(new Map((patients ?? []).map((p) => [p.id, personName(p)])));
       },
       error: () => {
         // Names stay blank; the table says the name is unavailable.
@@ -440,7 +478,7 @@ export class MaternityComponent implements OnInit {
   patientName(patientId: string): string {
     // QA D992 class: never a slice of the UUID; say the name is unavailable.
     return (
-      this.patientNames.get(patientId) ||
+      this.patientNames().get(patientId) ||
       (this.translate.instant('MATERNITY.PATIENT_NAME_UNAVAILABLE') as string)
     );
   }

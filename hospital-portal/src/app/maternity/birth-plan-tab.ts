@@ -49,7 +49,7 @@ export class BirthPlanTabComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
-  private hospitalId: string | null = null;
+  protected hospitalId: string | null = null;
 
   /** Create/update includes NURSE on the backend. */
   readonly canEdit = this.roleContext.hasAnyActiveRole([

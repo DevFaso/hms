@@ -26,6 +26,27 @@ describe('PatientPickerComponent', () => {
     component = TestBed.createComponent(PatientPickerComponent).componentInstance;
   });
 
+  it('four MRN digits search within the selected hospital and leave ambiguous candidates for confirmation', (done) => {
+    component.hospitalId = 'h2';
+    const patients = [
+      { ...mockPatient('p1', 'Awa'), mrn: 'CHW5624' },
+      { ...mockPatient('p2', 'Ben'), mrn: 'CHW15624' },
+    ];
+    patientSpy.search.and.returnValue(of(patients));
+    component.ngOnInit();
+    component.onQueryChange('5624');
+    setTimeout(() => {
+      expect(patientSpy.search).toHaveBeenCalledWith(
+        jasmine.objectContaining({ name: '5624', hospitalId: 'h2' }),
+      );
+      expect(patientSpy.lookup).not.toHaveBeenCalled();
+      expect(component.suggestions().length).toBe(2);
+      expect(component.selectedPatient()).toBeNull();
+      component.ngOnDestroy();
+      done();
+    }, 400);
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });

@@ -5179,6 +5179,8 @@
     "PHONE_PLACEHOLDER": "ex. +226 25 30 00 00"
   },
   "PANEL": {
+    "NETWORK_HELP": "Sélectionnez un hôpital pour gérer les panels des équipes et les rattachements des patients.",
+    "ACTIVE_ASSIGNMENTS": "Rattachements actifs",
     "TITLE": "Gestion des panels",
     "ASSIGN": "Rattacher un patient",
     "ASSIGN_HINT": "L'affectation d'un nouveau responsable pour un rôle met automatiquement fin à la précédente — l'historique est conservé.",
@@ -11098,6 +11100,7 @@
     "SOCIAL_EMPTY": "Saisissez au moins un élément (habitudes, profession, conditions de vie ou notes) avant d'enregistrer une nouvelle version."
   },
   "MATERNITY": {
+    "NETWORK_HELP": "Sélectionnez un hôpital pour les antécédents, les orientations et les listes de soins maternels.",
     "FOREIGN_RECORDED_AT": "Enregistré à {{hospital}}, lecture seule ici",
     "GA": "Terme",
     "GA_SHORT": "{{weeks}} SA {{days}} j",
@@ -13667,6 +13670,14 @@
     "RELOAD": "Recharger la page"
   },
   "CARE_DASH": {
+    "UNASSIGNED": "Non attribué",
+    "RECEIVING_TEAM": "Soignant destinataire",
+    "OVERDUE_MINUTES": "En retard de {{count}} min",
+    "MRN_HINT": "N° de dossier : 4 chiffres peuvent retrouver des personnes ; confirmez leur identité. Identifiant national exact : 12 chiffres.",
+    "SEARCH_PATIENT_MRN": "Nom ou n° de dossier (y compris 4 chiffres)",
+    "SEARCH_PATIENTS": "Rechercher une personne ou un n° de dossier",
+    "PAGE_FILTERS": "Les filtres portent sur cette page chargée.",
+    "LOCAL_FILTERS": "Les filtres portent sur les rattachements affichés.",
     "EDUCATION_EYEBROW": "APPRENTISSAGE DU PATIENT",
     "REGISTRY_EYEBROW": "PROGRAMMES DE SOINS",
     "PANEL_EYEBROW": "PANELS DES ÉQUIPES DE SOINS",

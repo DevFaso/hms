@@ -82,7 +82,7 @@ export class PrenatalTabComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  private hospitalId: string | null = null;
+  protected hospitalId: string | null = null;
 
   /** RCPT-CLIN: the desk books by the gestational week; the high-risk flag is not its to read or tick. */
   frontDeskOnly(): boolean {

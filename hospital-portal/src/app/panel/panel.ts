@@ -124,10 +124,22 @@ export class PanelComponent implements OnInit {
   /* ── admin overview ── */
   overviewRows = signal<PanelOverviewRow[]>([]);
   readonly providerSearch = signal('');
+  readonly providerRoleFilter = signal<PanelRole | ''>('');
+  readonly activeAssignments = computed(() =>
+    this.overviewRows().reduce((sum, row) => sum + row.activeCount, 0),
+  );
+  refresh(): void {
+    this.loadMyPanel();
+    if (this.isAdmin()) this.loadOverview();
+    const selected = this.drilldownProvider();
+    if (selected) this.openDrilldown(selected);
+  }
   readonly visibleOverviewRows = computed(() => {
     const term = this.providerSearch().trim().toLocaleLowerCase();
     return this.overviewRows().filter(
-      (row) => !term || row.providerName?.toLocaleLowerCase().includes(term),
+      (row) =>
+        (!this.providerRoleFilter() || row.panelRole === this.providerRoleFilter()) &&
+        (!term || row.providerName?.toLocaleLowerCase().includes(term)),
     );
   });
   readonly loadedProviders = computed(

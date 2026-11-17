@@ -1,4 +1,7 @@
 <div class="filter-bar">
+  <button type="button" class="btn-secondary" (click)="load()">
+    {{ 'COMMON.REFRESH' | translate }}
+  </button>
   <div class="tabs">
     @for (w of worklists; track w) {
       <button class="tab-btn" [class.active]="worklist() === w" (click)="setWorklist(w)">
@@ -14,6 +17,30 @@
   }
 </div>
 
+@if (!isReportList()) {
+  <div class="workspace-tools">
+    <label
+      >{{ 'CARE_DASH.SEARCH_PATIENT_MRN' | translate
+      }}<input
+        type="search"
+        [ngModel]="orderSearch()"
+        (ngModelChange)="orderSearch.set($event)" /></label
+    ><label
+      >{{ 'ULTRASOUND.PRIORITY' | translate
+      }}<select [ngModel]="orderPriority()" (ngModelChange)="orderPriority.set($event)">
+        <option value="">{{ 'COMMON.ALL' | translate }}</option>
+        @for (value of ['ROUTINE', 'URGENT', 'STAT']; track value) {
+          <option [value]="value">{{ value | enumLabel: 'imagingOrderPriority' }}</option>
+        }
+      </select></label
+    >
+  </div>
+}
+@if (orderSearch() || orderPriority()) {
+  <button type="button" class="btn-secondary" (click)="orderSearch.set(''); orderPriority.set('')">
+    {{ 'COMMON.CLEAR' | translate }}
+  </button>
+}
 @if (loading()) {
   <div class="loading-state">
     <div class="spinner"></div>
@@ -23,10 +50,10 @@
 
 <!-- ══ Orders worklists ══ -->
 @if (!loading() && !isReportList()) {
-  @if (orders().length === 0) {
+  @if (visibleOrders().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">waves</span>
-      <h3>{{ 'ULTRASOUND.NO_ORDERS' | translate }}</h3>
+      <h3>{{ (orders().length ? 'CARE_DASH.NO_MATCHES' : 'ULTRASOUND.NO_ORDERS') | translate }}</h3>
     </div>
   } @else {
     <div class="data-table">
@@ -43,7 +70,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (o of orders(); track o.id) {
+          @for (o of visibleOrders(); track o.id) {
             <tr class="data-row">
               <td>
                 {{ o.patientDisplayName || '—' }}
@@ -400,6 +427,8 @@
           <div class="field">
             <label for="us-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
             <app-patient-picker
+              [showMrnHint]="true"
+              [hospitalId]="hospitalId"
               required
               inputId="us-patient"
               [selected]="orderPatient()"

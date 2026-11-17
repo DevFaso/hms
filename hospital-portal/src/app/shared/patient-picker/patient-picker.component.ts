@@ -49,6 +49,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
 
   /** id for the input element so an external <label for> keeps working. */
   @Input() inputId = 'patient-picker-input';
+  @Input({ transform: booleanAttribute }) showMrnHint = false;
   /**
    * QA D1245: the form needs a patient. The search input then carries
    * `required` (a submit guard with `submitGuardRequired`, or listing the

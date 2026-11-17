@@ -29,6 +29,10 @@ describe('HospitalNetworkWorkspaceComponent', () => {
     expect(fixture.componentInstance.moduleHelpKey()).toBe('PROCEDURES.NETWORK_HELP');
     fixture.componentRef.setInput('moduleTitleKey', 'NAV.REGISTRIES');
     expect(fixture.componentInstance.moduleHelpKey()).toBe('REGISTRIES.NETWORK_HELP');
+    fixture.componentRef.setInput('moduleTitleKey', 'NAV.PANELS');
+    expect(fixture.componentInstance.moduleHelpKey()).toBe('PANEL.NETWORK_HELP');
+    fixture.componentRef.setInput('moduleTitleKey', 'NAV.MATERNITY');
+    expect(fixture.componentInstance.moduleHelpKey()).toBe('MATERNITY.NETWORK_HELP');
   });
 
   it('shows and searches all hospitals without firing module APIs', () => {

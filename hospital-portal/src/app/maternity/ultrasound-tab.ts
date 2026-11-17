@@ -4,6 +4,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   ElementRef,
   inject,
   OnInit,
@@ -306,7 +307,7 @@ export class UltrasoundTabComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  private hospitalId: string | null = null;
+  protected hospitalId: string | null = null;
 
   /** Order + report writes = DOCTOR/MIDWIFE/SUPER_ADMIN (effective backend roles). */
   /** QA D1081: an ultrasound order is rewritten or cancelled by its author only. */
@@ -337,6 +338,18 @@ export class UltrasoundTabComponent implements OnInit {
   ];
 
   orders = signal<UltrasoundOrderResponse[]>([]);
+  readonly orderSearch = signal('');
+  readonly orderPriority = signal('');
+  readonly visibleOrders = computed(() =>
+    this.orders().filter(
+      (row) =>
+        (!this.orderSearch().trim() ||
+          [row.patientDisplayName, row.patientMrn].some((value) =>
+            value?.toLocaleLowerCase().includes(this.orderSearch().trim().toLocaleLowerCase()),
+          )) &&
+        (!this.orderPriority() || row.priority === this.orderPriority()),
+    ),
+  );
   reports = signal<UltrasoundReportResponse[]>([]);
   loading = signal(false);
 

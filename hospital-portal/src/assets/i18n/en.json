@@ -5179,6 +5179,8 @@
     "PHONE_PLACEHOLDER": "e.g. +226 25 30 00 00"
   },
   "PANEL": {
+    "NETWORK_HELP": "Select a hospital to manage care-team panels and patient assignments.",
+    "ACTIVE_ASSIGNMENTS": "Active assignments",
     "TITLE": "Panel Management",
     "ASSIGN": "Empanel a patient",
     "ASSIGN_HINT": "Assigning a new owner for a role automatically ends the previous one — the history is kept.",
@@ -11098,6 +11100,7 @@
     "SOCIAL_EMPTY": "Record at least one item (habits, occupation, living situation or notes) before saving a new version."
   },
   "MATERNITY": {
+    "NETWORK_HELP": "Select a hospital for maternal histories, referrals and maternity worklists.",
     "FOREIGN_RECORDED_AT": "Recorded at {{hospital}}, read only here",
     "GA": "Gestational age",
     "GA_SHORT": "{{weeks}} wk {{days}} d",
@@ -13667,6 +13670,14 @@
     "RELOAD": "Reload page"
   },
   "CARE_DASH": {
+    "UNASSIGNED": "Not assigned",
+    "RECEIVING_TEAM": "Receiving clinician",
+    "OVERDUE_MINUTES": "Overdue by {{count}} min",
+    "MRN_HINT": "Record number: 4 digits can find candidates; confirm their full identity. Exact national ID: 12 digits.",
+    "SEARCH_PATIENT_MRN": "Name or record number (including 4 digits)",
+    "SEARCH_PATIENTS": "Search patient or record number",
+    "PAGE_FILTERS": "Filters apply to this loaded page.",
+    "LOCAL_FILTERS": "Filters apply to displayed assignments.",
     "EDUCATION_EYEBROW": "PATIENT LEARNING",
     "REGISTRY_EYEBROW": "CARE PROGRAMMES",
     "PANEL_EYEBROW": "CARE TEAM PANELS",

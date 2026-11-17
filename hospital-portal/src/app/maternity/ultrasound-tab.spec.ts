@@ -116,6 +116,21 @@ describe('UltrasoundTabComponent', () => {
     });
   });
 
+  it('patient MRN and priority filters preserve the loaded order sequence', () => {
+    create(
+      ['ROLE_SUPER_ADMIN'],
+      [
+        order({ id: 'a', patientMrn: 'CHW5624', priority: 'URGENT' }),
+        order({ id: 'b', patientMrn: 'CHW5624', priority: 'ROUTINE' }),
+      ],
+    );
+    const cmp = fixture.componentInstance;
+    cmp.orderSearch.set('5624');
+    cmp.orderPriority.set('URGENT');
+    expect(cmp.visibleOrders().map((row) => row.id)).toEqual(['a']);
+    expect(cmp.orders().map((row) => row.id)).toEqual(['a', 'b']);
+  });
+
   it('QA D1117: the priority reads in French in the list, the view and the order form', () => {
     create(['ROLE_MIDWIFE'], [order({ priority: 'STAT' })]);
     expect(texts('tbody td')).toContain('Immédiat (STAT)');

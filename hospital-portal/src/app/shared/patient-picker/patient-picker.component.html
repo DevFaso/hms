@@ -26,18 +26,31 @@
     />
     {{ 'NATIONAL_IU.SEARCH_EXACT' | translate }}
   </label>
+  @if (showMrnHint && !nationalUniqueIdMode()) {
+    <p class="hint" [id]="inputId + '-mrn-hint'">{{ 'CARE_DASH.MRN_HINT' | translate }}</p>
+  }
   <div class="patient-picker-wrap">
     <span class="material-symbols-outlined picker-search-icon">person_search</span>
     <input
       [attr.aria-label]="'COMMON.SEARCH_PATIENT' | translate"
       [id]="inputId"
+      [attr.aria-describedby]="
+        showMrnHint && !nationalUniqueIdMode() ? inputId + '-mrn-hint' : null
+      "
       [required]="required"
       [attr.aria-required]="required ? 'true' : null"
       data-submit-blank="true"
       class="picker-input"
       data-escape-discards
       type="text"
-      [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
+      [placeholder]="
+        (nationalUniqueIdMode()
+          ? 'NATIONAL_IU.SEARCH_EXACT'
+          : showMrnHint
+            ? 'CARE_DASH.SEARCH_PATIENT_MRN'
+            : 'COMMON.SEARCH_PATIENT'
+        ) | translate
+      "
       [value]="query()"
       (input)="onQueryChange($any($event.target).value)"
       (blur)="dropdownOpen.set(false)"

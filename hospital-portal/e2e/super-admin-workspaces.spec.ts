@@ -129,4 +129,78 @@ test.describe('super-admin workspaces', () => {
     await expect.poll(() => new Set(statuses).size).toBe(6);
     await expect(screen.locator('.empty-state')).toContainText('VIH');
   });
+  test('super-admin without a hospital staff profile gets the management overview', async ({
+    page,
+  }, testInfo) => {
+    await page.route('**/api/panels/my**', (route) =>
+      route.fulfill({ status: 400, json: { message: 'No local staff profile' } }),
+    );
+    await page.route('**/api/panels/overview', (route) =>
+      route.fulfill({
+        json: [
+          {
+            providerStaffId: HOME,
+            providerName: 'Team clinician',
+            panelRole: 'CHW',
+            activeCount: 3,
+          },
+        ],
+      }),
+    );
+    await page.goto(`/panels?hospitalId=${TARGET}`);
+    const screen = page.locator('app-panel');
+    await expect(screen.locator('#panel-overview-heading')).toBeVisible();
+    await expect(screen.locator('#my-panel-heading')).toHaveCount(0);
+    await expect(screen).toContainText('Rattachements actifs');
+    await expect(screen).toContainText('Team clinician');
+    await testInfo.attach('panel-management', {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: 'image/png',
+    });
+  });
+  test('maternity four-digit MRN search remains hospital-scoped and requires choosing a patient', async ({
+    page,
+  }, testInfo) => {
+    const reads: string[] = [];
+    await page.route('**/api/maternal-history/**', (route) =>
+      route.fulfill({
+        json: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
+      }),
+    );
+    await page.route('**/api/birth-plans/search**', (route) =>
+      route.fulfill({
+        json: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
+      }),
+    );
+    await page.route('**/api/patients/search**', (route) => {
+      expect(route.request().headers()['x-hospital-id']).toBe(TARGET);
+      reads.push(route.request().url());
+      return route.fulfill({
+        json: [
+          { id: HOME, firstName: 'Awa', lastName: 'Test', mrn: 'CHW5624', active: true },
+          { id: TARGET, firstName: 'Ben', lastName: 'Test', mrn: 'CHW15624', active: true },
+        ],
+      });
+    });
+    await page.goto(`/maternity?hospitalId=${TARGET}`);
+    const screen = page.locator('app-maternity');
+    await expect(screen.locator('details')).not.toHaveAttribute('open', '');
+    await screen.getByRole('button', { name: 'Plans de naissance', exact: true }).click();
+    const search = screen.locator('#bp-filter-patient');
+    await expect(search).toHaveAttribute('placeholder', /4 chiffres/);
+    await search.fill('5624');
+    await expect(screen.getByRole('option')).toHaveCount(2);
+    expect(
+      reads.some(
+        (url) =>
+          new URL(url).searchParams.get('name') === '5624' &&
+          new URL(url).searchParams.get('hospitalId') === TARGET,
+      ),
+    ).toBe(true);
+    await expect(screen.locator('.picker-chip')).toHaveCount(0);
+    await testInfo.attach('maternity-mrn-search', {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: 'image/png',
+    });
+  });
 });

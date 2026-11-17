@@ -5179,6 +5179,8 @@
     "PHONE_PLACEHOLDER": "ej. +226 25 30 00 00"
   },
   "PANEL": {
+    "NETWORK_HELP": "Seleccione un hospital para gestionar paneles y asignaciones de pacientes.",
+    "ACTIVE_ASSIGNMENTS": "Asignaciones activas",
     "TITLE": "Gestión de paneles",
     "ASSIGN": "Adscribir un paciente",
     "ASSIGN_HINT": "Asignar un nuevo responsable para un rol finaliza automáticamente el anterior — el historial se conserva.",
@@ -11098,6 +11100,7 @@
     "SOCIAL_EMPTY": "Registre al menos un elemento (hábitos, ocupación, situación de vida o notas) antes de guardar una nueva versión."
   },
   "MATERNITY": {
+    "NETWORK_HELP": "Seleccione un hospital para antecedentes, derivaciones y listas de atención materna.",
     "FOREIGN_RECORDED_AT": "Registrado en {{hospital}}, solo lectura aquí",
     "GA": "Edad gestacional",
     "GA_SHORT": "{{weeks}} sem {{days}} d",
@@ -13667,6 +13670,14 @@
     "RELOAD": "Recargar página"
   },
   "CARE_DASH": {
+    "UNASSIGNED": "Sin asignar",
+    "RECEIVING_TEAM": "Profesional destinatario",
+    "OVERDUE_MINUTES": "Retraso de {{count}} min",
+    "MRN_HINT": "Expediente: 4 dígitos pueden encontrar pacientes; confirme su identidad. Identificador nacional exacto: 12 dígitos.",
+    "SEARCH_PATIENT_MRN": "Nombre o expediente (incluidos 4 dígitos)",
+    "SEARCH_PATIENTS": "Buscar paciente o expediente",
+    "PAGE_FILTERS": "Los filtros se aplican a esta página cargada.",
+    "LOCAL_FILTERS": "Los filtros se aplican a las asignaciones mostradas.",
     "EDUCATION_EYEBROW": "APRENDIZAJE DEL PACIENTE",
     "REGISTRY_EYEBROW": "PROGRAMAS DE ATENCIÓN",
     "PANEL_EYEBROW": "PANELES DE EQUIPOS DE ATENCIÓN",
