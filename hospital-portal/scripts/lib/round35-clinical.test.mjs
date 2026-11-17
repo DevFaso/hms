@@ -59,7 +59,8 @@ export function minuteParamsByHand(html, frValue) {
     if (typeof value !== 'string') continue;
     for (const p of m[2].matchAll(/(\w+)\s*:\s*([^,]+)/g)) {
       const beforeMin = new RegExp(String.raw`\{\{\s*` + p[1] + String.raw`\s*\}\}\s*min\b`);
-      if (beforeMin.test(value) && !/\|\s*elapsed\b/.test(p[2])) hits.push(`${m[1]} ${p[2].trim()}`);
+      if (beforeMin.test(value) && !/\|\s*elapsed\b/.test(p[2]))
+        hits.push(`${m[1]} ${p[2].trim()}`);
     }
   }
   return hits;
@@ -77,11 +78,13 @@ test('no translated label prints an elapsed count of minutes by hand (QA D2126)'
 test('the D2126 scan catches the round-59 shape, and leaves the pipe alone', () => {
   const frValue = (key) => (key === 'X.OVERDUE' ? 'En retard de {{count}} min' : 'Attente {{d}}');
   assert.equal(
-    minuteParamsByHand("{{ 'X.OVERDUE' | translate: { count: overdueMinutes(r) } }}", frValue).length,
+    minuteParamsByHand("{{ 'X.OVERDUE' | translate: { count: overdueMinutes(r) } }}", frValue)
+      .length,
     1,
   );
   assert.equal(
-    minuteParamsByHand("{{ 'X.WAIT' | translate: { d: r.waitMinutes | elapsed } }}", frValue).length,
+    minuteParamsByHand("{{ 'X.WAIT' | translate: { d: r.waitMinutes | elapsed } }}", frValue)
+      .length,
     0,
   );
 });

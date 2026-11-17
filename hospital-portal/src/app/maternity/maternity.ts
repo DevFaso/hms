@@ -177,7 +177,8 @@ type MaternityTab =
 @Component({
   selector: 'app-maternity',
   standalone: true,
-  imports: [ElapsedPipe, 
+  imports: [
+    ElapsedPipe,
     DateTimePipe,
     InlineDiscardAskComponent,
     InlineSubFormDirective,

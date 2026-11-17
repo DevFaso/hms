@@ -145,7 +145,8 @@ export { currentMedications };
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [ElapsedPipe, 
+  imports: [
+    ElapsedPipe,
     MeasurePipe,
     LabValuePipe,
     LabRangePipe,
