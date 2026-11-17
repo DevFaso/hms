@@ -87,6 +87,19 @@ public class InvoiceItemMapper {
         return dto;
     }
 
+    /**
+     * Review #1197 M1 (D1105 class): the patient's copy of a line - the price charged, never the cashier's override
+     * reason, the price-list price or where the price came from.
+     */
+    public static InvoiceItemResponseDTO forPatient(InvoiceItemResponseDTO line) {
+        if (line != null) {
+            line.setOverrideReason(null);
+            line.setTariffUnitPrice(null);
+            line.setPriceSource(null);
+        }
+        return line;
+    }
+
     /** The price list's price for the line: the stored tariff when overridden, the line's own price when TARIFF. */
     public static java.math.BigDecimal tariffUnitPriceOf(InvoiceItem item) {
         if (item.getTariffUnitPrice() != null) {

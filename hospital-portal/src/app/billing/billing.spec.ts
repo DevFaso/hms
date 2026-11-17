@@ -1223,6 +1223,39 @@ describe('BillingComponent', () => {
       });
     });
 
+    it('#1197 L1: a second override asks a fresh reason, never re-sends the old one', () => {
+      component.startEditLine({ ...tariffLine, unitPrice: 1500, overrideReason: 'Remise' });
+      expect(component.editLineOverrideReason()).toBe('');
+    });
+
+    it('#1197 M2: removing a price-list line asks the reason in place and sends it', async () => {
+      const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      await component.removeItem(tariffLine);
+      expect(ask).not.toHaveBeenCalled();
+      expect(component.removingLineId()).toBe('line-t');
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="line-remove-reason-line-t"]',
+        ),
+      ).not.toBeNull();
+
+      component.confirmRemoveTariffLine(tariffLine);
+      expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
+
+      billingSpy.deleteInvoiceItem.and.returnValue(of('ok'));
+      component.removeLineReason.set('  Doublon  ');
+      component.confirmRemoveTariffLine(tariffLine);
+      expect(billingSpy.deleteInvoiceItem).toHaveBeenCalledWith('line-t', 'Doublon');
+    });
+
+    it('#1197 M2: a typed line is still removed through the confirmation, with no reason', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      billingSpy.deleteInvoiceItem.and.returnValue(of('ok'));
+      await component.removeItem(typedLine);
+      expect(billingSpy.deleteInvoiceItem).toHaveBeenCalledWith('line-m', undefined);
+    });
+
     it('keeps the tariff price without asking for a reason', () => {
       component.startEditLine(tariffLine);
       component.editLineQuantity.set(2);

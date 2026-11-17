@@ -79,8 +79,10 @@ public class InvoiceItemController {
     @Operation(summary = "Delete Invoice Item")
     public ResponseEntity<Object> deleteInvoiceItem(
         @PathVariable UUID id,
+        // Billing-money plan PR 3 (review #1197 M2): required to delete a line priced from the price list.
+        @org.springframework.web.bind.annotation.RequestParam(name = "reason", required = false) String reason,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        invoiceItemService.deleteInvoiceItem(id, locale);
+        invoiceItemService.deleteInvoiceItem(id, reason, locale);
         return ResponseEntity.ok()
                 .contentType(org.springframework.http.MediaType.parseMediaType(org.springframework.http.MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(org.springframework.web.util.HtmlUtils.htmlEscape(

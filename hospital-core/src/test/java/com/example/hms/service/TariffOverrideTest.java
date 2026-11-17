@@ -202,4 +202,71 @@ class TariffOverrideTest {
         InvoiceItemResponseDTO typed = service.createInvoiceItem(priced("500", null), Locale.FRENCH);
         assertThat(typed.getPriceSource()).isEqualTo("MANUAL");
     }
+
+    @Test
+    @DisplayName("#1197 L2: setting an overridden line back to the price list is audited, ids only")
+    void aRestoreIsAudited() {
+        service.updateInvoiceItem(line.getId(), priced("1500", "Remise"), Locale.FRENCH);
+        service.updateInvoiceItem(line.getId(), priced("2000", null), Locale.FRENCH);
+
+        ArgumentCaptor<AuditEventRequestDTO> events = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(audit, org.mockito.Mockito.times(2)).logEvent(events.capture());
+        assertThat(events.getAllValues()).extracting(AuditEventRequestDTO::getEventType).containsExactly(
+            AuditEventType.INVOICE_LINE_PRICE_OVERRIDDEN, AuditEventType.INVOICE_LINE_PRICE_RESTORED);
+        assertThat(events.getAllValues().get(1).getEventDescription()).doesNotContain("Remise").doesNotContain("2000");
+    }
+
+    @Test
+    @DisplayName("#1197 M2: a price-list line is not deleted without a reason (it could be re-added lower unseen)")
+    void deletingATariffLineNeedsAReason() {
+        assertThatThrownBy(() -> service.deleteInvoiceItem(line.getId(), " ", Locale.FRENCH))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("reason");
+                assertThat(e.getMessageKey()).isEqualTo("billing.item.deleteReasonRequired");
+            });
+        assertThatThrownBy(() -> service.deleteInvoiceItem(line.getId(), Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class);
+        verify(itemRepository, never()).delete(any());
+        verify(audit, never()).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("#1197 M2: only the cashier or an admin of the hospital deletes a price-list line")
+    void deletingATariffLineNeedsTheRole() {
+        when(roleValidator.canOverrideTariff(cashier, HOSPITAL_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.deleteInvoiceItem(line.getId(), "Doublon", Locale.FRENCH))
+            .isInstanceOf(AccessDeniedException.class);
+        verify(itemRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("#1197 M2: with a reason the line goes, audited with ids in the text and the reason in the details")
+    void aTariffLineDeletionIsAudited() {
+        service.deleteInvoiceItem(line.getId(), "Doublon de la consultation", Locale.FRENCH);
+
+        verify(itemRepository).delete(line);
+        ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(audit).logEvent(event.capture());
+        assertThat(event.getValue().getEventType()).isEqualTo(AuditEventType.INVOICE_LINE_DELETED);
+        assertThat(event.getValue().getEventDescription()).contains(line.getId().toString())
+            .contains(line.getPriceListPriceId().toString()).doesNotContain("Doublon");
+        assertThat(event.getValue().getDetails()).isEqualTo(java.util.Map.of("reason", "Doublon de la consultation"));
+    }
+
+    @Test
+    @DisplayName("#1197 M2: a typed line is deleted without a reason, as before, and the deletion is still audited")
+    void everyDeletionIsAudited() {
+        line.setPriceSource(InvoiceLinePriceSource.MANUAL);
+        line.setPriceListItemId(null);
+        line.setPriceListPriceId(null);
+
+        service.deleteInvoiceItem(line.getId(), null, Locale.FRENCH);
+
+        verify(itemRepository).delete(line);
+        ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(audit).logEvent(event.capture());
+        assertThat(event.getValue().getEventType()).isEqualTo(AuditEventType.INVOICE_LINE_DELETED);
+        assertThat(event.getValue().getDetails()).isNull();
+    }
 }

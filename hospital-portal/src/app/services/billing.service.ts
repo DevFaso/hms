@@ -322,8 +322,10 @@ export class BillingService {
     return this.http.put<InvoiceItemResponse>(`/invoice-items/${id}`, req);
   }
 
-  deleteInvoiceItem(id: string): Observable<string> {
-    return this.http.delete(`/invoice-items/${id}`, { responseType: 'text' });
+  /** Billing-money plan PR 3 (review #1197 M2): a price-list line is deleted only with a reason. */
+  deleteInvoiceItem(id: string, reason?: string): Observable<string> {
+    const params = reason ? { reason } : undefined;
+    return this.http.delete(`/invoice-items/${id}`, { responseType: 'text', params });
   }
 
   createInvoice(req: BillingInvoiceRequest): Observable<BillingInvoiceResponse> {

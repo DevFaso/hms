@@ -18,4 +18,7 @@ public interface InvoiceItemService {
     InvoiceItemResponseDTO updateInvoiceItem(UUID id, InvoiceItemRequestDTO requestDTO, Locale locale);
 
     void deleteInvoiceItem(UUID id, Locale locale);
+
+    /** Billing-money plan PR 3 (review #1197 M2): a price-list line is deleted only with a reason. */
+    void deleteInvoiceItem(UUID id, String reason, Locale locale);
 }
