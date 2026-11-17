@@ -132,9 +132,7 @@ public class PanelService {
                 .assignedBy(resolveCurrentStaff(hospitalId))
                 .build());
         } catch (DataIntegrityViolationException | OptimisticLockingFailureException e) {
-            throw new BusinessException(
-                "Another empanelment change for this patient landed at the same time — "
-                    + "reload and retry.");
+            throw new BusinessException("panel.concurrentChange.patient");
         }
 
         log.info("Empanelment: patient {} -> staff {} as {} at hospital {}",
@@ -158,7 +156,7 @@ public class PanelService {
         UUID hospitalId = requireHospital();
         PanelAssignment assignment = requireAssignmentInTenant(assignmentId, patientId, hospitalId);
         if (assignment.getStatus() != PanelAssignmentStatus.ACTIVE) {
-            throw new BusinessException("The empanelment is already ended.");
+            throw new BusinessException("panel.alreadyEnded");
         }
         assignment.setStatus(PanelAssignmentStatus.ENDED);
         assignment.setEndedOn(LocalDate.now(clock));
@@ -170,8 +168,7 @@ public class PanelService {
             // a refusal, not a silent overwrite of the first reason.
             saved = panelRepository.saveAndFlush(assignment);
         } catch (OptimisticLockingFailureException e) {
-            throw new BusinessException(
-                "The empanelment was changed at the same time by someone else — reload and retry.");
+            throw new BusinessException("panel.concurrentChange.assignment");
         }
 
         log.info("Empanelment {} ended (patient {}, {})",
@@ -198,8 +195,8 @@ public class PanelService {
         UUID hospitalId = requireHospital();
         Staff self = resolveCurrentStaff(hospitalId);
         if (self == null) {
-            throw new BusinessException(
-                "You have no staff profile at the active hospital, so you have no panel here.");
+            // QA D2127: in the caller's language, not English under Accept-Language fr.
+            throw new BusinessException("panel.my.noStaffProfile");
         }
         return providerPanelPage(self.getId(), hospitalId, page, size);
     }
@@ -252,7 +249,7 @@ public class PanelService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             // A panel without a hospital is every hospital's panel.
-            throw new BusinessException("An active hospital context is required.");
+            throw new BusinessException("panel.hospitalRequired");
         }
         return hospitalId;
     }

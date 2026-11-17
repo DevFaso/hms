@@ -252,4 +252,48 @@ describe('RoleContextService', () => {
       expect(sessionStorage.getItem('hms.heldRoles')).toBeNull();
     });
   });
+
+  // ── QA D2121: a late session bootstrap never undoes the URL's or the chip's choice ──
+  describe('super-admin scope choice', () => {
+    const HOSPITAL_B = '22222222-2222-4222-8222-222222222222';
+
+    beforeEach(() => {
+      svc.setRoles(['ROLE_SUPER_ADMIN']);
+      svc.markSuperAdminGlobalDefaults();
+    });
+
+    it('lands in global view when nothing was chosen', () => {
+      expect(svc.globalView()).toBeTrue();
+    });
+
+    it('keeps a hospital pick through a later re-hydration', () => {
+      svc.scopeToHospital(HOSPITAL_B);
+      svc.markSuperAdminGlobalDefaults();
+      expect(svc.globalView()).toBeFalse();
+      expect(svc.effectiveHospitalIdForRequest()).toBe(HOSPITAL_B);
+    });
+
+    it('a fresh login forgets the earlier pick', () => {
+      svc.scopeToHospital(HOSPITAL_B);
+      svc.resetSuperAdminScope();
+      expect(svc.globalView()).toBeTrue();
+      expect(svc.selectedHospitalId()).toBeNull();
+    });
+
+    it('sign-out forgets the pick, so the next super-admin starts global', () => {
+      svc.scopeToHospital(HOSPITAL_B);
+      svc.clearSession();
+      svc.setRoles(['ROLE_SUPER_ADMIN']);
+      svc.markSuperAdminGlobalDefaults();
+      expect(svc.globalView()).toBeTrue();
+    });
+
+    it('leaving the super-admin role (impersonation) forgets the pick', () => {
+      svc.scopeToHospital(HOSPITAL_B);
+      svc.setRoles(['ROLE_NURSE']);
+      svc.setRoles(['ROLE_SUPER_ADMIN']);
+      svc.markSuperAdminGlobalDefaults();
+      expect(svc.globalView()).toBeTrue();
+    });
+  });
 });

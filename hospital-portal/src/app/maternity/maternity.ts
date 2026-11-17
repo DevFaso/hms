@@ -1,3 +1,4 @@
+import { ElapsedPipe } from '../shared/pipes/elapsed.pipe';
 import { map } from 'rxjs';
 import { worklistCounts } from './worklist-counts';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
@@ -179,6 +180,7 @@ type MaternityTab =
   selector: 'app-maternity',
   standalone: true,
   imports: [
+    ElapsedPipe,
     DateTimePipe,
     InlineDiscardAskComponent,
     InlineSubFormDirective,
