@@ -11125,6 +11125,7 @@
     "SOCIAL_EMPTY": "Registre al menos un elemento (hábitos, ocupación, situación de vida o notas) antes de guardar una nueva versión."
   },
   "MATERNITY": {
+    "WORKLIST_COUNT_HELP": "Cantidad de la lista del hospital y del paciente seleccionados. — indica que está cargando o no está disponible. La búsqueda de texto no cambia estas cantidades.",
     "NETWORK_HELP": "Seleccione un hospital para antecedentes, derivaciones y listas de atención materna.",
     "FOREIGN_RECORDED_AT": "Registrado en {{hospital}}, solo lectura aquí",
     "GA": "Edad gestacional",

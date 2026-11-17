@@ -11125,6 +11125,7 @@
     "SOCIAL_EMPTY": "Record at least one item (habits, occupation, living situation or notes) before saving a new version."
   },
   "MATERNITY": {
+    "WORKLIST_COUNT_HELP": "Worklist count for the selected hospital and patient, if selected. — means loading or unavailable. Text search does not change these counts.",
     "NETWORK_HELP": "Select a hospital for maternal histories, referrals and maternity worklists.",
     "FOREIGN_RECORDED_AT": "Recorded at {{hospital}}, read only here",
     "GA": "Gestational age",
