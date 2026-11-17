@@ -34,11 +34,8 @@ public class InvoiceRefundRequestDTO {
         message = "{billing.payment.methodUnsupported}")
     private String method;
 
-    /** A {@code MobileMoneyOperator} code; required for MOBILE_MONEY. */
-    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.MobileMoneyOperator.CODES,
-        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE,
-        message = "{billing.refund.operatorUnsupported}")
-    private String mobileMoneyOperator;
+    /** Billing plan PR 9: Orange Money, Moov Money or another operator; required for MOBILE_MONEY, as a payment. */
+    private com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator;
 
     /** The operator's or the bank's transaction reference; required for mobile money and bank transfer. */
     @Size(max = 120, message = "{billing.refund.referenceTooLong}")

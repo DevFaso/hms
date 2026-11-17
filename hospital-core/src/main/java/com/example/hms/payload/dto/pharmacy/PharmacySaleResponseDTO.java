@@ -31,6 +31,8 @@ public class PharmacySaleResponseDTO {
     private BigDecimal totalAmount;
     private String currency;
     private String referenceNumber;
+    /** Billing plan PR 9: ORANGE_MONEY / MOOV_MONEY / AUTRE; null when not stated or not Mobile Money. */
+    private String mobileMoneyOperator;
     private String status;
     private String notes;
     private List<SaleLineResponseDTO> lines;

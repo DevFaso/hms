@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { MobileMoneyOperator } from '../shared/mobile-money-operator';
 
 /*
  * Billing invoices — /billing-invoices (+ /invoice-items). Bare DTOs and
@@ -159,6 +160,8 @@ export interface StaffPaymentRequest {
   method: StaffPaymentMethod;
   reference?: string;
   notes?: string;
+  /** Billing plan PR 9: required by the server when the method is MOBILE_MONEY. */
+  mobileMoneyOperator?: MobileMoneyOperator;
 }
 
 export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED';
@@ -170,6 +173,8 @@ export interface PaymentRow {
   paymentDate: string;
   paymentMethod: string;
   referenceNumber?: string | null;
+  /** Billing plan PR 9: ORANGE_MONEY / MOOV_MONEY / AUTRE; null when not stated. */
+  mobileMoneyOperator?: MobileMoneyOperator | null;
   notes?: string | null;
   status: PaymentStatus;
   reversalReason?: string | null;
@@ -234,9 +239,11 @@ export interface CashClosing {
   date: string;
   cashierId?: string;
   cashierName?: string | null;
+  /** Billing plan PR 9: one row per source, method and Mobile Money operator (and, PR 8, direction). */
   byMethod: {
     source: 'BILLING' | 'PHARMACY';
     method: string;
+    operator?: MobileMoneyOperator | null;
     /** Billing-money plan PR 8: absent on an older server, read as IN. */
     direction?: CashDirection;
     count: number;
@@ -249,6 +256,7 @@ export interface CashClosing {
     document?: string | null;
     patientName?: string | null;
     method?: string | null;
+    operator?: MobileMoneyOperator | null;
     reference?: string | null;
     amount: number;
     status: string;
@@ -270,10 +278,6 @@ export type InvoiceRefundStatus = 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'PAID'
 /** How a refund is handed back: never an insurer's share. */
 export const REFUND_METHODS = ['CASH', 'MOBILE_MONEY', 'BANK_TRANSFER', 'CHECK', 'OTHER'] as const;
 export type RefundMethod = (typeof REFUND_METHODS)[number];
-
-/** The mobile-money operators (MobileMoneyOperator). */
-export const MOBILE_MONEY_OPERATORS = ['ORANGE_MONEY', 'MOOV_MONEY', 'AUTRE'] as const;
-export type MobileMoneyOperator = (typeof MOBILE_MONEY_OPERATORS)[number];
 
 /** Billing-money plan PR 8: one refund of an invoice, as billing staff see it (InvoiceRefundDTO). */
 export interface InvoiceRefund {

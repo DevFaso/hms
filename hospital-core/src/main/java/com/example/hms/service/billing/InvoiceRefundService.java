@@ -165,10 +165,9 @@ public class InvoiceRefundService {
         PaymentMethod method = parseMethod(request.getMethod());
         // An insurer's share is never money at the till, in or out (QA D1611).
         TillPaymentMethods.requireReceivedAtTill(method, FIELD_METHOD);
-        MobileMoneyOperator operator = parseOperator(request.getMobileMoneyOperator());
-        if (method == PaymentMethod.MOBILE_MONEY && operator == null) {
-            throw new FieldBusinessException(FIELD_OPERATOR, "billing.refund.operatorRequired");
-        }
+        // Billing plan PR 9: the same rule as a payment taken at the till (billing.payment.operatorRequired).
+        MobileMoneyOperator operator = com.example.hms.service.payment.MobileMoneyOperators.require(method,
+            request.getMobileMoneyOperator(), FIELD_OPERATOR);
         if (REFERENCE_REQUIRED.contains(method) && reference == null) {
             throw new FieldBusinessException(FIELD_REFERENCE, "billing.refund.referenceRequired");
         }
@@ -199,7 +198,7 @@ public class InvoiceRefundService {
             .hospitalId(actor.hospitalId())
             .amount(amount)
             .method(method)
-            .mobileMoneyOperator(method == PaymentMethod.MOBILE_MONEY ? operator : null)
+            .mobileMoneyOperator(operator)
             .reference(reference)
             .reason(reason)
             .status(InvoiceRefundStatus.REQUESTED)
@@ -494,17 +493,6 @@ public class InvoiceRefundService {
         throw new FieldBusinessException(FIELD_METHOD, "billing.payment.methodUnsupported");
     }
 
-    private static MobileMoneyOperator parseOperator(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        for (MobileMoneyOperator candidate : MobileMoneyOperator.values()) {
-            if (candidate.name().equalsIgnoreCase(raw.trim())) {
-                return candidate;
-            }
-        }
-        throw new FieldBusinessException(FIELD_OPERATOR, "billing.refund.operatorUnsupported");
-    }
 
     /** A reason: at most 500 characters, never a card number. */
     private static void requireText(String text, String field) {

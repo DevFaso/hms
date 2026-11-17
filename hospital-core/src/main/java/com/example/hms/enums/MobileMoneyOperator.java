@@ -1,14 +1,17 @@
 package com.example.hms.enums;
 
 /**
- * Billing-money plan (section 3.2, V307 for refunds; V308 adds it to payments): the mobile-money operator that
- * carried the money, so the till totals Orange Money and Moov Money apart. AUTRE is any other operator.
+ * Billing plan PR 9 (scorecard M5): the operator a Mobile Money payment went
+ * through, so the cash close totals Orange Money and Moov Money apart.
+ *
+ * <p>There is no operator integration: the cashier records the payment by hand
+ * with the operator's transaction reference and checks it against the
+ * operator's merchant statement. A row recorded before V308 has no operator
+ * ("Opérateur non précisé").
  */
 public enum MobileMoneyOperator {
     ORANGE_MONEY,
     MOOV_MONEY,
-    AUTRE;
-
-    /** The edge check for a request's operator: a code in any case, or blank (left to the required rule). */
-    public static final String CODES = "\\s*+(?:ORANGE_MONEY|MOOV_MONEY|AUTRE)?\\s*+";
+    /** Another operator than Orange Money or Moov Money ("Autre opérateur"). */
+    AUTRE
 }

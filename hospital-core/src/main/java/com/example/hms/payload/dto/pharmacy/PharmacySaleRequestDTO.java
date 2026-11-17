@@ -42,6 +42,12 @@ public class PharmacySaleRequestDTO {
     @com.example.hms.validation.NoCardNumber
     private String referenceNumber;
 
+    /**
+     * Billing plan PR 9: Orange Money, Moov Money or another operator. Required
+     * when the method is MOBILE_MONEY (manual entry, no operator integration).
+     */
+    private com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator;
+
     @Size(max = 1000)
     @com.example.hms.validation.NoCardNumber
     private String notes;

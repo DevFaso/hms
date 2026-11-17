@@ -8,6 +8,7 @@ import { BillingService, CashClosing } from '../../services/billing.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { isMobileMoney, mobileMoneyOperatorLabelKey } from '../../shared/mobile-money-operator';
 
 /** Today in the browser's calendar, as YYYY-MM-DD. */
 function today(): string {
@@ -79,11 +80,20 @@ function today(): string {
               </tr>
             </thead>
             <tbody>
-              @for (t of c.byMethod; track t.source + t.method + (t.direction ?? 'IN')) {
+              @for (
+                t of c.byMethod;
+                track t.source + t.method + t.operator + (t.direction ?? 'IN')
+              ) {
                 <tr [class.money-out]="isOut(t.direction)">
                   <td>{{ t.source | keyLabel: 'BILLING.CASH_CLOSING.SOURCES.' }}</td>
                   <td>
                     {{ t.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
+                    @if (isMobileMoney(t.method)) {
+                      <!-- Billing plan PR 9: Orange Money and Moov Money are totalled apart. -->
+                      <span class="operator" data-testid="cash-closing-operator">
+                        — {{ operatorLabelKey(t.operator) | translate }}</span
+                      >
+                    }
                     @if (isOut(t.direction)) {
                       <span class="out-tag">{{
                         'BILLING.CASH_CLOSING.REFUND_TAG' | translate
@@ -149,7 +159,12 @@ function today(): string {
                   <td>{{ e.receivedAt | serverTime | date: 'shortTime' }}</td>
                   <td>{{ e.document || '—' }}</td>
                   <td>{{ e.patientName || '—' }}</td>
-                  <td>{{ e.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</td>
+                  <td>
+                    {{ e.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
+                    @if (isMobileMoney(e.method)) {
+                      <span class="operator">— {{ operatorLabelKey(e.operator) | translate }}</span>
+                    }
+                  </td>
                   <td>{{ e.reference || '—' }}</td>
                   <td class="numeric">
                     {{ isOut(e.direction) ? '−' : '' }}{{ e.amount | cfa }}
@@ -232,6 +247,8 @@ export class CashClosingComponent {
   private readonly destroyRef = inject(DestroyRef);
 
   readonly maxDate = today();
+  readonly isMobileMoney = isMobileMoney;
+  readonly operatorLabelKey = mobileMoneyOperatorLabelKey;
   readonly date = signal(today());
   readonly closing = signal<CashClosing | null>(null);
   readonly loading = signal(false);

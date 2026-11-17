@@ -317,13 +317,14 @@ class InvoiceRefundServiceTest {
                 assertThat(refusal.getField()).isEqualTo("mobileMoneyOperator"));
 
         InvoiceRefundRequestDTO noReference = InvoiceRefundRequestDTO.builder().amount(new BigDecimal("500"))
-            .method("MOBILE_MONEY").mobileMoneyOperator("ORANGE_MONEY").reason("Trop-perçu").build();
+            .method("MOBILE_MONEY").mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).reason("Trop-perçu").build();
         assertThatThrownBy(() -> service.request(invoiceId, noReference))
             .isInstanceOfSatisfying(FieldBusinessException.class, refusal ->
                 assertThat(refusal.getField()).isEqualTo("reference"));
 
         InvoiceRefundRequestDTO reused = InvoiceRefundRequestDTO.builder().amount(new BigDecimal("500"))
-            .method("MOBILE_MONEY").mobileMoneyOperator("ORANGE_MONEY").reference("OM-PAID-1").reason("Trop-perçu")
+            .method("MOBILE_MONEY").mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).reference("OM-PAID-1")
+            .reason("Trop-perçu")
             .build();
         doThrow(new FieldBusinessException("reference", PaymentReferenceRegistry.DUPLICATE_KEY))
             .when(registry).requireUnused(HOSPITAL_A, "OM-PAID-1", "reference");
@@ -333,7 +334,8 @@ class InvoiceRefundServiceTest {
         assertThat(ledger).isEmpty();
 
         InvoiceRefundRequestDTO good = InvoiceRefundRequestDTO.builder().amount(new BigDecimal("500"))
-            .method("mobile_money").mobileMoneyOperator("orange_money").reference("OM-OUT-9").reason("Trop-perçu")
+            .method("mobile_money").mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).reference("OM-OUT-9")
+            .reason("Trop-perçu")
             .build();
         InvoiceRefundDTO asked = service.request(invoiceId, good);
         assertThat(asked.getMobileMoneyOperator()).isEqualTo(MobileMoneyOperator.ORANGE_MONEY.name());
@@ -359,7 +361,8 @@ class InvoiceRefundServiceTest {
         assertThatThrownBy(() -> service.request(invoiceId, inReason))
             .isInstanceOfSatisfying(FieldBusinessException.class, refusal -> {
                 assertThat(refusal.getField()).isEqualTo("reason");
-                assertThat(refusal.getMessage()).doesNotContain("4111").contains("CVV");
+                assertThat(refusal.getMessageKey()).isEqualTo(com.example.hms.validation.NoCardNumber.MESSAGE_KEY);
+                assertThat(refusal.getMessage()).doesNotContain("4111").contains("carte");
             });
         InvoiceRefundRequestDTO inReference = InvoiceRefundRequestDTO.builder().amount(new BigDecimal("500"))
             .method("BANK_TRANSFER").reference("4111111111111111").reason("Trop-perçu").build();

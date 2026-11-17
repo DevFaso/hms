@@ -188,8 +188,8 @@ final class ComputedKeys {
             "PdfInvoiceService.java|pdf.invoice.statusValue.");
         site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.payment.method.\" + code",
             "PdfInvoiceService.java|pdf.payment.method.");
-        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.refund.operatorValue.\" + code",
-            "PdfInvoiceService.java|pdf.refund.operatorValue.");
+        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.payment.operator.\" + operator",
+            "PdfInvoiceService.java|pdf.payment.operator.");
         site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.invoice.category.\" + category.name()",
             "PdfInvoiceService.java|pdf.invoice.category.");
         site(r, d, "com/example/hms/service/PrenatalSchedulingServiceImpl.java|\"prenatal.schedule.recommendation.\" + recommendationKey(type)",
@@ -465,8 +465,10 @@ final class ComputedKeys {
         r.put("PdfInvoiceService.java|pdf.invoice.category.", enumValues("pdf.invoice.category.", ItemCategory.class));
         r.put("PdfInvoiceService.java|pdf.invoice.statusValue.", enumValues("pdf.invoice.statusValue.", InvoiceStatus.class));
         r.put("PdfInvoiceService.java|pdf.payment.method.", enumValues("pdf.payment.method.", PaymentMethod.class));
-        r.put("PdfInvoiceService.java|pdf.refund.operatorValue.",
-            enumValues("pdf.refund.operatorValue.", com.example.hms.enums.MobileMoneyOperator.class));
+        // Billing plan PR 9: a Mobile Money operator, or NOT_STATED for a row recorded before V308.
+        r.put("PdfInvoiceService.java|pdf.payment.operator.", union(
+            enumValues("pdf.payment.operator.", com.example.hms.enums.MobileMoneyOperator.class),
+            values("pdf.payment.operator.", List.of("NOT_STATED"))));
         r.put("PharmacyClaimServiceImpl.java|pharmacy.claim.status.",
             enumValues("pharmacy.claim.status.", PharmacyClaimStatus.class));
         r.put("ResultReviewServiceImpl.java|signature.type.", enumValues("signature.type.", SignatureType.class));

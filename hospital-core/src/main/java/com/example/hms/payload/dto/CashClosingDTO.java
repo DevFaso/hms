@@ -34,7 +34,10 @@ public class CashClosingDTO {
     private LocalDate date;
     private UUID cashierId;
     private String cashierName;
-    /** One row per source and method: BILLING / PHARMACY, CASH, MOBILE_MONEY, ... (still counted only). */
+    /**
+     * One row per source, method and Mobile Money operator: BILLING / PHARMACY,
+     * CASH, MOBILE_MONEY + ORANGE_MONEY, MOBILE_MONEY + MOOV_MONEY, ... (still counted only).
+     */
     private List<MethodTotal> byMethod;
     /** Every payment received that day, oldest first. */
     private List<Entry> entries;
@@ -58,7 +61,13 @@ public class CashClosingDTO {
     public static class MethodTotal {
         private String source;
         private String method;
-        /** IN (received) or OUT (refunded); one row per source, method and direction. */
+        /**
+         * Billing plan PR 9: ORANGE_MONEY / MOOV_MONEY / AUTRE for a Mobile Money
+         * payment, so Orange and Moov are totalled apart; null when not stated
+         * (older rows) or for any other method.
+         */
+        private String operator;
+        /** IN (received) or OUT (refunded); one row per source, method, operator and direction. */
         private String direction;
         private long count;
         private BigDecimal amount;
@@ -77,6 +86,12 @@ public class CashClosingDTO {
         private String document;
         private String patientName;
         private String method;
+        /**
+         * Billing plan PR 9: ORANGE_MONEY / MOOV_MONEY / AUTRE for a Mobile Money
+         * payment, so Orange and Moov are totalled apart; null when not stated
+         * (older rows) or for any other method.
+         */
+        private String operator;
         private String reference;
         private BigDecimal amount;
         /**

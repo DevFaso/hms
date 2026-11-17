@@ -57,7 +57,7 @@ class CardNumbersTest {
         assertThatThrownBy(() -> CardNumbers.requireNone("4111 1111 1111 1111", "notes"))
             .isInstanceOfSatisfying(FieldBusinessException.class, refusal -> {
                 assertThat(refusal.getField()).isEqualTo("notes");
-                assertThat(refusal.getMessageKey()).isEqualTo(CardNumbers.REFUSED_KEY);
+                assertThat(refusal.getMessageKey()).isEqualTo(com.example.hms.validation.NoCardNumber.MESSAGE_KEY);
                 assertThat(String.valueOf(refusal.getMessage())).doesNotContain("4111").doesNotContain("1111");
             });
     }

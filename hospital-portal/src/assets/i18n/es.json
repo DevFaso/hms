@@ -329,6 +329,20 @@
     "BABY_OUTCOMES": "Resultado de cada bebé",
     "FETAL_DEATH_EVENT_RECORDED": "Mortinato registrado como evento de muerte fetal (sin historia clínica): se cuenta en el registro de mortalidad."
   },
+  "MOBILE_MONEY": {
+    "OPERATOR_LABEL": "Operador",
+    "OPERATOR_CHOOSE": "Elija el operador",
+    "OPERATOR_REQUIRED": "Elija el operador del pago por dinero móvil (Orange Money, Moov Money u otro operador).",
+    "OPERATOR": {
+      "ORANGE_MONEY": "Orange Money",
+      "MOOV_MONEY": "Moov Money",
+      "AUTRE": "Otro operador",
+      "NOT_STATED": "Operador no indicado"
+    },
+    "MANUAL_ENTRY_NOTICE": "Pago introducido manualmente: compruebe la referencia en el extracto del operador.",
+    "NO_CARD_DETAILS": "Nunca introduzca un número de tarjeta, CVV ni PIN: solo la referencia de la transacción.",
+    "CARD_NUMBER_REFUSED": "Este campo parece contener un número de tarjeta. e-Keneya nunca guarda números de tarjeta: introduzca solo la referencia de la transacción."
+  },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Volver a organizaciones",
     "LOADING": "Cargando ciclo de vida…",
@@ -2552,11 +2566,6 @@
       "METHOD": "Refund method",
       "REASON": "Reason",
       "BY": "by {{name}}",
-      "OPERATORS": {
-        "ORANGE_MONEY": "Orange Money",
-        "MOOV_MONEY": "Moov Money",
-        "AUTRE": "Other operator"
-      },
       "STATUSES": {
         "REQUESTED": "Requested, to approve",
         "APPROVED": "Approved, to hand over",
@@ -2573,15 +2582,12 @@
       "CANCEL": "Cancel the request",
       "RECEIPT": "Refund receipt",
       "REQUEST_TITLE": "Refund the patient",
-      "OPERATOR": "Operator",
-      "OPERATOR_PICK": "Choose the operator",
       "REFERENCE": "Transaction reference",
       "APPROVAL_NOTE": "The request must be approved by another manager (administrator or accountant), then handed to the patient at the till.",
       "SUBMIT_REQUEST": "Request the refund",
       "REJECT_TITLE": "Reject the refund of {{amount}}",
       "CANCEL_TITLE": "Cancel the refund request of {{amount}}",
       "AMOUNT_REQUIRED": "Enter the amount to refund (more than 0).",
-      "OPERATOR_REQUIRED": "Choose the mobile money operator.",
       "REFERENCE_REQUIRED": "Enter the transaction reference (mobile money or bank transfer).",
       "REASON_REQUIRED": "Reason required: say why the money is given back to the patient.",
       "DECISION_REASON_REQUIRED": "Reason required.",
@@ -2596,8 +2602,7 @@
       "QUEUE_EMPTY": "No refund waiting.",
       "OPEN_INVOICE": "Open the invoice",
       "INVOICE": "Invoice"
-    },
-    "NO_CARD_DATA": "Never enter a card number, CVV or PIN: only the transaction reference (terminal slip, operator SMS)."
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -11199,6 +11204,7 @@
     "SOCIAL_EMPTY": "Registre al menos un elemento (hábitos, ocupación, situación de vida o notas) antes de guardar una nueva versión."
   },
   "MATERNITY": {
+    "WORKLIST_COUNT_HELP": "Cantidad de la lista del hospital y del paciente seleccionados. — indica que está cargando o no está disponible. La búsqueda de texto no cambia estas cantidades.",
     "NETWORK_HELP": "Seleccione un hospital para antecedentes, derivaciones y listas de atención materna.",
     "FOREIGN_RECORDED_AT": "Registrado en {{hospital}}, solo lectura aquí",
     "GA": "Edad gestacional",

@@ -919,7 +919,14 @@
                           p.paymentDate ? (p.paymentDate | serverTime | date: 'mediumDate') : '—'
                         }}
                       </td>
-                      <td>{{ p.paymentMethod | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</td>
+                      <td>
+                        {{ p.paymentMethod | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
+                        @if (isMobileMoney(p.paymentMethod)) {
+                          <div class="cell-secondary" data-testid="payment-operator">
+                            {{ operatorLabelKey(p.mobileMoneyOperator) | translate }}
+                          </div>
+                        }
+                      </td>
                       <td>{{ p.referenceNumber || '—' }}</td>
                       <td class="amount">{{ formatCurrency(p.amount) }}</td>
                       <td>
@@ -1385,6 +1392,28 @@
             }
           </select>
         </div>
+        @if (isMobileMoney(paymentMethod())) {
+          <!-- Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close. -->
+          <div class="field">
+            <label for="payment-operator">{{ 'MOBILE_MONEY.OPERATOR_LABEL' | translate }} *</label>
+            <select
+              required
+              aria-required="true"
+              id="payment-operator"
+              data-server-field="mobileMoneyOperator"
+              [ngModel]="paymentOperator()"
+              (ngModelChange)="paymentOperator.set($event)"
+            >
+              <option [ngValue]="null">{{ 'MOBILE_MONEY.OPERATOR_CHOOSE' | translate }}</option>
+              @for (o of mobileMoneyOperators; track o.value) {
+                <option [ngValue]="o.value">{{ o.labelKey | translate }}</option>
+              }
+            </select>
+            <p class="muted-note" data-testid="mobile-money-manual-entry">
+              {{ 'MOBILE_MONEY.MANUAL_ENTRY_NOTICE' | translate }}
+            </p>
+          </div>
+        }
         <div class="field">
           <!-- QA D1007: the methods the server refuses without a reference say so. -->
           <label for="payment-reference"
@@ -1403,6 +1432,9 @@
           />
         </div>
         <p class="muted-note">{{ 'BILLING.PAYMENT_NOTE' | translate }}</p>
+        <p class="muted-note" data-testid="payment-no-card-details">
+          {{ 'MOBILE_MONEY.NO_CARD_DETAILS' | translate }}
+        </p>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closePayment()">

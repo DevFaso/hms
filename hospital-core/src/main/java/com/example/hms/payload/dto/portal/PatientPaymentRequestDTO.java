@@ -51,6 +51,14 @@ public class PatientPaymentRequestDTO {
     private String notes;
 
     /**
+     * Billing plan PR 9: the Mobile Money operator. The portal asks for it; the
+     * mobile apps do not send it yet, so it stays optional here and a missing
+     * one is stored as "not stated".
+     */
+    @Schema(description = "Mobile Money operator, for a MOBILE_MONEY payment", example = "ORANGE_MONEY")
+    private com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator;
+
+    /**
      * QA D433: a card, transfer or mobile-money payment is declared with the
      * reference staff need to confirm it; only cash is paid at the desk.
      */

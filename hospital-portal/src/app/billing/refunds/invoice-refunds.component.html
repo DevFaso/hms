@@ -62,7 +62,7 @@
               {{ r.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
               @if (r.mobileMoneyOperator) {
                 <div class="cell-secondary">
-                  {{ r.mobileMoneyOperator | keyLabel: 'BILLING.REFUNDS.OPERATORS.' }}
+                  {{ operatorLabelKey(r.mobileMoneyOperator) | translate }}
                 </div>
               }
               @if (r.reference) {
@@ -230,16 +230,16 @@
         </div>
         @if (needsOperator()) {
           <div class="field">
-            <label for="refund-operator">{{ 'BILLING.REFUNDS.OPERATOR' | translate }} *</label>
+            <label for="refund-operator">{{ 'MOBILE_MONEY.OPERATOR_LABEL' | translate }} *</label>
             <select
               id="refund-operator"
               required
               [ngModel]="operator()"
               (ngModelChange)="operator.set($event)"
             >
-              <option value="">{{ 'BILLING.REFUNDS.OPERATOR_PICK' | translate }}</option>
+              <option value="">{{ 'MOBILE_MONEY.OPERATOR_CHOOSE' | translate }}</option>
               @for (o of operators; track o) {
-                <option [value]="o">{{ o | keyLabel: 'BILLING.REFUNDS.OPERATORS.' }}</option>
+                <option [value]="o.value">{{ o.labelKey | translate }}</option>
               }
             </select>
           </div>
@@ -271,7 +271,7 @@
         </div>
         <p class="no-card-notice" role="note" data-testid="no-card-notice">
           <span class="material-symbols-outlined" aria-hidden="true">credit_card_off</span>
-          {{ 'BILLING.NO_CARD_DATA' | translate }}
+          {{ 'MOBILE_MONEY.NO_CARD_DETAILS' | translate }}
         </p>
         <p class="muted-note">{{ 'BILLING.REFUNDS.APPROVAL_NOTE' | translate }}</p>
       </div>
@@ -339,7 +339,7 @@
         </div>
         <p class="no-card-notice" role="note">
           <span class="material-symbols-outlined" aria-hidden="true">credit_card_off</span>
-          {{ 'BILLING.NO_CARD_DATA' | translate }}
+          {{ 'MOBILE_MONEY.NO_CARD_DETAILS' | translate }}
         </p>
       </div>
       <div class="modal-actions">

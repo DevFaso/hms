@@ -20,7 +20,6 @@ import {
   BillingInvoiceResponse,
   BillingService,
   InvoiceRefund,
-  MOBILE_MONEY_OPERATORS,
   REFUND_METHODS,
   RefundMethod,
 } from '../../services/billing.service';
@@ -36,6 +35,12 @@ import { refusalReason } from '../../shared/refusal-reason';
 import { joinReasons } from '../../shared/required-fields';
 import { saveResponse } from '../../shared/download-file';
 import { cfaAmountMessageKey, cfaAmountProblem } from '../../shared/cfa-amount';
+import {
+  MOBILE_MONEY_OPERATORS,
+  containsCardNumber,
+  isMobileMoney,
+  mobileMoneyOperatorLabelKey,
+} from '../../shared/mobile-money-operator';
 
 /** The request form's fields, in the order a refusal marks them. */
 const AMOUNT_ID = 'refund-amount';
@@ -131,7 +136,9 @@ export class InvoiceRefundsComponent {
   readonly reference = signal('');
   readonly reason = signal('');
   private requestKey = newRequestKey();
-  readonly needsOperator = computed(() => this.method() === 'MOBILE_MONEY');
+  readonly needsOperator = computed(() => isMobileMoney(this.method()));
+  /** Billing plan PR 9: the stored operator's label ("Opérateur non précisé" when none). */
+  readonly operatorLabelKey = mobileMoneyOperatorLabelKey;
   readonly needsReference = computed(() => REFERENCE_REQUIRED.includes(this.method()));
 
   /* ── the reject / cancel dialog ── */
@@ -219,8 +226,17 @@ export class InvoiceRefundsComponent {
     if (this.needsOperator() && !this.operator()) {
       refused.push({
         id: OPERATOR_ID,
-        message: this.translate.instant('BILLING.REFUNDS.OPERATOR_REQUIRED'),
+        message: this.translate.instant('MOBILE_MONEY.OPERATOR_REQUIRED'),
       });
+    }
+    // Owner decision D-15: never a card number, said before anything is sent (the server refuses it too).
+    for (const [id, value] of [
+      [REFERENCE_ID, this.reference()],
+      [REASON_ID, this.reason()],
+    ] as const) {
+      if (containsCardNumber(value)) {
+        refused.push({ id, message: this.translate.instant('MOBILE_MONEY.CARD_NUMBER_REFUSED') });
+      }
     }
     if (this.needsReference() && !this.reference().trim()) {
       refused.push({

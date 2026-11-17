@@ -237,8 +237,15 @@ public class PdfInvoiceService {
             w.down(15);
             w.text(BODY, 11, MARGIN, t.get("pdf.receipt.date", t.fmt(payment.getPaymentDate())));
             w.down(15);
-            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.method", methodLabel(t, payment)));
-            if (payment.getReferenceNumber() != null && !payment.getReferenceNumber().isBlank()) {
+            boolean hasReference = payment.getReferenceNumber() != null && !payment.getReferenceNumber().isBlank();
+            if (hasReference && payment.getPaymentMethod() == com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {
+                // Billing plan PR 9: "Orange Money, réf. …" on one line.
+                w.text(BODY, 11, MARGIN, t.get("pdf.receipt.methodWithReference", methodLabel(t, payment),
+                    payment.getReferenceNumber()));
+            } else {
+                w.text(BODY, 11, MARGIN, t.get("pdf.receipt.method", methodLabel(t, payment)));
+            }
+            if (hasReference && payment.getPaymentMethod() != com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {
                 w.down(15);
                 w.text(BODY, 11, MARGIN, t.get("pdf.receipt.reference", payment.getReferenceNumber()));
             }
@@ -292,12 +299,8 @@ public class PdfInvoiceService {
             w.text(BODY, 11, MARGIN, t.get("pdf.refund.date",
                 refund.getPaidAt() != null ? t.fmt(refund.getPaidAt()) : ""));
             w.down(15);
-            w.text(BODY, 11, MARGIN, t.get("pdf.refund.method", methodLabel(t, refund.getMethod())));
-            if (refund.getMobileMoneyOperator() != null) {
-                w.down(15);
-                w.text(BODY, 11, MARGIN, t.get("pdf.refund.operator",
-                    operatorLabel(t, refund.getMobileMoneyOperator())));
-            }
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.method",
+                methodLabel(t, refund.getMethod(), refund.getMobileMoneyOperator())));
             if (refund.getReference() != null && !refund.getReference().isBlank()) {
                 w.down(15);
                 w.text(BODY, 11, MARGIN, t.get("pdf.receipt.reference", refund.getReference()));
@@ -372,21 +375,24 @@ public class PdfInvoiceService {
     }
 
     private static String methodLabel(PdfLabels t, PaymentTransaction p) {
-        return methodLabel(t, p.getPaymentMethod());
+        return methodLabel(t, p.getPaymentMethod(), p.getMobileMoneyOperator());
     }
 
-    private static String methodLabel(PdfLabels t, com.example.hms.enums.PaymentMethod method) {
+    /**
+     * The method in the paper's language. Billing plan PR 9: a Mobile Money payment (or, PR 8, refund) prints its
+     * operator, or says it was not stated.
+     */
+    private static String methodLabel(PdfLabels t, com.example.hms.enums.PaymentMethod method,
+                                      com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator) {
         if (method == null) {
             return "";
         }
+        if (method == com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {
+            String operator = mobileMoneyOperator != null ? mobileMoneyOperator.name() : "NOT_STATED";
+            return t.getOrCode("pdf.payment.operator." + operator, operator);
+        }
         String code = method.name();
         return t.getOrCode("pdf.payment.method." + code, code);
-    }
-
-    /** Billing-money plan PR 8: the mobile-money operator of a refund, in the paper's language. */
-    private static String operatorLabel(PdfLabels t, com.example.hms.enums.MobileMoneyOperator operator) {
-        String code = operator.name();
-        return t.getOrCode("pdf.refund.operatorValue." + code, code);
     }
 
     /** The line's own description; the category label only when the line has none. */
