@@ -336,9 +336,11 @@ class PayerCataloguePostgresIT {
                 + "default_coverage_percent, per_invoice_ceiling, effective_from) VALUES (?, ?, 50, 100.5, ?)",
             hospitalA, planId, day))
             .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_payer_terms_invoice_cap");
+        LocalDate laterFrom = day.plusDays(5);
+        LocalDate laterTo = day.plusDays(6);
         assertThatThrownBy(() -> jdbc.update("INSERT INTO billing.payer_plan_terms (hospital_id, plan_id, "
                 + "default_coverage_percent, effective_from, effective_to) VALUES (?, ?, 50, ?, ?)", hospitalB, planId,
-                day.plusDays(5), day.plusDays(6)))
+                laterFrom, laterTo))
             .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("fk_payer_terms_plan");
         assertThatThrownBy(() -> jdbc.update("INSERT INTO billing.payer_plans (hospital_id, payer_id, code, name, "
                 + "effective_from) VALUES (?, ?, 'Y', 'Y', ?)",
