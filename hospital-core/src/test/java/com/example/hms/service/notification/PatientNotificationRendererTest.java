@@ -61,6 +61,7 @@ class PatientNotificationRendererTest {
     @Mock private PatientLocaleResolver localeResolver;
 
     private PatientNotificationRenderer renderer;
+    private final PatientNotificationProperties properties = new PatientNotificationProperties();
     private Patient patient;
     private Hospital hospital;
     private LabOrder order;
@@ -71,7 +72,7 @@ class PatientNotificationRendererTest {
         renderer = new PatientNotificationRenderer(repository, patientRepository, hospitalRepository,
             appointmentRepository, labOrderRepository, labResultRepository, imagingReportRepository,
             ultrasoundReportRepository, consent, localeResolver, TestMessageSources.bundles(),
-            Clock.fixed(NOW, ZoneOffset.UTC));
+            Clock.fixed(NOW, ZoneOffset.UTC), properties);
         patient = new Patient();
         patient.setId(UUID.randomUUID());
         patient.setPhoneNumberPrimary("+22670707070");
@@ -197,6 +198,51 @@ class PatientNotificationRendererTest {
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
         row.setStatus(NotificationDeliveryStatus.PENDING);
+        assertThat(renderer.prepare(row.getId())).isNull();
+        assertThat(row.getErrorCode()).isEqualTo("SUBJECT_WITHDRAWN");
+    }
+
+    @Test
+    @DisplayName("EMAIL_RECIPIENT_ALLOWLIST: an address not listed is skipped, a listed one is sent")
+    void emailAllowlist() {
+        properties.setEmailRecipientAllowlist("tester@example.com");
+        PatientNotificationDelivery row = row(PatientNotificationEvent.LAB_RESULT_AVAILABLE, order.getId(),
+            NotificationChannel.EMAIL);
+
+        assertThat(renderer.prepare(row.getId())).isNull();
+        assertThat(row.getStatus()).isEqualTo(NotificationDeliveryStatus.SKIPPED);
+        assertThat(row.getErrorCode()).isEqualTo("RECIPIENT_NOT_ALLOWED");
+
+        properties.setEmailRecipientAllowlist("Tester@Example.com, AWA@example.com");
+        row.setStatus(NotificationDeliveryStatus.PENDING);
+        assertThat(renderer.prepare(row.getId())).isNotNull();
+        assertThat(EmailRecipientAllowlist.parse(" ").restricts()).isFalse();
+        assertThat(EmailRecipientAllowlist.parse(",,").permits("awa@example.com")).isFalse();
+    }
+
+    @Test
+    @DisplayName("without a stated language, the configured reminder locale is used")
+    void configuredFallbackLocale() {
+        org.springframework.test.util.ReflectionTestUtils.setField(renderer, "fallbackLocale", "en");
+        PatientNotificationDelivery row = row(PatientNotificationEvent.LAB_RESULT_AVAILABLE, order.getId(),
+            NotificationChannel.SMS);
+
+        assertThat(renderer.prepare(row.getId()).body()).startsWith("CMA Pissy: a new result is available.");
+    }
+
+    @Test
+    @DisplayName("only the latest imaging report version decides: a newer unsigned version is not announced")
+    void latestImagingVersionDecides() {
+        UUID imagingOrderId = UUID.randomUUID();
+        com.example.hms.model.ImagingReport signedOriginal = org.mockito.Mockito.mock(com.example.hms.model.ImagingReport.class);
+        com.example.hms.model.ImagingReport draftAddendum = org.mockito.Mockito.mock(com.example.hms.model.ImagingReport.class);
+        lenient().when(signedOriginal.isReleasedToPatient()).thenReturn(true);
+        when(draftAddendum.isReleasedToPatient()).thenReturn(false);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId))
+            .thenReturn(List.of(draftAddendum, signedOriginal));
+        PatientNotificationDelivery row = row(PatientNotificationEvent.IMAGING_RESULT_AVAILABLE, imagingOrderId,
+            NotificationChannel.SMS);
+
         assertThat(renderer.prepare(row.getId())).isNull();
         assertThat(row.getErrorCode()).isEqualTo("SUBJECT_WITHDRAWN");
     }

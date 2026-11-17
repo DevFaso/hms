@@ -75,6 +75,20 @@ class PatientNotificationDispatchServiceTest {
         lenient().when(renderer.prepare(row.getId()))
             .thenReturn(new PatientNotificationRenderer.Prepared(NotificationChannel.SMS, PHONE, null, "texte"));
         lenient().when(smsService.deliversRealSms()).thenReturn(true);
+        // The conditional outcome writes, applied to the row as the database would while the claim holds.
+        lenient().when(repository.markSent(eq(row.getId()), any(), any(), any(), any())).thenAnswer(inv -> {
+            row.setStatus(inv.getArgument(3));
+            row.setSentAt(inv.getArgument(4));
+            row.setErrorCode(null);
+            return 1;
+        });
+        lenient().when(repository.markFailure(eq(row.getId()), any(), any(), any(), any(), any(), any()))
+            .thenAnswer(inv -> {
+                row.setStatus(inv.getArgument(3));
+                row.setErrorCode(inv.getArgument(4));
+                row.setNextAttemptAt(inv.getArgument(5));
+                return 1;
+            });
     }
 
     @Test
@@ -134,6 +148,30 @@ class PatientNotificationDispatchServiceTest {
     }
 
     @Test
+    @DisplayName("an SMS failure nobody classified is an unknown outcome: never resent automatically")
+    void unclassifiedSmsFailureIsUnknown() {
+        doThrow(new IllegalStateException("IKODDI exploded")).when(smsService).send(anyString(), anyString());
+
+        service.dispatchPending();
+
+        assertThat(row.getStatus()).isEqualTo(NotificationDeliveryStatus.FAILED);
+        assertThat(row.getErrorCode()).isEqualTo("OUTCOME_UNKNOWN");
+    }
+
+    @Test
+    @DisplayName("an outcome is written with the claim token: a sweep that lost its claim never overwrites")
+    void outcomeIsWrittenUnderTheClaim() {
+        when(repository.markSent(eq(row.getId()), any(), any(), any(), any())).thenReturn(0);
+        org.mockito.ArgumentCaptor<LocalDateTime> claimedAt = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+
+        service.dispatchPending();
+
+        verify(repository).claim(eq(row.getId()), any(), anyInt(), claimedAt.capture(), any());
+        verify(repository).markSent(eq(row.getId()), eq(claimedAt.getValue()), any(), any(), any());
+        assertThat(row.getStatus()).as("the newer attempt's state is untouched").isEqualTo(NotificationDeliveryStatus.PENDING);
+    }
+
+    @Test
     @DisplayName("a refused message is FAILED at once")
     void rejectedIsPermanent() {
         doThrow(new IllegalStateException("sms.provider.rejected")).when(smsService).send(anyString(), anyString());
@@ -170,6 +208,8 @@ class PatientNotificationDispatchServiceTest {
     @Test
     @DisplayName("an email goes through the synchronous transport, and an SMTP failure is retried")
     void emailRetries() {
+        row.setChannel(NotificationChannel.EMAIL);
+        row.setChannel(NotificationChannel.EMAIL);
         when(renderer.prepare(row.getId())).thenReturn(new PatientNotificationRenderer.Prepared(
             NotificationChannel.EMAIL, "awa@example.com", "Sujet", "<p>x</p>"));
         doThrow(new MailSendException("smtp down awa@example.com")).when(emailService)
@@ -211,7 +251,8 @@ class PatientNotificationDispatchServiceTest {
     @Test
     @DisplayName("an unconfigured transport maps to a retryable code")
     void transportUnavailableCode() {
-        assertThat(PatientNotificationErrorCode.of(new NotificationTransportUnavailableException("x")))
+        assertThat(PatientNotificationErrorCode.of(new NotificationTransportUnavailableException("x"),
+            NotificationChannel.SMS))
             .isEqualTo(PatientNotificationErrorCode.TRANSPORT_UNAVAILABLE)
             .extracting(PatientNotificationErrorCode::retryable).isEqualTo(true);
     }

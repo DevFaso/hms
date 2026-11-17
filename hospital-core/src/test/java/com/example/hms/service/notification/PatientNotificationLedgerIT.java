@@ -170,6 +170,30 @@ class PatientNotificationLedgerIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("an outcome is written only by the sweep that still holds the claim")
+    void theOutcomeNeedsTheClaimToken() {
+        PatientNotificationDelivery saved = repository.saveAndFlush(row(UUID.randomUUID(), hospital.getId()));
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        List<NotificationDeliveryStatus> open = PatientNotificationDispatchService.OPEN;
+        LocalDateTime firstClaim = LocalDateTime.now(clock).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        LocalDateTime secondClaim = firstClaim.plusMinutes(6);
+        tx.execute(s -> repository.claim(saved.getId(), open, 5, firstClaim, firstClaim.plusMinutes(5)));
+        // The first send outlived its lease: a second sweep claimed the row again.
+        tx.execute(s -> repository.claim(saved.getId(), open, 5, secondClaim, secondClaim.plusMinutes(5)));
+
+        Integer stale = tx.execute(s -> repository.markFailure(saved.getId(), firstClaim, open,
+            NotificationDeliveryStatus.FAILED, "OUTCOME_UNKNOWN", firstClaim, firstClaim));
+        Integer current = tx.execute(s -> repository.markSent(saved.getId(), secondClaim, open,
+            NotificationDeliveryStatus.SENT, secondClaim));
+
+        assertThat(stale).as("the first sweep lost its claim and writes nothing").isZero();
+        assertThat(current).isEqualTo(1);
+        PatientNotificationDelivery reloaded = repository.findById(saved.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(NotificationDeliveryStatus.SENT);
+        assertThat(reloaded.getErrorCode()).isNull();
+    }
+
+    @Test
     @DisplayName("a FAILED row is requeued only from its own hospital, and only once")
     void requeueIsScopedAndOnce() {
         PatientNotificationDelivery row = row(UUID.randomUUID(), hospital.getId());

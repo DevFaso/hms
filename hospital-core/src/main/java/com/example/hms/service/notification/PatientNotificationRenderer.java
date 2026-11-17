@@ -20,11 +20,11 @@ import com.example.hms.repository.PatientNotificationDeliveryRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.service.AppointmentReminderService;
-import com.example.hms.service.EmailService;
 import com.example.hms.service.i18n.PatientLocaleResolver;
 import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -53,10 +53,12 @@ import java.util.UUID;
  * <p><b>No clinical content.</b> An appointment message carries the day, the time and the hospital's
  * name, the existing reminder's text; a result message says only that a result is available at the
  * hospital and to log in. Never the test, the value, the modality, the department or a diagnosis:
- * an SMS is read on a shared phone. {@code PatientNotificationContentGuardTest} holds that.
+ * an SMS is read on a shared phone. {@code PatientNotificationRoutingGuardTest} holds the result
+ * templates to it.
  *
- * <p>The language is the patient's own ({@link PatientLocaleResolver}), French when they stated
- * none we can write.
+ * <p>The language is the patient's own ({@link PatientLocaleResolver}). When they stated none we can
+ * write, it is the configured {@code hms.appointments.reminder.locale} (French by default), as the
+ * reminder sweep does.
  */
 @Slf4j
 @Component
@@ -94,6 +96,14 @@ public class PatientNotificationRenderer {
     private final PatientLocaleResolver localeResolver;
     private final MessageSource messageSource;
     private final Clock clock;
+    private final PatientNotificationProperties properties;
+
+    /**
+     * The fallback language, the reminder sweep's own setting ({@code AppointmentReminderService}):
+     * a sweep has no request locale, and Burkina Faso deployments default to French.
+     */
+    @Value("${hms.appointments.reminder.locale:fr}")
+    private String fallbackLocale = "fr";
 
     /**
      * @return the message, or null when the row was skipped (and recorded so) or is no longer open
@@ -120,7 +130,12 @@ public class PatientNotificationRenderer {
         if (!StringUtils.hasText(recipient)) {
             return skip(row, PatientNotificationErrorCode.NO_CONTACT);
         }
-        Locale locale = localeResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
+        if (row.getChannel() == NotificationChannel.EMAIL
+            && !EmailRecipientAllowlist.parse(properties.getEmailRecipientAllowlist()).permits(recipient)) {
+            // Dev / uat: EMAIL_RECIPIENT_ALLOWLIST, the email twin of SMS_RECIPIENT_ALLOWLIST.
+            return skip(row, PatientNotificationErrorCode.RECIPIENT_NOT_ALLOWED);
+        }
+        Locale locale = localeResolver.resolve(patient, Locale.forLanguageTag(fallbackLocale));
         String hospitalName = hospitalRepository.findById(row.getHospitalId())
             .map(Hospital::getName).filter(StringUtils::hasText).orElse("");
 
@@ -176,9 +191,12 @@ public class PatientNotificationRenderer {
                 .filter(order -> order.getStatus() != LabOrderStatus.ENTERED_IN_ERROR)
                 .isPresent()
                 && labResultRepository.findByLabOrder_Id(subjectId).stream().anyMatch(LabResult::isReleased);
+            // The order's current read: its latest version, as the patient's chart shows it. A
+            // newer version that is voided or not yet signed is not announced as a result.
             case IMAGING_RESULT_AVAILABLE -> imagingReportRepository
                 .findByImagingOrder_IdOrderByReportVersionDesc(subjectId).stream()
-                .anyMatch(ImagingReport::isReleasedToPatient);
+                .findFirst()
+                .map(ImagingReport::isReleasedToPatient).orElse(false);
             case ULTRASOUND_RESULT_AVAILABLE -> ultrasoundReportRepository.findByIdUnscoped(subjectId)
                 .map(UltrasoundReport::isReleasedToPatient).orElse(false);
             default -> false;

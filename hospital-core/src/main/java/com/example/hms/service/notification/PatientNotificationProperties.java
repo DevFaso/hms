@@ -31,6 +31,12 @@ public class PatientNotificationProperties {
     /** Ceiling of the doubling backoff. */
     private long maxBackoffSeconds = 3_600;
 
+    /**
+     * {@code EMAIL_RECIPIENT_ALLOWLIST}: when set, the only addresses the ledger's emails may go to
+     * ({@link EmailRecipientAllowlist}). Blank (production) means no restriction.
+     */
+    private String emailRecipientAllowlist = "";
+
     /** How long a claimed row is reserved for the instance sending it. Must outlast the transport timeouts. */
     private long claimLeaseSeconds = 300;
 }
