@@ -52,3 +52,40 @@ that static scanning can establish correct clinical meaning.
   passing tests. The final display correction is rerun before publication.
 - Translation parity/referenced keys, source guards and script tests remain
   enabled; no quality-gate floor or baseline is lowered.
+
+
+## Review follow-up on 738ff70ae
+
+- Confirmed and corrected: global chart and medical-history views must remain
+  readable without offering local clinical writes. Their write role gates now
+  also require effective hospital scope; submission methods reject a missing
+  scope. Unscoped chart rows never receive local edit actions. Component tests
+  enumerate chart/history submit paths without invoking a write API.
+- Confirmed and corrected: verification success no longer prints an untranslated
+  server message; Spanish signature subtitle encoding repaired. ROI decision
+  dialogs omit unknown hospital confirmation, matching intake behavior. ROI
+  date and registry name comparators tolerate absent display fields.
+- Registry All is a client merge of six capped status pages, sorted by overdue
+  days then name and capped at 200. New copy says this explicitly; individual
+  status default ordering is unchanged. ROI retains oldest-first queue ordering
+  deliberately, including when capped; switching to newest-first was a review
+  preference rather than an established requirement.
+- Missing maternal names no longer match the translated fallback phrase. The
+  global procedure browser assertion waits for network idle before checking
+  that no clinical worklist request was fired. Duplicate SEARCH_PATIENTS keys
+  introduced by the earlier additions are separated into SEARCH_PATIENT_RECORD.
+- Procedure scope-change reload concern: HospitalScopeGateService.outletKey and
+  shell.html recreate gated route components whenever effective hospital changes.
+  Procedure and maternity routes require hospital scope. Also reset procedure
+  saving before discarding a stale callback, and suppress stale error toasts.
+- Network education behavior is confirmed by PatientEducationController's
+  resolveHospitalScope and service/impl/PatientEducationServiceImpl.getAllResources:
+  null scope is reserved for a global super-admin and queries all active resources.
+- The single-shift UI was part of the earlier workflow implementation, not a
+  feature added by the CI repair. StaffSchedulingController.scheduleShift admits
+  the established scheduling roles; StaffSchedulingServiceImpl.scheduleShift
+  calls ensureStaffBelongsToHospital and ensureSchedulerPermissions. These checks
+  remain unchanged. The overlapping workflow/translation changes come from #1196.
+
+The pre-follow-up published heads of #1196 and #1198 passed every required CI
+check, including accessibility and Sonar. Follow-up commits require fresh CI.

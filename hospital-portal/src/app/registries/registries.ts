@@ -118,7 +118,7 @@ export class RegistriesComponent implements OnInit, OnDestroy {
         this.sortBy() === 'nextVisit'
           ? (a.nextExpectedVisit ?? '9999').localeCompare(b.nextExpectedVisit ?? '9999')
           : this.sortBy() === 'name'
-            ? a.patientName.localeCompare(b.patientName)
+            ? (a.patientName ?? '').localeCompare(b.patientName ?? '')
             : 0,
       );
   });
@@ -172,7 +172,7 @@ export class RegistriesComponent implements OnInit, OnDestroy {
                       .sort(
                         (a, b) =>
                           b.overdueDays - a.overdueDays ||
-                          a.patientName.localeCompare(b.patientName),
+                          (a.patientName ?? '').localeCompare(b.patientName ?? ''),
                       )
                       .slice(0, RegistriesComponent.PAGE_SIZE),
                     totalElements: pages.reduce((sum, page) => sum + page.totalElements, 0),

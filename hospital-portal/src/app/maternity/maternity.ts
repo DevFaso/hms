@@ -283,7 +283,7 @@ export class MaternityComponent implements OnInit {
     this.histories().filter(
       (row) =>
         !this.boardSearch().trim() ||
-        this.patientName(row.patientId)
+        (this.patientNames().get(row.patientId) ?? '')
           .toLocaleLowerCase()
           .includes(this.boardSearch().trim().toLocaleLowerCase()),
     ),

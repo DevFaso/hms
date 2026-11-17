@@ -7,6 +7,8 @@ import { MedicalHistoryTabComponent } from './medical-history-tab.component';
 import { MedicalHistoryService } from '../../services/medical-history.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
+import { RoleContextService } from '../../core/role-context.service';
+import { roleContextStub } from '../../testing/role-context.stub';
 
 describe('MedicalHistoryTabComponent — past PEV doses (QA D1003)', () => {
   let component: MedicalHistoryTabComponent;
@@ -34,6 +36,14 @@ describe('MedicalHistoryTabComponent — past PEV doses (QA D1003)', () => {
         { provide: MedicalHistoryService, useValue: history },
         { provide: AuthService, useValue: auth },
         {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: false,
+            hospitalId: 'h1',
+            roles: ['ROLE_DOCTOR'],
+          }),
+        },
+        {
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
         },
@@ -42,6 +52,21 @@ describe('MedicalHistoryTabComponent — past PEV doses (QA D1003)', () => {
     component = TestBed.createComponent(MedicalHistoryTabComponent).componentInstance;
     component.patientId = 'p1';
     spyOn(component as never, 'loadImmunizations');
+  });
+
+  it('refuses clinical history submissions without a selected hospital', () => {
+    spyOn(TestBed.inject(RoleContextService), 'effectiveHospitalIdForRequest').and.returnValue(
+      null,
+    );
+    expect(component.canEditSocialFamily()).toBeFalse();
+    expect(component.canEditImmunizations()).toBeFalse();
+    expect(component.canMarkReminder()).toBeFalse();
+    component.submitSocial();
+    component.submitFamily();
+    component.submitImmunization();
+    component.markReminderSent({ id: 'im1' } as never);
+    expect(history.createImmunization).not.toHaveBeenCalled();
+    expect(history.updateImmunization).not.toHaveBeenCalled();
   });
 
   it('a 2021 dose from the card is recorded as such, with no vaccinator here', () => {

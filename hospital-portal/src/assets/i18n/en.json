@@ -13047,6 +13047,7 @@
     "NO_EXPIRY": "Does not expire"
   },
   "REGISTRIES": {
+    "ALL_MERGED_HINT": "All statuses combines the first loaded page of each status, sorted here by overdue days then name; at most 200 rows are displayed.",
     "TITLE": "Disease Registries",
     "SUBTITLE": "Who is enrolled in each care programme, and who is overdue for a visit.",
     "ENROLL": "Enrol patient",
@@ -13675,7 +13676,7 @@
     "OVERDUE_MINUTES": "Overdue by {{count}} min",
     "MRN_HINT": "Record number: 4 digits can find candidates; confirm their full identity. Exact national ID: 12 digits.",
     "SEARCH_PATIENT_MRN": "Name or record number (including 4 digits)",
-    "SEARCH_PATIENTS": "Search patient or record number",
+    "SEARCH_PATIENT_RECORD": "Search patient or record number",
     "PAGE_FILTERS": "Filters apply to this loaded page.",
     "LOCAL_FILTERS": "Filters apply to displayed assignments.",
     "EDUCATION_EYEBROW": "PATIENT LEARNING",

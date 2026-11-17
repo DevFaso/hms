@@ -103,19 +103,25 @@ export class MedicalHistoryTabComponent implements OnInit {
   private readonly host = inject(ElementRef<HTMLElement>);
 
   /** Social/family writes; immunization writes additionally allow PHARMACIST. */
-  readonly canEditSocialFamily = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_NURSE',
-    'ROLE_MIDWIFE',
-  ]);
-  readonly canEditImmunizations = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_NURSE',
-    'ROLE_MIDWIFE',
-    'ROLE_PHARMACIST',
-  ]);
+  readonly canEditSocialFamily = computed(
+    () =>
+      !!this.hospitalId() &&
+      this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']),
+  );
+  readonly canEditImmunizations = computed(
+    () =>
+      !!this.hospitalId() &&
+      this.roleContext.hasAnyActiveRole([
+        'ROLE_DOCTOR',
+        'ROLE_NURSE',
+        'ROLE_MIDWIFE',
+        'ROLE_PHARMACIST',
+      ]),
+  );
   /** mark-reminder-sent ∩ read roles. */
-  readonly canMarkReminder = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE']);
+  readonly canMarkReminder = computed(
+    () => !!this.hospitalId() && this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE']),
+  );
 
   section = signal<HistorySection>('social');
 
@@ -247,6 +253,7 @@ export class MedicalHistoryTabComponent implements OnInit {
   }
 
   submitSocial(): void {
+    if (!this.hospitalId()) return;
     if (!this.socialForm.patientId || !this.socialForm.recordedDate) return;
     if (!hasClinicalContent(this.socialForm, SOCIAL_CONTENT_FIELDS)) {
       // QA D1148: an empty version was stored and superseded the record.
@@ -344,6 +351,7 @@ export class MedicalHistoryTabComponent implements OnInit {
   }
 
   submitFamily(): void {
+    if (!this.hospitalId()) return;
     const form = this.familyForm;
     if (!form.relationship.trim() || !form.conditionDisplay.trim()) {
       // QA D1358: name the blank fields, not a fixed list.
@@ -588,6 +596,7 @@ export class MedicalHistoryTabComponent implements OnInit {
   }
 
   submitImmunization(): void {
+    if (!this.hospitalId()) return;
     const form = this.immunizationForm;
     // QA D1003: the CVX code is optional (a PEV vaccine may have none).
     if (!form.vaccineDisplay.trim() || !form.administrationDate) {
@@ -649,6 +658,7 @@ export class MedicalHistoryTabComponent implements OnInit {
   }
 
   markReminderSent(immunization: ImmunizationResponse): void {
+    if (!this.hospitalId()) return;
     this.reminderBusyId.set(immunization.id);
     this.historyService.markReminderSent(immunization.id).subscribe({
       next: () => {

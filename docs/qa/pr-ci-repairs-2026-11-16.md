@@ -1,4 +1,4 @@
-﻿# PR CI repairs — 2026-11-16
+# PR CI repairs — 2026-11-16
 
 | Defect | Class | Instances | Correction | Guard/evidence |
 | --- | --- | --- | --- | --- |

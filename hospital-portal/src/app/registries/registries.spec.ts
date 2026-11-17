@@ -119,6 +119,17 @@ describe('RegistriesComponent', () => {
     expect(component.totalRows()).toBe(6);
   });
 
+  it('merges All and sorts names without crashing on missing patient display names', () => {
+    fixture.detectChanges();
+    registryService.registry.and.returnValue(
+      of(page([enrollment({ patientName: null as unknown as string })])),
+    );
+    component.setStatusFilter('ALL');
+    expect(component.rows().length).toBe(6);
+    component.sortBy.set('name');
+    expect(component.visibleRows().length).toBe(6);
+  });
+
   it('filters overdue loaded patients and sorts dates only when selected, retaining source totals', () => {
     registryService.registry.and.returnValue(
       of(

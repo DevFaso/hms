@@ -333,15 +333,16 @@ export class ProcedureOrdersComponent implements OnInit {
     // UTC and the list reads it back through serverTime.
     this.orderService.create(withServerDateTimes(form, ['scheduledDatetime'])).subscribe({
       next: (created) => {
+        this.orderSaving.set(false);
         if (hospitalId !== this.hospitalId) return;
         this.toast.success(this.translate.instant('PROCEDURES.CREATED'));
-        this.orderSaving.set(false);
         this.closeOrderModal();
         this.orders.update((list) => [created, ...list]);
       },
       error: (err: unknown) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('PROCEDURES.SAVE_ERROR'));
         this.orderSaving.set(false);
+        if (hospitalId !== this.hospitalId) return;
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PROCEDURES.SAVE_ERROR'));
       },
     });
   }

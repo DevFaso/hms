@@ -13047,6 +13047,7 @@
     "NO_EXPIRY": "N'expire pas"
   },
   "REGISTRIES": {
+    "ALL_MERGED_HINT": "Tous les statuts combine la première page chargée de chaque statut, triée ici par jours de retard puis par nom ; 200 lignes au maximum sont affichées.",
     "TITLE": "Registres de maladies",
     "SUBTITLE": "Qui est inscrit dans chaque programme de soins, et qui est en retard pour une visite.",
     "ENROLL": "Inscrire un patient",
@@ -13675,7 +13676,7 @@
     "OVERDUE_MINUTES": "En retard de {{count}} min",
     "MRN_HINT": "N° de dossier : 4 chiffres peuvent retrouver des personnes ; confirmez leur identité. Identifiant national exact : 12 chiffres.",
     "SEARCH_PATIENT_MRN": "Nom ou n° de dossier (y compris 4 chiffres)",
-    "SEARCH_PATIENTS": "Rechercher une personne ou un n° de dossier",
+    "SEARCH_PATIENT_RECORD": "Rechercher une personne ou un n° de dossier",
     "PAGE_FILTERS": "Les filtres portent sur cette page chargée.",
     "LOCAL_FILTERS": "Les filtres portent sur les rattachements affichés.",
     "EDUCATION_EYEBROW": "APPRENTISSAGE DU PATIENT",

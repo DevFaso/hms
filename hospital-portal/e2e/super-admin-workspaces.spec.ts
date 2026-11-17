@@ -95,6 +95,7 @@ test.describe('super-admin workspaces', () => {
     await page.goto('/procedure-orders');
     await expect(page.getByTestId('hospital-network-workspace')).toBeVisible();
     await expect(page.locator('app-procedure-orders')).toHaveCount(0);
+    await page.waitForLoadState('networkidle');
     expect(reads).toBe(0);
   });
   test('education is globally readable but requires a hospital to create', async ({ page }) => {
