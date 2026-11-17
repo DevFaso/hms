@@ -501,7 +501,10 @@ class PayerCatalogueServiceTest {
         AuditEventRequestDTO row = auditRow();
         assertThat(row.getEventDescription())
             .contains("closed [" + inForce.getId() + "]", "replaced []")
-            .doesNotContain("Avenant", "70");
+            .doesNotContain("Avenant")
+            // ids only: no rate (a bare "70" could sit inside a random UUID, so the sentence's shape is checked)
+            .matches("Terms [0-9a-f-]{36} added to payer plan [0-9a-f-]{36}, effective [0-9-]{10}, "
+                + "closed \\[[0-9a-f-]{36}\\], replaced \\[\\]");
     }
 
     @Test
