@@ -840,6 +840,44 @@ class GlobalExceptionHandlerTest {
                 .containsEntry("code", "ACCESS_DENIED");
         }
 
+        private ResponseEntity<Object> refuse(String method, String... authorities) {
+            var servlet = new org.springframework.mock.web.MockHttpServletRequest(method, "/api/patients/p/programs");
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.TestingAuthenticationToken("u", "n/a", authorities));
+            try {
+                return handler.handleAccessDenied(
+                    new org.springframework.security.access.AccessDeniedException("Access Denied"),
+                    new org.springframework.web.context.request.ServletWebRequest(servlet));
+            } finally {
+                org.springframework.security.core.context.SecurityContextHolder.clearContext();
+            }
+        }
+
+        @Test
+        @DisplayName("QA D2120/D2122: a super-admin refused a write is told it needs a clinical role, in French")
+        void superAdminRefusedAWriteIsToldItIsAClinicalAct() {
+            ResponseEntity<Object> response = refuse("POST", "ROLE_SUPER_ADMIN", "ROLE_DOCTOR");
+            assertThat(messageOf(response)).startsWith("Action clinique : elle nécessite un rôle clinique")
+                .doesNotContainPattern("[0-9a-f]{8}-[0-9a-f]{4}");
+            assertThat(response.getBody()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .containsEntry("code", "ACCESS_DENIED");
+        }
+
+        @Test
+        @DisplayName("QA D2120: the clinical-role sentence is for a super-admin's writes only")
+        void otherRefusalsKeepTheOpaqueDefault() {
+            assertThat(messageOf(refuse("GET", "ROLE_SUPER_ADMIN"))).isEqualTo("Accès refusé");
+            assertThat(messageOf(refuse("POST", "ROLE_RECEPTIONIST"))).isEqualTo("Accès refusé");
+        }
+
+        @Test
+        @DisplayName("QA D2122: the clinical-role sentence exists in English")
+        void superAdminRefusedAWriteInEnglish() {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+            assertThat(messageOf(refuse("PUT", "ROLE_SUPER_ADMIN")))
+                .startsWith("This is a clinical action: it needs a clinical role you hold at this hospital");
+        }
+
         @Test
         @DisplayName("an IllegalArgumentException thrown with a bundle key is resolved, not echoed")
         void illegalArgumentKeyResolved() {

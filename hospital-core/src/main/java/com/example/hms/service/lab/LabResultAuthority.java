@@ -68,10 +68,11 @@ public final class LabResultAuthority {
 
     /** The Spring expression for {@link #RELEASE_ROLES}, for {@code @PreAuthorize}. */
     public static final String RELEASE_EXPRESSION =
-        "hasAnyRole('LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'SUPER_ADMIN')";
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_MANAGER','LAB_DIRECTOR')";
 
     /**
-     * The Spring expression for who may reach the entry endpoints at all.
+     * The Spring expression for who may reach the entry endpoints at all. QA D2120: a clinical
+     * role the caller holds (ClinicalActor.holdsOwnRole), never a super-admin alone.
      *
      * <p>Deliberately still broad: whether a given caller may enter a result
      * for a given TEST depends on that test's point-of-care flag, which the
@@ -79,6 +80,6 @@ public final class LabResultAuthority {
      * the service, where the test is loaded.
      */
     public static final String ENTRY_EXPRESSION =
-        "hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', "
-        + "'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'SUPER_ADMIN')";
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE',"
+        + "'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR','QUALITY_MANAGER')";
 }

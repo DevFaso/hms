@@ -39,7 +39,7 @@ public class HighRiskPregnancyCarePlanController {
     private final HighRiskPregnancyCarePlanService carePlanService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Create a high-risk pregnancy care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> createPlan(
         @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
@@ -51,7 +51,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @PutMapping("/{planId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Update an existing high-risk pregnancy care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> updatePlan(
         @PathVariable UUID planId,
@@ -99,7 +99,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @PostMapping("/{planId}/blood-pressure-logs")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Append a blood pressure reading to the care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> addBloodPressureLog(
         @PathVariable UUID planId,
@@ -111,7 +111,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @PostMapping("/{planId}/medication-logs")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Record medication adherence for the care plan")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> addMedicationLog(
         @PathVariable UUID planId,
@@ -123,7 +123,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @PostMapping("/{planId}/care-team-notes")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PATIENT')")
     @Operation(summary = "Capture a coordination note from the care team or patient")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> addCareTeamNote(
         @PathVariable UUID planId,
@@ -135,7 +135,7 @@ public class HighRiskPregnancyCarePlanController {
     }
 
     @PostMapping("/{planId}/milestones/{milestoneId}/complete")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Mark a monitoring milestone as completed")
     public ResponseEntity<HighRiskPregnancyCarePlanResponseDTO> markMilestoneComplete(
         @PathVariable UUID planId,

@@ -188,6 +188,8 @@ describe('DispensingComponent', () => {
         { provide: OfflineDispenseQueueService, useValue: offlineQueueStub },
       ],
     }).compileComponents();
+    // QA D2120: the actions are a pharmacist's (a super-admin only reads the queue).
+    TestBed.inject(RoleContextService).setRoles(['ROLE_PHARMACIST']);
 
     fixture = TestBed.createComponent(DispensingComponent);
     component = fixture.componentInstance;
@@ -1142,6 +1144,8 @@ describe('DispensingComponent — refill context on the work queue', () => {
         { provide: OfflineDispenseQueueService, useValue: offlineQueueStub },
       ],
     }).compileComponents();
+    // QA D2120: the actions are a pharmacist's (a super-admin only reads the queue).
+    TestBed.inject(RoleContextService).setRoles(['ROLE_PHARMACIST']);
 
     fixture = TestBed.createComponent(DispensingComponent);
     component = fixture.componentInstance;
@@ -1341,6 +1345,17 @@ describe('DispensingComponent — clarification control on the work queue', () =
     expect(
       fixture.nativeElement.querySelector('[data-testid="rx-clarification-open-rx-1"]'),
     ).toBeNull();
+  });
+
+  it('QA D2120: shows a super-admin the queue with no action on it', async () => {
+    await render(['ROLE_SUPER_ADMIN']);
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.textContent).toContain('Metformin 500mg');
+    expect(el.querySelector('[data-testid="rx-dispense-rx-1"]')).toBeNull();
+    expect(el.querySelector('[data-testid="rx-route-rx-1"]')).toBeNull();
+    expect(el.querySelector('[data-testid="rx-claim-btn-rx-1"]')).toBeNull();
+    expect(el.querySelector('[data-testid="rx-clarification-open-rx-1"]')).toBeNull();
   });
 
   it('flags a row that needs a second look, in words rather than an enum name', async () => {
@@ -1568,6 +1583,7 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
     translate.use('en');
     router = TestBed.inject(Router);
     spyOn(router, 'navigate').and.resolveTo(true);
+    TestBed.inject(RoleContextService).setRoles(['ROLE_PHARMACIST']);
 
     fixture = TestBed.createComponent(DispensingComponent);
     component = fixture.componentInstance;

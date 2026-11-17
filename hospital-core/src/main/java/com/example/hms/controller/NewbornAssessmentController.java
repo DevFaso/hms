@@ -45,7 +45,7 @@ public class NewbornAssessmentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(
         summary = "Document a newborn assessment",
         description = "Records newborn adaptation details including Apgar scores, vitals, physical exam findings, follow-up actions, and parent education. "

@@ -58,6 +58,20 @@ class PharmacyPageEndpointRolesTest {
             Map.entry("medication-catalog#createMedication", "canManage()"),
             Map.entry("medication-catalog#updateMedication", "canManage()"),
             Map.entry("medication-catalog#deleteMedication", "canManage()"),
+            // QA D2120: dispensing and stock-out routing are clinical acts a super-admin
+            // reads and never makes (ClinicalActor.holdsOwnRole); the page hides them.
+            Map.entry("dispensing#cancelDispense", "@if (canAct && d.status"),
+            Map.entry("dispensing#cancelReady", "@if (!canAct)"),
+            Map.entry("dispensing#claimQueueRow", "@if (!canAct)"),
+            Map.entry("dispensing#createDispense", "@if (!canAct)"),
+            Map.entry("dispensing#handOver", "@if (!canAct)"),
+            Map.entry("dispensing#markReady", "@if (!canAct)"),
+            Map.entry("dispensing#releaseQueueRow", "@if (!canAct)"),
+            Map.entry("dispensing#takeOverQueueRow", "@if (!canAct)"),
+            Map.entry("stock-routing#backOrder", "@if (canAct && !stockResult()!.sufficient"),
+            Map.entry("stock-routing#printForPatient", "@if (canAct && "),
+            Map.entry("stock-routing#partnerRespond", "@if (canAct && d.status === 'PENDING'"),
+            Map.entry("stock-routing#confirmPartnerDispense", "@if (canAct && d.status === 'ACCEPTED'"),
             // Round 18 (QA D935): the paediatric dose limits are the pharmacy's
             // (and the hospital admin's); a doctor or store manager reads them.
             Map.entry("medication-catalog#updatePediatricDosing", "canEditDosing()"),
@@ -271,7 +285,8 @@ class PharmacyPageEndpointRolesTest {
         }
         assertThat(expression)
                 .as("%s#%s: a role list the guard can read", method.getDeclaringClass().getSimpleName(), method.getName())
-                .matches("^(hasAnyAuthority|hasAuthority|hasAnyRole|hasRole)\\(.*\\)$");
+                .matches("^(hasAnyAuthority|hasAuthority|hasAnyRole|hasRole"
+                    + "|T\\(com\\.example\\.hms\\.security\\.ClinicalActor\\)\\.holdsOwnRole)\\(.*\\)$");
         return ActionPermissionsMirrorTest.rolesOf(expression);
     }
 }

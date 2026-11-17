@@ -60,6 +60,13 @@ export class MtmReviewComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+
+  /**
+   * QA D2120: a medication therapy review is the pharmacist's clinical act
+   * (MtmReviewController gates it with ClinicalActor.holdsOwnRole on PHARMACIST);
+   * a super-admin reads the reviews and never starts or edits one.
+   */
+  readonly canAct = this.roleContext.hasAnyActiveRole(['ROLE_PHARMACIST']);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   reviews = signal<MtmReviewResponse[]>([]);
@@ -144,7 +151,7 @@ export class MtmReviewComponent implements OnInit {
    * completed.
    */
   canEdit(review: MtmReviewResponse): boolean {
-    return review.status !== 'COMPLETED';
+    return this.canAct && review.status !== 'COMPLETED';
   }
 
   canChooseDraft(): boolean {

@@ -60,7 +60,7 @@ public class PatientVitalSignController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(
         summary = "Record vital signs for a patient",
         description = "Creates a new vital sign record scoped to the caller's hospital context.",

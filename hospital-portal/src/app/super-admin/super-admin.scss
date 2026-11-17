@@ -649,3 +649,142 @@ summary:focus-visible,
     animation: none;
   }
 }
+
+// Control-plane navigation remains visible at every viewport width.
+.admin-directory,
+.integration-overview {
+  margin-bottom: 20px;
+}
+.admin-groups {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.admin-group {
+  min-width: 0;
+}
+.admin-group h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #52677f;
+  margin: 0 0 8px;
+}
+.admin-group a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 4px;
+  color: #135f57;
+  text-decoration: none;
+  font-size: 13px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.admin-group a:hover {
+  background: #edf7f4;
+}
+.admin-group .material-symbols-outlined {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.admin-arrow {
+  margin-left: auto;
+}
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.health-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 16px;
+  background: #f6f9fb;
+  border: 1px solid #dce6ee;
+  border-radius: 12px;
+}
+.health-card strong {
+  font-size: 26px;
+}
+.health-card > span:last-child {
+  grid-column: 2;
+  font-size: 13px;
+}
+.health-card.attention {
+  background: #fff6ed;
+  border-color: #edbb85;
+}
+.integration-overview .panel-heading p,
+.audit-sample {
+  color: #52677f;
+  font-size: 12px;
+}
+.integration-overview .panel-heading a {
+  color: #096d60;
+  font-size: 13px;
+}
+.activity-tabs {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+.activity-tab {
+  flex-shrink: 1;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+.audit-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.routine-toggle {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid #cbd9e3;
+  background: white;
+  color: #135f57;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.routine-toggle[aria-pressed='true'] {
+  background: #e5f5ef;
+}
+.control-tower a:focus-visible,
+.control-tower button:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+@media (max-width: 1000px) {
+  .admin-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .integration-overview .panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+@media (max-width: 380px) {
+  .admin-groups {
+    grid-template-columns: 1fr;
+  }
+}
+
+.integration-overview .panel-heading h2 {
+  color: #172d43;
+}
+@media (max-width: 600px) {
+  .admin-groups {
+    grid-template-columns: 1fr;
+  }
+}

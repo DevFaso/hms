@@ -1206,7 +1206,12 @@ describe('LabComponent — performing laboratory', () => {
 
   it('QA D820: a voided order offers neither Edit nor Delete, which the server refuses', async () => {
     // Voided before any result: the results-stage check alone let the trash through (409).
-    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-void', status: 'ENTERED_IN_ERROR' })]);
+    // A doctor who also holds ROLE_ADMIN has both the edit (labOrderUpdate) and the delete
+    // (labOrderDelete) role; a super-admin alone no longer edits an order (QA D2120).
+    await setup(
+      ['ROLE_DOCTOR', 'ROLE_ADMIN'],
+      [order({ id: 'o-void', status: 'ENTERED_IN_ERROR' })],
+    );
     expect(fixture.nativeElement.querySelectorAll('tbody tr').length)
       .withContext('the voided order is rendered')
       .toBeGreaterThanOrEqual(1);
@@ -1219,9 +1224,14 @@ describe('LabComponent — performing laboratory', () => {
 
     // The same caller on an open order is still offered both.
     TestBed.resetTestingModule();
-    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-ordered', status: 'ORDERED' })]);
+    await setup(['ROLE_DOCTOR', 'ROLE_ADMIN'], [order({ id: 'o-ordered', status: 'ORDERED' })]);
     expect(fixture.nativeElement.querySelector('.edit-link')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  it('QA D2120: a super-admin alone is not offered the edit of a lab order', async () => {
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-ordered', status: 'ORDERED' })]);
+    expect(fixture.nativeElement.querySelector('.edit-link')).toBeNull();
   });
 
   it('QA D616: a lab technician who also holds ROLE_ADMIN, with no role picked, gets the trash (the reported case)', async () => {

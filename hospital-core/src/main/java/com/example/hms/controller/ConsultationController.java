@@ -49,7 +49,7 @@ public class ConsultationController {
     private final com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheld;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Request a specialist consultation",
                description = "Create consultation request for any specialty (Cardiology, Neurology, Surgery, etc.)")
     public ResponseEntity<ConsultationResponseDTO> createConsultation(
@@ -177,7 +177,7 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/acknowledge")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Acknowledge consultation request",
                description = "Consultant accepts the consultation request and assigns themselves")
     public ResponseEntity<ConsultationResponseDTO> acknowledgeConsultation(
@@ -190,7 +190,7 @@ public class ConsultationController {
     }
 
     @PutMapping("/{consultationId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Update consultation details",
                description = "Update scheduled time, consultant notes, recommendations, etc.")
     public ResponseEntity<ConsultationResponseDTO> updateConsultation(
@@ -202,7 +202,7 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/schedule")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Schedule consultation", description = "Set scheduled date/time; status transitions to SCHEDULED")
     public ResponseEntity<ConsultationResponseDTO> scheduleConsultation(
         @PathVariable UUID consultationId,
@@ -214,7 +214,7 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/start")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Start consultation", description = "Mark consultation as in progress; status transitions to IN_PROGRESS")
     public ResponseEntity<ConsultationResponseDTO> startConsultation(@PathVariable UUID consultationId) {
         ConsultationResponseDTO response = consultationService.startConsultation(consultationId);
@@ -222,7 +222,7 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/complete")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Complete consultation",
                description = "Submit final recommendations and mark consultation as complete")
     public ResponseEntity<ConsultationResponseDTO> completeConsultation(
@@ -234,7 +234,7 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/decline")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Decline consultation", description = "Decline consultation with required reason; status transitions to DECLINED")
     public ResponseEntity<ConsultationResponseDTO> declineConsultation(
         @PathVariable UUID consultationId,
@@ -245,7 +245,7 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/cancel")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Cancel consultation",
                description = "Cancel consultation with reason (patient improved, consultation no longer needed, etc.)")
     public ResponseEntity<ConsultationResponseDTO> cancelConsultation(
@@ -259,7 +259,7 @@ public class ConsultationController {
     @PostMapping("/{consultationId}/assign")
     // QA D749: the roles that may CREATE a consult, so a midwife or nurse who
     // requested it can address it; the service's actor rule is the real gate.
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Assign consultation to consultant",
                description = "Assign a REQUESTED consultation to a specific consultant; status changes to ASSIGNED")
     public ResponseEntity<ConsultationResponseDTO> assignConsultation(
@@ -276,7 +276,7 @@ public class ConsultationController {
     @PostMapping("/{consultationId}/reassign")
     // QA D749: the roles that may CREATE a consult, so a midwife or nurse who
     // requested it can address it; the service's actor rule is the real gate.
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Reassign consultation to a different consultant",
                description = "Reassign a consultation to a different consultant with a required reason; status reverts to ASSIGNED")
     public ResponseEntity<ConsultationResponseDTO> reassignConsultation(

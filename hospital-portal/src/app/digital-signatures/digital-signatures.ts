@@ -75,7 +75,7 @@ export class DigitalSignaturesComponent implements OnInit {
   /** GET /signatures/report/{type}/{id}: clinicians only. */
   readonly canLookup = this.roleContext.hasAnyActiveRole(actionRoles('signatureReportLookup'));
 
-  /** POST /signatures/{id}/revoke roles. */
+  /** POST /signatures/{id}/revoke roles (QA D2120: never a super-admin alone). */
   readonly canRevoke = this.roleContext.hasAnyActiveRole(actionRoles('signatureRevoke'));
 
   /** GET /signatures/{id}/audit-trail roles. */

@@ -38,7 +38,7 @@ public class UltrasoundController {
     private final UltrasoundService ultrasoundService;
 
     @PostMapping("/orders")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE')")
     @Operation(summary = "Create a new ultrasound order for a patient")
     public ResponseEntity<UltrasoundOrderResponseDTO> createOrder(
         @Valid @RequestBody UltrasoundOrderRequestDTO request,
@@ -51,7 +51,7 @@ public class UltrasoundController {
     }
 
     @PutMapping("/orders/{orderId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE')")
     @Operation(summary = "Update an existing ultrasound order")
     public ResponseEntity<UltrasoundOrderResponseDTO> updateOrder(
         @PathVariable UUID orderId,
@@ -63,7 +63,7 @@ public class UltrasoundController {
     }
 
     @PostMapping("/orders/{orderId}/cancel")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE')")
     @Operation(summary = "Cancel an ultrasound order")
     public ResponseEntity<UltrasoundOrderResponseDTO> cancelOrder(
         @PathVariable UUID orderId,
@@ -136,7 +136,7 @@ public class UltrasoundController {
     }
 
     @PostMapping("/orders/{orderId}/report")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE')")
     @Operation(summary = "Create or update the ultrasound report for an order")
     public ResponseEntity<UltrasoundReportResponseDTO> createOrUpdateReport(
         @PathVariable UUID orderId,
@@ -149,7 +149,7 @@ public class UltrasoundController {
     }
 
     @PostMapping("/reports/{reportId}/review")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Mark ultrasound report as reviewed (typically by a doctor)")
     public ResponseEntity<UltrasoundReportResponseDTO> markReportReviewed(
         @PathVariable UUID reportId,
@@ -161,7 +161,7 @@ public class UltrasoundController {
     }
 
     @PostMapping("/reports/{reportId}/notify-patient")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE')")
     @Operation(summary = "Mark that patient has been notified of ultrasound results")
     public ResponseEntity<UltrasoundReportResponseDTO> markPatientNotified(
         @PathVariable UUID reportId,

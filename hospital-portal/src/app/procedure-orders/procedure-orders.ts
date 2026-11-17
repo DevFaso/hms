@@ -115,14 +115,13 @@ export class ProcedureOrdersComponent implements OnInit {
     this.urgencyFilter.set('');
   }
 
-  /** Create/update = DOCTOR/NURSE/SUPER_ADMIN; HOSPITAL_ADMIN is read-only. */
-  readonly canManage = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_NURSE',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  /** Cancel = DOCTOR/SUPER_ADMIN only (no NURSE). */
-  readonly canCancel = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
+  /**
+   * Create/update = DOCTOR/NURSE; HOSPITAL_ADMIN is read-only. QA D2120/D2122: a super-admin
+   * reads procedures and never orders one (the server refuses with a role sentence).
+   */
+  readonly canManage = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE']);
+  /** Cancel = DOCTOR only (no NURSE, no super-admin alone). */
+  readonly canCancel = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
 
   /**
    * QA D1081: the ordering clinician cancels; a physician also ends a nurse's
