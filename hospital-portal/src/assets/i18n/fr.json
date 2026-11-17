@@ -14054,6 +14054,9 @@
       "NO_CONTACT": "Aucun numéro de téléphone ni adresse e-mail",
       "SUBJECT_WITHDRAWN": "Rendez-vous annulé ou passé, ou résultat retiré",
       "PATIENT_DECEASED": "Le patient est décédé"
-    }
+    },
+    "MAYBE_DELIVERED": "Le patient a peut-être déjà reçu ce message.",
+    "RETRY_CONFIRM_TITLE": "Renvoyer ce message ?",
+    "RETRY_CONFIRM_MESSAGE": "Le fournisseur n’a pas répondu : le patient a peut-être déjà reçu ce message. Le relancer peut l’envoyer deux fois."
   }
 }

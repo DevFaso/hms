@@ -89,6 +89,14 @@
               <td>
                 @if (errorKey(row.errorCode); as reason) {
                   {{ reason | translate }}
+                  @if (maybeDelivered(row)) {
+                    <span
+                      class="maybe-delivered"
+                      [attr.data-testid]="'pn-maybe-delivered-' + row.id"
+                    >
+                      {{ 'PATIENT_NOTIFICATIONS.MAYBE_DELIVERED' | translate }}
+                    </span>
+                  }
                 } @else {
                   —
                 }

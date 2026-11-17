@@ -14054,6 +14054,9 @@
       "NO_CONTACT": "No phone number or email address",
       "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
       "PATIENT_DECEASED": "The patient has died"
-    }
+    },
+    "MAYBE_DELIVERED": "The patient may already have received this message.",
+    "RETRY_CONFIRM_TITLE": "Send this message again?",
+    "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice."
   }
 }

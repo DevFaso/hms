@@ -21,6 +21,13 @@ import {
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+
+/**
+ * Codes after which the patient may already have the message: the provider gave no answer, or every
+ * attempt ran out without one recorded. Retrying them can text the patient twice, so it is asked.
+ */
+const MAYBE_DELIVERED: ReadonlySet<string> = new Set(['OUTCOME_UNKNOWN', 'ATTEMPTS_EXHAUSTED']);
 
 /** Every status, in the order the counters show them. */
 export const DELIVERY_STATUSES: readonly DeliveryStatus[] = [
@@ -89,6 +96,7 @@ export class PatientNotificationsComponent implements OnInit {
   private readonly service = inject(PatientNotificationDeliveryService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
 
   readonly statuses = DELIVERY_STATUSES;
   readonly pageSize = 25;
@@ -171,8 +179,23 @@ export class PatientNotificationsComponent implements OnInit {
     return ERROR_KEYS[code] ?? 'PATIENT_NOTIFICATIONS.ERROR.SEND_FAILED';
   }
 
-  retry(row: PatientNotificationDelivery): void {
+  /** Whether the patient may already have received this message. */
+  maybeDelivered(row: PatientNotificationDelivery): boolean {
+    return !!row.errorCode && MAYBE_DELIVERED.has(row.errorCode);
+  }
+
+  async retry(row: PatientNotificationDelivery): Promise<void> {
     if (this.retryingId() || !row.retryable) {
+      return;
+    }
+    if (
+      this.maybeDelivered(row) &&
+      !(await this.confirm.ask({
+        titleKey: 'PATIENT_NOTIFICATIONS.RETRY_CONFIRM_TITLE',
+        messageKey: 'PATIENT_NOTIFICATIONS.RETRY_CONFIRM_MESSAGE',
+        confirmKey: 'PATIENT_NOTIFICATIONS.RETRY',
+      }))
+    ) {
       return;
     }
     // The in-flight guard is set BEFORE the call (the #443 lesson).

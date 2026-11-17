@@ -9,6 +9,7 @@ import {
   PatientNotificationDeliveryService,
 } from '../services/patient-notification-delivery.service';
 import { ToastService } from '../core/toast.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 /**
  * Patient notification sends (V312, scorecard K3): the hospital administrator
@@ -20,6 +21,7 @@ describe('PatientNotificationsComponent', () => {
   let component: PatientNotificationsComponent;
   let service: jasmine.SpyObj<PatientNotificationDeliveryService>;
   let toast: jasmine.SpyObj<ToastService>;
+  let confirm: jasmine.SpyObj<ConfirmService>;
 
   function delivery(overrides: Partial<PatientNotificationDelivery>): PatientNotificationDelivery {
     return {
@@ -56,12 +58,15 @@ describe('PatientNotificationsComponent', () => {
     );
     service.search.and.returnValue(of(page));
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    confirm = jasmine.createSpyObj<ConfirmService>('ConfirmService', ['ask']);
+    confirm.ask.and.resolveTo(true);
 
     TestBed.configureTestingModule({
       imports: [PatientNotificationsComponent, TranslateModule.forRoot()],
       providers: [
         { provide: PatientNotificationDeliveryService, useValue: service },
         { provide: ToastService, useValue: toast },
+        { provide: ConfirmService, useValue: confirm },
       ],
     });
     fixture = TestBed.createComponent(PatientNotificationsComponent);
@@ -97,18 +102,33 @@ describe('PatientNotificationsComponent', () => {
     expect(service.search).toHaveBeenCalledWith('ALL', 0, 25);
   });
 
-  it('retries a FAILED send once and reloads', () => {
+  it('retries a FAILED send once and reloads, without asking when nothing went out', async () => {
     setup(pageOf([delivery({})]));
     service.retry.and.returnValue(of(delivery({ status: 'PENDING', retryable: false })));
 
-    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
-      '[data-testid="pn-retry-d-1"]',
-    );
-    button?.click();
+    await component.retry(delivery({}));
 
+    expect(confirm.ask).not.toHaveBeenCalled();
     expect(service.retry).toHaveBeenCalledOnceWith('d-1');
     expect(toast.success).toHaveBeenCalled();
     expect(service.search).toHaveBeenCalledTimes(2);
+  });
+
+  it('warns and asks before retrying a send the patient may already have received', async () => {
+    const unknown = delivery({ errorCode: 'OUTCOME_UNKNOWN' });
+    setup(pageOf([unknown]));
+    service.retry.and.returnValue(of(delivery({ status: 'PENDING', retryable: false })));
+    confirm.ask.and.resolveTo(false);
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="pn-maybe-delivered-d-1"]')).not.toBeNull();
+    await component.retry(unknown);
+    expect(confirm.ask).toHaveBeenCalled();
+    expect(service.retry).not.toHaveBeenCalled();
+
+    confirm.ask.and.resolveTo(true);
+    await component.retry(delivery({ errorCode: 'ATTEMPTS_EXHAUSTED' }));
+    expect(service.retry).toHaveBeenCalledOnceWith('d-1');
   });
 
   it('offers no retry on a send that is not FAILED', () => {
@@ -117,17 +137,17 @@ describe('PatientNotificationsComponent', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="pn-retry-d-1"]'),
     ).toBeNull();
-    component.retry(delivery({ status: 'SENT', retryable: false }));
+    void component.retry(delivery({ status: 'SENT', retryable: false }));
     expect(service.retry).not.toHaveBeenCalled();
   });
 
-  it('a refused retry shows the server reason and frees the button', () => {
+  it('a refused retry shows the server reason and frees the button', async () => {
     setup(pageOf([delivery({})]));
     service.retry.and.returnValue(
       throwError(() => ({ error: { message: 'Seul un envoi en échec peut être relancé.' } })),
     );
 
-    component.retry(delivery({}));
+    await component.retry(delivery({}));
 
     expect(toast.error).toHaveBeenCalled();
     expect(component.retryingId()).toBeNull();
