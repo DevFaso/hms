@@ -156,6 +156,37 @@ test.describe('super-admin control tower', () => {
     });
   }
 
+  test('an all-routine audit sample is filtered, not reported as absent', async ({ page }) => {
+    await page.route('**/api/super-admin/summary**', (route) =>
+      route.fulfill({
+        json: {
+          recentAuditEvents: Array.from({ length: 10 }, (_, index) => ({
+            id: `routine-${index}`,
+            eventType: 'TOKEN_REFRESH',
+            status: 'SUCCESS',
+            userName: `Routine actor ${index}`,
+            eventTimestamp: '2026-11-17T15:40:00Z',
+          })),
+        },
+      }),
+    );
+    await page.goto('/super-admin');
+    const screen = page.locator('app-super-admin');
+    const list = screen.locator('.audit-list');
+    await expect(list).toContainText(
+      'Aucun \u00e9v\u00e9nement de cet \u00e9chantillon r\u00e9cent ne correspond au filtre.',
+    );
+    await expect(list.locator('.audit-row')).toHaveCount(0);
+    await screen.locator('.routine-toggle').click();
+    await expect(list.locator('.audit-row')).toHaveCount(10);
+    await expect(list.locator('.activity-empty')).toHaveCount(0);
+    await screen.locator('.routine-toggle').click();
+    await expect(list.locator('.audit-row')).toHaveCount(0);
+    await expect(list).toContainText(
+      'Aucun \u00e9v\u00e9nement de cet \u00e9chantillon r\u00e9cent ne correspond au filtre.',
+    );
+  });
+
   test('failed sources are visibly unavailable, while administration remains accessible', async ({
     page,
   }) => {

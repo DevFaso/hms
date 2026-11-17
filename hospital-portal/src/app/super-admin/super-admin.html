@@ -323,8 +323,10 @@
             @if (visibleAudit().length === 0) {
               <p class="activity-empty">
                 {{
-                  (auditFailuresOnly() ? 'SUPER_ADMIN.AUDIT_EMPTY' : 'SUPER_ADMIN.AUDIT_NONE')
-                    | translate
+                  (auditFailuresOnly() || recentAudit().length > 0
+                    ? 'SUPER_ADMIN.AUDIT_EMPTY'
+                    : 'SUPER_ADMIN.AUDIT_NONE'
+                  ) | translate
                 }}
               </p>
             }

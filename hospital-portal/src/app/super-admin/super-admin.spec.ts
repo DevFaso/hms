@@ -292,6 +292,30 @@ describe('SuperAdminComponent', () => {
     expect(panel.textContent).not.toContain('COMMON.LOADING');
   });
 
+  it('reports a filtered empty sample when every audit event is a hidden routine refresh', () => {
+    dashboard.getSummary.and.returnValue(
+      of(
+        fakeSummary({
+          recentAuditEvents: [{ ...auditEvent('routine'), eventType: 'TOKEN_REFRESH' }],
+        }),
+      ),
+    );
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    setup();
+    const list: HTMLElement = fixture.nativeElement.querySelector('.audit-list');
+    expect(list.textContent).toContain('SUPER_ADMIN.AUDIT_EMPTY');
+    expect(list.textContent).not.toContain('SUPER_ADMIN.AUDIT_NONE');
+    const toggle: HTMLButtonElement = fixture.nativeElement.querySelector('.routine-toggle');
+    toggle.click();
+    fixture.detectChanges();
+    expect(list.querySelectorAll('.audit-row').length).toBe(1);
+    expect(list.querySelector('.activity-empty')).toBeNull();
+    toggle.click();
+    fixture.detectChanges();
+    expect(list.querySelectorAll('.audit-row').length).toBe(0);
+    expect(list.textContent).toContain('SUPER_ADMIN.AUDIT_EMPTY');
+  });
+
   it('distinguishes an empty audit sample from an empty failure filter', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
