@@ -565,6 +565,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['what'],
   },
   {
+    // Billing-money plan PR 8 review: a cancelled dispense's payment voided (ids only; older rows below).
+    key: 'AUDIT.DESC.PHARMACY_PAYMENT_VOIDED_IDS',
+    re: /^Pharmacy payment (\S+) voided for cancelled dispense (\S+)$/,
+    params: ['payment', 'dispense'],
+  },
+  {
     key: 'AUDIT.DESC.SUPPORT_SESSION_REFUSED',
     re: /^Support session refused: (.+) \(sign-in or recovery details\)$/,
     params: ['what'],

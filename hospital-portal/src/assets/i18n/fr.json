@@ -2010,7 +2010,8 @@
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Doublon possible, sans « Commander quand même » : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "NATIONAL_IU_ACTION": "Identifiant unique du patient : {{operation}}",
       "REFUND_EVENT": "{{what}} : remboursement {{refund}} sur la facture {{invoice}}",
-      "SUPPORT_SESSION_MONEY_REFUSED": "Session de support refusée : {{what}} (mouvement d’argent)"
+      "SUPPORT_SESSION_MONEY_REFUSED": "Session de support refusée : {{what}} (mouvement d’argent)",
+      "PHARMACY_PAYMENT_VOIDED_IDS": "Paiement pharmacie {{payment}} annulé pour la délivrance annulée {{dispense}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",

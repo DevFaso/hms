@@ -65,6 +65,9 @@ public class ImpersonationLimits implements HandlerInterceptor {
     /** Writes under {@link #MONEY_PATHS} that only read: a search sent as a POST for its body. */
     public static final List<String> MONEY_PATH_READS = List.of("/billing-invoices/search");
 
+    /** What the money rule names in its audit row ("(money)"; the portal reads it). */
+    private static final String MONEY = "money";
+
     /** The audit service, when the context has one (a {@code @WebMvcTest} slice may not). */
     private final Supplier<AuditEventLogService> audit;
     private final String refusalKey;
@@ -83,7 +86,7 @@ public class ImpersonationLimits implements HandlerInterceptor {
 
     /** The money rule, for {@link #MONEY_PATHS}. */
     public static ImpersonationLimits forMoney(Supplier<AuditEventLogService> audit) {
-        return new ImpersonationLimits(audit, MONEY_WRITE_REFUSED, "money");
+        return new ImpersonationLimits(audit, MONEY_WRITE_REFUSED, MONEY);
     }
 
     @Override
@@ -106,7 +109,7 @@ public class ImpersonationLimits implements HandlerInterceptor {
      */
     public static void refuseMoneyWrite(Supplier<AuditEventLogService> audit, String step) {
         if (ImpersonationContextHolder.isImpersonating()) {
-            audit(audit, step, "money");
+            audit(audit, step, MONEY);
             throw new ClientSafeAccessDeniedException(MessageUtil.resolve(MONEY_WRITE_REFUSED));
         }
     }
@@ -128,7 +131,9 @@ public class ImpersonationLimits implements HandlerInterceptor {
                 .userId(acting != null && acting.getPrincipal() instanceof com.example.hms.security.HospitalUserDetails target
                     ? target.getUserId() : null)
                 .userName(acting == null ? null : acting.getName())
-                .eventDescription("Support session refused: " + attempt + " (" + what + ")")
+                .eventDescription(MONEY.equals(what)
+                    ? "Support session refused: " + attempt + " (money)"
+                    : "Support session refused: " + attempt + " (sign-in or recovery details)")
                 .build());
         } catch (RuntimeException ex) {
             log.error("[IMPERSONATION] Failed to audit a refused {} write", what, ex);
