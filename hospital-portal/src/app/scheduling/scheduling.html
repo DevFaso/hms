@@ -601,9 +601,10 @@
                 class="dow-chip"
                 [class.selected]="isDaySelected(day)"
                 [attr.aria-pressed]="isDaySelected(day)"
+                [attr.aria-label]="dayChipLabel(day, 'long')"
                 (click)="toggleDay(day)"
               >
-                {{ day.slice(0, 3) }}
+                {{ dayChipLabel(day) }}
               </button>
             }
           </div>

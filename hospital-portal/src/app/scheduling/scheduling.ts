@@ -248,6 +248,16 @@ export class SchedulingComponent implements OnInit {
     this.bulkModalOpen.set(false);
   }
 
+  /**
+   * QA D2124: the weekday chips read « lun. mar. … » in French, not the enum's
+   * « MON TUE ». The locale names the day, as the week header does (QA D348).
+   */
+  dayChipLabel(day: DayOfWeek, width: 'short' | 'long' = 'short'): string {
+    // 1 January 2024 was a Monday: allDays' order from there.
+    const date = new Date(2024, 0, 1 + this.allDays.indexOf(day));
+    return date.toLocaleDateString(currentLocale(), { weekday: width });
+  }
+
   isDaySelected(day: DayOfWeek): boolean {
     return this.bulk.daysOfWeek.includes(day);
   }

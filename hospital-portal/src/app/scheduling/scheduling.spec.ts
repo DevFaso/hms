@@ -592,6 +592,32 @@ describe('SchedulingComponent', () => {
         expect(labels[0]).toBe(monday);
         expect(labels.join(' ')).not.toMatch(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/);
       });
+
+      it(`names the bulk-planning weekday chips in ${lang} (QA D2124)`, () => {
+        localStorage.setItem('lang', lang);
+        resetStoredLangForTests();
+        const chips = component.allDays.map((d) => component.dayChipLabel(d));
+        expect(chips[0]).toBe(monday);
+        expect(chips.join(' ')).not.toMatch(/MON|TUE|WED|THU|FRI|SAT|SUN|Mon|Sun/);
+        expect(component.dayChipLabel('SUNDAY', 'long')).toBe(
+          lang === 'fr' ? 'dimanche' : 'domingo',
+        );
+      });
     }
+
+    it('the template names the chips through the locale, never the enum text (QA D2124)', () => {
+      localStorage.setItem('lang', 'fr');
+      resetStoredLangForTests();
+      fixture.detectChanges();
+      component.openBulkModal();
+      fixture.detectChanges();
+      const chips = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.dow-chip'),
+      );
+      expect(chips.length).toBe(7);
+      expect(chips.map((c) => c.textContent?.trim()).join(' ')).not.toMatch(/MON|TUE|SUN/);
+      expect(chips[0].textContent?.trim()).toBe('lun.');
+      expect(chips[0].getAttribute('aria-label')).toBe('lundi');
+    });
   });
 });
