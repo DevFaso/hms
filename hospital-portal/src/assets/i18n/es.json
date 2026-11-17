@@ -329,6 +329,20 @@
     "BABY_OUTCOMES": "Resultado de cada bebé",
     "FETAL_DEATH_EVENT_RECORDED": "Mortinato registrado como evento de muerte fetal (sin historia clínica): se cuenta en el registro de mortalidad."
   },
+  "MOBILE_MONEY": {
+    "OPERATOR_LABEL": "Operador",
+    "OPERATOR_CHOOSE": "Elija el operador",
+    "OPERATOR_REQUIRED": "Elija el operador del pago por dinero móvil (Orange Money, Moov Money u otro operador).",
+    "OPERATOR": {
+      "ORANGE_MONEY": "Orange Money",
+      "MOOV_MONEY": "Moov Money",
+      "AUTRE": "Otro operador",
+      "NOT_STATED": "Operador no indicado"
+    },
+    "MANUAL_ENTRY_NOTICE": "Pago introducido manualmente: compruebe la referencia en el extracto del operador.",
+    "NO_CARD_DETAILS": "Nunca introduzca un número de tarjeta, CVV ni PIN: solo la referencia de la transacción.",
+    "CARD_NUMBER_REFUSED": "Este campo parece contener un número de tarjeta. e-Keneya nunca guarda números de tarjeta: introduzca solo la referencia de la transacción."
+  },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Volver a organizaciones",
     "LOADING": "Cargando ciclo de vida…",

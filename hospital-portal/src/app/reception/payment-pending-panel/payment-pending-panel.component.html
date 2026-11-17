@@ -140,6 +140,29 @@
             }
           </select>
         </div>
+        @if (payIsMobileMoney()) {
+          <!-- Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close. -->
+          <div class="field-group">
+            <label for="payOperator">{{ 'MOBILE_MONEY.OPERATOR_LABEL' | translate }} *</label>
+            <select
+              required
+              aria-required="true"
+              id="payOperator"
+              class="form-control"
+              data-server-field="mobileMoneyOperator"
+              [ngModel]="payOperator()"
+              (ngModelChange)="payOperator.set($event)"
+            >
+              <option [ngValue]="null">{{ 'MOBILE_MONEY.OPERATOR_CHOOSE' | translate }}</option>
+              @for (o of mobileMoneyOperators; track o.value) {
+                <option [ngValue]="o.value">{{ o.labelKey | translate }}</option>
+              }
+            </select>
+            <p class="field-hint" data-testid="mobile-money-manual-entry">
+              {{ 'MOBILE_MONEY.MANUAL_ENTRY_NOTICE' | translate }}
+            </p>
+          </div>
+        }
         @if (needsReference()) {
           <div class="field-group">
             <label for="payRef"
@@ -157,6 +180,7 @@
               (ngModelChange)="payReference.set($event)"
               [placeholder]="'RECEPTION.PAYMENT_REFERENCE_PLACEHOLDER' | translate"
             />
+            <p class="field-hint">{{ 'MOBILE_MONEY.NO_CARD_DETAILS' | translate }}</p>
           </div>
         }
       }

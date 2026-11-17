@@ -1958,7 +1958,7 @@ class ReceptionServiceImplTest {
 
             org.mockito.ArgumentCaptor<Encounter> encounter = org.mockito.ArgumentCaptor.forClass(Encounter.class);
             verify(billingInvoiceService).recordCheckInCopay(encounter.capture(),
-                eq(new java.math.BigDecimal("2000")), any(), any(), any());
+                eq(new java.math.BigDecimal("2000")), any(), any(), any(), any());
             assertThat(encounter.getValue().getId()).isEqualTo(response.getEncounterId());
         }
 
@@ -2024,6 +2024,27 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("Billing plan PR 9: a Mobile Money copay with no operator is refused on copayMobileMoneyOperator, before anything is written")
+        void aMobileMoneyCopayWithoutOperatorIsRefused() {
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(UUID.randomUUID())
+                    .copayAmount(new java.math.BigDecimal("2000"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.MOBILE_MONEY)
+                    .copayReference("OM-R44-001")
+                    .identityConfirmed(true)
+                    .build();
+
+            com.example.hms.exception.FieldBusinessException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                com.example.hms.exception.FieldBusinessException.class,
+                () -> service.checkInPatient(request, hospitalId, "receptionist1"));
+
+            assertThat(refused.getField()).isEqualTo("copayMobileMoneyOperator");
+            assertThat(refused.getMessageKey()).isEqualTo("billing.payment.operatorRequired");
+            verify(appointmentRepo, never()).lockById(any());
+            org.mockito.Mockito.verifyNoInteractions(billingInvoiceService);
+        }
+
+        @Test
         @DisplayName("QA D975: the copay is recorded in the method and with the reference the desk chose, and the receipt ids come back")
         void copayKeepsItsMethodAndReference_D975() {
             Appointment appointment = scheduledAppointment();
@@ -2032,6 +2053,7 @@ class ReceptionServiceImplTest {
                     .copayAmount(new java.math.BigDecimal("1500"))
                     .copayMethod(com.example.hms.enums.PaymentMethod.MOBILE_MONEY)
                     .copayReference("OM-778812")
+                    .copayMobileMoneyOperator(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY)
                     .identityConfirmed(true)
                     .build();
             com.example.hms.model.BillingInvoice invoice = new com.example.hms.model.BillingInvoice();
@@ -2040,7 +2062,8 @@ class ReceptionServiceImplTest {
             row.setId(UUID.randomUUID());
             row.setInvoice(invoice);
             when(billingInvoiceService.recordCheckInCopay(any(), any(),
-                eq(com.example.hms.enums.PaymentMethod.MOBILE_MONEY), eq("OM-778812"), any())).thenReturn(row);
+                eq(com.example.hms.enums.PaymentMethod.MOBILE_MONEY), eq("OM-778812"),
+                eq(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY), any())).thenReturn(row);
 
             CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
 
@@ -2076,7 +2099,7 @@ class ReceptionServiceImplTest {
 
             service.checkInPatient(request, hospitalId, "receptionist1");
 
-            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any(), any(), any());
+            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any(), any(), any(), any());
         }
 
         @Test

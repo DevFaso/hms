@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import type { AllergyReviewState } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
+import { MobileMoneyOperator } from '../shared/mobile-money-operator';
 
 /* ───────────────────────────── Medication Catalog ───────────────────────────── */
 
@@ -693,6 +694,8 @@ export interface PharmacyPaymentRequest {
   amount: number;
   currency?: string;
   referenceNumber?: string;
+  /** Billing plan PR 9: required by the server when the method is MOBILE_MONEY. */
+  mobileMoneyOperator?: MobileMoneyOperator;
   receivedBy: string;
   notes?: string;
 }
@@ -708,6 +711,8 @@ export interface PharmacyPaymentResponse {
   amount: number;
   currency: string;
   referenceNumber?: string;
+  /** Billing plan PR 9: null when not stated (older rows) or not Mobile Money. */
+  mobileMoneyOperator?: MobileMoneyOperator | null;
   receivedBy: string;
   notes?: string;
   /** QA D404: POSTED, or VOIDED once the dispense it paid for was cancelled. */

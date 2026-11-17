@@ -1151,6 +1151,9 @@ public class ReceptionServiceImpl implements ReceptionService {
             if (copay.signum() > 0) {
                 com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(
                     request.getCopayMethod(), "copayMethod");
+                // Billing plan PR 9: a Mobile Money copay names its operator, refused before anything is written.
+                com.example.hms.service.payment.MobileMoneyOperators.require(
+                    request.getCopayMethod(), request.getCopayMobileMoneyOperator(), "copayMobileMoneyOperator");
             }
         }
 
@@ -1260,7 +1263,8 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (copay != null && copay.signum() > 0) {
             UUID actorUserId = userRepo.findByUsername(actorUsername).map(u -> u.getId()).orElse(null);
             copayPayment = billingInvoiceService.recordCheckInCopay(encounter, copay,
-                request.getCopayMethod(), request.getCopayReference(), actorUserId);
+                request.getCopayMethod(), request.getCopayReference(), request.getCopayMobileMoneyOperator(),
+                actorUserId);
         }
 
         // 4. Audit trail

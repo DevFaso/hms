@@ -28,8 +28,21 @@ public class StaffPaymentRequestDTO {
     @jakarta.validation.constraints.Size(max = 120)
     // QA D768: a client sending "referenceNumber" (the stored column's name) had it dropped silently.
     @com.fasterxml.jackson.annotation.JsonAlias({"referenceNumber", "transactionReference"})
+    @com.example.hms.validation.NoCardNumber
     private String reference;
     /** billing.payment_transactions.notes is VARCHAR(1024). */
     @jakarta.validation.constraints.Size(max = 1024)
+    @com.example.hms.validation.NoCardNumber
     private String notes;
+
+    /**
+     * Billing plan PR 9: Orange Money, Moov Money or another operator. Required
+     * when the method is MOBILE_MONEY (manual entry, no operator integration).
+     */
+    private com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator;
+
+    /** A payment with no Mobile Money operator (any method other than MOBILE_MONEY). */
+    public StaffPaymentRequestDTO(BigDecimal amount, String method, String reference, String notes) {
+        this(amount, method, reference, notes, null);
+    }
 }

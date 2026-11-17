@@ -333,12 +333,68 @@ describe('BillingComponent', () => {
     component.openPayment(component.invoices()[0]);
     component.paymentAmount.set(500);
     component.paymentMethod.set('MOBILE_MONEY');
+    component.paymentOperator.set('ORANGE_MONEY');
     component.paymentReference.set(' MM-778 ');
     component.recordPayment();
     expect(billingSpy.recordPayment).toHaveBeenCalledWith('inv-1', {
       amount: 500,
       method: 'MOBILE_MONEY',
       reference: 'MM-778',
+      mobileMoneyOperator: 'ORANGE_MONEY',
+    });
+  });
+
+  it('billing plan PR 9: the operator picker shows for Mobile Money only, with the manual-entry notice', () => {
+    fixture.detectChanges();
+    component.openPayment(component.invoices()[0]);
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    expect(host.querySelector('#payment-operator')).toBeNull();
+    expect(host.querySelector('[data-testid="payment-no-card-details"]')).not.toBeNull();
+
+    component.paymentMethod.set('MOBILE_MONEY');
+    fixture.detectChanges();
+    const picker = host.querySelector<HTMLSelectElement>('#payment-operator');
+    expect(picker).not.toBeNull();
+    // A blank choice, then Orange Money, Moov Money and another operator.
+    expect(picker!.options.length).toBe(4);
+    expect(host.querySelector('[data-testid="mobile-money-manual-entry"]')).not.toBeNull();
+  });
+
+  it('billing plan PR 9: a Mobile Money payment without an operator is refused on the picker', () => {
+    fixture.detectChanges();
+    component.openPayment(component.invoices()[0]);
+    component.paymentAmount.set(500);
+    component.paymentMethod.set('MOBILE_MONEY');
+    component.paymentReference.set('OM-1');
+    component.recordPayment();
+    expect(billingSpy.recordPayment).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
+  it('D-15: a card number typed as the reference is refused before anything is sent', () => {
+    fixture.detectChanges();
+    component.openPayment(component.invoices()[0]);
+    component.paymentAmount.set(500);
+    component.paymentMethod.set('CARD');
+    component.paymentReference.set('4111 1111 1111 1111');
+    component.recordPayment();
+    expect(billingSpy.recordPayment).not.toHaveBeenCalled();
+  });
+
+  it('billing plan PR 9: a cash payment sends no operator, even after Mobile Money was picked', () => {
+    fixture.detectChanges();
+    billingSpy.recordPayment.and.returnValue(of(mockInvoice({ status: 'PARTIALLY_PAID' })));
+    component.openPayment(component.invoices()[0]);
+    component.paymentAmount.set(500);
+    component.paymentMethod.set('MOBILE_MONEY');
+    component.paymentOperator.set('MOOV_MONEY');
+    component.paymentMethod.set('CASH');
+    component.recordPayment();
+    expect(billingSpy.recordPayment).toHaveBeenCalledWith('inv-1', {
+      amount: 500,
+      method: 'CASH',
+      reference: undefined,
     });
   });
 
@@ -950,6 +1006,7 @@ describe('BillingComponent', () => {
       fixture.detectChanges();
       component.openPayment(component.invoices()[0]);
       component.paymentMethod.set('MOBILE_MONEY');
+      component.paymentOperator.set('MOOV_MONEY');
       component.paymentAmount.set(500);
       component.paymentReference.set('');
       component.recordPayment();
