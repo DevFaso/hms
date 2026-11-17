@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { MobileMoneyOperator } from '../shared/mobile-money-operator';
 
 /*
  * Billing invoices — /billing-invoices (+ /invoice-items). Bare DTOs and
@@ -157,6 +158,8 @@ export interface StaffPaymentRequest {
   method: StaffPaymentMethod;
   reference?: string;
   notes?: string;
+  /** Billing plan PR 9: required by the server when the method is MOBILE_MONEY. */
+  mobileMoneyOperator?: MobileMoneyOperator;
 }
 
 export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED';
@@ -168,6 +171,8 @@ export interface PaymentRow {
   paymentDate: string;
   paymentMethod: string;
   referenceNumber?: string | null;
+  /** Billing plan PR 9: ORANGE_MONEY / MOOV_MONEY / AUTRE; null when not stated. */
+  mobileMoneyOperator?: MobileMoneyOperator | null;
   notes?: string | null;
   status: PaymentStatus;
   reversalReason?: string | null;
@@ -229,7 +234,14 @@ export interface CashClosing {
   date: string;
   cashierId?: string;
   cashierName?: string | null;
-  byMethod: { source: 'BILLING' | 'PHARMACY'; method: string; count: number; amount: number }[];
+  /** Billing plan PR 9: one row per source, method and Mobile Money operator. */
+  byMethod: {
+    source: 'BILLING' | 'PHARMACY';
+    method: string;
+    operator?: MobileMoneyOperator | null;
+    count: number;
+    amount: number;
+  }[];
   entries: {
     id: string;
     source: 'BILLING' | 'PHARMACY';
@@ -237,6 +249,7 @@ export interface CashClosing {
     document?: string | null;
     patientName?: string | null;
     method?: string | null;
+    operator?: MobileMoneyOperator | null;
     reference?: string | null;
     amount: number;
     status: string;

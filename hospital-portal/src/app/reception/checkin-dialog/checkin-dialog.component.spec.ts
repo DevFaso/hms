@@ -199,6 +199,9 @@ describe('CheckinDialogComponent', () => {
     component.copayMethod.set('MOBILE_MONEY');
     expect(component.canSubmit).toBeFalse();
     component.copayReference.set('OM-778812');
+    // Billing plan PR 9: the operator is required too.
+    expect(component.canSubmit).toBeFalse();
+    component.copayOperator.set('ORANGE_MONEY');
     expect(component.canSubmit).toBeTrue();
 
     component.submit();
@@ -206,6 +209,15 @@ describe('CheckinDialogComponent', () => {
     const sent = mockReceptionService.checkInPatient.calls.mostRecent().args[0];
     expect(sent.copayMethod).toBe('MOBILE_MONEY');
     expect(sent.copayReference).toBe('OM-778812');
+    expect(sent.copayMobileMoneyOperator).toBe('ORANGE_MONEY');
+  });
+
+  it('D-15: a card number as the copay reference is refused on the field', () => {
+    component.identityConfirmed.set(true);
+    component.copayAmount.set(1500);
+    component.copayMethod.set('CARD');
+    component.copayReference.set('5555 5555 5555 4444');
+    expect(component.refusals().map((r) => r.id)).toEqual(['copayReference']);
   });
 
   it('QA D975 + D1009: the copay receipt is saved under the server name, the encounter code only as fallback', () => {
