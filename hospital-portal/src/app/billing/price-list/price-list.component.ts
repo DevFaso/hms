@@ -35,6 +35,8 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { localDateString } from '../../shared/date-utils';
 import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
+import { saveResponse } from '../../shared/download-file';
+import { PriceListImportComponent } from './price-list-import.component';
 
 /**
  * Today as YYYY-MM-DD in the reader's calendar: the hospital's business day
@@ -111,6 +113,7 @@ interface PriceForm {
     DialogA11yDirective,
     SubmitGuardDirective,
     ReasonDialogComponent,
+    PriceListImportComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './price-list.component.html',
@@ -131,6 +134,8 @@ export class PriceListComponent implements OnInit {
   readonly canUpdate = this.roleContext.hasAnyActiveRole(actionRoles('priceListUpdate'));
   readonly canAddPrice = this.roleContext.hasAnyActiveRole(actionRoles('priceListAddPrice'));
   readonly canDeactivate = this.roleContext.hasAnyActiveRole(actionRoles('priceListDeactivate'));
+  /** PR 4: the CSV import is the maintainers'; the export is for whoever reads the list. */
+  readonly canImport = this.roleContext.hasAnyActiveRole(actionRoles('priceListImport'));
 
   readonly items = signal<PriceListItem[]>([]);
   readonly loading = signal(false);
@@ -397,6 +402,38 @@ export class PriceListComponent implements OnInit {
           this.toast.error(
             refusalReason(err) ?? this.translate.instant('BILLING.PRICE_LIST.SAVE_FAILED'),
           );
+        },
+      });
+  }
+
+  // ── CSV import and export (PR 4) ─────────────────────────────────────
+
+  readonly importOpen = signal(false);
+  readonly exporting = signal(false);
+
+  openImport(): void {
+    this.importOpen.set(true);
+  }
+
+  /** A file was applied: the list shows the new items and prices. */
+  imported(): void {
+    this.load();
+  }
+
+  exportCsv(): void {
+    if (this.exporting()) return;
+    this.exporting.set(true);
+    this.api
+      .exportCsv()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.exporting.set(false);
+          saveResponse(response, `grille-tarifaire-${businessToday()}.csv`);
+        },
+        error: () => {
+          this.exporting.set(false);
+          this.toast.error(this.translate.instant('BILLING.PRICE_LIST.EXPORT_FAILED'));
         },
       });
   }

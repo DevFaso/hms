@@ -9,6 +9,27 @@
         <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
         {{ 'BILLING.PRICE_LIST.BACK_TO_BILLING' | translate }}
       </a>
+      <button
+        type="button"
+        class="btn-secondary"
+        data-testid="price-list-export"
+        [disabled]="exporting()"
+        (click)="exportCsv()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">download</span>
+        {{ 'BILLING.PRICE_LIST.EXPORT_BUTTON' | translate }}
+      </button>
+      @if (canImport) {
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="price-list-import"
+          (click)="openImport()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+          {{ 'BILLING.PRICE_LIST.IMPORT_BUTTON' | translate }}
+        </button>
+      }
       @if (canCreate) {
         <button
           type="button"
@@ -273,6 +294,11 @@
   >
     <p>{{ item.code }} — {{ item.label }}</p>
   </app-reason-dialog>
+}
+
+<!-- ═══ CSV IMPORT (PR 4) ═══ -->
+@if (importOpen()) {
+  <app-price-list-import (closed)="importOpen.set(false)" (applied)="imported()" />
 }
 
 <!-- ═══ CREATE / EDIT AN ITEM ═══ -->

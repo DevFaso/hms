@@ -1974,7 +1974,8 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Contradicción entre acta de mortinato y parto conciliada",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerta de duplicado anulada («Solicitar de todos modos», motivo: {{reason}}): solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Alerta de duplicado no anulada: solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
-      "NATIONAL_IU_ACTION": "Identificador único del paciente: {{operation}}"
+      "NATIONAL_IU_ACTION": "Identificador único del paciente: {{operation}}",
+      "PRICE_LIST_IMPORTED": "Importación de lista de precios {{import}} aplicada: {{items}} artículos nuevos, {{prices}} precios nuevos, {{unchanged}} sin cambios"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -2528,7 +2529,42 @@
       "SAVED": "Artículo guardado.",
       "PRICE_SAVED": "Nuevo precio guardado.",
       "SAVE_FAILED": "No se pudo guardar.",
-      "DEACTIVATE_REASON": "Motivo de la desactivación"
+      "DEACTIVATE_REASON": "Motivo de la desactivación",
+      "IMPORT_BUTTON": "Import a price list (CSV)",
+      "EXPORT_BUTTON": "Export the price list (CSV)",
+      "EXPORT_FAILED": "The price list could not be exported.",
+      "IMPORT": {
+        "TITLE": "Import a price list (CSV)",
+        "INTRO": "One row per tariff code, semicolon separated, prices in whole CFA francs (2000 or 2 000), effective date DD/MM/YYYY (blank: today). The import changes prices only: an equal price is unchanged, a different price becomes a new price from its effective date. If a single row is refused, nothing is applied.",
+        "TEMPLATE": "Download the template",
+        "FILE": "CSV file",
+        "NO_FILE": "Choose a CSV file.",
+        "REPLACE_SCHEDULED": "Replace prices planned on the same date",
+        "CHECK": "Check the file",
+        "CHECKING": "Checking…",
+        "APPLY": "Apply the import",
+        "APPLYING": "Importing…",
+        "APPLY_HINT": "Check the file first: the import applies only when no row is refused.",
+        "COUNT_VALID": "Valid rows",
+        "COUNT_NEW_ITEMS": "New",
+        "COUNT_NEW_PRICES": "New prices",
+        "COUNT_UNCHANGED": "Unchanged",
+        "COUNT_REFUSED": "Refused",
+        "ALREADY_IMPORTED": "This file was already imported on {{date}}: applying it again will record nothing.",
+        "ALREADY_APPLIED": "Already imported: nothing new was recorded.",
+        "APPLIED": "Import applied: {{newItems}} new items, {{newPrices}} new prices, {{unchanged}} unchanged.",
+        "APPLY_FAILED": "At least one row is refused: nothing was applied. Fix the file and check it again.",
+        "FAILED": "The file could not be checked.",
+        "ONLY_REFUSED": "Show refused rows only",
+        "LINE": "Line",
+        "COLUMN": "Column",
+        "OUTCOME": "Result",
+        "REASON": "Reason",
+        "PRICE": "Price",
+        "PREVIOUS_PRICE": "Current price",
+        "WHOLE_ROW": "Whole row",
+        "TOO_LARGE": "The file is larger than 1 MB. Split the price list into several files."
+      }
     }
   },
   "CHAT": {
@@ -7043,7 +7079,8 @@
         "PRICE_VERSION_ADDED": "Nuevo precio añadido",
         "INVOICE_LINE_PRICE_RESTORED": "Precio de la lista restablecido",
         "INVOICE_LINE_DELETED": "Línea de factura eliminada",
-        "INVOICE_LINE_PRICE_OVERRIDDEN": "Precio de la lista modificado"
+        "INVOICE_LINE_PRICE_OVERRIDDEN": "Precio de la lista modificado",
+        "PRICE_LIST_IMPORTED": "Lista de precios importada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7742,6 +7779,12 @@
         "BED_DAY": "Día de hospitalización",
         "DELIVERY_VAGINAL": "Parto vaginal",
         "DELIVERY_CAESAREAN": "Cesárea"
+      },
+      "PRICE_LIST_IMPORT_ROW_OUTCOME": {
+        "NEW_ITEM": "Artículo nuevo",
+        "NEW_PRICE": "Precio nuevo",
+        "UNCHANGED": "Sin cambios",
+        "REFUSED": "Rechazado"
       }
     },
     "DOCUMENTS": {

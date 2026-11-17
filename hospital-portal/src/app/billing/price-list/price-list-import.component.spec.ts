@@ -1,0 +1,265 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+
+import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
+import fr from '../../../assets/i18n/fr.json';
+import { PriceListImportComponent, priceListTemplate } from './price-list-import.component';
+import { PRICE_LIST_CSV_HEADER, PriceListImportReport } from '../../services/price-list.service';
+import { ToastService } from '../../core/toast.service';
+
+const URL_IMPORT = '/billing/price-list/import';
+
+/** Two rows of the fictional test clinic's grid, one of them wrong (README §6.1). */
+const DRY_RUN_REFUSED: PriceListImportReport = {
+  importId: 'imp-1',
+  fileName: 'tarifs-test.csv',
+  sha256: 'a'.repeat(64),
+  result: 'DRY_RUN',
+  alreadyImported: false,
+  totalRows: 2,
+  newItems: 1,
+  newPrices: 0,
+  unchanged: 0,
+  refused: 1,
+  rows: [
+    {
+      line: 2,
+      code: 'CS-GEN',
+      label: 'Consultation générale (médecin généraliste)',
+      outcome: 'NEW_ITEM',
+      price: 2000,
+      effectiveDate: '2026-12-01',
+      refusals: [],
+    },
+    {
+      line: 3,
+      code: 'LAB-FAUX',
+      label: 'Test avec prix décimal',
+      outcome: 'REFUSED',
+      price: null,
+      effectiveDate: '2026-12-01',
+      refusals: [
+        {
+          column: 'prix',
+          message: 'Saisissez le prix unitaire en francs CFA entiers, sans décimales.',
+        },
+      ],
+    },
+  ],
+};
+
+const DRY_RUN_CLEAN: PriceListImportReport = {
+  ...DRY_RUN_REFUSED,
+  totalRows: 1,
+  refused: 0,
+  rows: [DRY_RUN_REFUSED.rows[0]],
+};
+
+describe('PriceListImportComponent (billing-money plan PR 4)', () => {
+  let fixture: ComponentFixture<PriceListImportComponent>;
+  let http: HttpTestingController;
+  let toast: jasmine.SpyObj<ToastService>;
+  let previousLang: string | null;
+
+  beforeEach(() => {
+    previousLang = localStorage.getItem('lang');
+    localStorage.setItem('lang', 'fr');
+    resetStoredLangForTests();
+    toast = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warning']);
+    TestBed.configureTestingModule({
+      imports: [PriceListImportComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ToastService, useValue: toast },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(PriceListImportComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    if (previousLang === null) localStorage.removeItem('lang');
+    else localStorage.setItem('lang', previousLang);
+    resetStoredLangForTests();
+    http.verify();
+    (fixture.nativeElement as HTMLElement).remove();
+  });
+
+  function el(): HTMLElement {
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function button(testId: string): HTMLButtonElement {
+    return el().querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)!;
+  }
+
+  function pick(file: File): void {
+    const input = el().querySelector<HTMLInputElement>('[data-testid="price-list-import-file"]')!;
+    const files = new DataTransfer();
+    files.items.add(file);
+    input.files = files.files;
+    input.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+  }
+
+  function csv(name = 'tarifs-test.csv'): File {
+    return new File([PRICE_LIST_CSV_HEADER + '\n'], name, { type: 'text/csv' });
+  }
+
+  it('shows the French labels and keeps "Appliquer l’import" disabled before any check', () => {
+    expect(el().textContent).toContain('Importer une grille (CSV)');
+    expect(el().textContent).toContain('Modèle à télécharger');
+    expect(button('price-list-import-check').textContent).toContain('Vérifier le fichier');
+    expect(button('price-list-import-check').disabled).toBeTrue();
+    expect(button('price-list-import-apply').textContent).toContain('Appliquer l’import');
+    expect(button('price-list-import-apply').disabled).toBeTrue();
+  });
+
+  it('lists each refused row with its line, column and reason, and does not enable the apply', () => {
+    pick(csv());
+    button('price-list-import-check').click();
+    const req = http.expectOne((r) => r.url === URL_IMPORT);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.params.get('dryRun')).toBe('true');
+    expect(req.request.params.get('replaceScheduled')).toBe('false');
+    expect(req.request.body instanceof FormData).toBeTrue();
+    req.flush(DRY_RUN_REFUSED);
+    fixture.detectChanges();
+
+    expect(el().querySelector('[data-testid="price-list-import-valid"]')!.textContent!.trim()).toBe(
+      '1',
+    );
+    expect(
+      el().querySelector('[data-testid="price-list-import-refused"]')!.textContent!.trim(),
+    ).toBe('1');
+    const refused = el().querySelector('[data-testid="price-list-import-row-3"]')!;
+    expect(refused.textContent).toContain('LAB-FAUX');
+    expect(refused.textContent).toContain('prix');
+    expect(refused.textContent).toContain('Saisissez le prix unitaire en francs CFA entiers');
+    expect(refused.textContent).toContain('Refusé');
+    expect(el().querySelector('[data-testid="price-list-import-row-2"]')!.textContent).toContain(
+      'Nouvel article',
+    );
+    expect(button('price-list-import-apply').disabled).toBeTrue();
+  });
+
+  it('enables the apply only after a clean check, and a new file or option takes it back', () => {
+    pick(csv());
+    button('price-list-import-check').click();
+    http.expectOne((r) => r.url === URL_IMPORT).flush(DRY_RUN_CLEAN);
+    fixture.detectChanges();
+    expect(button('price-list-import-apply').disabled).toBeFalse();
+
+    const replace = el().querySelector<HTMLInputElement>(
+      '[data-testid="price-list-import-replace"]',
+    )!;
+    replace.click();
+    fixture.detectChanges();
+    expect(button('price-list-import-apply').disabled)
+      .withContext('the option changed: check again')
+      .toBeTrue();
+
+    button('price-list-import-check').click();
+    const again = http.expectOne((r) => r.url === URL_IMPORT);
+    expect(again.request.params.get('replaceScheduled')).toBe('true');
+    again.flush(DRY_RUN_CLEAN);
+    fixture.detectChanges();
+    expect(button('price-list-import-apply').disabled).toBeFalse();
+
+    pick(csv('autre.csv'));
+    expect(button('price-list-import-apply').disabled)
+      .withContext('another file: check again')
+      .toBeTrue();
+  });
+
+  it('applies with dryRun=false and tells the page', () => {
+    const applied: PriceListImportReport[] = [];
+    fixture.componentInstance.applied.subscribe((r) => applied.push(r));
+    pick(csv());
+    button('price-list-import-check').click();
+    http.expectOne((r) => r.url === URL_IMPORT).flush(DRY_RUN_CLEAN);
+    fixture.detectChanges();
+    button('price-list-import-apply').click();
+    const req = http.expectOne((r) => r.url === URL_IMPORT);
+    expect(req.request.params.get('dryRun')).toBe('false');
+    req.flush({ ...DRY_RUN_CLEAN, result: 'APPLIED' });
+    fixture.detectChanges();
+    expect(applied.length).toBe(1);
+    expect(toast.success).toHaveBeenCalled();
+    expect(button('price-list-import-apply').disabled).withContext('applied once').toBeTrue();
+  });
+
+  it('shows the report of an apply refused as a whole (422)', () => {
+    pick(csv());
+    button('price-list-import-check').click();
+    http.expectOne((r) => r.url === URL_IMPORT).flush(DRY_RUN_CLEAN);
+    fixture.detectChanges();
+    button('price-list-import-apply').click();
+    http
+      .expectOne((r) => r.url === URL_IMPORT)
+      .flush(
+        { ...DRY_RUN_REFUSED, result: 'REFUSED', importId: null },
+        {
+          status: 422,
+          statusText: 'Unprocessable',
+        },
+      );
+    fixture.detectChanges();
+    expect(toast.error).toHaveBeenCalled();
+    expect(el().querySelector('[data-testid="price-list-import-row-3"]')).not.toBeNull();
+    expect(el().querySelector('[data-testid="price-list-import-row-2"]'))
+      .withContext('only the refused rows are shown first')
+      .toBeNull();
+    expect(button('price-list-import-apply').disabled).toBeTrue();
+  });
+
+  it('shows a refusal of the whole file in the server’s words', () => {
+    pick(csv());
+    button('price-list-import-check').click();
+    http
+      .expectOne((r) => r.url === URL_IMPORT)
+      .flush(
+        { message: 'La ligne d’en-tête n’a pas de colonne « prix ».' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+    fixture.detectChanges();
+    expect(
+      el().querySelector('[data-testid="price-list-import-file-error"]')!.textContent,
+    ).toContain('La ligne d’en-tête n’a pas de colonne « prix ».');
+  });
+
+  it('refuses a file over 1 MB before sending it', () => {
+    pick(new File([new Uint8Array(1_048_577)], 'gros.csv', { type: 'text/csv' }));
+    expect(
+      el().querySelector('[data-testid="price-list-import-file-error"]')!.textContent,
+    ).toContain('Le fichier dépasse 1 Mo');
+    button('price-list-import-check').click();
+    http.expectNone(URL_IMPORT);
+  });
+
+  it('says when the file was already applied', () => {
+    pick(csv());
+    button('price-list-import-check').click();
+    http
+      .expectOne((r) => r.url === URL_IMPORT)
+      .flush({ ...DRY_RUN_CLEAN, alreadyImported: true, alreadyImportedAt: '2026-11-15T09:00:00' });
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="price-list-import-already"]')!.textContent).toContain(
+      'Ce fichier a déjà été importé le',
+    );
+  });
+
+  it('offers a template with the import header, a BOM and CRLF', async () => {
+    const bytes = new Uint8Array(await priceListTemplate().arrayBuffer());
+    expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
+    expect(new TextDecoder().decode(bytes.slice(3))).toBe(PRICE_LIST_CSV_HEADER + '\r\n');
+  });
+});

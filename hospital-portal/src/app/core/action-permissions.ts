@@ -314,6 +314,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PriceListController#deactivate',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
   },
+  // Billing-money plan PR 4: the CSV import, for the same two roles.
+  priceListImport: {
+    endpoint: 'PriceListController#importCsv',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
 } as const satisfies Record<string, ActionPermission>;
 
 /**

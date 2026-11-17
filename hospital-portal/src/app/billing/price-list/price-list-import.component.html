@@ -1,0 +1,224 @@
+<div class="modal-backdrop" tabindex="-1" (click)="close()" (keydown.escape)="close()">
+  <div
+    class="modal modal-wide"
+    appDialogA11y
+    tabindex="-1"
+    aria-labelledby="pl-import-title"
+    data-testid="price-list-import-dialog"
+    (dialogClose)="close()"
+    (click)="$event.stopPropagation()"
+    (keydown.escape)="$event.stopPropagation()"
+  >
+    <div class="modal-header">
+      <h2 id="pl-import-title">{{ 'BILLING.PRICE_LIST.IMPORT.TITLE' | translate }}</h2>
+      <button
+        type="button"
+        class="modal-close"
+        (click)="close()"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="muted-note">{{ 'BILLING.PRICE_LIST.IMPORT.INTRO' | translate }}</p>
+      <p>
+        <button
+          type="button"
+          class="link-button"
+          data-testid="price-list-import-template"
+          (click)="downloadTemplate()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">download</span>
+          {{ 'BILLING.PRICE_LIST.IMPORT.TEMPLATE' | translate }}
+        </button>
+      </p>
+      <div class="field">
+        <label for="pl-import-file">{{ 'BILLING.PRICE_LIST.IMPORT.FILE' | translate }} *</label>
+        <input
+          id="pl-import-file"
+          type="file"
+          accept=".csv,text/csv"
+          data-testid="price-list-import-file"
+          [attr.aria-describedby]="fileError() ? 'pl-import-file-error' : null"
+          (change)="pickFile($event)"
+        />
+        @if (fileError(); as reason) {
+          <p
+            id="pl-import-file-error"
+            class="field-error"
+            role="alert"
+            data-testid="price-list-import-file-error"
+          >
+            {{ reason }}
+          </p>
+        }
+      </div>
+      <label class="checkbox-inline" for="pl-import-replace">
+        <input
+          id="pl-import-replace"
+          type="checkbox"
+          data-testid="price-list-import-replace"
+          [ngModel]="replaceScheduled()"
+          (ngModelChange)="setReplaceScheduled($event)"
+        />
+        {{ 'BILLING.PRICE_LIST.IMPORT.REPLACE_SCHEDULED' | translate }}
+      </label>
+
+      @if (report(); as r) {
+        <div class="import-summary" role="status" data-testid="price-list-import-summary">
+          @if (r.alreadyImported && r.result !== 'APPLIED') {
+            <p class="muted-note" data-testid="price-list-import-already">
+              {{
+                'BILLING.PRICE_LIST.IMPORT.ALREADY_IMPORTED'
+                  | translate: { date: (r.alreadyImportedAt | serverTime | date: 'medium') }
+              }}
+            </p>
+          }
+          @if (r.result !== 'ALREADY_IMPORTED') {
+            <dl class="import-counts">
+              <div>
+                <dt>{{ 'BILLING.PRICE_LIST.IMPORT.COUNT_VALID' | translate }}</dt>
+                <dd data-testid="price-list-import-valid">{{ validRows() }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'BILLING.PRICE_LIST.IMPORT.COUNT_NEW_ITEMS' | translate }}</dt>
+                <dd data-testid="price-list-import-new">{{ r.newItems }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'BILLING.PRICE_LIST.IMPORT.COUNT_NEW_PRICES' | translate }}</dt>
+                <dd data-testid="price-list-import-new-prices">{{ r.newPrices }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'BILLING.PRICE_LIST.IMPORT.COUNT_UNCHANGED' | translate }}</dt>
+                <dd data-testid="price-list-import-unchanged">{{ r.unchanged }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'BILLING.PRICE_LIST.IMPORT.COUNT_REFUSED' | translate }}</dt>
+                <dd data-testid="price-list-import-refused">{{ r.refused }}</dd>
+              </div>
+            </dl>
+          }
+        </div>
+        @if (r.rows.length > 0) {
+          @if (r.refused > 0) {
+            <label class="checkbox-inline" for="pl-import-only-refused">
+              <input
+                id="pl-import-only-refused"
+                type="checkbox"
+                [ngModel]="onlyRefused()"
+                (ngModelChange)="onlyRefused.set($event)"
+              />
+              {{ 'BILLING.PRICE_LIST.IMPORT.ONLY_REFUSED' | translate }}
+            </label>
+          }
+          <div class="table-scroll">
+            <table class="data-table" data-testid="price-list-import-table">
+              <caption class="sr-only">
+                {{
+                  'BILLING.PRICE_LIST.IMPORT.TITLE' | translate
+                }}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="numeric">
+                    {{ 'BILLING.PRICE_LIST.IMPORT.LINE' | translate }}
+                  </th>
+                  <th scope="col">{{ 'BILLING.PRICE_LIST.CODE' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PRICE_LIST.LABEL' | translate }}</th>
+                  <th scope="col" class="numeric">
+                    {{ 'BILLING.PRICE_LIST.IMPORT.PRICE' | translate }}
+                  </th>
+                  <th scope="col">{{ 'BILLING.PRICE_LIST.EFFECTIVE_FROM' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PRICE_LIST.IMPORT.OUTCOME' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PRICE_LIST.IMPORT.REASON' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of visibleRows(); track row.line) {
+                  <tr
+                    [class.refused]="row.outcome === 'REFUSED'"
+                    [attr.data-testid]="'price-list-import-row-' + row.line"
+                  >
+                    <td class="numeric">{{ row.line }}</td>
+                    <td>{{ row.code }}</td>
+                    <td>{{ row.label }}</td>
+                    <td class="numeric">
+                      @if (row.price !== null && row.price !== undefined) {
+                        {{ row.price | cfa }}
+                      }
+                      @if (
+                        row.outcome === 'NEW_PRICE' &&
+                        row.previousPrice !== null &&
+                        row.previousPrice !== undefined
+                      ) {
+                        <small class="muted">
+                          {{ 'BILLING.PRICE_LIST.IMPORT.PREVIOUS_PRICE' | translate
+                          }}{{ 'COMMON.COLON' | translate }}
+                          {{ row.previousPrice | cfa }}
+                        </small>
+                      }
+                    </td>
+                    <td>
+                      {{
+                        row.effectiveDate
+                          ? (row.effectiveDate | serverTime | date: 'mediumDate')
+                          : ''
+                      }}
+                    </td>
+                    <td>{{ row.outcome | enumLabel: 'priceListImportRowOutcome' }}</td>
+                    <td>
+                      @for (refusal of row.refusals; track $index) {
+                        <p class="field-error">
+                          <strong>{{
+                            refusal.column ?? ('BILLING.PRICE_LIST.IMPORT.WHOLE_ROW' | translate)
+                          }}</strong
+                          >{{ 'COMMON.COLON' | translate }} {{ refusal.message }}
+                        </p>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <p class="muted-note">{{ 'BILLING.PRICE_LIST.IMPORT.APPLY_HINT' | translate }}</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="close()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="price-list-import-check"
+          [disabled]="busy() !== null || !file()"
+          (click)="check()"
+        >
+          {{
+            (busy() === 'check'
+              ? 'BILLING.PRICE_LIST.IMPORT.CHECKING'
+              : 'BILLING.PRICE_LIST.IMPORT.CHECK'
+            ) | translate
+          }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="price-list-import-apply"
+          [disabled]="!canApply()"
+          (click)="apply()"
+        >
+          {{
+            (busy() === 'apply'
+              ? 'BILLING.PRICE_LIST.IMPORT.APPLYING'
+              : 'BILLING.PRICE_LIST.IMPORT.APPLY'
+            ) | translate
+          }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
