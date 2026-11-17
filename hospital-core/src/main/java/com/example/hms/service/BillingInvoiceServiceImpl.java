@@ -880,7 +880,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .map(PaymentTransactionResponseDTO::from)
             // The cashier's notes and reversal reasons stay with the cashier.
             .map(row -> new PaymentTransactionResponseDTO(row.id(), row.amount(), row.paymentDate(),
-                row.paymentMethod(), row.referenceNumber(), null, row.status(), null,
+                row.paymentMethod(), row.referenceNumber(), row.mobileMoneyOperator(), null, row.status(), null,
                 row.reversedAt(), row.createdAt()))
             .toList();
         List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> adjustments = adjustmentRepository == null
@@ -1660,6 +1660,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .document(invoice != null ? invoice.getInvoiceNumber() : null)
             .patientName(invoice != null && invoice.getPatient() != null ? invoice.getPatient().getFullName() : null)
             .method(p.getPaymentMethod() != null ? p.getPaymentMethod().name() : null)
+            .operator(p.getMobileMoneyOperator() != null ? p.getMobileMoneyOperator().name() : null)
             .reference(p.getReferenceNumber())
             .amount(p.getAmount())
             .status(p.getStatus() != null ? p.getStatus().name() : null)
@@ -1676,6 +1677,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .document(p.getDispense() != null ? p.getDispense().getMedicationName() : null)
             .patientName(p.getPatient() != null ? p.getPatient().getFullName() : null)
             .method(p.getPaymentMethod() != null ? p.getPaymentMethod().name() : null)
+            .operator(p.getMobileMoneyOperator() != null ? p.getMobileMoneyOperator().name() : null)
             .reference(p.getReferenceNumber())
             .amount(p.getAmount())
             .status(p.getStatus() != null ? p.getStatus().name() : null)
@@ -1720,9 +1722,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             receivedCount++;
             received = received.add(amount);
             com.example.hms.payload.dto.CashClosingDTO.MethodTotal t = totals.computeIfAbsent(
-                e.getSource() + "|" + e.getMethod(),
+                // Billing plan PR 9: Orange Money and Moov Money are counted apart.
+                e.getSource() + "|" + e.getMethod() + "|" + e.getOperator(),
                 k -> com.example.hms.payload.dto.CashClosingDTO.MethodTotal.builder()
-                    .source(e.getSource()).method(e.getMethod()).count(0).amount(BigDecimal.ZERO).build());
+                    .source(e.getSource()).method(e.getMethod()).operator(e.getOperator())
+                    .count(0).amount(BigDecimal.ZERO).build());
             t.setCount(t.getCount() + 1);
             t.setAmount(t.getAmount().add(amount));
         }
@@ -1755,6 +1759,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         PaymentMethod method = parsePaymentMethod(payment.getPaymentMethod(), "paymentMethod");
         // QA D1611: an insurer's share is claimed, never declared as paid.
         com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(method, "paymentMethod");
+        // Billing plan PR 9: kept when given; the mobile apps send none yet ("not stated").
+        com.example.hms.enums.MobileMoneyOperator operator = com.example.hms.service.payment.MobileMoneyOperators
+            .keep(method, payment.getMobileMoneyOperator());
         requireWholeAmount(payment.getAmount());
         // QA D140: nothing verifies a patient's declaration (no payment
         // provider callback exists), so it settles nothing. It is recorded as
@@ -1780,7 +1787,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         requirePayable(invoice, patientId, declared);
         rejectReusedReference(invoice, method, payment.getTransactionReference(), "transactionReference");
         savePaymentRow(invoice, payment.getAmount(), method,
-            payment.getTransactionReference(), payment.getNotes(), recordedBy, PaymentStatus.PENDING);
+            payment.getTransactionReference(), operator, payment.getNotes(), recordedBy, PaymentStatus.PENDING);
         BillingInvoiceResponseDTO response = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
         response.setPendingDeclaredAmount(open.add(payment.getAmount()));
         return response;
@@ -1809,7 +1816,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     /** The ledger row a cashier reconciles against: one per recorded payment, patient or staff. */
     private PaymentTransaction savePaymentRow(BillingInvoice invoice, BigDecimal amount, PaymentMethod method,
-            String reference, String notes, UUID recordedBy, PaymentStatus status) {
+            String reference, com.example.hms.enums.MobileMoneyOperator operator, String notes, UUID recordedBy,
+            PaymentStatus status) {
         boolean confirmed = status == PaymentStatus.CONFIRMED;
         PaymentTransaction row = PaymentTransaction.builder()
             .invoice(invoice)
@@ -1817,6 +1825,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .paymentDate(LocalDate.now(java.time.ZoneId.systemDefault()))
             .paymentMethod(method)
             .referenceNumber(blankToNull(reference))
+            .mobileMoneyOperator(operator)
             .notes(blankToNull(notes))
             .recordedBy(recordedBy)
             .status(status)
@@ -1947,6 +1956,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             throw new FieldBusinessException("reference", MSG_REFERENCE_REQUIRED);
         }
         rejectReusedReference(invoice, method, payment.getReference(), "reference");
+        // Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close.
+        com.example.hms.enums.MobileMoneyOperator operator = com.example.hms.service.payment.MobileMoneyOperators
+            .require(method, payment.getMobileMoneyOperator(), "mobileMoneyOperator");
         // QA D272: the copay already taken at check-in counts before the clerk's payment.
         boolean wasOpen = invoice.getStatus() != InvoiceStatus.PAID;
         creditCheckInCopays(invoice);
@@ -1956,7 +1968,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         requireRoomBesidePendingDeclarations(invoice, payment.getAmount());
         BillingInvoice saved = applyPayment(invoiceId, invoice.getPatient().getId(), payment.getAmount());
         PaymentTransaction row = savePaymentRow(saved, payment.getAmount(), method, payment.getReference(),
-            payment.getNotes(), recordedBy, PaymentStatus.CONFIRMED);
+            operator, payment.getNotes(), recordedBy, PaymentStatus.CONFIRMED);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, recordedBy, saved, row.getId(), "Payment recorded");
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
@@ -2151,19 +2163,22 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional
     public void recordCheckInCopay(Encounter encounter, BigDecimal amount, UUID recordedBy) {
-        doRecordCheckInCopay(encounter, amount, PaymentMethod.CASH, null, recordedBy);
+        doRecordCheckInCopay(encounter, amount, PaymentMethod.CASH, null, null, recordedBy);
     }
 
     @Override
     @Transactional
     public PaymentTransaction recordCheckInCopay(Encounter encounter, BigDecimal amount, PaymentMethod method,
-                                                 String reference, UUID recordedBy) {
-        return doRecordCheckInCopay(encounter, amount, method, reference, recordedBy);
+                                                 String reference, com.example.hms.enums.MobileMoneyOperator operator,
+                                                 UUID recordedBy) {
+        return doRecordCheckInCopay(encounter, amount, method, reference, operator, recordedBy);
     }
 
     /** Both entry points share this body (Sonar S6809: no self-call through a transactional method). */
     private PaymentTransaction doRecordCheckInCopay(Encounter encounter, BigDecimal amount, PaymentMethod method,
-                                                    String reference, UUID recordedBy) {
+                                                    String reference,
+                                                    com.example.hms.enums.MobileMoneyOperator operator,
+                                                    UUID recordedBy) {
         if (amount == null || amount.signum() <= 0) {
             return null;
         }
@@ -2175,6 +2190,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         PaymentMethod copayMethod = method;
         // QA D1611: a copay is money taken at the desk, not an insurer's share.
         com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(copayMethod, "copayMethod");
+        // Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close.
+        com.example.hms.enums.MobileMoneyOperator copayOperator = com.example.hms.service.payment.MobileMoneyOperators
+            .require(copayMethod, operator, "copayMobileMoneyOperator");
         String copayReference = reference == null || reference.isBlank() ? null : reference.trim();
         if (REFERENCE_REQUIRED.contains(copayMethod) && copayReference == null) {
             throw new FieldBusinessException("copayReference", MSG_REFERENCE_REQUIRED);
@@ -2211,8 +2229,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // One operator transaction pays once: the same rule as the desk payment.
         rejectReusedReference(saved, copayMethod, copayReference, "copayReference");
         BillingInvoice settled = settle(saved, amount);
-        PaymentTransaction row = savePaymentRow(settled, amount, copayMethod, copayReference, null, recordedBy,
-            PaymentStatus.CONFIRMED);
+        PaymentTransaction row = savePaymentRow(settled, amount, copayMethod, copayReference, copayOperator, null,
+            recordedBy, PaymentStatus.CONFIRMED);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, recordedBy, settled, row.getId(), "Check-in copay recorded");
         return row;
     }

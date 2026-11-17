@@ -5,6 +5,6 @@ import jakarta.validation.constraints.Size;
 
 /** The reason billing staff give to reverse or reject a payment (QA D140, D142). */
 public record PaymentReasonRequestDTO(
-    @NotBlank @Size(max = 500) String reason
+    @NotBlank @Size(max = 500) @com.example.hms.validation.NoCardNumber String reason
 ) {
 }

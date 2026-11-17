@@ -64,6 +64,15 @@ public class PaymentTransaction extends BaseEntity {
     @Column(name = "reference_number", length = 120)
     private String referenceNumber;
 
+    /**
+     * Billing plan PR 9 (V308): the operator of a Mobile Money payment, typed by
+     * the cashier (no operator integration). Null on older rows and for every
+     * other method ("Opérateur non précisé").
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mobile_money_operator", length = 20)
+    private com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator;
+
     @Column(name = "recorded_by")
     private UUID recordedBy;
 
