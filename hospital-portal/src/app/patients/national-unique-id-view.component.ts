@@ -1,23 +1,52 @@
-import { Component, Input, OnChanges, OnDestroy, effect, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  Input,
+  OnChanges,
+  OnDestroy,
+  effect,
+  inject,
+} from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientService } from '../services/patient.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PATIENT_IDENTITY_EDIT_ROLES } from './patient-chart/chart-access';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-national-unique-id-view',
   standalone: true,
   imports: [TranslateModule],
+  // QA D2031: the label and the value were glued and unstyled in the header.
+  styles: [
+    `
+      .iu-view {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .iu-label {
+        font-weight: 600;
+      }
+      .iu-value {
+        font-variant-numeric: tabular-nums;
+      }
+    `,
+  ],
   template: `@if (masked) {
-    <div>
-      <span>{{ 'NATIONAL_IU.LABEL' | translate }}</span> <span>{{ fullValue ?? masked }}</span>
+    <div class="iu-view" data-testid="national-iu-view">
+      <span class="iu-label">{{ 'NATIONAL_IU.LABEL' | translate }}</span>
+      <span class="iu-value">{{ fullValue ?? masked }}</span>
       @if (canReveal() && !fullValue) {
-        <button type="button" (click)="reveal()" [disabled]="busy">
+        <button type="button" class="btn-secondary" (click)="reveal()" [disabled]="busy">
           {{ 'NATIONAL_IU.SHOW_FULL' | translate }}
         </button>
       }
       @if (fullValue) {
-        <button type="button" (click)="clear()">{{ 'NATIONAL_IU.HIDE' | translate }}</button>
+        <button type="button" class="btn-secondary" (click)="clear()">
+          {{ 'NATIONAL_IU.HIDE' | translate }}
+        </button>
       }
       @if (failed) {
         <small role="alert">{{ 'NATIONAL_IU.UNAVAILABLE' | translate }}</small>

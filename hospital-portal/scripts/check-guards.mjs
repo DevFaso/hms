@@ -33,6 +33,7 @@ import { gate as formBehaviour } from './check-form-behaviour.mjs';
 import { gate as listCaps } from './check-list-caps.mjs';
 import { gate as destructiveConfirm } from './check-destructive-confirm.mjs';
 import { gate as eventCancel } from './check-event-cancel.mjs';
+import { gate as changeDetection } from './check-change-detection.mjs';
 
 const argv = process.argv.slice(2);
 // The `.ts` sources are read once and handed to the template loader, so a
@@ -55,6 +56,7 @@ for (const gate of [
   listCaps,
   destructiveConfirm,
   eventCancel,
+  changeDetection,
 ]) {
   if (!evaluateGate(gate, argv, ctx)) failed++;
 }

@@ -1,4 +1,5 @@
 import {
+  ChangeDetectionStrategy,
   Component,
   EventEmitter,
   Input,
@@ -23,6 +24,7 @@ import {
 
 /** Full identity data lives only in this editor and is dropped on scope/patient changes. */
 @Component({
+  changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-national-unique-id-editor',
   standalone: true,
   imports: [FormsModule, RouterLink, TranslateModule],

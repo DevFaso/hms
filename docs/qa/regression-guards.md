@@ -1171,3 +1171,9 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `architecture/StatusWriteKeepsAbsentFieldsGuardTest` (new) | D1822: a status-writing method (`update…Status…`, `change…Status…`, `transition…Status…`, `patch…Status…`) that copies a request field other than the status and its reason onto the record (`record.setX(request.getX())`) without `if (request.getX() != null)`, so a status write erases every field it was not sent (the imaging status write nulled the schedule, location, notes and pre-authorisation). All of `src/main` except `model/`. | **0** |
 | `mapper/ImagingEditKeepsAbsentFieldsTest` (new), `service/ImagingOrderServiceImplTest#aStatusWriteKeepsEveryNonStatusField_D1822` | D1822 class: the order edit and the report revision mapped the whole request onto the record, erasing what the portal form does not carry (safety flags, schedule, visit; DICOM UIDs, PACS link, performed time, dose). Read by reflection over every request / entity field, so a new field is covered. | form-owned fields listed in the test (replaced, a blank one clears) |
 | portal `scripts/lib/imaging-report-status-words.test.mjs` (new) | D1820: a second key family naming an imaging report status (`IMAGING.REPORT_STATUS_*`), so two drawers said "Final" and "Définitif". Every surface uses `enumLabel: 'imagingReportStatus'`. | **0** |
+
+## Guard added by fix/d2030-iu-reveal (r58; extend it too)
+
+| Gate | Catches | Run |
+|---|---|---|
+| change detection (`scripts/check-change-detection.mjs`) | A component with no explicit `changeDetection`. Angular 22 defaults to OnPush, so plain fields set in an HTTP callback or timer never render (QA D2030: the national IU reveal wrote its audit row but showed nothing, button stuck disabled). Declare `Eager` for plain mutable fields, `OnPush` only for signal-driven components. No baseline: it must stay empty | `npm run guards` |

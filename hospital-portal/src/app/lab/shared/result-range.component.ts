@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { LabResultResponse } from '../../services/lab.service';
 import { LabValuePipe } from './lab-value.pipe';
@@ -10,6 +10,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { labSeverityFlag } from './lab-severity';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-result-range',
   imports: [
     TranslateModule,

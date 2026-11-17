@@ -1,5 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -257,6 +258,36 @@ describe('Optional protected national IU', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).not.toContain('0001 2345 6789');
     expect(fixture.nativeElement.querySelector('button')).toBeNull();
+  });
+
+  // QA D2030: inside the patient header the revealed number never appeared and
+  // the button stayed disabled, because the view defaulted to OnPush and set
+  // plain fields in the HTTP callback. Rendered through a host, as on the page.
+  it('shows the revealed number and re-enables the header when hosted in a page', () => {
+    @Component({
+      selector: 'app-iu-host',
+      changeDetection: ChangeDetectionStrategy.Eager,
+      imports: [NationalUniqueIdViewComponent],
+      template: `<app-national-unique-id-view patientId="patient-a" masked="•••• •••• 6789" />`,
+    })
+    class HostComponent {}
+    TestBed.inject(RoleContextService).setRoles(['ROLE_RECEPTIONIST']);
+    const fixture = TestBed.createComponent(HostComponent);
+    fixture.detectChanges();
+    const view = fixture.nativeElement as HTMLElement;
+    (view.querySelector('button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    TestBed.inject(HttpTestingController)
+      .expectOne('/patients/national-unique-id/patient-a/reveal')
+      .flush({ nationalUniqueId: '0001 2345 6789' });
+    fixture.detectChanges();
+    expect(view.textContent).toContain('0001 2345 6789');
+    const label = view.querySelector('.iu-label');
+    const value = view.querySelector('.iu-value');
+    expect(label?.textContent?.trim()).toBeTruthy();
+    expect(value?.textContent?.trim()).toBe('0001 2345 6789');
+    const hide = view.querySelector('button') as HTMLButtonElement;
+    expect(hide.disabled).toBe(false);
   });
 
   for (const locale of ['fr', 'en', 'es']) {
