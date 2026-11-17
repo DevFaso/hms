@@ -55,12 +55,12 @@ describe('ResetPasswordComponent — a refused link is never shown as a reset (Q
     c.newPassword = 'Valid-Pass-2026';
     c.confirmPassword = 'Valid-Pass-2026';
     c.submit();
-    httpMock
-      .expectOne('/auth/password/confirm')
-      .flush(
-        { message: 'Ce lien est invalide, a expiré ou a déjà été utilisé. Demandez-en un nouveau.' },
-        { status: 400, statusText: 'Bad Request' },
-      );
+    httpMock.expectOne('/auth/password/confirm').flush(
+      {
+        message: 'Ce lien est invalide, a expiré ou a déjà été utilisé. Demandez-en un nouveau.',
+      },
+      { status: 400, statusText: 'Bad Request' },
+    );
     fixture.detectChanges();
 
     expect(c.success).toBe('');
@@ -74,7 +74,9 @@ describe('ResetPasswordComponent — a refused link is never shown as a reset (Q
     c.newPassword = 'Valid-Pass-2026';
     c.confirmPassword = 'Valid-Pass-2026';
     c.submit();
-    httpMock.expectOne('/auth/password/confirm').flush(null, { status: 502, statusText: 'Bad Gateway' });
+    httpMock
+      .expectOne('/auth/password/confirm')
+      .flush(null, { status: 502, statusText: 'Bad Gateway' });
 
     expect(c.error).toBe('RESET.ERR_LINK_INVALID');
     expect(c.success).toBe('');
