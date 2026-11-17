@@ -9,6 +9,7 @@ import {
   AdmissionResponse,
   AdmissionRequest,
   AdmissionType,
+  AdmissionStatus,
   AcuityLevel,
 } from '../services/admission.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -71,6 +72,18 @@ export class AdmissionsComponent implements OnInit {
   loading = signal(true);
   searchTerm = '';
   activeTab = signal<'all' | 'admitted' | 'discharged'>('all');
+  readonly statuses: AdmissionStatus[] = [
+    'PENDING',
+    'ACTIVE',
+    'ON_LEAVE',
+    'AWAITING_DISCHARGE',
+    'DISCHARGED',
+    'CANCELLED',
+    'TRANSFERRED',
+    'DECEASED',
+  ];
+  statusFilter = signal<AdmissionStatus | 'ALL'>('ALL');
+  missingBedOnly = signal(false);
 
   /**
    * When non-null, the order-set picker is rendered as a modal-style
@@ -577,7 +590,39 @@ export class AdmissionsComponent implements OnInit {
 
   setTab(tab: 'all' | 'admitted' | 'discharged'): void {
     this.activeTab.set(tab);
+    this.statusFilter.set(
+      tab === 'admitted' ? 'ACTIVE' : tab === 'discharged' ? 'DISCHARGED' : 'ALL',
+    );
+    this.missingBedOnly.set(false);
     this.applyFilter();
+  }
+
+  setStatus(status: AdmissionStatus | 'ALL'): void {
+    this.statusFilter.set(status);
+    this.missingBedOnly.set(false);
+    this.activeTab.set(
+      status === 'ACTIVE' ? 'admitted' : status === 'DISCHARGED' ? 'discharged' : 'all',
+    );
+    this.applyFilter();
+  }
+
+  isBedMissing(admission: AdmissionResponse): boolean {
+    return !admission.bedId && !admission.roomBed?.trim();
+  }
+
+  missingBedCount(): number {
+    return this.admissions().filter((a) => a.status === 'ACTIVE' && this.isBedMissing(a)).length;
+  }
+
+  filterMissingBeds(): void {
+    this.setStatus('ACTIVE');
+    this.missingBedOnly.set(true);
+    this.applyFilter();
+  }
+
+  resetFilters(): void {
+    this.searchTerm = '';
+    this.setTab('all');
   }
 
   applyFilter(): void {
@@ -585,6 +630,8 @@ export class AdmissionsComponent implements OnInit {
     const tab = this.activeTab();
     if (tab === 'admitted') list = list.filter((a) => a.status === 'ACTIVE');
     else if (tab === 'discharged') list = list.filter((a) => a.status === 'DISCHARGED');
+    if (this.statusFilter() !== 'ALL') list = list.filter((a) => a.status === this.statusFilter());
+    if (this.missingBedOnly()) list = list.filter((a) => this.isBedMissing(a));
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(

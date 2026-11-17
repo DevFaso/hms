@@ -15,58 +15,40 @@
     </div>
   </div>
 
-  <div class="summary-cards">
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon open">meeting_room</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('SCHEDULED') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.SCHEDULED' | translate }}</span>
-      </div>
+  <section aria-labelledby="encounter-overview-title">
+    <h2 id="encounter-overview-title" class="list-title">
+      {{ 'ENCOUNTERS.OVERVIEW_TITLE' | translate }}
+    </h2>
+    <div class="summary-cards">
+      <button
+        type="button"
+        class="summary-card"
+        [class.selected]="statusFilter() === 'ALL' && activeTab() === 'all'"
+        [attr.aria-pressed]="statusFilter() === 'ALL' && activeTab() === 'all'"
+        (click)="setTab('all')"
+      >
+        <div class="card-info">
+          <span class="card-value">{{ encounters().length }}</span
+          ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+        </div>
+      </button>
+      @for (status of statuses; track status) {
+        <button
+          type="button"
+          class="summary-card"
+          [class.selected]="statusFilter() === status"
+          [attr.aria-pressed]="statusFilter() === status"
+          (click)="setStatus(status)"
+        >
+          <div class="card-info">
+            <span class="card-value">{{ countByStatus(status) }}</span
+            ><span class="card-label">{{ status | enumLabel: 'encounterStatus' }}</span>
+          </div>
+        </button>
+      }
     </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon progress">how_to_reg</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('ARRIVED') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.ARRIVED' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon progress">monitor_heart</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('TRIAGE') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.TRIAGE' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon warning">person_search</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('WAITING_FOR_PHYSICIAN') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.WAITING_FOR_MD' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon progress">pending</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('IN_PROGRESS') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.IN_PROGRESS' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon completed">check_circle</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('COMPLETED') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.COMPLETED' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon total">bar_chart</span>
-      <div class="card-info">
-        <span class="card-value">{{ encounters().length }}</span>
-        <span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
-      </div>
-    </div>
-  </div>
-
+  </section>
+  <h2 class="list-title">{{ 'ENCOUNTERS.LIST_TITLE' | translate }}</h2>
   <div class="filter-bar">
     <div class="tabs">
       <button class="tab-btn" [class.active]="activeTab() === 'all'" (click)="setTab('all')">
@@ -92,6 +74,31 @@
         (input)="applyFilter()"
       />
     </div>
+  </div>
+
+  <div class="status-filter-row">
+    <label for="encounter-status-filter">{{ 'COMMON.STATUS' | translate }}</label>
+    <select
+      id="encounter-status-filter"
+      [ngModel]="
+        statusFilter() === 'ALL' && activeTab() === 'open' ? 'ACTIVE_GROUP' : statusFilter()
+      "
+      (ngModelChange)="changeStatusFilter($event)"
+    >
+      <option value="ALL">{{ 'COMMON.ALL' | translate }}</option>
+      <option value="ACTIVE_GROUP">{{ 'COMMON.ACTIVE' | translate }}</option>
+      @for (status of statuses; track status) {
+        <option [value]="status">{{ status | enumLabel: 'encounterStatus' }}</option>
+      }
+    </select>
+    @if (searchTerm.trim() || statusFilter() !== 'ALL' || activeTab() !== 'all') {
+      <button type="button" class="btn-secondary" (click)="resetFilters()">
+        {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
+      </button>
+    }
+    <span aria-live="polite">{{
+      'ENCOUNTERS.MATCHING_COUNT' | translate: { count: filtered().length }
+    }}</span>
   </div>
 
   @if (loading()) {
@@ -193,7 +200,13 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
       <div class="detail-panel">
         <div class="detail-header">
-          <h2>{{ 'ENCOUNTERS.DETAILS' | translate }}</h2>
+          <div class="detail-identity">
+            <h2>{{ enc.patientName }}</h2>
+            <span class="status-badge {{ getStatusClass(enc.status) }}">{{
+              enc.status | enumLabel: 'encounterStatus'
+            }}</span>
+            <span class="note-meta">{{ 'ENCOUNTERS.DETAILS' | translate }}</span>
+          </div>
           <button class="btn-icon" [title]="'COMMON.CLOSE' | translate" (click)="closeDetail()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -271,32 +284,60 @@
             }
           </div>
 
-          @if (enc.notes) {
+          @if (
+            enc.notes && enc.notes !== noteState()?.content && enc.notes !== noteState()?.summary
+          ) {
             <div class="detail-section">
               <h3>{{ 'ENCOUNTERS.NOTES' | translate }}</h3>
               <p class="notes-content">{{ enc.notes }}</p>
             </div>
           }
 
+          @if (noteHistoryLoading()) {
+            <p role="status">{{ 'COMMON.LOADING' | translate }}</p>
+          }
           @if (noteHistory().length > 0) {
-            <div class="detail-section">
-              <h3>{{ 'ENCOUNTERS.NOTE_HISTORY' | translate }}</h3>
+            <details class="detail-section note-history-disclosure">
+              <summary>
+                {{ 'ENCOUNTERS.NOTE_HISTORY' | translate }} ({{ noteHistory().length }})
+              </summary>
               <div class="note-history">
                 @for (n of noteHistory(); track n.id) {
-                  <div class="note-history-item">
-                    <p class="notes-content">{{ n.content }}</p>
-                    <span class="note-meta">
-                      {{ n.authorName }} — {{ n.createdAt | date: 'short' }}
-                    </span>
-                  </div>
+                  <details class="note-history-item">
+                    <summary>
+                      {{ historyAction(n) | translate }}
+                      <span class="note-meta"
+                        >{{ historyAuthor(n) }} -
+                        {{ n.changedAt || n.createdAt | date: 'short' }}</span
+                      >
+                    </summary>
+                    <ng-container
+                      *ngTemplateOutlet="noteContent; context: { $implicit: historySections(n) }"
+                    />
+                  </details>
                 }
               </div>
-            </div>
+            </details>
           }
 
           @if (noteState(); as note) {
             <div class="detail-section" data-testid="note-signature-section">
-              <h3>{{ 'ENCOUNTERS.NOTE_SIGNATURE' | translate }}</h3>
+              <h3>{{ 'ENCOUNTERS.CURRENT_NOTE' | translate }}</h3>
+              <ng-container
+                *ngTemplateOutlet="noteContent; context: { $implicit: noteSections(note) }"
+              />
+              <h4>{{ 'ENCOUNTERS.NOTE_SIGNATURE' | translate }}</h4>
+              <span
+                class="signature-status"
+                [class.signed]="!!note.signedAt"
+                data-testid="note-status"
+                >{{
+                  (note.signedAt
+                    ? 'ENCOUNTERS.NOTE_STATUS_SIGNED'
+                    : 'ENCOUNTERS.NOTE_STATUS_UNSIGNED'
+                  ) | translate
+                }}</span
+              >
               @if (note.signedAt) {
                 <p class="note-meta" data-testid="note-signed-line">
                   {{ 'ENCOUNTERS.NOTE_SIGNED_AT' | translate }}
@@ -396,39 +437,41 @@
             </div>
           }
 
-          <div class="detail-section">
-            @if (!showAddendumForm()) {
-              <button
-                class="btn-secondary"
-                [title]="'ENCOUNTERS.ADD_ADDENDUM' | translate"
-                (click)="showAddendumForm.set(true)"
-              >
-                <span class="material-symbols-outlined">post_add</span>
-                {{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}
-              </button>
-            } @else {
-              <h3>{{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}</h3>
-              <textarea
-                class="note-input"
-                [(ngModel)]="addendumContent"
-                rows="3"
-                [attr.aria-label]="'ENCOUNTERS.ADDENDUM_ARIA' | translate"
-                [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
-              ></textarea>
-              <div class="note-actions">
+          @if (noteState()) {
+            <div class="detail-section">
+              @if (!showAddendumForm()) {
                 <button
-                  class="btn-primary"
-                  (click)="addAddendum()"
-                  [disabled]="!addendumContent.trim() || addendumSaving()"
+                  class="btn-secondary"
+                  [title]="'ENCOUNTERS.ADD_ADDENDUM' | translate"
+                  (click)="showAddendumForm.set(true)"
                 >
-                  {{ 'COMMON.SAVE' | translate }}
+                  <span class="material-symbols-outlined">post_add</span>
+                  {{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}
                 </button>
-                <button class="btn-secondary" (click)="showAddendumForm.set(false)">
-                  {{ 'COMMON.CANCEL' | translate }}
-                </button>
-              </div>
-            }
-          </div>
+              } @else {
+                <h3>{{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}</h3>
+                <textarea
+                  class="note-input"
+                  [(ngModel)]="addendumContent"
+                  rows="3"
+                  [attr.aria-label]="'ENCOUNTERS.ADDENDUM_ARIA' | translate"
+                  [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
+                ></textarea>
+                <div class="note-actions">
+                  <button
+                    class="btn-primary"
+                    (click)="addAddendum()"
+                    [disabled]="!addendumContent.trim() || addendumSaving()"
+                  >
+                    {{ 'COMMON.SAVE' | translate }}
+                  </button>
+                  <button class="btn-secondary" (click)="showAddendumForm.set(false)">
+                    {{ 'COMMON.CANCEL' | translate }}
+                  </button>
+                </div>
+              }
+            </div>
+          }
         </div>
       </div>
     </div>
@@ -765,3 +808,14 @@
     </div>
   </div>
 }
+
+<ng-template #noteContent let-sections>
+  <div class="note-sections">
+    @for (section of sections; track section.label) {
+      <section class="note-section">
+        <h4>{{ section.label | translate }}</h4>
+        <p>{{ section.content }}</p>
+      </section>
+    }
+  </div>
+</ng-template>

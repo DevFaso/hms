@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 import { InBasketPanelComponent } from './in-basket-panel';
 import {
   InBasketService,
@@ -158,11 +158,11 @@ describe('InBasketPanelComponent', () => {
   });
 
   it('should return correct type icon', () => {
-    expect(component.typeIcon('RESULT')).toBe('🧪');
-    expect(component.typeIcon('ORDER')).toBe('📋');
-    expect(component.typeIcon('MESSAGE')).toBe('✉️');
-    expect(component.typeIcon('TASK')).toBe('✅');
-    expect(component.typeIcon('UNKNOWN')).toBe('📌');
+    expect(component.typeIcon('RESULT')).toBe('science');
+    expect(component.typeIcon('ORDER')).toBe('prescriptions');
+    expect(component.typeIcon('MESSAGE')).toBe('mail');
+    expect(component.typeIcon('TASK')).toBe('task_alt');
+    expect(component.typeIcon('UNKNOWN')).toBe('inbox');
   });
 
   it('formats dates in the product language by default — French, 24-hour', () => {
@@ -199,5 +199,72 @@ describe('InBasketPanelComponent', () => {
     component.refresh();
     expect(inBasketSpy.getItems).toHaveBeenCalled();
     expect(inBasketSpy.getSummary).toHaveBeenCalled();
+  });
+  it('shows an error with retry instead of an empty inbox when loading fails', () => {
+    inBasketSpy.getItems.and.returnValue(throwError(() => new Error('offline')));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.empty-state')).toBeNull();
+    expect(component.lastUpdated()).toBeNull();
+    inBasketSpy.getItems.and.returnValue(of(mockPage([])));
+    fixture.nativeElement.querySelector('.error-state button').click();
+    fixture.detectChanges();
+    expect(component.loadError()).toBeFalse();
+    expect(component.lastUpdated()).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.empty-state')).not.toBeNull();
+  });
+
+  it('waits for items and counts before reporting refresh success and ignores duplicate refreshes', () => {
+    const summary = new Subject<InBasketSummary>();
+    inBasketSpy.getSummary.and.returnValue(summary);
+    fixture.detectChanges();
+    expect(component.loading()).toBeTrue();
+    expect(component.lastUpdated()).toBeNull();
+    expect(fixture.nativeElement.querySelector('.btn-refresh').disabled).toBeTrue();
+    component.refresh();
+    expect(inBasketSpy.getItems).toHaveBeenCalledTimes(1);
+    summary.next(mockSummary());
+    summary.complete();
+    fixture.detectChanges();
+    expect(component.loading()).toBeFalse();
+    expect(component.lastUpdated()).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.last-updated')).not.toBeNull();
+  });
+
+  it('retains the last complete snapshot and timestamp if refreshing counts fails', () => {
+    fixture.detectChanges();
+    const timestamp = component.lastUpdated();
+    inBasketSpy.getItems.and.returnValue(of(mockPage([])));
+    inBasketSpy.getSummary.and.returnValue(throwError(() => new Error('offline')));
+    component.refresh();
+    fixture.detectChanges();
+    expect(component.loadError()).toBeTrue();
+    expect(component.lastUpdated()).toBe(timestamp);
+    expect(component.items().length).toBe(1);
+    expect(component.summary().totalUnread).toBe(3);
+    expect(fixture.nativeElement.querySelector('.error-state')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.item-list')).not.toBeNull();
+  });
+
+  it('offers a way back to all items when a category is empty', () => {
+    fixture.detectChanges();
+    component.setFilter('MESSAGE');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.empty-state h3').textContent).toContain(
+      'inBasket.emptyCategory',
+    );
+    fixture.nativeElement.querySelector('.empty-state button').click();
+    fixture.detectChanges();
+    expect(component.activeFilter()).toBeNull();
+    expect(fixture.nativeElement.querySelector('.item-list')).not.toBeNull();
+  });
+
+  it('preserves the dashboard title and allows the full page to hide it', () => {
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.panel-title')).not.toBeNull();
+    fixture.componentRef.setInput('showTitle', false);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.panel-title')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.btn-refresh')).not.toBeNull();
   });
 });

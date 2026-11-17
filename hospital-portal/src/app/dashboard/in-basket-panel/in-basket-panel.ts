@@ -5,7 +5,11 @@ import {
   inject,
   signal,
   computed,
+  input,
+  DestroyRef,
 } from '@angular/core';
+import { forkJoin, finalize } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { InBasketService, InBasketItem, InBasketSummary } from '../../services/in-basket.service';
@@ -22,6 +26,8 @@ import { currentLocale } from '../../shared/i18n/app-locale';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class InBasketPanelComponent implements OnInit {
+  readonly showTitle = input(true);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly inBasketService = inject(InBasketService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -36,6 +42,8 @@ export class InBasketPanelComponent implements OnInit {
     taskUnread: 0,
   });
   loading = signal(false);
+  loadError = signal(false);
+  lastUpdated = signal<string | null>(null);
   activeFilter = signal<string | null>(null);
 
   /* ── derived ── */
@@ -105,18 +113,13 @@ export class InBasketPanelComponent implements OnInit {
   }
 
   typeIcon(type: string): string {
-    switch (type) {
-      case 'RESULT':
-        return '🧪';
-      case 'ORDER':
-        return '📋';
-      case 'MESSAGE':
-        return '✉️';
-      case 'TASK':
-        return '✅';
-      default:
-        return '📌';
-    }
+    const icons: Record<string, string> = {
+      RESULT: 'science',
+      ORDER: 'prescriptions',
+      MESSAGE: 'mail',
+      TASK: 'task_alt',
+    };
+    return icons[type] ?? 'inbox';
   }
 
   formatDate(iso: string | null): string {
@@ -138,21 +141,35 @@ export class InBasketPanelComponent implements OnInit {
   }
 
   private loadData(): void {
+    if (this.loading()) return;
     this.loading.set(true);
-    this.inBasketService.getItems().subscribe({
-      next: (page) => {
-        this.items.set(page.content);
-        this.loading.set(false);
-      },
-      error: () => this.loading.set(false),
-    });
-    this.loadSummary();
+    this.loadError.set(false);
+    forkJoin({
+      page: this.inBasketService.getItems(),
+      summary: this.inBasketService.getSummary(),
+    })
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => this.loading.set(false)),
+      )
+      .subscribe({
+        next: ({ page, summary }) => {
+          this.items.set(page.content);
+          this.summary.set(summary);
+          this.lastUpdated.set(new Date().toISOString());
+        },
+        error: () => this.loadError.set(true),
+      });
   }
 
   private loadSummary(): void {
-    this.inBasketService.getSummary().subscribe({
-      next: (s) => this.summary.set(s),
-    });
+    this.inBasketService
+      .getSummary()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (s) => this.summary.set(s),
+        error: () => this.toast.error(this.translate.instant('inBasket.summaryLoadFailed')),
+      });
   }
 
   private patchItem(updated: InBasketItem): void {

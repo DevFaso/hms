@@ -1,9 +1,9 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { EncountersComponent } from './encounters';
 import {
@@ -40,6 +40,7 @@ function mockEncounter(overrides: Partial<EncounterResponse> = {}): EncounterRes
 describe('EncountersComponent', () => {
   let deptLookupSpy: jasmine.SpyObj<DepartmentLookupService>;
   let component: EncountersComponent;
+  let fixture: ComponentFixture<EncountersComponent>;
   let encounterSpy: jasmine.SpyObj<EncounterService>;
   let hospitalSpy: jasmine.SpyObj<HospitalService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
@@ -141,7 +142,8 @@ describe('EncountersComponent', () => {
       ],
     }).compileComponents();
 
-    component = TestBed.createComponent(EncountersComponent).componentInstance;
+    fixture = TestBed.createComponent(EncountersComponent);
+    component = fixture.componentInstance;
   });
 
   it('should create', () => {
@@ -218,6 +220,79 @@ describe('EncountersComponent', () => {
     expect(component.filtered().map((e) => e.id)).toEqual(['e1', 'e3']);
     component.setTab('completed');
     expect(component.filtered().map((e) => e.id)).toEqual(['e2']);
+  });
+
+  it('accounts for every encounter status and synchronizes the status filter with tabs', () => {
+    component.encounters.set(
+      component.statuses.map((status, i) => mockEncounter({ id: String(i), status })),
+    );
+    const total = component.statuses.reduce(
+      (sum, status) => sum + component.countByStatus(status),
+      0,
+    );
+    expect(total).toBe(component.encounters().length);
+    component.setStatus('AWAITING_RESULTS');
+    expect(component.activeTab()).toBe('open');
+    expect(component.filtered().map((e) => e.status)).toEqual(['AWAITING_RESULTS']);
+    component.setStatus('CANCELLED');
+    expect(component.activeTab()).toBe('all');
+    expect(component.filtered().map((e) => e.status)).toEqual(['CANCELLED']);
+    component.setTab('completed');
+    expect(component.statusFilter()).toBe('COMPLETED');
+    expect(component.filtered().map((e) => e.status)).toEqual(['COMPLETED']);
+    component.resetFilters();
+    expect(component.filtered().length).toBe(component.encounters().length);
+  });
+
+  it('renders the current SOAP note once with signature status independent of encounter completion', () => {
+    const note = {
+      id: 'n1',
+      subjective: 'Unique subjective content',
+      objective: 'Line one\nLine two',
+      signedAt: null,
+    } as EncounterNoteResponse;
+    encounterSpy.getNoteHistory.and.returnValue(
+      of([{ id: 'h1', contentSnapshot: JSON.stringify(note) }]),
+    );
+    component.selectEncounter(mockEncounter({ status: 'COMPLETED', note }));
+    fixture.detectChanges();
+    const section = fixture.nativeElement.querySelector('[data-testid="note-signature-section"]');
+    expect(section.querySelector('.note-section p').textContent).toContain(
+      'Unique subjective content',
+    );
+    expect(section.querySelector('[data-testid="note-status"]').textContent).toContain(
+      'ENCOUNTERS.NOTE_STATUS_UNSIGNED',
+    );
+    expect(fixture.nativeElement.querySelector('.note-history-disclosure').open).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.note-history-item').open).toBeFalse();
+    expect(section.querySelectorAll('.note-section').length).toBe(2);
+  });
+
+  it('reads structured history snapshots and safely retains older plain text', () => {
+    expect(
+      component
+        .historySections({
+          id: 'h1',
+          contentSnapshot: '{"subjective":"Symptoms","plan":"Follow up"}',
+        })
+        .map((s) => s.content),
+    ).toEqual(['Symptoms', 'Follow up']);
+    expect(component.historySections({ id: 'h2', contentSnapshot: 'Older text' })[0].content).toBe(
+      'Older text',
+    );
+    expect(
+      component.historyAuthor({ id: 'h3', metadataSnapshot: '{"authorName":"Dr Test"}' }),
+    ).toBe('Dr Test');
+  });
+
+  it('ignores late history responses after another encounter is selected', () => {
+    const response = new Subject<any[]>();
+    encounterSpy.getNoteHistory.and.returnValue(response);
+    component.selectEncounter(mockEncounter({ id: 'first' }));
+    encounterSpy.getNoteHistory.and.returnValue(of([{ id: 'second-history' }] as any));
+    component.selectEncounter(mockEncounter({ id: 'second' }));
+    response.next([{ id: 'first-history' }]);
+    expect(component.noteHistory()[0].id).toBe('second-history');
   });
 
   it('search filter matches patient, staff, and department', () => {
@@ -306,7 +381,8 @@ describe('EncountersComponent', () => {
     expect(encounterSpy.addAddendum).not.toHaveBeenCalled();
   });
 
-  it('addAddendum records the addendum and refreshes history', () => {
+  it('addAddendum records an addendum on an existing unsigned note and refreshes history', () => {
+    component.noteState.set({ id: 'note1', signedAt: null } as EncounterNoteResponse);
     encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
     component.selectedEncounter.set(mockEncounter());
     component.addendumContent = ' late note ';

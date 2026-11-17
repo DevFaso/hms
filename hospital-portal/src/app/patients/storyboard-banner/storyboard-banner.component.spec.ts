@@ -59,6 +59,23 @@ describe('StoryboardBannerComponent', () => {
     ).not.toBeNull();
   });
 
+  it('keeps the allergen, reaction, severity and source in separate readable elements', () => {
+    const summary = populatedSummary();
+    summary.allergies[0].hospitalId = 'other-hospital';
+    summary.allergies[0].hospitalName = 'Centre Hospitalier Wend-Panga';
+    storyboardSpy.getStoryboard.and.returnValue(of(summary));
+    setPatient('p-123');
+    const allergy = fixture.nativeElement.querySelector('.storyboard__allergy');
+    expect(allergy.querySelector('.storyboard__chip-label').textContent).toContain('Penicillin');
+    expect(allergy.querySelector('.storyboard__allergy-reaction').textContent).toContain(
+      'anaphylaxis',
+    );
+    expect(allergy.querySelector('.storyboard__chip-severity')).not.toBeNull();
+    expect(allergy.querySelector('.storyboard__allergy-source').textContent).toContain(
+      'Centre Hospitalier Wend-Panga',
+    );
+  });
+
   it('forwards the hospital scope when supplied', () => {
     storyboardSpy.getStoryboard.and.returnValue(of(emptySummary()));
     setPatient('p-1', 'h-99');

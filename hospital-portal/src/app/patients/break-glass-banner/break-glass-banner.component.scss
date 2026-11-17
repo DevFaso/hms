@@ -13,6 +13,19 @@
     color: #7a1f1f;
   }
 
+  &.bg-compact {
+    background: #fff;
+    border-color: var(--border, #cfd8d7);
+    color: var(--text-secondary, #475569);
+    font-size: 0.8125rem;
+
+    .bg-banner__btn {
+      background: transparent;
+      color: var(--primary, #0f766e);
+      border-radius: 6px;
+    }
+  }
+
   &__row {
     display: flex;
     gap: 0.6rem;

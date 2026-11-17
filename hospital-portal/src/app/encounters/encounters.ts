@@ -10,6 +10,8 @@ import {
   EncounterResponse,
   EncounterType,
   EncounterNoteResponse,
+  EncounterNoteHistoryResponse,
+  EncounterStatus,
   AfterVisitSummary,
   EncounterNoteRequest,
 } from '../services/encounter.service';
@@ -74,13 +76,25 @@ export class EncountersComponent implements OnInit {
   loading = signal(true);
   searchTerm = '';
   activeTab = signal<'all' | 'open' | 'completed'>('all');
+  readonly statuses: EncounterStatus[] = [
+    'SCHEDULED',
+    'ARRIVED',
+    'TRIAGE',
+    'WAITING_FOR_PHYSICIAN',
+    'IN_PROGRESS',
+    'AWAITING_RESULTS',
+    'READY_FOR_DISCHARGE',
+    'COMPLETED',
+    'CANCELLED',
+  ];
+  statusFilter = signal<EncounterStatus | 'ALL'>('ALL');
   selectedEncounter = signal<EncounterResponse | null>(null);
   showNoteForm = signal(false);
   savingNote = signal(false);
   showEligibilityDialog = signal(false);
 
   /* Note history + addendums */
-  noteHistory = signal<EncounterNoteResponse[]>([]);
+  noteHistory = signal<EncounterNoteHistoryResponse[]>([]);
   noteHistoryLoading = signal(false);
 
   /* Note sign/co-sign ceremony (P3 #20). State comes from the encounter's
@@ -426,7 +440,89 @@ export class EncountersComponent implements OnInit {
 
   setTab(tab: 'all' | 'open' | 'completed'): void {
     this.activeTab.set(tab);
+    this.statusFilter.set(tab === 'completed' ? 'COMPLETED' : 'ALL');
     this.applyFilter();
+  }
+
+  changeStatusFilter(status: EncounterStatus | 'ALL' | 'ACTIVE_GROUP'): void {
+    if (status === 'ACTIVE_GROUP') this.setTab('open');
+    else this.setStatus(status);
+  }
+
+  setStatus(status: EncounterStatus | 'ALL'): void {
+    this.statusFilter.set(status);
+    this.activeTab.set(
+      status === 'COMPLETED'
+        ? 'completed'
+        : status !== 'ALL' && status !== 'CANCELLED'
+          ? 'open'
+          : 'all',
+    );
+    this.applyFilter();
+  }
+
+  resetFilters(): void {
+    this.searchTerm = '';
+    this.setTab('all');
+  }
+
+  noteSections(note: Partial<EncounterNoteResponse>): { label: string; content: string }[] {
+    const fields: [keyof EncounterNoteResponse, string][] = [
+      ['chiefComplaint', 'ENCOUNTERS.CHIEF_COMPLAINT'],
+      ['historyOfPresentIllness', 'ENCOUNTERS.NOTE_FORM_HPI'],
+      ['reviewOfSystems', 'ENCOUNTERS.NOTE_FORM_ROS'],
+      ['physicalExam', 'ENCOUNTERS.NOTE_FORM_EXAM'],
+      ['diagnosticResults', 'ENCOUNTERS.NOTE_FORM_DIAG'],
+      ['subjective', 'ENCOUNTERS.NOTE_FORM_SOAP_S'],
+      ['objective', 'ENCOUNTERS.NOTE_FORM_SOAP_O'],
+      ['assessment', 'ENCOUNTERS.NOTE_FORM_SOAP_A'],
+      ['plan', 'ENCOUNTERS.NOTE_FORM_SOAP_P'],
+      ['implementation', 'ENCOUNTERS.NOTE_FORM_SOAP_I'],
+      ['evaluation', 'ENCOUNTERS.NOTE_FORM_SOAP_E'],
+      ['patientInstructions', 'ENCOUNTERS.NOTE_FORM_PATIENT_INSTRUCTIONS'],
+      ['summary', 'ENCOUNTERS.NOTES'],
+    ];
+    const sections = fields.flatMap(([field, label]) => {
+      const content = note[field];
+      return typeof content === 'string' && content.trim() ? [{ label, content }] : [];
+    });
+    return sections.length
+      ? sections
+      : note.content
+        ? [{ label: 'ENCOUNTERS.NOTES', content: note.content }]
+        : [];
+  }
+
+  historyAction(note: EncounterNoteHistoryResponse): string {
+    const known = ['NOTE_CREATED', 'NOTE_UPDATED', 'NOTE_ADDENDUM', 'NOTE_SIGNED', 'NOTE_COSIGNED'];
+    return known.includes(note.changeType ?? '')
+      ? 'ENCOUNTERS.HISTORY_' + note.changeType
+      : 'ENCOUNTERS.NOTE_HISTORY';
+  }
+
+  historyAuthor(note: EncounterNoteHistoryResponse): string {
+    if (note.authorName) return note.authorName;
+    try {
+      const metadata = JSON.parse(note.metadataSnapshot ?? '{}');
+      return typeof metadata?.authorName === 'string' ? metadata.authorName : '';
+    } catch {
+      return '';
+    }
+  }
+
+  historySections(note: EncounterNoteHistoryResponse): { label: string; content: string }[] {
+    if (note.contentSnapshot) {
+      try {
+        const snapshot: unknown = JSON.parse(note.contentSnapshot);
+        if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)) {
+          return this.noteSections(snapshot as Partial<EncounterNoteResponse>);
+        }
+      } catch {
+        /* Older snapshots can contain plain text. */
+      }
+      return [{ label: 'ENCOUNTERS.NOTES', content: note.contentSnapshot }];
+    }
+    return note.content ? [{ label: 'ENCOUNTERS.NOTES', content: note.content }] : [];
   }
 
   applyFilter(): void {
@@ -446,6 +542,7 @@ export class EncountersComponent implements OnInit {
     } else if (tab === 'completed') {
       list = list.filter((e) => e.status === 'COMPLETED');
     }
+    if (this.statusFilter() !== 'ALL') list = list.filter((e) => e.status === this.statusFilter());
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
@@ -461,6 +558,7 @@ export class EncountersComponent implements OnInit {
 
   selectEncounter(enc: EncounterResponse): void {
     this.selectedEncounter.set(enc);
+    this.noteHistory.set([]);
     this.showNoteForm.set(false);
     this.showAddendumForm.set(false);
     this.addendumContent = '';
@@ -558,10 +656,12 @@ export class EncountersComponent implements OnInit {
     this.noteHistoryLoading.set(true);
     this.encounterService.getNoteHistory(encounterId).subscribe({
       next: (history) => {
+        if (this.selectedEncounter()?.id !== encounterId) return;
         this.noteHistory.set(history ?? []);
         this.noteHistoryLoading.set(false);
       },
       error: () => {
+        if (this.selectedEncounter()?.id !== encounterId) return;
         this.noteHistory.set([]);
         this.noteHistoryLoading.set(false);
       },
@@ -570,7 +670,7 @@ export class EncountersComponent implements OnInit {
 
   addAddendum(): void {
     const enc = this.selectedEncounter();
-    if (!enc || !this.addendumContent.trim()) return;
+    if (!enc || !this.noteState() || !this.addendumContent.trim() || this.addendumSaving()) return;
     this.addendumSaving.set(true);
     this.encounterService
       .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true })

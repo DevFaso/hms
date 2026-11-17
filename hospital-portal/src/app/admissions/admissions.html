@@ -13,57 +13,52 @@
       </button>
     </div>
   </div>
-  <div class="summary-cards">
-    <div
-      class="summary-card"
-      role="button"
-      tabindex="0"
-      (click)="setTab('admitted')"
-      (keydown.enter)="setTab('admitted')"
-      (keydown.space)="setTab('admitted')"
-    >
-      <span class="material-symbols-outlined card-icon admitted">hotel</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('ACTIVE') }}</span
-        ><span class="card-label">{{ 'ADMISSIONS.ADMITTED' | translate }}</span>
-      </div>
+  <section aria-labelledby="admission-overview-title">
+    <h2 id="admission-overview-title" class="list-title">
+      {{ 'ADMISSIONS.OVERVIEW_TITLE' | translate }}
+    </h2>
+    <div class="summary-cards">
+      <button
+        type="button"
+        class="summary-card"
+        [class.selected]="activeTab() === 'all' && statusFilter() === 'ALL' && !missingBedOnly()"
+        [attr.aria-pressed]="activeTab() === 'all' && statusFilter() === 'ALL' && !missingBedOnly()"
+        (click)="setTab('all')"
+      >
+        <div class="card-info">
+          <span class="card-value">{{ admissions().length }}</span
+          ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+        </div>
+      </button>
+      @for (status of statuses; track status) {
+        <button
+          type="button"
+          class="summary-card"
+          [class.selected]="statusFilter() === status && !missingBedOnly()"
+          [attr.aria-pressed]="statusFilter() === status && !missingBedOnly()"
+          (click)="setStatus(status)"
+        >
+          <div class="card-info">
+            <span class="card-value">{{ countByStatus(status) }}</span
+            ><span class="card-label">{{ status | enumLabel: 'admissionStatus' }}</span>
+          </div>
+        </button>
+      }
+      <button
+        type="button"
+        class="summary-card"
+        [class.selected]="missingBedOnly()"
+        [attr.aria-pressed]="missingBedOnly()"
+        (click)="filterMissingBeds()"
+      >
+        <div class="card-info">
+          <span class="card-value">{{ missingBedCount() }}</span
+          ><span class="card-label">{{ 'ADMISSIONS.MISSING_BED_SUBSET' | translate }}</span>
+        </div>
+      </button>
     </div>
-    <div
-      class="summary-card"
-      role="button"
-      tabindex="0"
-      (click)="setTab('discharged')"
-      (keydown.enter)="setTab('discharged')"
-      (keydown.space)="setTab('discharged')"
-    >
-      <span class="material-symbols-outlined card-icon discharged">logout</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('DISCHARGED') }}</span
-        ><span class="card-label">{{ 'ADMISSIONS.DISCHARGED' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon pending">schedule</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('PENDING') }}</span
-        ><span class="card-label">{{ 'ADMISSIONS.PENDING' | translate }}</span>
-      </div>
-    </div>
-    <div
-      class="summary-card"
-      role="button"
-      tabindex="0"
-      (click)="setTab('all')"
-      (keydown.enter)="setTab('all')"
-      (keydown.space)="setTab('all')"
-    >
-      <span class="material-symbols-outlined card-icon total">bar_chart</span>
-      <div class="card-info">
-        <span class="card-value">{{ admissions().length }}</span
-        ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
-      </div>
-    </div>
-  </div>
+    <p class="subset-hint">{{ 'ADMISSIONS.MISSING_BED_HINT' | translate }}</p>
+  </section>
   <div class="filter-bar">
     <div class="tabs">
       <button class="tab-btn" [class.active]="activeTab() === 'all'" (click)="setTab('all')">
@@ -95,6 +90,29 @@
         (input)="applyFilter()"
       />
     </div>
+  </div>
+  <div class="status-filter-row">
+    <label for="admission-status-filter">{{ 'COMMON.STATUS' | translate }}</label>
+    <select
+      id="admission-status-filter"
+      [ngModel]="statusFilter()"
+      (ngModelChange)="setStatus($event)"
+    >
+      <option value="ALL">{{ 'COMMON.ALL' | translate }}</option>
+      @for (status of statuses; track status) {
+        <option [value]="status">{{ status | enumLabel: 'admissionStatus' }}</option>
+      }
+    </select>
+    @if (
+      searchTerm.trim() || statusFilter() !== 'ALL' || activeTab() !== 'all' || missingBedOnly()
+    ) {
+      <button type="button" class="btn-secondary" (click)="resetFilters()">
+        {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
+      </button>
+    }
+    <span aria-live="polite">{{
+      'ADMISSIONS.MATCHING_COUNT' | translate: { count: filtered().length }
+    }}</span>
   </div>
   @if (loading()) {
     <div class="loading-state">
@@ -144,7 +162,14 @@
                   {{ a.patientName ? a.patientName : ('COMMON.UNKNOWN' | translate) }}
                 </div>
               </td>
-              <td>{{ a.roomBed || '—' }}</td>
+              <td>
+                {{
+                  a.roomBed ||
+                    (a.bedId
+                      ? ('ADMISSIONS.BED_RECORDED' | translate)
+                      : ('ADMISSIONS.BED_NOT_RECORDED' | translate))
+                }}
+              </td>
               <td>{{ a.admissionType || '—' }}</td>
               <td>
                 <span class="acuity-badge {{ getAcuityClass(a.acuityLevel) }}">{{

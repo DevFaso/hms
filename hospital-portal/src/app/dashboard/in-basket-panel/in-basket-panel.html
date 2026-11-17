@@ -1,20 +1,26 @@
 <section class="in-basket-panel">
-  <!-- Header with badge -->
   <header class="panel-header">
-    <h3 class="panel-title">
-      <span>{{ 'inBasket.title' | translate }}</span>
-      @if (badgeCount() > 0) {
-        <span class="badge" [attr.aria-label]="'inBasket.unreadCount' | translate">{{
-          badgeCount()
-        }}</span>
+    <div class="panel-heading">
+      @if (showTitle()) {
+        <h3 class="panel-title">{{ 'inBasket.title' | translate }}</h3>
       }
-    </h3>
-    <button
-      class="btn-refresh"
-      (click)="refresh()"
-      [attr.aria-label]="'inBasket.refresh' | translate"
-    >
-      ↻
+      @if (badgeCount() > 0) {
+        <span class="unread-summary">
+          <span class="badge">{{ badgeCount() }}</span>
+          {{ 'inBasket.unreadCount' | translate }}
+        </span>
+      }
+      @if (lastUpdated()) {
+        <span class="last-updated" aria-live="polite">
+          {{ 'inBasket.lastUpdated' | translate: { time: formatDate(lastUpdated()) } }}
+        </span>
+      }
+    </div>
+    <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">
+      <span class="material-symbols-outlined" aria-hidden="true" [class.refreshing]="loading()"
+        >refresh</span
+      >
+      {{ (loading() ? 'inBasket.refreshing' : 'inBasket.refresh') | translate }}
     </button>
   </header>
 
@@ -25,40 +31,53 @@
     appRovingFocus=".filter-tab"
     orientation="horizontal"
   >
-    <button class="filter-tab" [class.active]="activeFilter() === null" (click)="setFilter(null)">
+    <button
+      class="filter-tab"
+      [class.active]="activeFilter() === null"
+      [attr.aria-pressed]="activeFilter() === null"
+      (click)="setFilter(null)"
+    >
       {{ 'inBasket.all' | translate }}
       <span class="tab-count">{{ summary().totalUnread }}</span>
     </button>
     <button
       class="filter-tab"
       [class.active]="activeFilter() === 'RESULT'"
+      [attr.aria-pressed]="activeFilter() === 'RESULT'"
       (click)="setFilter('RESULT')"
     >
-      🧪 {{ 'inBasket.results' | translate }}
+      <span class="material-symbols-outlined" aria-hidden="true">science</span>
+      {{ 'inBasket.results' | translate }}
       <span class="tab-count">{{ summary().resultUnread }}</span>
     </button>
     <button
       class="filter-tab"
       [class.active]="activeFilter() === 'ORDER'"
+      [attr.aria-pressed]="activeFilter() === 'ORDER'"
       (click)="setFilter('ORDER')"
     >
-      📋 {{ 'inBasket.orders' | translate }}
+      <span class="material-symbols-outlined" aria-hidden="true">prescriptions</span>
+      {{ 'inBasket.orders' | translate }}
       <span class="tab-count">{{ summary().orderUnread }}</span>
     </button>
     <button
       class="filter-tab"
       [class.active]="activeFilter() === 'MESSAGE'"
+      [attr.aria-pressed]="activeFilter() === 'MESSAGE'"
       (click)="setFilter('MESSAGE')"
     >
-      ✉️ {{ 'inBasket.messages' | translate }}
+      <span class="material-symbols-outlined" aria-hidden="true">mail</span>
+      {{ 'inBasket.messages' | translate }}
       <span class="tab-count">{{ summary().messageUnread }}</span>
     </button>
     <button
       class="filter-tab"
       [class.active]="activeFilter() === 'TASK'"
+      [attr.aria-pressed]="activeFilter() === 'TASK'"
       (click)="setFilter('TASK')"
     >
-      ✅ {{ 'inBasket.tasks' | translate }}
+      <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+      {{ 'inBasket.tasks' | translate }}
       <span class="tab-count">{{ summary().taskUnread }}</span>
     </button>
   </nav>
@@ -71,9 +90,32 @@
     </div>
   }
 
-  <!-- Empty state -->
-  @if (!loading() && filteredItems().length === 0) {
-    <p class="empty-state">{{ 'inBasket.empty' | translate }}</p>
+  @if (!loading() && loadError()) {
+    <div class="error-state" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <div>
+        <strong>{{ 'inBasket.loadFailed' | translate }}</strong>
+        @if (lastUpdated()) {
+          <p>{{ 'inBasket.staleData' | translate }}</p>
+        }
+      </div>
+      <button class="btn-refresh" (click)="refresh()">{{ 'inBasket.retry' | translate }}</button>
+    </div>
+  }
+
+  @if (!loading() && !loadError() && filteredItems().length === 0) {
+    <div class="empty-state" role="status">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">inbox</span>
+      <h3>{{ (activeFilter() ? 'inBasket.emptyCategory' : 'inBasket.emptyTitle') | translate }}</h3>
+      <p>
+        {{ (activeFilter() ? 'inBasket.emptyCategoryHint' : 'inBasket.emptyHint') | translate }}
+      </p>
+      @if (activeFilter()) {
+        <button class="btn-refresh" (click)="setFilter(null)">
+          {{ 'inBasket.showAll' | translate }}
+        </button>
+      }
+    </div>
   }
 
   <!-- Items list — arrow-key roving across primary item buttons (row 11). -->
@@ -87,7 +129,9 @@
           [ngClass]="priorityClass(item.priority)"
         >
           <button class="item-button" (click)="markRead(item)">
-            <span class="item-icon">{{ typeIcon(item.itemType) }}</span>
+            <span class="item-icon material-symbols-outlined" aria-hidden="true">{{
+              typeIcon(item.itemType)
+            }}</span>
             <span class="item-content">
               <span class="item-header">
                 <span class="item-title">{{ item.title }}</span>

@@ -265,15 +265,6 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #f8fafc;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s;
-
-  &:hover {
-    background: var(--primary-soft);
-    border-color: var(--primary-light);
-    color: var(--primary-dark);
-  }
 }
 
 // ── Week Grid ──
@@ -1005,6 +996,11 @@ dialog.modal-panel {
 }
 
 .suggestion-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
   display: flex;
   align-items: flex-start;
   gap: 0.625rem;
@@ -1573,5 +1569,94 @@ dialog.modal-panel {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+.page-actions,
+.week-nav {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.schedule-header {
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.week-empty-hint {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: var(--primary-soft, #f5f3ff);
+  border-radius: 10px;
+  color: #334155;
+  font-size: 0.8125rem;
+  > div {
+    flex: 1;
+    min-width: 180px;
+  }
+  p {
+    margin: 0.25rem 0 0;
+    color: #64748b;
+  }
+}
+.today-badge {
+  display: inline-block;
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+.day-header {
+  min-height: 68px;
+  box-sizing: border-box;
+}
+.day-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.day-shifts {
+  flex: 1;
+}
+.add-day-shift {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  margin-top: auto;
+  padding: 0.5rem 0.25rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary, #0f766e);
+  font: inherit;
+  font-size: 0.6875rem;
+  cursor: pointer;
+  .material-symbols-outlined {
+    font-size: 1rem;
+  }
+  &:hover {
+    background: var(--primary-soft, #f5f3ff);
+    border-color: currentColor;
+  }
+}
+button:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 3px;
+}
+.btn-ghost:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+@media (max-width: 900px) {
+  .week-grid {
+    grid-template-columns: repeat(7, minmax(145px, 1fr));
+    overflow-x: auto;
+    padding: 2px;
+  }
+  .summary-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

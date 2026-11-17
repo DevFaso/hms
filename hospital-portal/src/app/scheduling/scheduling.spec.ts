@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 
 import { SchedulingComponent } from './scheduling';
 import {
@@ -53,6 +53,7 @@ describe('SchedulingComponent', () => {
 
   beforeEach(async () => {
     schedulingSpy = jasmine.createSpyObj('StaffSchedulingService', [
+      'createShift',
       'listShifts',
       'listLeaves',
       'bulkScheduleShifts',
@@ -245,6 +246,92 @@ describe('SchedulingComponent', () => {
     component.clearStaff();
     expect(component.bulk.staffId).toBe('');
     expect(component.selectedStaff()).toBeNull();
+  });
+
+  it('opens a single shift for the chosen day with fresh defaults', () => {
+    component.bulk.notes = 'Old note';
+    component.openShiftModal('2026-11-18');
+    expect(component.singleShiftMode()).toBeTrue();
+    expect(component.bulkModalOpen()).toBeTrue();
+    expect(component.bulk.startDate).toBe('2026-11-18');
+    expect(component.bulk.notes).toBe('');
+    expect(component.bulk.shiftType).toBe('MORNING');
+    component.openBulkModal();
+    expect(component.singleShiftMode()).toBeFalse();
+  });
+
+  it('creates an overnight shift through the single-shift API and refreshes the week', () => {
+    component.openShiftModal('2026-11-18');
+    component.selectStaff({ id: 'st1', hospitalId: 'h1', name: 'Ama' } as StaffResponse);
+    component.bulk.startTime = '22:00';
+    component.bulk.endTime = '06:00';
+    schedulingSpy.createShift.and.returnValue(of(mockShift()));
+    component.submitShift();
+    expect(schedulingSpy.createShift).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        staffId: 'st1',
+        hospitalId: 'h1',
+        shiftDate: '2026-11-18',
+        startTime: '22:00',
+        endTime: '06:00',
+      }),
+    );
+    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+    expect(component.bulkModalOpen()).toBeFalse();
+    expect(schedulingSpy.listShifts).toHaveBeenCalled();
+  });
+
+  it('requires a staff member, date and distinct times before saving', () => {
+    component.openShiftModal('2026-11-18');
+    component.submitShift();
+    component.selectStaff({ id: 'st1', hospitalId: 'h1', name: 'Ama' } as StaffResponse);
+    component.bulk.endTime = component.bulk.startTime;
+    component.submitShift();
+    component.bulk.startDate = '';
+    component.submitShift();
+    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledTimes(3);
+  });
+
+  it('prevents duplicate saves and preserves the form on an API error', () => {
+    component.openShiftModal('2026-11-18');
+    component.selectStaff({ id: 'st1', hospitalId: 'h1', name: 'Ama' } as StaffResponse);
+    const response = new Subject<StaffShiftResponse>();
+    schedulingSpy.createShift.and.returnValue(response);
+    component.submitShift();
+    component.submitShift();
+    component.closeBulkModal();
+    expect(schedulingSpy.createShift).toHaveBeenCalledTimes(1);
+    expect(component.bulkModalOpen()).toBeTrue();
+    response.error({ error: { message: 'Overlapping shift' } });
+    expect(component.bulkSubmitting()).toBeFalse();
+    expect(component.bulkModalOpen()).toBeTrue();
+    expect(component.bulk.startDate).toBe('2026-11-18');
+    expect(toastSpy.error).toHaveBeenCalledWith('Overlapping shift');
+  });
+
+  it('day actions prefill the selected date and single mode hides bulk-only fields', () => {
+    fixture.detectChanges();
+    const buttons = fixture.nativeElement.querySelectorAll(
+      '.add-day-shift',
+    ) as NodeListOf<HTMLButtonElement>;
+    expect(buttons.length).toBe(7);
+    buttons[2].click();
+    fixture.detectChanges();
+    expect(component.bulk.startDate).toBe(component.getWeekDays()[2].date);
+    expect(fixture.nativeElement.querySelector('#bulk-endDate')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.dow-fieldset')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#bulk-skip')).toBeNull();
+  });
+
+  it('keeps creation actions hidden and guarded for read-only users', () => {
+    Object.defineProperty(component, 'isSchedulingAdmin', { value: false });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.add-day-shift')).toBeNull();
+    component.openShiftModal();
+    component.submitShift();
+    expect(component.bulkModalOpen()).toBeFalse();
+    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
   });
 
   it('formats times, ranges, and enum labels', () => {

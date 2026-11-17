@@ -35,6 +35,20 @@ export interface EncounterNoteResponse {
   content: string;
   authorName: string;
   createdAt: string;
+  template?: 'SOAP' | 'SOAPIE';
+  chiefComplaint?: string;
+  historyOfPresentIllness?: string;
+  reviewOfSystems?: string;
+  physicalExam?: string;
+  diagnosticResults?: string;
+  subjective?: string;
+  objective?: string;
+  assessment?: string;
+  plan?: string;
+  implementation?: string;
+  evaluation?: string;
+  patientInstructions?: string;
+  summary?: string;
   /* Ceremony evidence (P3 #20), present on EncounterNoteResponseDTO payloads
      (encounter.note, addNote/sign/cosign responses). signatureValue null on a
      signed note means "asserted before V125, unverifiable". */
@@ -44,6 +58,20 @@ export interface EncounterNoteResponse {
   requiresCosign?: boolean;
   cosignedAt?: string | null;
   cosignedByName?: string | null;
+}
+
+export interface EncounterNoteHistoryResponse {
+  id: string;
+  noteId?: string;
+  changedAt?: string;
+  changedBy?: string;
+  changeType?: string;
+  contentSnapshot?: string;
+  metadataSnapshot?: string;
+  /** Legacy history payloads. */
+  content?: string;
+  authorName?: string;
+  createdAt?: string;
 }
 
 export type EncounterUrgency = 'EMERGENT' | 'URGENT' | 'ROUTINE' | 'LOW';
@@ -342,8 +370,10 @@ export class EncounterService {
     );
   }
 
-  getNoteHistory(encounterId: string): Observable<EncounterNoteResponse[]> {
-    return this.http.get<EncounterNoteResponse[]>(`${this.baseUrl}/${encounterId}/notes/history`);
+  getNoteHistory(encounterId: string): Observable<EncounterNoteHistoryResponse[]> {
+    return this.http.get<EncounterNoteHistoryResponse[]>(
+      `${this.baseUrl}/${encounterId}/notes/history`,
+    );
   }
 
   /** Author-only signing ceremony (P3 #20) — the backend resolves the signer

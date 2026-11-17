@@ -1,5 +1,9 @@
 @if (canDeclare() && state() !== 'idle') {
-  <section class="bg-banner" [class.bg-active]="mySession()?.live">
+  <section
+    class="bg-banner"
+    [class.bg-active]="mySession()?.live"
+    [class.bg-compact]="compactWhenIdle() && !mySession()?.live"
+  >
     @if (mySession()?.live) {
       <div class="bg-banner__row">
         <span class="bg-banner__icon" aria-hidden="true">!</span>
