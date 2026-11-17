@@ -108,7 +108,7 @@ describe('SchedulingComponent', () => {
     fixture.detectChanges();
     expectEmptySubmitRefusal(fixture, {
       button: '[data-testid="single-shift-submit"]',
-      alsoMarked: ['bulk-staffSearch', 'bulk-hospitalId'],
+      alsoMarked: ['bulk-staffSearch'],
       sent: schedulingSpy.createShift,
     });
   });
@@ -171,7 +171,6 @@ describe('SchedulingComponent', () => {
     component.submitBulk();
     expectFieldsMarked(fixture, {
       'bulk-staffSearch': 'SCHEDULING.TOAST.IDS_REQUIRED',
-      'bulk-hospitalId': 'SCHEDULING.TOAST.IDS_REQUIRED',
     });
     component.bulk.staffId = 'st1';
     component.bulk.hospitalId = 'h1';
@@ -186,6 +185,18 @@ describe('SchedulingComponent', () => {
     component.submitBulk();
     expectFieldsMarked(fixture, { 'bulk-daysOfWeek': 'SCHEDULING.TOAST.DOW_REQUIRED' });
     expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+  });
+
+  it('never asks for a pasted hospital UUID: the hospital follows the staff pick (QA D2128)', () => {
+    fixture.detectChanges();
+    component.openBulkModal();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const hospital = el.querySelector('#bulk-hospitalId') as HTMLElement;
+    expect(hospital.tagName).toBe('DIV');
+    expect(hospital.textContent).toContain('SCHEDULING.HOSPITAL_FROM_STAFF');
+    expect(el.querySelector('input[placeholder*="UUID"]')).toBeNull();
+    expect(el.textContent).not.toContain('PASTE_HOSPITAL_UUID');
   });
 
   it('marks server field errors in the bulk form as well as the single shift form', () => {

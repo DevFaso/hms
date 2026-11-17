@@ -453,14 +453,15 @@
 
         <!-- ── Hospital (auto-filled or manual fallback) ── -->
         <div class="form-group">
-          <label class="form-label" for="bulk-hospitalId">
-            <span class="material-symbols-outlined">local_hospital</span>
-            {{ 'ENCOUNTERS.HOSPITAL' | translate }} <span class="required">*</span>
-          </label>
+          <!-- QA D2128: nothing to type here, so a caption, not a label for a control. -->
+          <span class="form-label" id="bulk-hospital-label">
+            <span class="material-symbols-outlined" aria-hidden="true">local_hospital</span>
+            {{ 'ENCOUNTERS.HOSPITAL' | translate }}
+          </span>
 
           @if (selectedStaff()) {
             <!-- Read-only chip showing the matched hospital -->
-            <div class="hospital-locked">
+            <div class="hospital-locked" role="note" aria-labelledby="bulk-hospital-label">
               <span class="material-symbols-outlined lock-icon">lock</span>
               <div class="locked-info">
                 <span class="locked-name">{{
@@ -471,14 +472,19 @@
               </div>
             </div>
           } @else {
-            <input
-              required
+            <!--
+              QA D2128: never ask for a pasted hospital UUID. A shift belongs to
+              the staff member's hospital, so the hospital follows the pick.
+            -->
+            <div
+              class="hospital-locked hospital-pending"
               id="bulk-hospitalId"
-              class="form-input"
-              type="text"
-              [placeholder]="'SCHEDULING.PASTE_HOSPITAL_UUID' | translate"
-              [(ngModel)]="bulk.hospitalId"
-            />
+              role="note"
+              aria-labelledby="bulk-hospital-label"
+            >
+              <span class="material-symbols-outlined lock-icon" aria-hidden="true">badge</span>
+              <span class="locked-sub">{{ 'SCHEDULING.HOSPITAL_FROM_STAFF' | translate }}</span>
+            </div>
           }
         </div>
       </div>

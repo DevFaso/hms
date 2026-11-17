@@ -8955,6 +8955,7 @@
     "OPTIONAL": "Opcional",
     "OVERTIME": "Horas extra",
     "PASTE_HOSPITAL_UUID": "Pegar UUID del hospital",
+    "HOSPITAL_FROM_STAFF": "Lo fija el miembro del personal elegido",
     "PENDING_LEAVES": "Permisos pendientes",
     "PREVIOUS": "Anterior",
     "PROVIDER_AVAILABILITY": "Disponibilidad del profesional",

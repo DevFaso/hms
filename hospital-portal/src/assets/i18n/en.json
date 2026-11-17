@@ -8955,6 +8955,7 @@
     "OPTIONAL": "Optional",
     "OVERTIME": "Overtime",
     "PASTE_HOSPITAL_UUID": "Paste hospital UUID",
+    "HOSPITAL_FROM_STAFF": "Set by the staff member you choose",
     "PENDING_LEAVES": "Pending Leaves",
     "PREVIOUS": "Previous",
     "PROVIDER_AVAILABILITY": "Provider Availability",

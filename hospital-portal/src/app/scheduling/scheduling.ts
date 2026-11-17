@@ -287,10 +287,8 @@ export class SchedulingComponent implements OnInit {
     if (!this.bulk.staffId || !this.bulk.hospitalId) {
       refuseFields(
         this.host.nativeElement,
-        [
-          !this.bulk.staffId ? 'bulk-staffSearch' : '',
-          !this.bulk.hospitalId ? 'bulk-hospitalId' : '',
-        ].filter(Boolean),
+        // QA D2128: the hospital follows the staff pick, so the staff field is the one to fix.
+        ['bulk-staffSearch'],
         Object.values(this.shiftFields),
         this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'),
       );
@@ -358,10 +356,8 @@ export class SchedulingComponent implements OnInit {
     if (!this.bulk.staffId || !this.bulk.hospitalId) {
       refuseFields(
         this.host.nativeElement,
-        [
-          !this.bulk.staffId ? 'bulk-staffSearch' : '',
-          !this.bulk.hospitalId ? 'bulk-hospitalId' : '',
-        ].filter(Boolean),
+        // QA D2128: the hospital follows the staff pick, so the staff field is the one to fix.
+        ['bulk-staffSearch'],
         Object.values(this.bulkFields),
         this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'),
       );
