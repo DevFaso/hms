@@ -299,11 +299,21 @@ public class AuthController {
             // role picker; the picker offered "FACTOR PASSWORD" as a card; and
             // selecting it passed the holds-this-role check below and minted a
             // token whose only role no guard admits.
-            var allRoles = authentication.getAuthorities().stream()
+            //
+            // QA D1973 / D2050: the picker offers the roles the account holds on
+            // its own (the principal's authorities, before the login's
+            // RoleExpansion widening), never one only super-admin inheritance
+            // added: the session bootstrap does not list those, so the portal
+            // signed the user out with no word after such a pick.
+            var heldAuthorities = authentication.getPrincipal()
+                    instanceof org.springframework.security.core.userdetails.UserDetails details
+                    ? details.getAuthorities()
+                    : authentication.getAuthorities();
+            var allRoles = com.example.hms.security.RoleExpansion.selectableAtLogin(heldAuthorities.stream()
                     .map(GrantedAuthority::getAuthority)
                     .filter(authority -> authority != null && authority.startsWith(ROLE_PREFIX))
                     .distinct()
-                    .toList();
+                    .toList());
 
             // ── Multi-role selection gate ──
             // If the user holds more than one role and has NOT yet chosen, ask them to pick.
@@ -1163,6 +1173,42 @@ public class AuthController {
         }
     }
 
+    /**
+     * QA D2020 (round 57): a wrong current password on a password change or the forced setup is a counted failure
+     * in the account's sign-in bucket (D2001), and could lock the account, yet it wrote no audit row: an admin saw
+     * four sign-in failures and a lock. Each refused check now leaves a {@code LOGIN_FAILURE} row, and the one that
+     * locks the account (or a check refused because it is locked) an {@code ACCOUNT_LOCKED} row, as the lock screen
+     * does. The rows carry the account id and a fixed description: never the typed password, never a typed name.
+     */
+    private void auditOwnPasswordCheck(LoginAttemptService.PasswordCheck check, UUID userId, String surface) {
+        if (check == LoginAttemptService.PasswordCheck.ACCEPTED) {
+            return;
+        }
+        String resourceId = userId == null ? null : userId.toString();
+        if (check != LoginAttemptService.PasswordCheck.LOCKED) {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.LOGIN_FAILURE)
+                    .eventDescription(surface + " refused: current password incorrect")
+                    .userId(userId)
+                    .resourceId(resourceId)
+                    .entityType("USER")
+                    .status(AuditStatus.FAILURE)
+                    .build());
+        }
+        if (check != LoginAttemptService.PasswordCheck.REJECTED) {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.ACCOUNT_LOCKED)
+                    .eventDescription(check == LoginAttemptService.PasswordCheck.LOCKED
+                            ? surface + " refused: account locked"
+                            : surface + " failed too many times: account locked")
+                    .userId(userId)
+                    .resourceId(resourceId)
+                    .entityType("USER")
+                    .status(AuditStatus.FAILURE)
+                    .build());
+        }
+    }
+
     /** The sign-in's 423 for a locked account, with the minutes left on its lock. */
     private ResponseEntity<Object> lockedAnswer(UUID userId) {
         long remainMin = LoginAttemptService.lockMinutes(loginAttemptService.remainingAccountLockMs(userId));
@@ -1206,6 +1252,7 @@ public class AuthController {
             // Restore the original authentication after verify sub-call
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
+        auditOwnPasswordCheck(check, user.getId(), "Password change");
         if (check == LoginAttemptService.PasswordCheck.REJECTED) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.password.currentIncorrect")));
@@ -1370,6 +1417,7 @@ public class AuthController {
             resetSecurityContextToAnonymous();
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
+        auditOwnPasswordCheck(check, user.getId(), "Account setup");
         if (check == LoginAttemptService.PasswordCheck.REJECTED) {
             // 400, not 401: the session is fine, and the portal treats a 401
             // as an expired session (refresh, then sign-out).

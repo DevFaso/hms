@@ -192,6 +192,54 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.forceUsernameChange").value(true));
     }
 
+    /**
+     * QA D1973 / D2050: a super-admin whose only assignment is SUPER_ADMIN was
+     * offered eight roles (the login-time widening); picking « Médecin » minted
+     * a DOCTOR token the session bootstrap did not know, and the portal signed
+     * them out with no word. The picker now reads the principal's own roles.
+     */
+    @Test
+    void qaD2050_superAdminIsOfferedOnlyTheRolesTheAccountHolds() throws Exception {
+        var raw = java.util.List.of(
+                new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
+        var principal = org.springframework.security.core.userdetails.User
+                .withUsername("sa").password("x").authorities(raw).build();
+        var widened = com.example.hms.security.RoleExpansion.authoritiesMapper().mapAuthorities(raw);
+        org.mockito.Mockito.when(authenticationManager.authenticate(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        principal, "password", widened));
+
+        LoginRequest pick = new LoginRequest();
+        pick.setUsername("sa");
+        pick.setPassword("password123");
+        pick.setSelectedRole("ROLE_DOCTOR");
+        mockMvc.perform(post("/auth/login").header("Accept-Language", "en")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(pick)))
+                .andExpect(status().isForbidden());
+
+        com.example.hms.model.User user = com.example.hms.model.User.builder().username("sa")
+                .email("sa@example.com").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", java.util.UUID.randomUUID());
+        when(userRepository.findByUsername("sa")).thenReturn(java.util.Optional.of(user));
+        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("mock.access.token");
+        when(jwtTokenProvider.generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("mock.refresh.token");
+        LoginRequest plain = new LoginRequest();
+        plain.setUsername("sa");
+        plain.setPassword("password123");
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(plain)))
+                .andExpect(status().isOk())
+                // One held role: straight in as super-admin, no picker of inherited roles.
+                .andExpect(jsonPath("$.roleSelectionRequired").value(false));
+        var descriptor = org.mockito.ArgumentCaptor.forClass(com.example.hms.security.TokenUserDescriptor.class);
+        org.mockito.Mockito.verify(jwtTokenProvider).generateAccessToken(descriptor.capture());
+        org.assertj.core.api.Assertions.assertThat(descriptor.getValue().roles()).containsExactly("ROLE_SUPER_ADMIN");
+    }
+
     /** Authenticate as a user carrying exactly these authorities. */
     private void givenAuthenticatedWith(String... authorities) {
         var granted = java.util.Arrays.stream(authorities)
