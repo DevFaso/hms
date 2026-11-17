@@ -1989,7 +1989,8 @@
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerte de doublon outrepassée (« Commander quand même », motif : {{reason}}) : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Doublon possible, sans « Commander quand même » : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "NATIONAL_IU_ACTION": "Identifiant unique du patient : {{operation}}",
-      "REFUND_EVENT": "{{what}} : remboursement {{refund}} sur la facture {{invoice}}"
+      "REFUND_EVENT": "{{what}} : remboursement {{refund}} sur la facture {{invoice}}",
+      "SUPPORT_SESSION_MONEY_REFUSED": "Session de support refusée : {{what}} (mouvement d’argent)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2601,7 +2602,10 @@
       "QUEUE_TITLE": "Remboursements à approuver ou à remettre",
       "QUEUE_EMPTY": "Aucun remboursement en attente.",
       "OPEN_INVOICE": "Ouvrir la facture",
-      "INVOICE": "Facture"
+      "INVOICE": "Facture",
+      "REFERENCE_AT_HANDOVER": "La référence de la transaction sera demandée à la remise, quand l’argent est envoyé.",
+      "HAND_OVER_TITLE": "Remettre le remboursement de {{amount}}",
+      "RECEIPT_NUMBER": "Reçu n° {{number}}"
     }
   },
   "CHAT": {

@@ -1989,7 +1989,8 @@
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerta de duplicado anulada («Solicitar de todos modos», motivo: {{reason}}): solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Alerta de duplicado no anulada: solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
       "NATIONAL_IU_ACTION": "Identificador único del paciente: {{operation}}",
-      "REFUND_EVENT": "{{what}}: refund {{refund}} on invoice {{invoice}}"
+      "REFUND_EVENT": "{{what}}: refund {{refund}} on invoice {{invoice}}",
+      "SUPPORT_SESSION_MONEY_REFUSED": "Sesión de soporte rechazada: {{what}} (dinero)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -2601,7 +2602,10 @@
       "QUEUE_TITLE": "Refunds to approve or hand over",
       "QUEUE_EMPTY": "No refund waiting.",
       "OPEN_INVOICE": "Open the invoice",
-      "INVOICE": "Invoice"
+      "INVOICE": "Invoice",
+      "REFERENCE_AT_HANDOVER": "La referencia de la transacción se pide en la entrega, cuando se envía el dinero.",
+      "HAND_OVER_TITLE": "Entregar el reembolso de {{amount}}",
+      "RECEIPT_NUMBER": "Recibo n.º {{number}}"
     }
   },
   "CHAT": {

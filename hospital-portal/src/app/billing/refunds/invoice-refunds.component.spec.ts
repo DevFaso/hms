@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
-import { InvoiceRefundsComponent } from './invoice-refunds.component';
+import { InvoiceRefundsComponent, newRequestKey } from './invoice-refunds.component';
 import {
   BillingInvoiceResponse,
   BillingService,
@@ -131,19 +131,60 @@ describe('InvoiceRefundsComponent (QA D1900)', () => {
     expect(billing.requestRefund).not.toHaveBeenCalled();
   }));
 
-  it('mobile money also names the operator and the reference', fakeAsync(() => {
-    render(['ROLE_BILLING_SPECIALIST'], invoice());
-    fixture.componentInstance.openRequest();
-    fixture.componentInstance.method.set('MOBILE_MONEY');
-    fixture.componentInstance.reason.set('Trop-perçu');
+  it('PR 8 review: mobile money is asked for without its reference, which the hand-over asks for', fakeAsync(() => {
+    render(['ROLE_BILLING_SPECIALIST'], invoice(), [
+      { ...requested, id: 'rf-mm', status: 'APPROVED', method: 'MOBILE_MONEY' },
+    ]);
+    billing.requestRefund.and.returnValue(of(requested));
+    const c = fixture.componentInstance;
+    c.openRequest();
+    c.method.set('MOBILE_MONEY');
+    c.reason.set('Trop-perçu');
+    c.submitRequest();
+    expect(billing.requestRefund).toHaveBeenCalled();
+
+    // The hand-over of an approved mobile-money refund opens its own dialog; an empty submit marks both fields.
+    (
+      host().querySelector('[data-testid="refund-rf-mm"] [data-testid="refund-pay"]') as HTMLElement
+    ).click();
     fixture.detectChanges();
-    (host().querySelector('[data-testid="refund-request-submit"]') as HTMLButtonElement).click();
+    expect(host().querySelector('[data-testid="refund-pay-dialog"]')).not.toBeNull();
+    (host().querySelector('[data-testid="refund-pay-submit"]') as HTMLButtonElement).click();
     fixture.detectChanges();
     tick();
-    expect(host().querySelector('#refund-operator')?.getAttribute('aria-invalid')).toBe('true');
-    expect(host().querySelector('#refund-reference')?.getAttribute('aria-invalid')).toBe('true');
-    expect(billing.requestRefund).not.toHaveBeenCalled();
+    expect(host().querySelector('#refund-pay-operator')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host().querySelector('#refund-pay-reference')?.getAttribute('aria-invalid')).toBe(
+      'true',
+    );
+    expect(billing.payRefund).not.toHaveBeenCalled();
+
+    billing.payRefund.and.returnValue(of({ ...requested, status: 'PAID' }));
+    c.payOperator.set('ORANGE_MONEY');
+    c.payReference.set('OM-OUT-9');
+    c.submitHandOver();
+    expect(billing.payRefund).toHaveBeenCalledWith('inv-13', 'rf-mm', {
+      reference: 'OM-OUT-9',
+      mobileMoneyOperator: 'ORANGE_MONEY',
+    });
   }));
+
+  it('PR 8 review: the idempotency key is a v4 UUID, also without crypto.randomUUID', () => {
+    const v4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    expect(newRequestKey()).toMatch(v4);
+    const original = globalThis.crypto.randomUUID;
+    try {
+      Object.defineProperty(globalThis.crypto, 'randomUUID', {
+        value: undefined,
+        configurable: true,
+      });
+      expect(newRequestKey()).toMatch(v4);
+    } finally {
+      Object.defineProperty(globalThis.crypto, 'randomUUID', {
+        value: original,
+        configurable: true,
+      });
+    }
+  });
 
   it('sends the request with an idempotency key', () => {
     render(['ROLE_BILLING_SPECIALIST'], invoice());

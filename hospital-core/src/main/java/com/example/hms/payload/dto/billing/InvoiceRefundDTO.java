@@ -41,6 +41,8 @@ public class InvoiceRefundDTO {
     private UUID paidBy;
     private String paidByName;
     private LocalDateTime paidAt;
+    /** PR 8 review: the receipt number given at payout (-RB<n>). */
+    private String receiptNumber;
     private UUID cancelledBy;
     private String cancelledByName;
     private LocalDateTime cancelledAt;

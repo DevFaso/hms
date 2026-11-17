@@ -95,8 +95,11 @@ public class InvoiceRefundController {
     @PostMapping("/{invoiceId}/refunds/{refundId}/pay")
     @PreAuthorize(PAYERS)
     @Operation(summary = "Record that an approved refund was handed to the patient")
-    public ResponseEntity<InvoiceRefundDTO> pay(@PathVariable UUID invoiceId, @PathVariable UUID refundId) {
-        return ResponseEntity.ok(refundService.pay(invoiceId, refundId));
+    public ResponseEntity<InvoiceRefundDTO> pay(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID refundId,
+        @Valid @RequestBody(required = false) com.example.hms.payload.dto.billing.InvoiceRefundPayRequestDTO body) {
+        return ResponseEntity.ok(refundService.pay(invoiceId, refundId, body));
     }
 
     @PostMapping("/{invoiceId}/refunds/{refundId}/cancel")

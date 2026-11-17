@@ -54,11 +54,25 @@ const DECISION_REASON_ID = 'refund-decision-reason';
 /** Methods whose money is traced only by the operator's or the bank's reference (as the server requires). */
 const REFERENCE_REQUIRED: readonly string[] = ['MOBILE_MONEY', 'BANK_TRANSFER'];
 
-/** A fresh idempotency key for one refund request (kept across retries of the same dialog). */
-function newRequestKey(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
-  );
+/** The hand-over dialog's fields. */
+const PAY_OPERATOR_ID = 'refund-pay-operator';
+const PAY_REFERENCE_ID = 'refund-pay-reference';
+const PAY_FIELD_IDS = [PAY_OPERATOR_ID, PAY_REFERENCE_ID];
+
+/**
+ * A fresh idempotency key for one refund request (kept across retries of the same dialog): a v4 UUID, as the server
+ * reads it. Where `randomUUID` is missing (an older browser, a non-secure origin), the 16 random bytes come from
+ * `getRandomValues` and are given the v4 version and variant bits (PR 8 review).
+ */
+export function newRequestKey(): string {
+  const cryptoApi = globalThis.crypto;
+  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID();
+  const bytes = new Uint8Array(16);
+  cryptoApi.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /**
@@ -140,6 +154,15 @@ export class InvoiceRefundsComponent {
   /** Billing plan PR 9: the stored operator's label ("Opérateur non précisé" when none). */
   readonly operatorLabelKey = mobileMoneyOperatorLabelKey;
   readonly needsReference = computed(() => REFERENCE_REQUIRED.includes(this.method()));
+
+  /* ── the hand-over dialog (PR 8 review: the reference is known when the money is sent) ── */
+  readonly handingOver = signal<InvoiceRefund | null>(null);
+  readonly payOperator = signal('');
+  readonly payReference = signal('');
+  readonly payNeedsOperator = computed(() => isMobileMoney(this.handingOver()?.method));
+  readonly payNeedsReference = computed(() =>
+    REFERENCE_REQUIRED.includes(this.handingOver()?.method ?? ''),
+  );
 
   /* ── the reject / cancel dialog ── */
   readonly decision = signal<{ refund: InvoiceRefund; mode: 'reject' | 'cancel' } | null>(null);
@@ -223,12 +246,6 @@ export class InvoiceRefundsComponent {
         ),
       });
     }
-    if (this.needsOperator() && !this.operator()) {
-      refused.push({
-        id: OPERATOR_ID,
-        message: this.translate.instant('MOBILE_MONEY.OPERATOR_REQUIRED'),
-      });
-    }
     // Owner decision D-15: never a card number, said before anything is sent (the server refuses it too).
     for (const [id, value] of [
       [REFERENCE_ID, this.reference()],
@@ -237,12 +254,6 @@ export class InvoiceRefundsComponent {
       if (containsCardNumber(value)) {
         refused.push({ id, message: this.translate.instant('MOBILE_MONEY.CARD_NUMBER_REFUSED') });
       }
-    }
-    if (this.needsReference() && !this.reference().trim()) {
-      refused.push({
-        id: REFERENCE_ID,
-        message: this.translate.instant('BILLING.REFUNDS.REFERENCE_REQUIRED'),
-      });
     }
     if (!this.reason().trim()) {
       refused.push({
@@ -263,7 +274,7 @@ export class InvoiceRefundsComponent {
       .requestRefund(invoiceId, {
         amount,
         method: this.method(),
-        mobileMoneyOperator: this.needsOperator() ? this.operator() : null,
+        mobileMoneyOperator: this.needsOperator() && this.operator() ? this.operator() : null,
         reference: this.reference().trim() || null,
         reason: this.reason().trim(),
         clientRequestId: this.requestKey,
@@ -302,12 +313,81 @@ export class InvoiceRefundsComponent {
       .subscribe(this.stepObserver(r, 'BILLING.REFUNDS.APPROVED_TOAST'));
   }
 
+  /**
+   * A cash (or cheque, other) refund is handed over at once. Mobile money and bank transfer are sent now, so the
+   * dialog asks for the transaction reference (and the operator for mobile money), as the server requires.
+   */
   handOver(r: InvoiceRefund): void {
     if (this.busy()) return;
+    if (REFERENCE_REQUIRED.includes(r.method)) {
+      this.payOperator.set(r.mobileMoneyOperator ?? '');
+      this.payReference.set(r.reference ?? '');
+      this.handingOver.set(r);
+      return;
+    }
     this.busy.set(true);
     this.billing
       .payRefund(r.invoiceId, r.id)
       .subscribe(this.stepObserver(r, 'BILLING.REFUNDS.PAID_TOAST'));
+  }
+
+  closeHandOver(): void {
+    this.handingOver.set(null);
+  }
+
+  submitHandOver(): void {
+    const r = this.handingOver();
+    if (!r || this.busy()) return;
+    const refused: { id: string; message: string }[] = [];
+    if (this.payNeedsOperator() && !this.payOperator()) {
+      refused.push({
+        id: PAY_OPERATOR_ID,
+        message: this.translate.instant('MOBILE_MONEY.OPERATOR_REQUIRED'),
+      });
+    }
+    const reference = this.payReference().trim();
+    if (this.payNeedsReference() && !reference) {
+      refused.push({
+        id: PAY_REFERENCE_ID,
+        message: this.translate.instant('BILLING.REFUNDS.REFERENCE_REQUIRED'),
+      });
+    } else if (containsCardNumber(reference)) {
+      refused.push({
+        id: PAY_REFERENCE_ID,
+        message: this.translate.instant('MOBILE_MONEY.CARD_NUMBER_REFUSED'),
+      });
+    }
+    if (refused.length > 0) {
+      refuseFields(this.host.nativeElement, refused, PAY_FIELD_IDS);
+      this.toast.error(joinReasons(refused.map((f) => f.message)) ?? '');
+      return;
+    }
+    this.busy.set(true);
+    this.billing
+      .payRefund(r.invoiceId, r.id, {
+        reference: reference || null,
+        mobileMoneyOperator: this.payNeedsOperator() ? this.payOperator() : null,
+      })
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.handingOver.set(null);
+          this.toast.success(this.translate.instant('BILLING.REFUNDS.PAID_TOAST'));
+          this.afterStep(r.invoiceId);
+        },
+        error: (err: unknown) => {
+          this.busy.set(false);
+          const marked = markServerFieldErrors(this.host.nativeElement, err, {
+            mobileMoneyOperator: PAY_OPERATOR_ID,
+            reference: PAY_REFERENCE_ID,
+          });
+          if (marked.length === 0) {
+            this.toast.error(
+              refusalReason(err) ?? this.translate.instant('BILLING.REFUNDS.FAILED'),
+            );
+          }
+        },
+      });
   }
 
   openDecision(r: InvoiceRefund, mode: 'reject' | 'cancel'): void {

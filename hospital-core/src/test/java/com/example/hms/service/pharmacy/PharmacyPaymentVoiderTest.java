@@ -66,7 +66,7 @@ class PharmacyPaymentVoiderTest {
         assertThat(voided).isEqualTo(1);
         assertThat(payment.getStatus()).isEqualTo(PharmacyPaymentStatus.VOIDED);
         assertThat(payment.getVoidedBy()).isEqualTo(pharmacist);
-        verify(support).logAudit(eq(AuditEventType.PAYMENT_REVERSED), argThat(d -> d.contains("200")),
+        verify(support).logAudit(eq(AuditEventType.PAYMENT_REVERSED), argThat(d -> d.contains(payment.getId().toString()) && !d.contains("200")),
                 eq(payment.getId().toString()), eq("PHARMACY_PAYMENT"));
     }
 

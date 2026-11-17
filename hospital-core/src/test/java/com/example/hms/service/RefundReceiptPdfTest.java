@@ -37,6 +37,7 @@ class RefundReceiptPdfTest {
         return InvoiceRefund.builder().invoice(invoice).amount(new BigDecimal("500.00"))
             .method(PaymentMethod.MOBILE_MONEY).mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY)
             .reference("OM-OUT-77").reason("Trop-perçu du ticket modérateur").status(InvoiceRefundStatus.PAID)
+            .receiptSeq(1).receiptNumber("CHWF-2026-000013-RB1")
             .paidAt(LocalDateTime.of(2026, 11, 17, 15, 30)).build();
     }
 
@@ -61,8 +62,10 @@ class RefundReceiptPdfTest {
             "Awa Caisse", Locale.FRENCH));
 
         assertThat(text).contains("REÇU DE REMBOURSEMENT", "CHWF-2026-000013-RB1", "Montant remboursé : 500 F CFA",
-            "Orange Money", "OM-OUT-77", "Trop-perçu du ticket modérateur", "Remis par : Awa Caisse",
-            "Reçu par le patient");
+            "Orange Money", "OM-OUT-77", "Remboursement du trop-perçu", "Remis par : Awa Caisse",
+            "Reçu par le patient")
+            // PR 8 review: the paper the patient keeps never carries the staff's typed reason.
+            .doesNotContain("Trop-perçu du ticket modérateur");
     }
 
     @Test
@@ -71,7 +74,8 @@ class RefundReceiptPdfTest {
         String text = textOf(service.generateRefundReceiptPdf(invoice, refund(invoice), "CHWF-2026-000013-RB1",
             "Awa Caisse", Locale.ENGLISH));
 
-        assertThat(text).contains("REFUND RECEIPT", "Amount refunded: 500 F CFA", "Received by the patient")
+        assertThat(text).contains("REFUND RECEIPT", "Amount refunded: 500 F CFA", "Received by the patient",
+                "Refund of overpayment")
             .doesNotContain("REÇU");
     }
 }

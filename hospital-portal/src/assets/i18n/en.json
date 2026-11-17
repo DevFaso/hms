@@ -1989,7 +1989,8 @@
       "IMAGING_DUPLICATE_OVERRIDDEN": "Duplicate warning overridden (\"Order anyway\", reason: {{reason}}): imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
       "NATIONAL_IU_ACTION": "Patient unique identifier: {{operation}}",
-      "REFUND_EVENT": "{{what}}: refund {{refund}} on invoice {{invoice}}"
+      "REFUND_EVENT": "{{what}}: refund {{refund}} on invoice {{invoice}}",
+      "SUPPORT_SESSION_MONEY_REFUSED": "Support session refused: {{what}} (money)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2601,7 +2602,10 @@
       "QUEUE_TITLE": "Refunds to approve or hand over",
       "QUEUE_EMPTY": "No refund waiting.",
       "OPEN_INVOICE": "Open the invoice",
-      "INVOICE": "Invoice"
+      "INVOICE": "Invoice",
+      "REFERENCE_AT_HANDOVER": "The transaction reference is asked for at hand-over, when the money is sent.",
+      "HAND_OVER_TITLE": "Hand over the refund of {{amount}}",
+      "RECEIPT_NUMBER": "Receipt no. {{number}}"
     }
   },
   "CHAT": {

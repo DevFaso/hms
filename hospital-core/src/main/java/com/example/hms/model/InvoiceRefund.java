@@ -106,6 +106,14 @@ public class InvoiceRefund extends BaseEntity {
     @Column(name = "cancel_reason", length = 500)
     private String cancelReason;
 
+    /** PR 8 review: the receipt's rank on the invoice (-RB1, -RB2...), assigned once at payout under the invoice lock. */
+    @Column(name = "receipt_seq")
+    private Integer receiptSeq;
+
+    /** The receipt number printed on the refund receipt, stored at payout and never renumbered. */
+    @Column(name = "receipt_number", length = 80)
+    private String receiptNumber;
+
     /** A retried request carrying the same key returns the refund already asked for (unique per hospital). */
     @Column(name = "client_request_id")
     private UUID clientRequestId;

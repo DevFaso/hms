@@ -34,10 +34,13 @@ public class InvoiceRefundRequestDTO {
         message = "{billing.payment.methodUnsupported}")
     private String method;
 
-    /** Billing plan PR 9: Orange Money, Moov Money or another operator; required for MOBILE_MONEY, as a payment. */
+    /** Billing plan PR 9: Orange Money, Moov Money or another operator, when known; required at payout. */
     private com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator;
 
-    /** The operator's or the bank's transaction reference; required for mobile money and bank transfer. */
+    /**
+     * The operator's or the bank's transaction reference, when already known. Optional here: it is required when the
+     * refund is handed over (PR 8 review), since the money is sent then.
+     */
     @Size(max = 120, message = "{billing.refund.referenceTooLong}")
     @NoCardNumber
     private String reference;

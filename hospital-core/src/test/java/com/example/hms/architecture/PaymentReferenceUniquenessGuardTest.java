@@ -56,6 +56,8 @@ class PaymentReferenceUniquenessGuardTest {
             "CHECKED: every caller runs rejectReusedReference first (patient, staff and copay payments)");
         WRITERS.put("PharmacyPaymentServiceImpl.createPayment", "CHECKED: a typed mobile-money reference, before anything is charged");
         WRITERS.put("PharmacySaleServiceImpl.createSale", "CHECKED: a mobile-money walk-in sale");
+        WRITERS.put("InvoiceRefundService.pay",
+            "CHECKED: the reference given when the money is sent (PR 8 review), before the refund is marked paid");
         WRITERS.put("InvoiceRefundService.request",
             "CHECKED: a non-cash refund's reference, before the refund is asked for (money out, PR 8)");
         WRITERS.put("PharmacyPaymentMapper.toEntity",

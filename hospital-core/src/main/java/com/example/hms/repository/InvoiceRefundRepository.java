@@ -70,17 +70,28 @@ public interface InvoiceRefundRepository extends JpaRepository<InvoiceRefund, UU
                @Param("decidedBy") UUID decidedBy, @Param("decidedAt") LocalDateTime decidedAt,
                @Param("decisionReason") String decisionReason);
 
-    /** APPROVED to PAID, handed over by {@code paidBy}. */
+    /**
+     * APPROVED to PAID, handed over by {@code paidBy}, with the operator's reference and operator recorded when the
+     * money was sent, and the receipt number assigned now (PR 8 review).
+     */
     @Modifying(flushAutomatically = true)
     @Query("""
            UPDATE InvoiceRefund r
-              SET r.status = com.example.hms.enums.InvoiceRefundStatus.PAID, r.paidBy = :paidBy, r.paidAt = :paidAt
+              SET r.status = com.example.hms.enums.InvoiceRefundStatus.PAID, r.paidBy = :paidBy, r.paidAt = :paidAt,
+                  r.reference = :reference, r.mobileMoneyOperator = :operator,
+                  r.receiptSeq = :receiptSeq, r.receiptNumber = :receiptNumber
             WHERE r.id = :id
               AND r.hospitalId = :hospitalId
               AND r.status = com.example.hms.enums.InvoiceRefundStatus.APPROVED
            """)
     int markPaid(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId, @Param("paidBy") UUID paidBy,
-                 @Param("paidAt") LocalDateTime paidAt);
+                 @Param("paidAt") LocalDateTime paidAt, @Param("reference") String reference,
+                 @Param("operator") com.example.hms.enums.MobileMoneyOperator operator,
+                 @Param("receiptSeq") Integer receiptSeq, @Param("receiptNumber") String receiptNumber);
+
+    /** The highest receipt rank given on the invoice so far (0 when none); read under the invoice lock. */
+    @Query("SELECT COALESCE(MAX(r.receiptSeq), 0) FROM InvoiceRefund r WHERE r.invoice.id = :invoiceId")
+    int maxReceiptSeq(@Param("invoiceId") UUID invoiceId);
 
     /** {@code from} (REQUESTED or APPROVED) to CANCELLED, by {@code cancelledBy}, with the reason. */
     @Modifying(flushAutomatically = true)

@@ -306,7 +306,8 @@ public class PdfInvoiceService {
                 w.text(BODY, 11, MARGIN, t.get("pdf.receipt.reference", refund.getReference()));
             }
             w.down(15);
-            w.paragraph(BODY, 11, MARGIN, t.get("pdf.refund.reason", safe(refund.getReason())));
+            // PR 8 review: the paper the patient keeps says what the money is, never the staff's typed reason.
+            w.paragraph(BODY, 11, MARGIN, t.get("pdf.refund.purpose"));
             w.down(28);
             w.text(BOLD, 14, MARGIN, t.get("pdf.refund.amount", money(refund.getAmount())));
             w.down(36);

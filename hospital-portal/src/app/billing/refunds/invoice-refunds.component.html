@@ -95,6 +95,11 @@
                           }
                   }}
                 </div>
+                @if (r.receiptNumber) {
+                  <div class="cell-secondary" data-testid="refund-receipt-number">
+                    {{ 'BILLING.REFUNDS.RECEIPT_NUMBER' | translate: { number: r.receiptNumber } }}
+                  </div>
+                }
               }
               @if (r.cancelReason) {
                 <div class="cell-secondary">
@@ -230,33 +235,35 @@
         </div>
         @if (needsOperator()) {
           <div class="field">
-            <label for="refund-operator">{{ 'MOBILE_MONEY.OPERATOR_LABEL' | translate }} *</label>
+            <label for="refund-operator">{{ 'MOBILE_MONEY.OPERATOR_LABEL' | translate }}</label>
             <select
               id="refund-operator"
-              required
               [ngModel]="operator()"
               (ngModelChange)="operator.set($event)"
             >
               <option value="">{{ 'MOBILE_MONEY.OPERATOR_CHOOSE' | translate }}</option>
-              @for (o of operators; track o) {
+              @for (o of operators; track o.value) {
                 <option [value]="o.value">{{ o.labelKey | translate }}</option>
               }
             </select>
           </div>
         }
         <div class="field">
-          <label for="refund-reference"
-            >{{ 'BILLING.REFUNDS.REFERENCE' | translate }}{{ needsReference() ? ' *' : '' }}</label
-          >
+          <label for="refund-reference">{{ 'BILLING.REFUNDS.REFERENCE' | translate }}</label>
           <input
             id="refund-reference"
             type="text"
             maxlength="120"
             autocomplete="off"
-            [required]="needsReference()"
+            [attr.aria-describedby]="needsReference() ? 'refund-reference-hint' : null"
             [ngModel]="reference()"
             (ngModelChange)="reference.set($event)"
           />
+          @if (needsReference()) {
+            <p class="field-hint" id="refund-reference-hint">
+              {{ 'BILLING.REFUNDS.REFERENCE_AT_HANDOVER' | translate }}
+            </p>
+          }
         </div>
         <div class="field">
           <label for="refund-reason">{{ 'BILLING.REFUNDS.REASON' | translate }} *</label>
@@ -286,6 +293,89 @@
           (click)="submitRequest()"
         >
           {{ 'BILLING.REFUNDS.SUBMIT_REQUEST' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ HAND A REFUND OVER: mobile money and transfer carry their reference (PR 8 review) ═══ -->
+@if (handingOver(); as h) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeHandOver()"
+    (keydown.escape)="closeHandOver()"
+  >
+    <div
+      class="modal"
+      appDialogA11y
+      tabindex="-1"
+      aria-labelledby="refund-pay-title"
+      data-testid="refund-pay-dialog"
+      (dialogClose)="closeHandOver()"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2 id="refund-pay-title">
+          {{ 'BILLING.REFUNDS.HAND_OVER_TITLE' | translate: { amount: (h.amount | cfa) } }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeHandOver()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        @if (payNeedsOperator()) {
+          <div class="field">
+            <label for="refund-pay-operator"
+              >{{ 'MOBILE_MONEY.OPERATOR_LABEL' | translate }} *</label
+            >
+            <select
+              id="refund-pay-operator"
+              required
+              [ngModel]="payOperator()"
+              (ngModelChange)="payOperator.set($event)"
+            >
+              <option value="">{{ 'MOBILE_MONEY.OPERATOR_CHOOSE' | translate }}</option>
+              @for (o of operators; track o.value) {
+                <option [value]="o.value">{{ o.labelKey | translate }}</option>
+              }
+            </select>
+          </div>
+        }
+        <div class="field">
+          <label for="refund-pay-reference">{{ 'BILLING.REFUNDS.REFERENCE' | translate }} *</label>
+          <input
+            id="refund-pay-reference"
+            type="text"
+            maxlength="120"
+            autocomplete="off"
+            required
+            [ngModel]="payReference()"
+            (ngModelChange)="payReference.set($event)"
+          />
+        </div>
+        <p class="no-card-notice" role="note">
+          <span class="material-symbols-outlined" aria-hidden="true">credit_card_off</span>
+          {{ 'MOBILE_MONEY.NO_CARD_DETAILS' | translate }}
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeHandOver()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          data-testid="refund-pay-submit"
+          [disabled]="busy()"
+          (click)="submitHandOver()"
+        >
+          {{ 'BILLING.REFUNDS.HAND_OVER' | translate }}
         </button>
       </div>
     </div>

@@ -534,6 +534,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { subject: 'phrase:CROSS_HOSPITAL_SUBJECT', extra: 'phrase:CROSS_HOSPITAL_PURPOSE' },
   },
   {
+    // Billing-money plan PR 8 review: a support session never moves money as the user it impersonates.
+    key: 'AUDIT.DESC.SUPPORT_SESSION_MONEY_REFUSED',
+    re: /^Support session refused: (.+) \(money\)$/,
+    params: ['what'],
+  },
+  {
     key: 'AUDIT.DESC.SUPPORT_SESSION_REFUSED',
     re: /^Support session refused: (.+) \(sign-in or recovery details\)$/,
     params: ['what'],

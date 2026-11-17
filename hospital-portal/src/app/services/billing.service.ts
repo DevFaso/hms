@@ -301,6 +301,8 @@ export interface InvoiceRefund {
   decisionReason?: string | null;
   paidByName?: string | null;
   paidAt?: string | null;
+  /** PR 8 review: the receipt number given at hand-over (-RB<n>). */
+  receiptNumber?: string | null;
   cancelledByName?: string | null;
   cancelledAt?: string | null;
   cancelReason?: string | null;
@@ -527,10 +529,15 @@ export class BillingService {
     );
   }
 
-  payRefund(invoiceId: string, refundId: string): Observable<InvoiceRefund> {
+  /** PR 8 review: mobile money and bank transfer carry their reference (and operator) at hand-over. */
+  payRefund(
+    invoiceId: string,
+    refundId: string,
+    handover: { reference?: string | null; mobileMoneyOperator?: string | null } = {},
+  ): Observable<InvoiceRefund> {
     return this.http.post<InvoiceRefund>(
       `/billing-invoices/${invoiceId}/refunds/${refundId}/pay`,
-      {},
+      handover,
     );
   }
 

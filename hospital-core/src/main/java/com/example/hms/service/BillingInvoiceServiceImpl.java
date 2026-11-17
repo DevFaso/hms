@@ -2262,6 +2262,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (amount == null || amount.signum() <= 0) {
             return null;
         }
+        // Billing-money plan PR 8 review: a support session never takes money as the user it impersonates. The
+        // check-in itself is not money (its path stays open); the copay inside it is.
+        com.example.hms.security.context.ImpersonationLimits.refuseMoneyWrite(() -> auditEventLogService,
+            "check-in copay");
         // QA D975: every copay used to be recorded as cash with no reference.
         // QA D1293: and a copay with no method is refused, never guessed as cash.
         if (method == null) {

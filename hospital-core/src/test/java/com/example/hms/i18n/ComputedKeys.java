@@ -252,6 +252,9 @@ final class ComputedKeys {
             "LaborServiceImpl.java|labor.alert.msg.");
         site(r, d, "com/example/hms/service/impl/LaborServiceImpl.java|\"labor.alert.type.\" + alert.getType().name()",
             "LaborServiceImpl.java|labor.alert.type.");
+        r.put("com/example/hms/security/context/ImpersonationLimits.java|refusalKey",
+            new Open("one of the two constants ACCOUNT_CHANGE_REFUSED (messages-auth) and MONEY_WRITE_REFUSED"
+                + " (messages-billing), chosen by the constructor; ImpersonationLimitsTest resolves both"));
         r.put("com/example/hms/service/impl/LaborServiceImpl.java|messageKey",
             new Open("an obstetric alert or notice key built from a registered alert code, or stored on the row"));
         site(r, d, "com/example/hms/service/impl/LaborServiceImpl.java|\"labor.alert.type.\" + alert.getType().name() #2",

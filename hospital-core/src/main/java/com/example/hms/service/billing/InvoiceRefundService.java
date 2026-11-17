@@ -16,6 +16,7 @@ import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.InvoicePdfResponseDTO;
 import com.example.hms.payload.dto.billing.InvoiceRefundDTO;
+import com.example.hms.payload.dto.billing.InvoiceRefundPayRequestDTO;
 import com.example.hms.payload.dto.billing.InvoiceRefundReasonRequestDTO;
 import com.example.hms.payload.dto.billing.InvoiceRefundRequestDTO;
 import com.example.hms.repository.BillingInvoiceRepository;
@@ -146,7 +147,9 @@ public class InvoiceRefundService {
             InvoiceRefund replay = refundRepository
                 .findByHospitalIdAndClientRequestId(actor.hospitalId(), request.getClientRequestId()).orElse(null);
             if (replay != null) {
-                if (!Objects.equals(replay.getInvoice().getId(), invoice.getId())) {
+                if (!Objects.equals(replay.getInvoice().getId(), invoice.getId()) || !sameRequest(replay, request)) {
+                    // PR 8 review: a key reused for another invoice, or for another amount or method, is refused,
+                    // never answered with the refund it first named.
                     throw new ConflictException(MessageUtil.resolve("billing.refund.clientRequestReused"));
                 }
                 return toDto(replay, actor.userId(), null);
@@ -165,12 +168,9 @@ public class InvoiceRefundService {
         PaymentMethod method = parseMethod(request.getMethod());
         // An insurer's share is never money at the till, in or out (QA D1611).
         TillPaymentMethods.requireReceivedAtTill(method, FIELD_METHOD);
-        // Billing plan PR 9: the same rule as a payment taken at the till (billing.payment.operatorRequired).
-        MobileMoneyOperator operator = com.example.hms.service.payment.MobileMoneyOperators.require(method,
-            request.getMobileMoneyOperator(), FIELD_OPERATOR);
-        if (REFERENCE_REQUIRED.contains(method) && reference == null) {
-            throw new FieldBusinessException(FIELD_REFERENCE, "billing.refund.referenceRequired");
-        }
+        // PR 8 review: the operator and its reference are known when the money is sent; both are required at
+        // payout. Given now, they are kept (an operator only for mobile money).
+        MobileMoneyOperator operator = method == PaymentMethod.MOBILE_MONEY ? request.getMobileMoneyOperator() : null;
         requireText(reason, FIELD_REASON);
         if (reference != null) {
             if (reference.length() > REFERENCE_MAX) {
@@ -188,12 +188,12 @@ public class InvoiceRefundService {
         if (amount.compareTo(refundable) > 0) {
             throw new FieldBusinessException(FIELD_AMOUNT, "billing.refund.exceedsRefundable", francs(refundable));
         }
-        if (method != PaymentMethod.CASH) {
+        if (method != PaymentMethod.CASH && reference != null) {
             // A refund never reuses a payment's operator reference (nor another refund's): QA D1129 class.
             referenceRegistry.requireUnused(actor.hospitalId(), reference, FIELD_REFERENCE);
         }
 
-        InvoiceRefund refund = refundRepository.saveAndFlush(InvoiceRefund.builder()
+        InvoiceRefund refund = saveRequest(InvoiceRefund.builder()
             .invoice(invoice)
             .hospitalId(actor.hospitalId())
             .amount(amount)
@@ -205,7 +205,7 @@ public class InvoiceRefundService {
             .requestedBy(actor.userId())
             .requestedAt(now())
             .clientRequestId(request.getClientRequestId())
-            .build());
+            .build(), request.getClientRequestId());
         auditAfterCommit(AuditEventType.REFUND_REQUESTED, actor.userId(), invoice.getId(), refund.getId(),
             "Refund requested");
         return toDto(refund, actor.userId(), null);
@@ -264,7 +264,7 @@ public class InvoiceRefundService {
      * under its row lock; the refund is money out of this cashier's till today.
      */
     @Transactional
-    public InvoiceRefundDTO pay(UUID invoiceId, UUID refundId) {
+    public InvoiceRefundDTO pay(UUID invoiceId, UUID refundId, InvoiceRefundPayRequestDTO body) {
         Actor actor = requireActor(roleValidator::canPayRefund, "billing.refund.payersOnly");
         BillingInvoice invoice = lockInScope(invoiceId, actor.hospitalId());
         InvoiceRefund refund = loadRefund(refundId, invoice, actor.hospitalId());
@@ -275,15 +275,23 @@ public class InvoiceRefundService {
         if (refund.getAmount().compareTo(due) > 0) {
             throw new ConflictException(MessageUtil.resolve("billing.refund.noLongerDue", francs(due)));
         }
+        Handover handover = handover(refund, body, actor.hospitalId());
+        // PR 8 review: the receipt number is assigned once, here, under the invoice lock, in payout order.
+        int receiptSeq = refundRepository.maxReceiptSeq(invoice.getId()) + 1;
+        String receiptNumber = invoice.getInvoiceNumber() + "-RB" + receiptSeq;
         LocalDateTime at = now();
-        claimed(refundRepository.markPaid(refund.getId(), refund.getHospitalId(), actor.userId(), at),
-            "billing.refund.notApproved");
+        claimed(refundRepository.markPaid(refund.getId(), refund.getHospitalId(), actor.userId(), at,
+            handover.reference(), handover.operator(), receiptSeq, receiptNumber), "billing.refund.notApproved");
         BigDecimal refunded = invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO;
         invoice.setAmountRefunded(refunded.add(refund.getAmount()));
         invoiceRepository.save(invoice);
         refund.setStatus(InvoiceRefundStatus.PAID);
         refund.setPaidBy(actor.userId());
         refund.setPaidAt(at);
+        refund.setReference(handover.reference());
+        refund.setMobileMoneyOperator(handover.operator());
+        refund.setReceiptSeq(receiptSeq);
+        refund.setReceiptNumber(receiptNumber);
         auditAfterCommit(AuditEventType.REFUND_ISSUED, actor.userId(), invoice.getId(), refund.getId(),
             "Refund paid out");
         return toDto(refund, actor.userId(), null);
@@ -371,16 +379,8 @@ public class InvoiceRefundService {
         if (refund.getStatus() != InvoiceRefundStatus.PAID) {
             throw new ConflictException(MessageUtil.resolve("billing.refund.receiptOnlyPaid"));
         }
-        List<InvoiceRefund> paid = refundRepository.findByInvoice_IdAndStatusInOrderByCreatedAtAsc(invoice.getId(),
-            List.of(InvoiceRefundStatus.PAID));
-        int rank = 1;
-        for (InvoiceRefund other : paid) {
-            if (other.getId().equals(refund.getId())) {
-                break;
-            }
-            rank++;
-        }
-        String number = invoice.getInvoiceNumber() + "-RB" + rank;
+        // PR 8 review: the number stored at payout, never recomputed (a later payout cannot renumber it).
+        String number = refund.getReceiptNumber();
         Locale effective = locale != null ? locale : LocaleContextHolder.getLocale();
         byte[] pdf = pdfInvoiceService.generateRefundReceiptPdf(invoice, refund, number,
             displayName(refund.getPaidBy()), effective);
@@ -395,6 +395,10 @@ public class InvoiceRefundService {
 
     /** The acting hospital (pinned, never global view) when the caller holds one of the step's roles there. */
     private Actor requireActor(BiPredicate<UUID, UUID> holdsRole, String refusalKey) {
+        // PR 8 review: a support session impersonating a user never moves money as that user (the four-eyes rule
+        // would be one agent with two accounts). The paths refuse it first (ImpersonationLimits); this is the second
+        // line, for any caller that does not come through them.
+        com.example.hms.security.context.ImpersonationLimits.refuseMoneyWrite(() -> auditEventLogService, "refund");
         UUID hospitalId = actingScopeResolver.requirePinned();
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null || !holdsRole.test(userId, hospitalId)) {
@@ -473,6 +477,61 @@ public class InvoiceRefundService {
     }
 
     // ───────────────────────────── values ─────────────────────────────
+
+    /** The reference and operator recorded when the money is handed over. */
+    record Handover(String reference, MobileMoneyOperator operator) {
+    }
+
+    /**
+     * PR 8 review: mobile money and bank transfer are sent at payout, so their reference is required now (and the
+     * operator for mobile money: billing.payment.operatorRequired, as a payment). A value given at the request is
+     * kept when the payout repeats or omits it; a new reference goes through the registry and the card check.
+     */
+    private Handover handover(InvoiceRefund refund, InvoiceRefundPayRequestDTO body, UUID hospitalId) {
+        PaymentMethod method = refund.getMethod();
+        String given = trimToNull(body != null ? body.getReference() : null);
+        String reference = given != null ? given : refund.getReference();
+        MobileMoneyOperator operator = body != null && body.getMobileMoneyOperator() != null
+            ? body.getMobileMoneyOperator() : refund.getMobileMoneyOperator();
+        operator = com.example.hms.service.payment.MobileMoneyOperators.require(method, operator, FIELD_OPERATOR);
+        if (REFERENCE_REQUIRED.contains(method) && reference == null) {
+            throw new FieldBusinessException(FIELD_REFERENCE, "billing.refund.referenceRequired");
+        }
+        if (given != null && !given.equals(refund.getReference())) {
+            if (given.length() > REFERENCE_MAX) {
+                throw new FieldBusinessException(FIELD_REFERENCE, "billing.refund.referenceTooLong");
+            }
+            CardNumbers.requireNone(given, FIELD_REFERENCE);
+            if (method != PaymentMethod.CASH) {
+                referenceRegistry.requireUnused(hospitalId, given, FIELD_REFERENCE);
+            }
+        }
+        return new Handover(reference, operator);
+    }
+
+    /** A replay names the same amount and method as the request it repeats. */
+    private static boolean sameRequest(InvoiceRefund replay, InvoiceRefundRequestDTO request) {
+        boolean sameAmount = request.getAmount() != null && replay.getAmount() != null
+            && request.getAmount().compareTo(replay.getAmount()) == 0;
+        boolean sameMethod = request.getMethod() != null && replay.getMethod() != null
+            && replay.getMethod().name().equalsIgnoreCase(request.getMethod().trim());
+        return sameAmount && sameMethod;
+    }
+
+    /**
+     * Saves a new request. PR 8 review: two submits with one key racing on two invoices meet the per-hospital
+     * unique index; the loser is refused as a reused key, not a 500.
+     */
+    private InvoiceRefund saveRequest(InvoiceRefund refund, UUID clientRequestId) {
+        try {
+            return refundRepository.saveAndFlush(refund);
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            if (clientRequestId != null) {
+                throw new ConflictException(MessageUtil.resolve("billing.refund.clientRequestReused"));
+            }
+            throw ex;
+        }
+    }
 
     private static BigDecimal requireWholePositive(BigDecimal amount) {
         if (amount.signum() <= 0) {
@@ -586,6 +645,7 @@ public class InvoiceRefundService {
             .paidBy(r.getPaidBy())
             .paidByName(r.getPaidBy() != null ? known.get(r.getPaidBy()) : null)
             .paidAt(r.getPaidAt())
+            .receiptNumber(r.getReceiptNumber())
             .cancelledBy(r.getCancelledBy())
             .cancelledByName(r.getCancelledBy() != null ? known.get(r.getCancelledBy()) : null)
             .cancelledAt(r.getCancelledAt())

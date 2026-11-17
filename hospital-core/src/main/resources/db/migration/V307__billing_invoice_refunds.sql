@@ -10,11 +10,13 @@
 -- billing.invoice_refunds - one refund of one invoice, the outgoing entry of
 --   the ledger. Whole francs, > 0. Its life:
 --     REQUESTED  asked by a cashier, a receptionist, an accountant or a hospital
---                admin, with the method, the reason and (mobile money, bank
---                transfer) the operator's reference
+--                admin, with the method and the reason
 --     APPROVED   decided by ANOTHER person holding HOSPITAL_ADMIN or ACCOUNTANT
 --     REJECTED   decided by another such person, with a reason
---     PAID       handed to the patient; counted as money out in the cash
+--     PAID       handed to the patient, with the operator's reference (mobile
+--                money, bank transfer: known only when the money is sent) and
+--                a receipt number (-RB<n>, per invoice, assigned at payout);
+--                counted as money out in the cash
 --                closing of the day it was paid (paid_at), never on the day the
 --                money came in, so a refund rewrites no past day's figures
 --     CANCELLED  withdrawn before it was paid, with a reason
@@ -64,6 +66,8 @@ CREATE TABLE IF NOT EXISTS billing.invoice_refunds (
     cancelled_at           TIMESTAMP,
     cancel_reason          VARCHAR(500),
     client_request_id      UUID,
+    receipt_seq            INTEGER,
+    receipt_number         VARCHAR(80),
     created_at             TIMESTAMP      NOT NULL DEFAULT now(),
     updated_at             TIMESTAMP      NOT NULL DEFAULT now(),
 
@@ -75,11 +79,20 @@ CREATE TABLE IF NOT EXISTS billing.invoice_refunds (
     -- Every PaymentMethod constant (EntitySchemaValidationIT); the service refuses INSURANCE, never money at a till.
     CONSTRAINT ck_refund_method            CHECK (method IN ('CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'INSURANCE',
                                                              'BANK_TRANSFER', 'CHECK', 'CARD', 'MOBILE_MONEY', 'OTHER')),
-    CONSTRAINT ck_refund_operator          CHECK (mobile_money_operator IS NULL
-                                                  OR mobile_money_operator IN ('ORANGE_MONEY', 'MOOV_MONEY', 'AUTRE')),
-    CONSTRAINT ck_refund_mobile_money      CHECK (method <> 'MOBILE_MONEY'
+    -- An operator only on a mobile-money refund, one of V308's values.
+    CONSTRAINT ck_refund_operator          CHECK ((mobile_money_operator IS NULL
+                                                   OR mobile_money_operator IN ('ORANGE_MONEY', 'MOOV_MONEY', 'AUTRE'))
+                                                  AND (method = 'MOBILE_MONEY' OR mobile_money_operator IS NULL)),
+    -- The operator and its reference are known when the money is sent: required once PAID (PR 8 review).
+    CONSTRAINT ck_refund_mobile_money      CHECK (status <> 'PAID' OR method <> 'MOBILE_MONEY'
                                                   OR (mobile_money_operator IS NOT NULL
                                                       AND reference IS NOT NULL AND length(btrim(reference)) > 0)),
+    CONSTRAINT ck_refund_transfer_ref      CHECK (status <> 'PAID' OR method <> 'BANK_TRANSFER'
+                                                  OR (reference IS NOT NULL AND length(btrim(reference)) > 0)),
+    -- A paid refund carries its receipt number, assigned once at payout and never renumbered.
+    CONSTRAINT ck_refund_receipt           CHECK (status <> 'PAID'
+                                                  OR (receipt_seq IS NOT NULL AND receipt_seq > 0
+                                                      AND receipt_number IS NOT NULL)),
     CONSTRAINT ck_refund_reason            CHECK (length(btrim(reason)) > 0),
     -- D-3: the person who decides is never the person who asked.
     CONSTRAINT ck_refund_four_eyes         CHECK (decided_by IS NULL OR decided_by <> requested_by),
@@ -98,6 +111,10 @@ CREATE INDEX IF NOT EXISTS idx_refund_hospital_status ON billing.invoice_refunds
 -- The cash closing reads one cashier's refunds paid out on one day.
 CREATE INDEX IF NOT EXISTS idx_refund_paid_by_at ON billing.invoice_refunds (paid_by, paid_at)
     WHERE paid_at IS NOT NULL;
+-- Receipt numbers per invoice: -RB1, -RB2, ... in payout order.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_receipt_seq
+    ON billing.invoice_refunds (invoice_id, receipt_seq)
+    WHERE receipt_seq IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_client_request
     ON billing.invoice_refunds (hospital_id, client_request_id)
     WHERE client_request_id IS NOT NULL;

@@ -126,6 +126,34 @@ class InvoiceRefundAccessTest {
         verifyNoInteractions(service);
     }
 
+    /** PR 8 review (HIGH): a support session impersonating an admin reaches no refund write; reads stay open. */
+    @Test
+    @DisplayName("every refund write is refused to a support session impersonating the user (403, before the service)")
+    void impersonationMovesNoMoney() throws Exception {
+        com.example.hms.security.context.ImpersonationContextHolder.set(
+            com.example.hms.security.context.ImpersonationContext.of(UUID.randomUUID(), "support.agent"));
+        try {
+            for (Step step : steps()) {
+                actAs("ROLE_HOSPITAL_ADMIN");
+                int code = mockMvc.perform(step.request()).andReturn().getResponse().getStatus();
+                boolean read = Set.of("queue", "list", "receipt").contains(step.name());
+                if (read) {
+                    org.assertj.core.api.Assertions.assertThat(code).as(step.name()).isNotEqualTo(403);
+                } else {
+                    org.assertj.core.api.Assertions.assertThat(code).as(step.name()).isEqualTo(403);
+                }
+            }
+        } finally {
+            com.example.hms.security.context.ImpersonationContextHolder.clear();
+        }
+        org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).request(org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).approve(org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).pay(org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
     @Test
     @DisplayName("a card number in a refund reason or reference is refused before the service (400)")
     void aCardNumberIsRefusedAtTheEdge() throws Exception {

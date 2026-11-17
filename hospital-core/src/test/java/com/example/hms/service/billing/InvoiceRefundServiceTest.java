@@ -16,6 +16,7 @@ import com.example.hms.model.InvoiceRefund;
 import com.example.hms.model.Patient;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.billing.InvoiceRefundDTO;
+import com.example.hms.payload.dto.billing.InvoiceRefundPayRequestDTO;
 import com.example.hms.payload.dto.billing.InvoiceRefundReasonRequestDTO;
 import com.example.hms.payload.dto.billing.InvoiceRefundRequestDTO;
 import com.example.hms.repository.BillingInvoiceRepository;
@@ -116,8 +117,12 @@ class InvoiceRefundServiceTest {
         when(refunds.save(any(InvoiceRefund.class))).thenAnswer(call -> store(call.getArgument(0)));
         when(refunds.decide(any(), any(), any(), any(), any(), any())).thenAnswer(call ->
             move(call.getArgument(0), call.getArgument(1), InvoiceRefundStatus.REQUESTED, call.getArgument(2)));
-        when(refunds.markPaid(any(), any(), any(), any())).thenAnswer(call ->
+        when(refunds.markPaid(any(), any(), any(), any(), any(), any(), any(), any())).thenAnswer(call ->
             move(call.getArgument(0), call.getArgument(1), InvoiceRefundStatus.APPROVED, InvoiceRefundStatus.PAID));
+        // The receipt rank, read under the invoice lock: the highest given so far on the invoice.
+        when(refunds.maxReceiptSeq(any())).thenAnswer(call -> ledger.values().stream()
+            .filter(r -> r.getInvoice().getId().equals(call.getArgument(0)) && r.getReceiptSeq() != null)
+            .mapToInt(InvoiceRefund::getReceiptSeq).max().orElse(0));
         when(refunds.markCancelled(any(), any(), any(), any(), any(), any())).thenAnswer(call ->
             move(call.getArgument(0), call.getArgument(1), call.getArgument(2), InvoiceRefundStatus.CANCELLED));
         when(refunds.findByIdAndInvoice_IdAndHospitalId(any(), any(), any())).thenAnswer(call ->
@@ -219,7 +224,7 @@ class InvoiceRefundServiceTest {
         assertThat(service.approve(invoice.getId(), refundId).getStatus()).isEqualTo("APPROVED");
 
         actAs(BILLING_A);
-        InvoiceRefundDTO paid = service.pay(invoice.getId(), refundId);
+        InvoiceRefundDTO paid = service.pay(invoice.getId(), refundId, null);
 
         assertThat(paid.getStatus()).isEqualTo("PAID");
         assertThat(paid.getPaidBy()).isEqualTo(BILLING_A);
@@ -306,40 +311,65 @@ class InvoiceRefundServiceTest {
     }
 
     @Test
-    @DisplayName("mobile money needs an operator and a reference, and the reference is checked against payments")
-    void mobileMoneyNeedsAnOperatorAndAnUnusedReference() {
+    @DisplayName("PR 8 review: mobile money is asked for without its reference; the payout requires operator and reference")
+    void mobileMoneyNeedsAnOperatorAndAnUnusedReferenceAtPayout() {
         actAs(BILLING_A);
         UUID invoiceId = invoice.getId();
-        InvoiceRefundRequestDTO noOperator = InvoiceRefundRequestDTO.builder().amount(new BigDecimal("500"))
-            .method("MOBILE_MONEY").reference("OM-1").reason("Trop-perçu").build();
-        assertThatThrownBy(() -> service.request(invoiceId, noOperator))
-            .isInstanceOfSatisfying(FieldBusinessException.class, refusal ->
-                assertThat(refusal.getField()).isEqualTo("mobileMoneyOperator"));
+        // Asked for without the operator's reference: it does not exist until the money is sent.
+        InvoiceRefundDTO asked = service.request(invoiceId, InvoiceRefundRequestDTO.builder()
+            .amount(new BigDecimal("500")).method("MOBILE_MONEY").reason("Trop-perçu").build());
+        actAs(ADMIN_A);
+        UUID refundId = asked.getId();
+        service.approve(invoiceId, refundId);
+        actAs(BILLING_A);
 
-        InvoiceRefundRequestDTO noReference = InvoiceRefundRequestDTO.builder().amount(new BigDecimal("500"))
-            .method("MOBILE_MONEY").mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).reason("Trop-perçu").build();
-        assertThatThrownBy(() -> service.request(invoiceId, noReference))
+        assertThatThrownBy(() -> service.pay(invoiceId, refundId, null))
+            .isInstanceOfSatisfying(FieldBusinessException.class, refusal ->
+                assertThat(refusal.getMessageKey()).isEqualTo("billing.payment.operatorRequired"));
+        InvoiceRefundPayRequestDTO noReference = InvoiceRefundPayRequestDTO.builder()
+            .mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).build();
+        assertThatThrownBy(() -> service.pay(invoiceId, refundId, noReference))
             .isInstanceOfSatisfying(FieldBusinessException.class, refusal ->
                 assertThat(refusal.getField()).isEqualTo("reference"));
-
-        InvoiceRefundRequestDTO reused = InvoiceRefundRequestDTO.builder().amount(new BigDecimal("500"))
-            .method("MOBILE_MONEY").mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).reference("OM-PAID-1")
-            .reason("Trop-perçu")
-            .build();
+        InvoiceRefundPayRequestDTO card = InvoiceRefundPayRequestDTO.builder()
+            .mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).reference("4111 1111 1111 1111").build();
+        assertThatThrownBy(() -> service.pay(invoiceId, refundId, card))
+            .isInstanceOfSatisfying(FieldBusinessException.class, refusal ->
+                assertThat(refusal.getMessageKey()).isEqualTo(com.example.hms.validation.NoCardNumber.MESSAGE_KEY));
         doThrow(new FieldBusinessException("reference", PaymentReferenceRegistry.DUPLICATE_KEY))
             .when(registry).requireUnused(HOSPITAL_A, "OM-PAID-1", "reference");
-        assertThatThrownBy(() -> service.request(invoiceId, reused))
+        InvoiceRefundPayRequestDTO reused = InvoiceRefundPayRequestDTO.builder()
+            .mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).reference("OM-PAID-1").build();
+        assertThatThrownBy(() -> service.pay(invoiceId, refundId, reused))
             .isInstanceOfSatisfying(FieldBusinessException.class, refusal ->
                 assertThat(refusal.getMessageKey()).isEqualTo(PaymentReferenceRegistry.DUPLICATE_KEY));
-        assertThat(ledger).isEmpty();
+        assertThat(ledger.get(refundId).getStatus()).isEqualTo(InvoiceRefundStatus.APPROVED);
+        assertThat(invoice.getAmountRefunded()).isEqualByComparingTo("0");
 
-        InvoiceRefundRequestDTO good = InvoiceRefundRequestDTO.builder().amount(new BigDecimal("500"))
-            .method("mobile_money").mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).reference("OM-OUT-9")
-            .reason("Trop-perçu")
-            .build();
-        InvoiceRefundDTO asked = service.request(invoiceId, good);
-        assertThat(asked.getMobileMoneyOperator()).isEqualTo(MobileMoneyOperator.ORANGE_MONEY.name());
+        InvoiceRefundDTO paid = service.pay(invoiceId, refundId, InvoiceRefundPayRequestDTO.builder()
+            .mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).reference("OM-OUT-9").build());
+        assertThat(paid.getStatus()).isEqualTo("PAID");
+        assertThat(paid.getMobileMoneyOperator()).isEqualTo(MobileMoneyOperator.ORANGE_MONEY.name());
+        assertThat(paid.getReference()).isEqualTo("OM-OUT-9");
         verify(registry).requireUnused(HOSPITAL_A, "OM-OUT-9", "reference");
+    }
+
+    @Test
+    @DisplayName("PR 8 review: a bank transfer refund needs its reference at payout; a cash one needs none")
+    void aBankTransferNeedsItsReferenceAtPayout() {
+        actAs(BILLING_A);
+        UUID invoiceId = invoice.getId();
+        InvoiceRefundDTO asked = service.request(invoiceId, InvoiceRefundRequestDTO.builder()
+            .amount(new BigDecimal("500")).method("BANK_TRANSFER").reason("Trop-perçu").build());
+        actAs(ADMIN_A);
+        UUID refundId = asked.getId();
+        service.approve(invoiceId, refundId);
+        actAs(BILLING_A);
+        assertThatThrownBy(() -> service.pay(invoiceId, refundId, null))
+            .isInstanceOfSatisfying(FieldBusinessException.class, refusal ->
+                assertThat(refusal.getField()).isEqualTo("reference"));
+        assertThat(service.pay(invoiceId, refundId, InvoiceRefundPayRequestDTO.builder().reference("VIR-77").build())
+            .getStatus()).isEqualTo("PAID");
     }
 
     @Test
@@ -440,7 +470,7 @@ class InvoiceRefundServiceTest {
         Runnable call = switch (step) {
             case "approve" -> () -> service.approve(invoiceId, refundId);
             case "reject" -> () -> service.reject(invoiceId, refundId, because("Non justifié"));
-            case "pay" -> () -> service.pay(invoiceId, refundId);
+            case "pay" -> () -> service.pay(invoiceId, refundId, null);
             default -> () -> service.cancel(invoiceId, refundId, because("Patient parti"));
         };
         if (expected.startsWith("billing.")) {
@@ -460,8 +490,8 @@ class InvoiceRefundServiceTest {
         actAs(BILLING_A);
         UUID invoiceId = invoice.getId();
         UUID refundId = approved.getId();
-        service.pay(invoiceId, refundId);
-        assertThatThrownBy(() -> service.pay(invoiceId, refundId)).isInstanceOf(ConflictException.class);
+        service.pay(invoiceId, refundId, null);
+        assertThatThrownBy(() -> service.pay(invoiceId, refundId, null)).isInstanceOf(ConflictException.class);
         assertThatThrownBy(() -> service.cancel(invoiceId, refundId, because("Erreur")))
             .isInstanceOf(ConflictException.class);
         assertThat(invoice.getAmountRefunded()).isEqualByComparingTo("500");
@@ -471,11 +501,11 @@ class InvoiceRefundServiceTest {
     @DisplayName("a refund that lost the race to a concurrent payout moves no money")
     void aLostRaceMovesNoMoney() {
         InvoiceRefundDTO approved = approved("500");
-        when(refunds.markPaid(any(), any(), any(), any())).thenReturn(0);
+        when(refunds.markPaid(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(0);
         actAs(BILLING_A);
         UUID invoiceId = invoice.getId();
         UUID refundId = approved.getId();
-        assertThatThrownBy(() -> service.pay(invoiceId, refundId)).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> service.pay(invoiceId, refundId, null)).isInstanceOf(ConflictException.class);
         assertThat(invoice.getAmountRefunded()).isEqualByComparingTo("0");
     }
 
@@ -487,7 +517,7 @@ class InvoiceRefundServiceTest {
         actAs(BILLING_A);
         UUID invoiceId = invoice.getId();
         UUID refundId = approved.getId();
-        assertThatThrownBy(() -> service.pay(invoiceId, refundId))
+        assertThatThrownBy(() -> service.pay(invoiceId, refundId, null))
             .isInstanceOf(ConflictException.class).hasMessageContaining("200 F CFA");
         assertThat(invoice.getAmountRefunded()).isEqualByComparingTo("0");
     }
@@ -524,7 +554,7 @@ class InvoiceRefundServiceTest {
         UUID invoiceId = invoice.getId();
         InvoiceRefundRequestDTO body = cash("500", "x");
         assertThatThrownBy(() -> service.request(invoiceId, body)).isInstanceOf(ClientSafeAccessDeniedException.class);
-        assertThatThrownBy(() -> service.pay(invoiceId, UUID.randomUUID()))
+        assertThatThrownBy(() -> service.pay(invoiceId, UUID.randomUUID(), null))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
         actAs(RECEPTION_A);
         assertThatThrownBy(() -> service.approve(invoiceId, UUID.randomUUID()))
@@ -550,7 +580,7 @@ class InvoiceRefundServiceTest {
             () -> service.request(invoiceId, cash("500", "x")),
             () -> service.approve(invoiceId, refundId),
             () -> service.reject(invoiceId, refundId, because("x")),
-            () -> service.pay(invoiceId, refundId),
+            () -> service.pay(invoiceId, refundId, null),
             () -> service.cancel(invoiceId, refundId, because("x")),
             () -> service.list(invoiceId),
             () -> service.receipt(invoiceId, refundId, Locale.FRENCH)));
@@ -584,7 +614,7 @@ class InvoiceRefundServiceTest {
     void eachStepIsAuditedAndRefundIssuedOnlyOnPayout() {
         InvoiceRefundDTO approved = approved("500");
         actAs(BILLING_A);
-        service.pay(invoice.getId(), approved.getId());
+        service.pay(invoice.getId(), approved.getId(), null);
 
         ArgumentCaptor<AuditEventRequestDTO> logged = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(audit, atLeastOnce()).logEvent(logged.capture());
@@ -610,11 +640,78 @@ class InvoiceRefundServiceTest {
         actAs(ADMIN_A);
         service.approve(invoiceId, refundId);
         actAs(BILLING_A);
-        service.pay(invoiceId, refundId);
-        when(refunds.findByInvoice_IdAndStatusInOrderByCreatedAtAsc(eq(invoiceId), any()))
-            .thenReturn(List.of(ledger.get(refundId)));
+        service.pay(invoiceId, refundId, null);
         when(pdf.generateRefundReceiptPdf(any(), any(), anyString(), any(), any())).thenReturn(new byte[] {1});
         assertThat(service.receipt(invoiceId, refundId, Locale.FRENCH).suggestedFilename())
             .isEqualTo("CHWF-2026-000013-RB1");
+    }
+
+    @Test
+    @DisplayName("PR 8 review: a receipt number is given once at payout, in payout order, and never renumbered")
+    void receiptNumbersAreAssignedAtPayoutAndNeverRenumbered() {
+        // Two refunds of one invoice: the one asked for SECOND is paid FIRST, and gets -RB1.
+        InvoiceRefundDTO first = requested("200");
+        InvoiceRefundDTO second = requested("300");
+        UUID invoiceId = invoice.getId();
+        actAs(ADMIN_A);
+        service.approve(invoiceId, first.getId());
+        service.approve(invoiceId, second.getId());
+        actAs(BILLING_A);
+        assertThat(service.pay(invoiceId, second.getId(), null).getReceiptNumber()).isEqualTo("CHWF-2026-000013-RB1");
+        assertThat(service.pay(invoiceId, first.getId(), null).getReceiptNumber()).isEqualTo("CHWF-2026-000013-RB2");
+        // The receipt prints the stored number, whatever the creation order says.
+        when(pdf.generateRefundReceiptPdf(any(), any(), anyString(), any(), any())).thenReturn(new byte[] {1});
+        assertThat(service.receipt(invoiceId, second.getId(), Locale.FRENCH).suggestedFilename())
+            .isEqualTo("CHWF-2026-000013-RB1");
+        assertThat(service.receipt(invoiceId, first.getId(), Locale.FRENCH).suggestedFilename())
+            .isEqualTo("CHWF-2026-000013-RB2");
+    }
+
+    @Test
+    @DisplayName("PR 8 review: a key replayed with another amount or method is refused, never answered silently")
+    void aReplayWithAnotherAmountIsRefused() {
+        actAs(BILLING_A);
+        UUID key = UUID.randomUUID();
+        InvoiceRefundRequestDTO body = cash("300", "Trop-perçu");
+        body.setClientRequestId(key);
+        service.request(invoice.getId(), body);
+        InvoiceRefundRequestDTO changed = cash("400", "Trop-perçu");
+        changed.setClientRequestId(key);
+        UUID invoiceId = invoice.getId();
+        assertThatThrownBy(() -> service.request(invoiceId, changed)).isInstanceOf(ConflictException.class);
+        assertThat(ledger).hasSize(1);
+    }
+
+    /**
+     * PR 8 review (HIGH): a support session impersonating a cashier, an accountant or an admin moves no money:
+     * every refund write is refused with an audit row, before anything is read.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} is refused while impersonating")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"request", "approve", "reject", "pay", "cancel"})
+    void everyRefundWriteIsRefusedWhileImpersonating(String step) {
+        InvoiceRefundDTO asked = requested("500");
+        UUID invoiceId = invoice.getId();
+        UUID refundId = asked.getId();
+        org.mockito.Mockito.clearInvocations(audit, invoices);
+        com.example.hms.security.context.ImpersonationContextHolder.set(
+            com.example.hms.security.context.ImpersonationContext.of(UUID.randomUUID(), "support.agent"));
+        try {
+            actAs(ADMIN_A);
+            Runnable call = switch (step) {
+                case "request" -> () -> service.request(invoiceId, cash("100", "x"));
+                case "approve" -> () -> service.approve(invoiceId, refundId);
+                case "reject" -> () -> service.reject(invoiceId, refundId, because("x"));
+                case "pay" -> () -> service.pay(invoiceId, refundId, null);
+                default -> () -> service.cancel(invoiceId, refundId, because("x"));
+            };
+            assertThatThrownBy(call::run).isInstanceOf(ClientSafeAccessDeniedException.class);
+        } finally {
+            com.example.hms.security.context.ImpersonationContextHolder.clear();
+        }
+        verify(invoices, never()).findLockedById(any());
+        verify(audit).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == AuditEventType.SECURITY_ALERT_TRIGGERED
+                && e.getEventDescription().contains("(money)")));
+        assertThat(ledger.get(refundId).getStatus()).isEqualTo(InvoiceRefundStatus.REQUESTED);
     }
 }

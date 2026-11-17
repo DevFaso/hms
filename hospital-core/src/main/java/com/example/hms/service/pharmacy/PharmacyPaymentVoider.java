@@ -48,8 +48,8 @@ public class PharmacyPaymentVoider {
         int voided = paymentRepository.voidPostedForDispense(dispense.getId(), voidedBy, reason, now);
         for (PharmacyPayment payment : posted) {
             support.logAudit(AuditEventType.PAYMENT_REVERSED,
-                    "Pharmacy payment voided, refund due: " + payment.getAmount() + " " + payment.getCurrency()
-                            + " for cancelled dispense " + dispense.getId(),
+                    // Ids only (PR 8 review): the amount stays on the payment row.
+                    "Pharmacy payment " + payment.getId() + " voided for cancelled dispense " + dispense.getId(),
                     payment.getId().toString(), "PHARMACY_PAYMENT");
             // Keep a managed copy honest for the rest of the transaction.
             payment.setStatus(PharmacyPaymentStatus.VOIDED);
