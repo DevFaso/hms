@@ -142,7 +142,8 @@ class PriceListImportPostgresIT {
         actor = UUID.randomUUID();
         PriceListLinks links = new PriceListLinks(labTests, treatments);
         service = new PriceListService(items, prices, links, invoiceLines, labTests, treatments,
-            mock(UserRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
+            mock(UserRepository.class), mock(com.example.hms.repository.HospitalRepository.class), roles, scope, audit,
+            CLOCK, "Africa/Ouagadougou");
         importer = new PriceListImportService(service, items, prices, imports, links, labTests, audit, jdbc, "1s");
         tx = new TransactionTemplate(transactions);
         actAt(hospitalA);
