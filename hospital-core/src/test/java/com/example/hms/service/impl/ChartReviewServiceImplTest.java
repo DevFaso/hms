@@ -609,6 +609,31 @@ class ChartReviewServiceImplTest {
         assertThat(entry.getReportStatus()).isEqualTo("FINAL");
     }
 
+    @Test
+    void imagingConclusionsRemainCompleteForClinicalPdfIncludingOlderSignedVersionsAndAddenda() {
+        ImagingOrder order = imagingOrder(LocalDateTime.now().minusDays(1), ImagingModality.CT, "CT");
+        when(imagingOrderRepo.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(
+            any(UUID.class), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(order)));
+        String conclusion = "Full conclusion. ".repeat(100) + "CRITICAL FINAL SENTENCE.";
+        String additional = "Full addendum. ".repeat(100) + "ADDITIONAL FOLLOW-UP INSTRUCTIONS.";
+        ImagingReport signed = imagingReport(order, conclusion);
+        signed.setReportVersion(1);
+        signed.setLatestVersion(false);
+        signed.setSignedAt(LocalDateTime.now().minusHours(2));
+        ImagingReport addendum = imagingReport(order, additional);
+        addendum.setReportStatus(ImagingReportStatus.ADDENDUM);
+        addendum.setReportVersion(2);
+        addendum.setSignedAt(LocalDateTime.now().minusHours(1));
+        when(imagingReportRepo.findByImagingOrder_IdInAndLatestVersionIsTrue(any())).thenReturn(List.of(addendum));
+        when(imagingReportRepo.findByImagingOrder_IdIn(any())).thenReturn(List.of(addendum, signed));
+
+        var entry = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null).getImaging().get(0);
+
+        assertThat(entry.getReportImpression()).isEqualTo(conclusion);
+        assertThat(entry.getReports()).extracting(ChartReviewDTO.ImagingReportEntryDTO::getImpression)
+            .containsExactly(conclusion, additional);
+    }
+
     /**
      * Rex on #1169: an unsigned later version (any status the author can save
      * before signing) never displaces the signed conclusion and is not listed,

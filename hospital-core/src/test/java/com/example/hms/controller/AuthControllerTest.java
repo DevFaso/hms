@@ -17,6 +17,8 @@ import com.example.hms.security.RefreshTokenCookieService;
 import com.example.hms.security.TokenBlacklistService;
 import com.example.hms.security.WsTicketService;
 import tools.jackson.databind.ObjectMapper;
+import java.util.UUID;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,14 +72,14 @@ class AuthControllerTest {
 
     @Autowired private MockMvc mockMvc;
 
-    @org.junit.jupiter.api.BeforeAll
-    static void messageBundles() {
-        var source = new org.springframework.context.support.ResourceBundleMessageSource();
-        source.setBasenames(java.util.Arrays.stream(com.example.hms.config.MessageBundles.basenames())
-            .map(b -> b.substring("classpath:".length())).toArray(String[]::new));
-        source.setDefaultEncoding("UTF-8");
-        source.setFallbackToSystemLocale(false);
-        com.example.hms.utility.MessageUtil.setMessageSource(source);
+    private org.springframework.context.MessageSource previousMessageSource;
+
+    @org.junit.jupiter.api.BeforeEach
+    void messageBundles() {
+        previousMessageSource = (org.springframework.context.MessageSource)
+            org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        checkPasswordRunsTheComparison();
     }
     @Autowired private ObjectMapper objectMapper;
 
@@ -204,7 +206,7 @@ class AuthControllerTest {
 
     @Test
     void register_returns410Gone() throws Exception {
-        mockMvc.perform(post("/auth/register")
+        mockMvc.perform(post("/auth/register").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isGone())
                 .andExpect(jsonPath("$.message").value("Public self-registration is no longer available."));
@@ -219,7 +221,7 @@ class AuthControllerTest {
 
     @Test
     void logout_returns200() throws Exception {
-        mockMvc.perform(post("/auth/logout"))
+        mockMvc.perform(post("/auth/logout").header("Accept-Language", "en"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Logged out successfully."));
     }
@@ -238,7 +240,7 @@ class AuthControllerTest {
         givenToken("access.jwt", "patient1", "jti-access");
         givenToken("refresh.jwt", "patient1", "jti-refresh");
 
-        mockMvc.perform(post("/auth/logout")
+        mockMvc.perform(post("/auth/logout").header("Accept-Language", "en")
                         .header("Authorization", "Bearer access.jwt")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"refresh.jwt\"}"))
@@ -258,7 +260,7 @@ class AuthControllerTest {
         givenToken("body.refresh", "patient1", "jti-body");
         when(refreshTokenCookieService.read(any())).thenReturn("cookie.refresh");
 
-        mockMvc.perform(post("/auth/logout")
+        mockMvc.perform(post("/auth/logout").header("Accept-Language", "en")
                         .header("Authorization", "Bearer access.jwt")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"body.refresh\"}"))
@@ -273,7 +275,7 @@ class AuthControllerTest {
         givenToken("access.jwt", "patient1", "jti-access");
         givenToken("refresh.jwt", "patient2", "jti-other");
 
-        mockMvc.perform(post("/auth/logout")
+        mockMvc.perform(post("/auth/logout").header("Accept-Language", "en")
                         .header("Authorization", "Bearer access.jwt")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"refresh.jwt\"}"))
@@ -291,7 +293,7 @@ class AuthControllerTest {
                 .thenThrow(new IllegalArgumentException("expired"));
         givenToken("refresh.jwt", "patient1", "jti-refresh");
 
-        mockMvc.perform(post("/auth/logout")
+        mockMvc.perform(post("/auth/logout").header("Accept-Language", "en")
                         .header("Authorization", "Bearer expired.jwt")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"refresh.jwt\"}"))
@@ -305,7 +307,7 @@ class AuthControllerTest {
         givenToken("access.jwt", "patient1", "jti-access");
         when(jwtTokenProvider.validateToken("stale.jwt")).thenReturn(false);
 
-        mockMvc.perform(post("/auth/logout")
+        mockMvc.perform(post("/auth/logout").header("Accept-Language", "en")
                         .header("Authorization", "Bearer access.jwt")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"stale.jwt\"}"))
@@ -421,6 +423,7 @@ class AuthControllerTest {
 
     @AfterEach
     void clearSecurityContext() {
+        com.example.hms.utility.MessageUtil.setMessageSource(previousMessageSource);
         SecurityContextHolder.clearContext();
     }
 
@@ -429,7 +432,6 @@ class AuthControllerTest {
      * controller's own answers (200, 401, 400) stay under test here. The real
      * bucket is under test in LockScreenLockoutIntegrationTest.
      */
-    @org.junit.jupiter.api.BeforeEach
     void checkPasswordRunsTheComparison() {
         when(loginAttemptService.checkPassword(any(), any())).thenAnswer(inv ->
                 ((java.util.function.BooleanSupplier) inv.getArgument(1)).getAsBoolean()
@@ -449,6 +451,80 @@ class AuthControllerTest {
                 username, "jwt-token-placeholder",
                 AuthorityUtils.createAuthorityList("ROLE_STAFF"));
         SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    @Test
+    void recoveryCodeRequiresAReadBackBodyBeforeCallingTheLifecycleService() throws Exception {
+        String route = "/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/send-code";
+        for (String body : java.util.List.of("{}", "{\"confirmedContactValue\":\"\"}", "{\"confirmedContactValue\":\"   \"}")) {
+            mockMvc.perform(post(route).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.confirmedContactValue").exists());
+        }
+        mockMvc.perform(post(route)).andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(userCredentialLifecycleService);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"EMAIL", "PHONE"})
+    void recoveryCodePassesTheExplicitReadBackAndActorToTheServerGuard(String type) throws Exception {
+        java.util.UUID actorId = java.util.UUID.randomUUID();
+        java.util.UUID contactId = java.util.UUID.randomUUID();
+        var user = new com.example.hms.model.User();
+        user.setId(actorId);
+        authenticateAs("readback.test");
+        when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(any(), any(), any()))
+            .thenReturn(java.util.Optional.of(user));
+        String value = type.equals("PHONE") ? "+22670123456" : "backup@example.test";
+        when(userCredentialLifecycleService.sendRecoveryContactVerificationCode(actorId, contactId, value)).thenReturn(type);
+        mockMvc.perform(post("/auth/credentials/recovery/" + contactId + "/send-code")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"confirmedContactValue\":\"" + value + "\"}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.contactType").value(type));
+        verify(userCredentialLifecycleService).sendRecoveryContactVerificationCode(actorId, contactId, value);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"en", "fr", "es"})
+    void recoveryDeliveryMessagesUseTheRequestLanguage(String language) throws Exception {
+        String sent = switch (language) {
+            case "fr" -> "Code de vérification envoyé.";
+            case "es" -> "Código de verificación enviado.";
+            default -> "Verification code sent";
+        };
+        UUID actorId = UUID.randomUUID();
+        var actor = new com.example.hms.model.User();
+        actor.setId(actorId);
+        actor.setUsername("display.test");
+        when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(any(), any(), any()))
+            .thenReturn(Optional.of(actor));
+        for (String type : java.util.List.of("PHONE", "EMAIL")) {
+            UUID contactId = UUID.randomUUID();
+            authenticateAs("display.test");
+            when(userCredentialLifecycleService.sendRecoveryContactVerificationCode(actorId, contactId, "backup@example.test")).thenReturn(type);
+            mockMvc.perform(post("/auth/credentials/recovery/" + contactId + "/send-code").header("Accept-Language", language)
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"confirmedContactValue\":\"backup@example.test\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.message").value(sent))
+                .andExpect(jsonPath("$.contactType").value(type));
+            verify(userCredentialLifecycleService).sendRecoveryContactVerificationCode(actorId, contactId, "backup@example.test");
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"en", "fr", "es"})
+    void refreshReplayMessagesUseTheRequestLanguage(String language) throws Exception {
+        String replay = switch (language) {
+            case "fr" -> "Ce jeton de renouvellement a déjà été utilisé. Reconnectez-vous.";
+            case "es" -> "Este token de renovación ya se ha utilizado. Inicie sesión de nuevo.";
+            default -> "Refresh token has already been used. Please log in again.";
+        };
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("old.refresh.token")).thenReturn("jti-old");
+        when(tokenBlacklistService.isBlacklisted("jti-old")).thenReturn(true);
+        when(tokenBlacklistService.wasRecentlyRotated("jti-old")).thenReturn(false);
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", language)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"refreshToken\":\"old.refresh.token\"}"))
+            .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.message").value(replay));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class));
     }
 
     // =====================================================================
@@ -576,7 +652,7 @@ class AuthControllerTest {
 
         LoginRequest req = new LoginRequest("drjones", "CorrectPass1!", null);
 
-        mockMvc.perform(post("/auth/verify-password")
+        mockMvc.perform(post("/auth/verify-password").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -593,7 +669,7 @@ class AuthControllerTest {
 
         LoginRequest req = new LoginRequest("drjones", "WrongPassword!", null);
 
-        mockMvc.perform(post("/auth/verify-password")
+        mockMvc.perform(post("/auth/verify-password").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isUnauthorized())
@@ -607,7 +683,7 @@ class AuthControllerTest {
 
         LoginRequest req = new LoginRequest("someoneelse", "AnyPassword1!", null);
 
-        mockMvc.perform(post("/auth/verify-password")
+        mockMvc.perform(post("/auth/verify-password").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isForbidden())
@@ -624,7 +700,7 @@ class AuthControllerTest {
 
         LoginRequest req = new LoginRequest("drjones", "CorrectPass1!", null);
 
-        mockMvc.perform(post("/auth/verify-password")
+        mockMvc.perform(post("/auth/verify-password").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isUnauthorized())
@@ -638,7 +714,7 @@ class AuthControllerTest {
 
         LoginRequest req = new LoginRequest("drjones", "", null);
 
-        mockMvc.perform(post("/auth/verify-password")
+        mockMvc.perform(post("/auth/verify-password").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
@@ -651,7 +727,7 @@ class AuthControllerTest {
 
         LoginRequest req = new LoginRequest("", "SomePassword1!", null);
 
-        mockMvc.perform(post("/auth/verify-password")
+        mockMvc.perform(post("/auth/verify-password").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
@@ -864,7 +940,7 @@ class AuthControllerTest {
     @Test
     void refreshToken_nullBody_returns401() throws Exception {
         // Sending {} (no refreshToken key) → body.get("refreshToken") == null → 401
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isUnauthorized())
@@ -874,7 +950,7 @@ class AuthControllerTest {
     @Test
     void refreshToken_blankToken_returns401() throws Exception {
         // refreshToken present but empty string → isBlank() == true → 401
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"\"}"))
                 .andExpect(status().isUnauthorized())
@@ -884,7 +960,7 @@ class AuthControllerTest {
     @Test
     void refreshToken_missingBody_returns401() throws Exception {
         // No body at all (required=false) → body == null → 401
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Refresh token is required."));
@@ -895,7 +971,7 @@ class AuthControllerTest {
         // isRefreshToken() returns false → token invalid/expired → 401
         when(jwtTokenProvider.isRefreshToken("bad.token.here")).thenReturn(false);
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"bad.token.here\"}"))
                 .andExpect(status().isUnauthorized())
@@ -912,7 +988,7 @@ class AuthControllerTest {
         when(userRepository.findByUsername("ghost@example.com"))
                 .thenReturn(java.util.Optional.empty());
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"valid.refresh.token\"}"))
                 .andExpect(status().isUnauthorized())
@@ -934,7 +1010,7 @@ class AuthControllerTest {
         when(userRepository.findByUsername("inactive@example.com"))
                 .thenReturn(java.util.Optional.of(inactiveUser));
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"valid.refresh.token\"}"))
                 .andExpect(status().isUnauthorized())
@@ -991,7 +1067,7 @@ class AuthControllerTest {
         when(jwtTokenProvider.getExpiration("new.refresh.token"))
                 .thenReturn(new java.util.Date(refreshExp));
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"old.refresh.token\"}"))
                 .andExpect(status().isOk())
@@ -1022,7 +1098,7 @@ class AuthControllerTest {
         when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com")).thenReturn(java.util.Optional.of(activeUser));
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"old.refresh.token\"}"))
                 // A sibling tab won the race: superseded, retry with the
@@ -1045,7 +1121,7 @@ class AuthControllerTest {
         when(tokenBlacklistService.isBlacklisted("jti-old")).thenReturn(true);
         when(tokenBlacklistService.wasRecentlyRotated("jti-old")).thenReturn(true);
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"old.refresh.token\"}"))
                 .andExpect(status().isConflict())
@@ -1060,7 +1136,7 @@ class AuthControllerTest {
         when(tokenBlacklistService.isBlacklisted("jti-old")).thenReturn(true);
         when(tokenBlacklistService.wasRecentlyRotated("jti-old")).thenReturn(false);
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"old.refresh.token\"}"))
                 .andExpect(status().isUnauthorized())
@@ -1087,7 +1163,7 @@ class AuthControllerTest {
         when(jwtTokenProvider.getExpiration("new.refresh.token"))
                 .thenReturn(new java.util.Date(System.currentTimeMillis() + 3_600_000L));
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"old.refresh.token\"}"))
                 .andExpect(status().isOk());
@@ -1107,7 +1183,7 @@ class AuthControllerTest {
                 .thenThrow(new IllegalStateException("transient"));
 
         try {
-            mockMvc.perform(post("/auth/token/refresh")
+            mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{\"refreshToken\":\"old.refresh.token\"}"));
         } catch (Exception propagated) {
@@ -1124,7 +1200,7 @@ class AuthControllerTest {
         when(jwtTokenProvider.getIssuedAt("old.refresh.token")).thenReturn(issuedAt);
         when(globalSessionRevocationService.revokesFresh(issuedAt)).thenReturn(true);
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"old.refresh.token\"}"))
                 .andExpect(status().isUnauthorized())
@@ -1140,7 +1216,7 @@ class AuthControllerTest {
 
     @Test
     void logout_clearsRefreshCookieViaCookieService() throws Exception {
-        mockMvc.perform(post("/auth/logout"))
+        mockMvc.perform(post("/auth/logout").header("Accept-Language", "en"))
                 .andExpect(status().isOk());
 
         org.mockito.Mockito.verify(refreshTokenCookieService)
@@ -1192,7 +1268,7 @@ class AuthControllerTest {
         when(jwtTokenProvider.getExpiration("new.refresh.token"))
                 .thenReturn(new java.util.Date(nowMs + 7 * 86_400_000L));
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .cookie(new jakarta.servlet.http.Cookie("hms_refresh", "cookie.refresh.token"))
                         .content("{\"refreshToken\":\"body.refresh.token\"}"))
@@ -1212,7 +1288,7 @@ class AuthControllerTest {
     void refreshToken_missingCookieAndBody_returns401() throws Exception {
         when(refreshTokenCookieService.read(org.mockito.ArgumentMatchers.any())).thenReturn(null);
 
-        mockMvc.perform(post("/auth/token/refresh"))
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -1366,7 +1442,7 @@ class AuthControllerTest {
                             .contentType(MediaType.APPLICATION_JSON).content("[]"),
                     org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/auth/credentials/mfa")
                             .contentType(MediaType.APPLICATION_JSON).content("[]"),
-                    post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/send-code"),
+                    post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/send-code").contentType(MediaType.APPLICATION_JSON).content("{\"confirmedContactValue\":\"backup@example.test\"}"),
                     post("/auth/verify-password").contentType(MediaType.APPLICATION_JSON)
                             .content("{\"username\":\"target\",\"password\":\"guess\"}"),
                     post("/auth/credentials/recovery/" + java.util.UUID.randomUUID() + "/verify")
@@ -1391,7 +1467,7 @@ class AuthControllerTest {
         when(jwtTokenProvider.secondFactorAt("old.refresh.token")).thenReturn(null);
         when(providerMfaGate.isProviderUser(pharmacist.getId(), "pharm@example.com")).thenReturn(true);
 
-        mockMvc.perform(post("/auth/token/refresh")
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"old.refresh.token\"}"))
                 .andExpect(status().isUnauthorized());

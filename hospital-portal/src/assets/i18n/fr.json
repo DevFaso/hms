@@ -6287,6 +6287,13 @@
       "PENDING_SIGNATURE": "Non finalisé — en attente de signature du praticien"
     },
     "ENUM": {
+      "RECOVERY_CONTACT_TYPE": {
+        "EMAIL": "E-mail",
+        "PHONE": "Téléphone",
+        "SECURITY_KEY": "Clé de sécurité",
+        "PERSONAL_CONTACT": "Contact personnel",
+        "OTHER": "Autre contact"
+      },
       "LAB_ORDER_CHANNEL": {
         "ELECTRONIC": "Électronique",
         "EMAIL": "E-mail",
@@ -8059,6 +8066,11 @@
     "PRN_MIN_INTERVAL_VALUE": "Au moins {{hours}} h entre deux doses"
   },
   "PROFILE": {
+    "RECOVERY_CONFIRM_TITLE": "Confirmez votre contact de récupération",
+    "RECOVERY_CONFIRM_ADDRESS": "Relisez attentivement cette adresse ou ce numéro : {{contact}}. Confirmez qu’il est correct et que vous pouvez y recevoir un code.",
+    "RECOVERY_SEND_CODE": "Confirmer et envoyer le code",
+    "RECOVERY_PHONE_EXAMPLE": "+226 70 12 34 56",
+    "RECOVERY_TYPE_UNVERIFIABLE": "Les codes de vérification ne peuvent pas être envoyés à ce type de contact.",
     "RECOVERY_REMOVE_CONFIRM": "Retirer ce contact de récupération ?",
     "ACCOUNT_AGE": "Ancienneté du compte",
     "ACCOUNT_DETAILS": "Détails du compte",

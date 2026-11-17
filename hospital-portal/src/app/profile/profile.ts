@@ -472,6 +472,28 @@ export class ProfileComponent implements OnInit {
   verificationSending = signal(false);
   verificationError = signal('');
   verificationCodeSent = signal(false);
+  private confirmedRecoveryContact: { id: string; value: string } | null = null;
+
+  async confirmRecoveryContact(contact: RecoveryContact): Promise<void> {
+    if (!contact.id || this.verificationSending()) return;
+    const id = contact.id;
+    const value = contact.contactValue;
+    const confirmed = await this.confirm.ask({
+      titleKey: 'PROFILE.RECOVERY_CONFIRM_TITLE',
+      messageKey: 'PROFILE.RECOVERY_CONFIRM_ADDRESS',
+      params: { contact: value },
+      confirmKey: 'PROFILE.RECOVERY_SEND_CODE',
+    });
+    if (
+      !confirmed ||
+      !this.credentials()?.recoveryContacts.some(
+        (current) => current.id === id && current.contactValue === value,
+      )
+    )
+      return;
+    this.confirmedRecoveryContact = { id, value };
+    this.sendVerificationCode(contact);
+  }
 
   openAddRecovery(): void {
     this.showAddRecovery.set(true);
@@ -597,6 +619,11 @@ export class ProfileComponent implements OnInit {
 
   sendVerificationCode(contact: RecoveryContact): void {
     if (!contact.id || this.verificationSending()) return;
+    if (
+      this.confirmedRecoveryContact?.id !== contact.id ||
+      this.confirmedRecoveryContact?.value !== contact.contactValue
+    )
+      return;
     if (this.verifyingContactId() !== contact.id) {
       this.verificationCode.set('');
       this.verificationCodeSent.set(false);
@@ -605,7 +632,7 @@ export class ProfileComponent implements OnInit {
     this.verificationError.set('');
     this.verificationSending.set(true);
 
-    this.profileService.sendRecoveryVerificationCode(contact.id).subscribe({
+    this.profileService.sendRecoveryVerificationCode(contact.id, contact.contactValue).subscribe({
       next: () => {
         this.verificationSending.set(false);
         this.verificationCodeSent.set(true);
@@ -653,6 +680,7 @@ export class ProfileComponent implements OnInit {
   }
 
   cancelVerification(): void {
+    this.confirmedRecoveryContact = null;
     this.verifyingContactId.set(null);
     this.verificationCode.set('');
     this.verificationError.set('');

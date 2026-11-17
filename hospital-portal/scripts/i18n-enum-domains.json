@@ -20,6 +20,9 @@
   "profileType": {
     "reason": "UserResponseDTO.profileType is a String UserMapper.deriveProfileType DERIVES: STAFF or PATIENT (null otherwise). PORTAL.ENUM.PROFILE_TYPE keys both; check by hand when that method changes (QA D528/D663)."
   },
+  "recoveryContactType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/RecoveryContactType.java"
+  },
   "medicationCategory": {
     "reason": "MedicationCatalogItem.category is a free-text String column; rows carry coded therapeutic classes (ANALGESIC, ANTIBIOTIC ...) that PORTAL.ENUM.MEDICATION_CATEGORY keys, any other typed text falls back to the pipe's Title Case (QA D528/D663)."
   },

@@ -185,6 +185,8 @@ class SuperAdminReviewDeciderGuardTest {
                 args[i] = Clock.systemDefaultZone();
             } else if (type == MortalityMapper.class) {
                 args[i] = new MortalityMapper(new com.example.hms.service.support.ClinicalActorNames(org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class)));
+            } else if (type == com.example.hms.service.support.ClinicalActorNames.class) {
+                args[i] = new com.example.hms.service.support.ClinicalActorNames(org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class));
             } else if (type == RoleValidator.class) {
                 args[i] = roles;
             } else if (type == DeathRecordRepository.class) {
