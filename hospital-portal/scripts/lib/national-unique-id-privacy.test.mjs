@@ -63,8 +63,11 @@ test('all production IU callers keep the value out of logs and URLs', () => {
     join(root, 'patients/patient-demographics-edit/patient-demographics-edit.component.ts'),
     'utf8',
   );
-  assert.match(form, /if \(!this\.nationalUniqueIdReady\) return/);
-  assert.match(edit, /if \(!this\.nationalUniqueIdReady\) return/);
+  // QA D2032: an unready identifier still blocks the save, and now says why.
+  const refusesUnready =
+    /if \(!this\.nationalUniqueIdReady\) \{[\s\S]*?refuseSubmit\(\)[\s\S]*?return;\s*\}/;
+  assert.match(form, refusesUnready);
+  assert.match(edit, refusesUnready);
   assert.match(form, /\.\.\.this\.nationalUniqueIdChange/);
   assert.match(edit, /\.\.\.this\.nationalUniqueIdChange/);
 });

@@ -90,6 +90,26 @@ public final class RoleExpansion {
     }
 
     /**
+     * QA D1973 / D2050 (rounds 55 and 58): the roles the login role picker may
+     * offer — what the account holds on its own ({@code held}, before any
+     * widening) plus the doctor equivalence, never a role that super-admin
+     * inheritance alone added. The session bootstrap lists the account's own
+     * roles, so a super-admin who picked an inherited « Médecin » got a token
+     * role the bootstrap did not know and the portal ended the session with no
+     * word. Inheritance still applies to every request of a SUPER_ADMIN session.
+     *
+     * @param held the role codes the account holds (its active assignments and legacy roles)
+     * @return those roles widened by the doctor equivalence only, in input order
+     */
+    public static List<String> selectableAtLogin(Collection<String> held) {
+        Set<String> expanded = expand(held);
+        Set<String> own = expand(held.stream().filter(role -> !ROLE_SUPER_ADMIN.equals(role)).toList());
+        return expanded.stream()
+            .filter(role -> !SUPER_ADMIN_INHERITS.contains(role) || own.contains(role))
+            .toList();
+    }
+
+    /**
      * Design Q10, option A: the authorities collection agrees with the LIVE
      * super-admin signal. A token still asserting {@code ROLE_SUPER_ADMIN} for
      * a caller with no active SUPER_ADMIN assignment (demoted after sign-in,

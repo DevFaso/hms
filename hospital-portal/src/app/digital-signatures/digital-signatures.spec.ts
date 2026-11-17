@@ -28,7 +28,7 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
     },
   ];
 
-  function setup(list: SignableReport[]): HTMLElement {
+  function setup(list: SignableReport[], roles?: string[]): HTMLElement {
     svc = jasmine.createSpyObj<DigitalSignatureService>('DigitalSignatureService', [
       'listSignable',
       'listByProvider',
@@ -52,7 +52,11 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
         { provide: AuthService, useValue: { getUserProfile: () => ({ staffId: 'staff-1' }) } },
         {
           provide: RoleContextService,
-          useValue: { hasAnyActiveRole: () => true, activeHospitalId: 'hosp-1' },
+          useValue: {
+            hasAnyActiveRole: (wanted: string[]) =>
+              roles ? wanted.some((r) => roles.includes(r)) : true,
+            activeHospitalId: 'hosp-1',
+          },
         },
         { provide: EnumLabelService, useValue: { transform: (v: string) => `label:${v}` } },
       ],
@@ -179,4 +183,47 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
     expect(el.querySelector('#sign-report')).toBeNull();
     expect(el.querySelector('[data-testid="no-signable"]')).not.toBeNull();
   });
+  // Review #1196/#1198 L3: the known-report select was bound to a constant ''
+  // and kept showing a stale report after Clear.
+  it('resets the known-report choice when the lookup is cleared or edited', () => {
+    const el = setup([]);
+    const component = fixture.componentInstance;
+    svc.listAll.and.returnValue(
+      of([
+        { id: 'sig-1', reportId, reportType: 'DISCHARGE_SUMMARY', status: 'SIGNED' },
+      ] as SignatureResponse[]),
+    );
+    component.loadSignatures();
+    fixture.detectChanges();
+    const select = el.querySelector('#known-report') as HTMLSelectElement;
+    select.value = select.options[1].value;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(component.knownReportChoice()).toBe('sig-1');
+    expect(component.lookupReportId()).toBe(reportId);
+
+    component.clearLookup();
+    fixture.detectChanges();
+    expect(component.knownReportChoice()).toBe('');
+    expect(component.lookupReportId()).toBe('');
+
+    component.chooseKnownReport('sig-1');
+    component.onLookupChange();
+    expect(component.knownReportChoice()).toBe('');
+  });
+
+  // Review #1196/#1198 L4: GET /signatures/report/{type}/{id} admits clinicians only.
+  for (const [role, shown] of [
+    ['ROLE_DOCTOR', true],
+    ['ROLE_PHARMACIST', true],
+    ['ROLE_HOSPITAL_ADMIN', false],
+    ['ROLE_SUPER_ADMIN', false],
+  ] as const) {
+    it(`${shown ? 'shows' : 'hides'} the report lookup for ${role}`, () => {
+      const el = setup([], [role]);
+      expect(fixture.componentInstance.canLookup).toBe(shown);
+      expect(el.querySelector('.lookup-panel') !== null).toBe(shown);
+      expect(el.querySelector('#lookup-id') !== null).toBe(shown);
+    });
+  }
 });

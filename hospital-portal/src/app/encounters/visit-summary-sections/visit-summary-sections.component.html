@@ -297,14 +297,16 @@
                       <span>{{ m.frequency }}</span>
                     }
                     @if (m.startDate) {
-                      <span class="vss-muted">{{
+                      {{ ' '
+                      }}<span class="vss-muted">{{
                         'VISIT_SUMMARY.SINCE'
                           | translate
                             : { date: m.startDate | serverTime | date: 'mediumDate' : 'UTC' }
                       }}</span>
                     }
                     @if (m.prescriberName) {
-                      <span class="vss-muted">{{
+                      {{ ' '
+                      }}<span class="vss-muted">{{
                         'VISIT_SUMMARY.PRESCRIBED_BY' | translate: { name: m.prescriberName }
                       }}</span>
                     }
@@ -383,9 +385,10 @@
               <span class="vss-flag">{{ key | translate }}</span>
             }
             @if (a.reaction) {
-              <span class="vss-muted">{{ a.reaction }}</span>
+              {{ ' ' }}<span class="vss-muted">{{ a.reaction }}</span>
             } @else {
-              <span class="vss-muted" data-testid="avs-allergy-unspecified">{{
+              {{ ' '
+              }}<span class="vss-muted" data-testid="avs-allergy-unspecified">{{
                 'VISIT_SUMMARY.REACTION_UNSPECIFIED' | translate
               }}</span>
             }
@@ -408,7 +411,7 @@
             <li>
               <span class="vss-item-title">{{ h.condition }}</span>
               @if (problemStatusKey(h.status); as key) {
-                <span class="vss-muted">{{ key | translate }}</span>
+                {{ ' ' }}<span class="vss-muted">{{ key | translate }}</span>
               }
             </li>
           }
@@ -421,7 +424,8 @@
             <li>
               <span class="vss-item-title">{{ h.procedure }}</span>
               @if (h.date) {
-                <span class="vss-muted">{{ h.date | serverTime | date: 'mediumDate' }}</span>
+                {{ ' '
+                }}<span class="vss-muted">{{ h.date | serverTime | date: 'mediumDate' }}</span>
               }
             </li>
           }
@@ -434,7 +438,7 @@
             <li>
               <span class="vss-item-title">{{ h.condition }}</span>
               @if (h.relationship) {
-                <span class="vss-muted">{{ h.relationship }}</span>
+                {{ ' ' }}<span class="vss-muted">{{ h.relationship }}</span>
               }
             </li>
           }

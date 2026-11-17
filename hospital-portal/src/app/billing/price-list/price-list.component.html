@@ -76,6 +76,9 @@
       </caption>
       <thead>
         <tr>
+          @if (showHospital()) {
+            <th scope="col">{{ 'BILLING.PRICE_LIST.HOSPITAL' | translate }}</th>
+          }
           <th scope="col">{{ 'BILLING.PRICE_LIST.CODE' | translate }}</th>
           <th scope="col">{{ 'BILLING.PRICE_LIST.LABEL' | translate }}</th>
           <th scope="col">{{ 'BILLING.PRICE_LIST.CATEGORY' | translate }}</th>
@@ -88,6 +91,9 @@
       <tbody>
         @for (item of visibleItems(); track item.id) {
           <tr [class.inactive]="!item.active" [attr.data-testid]="'price-list-row-' + item.code">
+            @if (showHospital()) {
+              <td data-testid="price-list-hospital">{{ item.hospitalName || '—' }}</td>
+            }
             <td>
               <button type="button" class="link-button" (click)="open(item)">
                 {{ item.code }}
