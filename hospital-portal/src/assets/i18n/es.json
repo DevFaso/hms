@@ -2493,6 +2493,7 @@
       "LOAD_FAILED": "No se pudo cargar la lista de precios.",
       "EMPTY": "Ningún artículo en la lista.",
       "CODE": "Código",
+      "HOSPITAL": "Hospital",
       "CODE_HINT": "El código de tarifa del hospital (p. ej. CS-GEN). No cambia una vez creado.",
       "LABEL": "Descripción",
       "LINK": "Vínculo",
@@ -5341,6 +5342,7 @@
     "THIRD_PARTY_LOADED": "Solicitudes de terceros cargadas",
     "REQUEST_DIRECTORY": "Seguimiento de solicitudes",
     "QUEUE_HELP": "Una cola por hospital, de la solicitud más antigua a la más reciente.",
+    "ALL_ORDER_HELP": "Todos los estados: primero las solicitudes pendientes y luego las más recientes; se muestran como máximo 200 filas.",
     "STATUS_FILTER": "Filtrar solicitudes por estado",
     "SEARCH": "Buscar paciente, solicitante o motivo",
     "ALL_REQUESTERS": "Todos los tipos de solicitantes",
@@ -13072,7 +13074,7 @@
     "NO_EXPIRY": "No caduca"
   },
   "REGISTRIES": {
-    "ALL_MERGED_HINT": "Todos los estados combina la primera página cargada de cada estado, ordenada aquí por días de retraso y nombre; se muestran como máximo 200 filas.",
+    "ALL_MERGED_HINT": "Todos los estados combina la primera página cargada de cada estado, ordenada aquí por próxima visita esperada y fecha de inscripción; se muestran como máximo 200 filas.",
     "TITLE": "Registros de enfermedades",
     "SUBTITLE": "Quién está inscrito en cada programa de atención y quién tiene una visita atrasada.",
     "ENROLL": "Inscribir paciente",
@@ -13996,6 +13998,10 @@
     "EXISTS_ELSEWHERE": "Este identificador puede estar registrado en otro centro. Consúltelo con el paciente.",
     "SAVE_ANYWAY": "Guardar de todos modos",
     "REASON": "Motivo para guardar un identificador duplicado",
-    "SEARCH_EXACT": "Buscar por identificador único exacto (12 dígitos)"
+    "SEARCH_EXACT": "Buscar por identificador único exacto (12 dígitos)",
+    "CONFIRM_DUPLICATE": "Este identificador ya está en uso. Marque « Guardar de todos modos » e indique un motivo, o corrija el identificador.",
+    "REASON_REQUIRED": "Indique el motivo para guardar un identificador duplicado.",
+    "WAIT_CHECK": "El identificador aún se está verificando. Inténtelo de nuevo en un momento.",
+    "EXISTS_HERE_NUMBERED": "Registro existente {{index}} de {{count}} con este identificador: abrirlo."
   }
 }

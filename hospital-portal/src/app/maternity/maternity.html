@@ -228,7 +228,7 @@
                     }}
                   </span>
                   @if (h.calculatedRiskScore !== null && h.calculatedRiskScore !== undefined) {
-                    <span class="muted score">{{ h.calculatedRiskScore }}</span>
+                    {{ ' ' }}<span class="muted score">{{ h.calculatedRiskScore }}</span>
                   }
                 </td>
                 <td class="flags-cell">
@@ -1424,7 +1424,7 @@
                     <strong>{{
                       m.senderDisplayName || ('MATERNITY.UNKNOWN_SENDER' | translate)
                     }}</strong>
-                    <span class="muted">{{ m.sentAt | serverTime | date: 'short' }}</span>
+                    {{ ' ' }}<span class="muted">{{ m.sentAt | serverTime | date: 'short' }}</span>
                   </div>
                   <p>{{ m.body }}</p>
                 </div>

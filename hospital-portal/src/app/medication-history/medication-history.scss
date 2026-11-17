@@ -395,3 +395,8 @@ tr.foreign-row td:first-child {
   color: #5c5c74;
   font-size: 0.85rem;
 }
+
+/* QA D2033: the prescriber, the signed stamp and the read-only note each on their own line. */
+.hospital-cell .muted {
+  display: block;
+}

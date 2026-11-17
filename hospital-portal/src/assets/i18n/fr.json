@@ -2493,6 +2493,7 @@
       "LOAD_FAILED": "La grille tarifaire n’a pas pu être chargée.",
       "EMPTY": "Aucun article dans la grille.",
       "CODE": "Code tarifaire",
+      "HOSPITAL": "Établissement",
       "CODE_HINT": "Le code tarifaire de l’établissement (ex. CS-GEN). Il ne change plus une fois créé.",
       "LABEL": "Libellé",
       "LINK": "Lien",
@@ -5341,6 +5342,7 @@
     "THIRD_PARTY_LOADED": "Demandes de tiers chargées",
     "REQUEST_DIRECTORY": "Suivi des demandes",
     "QUEUE_HELP": "Une file par établissement, de la plus ancienne à la plus récente.",
+    "ALL_ORDER_HELP": "Tous les statuts : les demandes en attente d’abord, puis les plus récentes ; 200 lignes au maximum sont affichées.",
     "STATUS_FILTER": "Filtrer les demandes par statut",
     "SEARCH": "Rechercher un patient, un demandeur ou un motif",
     "ALL_REQUESTERS": "Tous les types de demandeurs",
@@ -13072,7 +13074,7 @@
     "NO_EXPIRY": "N'expire pas"
   },
   "REGISTRIES": {
-    "ALL_MERGED_HINT": "Tous les statuts combine la première page chargée de chaque statut, triée ici par jours de retard puis par nom ; 200 lignes au maximum sont affichées.",
+    "ALL_MERGED_HINT": "Tous les statuts combine la première page chargée de chaque statut, triée ici par prochaine visite attendue puis par date d’inscription ; 200 lignes au maximum sont affichées.",
     "TITLE": "Registres de maladies",
     "SUBTITLE": "Qui est inscrit dans chaque programme de soins, et qui est en retard pour une visite.",
     "ENROLL": "Inscrire un patient",
@@ -13996,6 +13998,10 @@
     "EXISTS_ELSEWHERE": "Cet identifiant est peut-être déjà enregistré ailleurs. Vérifiez auprès du patient.",
     "SAVE_ANYWAY": "Enregistrer quand même",
     "REASON": "Motif d’enregistrement d’un identifiant en double",
-    "SEARCH_EXACT": "Rechercher par identifiant unique exact (12 chiffres)"
+    "SEARCH_EXACT": "Rechercher par identifiant unique exact (12 chiffres)",
+    "CONFIRM_DUPLICATE": "Cet identifiant est déjà utilisé. Cochez « Enregistrer quand même » et indiquez un motif, ou corrigez l’identifiant.",
+    "REASON_REQUIRED": "Indiquez le motif d’enregistrement d’un identifiant en double.",
+    "WAIT_CHECK": "L’identifiant est en cours de vérification. Réessayez dans un instant.",
+    "EXISTS_HERE_NUMBERED": "Dossier existant {{index}} sur {{count}} avec cet identifiant : l’ouvrir."
   }
 }

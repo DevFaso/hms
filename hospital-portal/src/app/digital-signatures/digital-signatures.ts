@@ -17,6 +17,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { actionRoles } from '../core/action-permissions';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
 import {
@@ -60,30 +61,25 @@ export class DigitalSignaturesComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly enumLabels = inject(EnumLabelService);
 
-  /** GET /signatures/all is HOSPITAL_ADMIN/SUPER_ADMIN-only on the backend. */
-  private readonly canListAll = this.roleContext.hasAnyActiveRole([
-    'ROLE_HOSPITAL_ADMIN',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  /**
+   * Every gate of this page comes from ACTION_PERMISSIONS, which
+   * ActionPermissionsMirrorTest holds to DigitalSignatureController's
+   * @PreAuthorize (review #1196/#1198 L4: the report lookup was shown to
+   * HOSPITAL_ADMIN/SUPER_ADMIN, whom GET /signatures/report/… refuses).
+   */
+  private readonly canListAll = this.roleContext.hasAnyActiveRole(actionRoles('signatureListAll'));
 
   /** POST /signatures/sign roles (admins cannot sign). */
-  readonly canSign = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_NURSE',
-    'ROLE_MIDWIFE',
-    'ROLE_LAB_SCIENTIST',
-    'ROLE_PHARMACIST',
-  ]);
+  readonly canSign = this.roleContext.hasAnyActiveRole(actionRoles('signatureSign'));
+
+  /** GET /signatures/report/{type}/{id}: clinicians only. */
+  readonly canLookup = this.roleContext.hasAnyActiveRole(actionRoles('signatureReportLookup'));
 
   /** POST /signatures/{id}/revoke roles. */
-  readonly canRevoke = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_HOSPITAL_ADMIN',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canRevoke = this.roleContext.hasAnyActiveRole(actionRoles('signatureRevoke'));
 
-  /** Audit trail is DOCTOR/HOSPITAL_ADMIN/SUPER_ADMIN — same list as revoke. */
-  readonly canViewAudit = this.canRevoke;
+  /** GET /signatures/{id}/audit-trail roles. */
+  readonly canViewAudit = this.roleContext.hasAnyActiveRole(actionRoles('signatureAuditTrail'));
 
   loading = signal(false);
   loadError = signal(false);
@@ -185,10 +181,14 @@ export class DigitalSignaturesComponent implements OnInit {
     ),
   );
 
+  /** Review L3: the known-report choice, reset with the lookup (it was a constant ''). */
+  knownReportChoice = signal('');
+
   chooseKnownReport(signatureId: string): void {
     const signature = this.signatures().find((s) => s.id === signatureId);
-    if (!signature) return;
     this.onLookupChange();
+    if (!signature) return;
+    this.knownReportChoice.set(signature.id);
     this.lookupReportType.set(signature.reportType);
     this.lookupReportId.set(signature.reportId);
   }
@@ -426,6 +426,7 @@ export class DigitalSignaturesComponent implements OnInit {
   /* ── Report lookup ── */
 
   onLookupChange(): void {
+    this.knownReportChoice.set('');
     this.lookupRequest?.unsubscribe();
     this.lookupLoading.set(false);
     this.lookupDone.set(false);
