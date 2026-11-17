@@ -201,7 +201,6 @@ public class ActingScopeResolver {
             .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    /** One active assignment's contribution to the live context. */
     /** QA D2120 review: where each role is held (a hospital, or none), for ClinicalActor. */
     private static void collectWhere(TenantRoleAssignment assignment, Map<UUID, Set<String>> hospitalRoles,
                                      Set<String> globalRoles) {
