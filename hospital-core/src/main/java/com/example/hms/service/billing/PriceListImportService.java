@@ -261,7 +261,7 @@ public class PriceListImportService {
             this.hospitalId = hospitalId;
             this.today = today;
             if (lock) {
-                lockFileItems(hospitalId, fileCodes);
+                lockFileItems(fileCodes);
             }
             for (PriceListItem item : itemRepository.findByHospitalIdOrderByCodeAsc(hospitalId)) {
                 byCode.put(item.getCode(), item);
@@ -280,6 +280,41 @@ public class PriceListImportService {
             }
             testCodes = testCodesOf(byCode.values().stream().filter(item -> fileCodes.contains(item.getCode()))
                 .toList());
+        }
+
+        /**
+         * Locks the items this file names (SELECT ... FOR UPDATE, in code order: the order a checkout takes its
+         * share locks in too, so the two never wait on each other in a circle). A lock held longer than the
+         * configured timeout (a long checkout, a screen edit) refuses the file with "try again" instead of waiting
+         * without end.
+         */
+        private void lockFileItems(Set<String> fileCodes) {
+            List<String> codes = fileCodes.stream().filter(code -> !code.isEmpty()).sorted().toList();
+            String previous = lockTimeout(lockTimeout);
+            try {
+                for (List<String> chunk : chunksOf(codes)) {
+                    itemRepository.lockByHospitalIdAndCodes(hospitalId, chunk);
+                }
+            } catch (org.springframework.dao.PessimisticLockingFailureException
+                     | jakarta.persistence.PessimisticLockException | jakarta.persistence.LockTimeoutException busy) {
+                throw new BusinessException("billing.priceList.import.busy");
+            }
+            if (previous != null) {
+                lockTimeout(previous);
+            }
+        }
+
+        /**
+         * Sets PostgreSQL's lock_timeout for this transaction only (set_config, a bound value, never SQL text) and
+         * returns the one it replaced; null where the database has no such setting.
+         */
+        private String lockTimeout(String value) {
+            try {
+                return jdbc.queryForObject("SELECT current_setting('lock_timeout') AS previous, "
+                    + "set_config('lock_timeout', ?, true) AS applied", (rs, n) -> rs.getString("previous"), value);
+            } catch (org.springframework.dao.DataAccessException notPostgres) {
+                return null;
+            }
         }
 
         /** The link cell the export writes for this item (a lab test by its code, as the export does). */
@@ -312,37 +347,6 @@ public class PriceListImportService {
                     return new ResolvedLink(type, null, refusal);
                 }
             });
-        }
-    }
-
-    /**
-     * Locks the items this file names (SELECT ... FOR UPDATE, in code order: the order a checkout takes its share
-     * locks in too, so the two never wait on each other in a circle). A lock held longer than the configured timeout
-     * (a long checkout, a screen edit) refuses the file with "try again" instead of waiting without end.
-     */
-    private void lockFileItems(UUID hospitalId, Set<String> fileCodes) {
-        List<String> codes = fileCodes.stream().filter(code -> !code.isEmpty()).sorted().toList();
-        boolean bounded = setLockTimeout(lockTimeout);
-        try {
-            for (List<String> chunk : chunksOf(codes)) {
-                itemRepository.lockByHospitalIdAndCodes(hospitalId, chunk);
-            }
-        } catch (org.springframework.dao.PessimisticLockingFailureException
-                 | jakarta.persistence.PessimisticLockException | jakarta.persistence.LockTimeoutException busy) {
-            throw new BusinessException("billing.priceList.import.busy");
-        }
-        if (bounded) {
-            setLockTimeout("DEFAULT");
-        }
-    }
-
-    /** SET LOCAL lock_timeout (PostgreSQL, this transaction only); false where the database has no such setting. */
-    private boolean setLockTimeout(String value) {
-        try {
-            jdbc.execute("SET LOCAL lock_timeout = " + ("DEFAULT".equals(value) ? value : "'" + value + "'"));
-            return true;
-        } catch (org.springframework.dao.DataAccessException notPostgres) {
-            return false;
         }
     }
 

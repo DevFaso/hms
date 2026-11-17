@@ -94,12 +94,12 @@ class CsvFormulaInjectionGuardTest {
     /** What is wrong with one writer: no cell written at all, a raw printRecord, a quoting helper without CsvCells. */
     static List<String> findings(String rel, String code) {
         List<String> out = new ArrayList<>();
-        Matcher record = PRINT_RECORD.matcher(code);
+        Matcher printCall = PRINT_RECORD.matcher(code);
         boolean writes = false;
-        while (record.find()) {
+        while (printCall.find()) {
             writes = true;
-            if (record.group(1) == null) {
-                out.add(rel + ":" + lineOf(code, record.start()) + " printRecord without CsvCells.safeAll");
+            if (printCall.group(1) == null) {
+                out.add(rel + ":" + lineOf(code, printCall.start()) + " printRecord without CsvCells.safeAll");
             }
         }
         Matcher doubling = QUOTE_DOUBLING.matcher(code);

@@ -20,6 +20,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -140,8 +142,8 @@ class TariffResolverTest {
         tariffs.find(PriceListLinkType.SYSTEM, "BED_DAY");
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(items);
         order.verify(items).lockActiveLinkedForCheckout(hospital);
-        order.verify(items, org.mockito.Mockito.times(2)).findActiveByLinkForCharge(any(), any(), any());
-        org.mockito.Mockito.verify(items, org.mockito.Mockito.times(1)).lockActiveLinkedForCheckout(hospital);
+        order.verify(items, times(2)).findActiveByLinkForCharge(any(), any(), any());
+        verify(items, times(1)).lockActiveLinkedForCheckout(hospital);
     }
 
     @Test
