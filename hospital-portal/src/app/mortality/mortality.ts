@@ -101,7 +101,6 @@ export class MortalityComponent implements OnInit {
     'ROLE_DOCTOR',
     'ROLE_SURGEON',
     'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
   ]);
 
   /** QA D1488: who may mark a record entered in error; the server holds them to their own hospital. */

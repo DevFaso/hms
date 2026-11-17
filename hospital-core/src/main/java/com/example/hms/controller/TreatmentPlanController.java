@@ -36,14 +36,14 @@ public class TreatmentPlanController {
     private final TreatmentPlanService treatmentPlanService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHYSIOTHERAPIST')")
     @Operation(summary = "Create a treatment plan")
     public ResponseEntity<TreatmentPlanResponseDTO> create(@Valid @RequestBody TreatmentPlanRequestDTO requestDTO) {
         return ResponseEntity.ok(treatmentPlanService.create(requestDTO));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHYSIOTHERAPIST')")
     @Operation(summary = "Update a treatment plan")
     public ResponseEntity<TreatmentPlanResponseDTO> update(@PathVariable UUID id,
                                                            @Valid @RequestBody TreatmentPlanRequestDTO requestDTO) {
@@ -84,7 +84,7 @@ public class TreatmentPlanController {
     }
 
     @PostMapping("/{id}/follow-ups")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHYSIOTHERAPIST')")
     @Operation(summary = "Add follow-up task to treatment plan")
     public ResponseEntity<TreatmentPlanFollowUpDTO> addFollowUp(@PathVariable UUID id,
                                                                 @Valid @RequestBody TreatmentPlanFollowUpRequestDTO requestDTO) {
@@ -92,7 +92,7 @@ public class TreatmentPlanController {
     }
 
     @PutMapping("/{id}/follow-ups/{followUpId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHYSIOTHERAPIST')")
     @Operation(summary = "Update follow-up task on treatment plan")
     public ResponseEntity<TreatmentPlanFollowUpDTO> updateFollowUp(@PathVariable UUID id,
                                                                    @PathVariable UUID followUpId,
@@ -101,7 +101,7 @@ public class TreatmentPlanController {
     }
 
     @PostMapping("/{id}/reviews")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE','PHYSIOTHERAPIST')")
     @Operation(summary = "Add review entry for treatment plan")
     public ResponseEntity<TreatmentPlanReviewDTO> addReview(@PathVariable UUID id,
                                                             @Valid @RequestBody TreatmentPlanReviewRequestDTO requestDTO) {

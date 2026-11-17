@@ -88,7 +88,7 @@ public class MedicationHistoryController {
      * @return Created pharmacy fill
      */
     @PostMapping("/pharmacy-fills")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_PHARMACIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','PHARMACIST')")
     @Operation(
         summary = "Create pharmacy fill",
         description = "Creates a new pharmacy fill record (manual entry or external system import)"
@@ -166,7 +166,7 @@ public class MedicationHistoryController {
      * @return Updated pharmacy fill
      */
     @PutMapping("/pharmacy-fills/{fillId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_PHARMACIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','PHARMACIST')")
     @Operation(
         summary = "Update pharmacy fill",
         description = "Updates an existing pharmacy fill record"

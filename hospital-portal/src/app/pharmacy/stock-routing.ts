@@ -78,6 +78,18 @@ export class StockRoutingComponent implements OnInit {
    */
   readonly scopeReady = this.roleContext.hasHospitalScope;
 
+  /**
+   * QA D2120: dispensing, claiming, handing over, cancelling and routing are clinical acts
+   * (DispenseController and StockOutRoutingController gate them with ClinicalActor.holdsOwnRole
+   * on PHARMACIST, PHARMACY_VERIFIER, HOSPITAL_ADMIN). A super-admin reads this page and never
+   * acts on it, so the action controls are hidden from anyone without one of those roles.
+   */
+  readonly canAct = this.roleContext.hasAnyActiveRole([
+    'ROLE_PHARMACIST',
+    'ROLE_PHARMACY_VERIFIER',
+    'ROLE_HOSPITAL_ADMIN',
+  ]);
+
   // Prescription lookup
   prescriptionId = '';
   checking = signal(false);

@@ -50,7 +50,7 @@ public class IntakeOutputController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize(READ_WRITE_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(
         summary = "Record a fluid intake/output entry",
         description = "The route determines the category (intake vs output) server-side.",

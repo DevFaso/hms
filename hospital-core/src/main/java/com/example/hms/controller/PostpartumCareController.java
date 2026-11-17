@@ -46,7 +46,7 @@ public class PostpartumCareController {
 
     @PostMapping("/observations")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(
         summary = "Record a postpartum observation",
         description = "Creates a postpartum observation entry capturing vitals, uterine assessments, education, and follow-up actions.",

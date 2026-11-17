@@ -55,6 +55,7 @@ import {
 import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/allergy-hold-dialog.component';
 import { AllergyReviewStateComponent } from '../shared/allergy-acknowledgement/allergy-review-state.component';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
+import { RoleContextService } from '../core/role-context.service';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
 function localIsoDate(d: Date): string {
@@ -197,6 +198,18 @@ export function sameDispenseUnit(
 })
 export class DispensingComponent implements OnInit, OnDestroy {
   private readonly svc = inject(PharmacyService);
+  private readonly roleContext = inject(RoleContextService);
+  /**
+   * QA D2120: dispensing, claiming, handing over, cancelling and routing are clinical acts
+   * (DispenseController and StockOutRoutingController gate them with ClinicalActor.holdsOwnRole
+   * on PHARMACIST, PHARMACY_VERIFIER, HOSPITAL_ADMIN). A super-admin reads this page and never
+   * acts on it, so the action controls are hidden from anyone without one of those roles.
+   */
+  readonly canAct = this.roleContext.hasAnyActiveRole([
+    'ROLE_PHARMACIST',
+    'ROLE_PHARMACY_VERIFIER',
+    'ROLE_HOSPITAL_ADMIN',
+  ]);
   /** QA D966: opens a fetched PDF for printing. */
   private readonly printService = inject(PrintLabelService);
   private readonly auth = inject(AuthService);

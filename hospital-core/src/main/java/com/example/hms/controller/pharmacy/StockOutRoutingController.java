@@ -50,7 +50,7 @@ public class StockOutRoutingController {
     }
 
     @PostMapping("/route-to-partner")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Route prescription to partner pharmacy",
             description = "Route a prescription to an external partner pharmacy for fulfillment")
     @ApiResponse(responseCode = "201", description = "Prescription routed to partner")
@@ -87,7 +87,7 @@ public class StockOutRoutingController {
     }
 
     @PostMapping("/print-for-patient/{prescriptionId}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Print prescription for patient",
             description = "Mark prescription as printed for patient to take to an external pharmacy (Tier 3)")
     @ApiResponse(responseCode = "201", description = "Prescription marked as printed")
@@ -98,7 +98,7 @@ public class StockOutRoutingController {
     }
 
     @PostMapping("/back-order/{prescriptionId}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Place prescription on back order",
             description = "Mark prescription as pending stock with optional estimated restock date")
     @ApiResponse(responseCode = "201", description = "Prescription placed on back order")
@@ -110,7 +110,7 @@ public class StockOutRoutingController {
     }
 
     @PostMapping("/partner-respond/{routingDecisionId}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Partner pharmacy response",
             description = "Partner pharmacy accepts or rejects a routed prescription")
     @ApiResponse(responseCode = "200", description = "Response recorded")
@@ -122,7 +122,7 @@ public class StockOutRoutingController {
     }
 
     @PostMapping("/partner-dispense-confirm/{routingDecisionId}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')")
     @Operation(summary = "Confirm partner dispense",
             description = "Confirm that a partner pharmacy has dispensed the medication")
     @ApiResponse(responseCode = "200", description = "Dispense confirmed")

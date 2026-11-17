@@ -41,7 +41,7 @@ public class ObgynReferralController {
     private final ObgynReferralService referralService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'MIDWIFE','DOCTOR')")
     @Operation(summary = "Create OB-GYN referral")
     public ResponseEntity<ObgynReferralResponseDTO> createReferral(
         @Valid @RequestBody ObgynReferralCreateRequestDTO request,
@@ -89,7 +89,7 @@ public class ObgynReferralController {
     }
 
     @PostMapping("/{id}/acknowledge")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Acknowledge referral")
     public ResponseEntity<ObgynReferralResponseDTO> acknowledgeReferral(
         @PathVariable UUID id,
@@ -100,7 +100,7 @@ public class ObgynReferralController {
     }
 
     @PostMapping("/{id}/start")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(
         summary = "Start referral consultation",
         description = "Move ACKNOWLEDGED → IN_PROGRESS once the receiving midwife begins "
@@ -116,7 +116,7 @@ public class ObgynReferralController {
     }
 
     @PostMapping("/{id}/complete")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Complete referral")
     public ResponseEntity<ObgynReferralResponseDTO> completeReferral(
         @PathVariable UUID id,
@@ -129,7 +129,7 @@ public class ObgynReferralController {
     @PostMapping("/{id}/cancel")
     // QA D1026: the author withdraws it, a midwife or a doctor (create admits
     // both); the service refuses anyone who did not write it.
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'MIDWIFE','DOCTOR')")
     @Operation(summary = "Cancel referral")
     public ResponseEntity<ObgynReferralResponseDTO> cancelReferral(
         @PathVariable UUID id,
@@ -140,7 +140,7 @@ public class ObgynReferralController {
     }
 
     @PostMapping("/{id}/messages")
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'MIDWIFE','DOCTOR')")
     @Operation(summary = "Add threaded message")
     public ResponseEntity<ObgynReferralMessageDTO> addMessage(
         @PathVariable UUID id,

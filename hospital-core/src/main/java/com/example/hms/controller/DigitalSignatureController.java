@@ -42,7 +42,7 @@ public class DigitalSignatureController {
      * Sign a clinical report
      */
     @PostMapping("/sign")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','LAB_SCIENTIST','PHARMACIST')")
     @Operation(summary = "Sign a clinical report", 
         description = "Create an electronic signature on a clinical report (discharge summary, lab result, imaging report, etc.)")
     public ResponseEntity<SignatureResponseDTO> signReport(@Valid @RequestBody SignatureRequestDTO request) {
@@ -79,7 +79,7 @@ public class DigitalSignatureController {
      * Revoke a signature
      */
     @PostMapping("/{signatureId}/revoke")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','HOSPITAL_ADMIN')")
     @Operation(summary = "Revoke a digital signature", 
         description = "Revoke an existing signature (requires elevated permissions)")
     public ResponseEntity<SignatureResponseDTO> revokeSignature(

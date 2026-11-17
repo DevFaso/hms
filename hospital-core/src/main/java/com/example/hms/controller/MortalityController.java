@@ -60,7 +60,7 @@ public class MortalityController {
 
     /** Who may certify or record a death. */
     private static final String RECORDER =
-        "hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE')";
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','MIDWIFE')";
 
     /** QA D1488: who may mark a death record entered in error; the service asks for the role at the record's hospital. */
     private static final String CORRECTOR = "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')";
@@ -113,7 +113,7 @@ public class MortalityController {
     }
 
     @PostMapping("/patients/{patientId}/disputes")
-    @PreAuthorize("hasRole('DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Dispute a recorded death, urgently",
                description = "A doctor with an active assignment at this hospital, who has assessed the patient as "
                    + "alive and verified who they are. Lifts the death's block on care here, at once, pending review. "

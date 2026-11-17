@@ -141,7 +141,6 @@ export class MicrobiologyComponent implements OnInit {
       'ROLE_DOCTOR',
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
-      'ROLE_SUPER_ADMIN',
     ]);
   }
 
@@ -151,7 +150,6 @@ export class MicrobiologyComponent implements OnInit {
       'ROLE_LAB_SCIENTIST',
       'ROLE_LAB_MANAGER',
       'ROLE_LAB_DIRECTOR',
-      'ROLE_SUPER_ADMIN',
     ]);
   }
 

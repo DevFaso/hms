@@ -45,7 +45,7 @@ public class AdmissionController {
     @PostMapping
     // Policy 2 (2026-11-09, provisional): a midwife may admit a woman in labour only; the
     // service refuses every other admission for her (AdmissionServiceImpl.requireMidwifeLabourAdmission).
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE')")
     @Operation(summary = "Admit a patient", description = "Create a new hospital admission for a patient. "
         + "A physician admits any type; a midwife only a woman in labour (LABOR_DELIVERY).")
     public ResponseEntity<AdmissionResponseDTO> admitPatient(@Valid @RequestBody AdmissionRequestDTO request) {
@@ -75,7 +75,7 @@ public class AdmissionController {
     }
 
     @PutMapping("/{admissionId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Update admission", description = "Update admission details (room, acuity, notes, etc.)")
     public ResponseEntity<AdmissionResponseDTO> updateAdmission(
         @PathVariable UUID admissionId,
@@ -85,7 +85,7 @@ public class AdmissionController {
     }
 
     @PostMapping("/{admissionId}/apply-order-sets")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Apply order sets", description = "Apply admission order sets to an admission")
     public ResponseEntity<AdmissionResponseDTO> applyOrderSets(
         @PathVariable UUID admissionId,
@@ -119,7 +119,7 @@ public class AdmissionController {
     }
 
     @PostMapping("/{admissionId}/discharge")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Discharge patient", description = "Discharge a patient from hospital")
     public ResponseEntity<AdmissionResponseDTO> dischargePatient(
         @PathVariable UUID admissionId,
@@ -129,7 +129,7 @@ public class AdmissionController {
     }
 
     @DeleteMapping("/{admissionId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Cancel admission",
         description = "Cancel a pending or active admission. A reason is required and kept on the admission (QA D1381).")
     public ResponseEntity<Void> cancelAdmission(
