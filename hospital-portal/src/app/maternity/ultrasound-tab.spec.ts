@@ -37,7 +37,11 @@ describe('UltrasoundTabComponent', () => {
 
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
   const texts = (selector: string): string[] =>
-    Array.from(host().querySelectorAll(selector)).map((el) => el.textContent?.trim() ?? '');
+    Array.from(host().querySelectorAll(selector)).map((el) => {
+      const label = el.cloneNode(true) as HTMLElement;
+      label.querySelectorAll('.worklist-count').forEach((badge) => badge.remove());
+      return label.textContent?.trim() ?? '';
+    });
   const actionTitles = (): (string | null)[] =>
     Array.from(host().querySelectorAll('.actions-cell button')).map((b) => b.getAttribute('title'));
 
@@ -1063,6 +1067,22 @@ describe('UltrasoundTabComponent', () => {
     expect(cells[0]).toBe('Awa Traoré');
     expect(cells[1]).toBe('Échographie morphologique');
     expect(texts('tbody .status-badge')).toEqual(['Prescrite']);
+  });
+
+  it('counts each hospital worklist independently, retaining unknown failures and zero', () => {
+    service.highRiskOrders.and.returnValue(throwError(() => new Error('unavailable')));
+    service.followUpRequired.and.returnValue(
+      of([{ id: 'report-1' }, { id: 'report-2' }] as UltrasoundReportResponse[]),
+    );
+    create(['ROLE_SUPER_ADMIN']);
+    expect(texts('.worklist-count')).toEqual(['1', '0', '—', '2', '0']);
+    expect(service.followUpRequired).toHaveBeenCalledWith('h-1');
+    fixture.componentInstance.orderSearch.set('no matching name');
+    fixture.detectChanges();
+    expect(texts('.worklist-count')).toEqual(['1', '0', '—', '2', '0']);
+    service.ordersByHospital.calls.reset();
+    fixture.componentInstance.setWorklist('pending');
+    expect(service.ordersByHospital).not.toHaveBeenCalled();
   });
 
   it('renders the worklist tabs translated', () => {

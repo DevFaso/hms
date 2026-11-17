@@ -29,6 +29,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * checked against {@code PaymentMethod.CODES}) and requires every service
  * class that reads that field to call the refusal. A new payment entry point
  * fails here until it decides, through that call, what an INSURANCE method means.
+ *
+ * <p>Billing plan PR 9: the same readers decide the Mobile Money operator
+ * through {@code MobileMoneyOperators}, so a new entry point cannot record
+ * Mobile Money without saying whether it was Orange Money or Moov Money.
  */
 @DisplayName("Every payment entry point refuses an insurer's share as money received")
 class TillPaymentMethodGuardTest {
@@ -36,6 +40,8 @@ class TillPaymentMethodGuardTest {
     private static final Path DTOS = Path.of("src/main/java/com/example/hms/payload/dto");
     private static final Path SERVICES = Path.of("src/main/java/com/example/hms/service");
     private static final String GUARD_CALL = "TillPaymentMethods.requireReceivedAtTill(";
+    /** Billing plan PR 9: a staff writer requires the Mobile Money operator, a patient declaration keeps it. */
+    private static final Pattern OPERATOR_CALL = Pattern.compile("MobileMoneyOperators\\s*+\\.\\s*+(?:require|keep)\\(");
 
     /** A typed method field: {@code private PharmacyPaymentMethod paymentMethod;}. */
     private static final Pattern TYPED_FIELD = Pattern.compile(
@@ -54,6 +60,7 @@ class TillPaymentMethodGuardTest {
 
         List<String> readers = new ArrayList<>();
         List<String> missing = new ArrayList<>();
+        List<String> missingOperator = new ArrayList<>();
         for (Path file : javaFiles(SERVICES)) {
             String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
             if (!code.contains("class ")) {
@@ -68,12 +75,20 @@ class TillPaymentMethodGuardTest {
                     if (!code.contains(GUARD_CALL)) {
                         missing.add(reader);
                     }
+                    if (!OPERATOR_CALL.matcher(code).find()) {
+                        missingOperator.add(reader);
+                    }
                 }
             }
         }
         assertThat(readers).as("the scan found the payment readers").hasSizeGreaterThanOrEqualTo(5);
         assertThat(missing)
             .as("a payment entry point that does not refuse INSURANCE through TillPaymentMethods")
+            .isEmpty();
+        assertThat(missingOperator)
+            .as("billing plan PR 9: a payment entry point that does not decide the Mobile Money operator through"
+                + " MobileMoneyOperators (require for staff, keep for a patient declaration), so Orange Money and"
+                + " Moov Money could not be totalled apart")
             .isEmpty();
     }
 

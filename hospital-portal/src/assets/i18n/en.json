@@ -329,6 +329,20 @@
     "BABY_OUTCOMES": "Outcome of each baby",
     "FETAL_DEATH_EVENT_RECORDED": "Stillbirth recorded as a fetal-death event (no patient record): it is counted in the mortality register."
   },
+  "MOBILE_MONEY": {
+    "OPERATOR_LABEL": "Operator",
+    "OPERATOR_CHOOSE": "Choose the operator",
+    "OPERATOR_REQUIRED": "Choose the operator of the mobile-money payment (Orange Money, Moov Money or another operator).",
+    "OPERATOR": {
+      "ORANGE_MONEY": "Orange Money",
+      "MOOV_MONEY": "Moov Money",
+      "AUTRE": "Other operator",
+      "NOT_STATED": "Operator not stated"
+    },
+    "MANUAL_ENTRY_NOTICE": "Payment entered manually — check the reference against the operator’s statement.",
+    "NO_CARD_DETAILS": "Never enter a card number, CVV or PIN: only the transaction reference.",
+    "CARD_NUMBER_REFUSED": "This field looks like it holds a card number. e-Keneya never stores card numbers: enter only the transaction reference."
+  },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Back to organizations",
     "LOADING": "Loading lifecycle…",
@@ -11169,6 +11183,7 @@
     "SOCIAL_EMPTY": "Record at least one item (habits, occupation, living situation or notes) before saving a new version."
   },
   "MATERNITY": {
+    "WORKLIST_COUNT_HELP": "Worklist count for the selected hospital and patient, if selected. — means loading or unavailable. Text search does not change these counts.",
     "NETWORK_HELP": "Select a hospital for maternal histories, referrals and maternity worklists.",
     "FOREIGN_RECORDED_AT": "Recorded at {{hospital}}, read only here",
     "GA": "Gestational age",

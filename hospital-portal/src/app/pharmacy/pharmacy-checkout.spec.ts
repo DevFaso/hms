@@ -113,9 +113,17 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
     expect(svc.createPayment).not.toHaveBeenCalled();
 
     c.referenceNumber = ' OM-R17-662001 ';
+    // Billing plan PR 9: the operator is required too.
+    c.submit();
+    expect(svc.createPayment).not.toHaveBeenCalled();
+    c.mobileMoneyOperator = 'ORANGE_MONEY';
     c.submit();
     expect(svc.createPayment).toHaveBeenCalledWith(
-      jasmine.objectContaining({ paymentMethod: 'MOBILE_MONEY', referenceNumber: 'OM-R17-662001' }),
+      jasmine.objectContaining({
+        paymentMethod: 'MOBILE_MONEY',
+        referenceNumber: 'OM-R17-662001',
+        mobileMoneyOperator: 'ORANGE_MONEY',
+      }),
     );
   });
 

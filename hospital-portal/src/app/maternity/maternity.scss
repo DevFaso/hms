@@ -714,3 +714,17 @@ details.care-maternity-guide > .material-symbols-outlined {
 .btn-primary:hover {
   background: var(--primary-dark, #0b6b60);
 }
+
+.worklist-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: 0.125rem 0.375rem;
+  margin-inline-start: 0.375rem;
+  border-radius: 999px;
+  background: var(--color-surface-alt, #edf3f5);
+  color: var(--color-text, #17394b);
+  font-size: 0.875em;
+  font-variant-numeric: tabular-nums;
+}

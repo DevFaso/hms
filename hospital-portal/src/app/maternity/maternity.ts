@@ -1,3 +1,5 @@
+import { map } from 'rxjs';
+import { worklistCounts } from './worklist-counts';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -276,6 +278,7 @@ export class MaternityComponent implements OnInit {
   activeTab = signal<MaternityTab>('board');
 
   /* ── Board (maternal histories) ── */
+  readonly boardCounts = worklistCounts<BoardWorklist>();
   worklist = signal<BoardWorklist>('high-risk');
   histories = signal<MaternalHistoryResponse[]>([]);
   readonly boardSearch = signal('');
@@ -486,26 +489,50 @@ export class MaternityComponent implements OnInit {
   setWorklist(w: BoardWorklist): void {
     this.worklist.set(w);
     this.boardPage.set(0);
-    this.loadBoard();
+    this.loadBoard(false);
   }
 
   boardPrev(): void {
     if (this.boardPage() > 0) {
       this.boardPage.update((p) => p - 1);
-      this.loadBoard();
+      this.loadBoard(false);
     }
   }
 
   boardNext(): void {
     if (this.boardPage() + 1 < this.boardTotalPages()) {
       this.boardPage.update((p) => p + 1);
-      this.loadBoard();
+      this.loadBoard(false);
     }
   }
 
-  loadBoard(): void {
+  private loadBoardCounts(hospitalId: string): void {
+    this.boardCounts.load(
+      Object.fromEntries(
+        this.visibleWorklists().map((worklist) => [
+          worklist,
+          () => {
+            const source =
+              worklist === 'high-risk'
+                ? this.maternityService.highRisk(hospitalId, 0, 1)
+                : worklist === 'pending-review'
+                  ? this.maternityService.pendingReview(hospitalId, 0, 1)
+                  : worklist === 'specialist-referral'
+                    ? this.maternityService.specialistReferral(hospitalId, 0, 1)
+                    : worklist === 'psychosocial'
+                      ? this.maternityService.psychosocialConcerns(hospitalId, 0, 1)
+                      : this.maternityService.search(hospitalId, { page: 0, size: 1 });
+            return source.pipe(map((page) => page.totalElements));
+          },
+        ]),
+      ),
+    );
+  }
+
+  loadBoard(refreshCounts = true): void {
     if (!this.hospitalId || !this.canManageHistory) return;
     const hospitalId = this.hospitalId;
+    if (refreshCounts) this.loadBoardCounts(hospitalId);
     const page = this.boardPage();
     this.historiesLoading.set(true);
     const source =

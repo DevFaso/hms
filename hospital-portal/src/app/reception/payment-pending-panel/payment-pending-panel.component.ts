@@ -27,13 +27,19 @@ import { amountStillDue, pendingDeclared } from '../../shared/payment-prefill';
 import { formatCfa } from '../../shared/i18n/app-locale';
 
 /** The fields the collect dialog may refuse. */
-const PAY_FIELDS = ['invSelect', 'payAmt', 'payRef'];
+const PAY_FIELDS = ['invSelect', 'payAmt', 'payOperator', 'payRef'];
 import {
   CFA_AMOUNT_REQUIRED_KEY,
   cfaAmountMessageKey,
   cfaAmountProblem,
 } from '../../shared/cfa-amount';
 import { DashPipe } from '../../shared/pipes/dash.pipe';
+import {
+  MOBILE_MONEY_OPERATORS,
+  MobileMoneyOperator,
+  containsCardNumber,
+  isMobileMoney,
+} from '../../shared/mobile-money-operator';
 
 interface OpenInvoice {
   id: string;
@@ -72,6 +78,10 @@ export class PaymentPendingPanelComponent {
   payMethod = signal<string>('CASH');
   /** QA D948: the operator or policy reference of a Mobile Money or insurance payment. */
   payReference = signal('');
+  /** Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close. */
+  payOperator = signal<MobileMoneyOperator | null>(null);
+  readonly mobileMoneyOperators = MOBILE_MONEY_OPERATORS;
+  readonly payIsMobileMoney = computed(() => isMobileMoney(this.payMethod()));
   readonly methods = DESK_PAYMENT_METHODS;
   readonly needsReference = computed(() => deskMethodNeedsReference(this.payMethod()));
   /** The selected invoice's currency (francs CFA unless the invoice says otherwise). */
@@ -92,6 +102,7 @@ export class PaymentPendingPanelComponent {
     this.payAmount.set(null);
     this.payMethod.set('CASH');
     this.payReference.set('');
+    this.payOperator.set(null);
     this.selectedInvoiceId.set(null);
     this.pending.set(0);
     this.openInvoices.set([]);
@@ -202,7 +213,20 @@ export class PaymentPendingPanelComponent {
             : this.translate.instant('BILLING.PAYMENT_EXCEEDS_BALANCE'),
       });
     }
+    if (this.payIsMobileMoney() && !this.payOperator()) {
+      refusals.push({
+        id: 'payOperator',
+        message: this.translate.instant('MOBILE_MONEY.OPERATOR_REQUIRED'),
+      });
+    }
     if (this.needsReference() && !reference) refusals.push({ id: 'payRef', message: required });
+    else if (containsCardNumber(reference)) {
+      // Owner decision D-15: never a card number (the server refuses it too).
+      refusals.push({
+        id: 'payRef',
+        message: this.translate.instant('MOBILE_MONEY.CARD_NUMBER_REFUSED'),
+      });
+    }
     if (refusals.length > 0 || !invoiceId || !amount) {
       refuseFields(this.host.nativeElement, refusals, PAY_FIELDS);
       return;
@@ -211,7 +235,13 @@ export class PaymentPendingPanelComponent {
 
     this.paying.set(true);
     this.receptionService
-      .recordPayment(invoiceId, amount, method, reference || undefined)
+      .recordPayment(
+        invoiceId,
+        amount,
+        method,
+        reference || undefined,
+        this.payIsMobileMoney() ? (this.payOperator() ?? undefined) : undefined,
+      )
       .subscribe({
         next: () => {
           this.paying.set(false);
