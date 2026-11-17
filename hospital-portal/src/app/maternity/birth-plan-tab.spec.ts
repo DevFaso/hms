@@ -147,6 +147,18 @@ describe('BirthPlanTabComponent', () => {
     expect(service.pendingReview).toHaveBeenCalledWith('h-1', 0);
   });
 
+  it('keeps the pending-review worklist readable by a super-admin without write controls', () => {
+    create(['ROLE_SUPER_ADMIN']);
+    expect(fixture.componentInstance.canSeePendingReview).toBeTrue();
+    expect(host().querySelector('.filter-bar .btn-primary')).toBeNull();
+    const titles = Array.from(host().querySelectorAll('.actions-cell button')).map((b) =>
+      b.getAttribute('title'),
+    );
+    expect(titles).toEqual(['COMMON.VIEW']);
+    fixture.componentInstance.setFilter('pending-review');
+    expect(service.pendingReview).toHaveBeenCalledWith('h-1', 0);
+  });
+
   it('toasts the translated error when the list cannot load', () => {
     service.search.and.returnValue(throwError(() => new Error('500')));
     roleCtx.set({ roles: ['ROLE_MIDWIFE'] });

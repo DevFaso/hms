@@ -61,7 +61,11 @@ export class BirthPlanTabComponent implements OnInit {
   readonly canReview = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']);
   /** Delete + pending-review worklist exclude NURSE. */
   readonly canDelete = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']);
-  readonly canSeePendingReview = this.canDelete;
+  readonly canSeePendingReview = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_MIDWIFE',
+    'ROLE_SUPER_ADMIN',
+  ]);
 
   filter = signal<BirthPlanFilter>('all');
   plans = signal<BirthPlanResponse[]>([]);
