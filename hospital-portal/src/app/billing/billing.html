@@ -632,6 +632,7 @@
                                 [disabled]="itemSaving()"
                                 [title]="'BILLING.REMOVE_LINE' | translate"
                                 [attr.aria-label]="'BILLING.REMOVE_LINE' | translate"
+                                [attr.data-testid]="'line-delete-' + it.id"
                                 (click)="removeItem(it)"
                               >
                                 <span class="material-symbols-outlined">delete</span>
@@ -642,7 +643,15 @@
                       </tr>
                       <!-- Review #1197 M2: a price-list line is removed only with a reason. -->
                       @if (removingLineId() === it.id) {
-                        <tr [attr.data-testid]="'line-remove-' + it.id">
+                        <tr
+                          appInlineSubForm
+                          #removeForm="inlineSubForm"
+                          (dismissed)="cancelRemoveLine()"
+                          [inlineSubFormReturn]="
+                            '[data-testid=&quot;line-delete-' + it.id + '&quot;]'
+                          "
+                          [attr.data-testid]="'line-remove-' + it.id"
+                        >
                           <td colspan="5">
                             <label class="line-edit-label" for="line-remove-reason"
                               >{{ 'BILLING.REMOVE_REASON' | translate }} *</label
@@ -658,7 +667,6 @@
                               [ngModel]="removeLineReason()"
                               (ngModelChange)="removeLineReason.set($event)"
                               (keydown.enter)="confirmRemoveTariffLine(it)"
-                              (keydown.escape)="cancelRemoveLine()"
                             />
                             <button
                               type="button"
@@ -676,6 +684,7 @@
                             >
                               {{ 'COMMON.CANCEL' | translate }}
                             </button>
+                            <app-inline-discard-ask [form]="removeForm" />
                           </td>
                         </tr>
                       }
