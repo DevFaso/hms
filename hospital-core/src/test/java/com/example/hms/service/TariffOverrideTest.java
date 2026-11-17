@@ -177,8 +177,14 @@ class TariffOverrideTest {
     void onlyTheCashierOrAnAdminMayOverride() {
         when(roleValidator.canOverrideTariff(cashier, HOSPITAL_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.updateInvoiceItem(line.getId(), priced("1500", "Remise"), Locale.FRENCH))
-            .isInstanceOf(AccessDeniedException.class);
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.FRENCH);
+        try {
+            assertThatThrownBy(() -> service.updateInvoiceItem(line.getId(), priced("1500", "Remise"), Locale.FRENCH))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("modifier un prix de la grille");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
         verify(itemRepository, never()).save(any());
         verify(audit, never()).logEvent(any());
     }
@@ -231,12 +237,25 @@ class TariffOverrideTest {
     }
 
     @Test
-    @DisplayName("#1197 M2: only the cashier or an admin of the hospital deletes a price-list line")
+    @DisplayName("#1197 M2 / QA D2101: only the cashier or an admin of the hospital deletes a price-list line, "
+        + "and the refusal names the removal, not a price change")
     void deletingATariffLineNeedsTheRole() {
         when(roleValidator.canOverrideTariff(cashier, HOSPITAL_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.deleteInvoiceItem(line.getId(), "Doublon", Locale.FRENCH))
-            .isInstanceOf(AccessDeniedException.class);
+        for (Locale locale : java.util.List.of(Locale.FRENCH, Locale.ENGLISH, Locale.forLanguageTag("es"))) {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+            try {
+                assertThatThrownBy(() -> service.deleteInvoiceItem(line.getId(), "Doublon", locale))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessage(MessageUtil.resolve(locale, "billing.item.deleteNotAllowed"))
+                    .hasMessageNotContaining("[Missing translation]")
+                    .satisfies(e -> assertThat(e.getMessage())
+                        .isNotEqualTo(MessageUtil.resolve(locale, "billing.item.overrideNotAllowed")));
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+        assertThat(MessageUtil.resolve(Locale.FRENCH, "billing.item.deleteNotAllowed")).contains("retirer");
         verify(itemRepository, never()).delete(any());
     }
 

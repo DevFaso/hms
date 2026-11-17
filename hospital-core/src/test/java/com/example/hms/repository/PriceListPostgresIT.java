@@ -141,9 +141,9 @@ class PriceListPostgresIT {
         hospitalB = UUID.randomUUID();
         actor = UUID.randomUUID();
         service = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), invoiceLines, labTests, treatments,
-            mock(UserRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
+            mock(UserRepository.class), mock(com.example.hms.repository.HospitalRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
         liveService = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), invoiceLines, labTests, treatments,
-            mock(UserRepository.class), roles, scope, audit, Clock.systemDefaultZone(), "Africa/Ouagadougou");
+            mock(UserRepository.class), mock(com.example.hms.repository.HospitalRepository.class), roles, scope, audit, Clock.systemDefaultZone(), "Africa/Ouagadougou");
         tx = new TransactionTemplate(transactions);
         actAt(hospitalA);
         when(roles.getCurrentUserId()).thenReturn(actor);
