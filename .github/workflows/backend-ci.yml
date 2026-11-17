@@ -7,8 +7,9 @@ permissions:
   contents: read
 
 jobs:
-  # The ~10,000-test suite used to run in ONE job (~21 min). It now runs in
-  # TEST_SHARDS parallel shards: build.gradle's -PtestShardCount/-PtestShardIndex
+  # The suite runs in TEST_SHARDS parallel shards. Four runners redistribute
+  # the scale-test-heavy partition without extending the existing timeout.
+  # build.gradle's -PtestShardCount/-PtestShardIndex options
   # partition the top-level test classes by name hash (every class runs in
   # exactly one shard), and inside a shard Gradle runs 2 test forks in
   # parallel (maxParallelForks). The build-and-test job below then merges
@@ -21,9 +22,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2]
+        shard: [0, 1, 2, 3]
     env:
-      TEST_SHARDS: 3
+      TEST_SHARDS: 4
 
     steps:
       - uses: actions/checkout@v7
@@ -31,8 +32,8 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v6
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version: "21"
+          distribution: "temurin"
 
       - name: Cache Gradle packages
         uses: actions/cache@v6
@@ -98,8 +99,8 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v6
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version: "21"
+          distribution: "temurin"
 
       - name: Cache Gradle packages
         uses: actions/cache@v6
@@ -129,7 +130,7 @@ jobs:
         run: |
           n=$(ls hospital-core/build/jacoco/test-shard-*.exec | wc -l)
           echo "exec files: $n"
-          test "$n" -eq 3
+          test "$n" -eq 4
           ls hospital-core/build/test-results/test/TEST-*.xml | wc -l
 
       - name: Generate Jacoco Report (merged shards)

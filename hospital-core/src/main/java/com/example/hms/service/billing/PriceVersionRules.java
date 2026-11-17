@@ -28,6 +28,8 @@ import java.util.function.Predicate;
  *       own start (never in force) and stays in the history. A version planned for a later day is never replaced:
  *       the new version ends the day before it starts.</li>
  *   <li>The version in force before the new one is closed on the day before the new one starts.</li>
+ *   <li>PR 3 (deferred from the #1179 review): a version an invoice line copied is never replaced, not even by a
+ *       same-day correction: it has priced a bill. The refusal names the version's price and its start.</li>
  * </ul>
  */
 public final class PriceVersionRules {
@@ -87,6 +89,15 @@ public final class PriceVersionRules {
      */
     public static Plan plan(List<PriceListPrice> versions, LocalDate today, LocalDate from, boolean replaceScheduled,
                             Predicate<PriceListPrice> enteredToday) {
+        return plan(versions, today, from, replaceScheduled, enteredToday, version -> false);
+    }
+
+    /**
+     * As {@link #plan(List, LocalDate, LocalDate, boolean, Predicate)}; {@code invoiced} says whether an invoice line
+     * copied a version, which is then never replaced (refused before any confirmation is asked).
+     */
+    public static Plan plan(List<PriceListPrice> versions, LocalDate today, LocalDate from, boolean replaceScheduled,
+                            Predicate<PriceListPrice> enteredToday, Predicate<PriceListPrice> invoiced) {
         List<PriceListPrice> live = versions.stream().filter(v -> !v.isReplaced()).toList();
         // At most one live version per start day (uq_price_list_price_item_from): the only one ever replaced.
         Optional<PriceListPrice> sameStart = live.stream().filter(v -> v.getEffectiveFrom().equals(from)).findFirst();
@@ -98,6 +109,10 @@ public final class PriceVersionRules {
             if (started && !enteredToday.test(named)) {
                 throw new FieldBusinessException(FIELD_EFFECTIVE_FROM, "billing.priceList.versionStarted",
                     DisplayDates.date(named.getEffectiveFrom()));
+            }
+            if (invoiced.test(named)) {
+                throw new FieldBusinessException(FIELD_EFFECTIVE_FROM, "billing.priceList.versionInvoiced",
+                    francs(named.getUnitPrice()), DisplayDates.date(named.getEffectiveFrom()));
             }
             if (!replaceScheduled) {
                 throw started

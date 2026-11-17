@@ -3591,4 +3591,22 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V303 (billing-money plan PR 3, scorecard M1) - a checkout line is
+         priced from the hospital's price list: billing.invoice_items gains
+         price_list_item_id / price_list_price_id (the version whose price the
+         line copied, composite FK to that item's version), price_source
+         (TARIFF, SERVICE_NAME, MANUAL, UNPRICED, LEGACY; existing lines with a
+         service become SERVICE_NAME, the rest stay LEGACY), and the cashier's
+         override (tariff_unit_price + override_reason, D-2). Also normalises
+         PROCEDURE_CODE link keys to upper case. Plain idempotent DDL, no DO
+         block.
+         ================================================================= -->
+    <changeSet id="V303-billing-invoice-line-tariff" author="hms-team" runOnChange="false">
+        <sqlFile path="V303__billing_invoice_line_tariff.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

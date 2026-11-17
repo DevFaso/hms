@@ -26,12 +26,16 @@ import java.util.UUID;
  *   <li>SYSTEM: one of {@link PriceListSystemKey}.</li>
  *   <li>LAB_TEST_DEFINITION: a live lab test the hospital can order (its own or the platform catalogue's), given by
  *       its id or its test code (a finance lead cannot type an id, README A-1); stored as the id.</li>
- *   <li>PROCEDURE_CODE: the procedure order's code, trimmed.</li>
+ *   <li>PROCEDURE_CODE: the procedure order's code (else its name), trimmed, single spaces, upper case
+ *       ({@link #procedureKey}; PR 3, deferred from the #1179 review).</li>
  *   <li>IMAGING_STUDY: {@code <ImagingModality>:<study type>}, the study type folded to lower case without accents
  *       and single spaces (A-2).</li>
  *   <li>TRANSFUSION_PRODUCT: a {@link BloodProductType} name.</li>
  *   <li>TREATMENT: a service of the same hospital, by id.</li>
  * </ul>
+ *
+ * <p>PR 3: the charge sources look a key up through {@link #lookupKey}, which writes it exactly as
+ * {@link #normalise} stored it ({@code PriceListLinkKeySymmetryTest} holds both sides together).
  */
 @Component
 @RequiredArgsConstructor
@@ -60,7 +64,7 @@ public class PriceListLinks {
         String stored = switch (type) {
             case SYSTEM -> systemKey(key);
             case LAB_TEST_DEFINITION -> labTest(hospitalId, key).getId().toString();
-            case PROCEDURE_CODE -> key;
+            case PROCEDURE_CODE -> procedureKey(key);
             case IMAGING_STUDY -> imagingKey(key);
             case TRANSFUSION_PRODUCT -> transfusionProduct(key);
             case TREATMENT -> treatment(hospitalId, key).getId().toString();
@@ -69,6 +73,35 @@ public class PriceListLinks {
             throw new FieldBusinessException(FIELD_LINK_KEY, "billing.priceList.linkKeyTooLong", LINK_KEY_MAX);
         }
         return stored;
+    }
+
+    /**
+     * PR 3: the key a charge source looks up, written the way {@link #normalise} stored it; empty when the raw value
+     * cannot be a key of that type (a blank code, an imaging study with no modality, an unknown product). Never
+     * throws: an unmatched charge falls back to the next pricing rule, it is not refused.
+     */
+    public static Optional<String> lookupKey(PriceListLinkType type, String raw) {
+        if (type == null || raw == null || raw.isBlank()) {
+            return Optional.empty();
+        }
+        String key = raw.trim();
+        try {
+            String stored = switch (type) {
+                case SYSTEM -> PriceListSystemKey.valueOf(key.toUpperCase(Locale.ROOT)).name();
+                case LAB_TEST_DEFINITION, TREATMENT -> UUID.fromString(key).toString();
+                case PROCEDURE_CODE -> procedureKey(key);
+                case IMAGING_STUDY -> imagingKey(key);
+                case TRANSFUSION_PRODUCT -> BloodProductType.valueOf(key.toUpperCase(Locale.ROOT)).name();
+            };
+            return stored.isEmpty() || stored.length() > LINK_KEY_MAX ? Optional.empty() : Optional.of(stored);
+        } catch (IllegalArgumentException | FieldBusinessException notAKey) {
+            return Optional.empty();
+        }
+    }
+
+    /** A procedure code (or name): trimmed, single spaces, upper case. */
+    public static String procedureKey(String key) {
+        return key.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
     }
 
     /** {@code <MODALITY>:<study type folded>}; public so the charge source (PR 3) folds the same way. */

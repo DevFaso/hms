@@ -118,6 +118,12 @@ public enum AuditEventType {
     PRICE_LIST_ITEM_DEACTIVATED,
     /** Billing-money plan PR 2: a new price version of an item (item id, version id, effective date). */
     PRICE_VERSION_ADDED,
+    /** Billing-money plan PR 3 (D-2): a tariff price overridden on a draft line, with a reason (ids only). */
+    INVOICE_LINE_PRICE_OVERRIDDEN,
+    /** Review #1197: an overridden draft line set back to its price-list price (ids only). */
+    INVOICE_LINE_PRICE_RESTORED,
+    /** Review #1197 M2: a draft line deleted (ids only; the reason, required for a price-list line, in details). */
+    INVOICE_LINE_DELETED,
 
     // Pharmacy & inventory
     STOCK_RECEIPT,

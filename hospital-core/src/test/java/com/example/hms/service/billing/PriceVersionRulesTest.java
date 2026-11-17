@@ -231,4 +231,29 @@ class PriceVersionRulesTest {
         assertThat(PriceVersionRules.statusOf(version("1", TODAY.plusDays(3), TODAY.plusDays(2)), TODAY))
             .isEqualTo(PriceListPriceStatus.REPLACED);
     }
+
+    @Test
+    @DisplayName("PR 3 (#1179 review): a version an invoice line copied is never corrected, even the same day, and no confirmation is asked")
+    void anInvoicedVersionIsNeverReplaced() {
+        PriceListPrice enteredToday = version("2000", TODAY, null);
+        PriceListPrice planned = version("2500", TODAY.plusDays(16), null);
+        List<PriceListPrice> today = List.of(enteredToday);
+
+        assertThatThrownBy(() -> PriceVersionRules.plan(today, TODAY, TODAY, true, v -> true, v -> true))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("effectiveFrom");
+                assertThat(e.getMessage()).isEqualTo("Le prix de 2 000 F CFA en vigueur depuis le 15 nov. 2026 a déjà "
+                    + "été facturé sur une ligne de facture : il ne peut plus être corrigé. Choisissez une date "
+                    + "d’effet postérieure.");
+            });
+        assertThatThrownBy(() -> PriceVersionRules.plan(today, TODAY, TODAY, false, v -> true, v -> true))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                e -> assertThat(e.getField()).as("refused before the confirmation question").isEqualTo("effectiveFrom"));
+        List<PriceListPrice> withPlanned = List.of(planned);
+        assertThatThrownBy(() -> PriceVersionRules.plan(withPlanned, TODAY, TODAY.plusDays(16), true, v -> false,
+            v -> true)).isInstanceOf(FieldBusinessException.class);
+        // Not invoiced, the same-day correction is still allowed (decision 2026-11-16).
+        assertThat(PriceVersionRules.plan(today, TODAY, TODAY, true, v -> true, v -> false).toReplace())
+            .containsExactly(enteredToday);
+    }
 }

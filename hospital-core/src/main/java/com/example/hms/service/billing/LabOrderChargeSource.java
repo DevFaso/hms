@@ -1,5 +1,8 @@
 package com.example.hms.service.billing;
 
+import java.util.Optional;
+import com.example.hms.model.LabTestDefinition;
+import com.example.hms.enums.PriceListLinkType;
 import com.example.hms.enums.ItemCategory;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.LabOrder;
@@ -35,9 +38,14 @@ public class LabOrderChargeSource implements VisitChargeSource {
             return lines;
         }
         for (LabOrder order : labOrderRepository.findAllById(ids)) {
-            String test = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : null;
+            LabTestDefinition definition = order.getLabTestDefinition();
+            String test = definition != null ? definition.getName() : null;
             if (test != null && !test.isBlank()) {
-                lines.add(VisitCharge.of(test, ItemCategory.LAB_TEST, 1, visit.prices().sameName(test)));
+                // PR 3: the tariff linked to the test definition first, else the service of the same name.
+                Optional<TariffResolver.Tariff> tariff = definition.getId() == null ? Optional.empty()
+                    : visit.tariff(PriceListLinkType.LAB_TEST_DEFINITION, definition.getId().toString());
+                lines.add(tariff.map(t -> VisitCharge.tariffed(t, ItemCategory.LAB_TEST, 1))
+                    .orElseGet(() -> VisitCharge.of(test, ItemCategory.LAB_TEST, 1, visit.prices().sameName(test))));
             }
         }
         return lines;

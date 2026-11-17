@@ -896,11 +896,29 @@ export class BillingComponent implements OnInit {
   editingLineId = signal<string | null>(null);
   editLineQuantity = signal<number | null>(null);
   editLineUnitPrice = signal<number | null>(null);
+  /* Billing-money plan PR 3 (D-2): the reason a price-list price is changed on a draft line. */
+  editLineOverrideReason = signal('');
+
+  /** A line priced from the price list (overridden or not): its price changes only with a reason. */
+  isTariffLine(item: InvoiceItemResponse): boolean {
+    return item.tariffUnitPrice !== null && item.tariffUnitPrice !== undefined;
+  }
+
+  /** Whether the price now typed overrides the price list, so a reason is required. */
+  overrideReasonRequired(item: InvoiceItemResponse): boolean {
+    const price = this.editLineUnitPrice();
+    if (!this.isTariffLine(item) || price === null) return false;
+    return (
+      Number(price) !== Number(item.tariffUnitPrice) && Number(price) !== Number(item.unitPrice)
+    );
+  }
 
   startEditLine(item: InvoiceItemResponse): void {
     this.editingLineId.set(item.id);
     this.editLineQuantity.set(item.quantity ?? 1);
     this.editLineUnitPrice.set(Number(item.unitPrice) > 0 ? Number(item.unitPrice) : null);
+    // Review #1197 L1: a new override asks a fresh reason; the old one is shown under the line, never re-sent.
+    this.editLineOverrideReason.set('');
     // QA D1195 / D1155: the editing row is an appInlineSubForm — it takes the
     // keyboard, keeps Escape to itself (asking first over a changed value) and
     // gives the keyboard back to the line's pencil when it closes.
@@ -924,7 +942,9 @@ export class BillingComponent implements OnInit {
     // QA D1089: the button is never dead; the field that is missing or wrong says so.
     const qtyKey = lineQuantityMessageKey(this.editLineQuantity());
     const priceProblem = cfaPriceProblem(this.editLineUnitPrice());
-    if (qtyKey || priceProblem) {
+    const reasonMissing =
+      this.overrideReasonRequired(item) && this.editLineOverrideReason().trim() === '';
+    if (qtyKey || priceProblem || reasonMissing) {
       // QA D1296 class (round 28): every wrong field at once, each under its
       // own reason (the price said "required" when only the quantity was).
       // QA D1344 (round 29): a quantity of 0 says it must be above zero.
@@ -940,7 +960,17 @@ export class BillingComponent implements OnInit {
           ),
         });
       }
-      refuseFields(this.host.nativeElement, refusals, ['line-edit-qty', 'line-edit-price']);
+      if (reasonMissing) {
+        refusals.push({
+          id: 'line-edit-override-reason',
+          message: this.translate.instant('BILLING.OVERRIDE_REASON_REQUIRED'),
+        });
+      }
+      refuseFields(this.host.nativeElement, refusals, [
+        'line-edit-qty',
+        'line-edit-price',
+        'line-edit-override-reason',
+      ]);
       return;
     }
     this.itemSaving.set(true);
@@ -951,6 +981,9 @@ export class BillingComponent implements OnInit {
         itemCategory: item.itemCategory as InvoiceItemCategory,
         quantity: this.editLineQuantity() ?? 1,
         unitPrice: this.editLineUnitPrice() ?? 0,
+        ...(this.isTariffLine(item)
+          ? { overrideReason: this.editLineOverrideReason().trim() || undefined }
+          : {}),
       })
       .subscribe({
         next: () => {
@@ -971,19 +1004,59 @@ export class BillingComponent implements OnInit {
       });
   }
 
+  /* Review #1197 M2: a price-list line is removed only with a reason, asked in place. */
+  removingLineId = signal<string | null>(null);
+  removeLineReason = signal('');
+
+  cancelRemoveLine(): void {
+    this.removingLineId.set(null);
+    this.removeLineReason.set('');
+  }
+
   async removeItem(item: InvoiceItemResponse): Promise<void> {
     const inv = this.selectedInvoice();
     if (!inv || this.itemSaving()) return;
+    if (this.isTariffLine(item)) {
+      this.removingLineId.set(item.id);
+      this.removeLineReason.set('');
+      return;
+    }
     // QA D147: a line deletion is not silent. QA D1229: asked in the app.
     const confirmed = await this.confirmService.ask({
       titleKey: 'BILLING.ITEM_REMOVE_CONFIRM',
       confirmKey: 'COMMON.DELETE',
     });
     if (!confirmed || this.itemSaving()) return;
+    this.deleteLine(item);
+  }
+
+  /** Deletes a price-list line with the reason typed in its row. */
+  confirmRemoveTariffLine(item: InvoiceItemResponse): void {
+    const reason = this.removeLineReason().trim();
+    if (!reason) {
+      refuseFields(
+        this.host.nativeElement,
+        [
+          {
+            id: 'line-remove-reason',
+            message: this.translate.instant('BILLING.REMOVE_REASON_REQUIRED'),
+          },
+        ],
+        ['line-remove-reason'],
+      );
+      return;
+    }
+    this.deleteLine(item, reason);
+  }
+
+  private deleteLine(item: InvoiceItemResponse, reason?: string): void {
+    const inv = this.selectedInvoice();
+    if (!inv || this.itemSaving()) return;
     this.itemSaving.set(true);
-    this.billingService.deleteInvoiceItem(item.id).subscribe({
+    this.billingService.deleteInvoiceItem(item.id, reason).subscribe({
       next: () => {
         this.itemSaving.set(false);
+        this.cancelRemoveLine();
         this.toast.success(this.translate.instant('BILLING.ITEM_REMOVED'));
         this.refreshSelected(inv.id);
       },

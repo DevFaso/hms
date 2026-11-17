@@ -1426,6 +1426,30 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['version', 'item', 'from'],
   },
   {
+    // Billing-money plan PR 3 (D-2): a price-list price overridden on a draft line (ids only; the prices and the
+    // reason stay on the line).
+    key: 'AUDIT.DESC.INVOICE_LINE_PRICE_OVERRIDDEN',
+    re: /^Tariff price version (\S+) overridden on draft line (\S+) of invoice (\S+)$/,
+    params: ['version', 'line', 'invoice'],
+  },
+  {
+    // Review #1197: an overridden line set back to its price-list price, and a draft line deleted (ids only;
+    // the reason a price-list line was removed is in the row's details).
+    key: 'AUDIT.DESC.INVOICE_LINE_PRICE_RESTORED',
+    re: /^Tariff price version (\S+) restored on draft line (\S+) of invoice (\S+)$/,
+    params: ['version', 'line', 'invoice'],
+  },
+  {
+    key: 'AUDIT.DESC.INVOICE_LINE_DELETED_TARIFF',
+    re: /^Draft line (\S+) of invoice (\S+) deleted \(tariff price version (\S+)\)$/,
+    params: ['line', 'invoice', 'version'],
+  },
+  {
+    key: 'AUDIT.DESC.INVOICE_LINE_DELETED',
+    re: /^Draft line (\S+) of invoice (\S+) deleted$/,
+    params: ['line', 'invoice'],
+  },
+  {
     // QA D974: a discount, waiver or credit note on an invoice.
     key: 'AUDIT.DESC.INVOICE_ADJUSTMENT',
     re: /^Invoice adjustment ([A-Z_]+) on invoice (\S+)$/,

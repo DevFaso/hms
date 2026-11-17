@@ -526,6 +526,34 @@
                             (ngModelChange)="editLineUnitPrice.set($event)"
                             (keydown.enter)="saveLine(it)"
                           />
+                          <!-- Billing-money plan PR 3 (D-2): a price-list line shows its tariff, and
+                               changing its price asks why; the reason is kept with the line. -->
+                          @if (isTariffLine(it)) {
+                            <div class="cell-secondary" [attr.data-testid]="'line-tariff-' + it.id">
+                              {{
+                                'BILLING.TARIFF_PRICE_VALUE'
+                                  | translate: { amount: formatCurrency(it.tariffUnitPrice ?? 0) }
+                              }}
+                            </div>
+                            <label class="line-edit-label" for="line-edit-override-reason"
+                              >{{ 'BILLING.OVERRIDE_REASON' | translate }}
+                              @if (overrideReasonRequired(it)) {
+                                *
+                              }
+                            </label>
+                            <input
+                              type="text"
+                              maxlength="500"
+                              id="line-edit-override-reason"
+                              class="line-edit-input"
+                              [required]="overrideReasonRequired(it)"
+                              [attr.data-testid]="'line-override-reason-' + it.id"
+                              [placeholder]="'BILLING.OVERRIDE_REASON_PLACEHOLDER' | translate"
+                              [ngModel]="editLineOverrideReason()"
+                              (ngModelChange)="editLineOverrideReason.set($event)"
+                              (keydown.enter)="saveLine(it)"
+                            />
+                          }
                         </td>
                         <td class="amount">
                           {{
@@ -563,6 +591,23 @@
                         <td>{{ it.quantity }}</td>
                         <td class="amount" [class.unpriced]="!(it.unitPrice > 0)">
                           {{ formatCurrency(it.unitPrice) }}
+                          @if (it.overrideReason && isTariffLine(it)) {
+                            <div
+                              class="cell-secondary"
+                              [attr.data-testid]="'line-override-' + it.id"
+                            >
+                              {{
+                                'BILLING.TARIFF_PRICE_VALUE'
+                                  | translate: { amount: formatCurrency(it.tariffUnitPrice ?? 0) }
+                              }}
+                            </div>
+                            <div class="cell-secondary">
+                              {{
+                                'BILLING.OVERRIDE_REASON_VALUE'
+                                  | translate: { reason: it.overrideReason }
+                              }}
+                            </div>
+                          }
                         </td>
                         <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
                         @if (canDelete || canEditLines(inv)) {
@@ -587,6 +632,7 @@
                                 [disabled]="itemSaving()"
                                 [title]="'BILLING.REMOVE_LINE' | translate"
                                 [attr.aria-label]="'BILLING.REMOVE_LINE' | translate"
+                                [attr.data-testid]="'line-delete-' + it.id"
                                 (click)="removeItem(it)"
                               >
                                 <span class="material-symbols-outlined">delete</span>
@@ -595,6 +641,53 @@
                           </td>
                         }
                       </tr>
+                      <!-- Review #1197 M2: a price-list line is removed only with a reason. -->
+                      @if (removingLineId() === it.id) {
+                        <tr
+                          appInlineSubForm
+                          #removeForm="inlineSubForm"
+                          (dismissed)="cancelRemoveLine()"
+                          [inlineSubFormReturn]="
+                            '[data-testid=&quot;line-delete-' + it.id + '&quot;]'
+                          "
+                          [attr.data-testid]="'line-remove-' + it.id"
+                        >
+                          <td colspan="5">
+                            <label class="line-edit-label" for="line-remove-reason"
+                              >{{ 'BILLING.REMOVE_REASON' | translate }} *</label
+                            >
+                            <input
+                              required
+                              type="text"
+                              maxlength="500"
+                              id="line-remove-reason"
+                              class="line-edit-input"
+                              [attr.data-testid]="'line-remove-reason-' + it.id"
+                              [placeholder]="'BILLING.REMOVE_REASON_PLACEHOLDER' | translate"
+                              [ngModel]="removeLineReason()"
+                              (ngModelChange)="removeLineReason.set($event)"
+                              (keydown.enter)="confirmRemoveTariffLine(it)"
+                            />
+                            <button
+                              type="button"
+                              class="btn-danger btn-sm"
+                              [disabled]="itemSaving()"
+                              [attr.data-testid]="'line-remove-confirm-' + it.id"
+                              (click)="confirmRemoveTariffLine(it)"
+                            >
+                              {{ 'COMMON.DELETE' | translate }}
+                            </button>
+                            <button
+                              type="button"
+                              class="btn-secondary btn-sm"
+                              (click)="cancelRemoveLine()"
+                            >
+                              {{ 'COMMON.CANCEL' | translate }}
+                            </button>
+                            <app-inline-discard-ask [form]="removeForm" />
+                          </td>
+                        </tr>
+                      }
                     }
                   }
                 </tbody>

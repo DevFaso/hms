@@ -1,5 +1,7 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.enums.PriceListSystemKey;
+import com.example.hms.enums.PriceListLinkType;
 import com.example.hms.enums.ItemCategory;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Treatment;
@@ -56,6 +58,12 @@ public class BedDaysChargeSource implements VisitChargeSource {
             out = visit.checkedOutAt() != null ? visit.checkedOutAt().toLocalDate() : in;
         }
         int days = (int) Math.max(1, ChronoUnit.DAYS.between(in, out));
+        // PR 3: the hospital's bed-day tariff first, else its service named for a stay.
+        Optional<TariffResolver.Tariff> tariff =
+            visit.tariff(PriceListLinkType.SYSTEM, PriceListSystemKey.BED_DAY.name());
+        if (tariff.isPresent()) {
+            return List.of(VisitCharge.tariffed(tariff.get(), ItemCategory.SERVICE, days));
+        }
         Optional<Treatment> stay = visit.prices().naming(STAY_WORDS);
         // QA D1901: the hospital's own service name as written; else the
         // server's words, shown in each reader's language.

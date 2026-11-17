@@ -37,7 +37,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       {@code /prices}).</li>
  *   <li>The price-list code never touches an invoice or an invoice line, so a price change cannot rewrite a posted
  *       line. (PR 3's tariff resolver reads a version and COPIES its price onto the line; it lives elsewhere and is
- *       not allowed here either.)</li>
+ *       not allowed here either.) The one exception, PR 3: {@code PriceListService} ASKS whether an invoice line
+ *       copied a version ({@code InvoiceItemRepository.existsByPriceListPriceIdIn}), to refuse correcting it; it
+ *       calls nothing else on the invoice lines.</li>
  * </ol>
  */
 @DisplayName("Price list: history is append-only and never reaches a posted line")
@@ -52,6 +54,9 @@ class PriceListHistoryGuardTest {
     /** Calls that would rewrite a frozen field of a version, in a file that handles versions. */
     private static final Pattern FROZEN_SETTER = Pattern.compile(
         "\\.set(HospitalId|Item|UnitPrice|EffectiveFrom|ChangeReason|CreatedBy|ImportId)\\(");
+    private static final Pattern VERSION_TYPE = Pattern.compile("\\bPriceListPrice\\b");
+    /** PR 3: the one invoice-line read the price-list code may make (whether a line copied a version). */
+    private static final String ALLOWED_LINE_READ = "invoiceItemRepository.existsByPriceListPriceIdIn(";
     private static final Pattern EFFECTIVE_TO_SETTER = Pattern.compile("\\.setEffectiveTo\\(");
     private static final Pattern DELETE_CALL = Pattern.compile("[pP]riceRepository\\.delete\\w*\\(|"
         + "PriceListPriceRepository[^;]*\\.delete\\w*\\(");
@@ -77,7 +82,8 @@ class PriceListHistoryGuardTest {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String rel = MAIN.relativize(file).toString().replace('\\', '/');
                 String text = Files.readString(file, StandardCharsets.UTF_8);
-                if (rel.equals("model/PriceListPrice.java") || !text.contains("PriceListPrice")) {
+                // A file that handles versions names the type; "getPriceListPriceId" on an invoice line does not.
+                if (rel.equals("model/PriceListPrice.java") || !VERSION_TYPE.matcher(text).find()) {
                     continue;
                 }
                 String[] lines = text.split("\n", -1);
@@ -123,6 +129,17 @@ class PriceListHistoryGuardTest {
                     .toList()) {
                 String text = Files.readString(file, StandardCharsets.UTF_8);
                 String code = text.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("//[^\n]*", "");
+                // PR 3: the price-list code may ASK whether a line copied a version, and call nothing else on the
+                // invoice lines; the repository's import, field and that one read are taken out, then nothing of an
+                // invoice may remain.
+                int calls = code.split("invoiceItemRepository\\.", -1).length - 1;
+                int allowed = code.split(Pattern.quote(ALLOWED_LINE_READ), -1).length - 1;
+                if (calls != allowed) {
+                    touches.add(MAIN.relativize(file) + " (an invoice-line call other than existsByPriceListPriceIdIn)");
+                }
+                code = code.replace(ALLOWED_LINE_READ, "")
+                    .replace("import com.example.hms.repository.InvoiceItemRepository;", "")
+                    .replace("InvoiceItemRepository invoiceItemRepository", "");
                 if (invoice.matcher(code).find()) {
                     touches.add(MAIN.relativize(file).toString());
                 }

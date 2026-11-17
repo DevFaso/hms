@@ -872,6 +872,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .findByBillingInvoiceId(invoiceId).stream()
             .map((invoiceItemMapper != null ? invoiceItemMapper : new com.example.hms.mapper.InvoiceItemMapper())
                 ::toInvoiceItemResponseDTO)
+            // Review #1197 M1: the patient sees the price charged, never the cashier's override or the grid price.
+            .map(com.example.hms.mapper.InvoiceItemMapper::forPatient)
             .toList();
         List<PaymentTransactionResponseDTO> payments = paymentTransactionRepository
             .findByInvoice_IdOrderByCreatedAtAsc(invoiceId).stream()

@@ -3129,6 +3129,33 @@ class BillingInvoiceServiceImplTest {
         return invoice;
     }
 
+    /** Review #1197 M1: the patient sees the price charged, never the cashier's override reason or the grid price. */
+    @Test
+    void portalDetail_neverShowsTheCashiersTariffOverride_1197() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = portalInvoice(patientId, InvoiceStatus.SENT);
+        com.example.hms.model.InvoiceItem line = new com.example.hms.model.InvoiceItem();
+        line.setId(UUID.randomUUID());
+        line.setBillingInvoice(invoice);
+        line.setItemDescription("Consultation générale");
+        line.setQuantity(1);
+        line.setUnitPrice(new BigDecimal("1500"));
+        line.setPriceSource(com.example.hms.enums.InvoiceLinePriceSource.MANUAL);
+        line.setTariffUnitPrice(new BigDecimal("2000"));
+        line.setOverrideReason("Patient indigent, accord du major");
+        when(invoiceItemRepository.findByBillingInvoiceId(invoice.getId())).thenReturn(List.of(line));
+        billingInvoiceService.setInvoiceItemMapper(new com.example.hms.mapper.InvoiceItemMapper());
+
+        com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO detail =
+            billingInvoiceService.getPortalInvoiceDetail(invoice.getId(), patientId);
+
+        com.example.hms.payload.dto.InvoiceItemResponseDTO shown = detail.items().get(0);
+        assertEquals(0, new BigDecimal("1500").compareTo(shown.getUnitPrice()));
+        assertNull(shown.getOverrideReason());
+        assertNull(shown.getTariffUnitPrice());
+        assertNull(shown.getPriceSource());
+    }
+
     @Test
     void portalDetail_listsTheLinesAndThePaymentsWithoutTheCashiersNotes_D982() {
         UUID patientId = UUID.randomUUID();

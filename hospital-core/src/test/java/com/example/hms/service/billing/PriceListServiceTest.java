@@ -70,13 +70,15 @@ class PriceListServiceTest {
     private final RoleValidator roles = mock(RoleValidator.class);
     private final ActingScopeResolver scope = mock(ActingScopeResolver.class);
     private final AuditEventLogService audit = mock(AuditEventLogService.class);
+    private final com.example.hms.repository.InvoiceItemRepository invoiceLines =
+        mock(com.example.hms.repository.InvoiceItemRepository.class);
     private PriceListService service;
 
     @BeforeEach
     void setUp() {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.FRENCH);
-        service = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), labTests, treatments,
+        service = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), invoiceLines, labTests, treatments,
             mock(UserRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
         when(scope.requirePinned()).thenReturn(HOSPITAL);
         when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL);
@@ -338,5 +340,71 @@ class PriceListServiceTest {
         assertThat(service.list(null, false)).isEmpty();
         verify(items).findAllByOrderByCodeAsc();
         verify(roles, never()).canReadPriceList(any(), any());
+    }
+
+    @Test
+    @DisplayName("PR 3 (#1179 review): the global view reads versions, names and links in chunks, never one unbounded IN")
+    void theGlobalViewReadsInChunks() {
+        when(roles.requireActiveHospitalId()).thenReturn(null);
+        when(scope.isVerifiedSuperAdmin()).thenReturn(true);
+        List<com.example.hms.model.PriceListItem> many = new java.util.ArrayList<>();
+        for (int n = 0; n < 1201; n++) {
+            com.example.hms.model.PriceListItem item = com.example.hms.model.PriceListItem.builder()
+                .hospitalId(UUID.randomUUID()).code("C" + n).label("L" + n)
+                .category(PriceListCategory.OTHER_SERVICE).active(true)
+                .linkType(com.example.hms.enums.PriceListLinkType.TREATMENT).linkKey(UUID.randomUUID().toString())
+                .build();
+            item.setId(UUID.randomUUID());
+            many.add(item);
+        }
+        when(items.findAllByOrderByCodeAsc()).thenReturn(many);
+        List<java.util.Collection<UUID>> priceCalls = new java.util.ArrayList<>();
+        when(prices.findByItemIds(any())).thenAnswer(call -> {
+            priceCalls.add(List.copyOf(call.<java.util.Collection<UUID>>getArgument(0)));
+            return List.of();
+        });
+        List<Iterable<UUID>> treatmentCalls = new java.util.ArrayList<>();
+        when(treatments.findAllById(any())).thenAnswer(call -> {
+            treatmentCalls.add(call.getArgument(0));
+            return List.of();
+        });
+
+        assertThat(service.list(null, false)).hasSize(1201);
+
+        assertThat(priceCalls).hasSize(3).allSatisfy(ids -> assertThat(ids).hasSizeLessThanOrEqualTo(500));
+        assertThat(priceCalls.stream().mapToInt(java.util.Collection::size).sum()).isEqualTo(1201);
+        assertThat(treatmentCalls).hasSize(3);
+        treatmentCalls.forEach(ids -> assertThat(ids).hasSizeLessThanOrEqualTo(500));
+    }
+
+    @Test
+    @DisplayName("PR 3 (#1179 review): a same-day correction is refused once an invoice line copied that version")
+    void anInvoicedVersionIsNeverCorrected() {
+        com.example.hms.model.PriceListItem item = com.example.hms.model.PriceListItem.builder().hospitalId(HOSPITAL)
+            .code("CS-GEN").label("Consultation").category(PriceListCategory.CONSULTATION).active(true).build();
+        item.setId(UUID.randomUUID());
+        com.example.hms.model.PriceListPrice today = com.example.hms.model.PriceListPrice.builder().hospitalId(HOSPITAL)
+            .item(item).unitPrice(new BigDecimal("2000")).effectiveFrom(TODAY).build();
+        today.setId(UUID.randomUUID());
+        today.setCreatedAt(java.time.LocalDateTime.now(CLOCK.withZone(java.time.ZoneId.systemDefault())));
+        when(roles.canMaintainPriceList(ACTOR, HOSPITAL)).thenReturn(true);
+        when(items.lockByIdAtHospital(item.getId(), HOSPITAL)).thenReturn(java.util.Optional.of(item));
+        when(prices.findHistory(item.getId(), HOSPITAL)).thenReturn(List.of(today));
+        when(invoiceLines.existsByPriceListPriceIdIn(List.of(today.getId()))).thenReturn(true);
+
+        PriceListPriceRequestDTO correction = PriceListPriceRequestDTO.builder().unitPrice(new BigDecimal("2200"))
+            .changeReason("Erreur de saisie").replaceScheduled(true).build();
+        UUID itemId = item.getId();
+        assertThatThrownBy(() -> service.addPrice(itemId, correction))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("effectiveFrom");
+                assertThat(e.getMessage()).contains("2 000 F CFA").contains("déjà été facturé");
+            });
+        verify(prices, never()).saveAndFlush(any());
+
+        // Not yet invoiced, the same correction goes through.
+        when(invoiceLines.existsByPriceListPriceIdIn(List.of(today.getId()))).thenReturn(false);
+        service.addPrice(itemId, correction);
+        verify(prices).saveAndFlush(any());
     }
 }

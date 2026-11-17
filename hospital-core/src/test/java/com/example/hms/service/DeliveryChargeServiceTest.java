@@ -39,6 +39,7 @@ class DeliveryChargeServiceTest {
     @Mock private TreatmentRepository treatmentRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private InvoiceNumberAllocator invoiceNumberAllocator;
+    @Mock private com.example.hms.service.billing.TariffResolver tariffResolver;
     @InjectMocks private DeliveryChargeService service;
 
     private final UUID recorderId = UUID.randomUUID();
@@ -205,5 +206,43 @@ class DeliveryChargeServiceTest {
 
         assertThat(service.chargeDelivery(delivery, recorderId)).isEmpty();
         verify(invoiceRepository, never()).save(any());
+    }
+
+    /** Billing-money plan PR 3: the delivery tariff in force on the birth day prices the line, before any service. */
+    @Test
+    void theDeliveryTariffOfTheBirthDayPricesTheLine() {
+        recorderWorksHere();
+        delivery.setDeliveryMode(DeliveryMode.CAESAREAN_EMERGENCY);
+        delivery.setBirthDateTime(java.time.LocalDateTime.of(2026, 11, 14, 23, 40));
+        UUID itemId = UUID.randomUUID();
+        UUID priceId = UUID.randomUUID();
+        when(tariffResolver.resolve(hospital.getId(), com.example.hms.enums.PriceListLinkType.SYSTEM,
+                "DELIVERY_CAESAREAN", java.time.LocalDate.of(2026, 11, 14)))
+            .thenReturn(Optional.of(new com.example.hms.service.billing.TariffResolver.Tariff(itemId, priceId,
+                "Césarienne (grille)", new BigDecimal("120000"))));
+
+        BillingInvoice invoice = service.chargeDelivery(delivery, recorderId).orElseThrow();
+
+        InvoiceItem line = invoice.getInvoiceItems().iterator().next();
+        assertThat(line.getUnitPrice()).isEqualByComparingTo("120000");
+        assertThat(line.getItemDescription()).isEqualTo("Césarienne (grille)");
+        assertThat(line.getTextCode()).isNull();
+        assertThat(line.getPriceSource()).isEqualTo(com.example.hms.enums.InvoiceLinePriceSource.TARIFF);
+        assertThat(line.getPriceListItemId()).isEqualTo(itemId);
+        assertThat(line.getPriceListPriceId()).isEqualTo(priceId);
+        assertThat(line.getRelatedService()).isNull();
+        verify(treatmentRepository, never()).findByHospital_Id(any());
+    }
+
+    @Test
+    void withoutATariffTheServiceNamePricesItAndSaysSo() {
+        recorderWorksHere();
+        when(treatmentRepository.findByHospital_Id(hospital.getId())).thenReturn(List.of(
+            service("Accouchement voie basse", "25000")));
+
+        InvoiceItem line = service.chargeDelivery(delivery, recorderId).orElseThrow().getInvoiceItems().iterator().next();
+
+        assertThat(line.getPriceSource()).isEqualTo(com.example.hms.enums.InvoiceLinePriceSource.SERVICE_NAME);
+        assertThat(line.getPriceListPriceId()).isNull();
     }
 }

@@ -14,7 +14,6 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.PriceListItem;
 import com.example.hms.model.PriceListPrice;
-import com.example.hms.model.Treatment;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.billing.PriceListDeactivateRequestDTO;
@@ -24,6 +23,7 @@ import com.example.hms.payload.dto.billing.PriceListItemUpdateRequestDTO;
 import com.example.hms.payload.dto.billing.PriceListLinkOptionsDTO;
 import com.example.hms.payload.dto.billing.PriceListPriceDTO;
 import com.example.hms.payload.dto.billing.PriceListPriceRequestDTO;
+import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.PriceListItemRepository;
 import com.example.hms.repository.PriceListPriceRepository;
@@ -45,6 +45,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
@@ -58,7 +59,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Billing-money plan PR 2 (V302, scorecard M1): each hospital's price list, with effective-dated price versions.
@@ -99,6 +99,7 @@ public class PriceListService {
     private final PriceListItemRepository itemRepository;
     private final PriceListPriceRepository priceRepository;
     private final PriceListLinks links;
+    private final InvoiceItemRepository invoiceItemRepository;
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final TreatmentRepository treatmentRepository;
     private final UserRepository userRepository;
@@ -112,6 +113,7 @@ public class PriceListService {
     public PriceListService(PriceListItemRepository itemRepository,
                             PriceListPriceRepository priceRepository,
                             PriceListLinks links,
+                            InvoiceItemRepository invoiceItemRepository,
                             LabTestDefinitionRepository labTestDefinitionRepository,
                             TreatmentRepository treatmentRepository,
                             UserRepository userRepository,
@@ -123,6 +125,7 @@ public class PriceListService {
         this.itemRepository = itemRepository;
         this.priceRepository = priceRepository;
         this.links = links;
+        this.invoiceItemRepository = invoiceItemRepository;
         this.labTestDefinitionRepository = labTestDefinitionRepository;
         this.treatmentRepository = treatmentRepository;
         this.userRepository = userRepository;
@@ -148,9 +151,14 @@ public class PriceListService {
         if (items.isEmpty()) {
             return List.of();
         }
-        Map<UUID, List<PriceListPrice>> versions = priceRepository
-            .findByItemIds(items.stream().map(PriceListItem::getId).toList()).stream()
-            .collect(Collectors.groupingBy(p -> p.getItem().getId()));
+        // PR 3 (deferred from the #1179 review): the global view lists every hospital's items, so the versions are
+        // read IN_CHUNK ids at a time, never in one unbounded IN list.
+        Map<UUID, List<PriceListPrice>> versions = new HashMap<>();
+        for (List<UUID> chunk : chunksOf(items.stream().map(PriceListItem::getId).toList())) {
+            for (PriceListPrice price : priceRepository.findByItemIds(chunk)) {
+                versions.computeIfAbsent(price.getItem().getId(), id -> new ArrayList<>()).add(price);
+            }
+        }
         Names names = names(items, versions.values().stream().flatMap(List::stream).toList());
         LinkLabels linkLabels = linkLabels(items);
         LocalDate today = today();
@@ -317,8 +325,11 @@ public class PriceListService {
         LocalDate today = today();
         LocalDate from = PriceVersionRules.startOf(body.getEffectiveFrom(), today);
         List<PriceListPrice> versions = priceRepository.findHistory(item.getId(), actor.hospitalId());
+        // PR 3: a version an invoice line copied is never replaced (read under the item's lock, which a checkout's
+        // share lock on the same item serialises with).
         PriceVersionRules.Plan plan = PriceVersionRules.plan(versions, today, from, body.isReplaceScheduled(),
-            version -> enteredOn(version, today));
+            version -> enteredOn(version, today),
+            version -> invoiceItemRepository.existsByPriceListPriceIdIn(List.of(version.getId())));
 
         // Close first, then insert: the partial unique indexes (one live version per start, one open-ended
         // version per item) hold at every statement.
@@ -418,6 +429,18 @@ public class PriceListService {
 
     // ───────────────────────────── helpers ─────────────────────────────
 
+    /** The most ids one IN list carries (well under the driver's bind-parameter limit). */
+    static final int IN_CHUNK = 500;
+
+    /** {@code ids} cut into lists of at most {@link #IN_CHUNK}, in order. */
+    static List<List<UUID>> chunksOf(List<UUID> ids) {
+        List<List<UUID>> chunks = new ArrayList<>();
+        for (int start = 0; start < ids.size(); start += IN_CHUNK) {
+            chunks.add(ids.subList(start, Math.min(ids.size(), start + IN_CHUNK)));
+        }
+        return chunks;
+    }
+
     private PriceListItem lockAtHospital(UUID itemId, Maintainer actor) {
         return itemRepository.lockByIdAtHospital(itemId, actor.hospitalId())
             .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_KEY, itemId));
@@ -474,8 +497,8 @@ public class PriceListService {
 
     /**
      * Owner/coordinator decision 2026-11-16 (provisional): a version entered today and in force since today is a
-     * same-day correction, not history already applied. No invoice line can reference a version until PR 3 (V303
-     * adds invoice_items.price_list_price_id); PR 3 must also refuse the correction once a posted line uses it.
+     * same-day correction, not history already applied - unless an invoice line already copied it
+     * (invoice_items.price_list_price_id, V303): then it has priced a bill and is refused (PR 3).
      */
     private boolean enteredOn(PriceListPrice version, LocalDate today) {
         return version.getCreatedAt() != null
@@ -530,8 +553,11 @@ public class PriceListService {
         if (ids.isEmpty()) {
             return new Names(Map.of());
         }
-        return new Names(userRepository.findAllById(ids).stream()
-            .collect(Collectors.toMap(User::getId, PriceListService::displayName, (a, b) -> a)));
+        Map<UUID, String> byId = new HashMap<>();
+        for (List<UUID> chunk : chunksOf(new ArrayList<>(ids))) {
+            userRepository.findAllById(chunk).forEach(user -> byId.putIfAbsent(user.getId(), displayName(user)));
+        }
+        return new Names(byId);
     }
 
     /** What the lab-test and service links name, read in two queries at most. */
@@ -541,14 +567,17 @@ public class PriceListService {
     private LinkLabels linkLabels(Collection<PriceListItem> items) {
         Set<UUID> labIds = idsOf(items, PriceListLinkType.LAB_TEST_DEFINITION);
         Set<UUID> treatmentIds = idsOf(items, PriceListLinkType.TREATMENT);
-        Map<UUID, String> labTests = labIds.isEmpty() ? Map.of()
-            : labTestDefinitionRepository.findAllById(labIds).stream().collect(Collectors.toMap(
-                LabTestDefinition::getId,
-                d -> d.getTestCode() == null ? Objects.toString(d.getName(), "") : d.getTestCode() + " · " + d.getName(),
-                (a, b) -> a));
-        Map<UUID, String> treatments = treatmentIds.isEmpty() ? Map.of()
-            : treatmentRepository.findAllById(treatmentIds).stream()
-                .collect(Collectors.toMap(Treatment::getId, t -> Objects.toString(t.getName(), ""), (a, b) -> a));
+        // Every IN list in chunks: the global view links every hospital's tests and services (#1179 review).
+        Map<UUID, String> labTests = new HashMap<>();
+        for (List<UUID> chunk : chunksOf(new ArrayList<>(labIds))) {
+            labTestDefinitionRepository.findAllById(chunk).forEach(d -> labTests.putIfAbsent(d.getId(),
+                d.getTestCode() == null ? Objects.toString(d.getName(), "") : d.getTestCode() + " · " + d.getName()));
+        }
+        Map<UUID, String> treatments = new HashMap<>();
+        for (List<UUID> chunk : chunksOf(new ArrayList<>(treatmentIds))) {
+            treatmentRepository.findAllById(chunk)
+                .forEach(t -> treatments.putIfAbsent(t.getId(), Objects.toString(t.getName(), "")));
+        }
         return new LinkLabels(labTests, treatments);
     }
 

@@ -54,4 +54,11 @@ public class InvoiceItemRequestDTO {
     private UUID assignmentId;
 
     private UUID relatedServiceId;
+
+    /**
+     * Billing-money plan PR 3 (D-2): required when the line was priced from the price list and its unit price is
+     * changed; kept on the line with the tariff's price, and audited.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String overrideReason;
 }

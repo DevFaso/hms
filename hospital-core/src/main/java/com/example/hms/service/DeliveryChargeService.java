@@ -1,5 +1,9 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.InvoiceLinePriceSource;
+import com.example.hms.enums.PriceListLinkType;
+import com.example.hms.enums.PriceListSystemKey;
+import com.example.hms.service.billing.TariffResolver;
 import com.example.hms.enums.DeliveryMode;
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.enums.ItemCategory;
@@ -57,6 +61,7 @@ public class DeliveryChargeService {
     private final TreatmentRepository treatmentRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final InvoiceNumberAllocator invoiceNumberAllocator;
+    private final TariffResolver tariffResolver;
 
     /**
      * Posts the delivery charge. {@code recorderUserId} is the clinician who
@@ -87,9 +92,24 @@ public class DeliveryChargeService {
             return Optional.empty();
         }
         boolean caesarean = delivery.getDeliveryMode() != null && CAESAREAN.contains(delivery.getDeliveryMode());
-        Optional<Treatment> service = pricedService(hospitalId, caesarean);
-        BigDecimal price = service.map(Treatment::getPrice).orElse(BigDecimal.ZERO)
+        // Billing-money plan PR 3 (plan 3.3, D-4): the hospital's delivery tariff in force on the day of the birth
+        // first, else its one service named for this kind of delivery, else zero for the billing clerk.
+        LocalDate serviceDay = delivery.getBirthDateTime() != null
+            ? delivery.getBirthDateTime().toLocalDate() : tariffResolver.today();
+        Optional<TariffResolver.Tariff> tariff = tariffResolver.resolve(hospitalId, PriceListLinkType.SYSTEM,
+            (caesarean ? PriceListSystemKey.DELIVERY_CAESAREAN : PriceListSystemKey.DELIVERY_VAGINAL).name(),
+            serviceDay);
+        Optional<Treatment> service = tariff.isPresent() ? Optional.empty() : pricedService(hospitalId, caesarean);
+        BigDecimal price = tariff.map(TariffResolver.Tariff::unitPrice)
+            .or(() -> service.map(Treatment::getPrice))
+            .orElse(BigDecimal.ZERO)
             .setScale(2, RoundingMode.HALF_UP);
+        InvoiceLinePriceSource priceSource;
+        if (tariff.isPresent()) {
+            priceSource = InvoiceLinePriceSource.TARIFF;
+        } else {
+            priceSource = service.isPresent() ? InvoiceLinePriceSource.SERVICE_NAME : InvoiceLinePriceSource.UNPRICED;
+        }
 
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         // QA D1901: the note and the line are kept as codes (the mode, the
@@ -115,19 +135,29 @@ public class DeliveryChargeService {
             // QA D1710 class: the day is written the reader's way when rendered.
             .notes(note.french()).notesCode(note.code()).notesArgs(note.argsJson())
             .build();
-        InvoiceItem line = InvoiceItem.builder()
-            .itemDescription(label.french()).textCode(label.code()).textArgs(label.argsJson())
+        // Plan 3.7: a tariff line is named by the hospital's label as typed (no code, never translated).
+        InvoiceItem.InvoiceItemBuilder builder = tariff.isPresent()
+            ? InvoiceItem.builder().itemDescription(truncate(tariff.get().label()))
+            : InvoiceItem.builder().itemDescription(label.french()).textCode(label.code()).textArgs(label.argsJson());
+        InvoiceItem line = builder
             .quantity(1)
             .itemCategory(ItemCategory.SERVICE)
             .unitPrice(price)
             .totalPrice(price)
             .assignment(assignment.get())
             .relatedService(service.orElse(null))
+            .priceSource(priceSource)
+            .priceListItemId(tariff.map(TariffResolver.Tariff::itemId).orElse(null))
+            .priceListPriceId(tariff.map(TariffResolver.Tariff::priceId).orElse(null))
             .build();
         invoice.addItem(line);
         // addItem keeps a priced draft a DRAFT; a zero line must stay one too.
         invoice.setStatus(InvoiceStatus.DRAFT);
         return Optional.of(invoiceRepository.save(invoice));
+    }
+
+    private static String truncate(String text) {
+        return text.length() > 255 ? text.substring(0, 255) : text;
     }
 
     /** The one active priced service of the hospital that names this kind of delivery, if exactly one does. */

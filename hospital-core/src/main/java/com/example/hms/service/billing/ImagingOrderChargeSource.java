@@ -1,5 +1,7 @@
 package com.example.hms.service.billing;
 
+import java.util.Optional;
+import com.example.hms.enums.PriceListLinkType;
 import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.enums.ItemCategory;
 import com.example.hms.model.ImagingOrder;
@@ -40,7 +42,12 @@ public class ImagingOrderChargeSource implements VisitChargeSource {
         for (ImagingOrder order : orders) {
             String study = order.getStudyType();
             if (study != null && !study.isBlank()) {
-                lines.add(VisitCharge.of(study.trim(), ItemCategory.SERVICE, 1, visit.prices().sameName(study)));
+                // PR 3: the tariff linked to <modality>:<study type> first, else the service of the same name.
+                Optional<TariffResolver.Tariff> tariff = order.getModality() == null ? Optional.empty()
+                    : visit.tariff(PriceListLinkType.IMAGING_STUDY, order.getModality().name() + ":" + study);
+                lines.add(tariff.map(t -> VisitCharge.tariffed(t, ItemCategory.SERVICE, 1))
+                    .orElseGet(() -> VisitCharge.of(study.trim(), ItemCategory.SERVICE, 1,
+                        visit.prices().sameName(study))));
             }
         }
         return lines;

@@ -117,6 +117,53 @@ class BillableOrderRegistryGuardTest {
         assertThat(stale).as("NOT_BILLABLE names an entity that is no longer on a visit, or is now billed").isEmpty();
     }
 
+    /** Billing-money plan PR 3: where an invoice charge outside the visit sources is priced. */
+    private static final Map<BillableOrderType.Route, Path> ROUTE_CHARGER = Map.of(
+        BillableOrderType.Route.DELIVERY_CHARGE,
+        Paths.get("src/main/java/com/example/hms/service/DeliveryChargeService.java"));
+    private static final Path BILLING = Paths.get("src/main/java/com/example/hms/service/billing");
+
+    @Test
+    @DisplayName("PR 3: every type charged on an invoice declares its price-list link, and its charge code looks it up")
+    void everyInvoicedTypeIsPricedThroughItsLink() throws Exception {
+        Map<BillableOrderType, String> sourceFiles = new EnumMap<>(BillableOrderType.class);
+        for (VisitChargeSource source : allSources()) {
+            sourceFiles.put(source.type(), source.getClass().getSimpleName());
+        }
+        List<String> problems = new ArrayList<>();
+        for (BillableOrderType type : BillableOrderType.values()) {
+            if (type.route() == BillableOrderType.Route.PHARMACY_CHECKOUT) {
+                if (!type.linkTypes().isEmpty()) {
+                    problems.add(type + " is priced at the pharmacy but declares price-list links " + type.linkTypes());
+                }
+                continue;
+            }
+            if (type.linkTypes().isEmpty()) {
+                problems.add(type + " is charged on an invoice but declares no price-list link type");
+                continue;
+            }
+            Path file = type.onVisitInvoice()
+                ? BILLING.resolve(sourceFiles.get(type) + ".java")
+                : ROUTE_CHARGER.get(type.route());
+            if (file == null || !Files.exists(file)) {
+                problems.add(type + " has no charge code to check (" + file + ")");
+                continue;
+            }
+            String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            String lookup = type.onVisitInvoice() ? "visit.tariff(" : "tariffResolver.resolve(";
+            if (!code.contains(lookup)) {
+                problems.add(type + " (" + file.getFileName() + ") never looks up its tariff with " + lookup);
+            }
+            for (com.example.hms.enums.PriceListLinkType link : type.linkTypes()) {
+                if (!code.contains("PriceListLinkType." + link.name())) {
+                    problems.add(type + " (" + file.getFileName() + ") declares " + link + " but never looks it up");
+                }
+            }
+        }
+        assertThat(problems).as("a billable type the price list cannot price (billing-money plan PR 3)"
+            + SourceScan.MANDATE).isEmpty();
+    }
+
     /** Every VisitChargeSource of production code, built with mocked dependencies to read its type. */
     static List<VisitChargeSource> allSources() throws Exception {
         ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
