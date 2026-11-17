@@ -125,6 +125,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         this.userRepository = userRepository;
     }
 
+    /** Billing-money plan PR 8: the refunds (money out); optional so the hand-built unit tests keep working. */
+    private com.example.hms.repository.InvoiceRefundRepository refundRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setRefundRepository(com.example.hms.repository.InvoiceRefundRepository refundRepository) {
+        this.refundRepository = refundRepository;
+    }
+
     private void attachCreator(BillingInvoice invoice, UUID creatorId) {
         if (creatorId != null && userRepository != null) {
             userRepository.findById(creatorId).ifPresent(invoice::setCreatedByUser);
@@ -255,7 +263,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         BigDecimal credit = copayCredit(copay);
         // Nothing is owed on an invoice already settled, so a second copay of the visit stays apart.
-        BigDecimal paid = target.getAmountPaid() != null ? target.getAmountPaid() : BigDecimal.ZERO;
+        // Billing-money plan PR 8: money refunded since is no longer held against the bill.
+        BigDecimal paid = com.example.hms.utility.InvoiceBalance.keptOf(target);
         BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid)
             .subtract(reserved);
         if (credit.signum() <= 0 || owed.signum() <= 0) {
@@ -628,7 +637,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_INVOICE_ITEM_ID, "billing.adjustment.lineRequired");
         }
         BigDecimal total = nz(invoice.getTotalAmount());
-        BigDecimal paid = nz(invoice.getAmountPaid());
+        BigDecimal paid = com.example.hms.utility.InvoiceBalance.keptOf(invoice); // PR 8: less what was refunded
         BigDecimal pending = nz(paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
             PaymentStatus.PENDING));
         // A discount or a waiver may name a line too: it is then held against that line.
@@ -769,7 +778,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // status follows it.
         BigDecimal newTotal = nz(invoice.getTotalAmount()).add(nz(adjustment.getAmount()));
         invoice.setTotalAmount(newTotal);
-        BigDecimal paid = nz(invoice.getAmountPaid());
+        BigDecimal paid = com.example.hms.utility.InvoiceBalance.keptOf(invoice); // PR 8: less what was refunded
         if (paid.compareTo(newTotal) >= 0) {
             invoice.setStatus(InvoiceStatus.PAID);
         } else if (paid.signum() > 0) {
@@ -891,8 +900,17 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 .map(a -> new com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO(a.id(), a.type(), a.amount(),
                     null, a.invoiceItemId(), a.invoiceItemDescription(), a.createdAt(), null, null))
                 .toList();
+        // Billing-money plan PR 8: the money handed back, as the patient sees it (amount, how, when).
+        List<com.example.hms.payload.dto.portal.PortalRefundDTO> refunds = refundRepository == null
+            ? List.of()
+            : refundRepository.findByInvoice_IdAndStatusInOrderByCreatedAtAsc(invoiceId,
+                    List.of(com.example.hms.enums.InvoiceRefundStatus.PAID)).stream()
+                .map(r -> new com.example.hms.payload.dto.portal.PortalRefundDTO(r.getId(), r.getAmount(),
+                    r.getMethod() != null ? r.getMethod().name() : null,
+                    r.getMobileMoneyOperator() != null ? r.getMobileMoneyOperator().name() : null, r.getPaidAt()))
+                .toList();
         return new com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO(toPortalResponse(invoice), items, payments,
-            adjustments);
+            adjustments, refunds);
     }
 
     @Override
@@ -1270,7 +1288,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
         BigDecimal sum = invoiceRepository.sumItemsByInvoiceId(invoiceId);
         BigDecimal total = sum != null ? sum : BigDecimal.ZERO;
-        BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
+        BigDecimal paid = com.example.hms.utility.InvoiceBalance.keptOf(invoice); // PR 8: less what was refunded
         // QA D1466: a line added to an invoice holding a refund due lowers that refund; only
         // a total going DOWN under the money received is refused.
         BigDecimal before = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
@@ -1601,6 +1619,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     private static final String SOURCE_BILLING = "BILLING";
     private static final String SOURCE_PHARMACY = "PHARMACY";
+    /** Billing-money plan PR 8: money received at the till, and money handed back (a refund paid out). */
+    private static final String DIRECTION_IN = "IN";
+    private static final String DIRECTION_OUT = "OUT";
 
     /**
      * QA D1059: the cashier's daily cash closing. What the signed-in cashier
@@ -1632,6 +1653,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 entries.add(cashEntry(p));
             }
         }
+        // Billing-money plan PR 8 (QA D1900): refunds this cashier handed back that day are money OUT of this
+        // till, today; the day the money came in is never rewritten.
+        if (refundRepository != null) {
+            for (com.example.hms.model.InvoiceRefund r
+                    : refundRepository.findPaidByCashier(cashierId, hospitalId, start, end)) {
+                entries.add(cashEntry(r));
+            }
+        }
         entries.sort(java.util.Comparator.comparing(com.example.hms.payload.dto.CashClosingDTO.Entry::getReceivedAt,
             java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())));
 
@@ -1647,6 +1676,26 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .receivedAmount(tally.received)
             .reversedCount(tally.reversedCount)
             .reversedAmount(tally.reversed)
+            .refundedCount(tally.refundedCount)
+            .refundedAmount(tally.refunded)
+            .netAmount(tally.received.subtract(tally.refunded))
+            .build();
+    }
+
+    /** Billing-money plan PR 8: a refund handed back, a line of money OUT of the cash closing. */
+    private static com.example.hms.payload.dto.CashClosingDTO.Entry cashEntry(com.example.hms.model.InvoiceRefund r) {
+        BillingInvoice invoice = r.getInvoice();
+        return com.example.hms.payload.dto.CashClosingDTO.Entry.builder()
+            .id(r.getId())
+            .source(SOURCE_BILLING)
+            .receivedAt(r.getPaidAt())
+            .document(invoice != null ? invoice.getInvoiceNumber() : null)
+            .patientName(invoice != null && invoice.getPatient() != null ? invoice.getPatient().getFullName() : null)
+            .method(r.getMethod() != null ? r.getMethod().name() : null)
+            .reference(r.getReference())
+            .amount(r.getAmount())
+            .status(r.getStatus() != null ? r.getStatus().name() : null)
+            .direction(DIRECTION_OUT)
             .build();
     }
 
@@ -1663,6 +1712,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .reference(p.getReferenceNumber())
             .amount(p.getAmount())
             .status(p.getStatus() != null ? p.getStatus().name() : null)
+            .direction(DIRECTION_IN)
             .build();
     }
 
@@ -1679,6 +1729,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .reference(p.getReferenceNumber())
             .amount(p.getAmount())
             .status(p.getStatus() != null ? p.getStatus().name() : null)
+            .direction(DIRECTION_IN)
             .build();
     }
 
@@ -1702,8 +1753,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             new java.util.LinkedHashMap<>();
         private long receivedCount;
         private long reversedCount;
+        private long refundedCount;
         private BigDecimal received = BigDecimal.ZERO;
         private BigDecimal reversed = BigDecimal.ZERO;
+        private BigDecimal refunded = BigDecimal.ZERO;
 
         private static boolean stillCounted(String status) {
             return PaymentStatus.CONFIRMED.name().equals(status)
@@ -1712,17 +1765,25 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
         void add(com.example.hms.payload.dto.CashClosingDTO.Entry e) {
             BigDecimal amount = e.getAmount() != null ? e.getAmount() : BigDecimal.ZERO;
-            if (!stillCounted(e.getStatus())) {
+            boolean out = DIRECTION_OUT.equals(e.getDirection());
+            if (out) {
+                // A refund handed back: money out of the till, with its own total per method.
+                refundedCount++;
+                refunded = refunded.add(amount);
+            } else if (!stillCounted(e.getStatus())) {
                 reversedCount++;
                 reversed = reversed.add(amount);
                 return;
+            } else {
+                receivedCount++;
+                received = received.add(amount);
             }
-            receivedCount++;
-            received = received.add(amount);
+            String direction = out ? DIRECTION_OUT : DIRECTION_IN;
             com.example.hms.payload.dto.CashClosingDTO.MethodTotal t = totals.computeIfAbsent(
-                e.getSource() + "|" + e.getMethod(),
+                e.getSource() + "|" + e.getMethod() + "|" + direction,
                 k -> com.example.hms.payload.dto.CashClosingDTO.MethodTotal.builder()
-                    .source(e.getSource()).method(e.getMethod()).count(0).amount(BigDecimal.ZERO).build());
+                    .source(e.getSource()).method(e.getMethod()).direction(direction)
+                    .count(0).amount(BigDecimal.ZERO).build());
             t.setCount(t.getCount() + 1);
             t.setAmount(t.getAmount().add(amount));
         }
@@ -1770,8 +1831,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // is already declared, what is left), not as one sum they never typed.
         BigDecimal open = pending != null ? pending : BigDecimal.ZERO;
         if (open.signum() > 0) {
-            BigDecimal balanceDue = invoice.getTotalAmount()
-                .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
+            BigDecimal balanceDue = invoice.getTotalAmount().subtract(com.example.hms.utility.InvoiceBalance.keptOf(invoice));
             if (declared.compareTo(balanceDue) > 0) {
                 throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.exceedsWithPending", payment.getAmount(), open,
                     balanceDue.subtract(open).max(BigDecimal.ZERO));
@@ -1888,8 +1948,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             throw new BusinessException("billing.invoice.notIssued");
         }
 
-        BigDecimal currentPaid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
-        BigDecimal balanceDue = invoice.getTotalAmount().subtract(currentPaid);
+        // Billing-money plan PR 8: what is held is what came in less what was refunded.
+        BigDecimal balanceDue = invoice.getTotalAmount().subtract(com.example.hms.utility.InvoiceBalance.keptOf(invoice));
 
         if (amount.compareTo(balanceDue) > 0) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.exceedsBalance", amount, balanceDue);
@@ -1912,7 +1972,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal newAmountPaid = currentPaid.add(amount);
         invoice.setAmountPaid(newAmountPaid);
 
-        if (newAmountPaid.compareTo(invoice.getTotalAmount()) >= 0) {
+        // Billing-money plan PR 8: settled by what the hospital holds (received less refunded).
+        if (com.example.hms.utility.InvoiceBalance.keptOf(invoice).compareTo(invoice.getTotalAmount()) >= 0) {
             invoice.setStatus(InvoiceStatus.PAID);
         } else {
             invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
@@ -1975,8 +2036,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (pending == null || pending.signum() <= 0 || amount == null) {
             return;
         }
-        BigDecimal balanceDue = invoice.getTotalAmount()
-            .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
+        BigDecimal balanceDue = invoice.getTotalAmount().subtract(com.example.hms.utility.InvoiceBalance.keptOf(invoice));
         if (amount.add(pending).compareTo(balanceDue) > 0) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.staffExceedsWithPending", amount, pending,
                 balanceDue.subtract(pending).max(BigDecimal.ZERO));
@@ -2066,10 +2126,16 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     /**
-     * QA D142: a confirmed payment is reversed (refunded, or entered in
-     * error) by billing staff with a reason. The row stays in the ledger as
-     * REVERSED, and the amount paid and the status are recomputed from what
-     * is still counted, so the totals stay consistent.
+     * QA D142: a confirmed payment entered in error is reversed by billing
+     * staff with a reason. The row stays in the ledger as REVERSED, and the
+     * amount paid and the status are recomputed from what is still counted,
+     * so the totals stay consistent.
+     *
+     * <p>Billing-money plan PR 8: a reversal is not a refund. Money handed
+     * back to a patient is an {@code InvoiceRefund} (approved by another
+     * person, counted as money out on the day it is paid); this is audited
+     * as {@code PAYMENT_REVERSED}, never {@code REFUND_ISSUED}. A reversal
+     * cannot take the money held below what refunds already handed back.
      */
     @Override
     @Transactional
@@ -2087,12 +2153,18 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             // A ledger that disagrees with the invoice is not settled by a guess.
             throw new BusinessException("billing.payment.ledgerMismatch");
         }
+        // Billing-money plan PR 8: money already handed back on a refund came out of what was received.
+        BigDecimal refunded = invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO;
+        if (remaining.compareTo(refunded) < 0) {
+            throw new BusinessException("billing.payment.reversalBelowRefunded");
+        }
         claimTransition(row, invoice, PaymentStatus.CONFIRMED, PaymentStatus.REVERSED, "billing.payment.notConfirmed");
         invoice.setAmountPaid(remaining);
-        if (remaining.signum() == 0) {
+        BigDecimal kept = com.example.hms.utility.InvoiceBalance.keptOf(invoice);
+        if (kept.signum() == 0) {
             invoice.setStatus(InvoiceStatus.SENT);
         } else {
-            invoice.setStatus(remaining.compareTo(invoice.getTotalAmount()) >= 0
+            invoice.setStatus(kept.compareTo(invoice.getTotalAmount()) >= 0
                 ? InvoiceStatus.PAID : InvoiceStatus.PARTIALLY_PAID);
         }
         row.setStatus(PaymentStatus.REVERSED);
@@ -2101,7 +2173,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         row.setReversalReason(why);
         paymentTransactionRepository.save(row);
         BillingInvoice saved = invoiceRepository.save(invoice);
-        auditPaymentAfterCommit(AuditEventType.REFUND_ISSUED, staffId, saved, row.getId(), "Payment reversed");
+        auditPaymentAfterCommit(AuditEventType.PAYMENT_REVERSED, staffId, saved, row.getId(), "Payment reversed");
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
 

@@ -40,11 +40,13 @@ public class PharmacyPaymentRequestDTO {
     private String currency;
 
     @Size(max = 120)
+    @com.example.hms.validation.NoCardNumber
     private String referenceNumber;
 
     @NotNull(message = "{pharmacyPayment.receivedBy.required}")
     private UUID receivedBy;
 
     @Size(max = 1000)
+    @com.example.hms.validation.NoCardNumber
     private String notes;
 }

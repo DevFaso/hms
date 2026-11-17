@@ -295,6 +295,29 @@ public class RoleValidator {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE);
     }
 
+    /**
+     * Billing-money plan PR 8 (plan section 3.8): who may ask for a refund at {@code hospitalId}: a hospital admin, an
+     * accountant, a billing specialist or a receptionist (the copay till) assignment there. Never the platform
+     * super-admin on their own.
+     */
+    public boolean canRequestRefund(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,
+            RECEPTIONIST_ROLE);
+    }
+
+    /**
+     * Billing-money plan PR 8 (owner decision D-3): who may approve or reject a refund at {@code hospitalId}: a
+     * hospital admin or an accountant assignment there. The service also refuses the person who asked for it.
+     */
+    public boolean canApproveRefund(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
+    }
+
+    /** Billing-money plan PR 8 (plan section 3.8): who hands an approved refund to the patient at a till. */
+    public boolean canPayRefund(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE, RECEPTIONIST_ROLE);
+    }
+
     /** Billing-money plan PR 2 (plan section 3.8): who reads a hospital's price list there. */
     public boolean canReadPriceList(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,

@@ -3609,4 +3609,20 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V307 (billing-money plan PR 8, scorecard M3, QA D1900) - refunds as
+         money going OUT: billing.invoice_refunds (REQUESTED / APPROVED /
+         REJECTED / PAID / CANCELLED, approved by a different person, D-3,
+         CHECK decided_by <> requested_by; whole francs; mobile money needs an
+         operator and a reference; client_request_id unique per hospital) and
+         billing.billing_invoices.amount_refunded. Plain idempotent DDL, no DO
+         block.
+         ================================================================= -->
+    <changeSet id="V307-billing-invoice-refunds" author="hms-team" runOnChange="false">
+        <sqlFile path="V307__billing_invoice_refunds.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

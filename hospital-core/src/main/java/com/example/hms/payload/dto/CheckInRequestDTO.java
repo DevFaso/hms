@@ -41,6 +41,7 @@ public class CheckInRequestDTO {
 
     /** QA D975: the operator or terminal reference of a non-cash copay. */
     @jakarta.validation.constraints.Size(max = 100, message = "{reception.checkin.copayReference.size}")
+    @com.example.hms.validation.NoCardNumber
     private String copayReference;
 
     /** Whether the receptionist confirmed patient identity (photo ID, DOB, etc.). */

@@ -136,6 +136,12 @@ public class PdfInvoiceService {
             w.right(BOLD, 11, t.get(BALANCE_DUE, money(com.example.hms.utility.InvoiceBalance.dueOf(invoice))));
             // QA D1466: a copay above the visit total: what the hospital owes back.
             BigDecimal refundDue = com.example.hms.utility.InvoiceBalance.refundDueOf(invoice);
+            // Billing-money plan PR 8 (QA D1900): what refunds already handed back.
+            BigDecimal refunded = nz(invoice.getAmountRefunded());
+            if (refunded.signum() > 0) {
+                w.down(16);
+                w.right(BODY, 11, t.get("pdf.invoice.refunded", money(refunded)));
+            }
             if (refundDue.signum() > 0) {
                 w.down(16);
                 w.right(BOLD, 11, t.get("pdf.invoice.refundDue", money(refundDue)));
@@ -260,6 +266,58 @@ public class PdfInvoiceService {
             return w.finish();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to generate receipt PDF", e);
+        }
+    }
+
+    /**
+     * Billing-money plan PR 8 (QA D1900): "Reçu de remboursement", the receipt of a refund handed to the patient,
+     * with the cashier who paid it out and the signature line "Reçu par le patient". In the reader's language.
+     */
+    public byte[] generateRefundReceiptPdf(BillingInvoice invoice, com.example.hms.model.InvoiceRefund refund,
+                                           String receiptNumber, String paidByName, Locale locale) {
+        PdfLabels t = PdfLabels.of(messageSource, locale);
+        try (var doc = new PDDocument()) {
+            var w = new Writer(doc);
+            w.logo();
+            w.text(BOLD, 16, MARGIN, t.get("pdf.refund.title"));
+            w.down(20);
+            w.text(BODY, 11, MARGIN, t.get(HOSPITAL, hospitalName(invoice)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.number", safe(receiptNumber)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.invoice", safe(invoice.getInvoiceNumber())));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get(PATIENT, patientLine(invoice)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.date",
+                refund.getPaidAt() != null ? t.fmt(refund.getPaidAt()) : ""));
+            w.down(15);
+            String method = refund.getMethod() != null
+                ? t.getOrCode("pdf.payment.method." + refund.getMethod().name(), refund.getMethod().name()) : "";
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.method", method));
+            if (refund.getMobileMoneyOperator() != null) {
+                w.down(15);
+                String operator = refund.getMobileMoneyOperator().name();
+                w.text(BODY, 11, MARGIN, t.get("pdf.refund.operator",
+                    t.getOrCode("pdf.refund.operatorValue." + operator, operator)));
+            }
+            if (refund.getReference() != null && !refund.getReference().isBlank()) {
+                w.down(15);
+                w.text(BODY, 11, MARGIN, t.get("pdf.receipt.reference", refund.getReference()));
+            }
+            w.down(15);
+            w.paragraph(BODY, 11, MARGIN, t.get("pdf.refund.reason", safe(refund.getReason())));
+            w.down(28);
+            w.text(BOLD, 14, MARGIN, t.get("pdf.refund.amount", money(refund.getAmount())));
+            w.down(36);
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.paidBy", safe(paidByName)));
+            w.down(40);
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.cashierSignature"));
+            w.down(40);
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.patientSignature"));
+            return w.finish();
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to generate refund receipt PDF", e);
         }
     }
 

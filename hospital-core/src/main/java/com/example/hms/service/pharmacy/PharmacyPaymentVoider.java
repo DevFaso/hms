@@ -21,9 +21,11 @@ import java.util.List;
  * stock return and the void commit or roll back together.
  *
  * <p>A POSTED payment becomes VOIDED, stamped with who, when and why, and a
- * {@link AuditEventType#REFUND_ISSUED} row is written for each: the till
+ * {@link AuditEventType#PAYMENT_REVERSED} row is written for each: the till
  * then owes the patient that amount back, and the patient's history shows
- * the payment as voided instead of counted.
+ * the payment as voided instead of counted. Billing-money plan PR 8: it was
+ * written as REFUND_ISSUED, but a void hands nothing back by itself; that
+ * event now means money actually paid out on an invoice refund.
  */
 @Component
 @RequiredArgsConstructor
@@ -45,7 +47,7 @@ public class PharmacyPaymentVoider {
         java.util.UUID voidedBy = roleValidator.getCurrentUserId();
         int voided = paymentRepository.voidPostedForDispense(dispense.getId(), voidedBy, reason, now);
         for (PharmacyPayment payment : posted) {
-            support.logAudit(AuditEventType.REFUND_ISSUED,
+            support.logAudit(AuditEventType.PAYMENT_REVERSED,
                     "Pharmacy payment voided, refund due: " + payment.getAmount() + " " + payment.getCurrency()
                             + " for cancelled dispense " + dispense.getId(),
                     payment.getId().toString(), "PHARMACY_PAYMENT");

@@ -25,8 +25,10 @@ class PaymentReferenceRegistryTest {
     private final PaymentTransactionRepository invoicePayments = mock(PaymentTransactionRepository.class);
     private final PharmacyPaymentRepository pharmacyPayments = mock(PharmacyPaymentRepository.class);
     private final PharmacySaleRepository pharmacySales = mock(PharmacySaleRepository.class);
+    private final com.example.hms.repository.InvoiceRefundRepository invoiceRefunds =
+        mock(com.example.hms.repository.InvoiceRefundRepository.class);
     private final PaymentReferenceRegistry registry =
-        new PaymentReferenceRegistry(invoicePayments, pharmacyPayments, pharmacySales);
+        new PaymentReferenceRegistry(invoicePayments, pharmacyPayments, pharmacySales, invoiceRefunds);
 
     @Test
     void theNormalFormIgnoresCaseAndSpaces() {
@@ -66,16 +68,27 @@ class PaymentReferenceRegistryTest {
     }
 
     @Test
+    void aReferenceOnARefundIsRefused() {
+        // Billing-money plan PR 8: a refund's operator reference is not reused by a payment, nor the reverse.
+        when(invoiceRefunds.existsLiveReference(hospitalId, "om-ref-1")).thenReturn(true);
+
+        assertThatThrownBy(() -> registry.requireUnused(hospitalId, "OM-REF-1", "reference"))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "billing.payment.duplicateReference");
+    }
+
+    @Test
     void aNewReferenceAndABlankOneAreAccepted() {
         when(pharmacyPayments.existsLiveReference(any(), anyString())).thenReturn(false);
         assertThatCode(() -> registry.requireUnused(hospitalId, "OM-NEW-1", "reference")).doesNotThrowAnyException();
 
         PaymentReferenceRegistry quiet = new PaymentReferenceRegistry(
             mock(PaymentTransactionRepository.class), mock(PharmacyPaymentRepository.class),
-            mock(PharmacySaleRepository.class));
+            mock(PharmacySaleRepository.class), mock(com.example.hms.repository.InvoiceRefundRepository.class));
         PharmacySaleRepository untouched = mock(PharmacySaleRepository.class);
         new PaymentReferenceRegistry(mock(PaymentTransactionRepository.class), mock(PharmacyPaymentRepository.class),
-            untouched).requireUnused(hospitalId, "  ", "reference");
+            untouched, mock(com.example.hms.repository.InvoiceRefundRepository.class))
+            .requireUnused(hospitalId, "  ", "reference");
         verifyNoInteractions(untouched);
         assertThatCode(() -> quiet.requireUnused(null, "OM-1", "reference")).doesNotThrowAnyException();
     }

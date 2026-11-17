@@ -110,6 +110,8 @@ public class BillingInvoiceMapper {
         dto.setBalanceDue(balanceDue);
         // QA D1466: a copay above the visit total leaves money owed back.
         dto.setRefundDue(com.example.hms.utility.InvoiceBalance.refundDueOf(invoice));
+        // Billing-money plan PR 8: what was already handed back, shown with the refund history.
+        dto.setAmountRefunded(invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO);
 
         // Calculate patient responsibility
         BigDecimal patientResponsibility = balanceDue.subtract(

@@ -42,10 +42,12 @@ public class PatientPaymentRequestDTO {
     @Size(max = 120)
     @Schema(description = "Optional reference or transaction ID from external payment provider",
             example = "TXN-20260308-ABC123")
+    @com.example.hms.validation.NoCardNumber
     private String transactionReference;
 
     @Size(max = 1000)
     @Schema(description = "Optional notes about the payment", example = "Partial payment for consultation")
+    @com.example.hms.validation.NoCardNumber
     private String notes;
 
     /**

@@ -99,7 +99,7 @@ class BillingInvoiceTest {
             BillingInvoice inv = new BillingInvoice(
                 patient, hospital, encounter,
                 "INV-001", invoiceDate, dueDate,
-                total, paid, InvoiceStatus.SENT,
+                total, paid, BigDecimal.ZERO, InvoiceStatus.SENT, // billing-money PR 8: amount refunded (V307)
                 "Some notes", null, null, // QA D1901: notes code and args (V301)
                 items, createdBy, updatedBy, null, false, null, null,
                 null, null, null, // QA D1069: cancel reason, (QA D1901) its code and args,

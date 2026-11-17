@@ -110,7 +110,18 @@ public enum AuditEventType {
     INVOICE_UPDATED,
     PAYMENT_POSTED,
     PAYMENT_REJECTED,
+    /** Billing-money plan PR 8: money handed back to a patient on a refund (paid out), ids only. */
     REFUND_ISSUED,
+    /** Billing-money plan PR 8: a refund asked for, approved, rejected or withdrawn (ids only). */
+    REFUND_REQUESTED,
+    REFUND_APPROVED,
+    REFUND_REJECTED,
+    REFUND_CANCELLED,
+    /**
+     * Billing-money plan PR 8: a received payment reversed (entered in error) or a pharmacy payment voided. It was
+     * written as REFUND_ISSUED, so the audit log claimed refunds that were never made.
+     */
+    PAYMENT_REVERSED,
     CLAIM_SUBMITTED,
     /** Billing-money plan PR 2: a price-list item created, edited or deactivated (ids only). */
     PRICE_LIST_ITEM_CREATED,

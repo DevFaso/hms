@@ -28,8 +28,10 @@ public class StaffPaymentRequestDTO {
     @jakarta.validation.constraints.Size(max = 120)
     // QA D768: a client sending "referenceNumber" (the stored column's name) had it dropped silently.
     @com.fasterxml.jackson.annotation.JsonAlias({"referenceNumber", "transactionReference"})
+    @com.example.hms.validation.NoCardNumber
     private String reference;
     /** billing.payment_transactions.notes is VARCHAR(1024). */
     @jakarta.validation.constraints.Size(max = 1024)
+    @com.example.hms.validation.NoCardNumber
     private String notes;
 }

@@ -39,9 +39,11 @@ public class PharmacySaleRequestDTO {
     private String currency;
 
     @Size(max = 120)
+    @com.example.hms.validation.NoCardNumber
     private String referenceNumber;
 
     @Size(max = 1000)
+    @com.example.hms.validation.NoCardNumber
     private String notes;
 
     @Valid
