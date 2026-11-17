@@ -761,8 +761,9 @@ class PatientInsuranceServiceImplTest {
         receptionAtThisHospital(true);
         when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
         when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.of(rowB));
+        UUID anyPlan = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.setPayerPlan(insuranceId, UUID.randomUUID(), locale))
+        assertThatThrownBy(() -> service.setPayerPlan(insuranceId, anyPlan, locale))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThat(rowB.getPayerPlanId()).isNull();
         verify(payerCatalogueService, never()).requireLinkablePlan(any(), any());

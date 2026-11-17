@@ -376,7 +376,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalIdForStaff),
                 () -> new ResourceNotFoundException("patientinsurance.notfound", insurance.getId()));
             planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalIdForStaff, actorUserId,
-                () -> new ResourceNotFoundException("patientinsurance.notfound", insurance.getId()));
+                () -> insuranceNotFound(insurance.getId()));
         }
 
         applyPrimaryFlag(req, actAsPatient, insurance, patient, hospitalIdForStaff);

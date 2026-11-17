@@ -302,13 +302,14 @@ class PayerCataloguePostgresIT {
             .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_payer_rule_terms");
         assertThatThrownBy(() -> jdbc.update(insert, hospitalB, planId, "IMAGING", null, 50, false, null, day))
             .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("fk_payer_rule_plan");
+        UUID payerId = payer.getId();
         assertThatThrownBy(() -> jdbc.update("INSERT INTO billing.payer_plans (hospital_id, payer_id, code, name, "
                 + "default_coverage_percent, per_invoice_ceiling, effective_from) VALUES (?, ?, 'X', 'X', 50, 100.5, ?)",
-            hospitalA, payer.getId(), day))
+            hospitalA, payerId, day))
             .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_payer_plan_invoice_cap");
         assertThatThrownBy(() -> jdbc.update("INSERT INTO billing.payer_plans (hospital_id, payer_id, code, name, "
                 + "default_coverage_percent, effective_from) VALUES (?, ?, 'Y', 'Y', 50, ?)",
-            hospitalB, payer.getId(), day))
+            hospitalB, payerId, day))
             .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("fk_payer_plan_payer");
 
         Integer coverageFk = jdbc.queryForObject("SELECT count(*) FROM pg_constraint WHERE conname = 'fk_pi_payer_plan'",

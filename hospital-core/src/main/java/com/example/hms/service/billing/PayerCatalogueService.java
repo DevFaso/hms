@@ -87,6 +87,7 @@ public class PayerCatalogueService {
     static final String PLAN_NOT_FOUND_KEY = "billing.payerPlan.notFound";
     static final String RULE_NOT_FOUND_KEY = "billing.payerRule.notFound";
     static final String AUDIT_ENTITY_PAYER = "PAYER";
+    private static final String PAYER_PREFIX = "Payer ";
     static final String AUDIT_ENTITY_PLAN = "PAYER_PLAN";
     static final String AUDIT_ENTITY_COVERAGE = "PATIENT_INSURANCE";
     static final int NAME_MAX = 150;
@@ -196,7 +197,7 @@ public class PayerCatalogueService {
             // A concurrent create of the same code at this hospital won between the check and the insert.
             throw new FieldBusinessException(FIELD_CODE, "billing.payer.codeDuplicate", code);
         }
-        audit(AuditEventType.PAYER_CHANGED, actor, "Payer " + saved.getId() + " created", AUDIT_ENTITY_PAYER,
+        audit(AuditEventType.PAYER_CHANGED, actor, PAYER_PREFIX + saved.getId() + " created", AUDIT_ENTITY_PAYER,
             saved.getId());
         return toDtos(List.of(saved)).get(0);
     }
@@ -217,7 +218,7 @@ public class PayerCatalogueService {
         payer.setPayerType(body.getPayerType());
         payer.setUpdatedBy(actor.userId());
         payerRepository.save(payer);
-        audit(AuditEventType.PAYER_CHANGED, actor, "Payer " + payer.getId() + " updated", AUDIT_ENTITY_PAYER,
+        audit(AuditEventType.PAYER_CHANGED, actor, PAYER_PREFIX + payer.getId() + " updated", AUDIT_ENTITY_PAYER,
             payer.getId());
         return toDtos(List.of(payer)).get(0);
     }
@@ -235,7 +236,7 @@ public class PayerCatalogueService {
             payer.setDeactivationReason(reason);
             payer.setUpdatedBy(actor.userId());
             payerRepository.save(payer);
-            audit(AuditEventType.PAYER_CHANGED, actor, "Payer " + payer.getId() + " deactivated", AUDIT_ENTITY_PAYER,
+            audit(AuditEventType.PAYER_CHANGED, actor, PAYER_PREFIX + payer.getId() + " deactivated", AUDIT_ENTITY_PAYER,
                 payer.getId());
         }
         return toDtos(List.of(payer)).get(0);
@@ -327,12 +328,10 @@ public class PayerCatalogueService {
             from = PayerCoverageRules.startOf(body.getEffectiveFrom(), today);
         }
         LocalDate to = body.getEffectiveTo();
-        if (to != null && !to.equals(plan.getEffectiveTo())) {
-            // The last day may be yesterday at the earliest (the plan stops today), or the day before its own start
-            // (withdrawn before it started).
-            if (to.isBefore(today.minusDays(1))) {
-                throw new FieldBusinessException(PayerCoverageRules.FIELD_EFFECTIVE_TO, "billing.payerPlan.endInPast");
-            }
+        // The last day may be yesterday at the earliest (the plan stops today), or the day before its own start
+        // (withdrawn before it started).
+        if (to != null && !to.equals(plan.getEffectiveTo()) && to.isBefore(today.minusDays(1))) {
+            throw new FieldBusinessException(PayerCoverageRules.FIELD_EFFECTIVE_TO, "billing.payerPlan.endInPast");
         }
         if (to != null && to.isBefore(from.minusDays(1))) {
             throw new FieldBusinessException(PayerCoverageRules.FIELD_EFFECTIVE_TO, "billing.payerPlan.endBeforeStart");
@@ -488,7 +487,7 @@ public class PayerCatalogueService {
     /** The label of one plan a coverage row names (null when it names none). */
     @Transactional(readOnly = true)
     public PlanLabel labelOf(UUID planId) {
-        return planId == null ? null : labelsOf(Set.of(planId)).get(planId);
+        return planId == null ? null : readLabels(Set.of(planId)).get(planId);
     }
 
     /** What a coverage row shows for its plan: the payer's name and code, the plan's name and code. */
@@ -501,6 +500,10 @@ public class PayerCatalogueService {
      */
     @Transactional(readOnly = true)
     public Map<UUID, PlanLabel> labelsOf(Collection<UUID> planIds) {
+        return readLabels(planIds);
+    }
+
+    private Map<UUID, PlanLabel> readLabels(Collection<UUID> planIds) {
         Set<UUID> ids = new HashSet<>(planIds);
         ids.remove(null);
         if (ids.isEmpty()) {

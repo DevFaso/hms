@@ -144,14 +144,15 @@ class PayerCatalogueServiceTest {
         when(roles.canMaintainPayers(ACTOR, HOSPITAL)).thenReturn(false);
         UUID id = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.createPayer(PayerRequestDTO.builder().code("X").name("X")
-            .payerType(PayerType.MUTUELLE).build()))
+        PayerRequestDTO newPayer = PayerRequestDTO.builder().code("X").name("X").payerType(PayerType.MUTUELLE).build();
+        PayerPlanRequestDTO newPlan = basePlan();
+        assertThatThrownBy(() -> service.createPayer(newPayer))
             .isInstanceOf(ClientSafeAccessDeniedException.class)
             .hasMessage("Seuls l’administrateur de l’établissement et le comptable modifient les organismes payeurs "
                 + "et leurs formules.");
         assertThatThrownBy(() -> service.updatePayer(id, null)).isInstanceOf(ClientSafeAccessDeniedException.class);
         assertThatThrownBy(() -> service.deactivatePayer(id, null)).isInstanceOf(ClientSafeAccessDeniedException.class);
-        assertThatThrownBy(() -> service.createPlan(id, basePlan())).isInstanceOf(ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> service.createPlan(id, newPlan)).isInstanceOf(ClientSafeAccessDeniedException.class);
         assertThatThrownBy(() -> service.updatePlan(id, id, null)).isInstanceOf(ClientSafeAccessDeniedException.class);
         assertThatThrownBy(() -> service.addRule(id, id, null)).isInstanceOf(ClientSafeAccessDeniedException.class);
         assertThatThrownBy(() -> service.endRule(id, id, id, null)).isInstanceOf(ClientSafeAccessDeniedException.class);
@@ -162,7 +163,8 @@ class PayerCatalogueServiceTest {
     @DisplayName("the super-admin's global view (no hospital named) never writes")
     void globalViewNeverWrites() {
         when(scope.requirePinned()).thenThrow(new HospitalScopeRefusedException("Select a hospital"));
-        assertThatThrownBy(() -> service.createPayer(new PayerRequestDTO()))
+        PayerRequestDTO empty = new PayerRequestDTO();
+        assertThatThrownBy(() -> service.createPayer(empty))
             .isInstanceOf(HospitalScopeRefusedException.class);
         verifyNoInteractions(payers, plans, rules, audit);
         verify(roles, never()).canMaintainPayers(any(), any());
@@ -197,7 +199,8 @@ class PayerCatalogueServiceTest {
         maintainer();
         UUID foreign = UUID.randomUUID();
         when(payers.lockByIdAtHospital(foreign, HOSPITAL)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.createPlan(foreign, basePlan())).isInstanceOf(ResourceNotFoundException.class);
+        PayerPlanRequestDTO plan = basePlan();
+        assertThatThrownBy(() -> service.createPlan(foreign, plan)).isInstanceOf(ResourceNotFoundException.class);
         when(roles.canReadPayers(ACTOR, HOSPITAL)).thenReturn(true);
         when(payers.findByIdAndHospitalId(foreign, HOSPITAL)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.get(foreign)).isInstanceOf(ResourceNotFoundException.class);
@@ -254,8 +257,9 @@ class PayerCatalogueServiceTest {
         assertThat(auditRow().getEventType()).isEqualTo(AuditEventType.PAYER_CHANGED);
 
         Payer closed = payer(false);
-        assertThatThrownBy(() -> service.updatePayer(closed.getId(), PayerUpdateRequestDTO.builder().name("B")
-            .payerType(PayerType.MUTUELLE).build())).isInstanceOf(BusinessException.class);
+        UUID closedId = closed.getId();
+        PayerUpdateRequestDTO rename = PayerUpdateRequestDTO.builder().name("B").payerType(PayerType.MUTUELLE).build();
+        assertThatThrownBy(() -> service.updatePayer(closedId, rename)).isInstanceOf(BusinessException.class);
         assertThat(closed.getName()).isEqualTo("Mutuelle Test A (FICTIVE)");
     }
 
@@ -330,6 +334,8 @@ class PayerCatalogueServiceTest {
         maintainer();
         Payer payer = payer(true);
         PayerPlan started = plan(payer, TODAY.minusDays(30), null);
+        UUID payerId = payer.getId();
+        UUID startedId = started.getId();
 
         assertThatThrownBy(() -> service.updatePlan(payer.getId(), started.getId(), PayerPlanUpdateRequestDTO.builder()
             .name("Formule").defaultCoveragePercent(BigDecimal.TEN).effectiveFrom(TODAY.plusDays(1)).build()))
@@ -347,8 +353,9 @@ class PayerCatalogueServiceTest {
         assertThat(started.getEffectiveTo()).isEqualTo(TODAY.minusDays(1));
         assertThat(started.getEffectiveFrom()).isEqualTo(TODAY.minusDays(30));
 
-        assertThatThrownBy(() -> service.updatePlan(payer.getId(), started.getId(), PayerPlanUpdateRequestDTO.builder()
-            .name("Formule").defaultCoveragePercent(BigDecimal.TEN).build()))
+        PayerPlanUpdateRequestDTO afterEnd = PayerPlanUpdateRequestDTO.builder()
+            .name("Formule").defaultCoveragePercent(BigDecimal.TEN).build();
+        assertThatThrownBy(() -> service.updatePlan(payerId, startedId, afterEnd))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -442,8 +449,11 @@ class PayerCatalogueServiceTest {
         assertThat(rule.getEndReason()).isEqualTo("Avenant 2026");
         assertThat(auditRow().getEventDescription()).doesNotContain("Avenant");
 
-        assertThatThrownBy(() -> service.endRule(payer.getId(), plan.getId(), rule.getId(),
-            new PayerReasonRequestDTO("Autre motif"))).isInstanceOf(BusinessException.class);
+        UUID payerId = payer.getId();
+        UUID planId = plan.getId();
+        UUID ruleId = rule.getId();
+        PayerReasonRequestDTO again = new PayerReasonRequestDTO("Autre motif");
+        assertThatThrownBy(() -> service.endRule(payerId, planId, ruleId, again)).isInstanceOf(BusinessException.class);
         assertThat(rule.getEndReason()).isEqualTo("Avenant 2026");
     }
 
@@ -470,7 +480,8 @@ class PayerCatalogueServiceTest {
                 e -> assertThat(e.getField()).isEqualTo("payerPlanId"));
 
         payer.setActive(false);
-        assertThatThrownBy(() -> service.requireLinkablePlan(live.getId(), HOSPITAL))
+        UUID liveId = live.getId();
+        assertThatThrownBy(() -> service.requireLinkablePlan(liveId, HOSPITAL))
             .isInstanceOf(FieldBusinessException.class);
     }
 }

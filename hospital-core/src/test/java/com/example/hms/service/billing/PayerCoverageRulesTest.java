@@ -22,7 +22,6 @@ import java.util.Locale;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Billing-money plan PR 6: the payer plan rules on their own (no I/O). Rates are whole percents 0-100, ceilings
