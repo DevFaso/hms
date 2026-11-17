@@ -4707,7 +4707,8 @@
     "DHIS2": "Export DHIS2",
     "ADT_INTAKE": "Admissions ADT automatiques",
     "UNSIGNED_NOTES": "Notes non signées",
-    "PRICE_LIST": "Grille tarifaire"
+    "PRICE_LIST": "Grille tarifaire",
+    "PATIENT_NOTIFICATIONS": "Notifications aux patients"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -7541,7 +7542,8 @@
         "WARD": "Unité de soins",
         "WEBHOOK": "Webhook partenaire",
         "FETAL_DEATH_EVENT": "Événement de décès fœtal",
-        "IMAGING_ORDER": "Demande d'imagerie"
+        "IMAGING_ORDER": "Demande d'imagerie",
+        "PATIENT_NOTIFICATION_DELIVERY": "Envoi de notification au patient"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -13997,5 +13999,61 @@
     "SAVE_ANYWAY": "Enregistrer quand même",
     "REASON": "Motif d’enregistrement d’un identifiant en double",
     "SEARCH_EXACT": "Rechercher par identifiant unique exact (12 chiffres)"
+  },
+  "PATIENT_NOTIFICATIONS": {
+    "TITLE": "Notifications aux patients",
+    "SUBTITLE": "SMS et e-mails de rendez-vous et de résultats disponibles envoyés à vos patients. Un envoi en échec peut être relancé.",
+    "FILTER_STATUS": "Statut",
+    "ALL_STATUSES": "Tous les statuts",
+    "EMPTY": "Aucun envoi dans ce statut.",
+    "LOAD_ERROR": "Impossible de charger les envois de notifications aux patients.",
+    "RETRY": "Relancer",
+    "RETRIED": "L’envoi est remis dans la file.",
+    "RETRY_ERROR": "Impossible de relancer cet envoi.",
+    "PAGE_OF": "Page {{page}} sur {{total}}",
+    "UNKNOWN": "Inconnu",
+    "COL_PATIENT": "Patient",
+    "COL_EVENT": "Avis",
+    "COL_CHANNEL": "Canal",
+    "COL_STATUS": "Statut",
+    "COL_ATTEMPTS": "Tentatives",
+    "COL_REASON": "Motif",
+    "COL_LAST_ATTEMPT": "Dernière tentative",
+    "COL_ACTIONS": "Actions",
+    "STATUS": {
+      "PENDING": "En file",
+      "RETRYING": "Nouvelle tentative prévue",
+      "SENT": "Envoyé",
+      "FAILED": "En échec",
+      "SKIPPED": "Non envoyé"
+    },
+    "EVENT": {
+      "APPOINTMENT_CONFIRMATION": "Confirmation de rendez-vous",
+      "APPOINTMENT_REMINDER": "Rappel de rendez-vous",
+      "LAB_RESULT_AVAILABLE": "Résultat de laboratoire disponible",
+      "IMAGING_RESULT_AVAILABLE": "Résultat d’imagerie disponible",
+      "ULTRASOUND_RESULT_AVAILABLE": "Résultat d’échographie disponible"
+    },
+    "CHANNEL": {
+      "SMS": "SMS",
+      "EMAIL": "E-mail"
+    },
+    "ERROR": {
+      "PROVIDER_REJECTED": "Refusé par le fournisseur de SMS",
+      "PROVIDER_AUTH_FAILED": "Le fournisseur de SMS a refusé les identifiants de la plateforme",
+      "PROVIDER_UNREACHABLE": "Fournisseur de SMS injoignable",
+      "OUTCOME_UNKNOWN": "Aucune réponse du fournisseur : le message a peut-être été remis, vérifiez avant de relancer",
+      "TRANSPORT_UNAVAILABLE": "Aucun service de SMS ou d’e-mail configuré",
+      "RECIPIENT_NOT_SUPPORTED": "Ce numéro ne peut pas recevoir de SMS",
+      "INVALID_ADDRESS": "Adresse e-mail invalide",
+      "MAIL_SEND_FAILED": "Le serveur de messagerie n’a pas accepté l’e-mail",
+      "SEND_FAILED": "Échec de l’envoi",
+      "ATTEMPTS_EXHAUSTED": "Toutes les tentatives ont été utilisées",
+      "RECIPIENT_NOT_ALLOWED": "Numéro absent de la liste de test de cet environnement",
+      "OPTED_OUT": "Le patient a désactivé ce canal",
+      "NO_CONTACT": "Aucun numéro de téléphone ni adresse e-mail",
+      "SUBJECT_WITHDRAWN": "Rendez-vous annulé ou passé, ou résultat retiré",
+      "PATIENT_DECEASED": "Le patient est décédé"
+    }
   }
 }

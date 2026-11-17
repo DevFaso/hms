@@ -4707,7 +4707,8 @@
     "DHIS2": "Exportación DHIS2",
     "ADT_INTAKE": "Ingresos ADT automáticos",
     "UNSIGNED_NOTES": "Notas sin firmar",
-    "PRICE_LIST": "Lista de precios"
+    "PRICE_LIST": "Lista de precios",
+    "PATIENT_NOTIFICATIONS": "Patient notifications"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -7575,7 +7576,8 @@
         "WARD": "Planta",
         "WEBHOOK": "Webhook de socio",
         "FETAL_DEATH_EVENT": "Evento de muerte fetal",
-        "IMAGING_ORDER": "Solicitud de imagen"
+        "IMAGING_ORDER": "Solicitud de imagen",
+        "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -13997,5 +13999,61 @@
     "SAVE_ANYWAY": "Guardar de todos modos",
     "REASON": "Motivo para guardar un identificador duplicado",
     "SEARCH_EXACT": "Buscar por identificador único exacto (12 dígitos)"
+  },
+  "PATIENT_NOTIFICATIONS": {
+    "TITLE": "Patient notifications",
+    "SUBTITLE": "Appointment and result-available SMS and emails sent to your patients. Failed sends can be retried.",
+    "FILTER_STATUS": "Status",
+    "ALL_STATUSES": "All statuses",
+    "EMPTY": "No sends in this status.",
+    "LOAD_ERROR": "Could not load the patient notification sends.",
+    "RETRY": "Retry",
+    "RETRIED": "The send is back in the queue.",
+    "RETRY_ERROR": "Could not retry this send.",
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "UNKNOWN": "Unknown",
+    "COL_PATIENT": "Patient",
+    "COL_EVENT": "Notice",
+    "COL_CHANNEL": "Channel",
+    "COL_STATUS": "Status",
+    "COL_ATTEMPTS": "Attempts",
+    "COL_REASON": "Reason",
+    "COL_LAST_ATTEMPT": "Last attempt",
+    "COL_ACTIONS": "Actions",
+    "STATUS": {
+      "PENDING": "Queued",
+      "RETRYING": "Retrying",
+      "SENT": "Sent",
+      "FAILED": "Failed",
+      "SKIPPED": "Not sent"
+    },
+    "EVENT": {
+      "APPOINTMENT_CONFIRMATION": "Appointment confirmation",
+      "APPOINTMENT_REMINDER": "Appointment reminder",
+      "LAB_RESULT_AVAILABLE": "Lab result available",
+      "IMAGING_RESULT_AVAILABLE": "Imaging result available",
+      "ULTRASOUND_RESULT_AVAILABLE": "Ultrasound result available"
+    },
+    "CHANNEL": {
+      "SMS": "SMS",
+      "EMAIL": "Email"
+    },
+    "ERROR": {
+      "PROVIDER_REJECTED": "Refused by the SMS provider",
+      "PROVIDER_AUTH_FAILED": "SMS provider refused the platform credentials",
+      "PROVIDER_UNREACHABLE": "SMS provider unreachable",
+      "OUTCOME_UNKNOWN": "No answer from the provider: it may have been delivered, check before retrying",
+      "TRANSPORT_UNAVAILABLE": "No SMS or email service configured",
+      "RECIPIENT_NOT_SUPPORTED": "The number cannot be texted",
+      "INVALID_ADDRESS": "Invalid email address",
+      "MAIL_SEND_FAILED": "The mail server did not accept the email",
+      "SEND_FAILED": "Send failed",
+      "ATTEMPTS_EXHAUSTED": "Every attempt was used",
+      "RECIPIENT_NOT_ALLOWED": "Number not on this environment's test list",
+      "OPTED_OUT": "The patient turned this channel off",
+      "NO_CONTACT": "No phone number or email address",
+      "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
+      "PATIENT_DECEASED": "The patient has died"
+    }
   }
 }

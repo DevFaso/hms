@@ -1102,6 +1102,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/admin/integrations/dhis2',
         roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       });
+      // V312 (scorecard K3): failed patient SMS / email sends and their retry.
+      // Same roles as the /patient-notifications RoleGuard.
+      items.push({
+        icon: 'sms_failed',
+        label: 'Patient notifications',
+        translationKey: 'NAV.PATIENT_NOTIFICATIONS',
+        route: '/patient-notifications',
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      });
     }
     // Break-the-glass review (E8 #54) — mirrors the /break-glass-review RoleGuard.
     if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
