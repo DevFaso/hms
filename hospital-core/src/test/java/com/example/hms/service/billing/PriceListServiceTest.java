@@ -67,6 +67,8 @@ class PriceListServiceTest {
     private final PriceListPriceRepository prices = mock(PriceListPriceRepository.class);
     private final LabTestDefinitionRepository labTests = mock(LabTestDefinitionRepository.class);
     private final TreatmentRepository treatments = mock(TreatmentRepository.class);
+    private final com.example.hms.repository.HospitalRepository hospitals =
+        mock(com.example.hms.repository.HospitalRepository.class);
     private final RoleValidator roles = mock(RoleValidator.class);
     private final ActingScopeResolver scope = mock(ActingScopeResolver.class);
     private final AuditEventLogService audit = mock(AuditEventLogService.class);
@@ -79,7 +81,7 @@ class PriceListServiceTest {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.FRENCH);
         service = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), invoiceLines, labTests, treatments,
-            mock(UserRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
+            mock(UserRepository.class), hospitals, roles, scope, audit, CLOCK, "Africa/Ouagadougou");
         when(scope.requirePinned()).thenReturn(HOSPITAL);
         when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL);
         when(roles.getCurrentUserId()).thenReturn(ACTOR);
@@ -284,6 +286,37 @@ class PriceListServiceTest {
     }
 
     @Test
+    @DisplayName("QA D2070: a taken link is named as the form shows it — a system key, a blood product, a lab test")
+    void aTakenLinkIsNamedReadably() {
+        when(roles.canMaintainPriceList(ACTOR, HOSPITAL)).thenReturn(true);
+        PriceListItem holder = withId(PriceListItem.builder().hospitalId(HOSPITAL).code("CS-GEN").active(true).build());
+        when(items.findActiveByLink(any(), any(), any())).thenReturn(List.of(holder));
+        assertThatThrownBy(() -> service.create(consultation()))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getMessage())
+                .contains("« Consultation par défaut »").contains("CS-GEN").doesNotContain("CONSULTATION_DEFAULT"));
+
+        PriceListItem item = withId(PriceListItem.builder().hospitalId(HOSPITAL).code("CGR").active(true).build());
+        when(items.lockByIdAtHospital(item.getId(), HOSPITAL)).thenReturn(Optional.of(item));
+        assertThatThrownBy(() -> service.update(item.getId(), com.example.hms.payload.dto.billing.PriceListItemUpdateRequestDTO
+            .builder().label("Culot").category(PriceListCategory.CONSULTATION)
+            .linkType(PriceListLinkType.TRANSFUSION_PRODUCT).linkKey("PACKED_RED_CELLS").build()))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getMessage())
+                .contains("globules rouges").doesNotContain("PACKED_RED_CELLS"));
+
+        com.example.hms.model.LabTestDefinition nfs = new com.example.hms.model.LabTestDefinition();
+        nfs.setId(UUID.randomUUID());
+        nfs.setTestCode("NFS");
+        nfs.setName("Numération formule sanguine");
+        nfs.setActive(true);
+        when(labTests.findById(nfs.getId())).thenReturn(Optional.of(nfs));
+        assertThatThrownBy(() -> service.update(item.getId(), com.example.hms.payload.dto.billing.PriceListItemUpdateRequestDTO
+            .builder().label("NFS").category(PriceListCategory.CONSULTATION)
+            .linkType(PriceListLinkType.LAB_TEST_DEFINITION).linkKey(nfs.getId().toString()).build()))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getMessage())
+                .contains("« NFS · Numération formule sanguine »").doesNotContain(nfs.getId().toString()));
+    }
+
+    @Test
     @DisplayName("a deactivated item takes no edit")
     void aDeactivatedItemTakesNoEdit() {
         when(roles.canMaintainPriceList(ACTOR, HOSPITAL)).thenReturn(true);
@@ -327,8 +360,39 @@ class PriceListServiceTest {
             .linkType(PriceListLinkType.SYSTEM).linkKey("BED_DAY").build()))
             .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
                 assertThat(e.getField()).isEqualTo("linkKey");
-                assertThat(e.getMessage()).contains("BED_DAY").contains("vient d");
+                // QA D2070: named the way the form shows it, never the stored key.
+                assertThat(e.getMessage()).contains("« Journée d’hospitalisation »").contains("vient d")
+                    .doesNotContain("BED_DAY");
             });
+    }
+
+    @Test
+    @DisplayName("QA D2071: in global view each row names its hospital; a pinned view reads no hospital")
+    void theGlobalViewNamesEachRowsHospital() {
+        UUID other = UUID.randomUUID();
+        PriceListItem a = withId(PriceListItem.builder().hospitalId(HOSPITAL).code("CS-GEN").active(true)
+            .category(PriceListCategory.CONSULTATION).build());
+        PriceListItem b = withId(PriceListItem.builder().hospitalId(other).code("CS-GEN").active(true)
+            .category(PriceListCategory.CONSULTATION).build());
+        com.example.hms.model.Hospital ha = new com.example.hms.model.Hospital();
+        ha.setId(HOSPITAL);
+        ha.setName("Clinique A");
+        com.example.hms.model.Hospital hb = new com.example.hms.model.Hospital();
+        hb.setId(other);
+        hb.setName("Clinique B");
+        when(hospitals.findAllById(any())).thenReturn(List.of(ha, hb));
+        when(roles.requireActiveHospitalId()).thenReturn(null);
+        when(scope.isVerifiedSuperAdmin()).thenReturn(true);
+        when(items.findAllByOrderByCodeAsc()).thenReturn(List.of(a, b));
+        assertThat(service.list(null, false)).extracting(com.example.hms.payload.dto.billing.PriceListItemDTO::getHospitalName)
+            .containsExactly("Clinique A", "Clinique B");
+
+        when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL);
+        when(roles.canReadPriceList(ACTOR, HOSPITAL)).thenReturn(true);
+        when(items.findByHospitalIdOrderByCodeAsc(HOSPITAL)).thenReturn(List.of(a));
+        org.mockito.Mockito.clearInvocations(hospitals);
+        assertThat(service.list(null, false)).extracting(com.example.hms.payload.dto.billing.PriceListItemDTO::getHospitalName).containsOnlyNulls();
+        verify(hospitals, never()).findAllById(any());
     }
 
     @Test

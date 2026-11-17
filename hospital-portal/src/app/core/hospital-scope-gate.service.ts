@@ -118,8 +118,21 @@ export class HospitalScopeGateService {
     }
     this.moduleTitleKey.set(titleKey);
     this._allowsGlobal.set(allowsGlobal);
+    const fromUrl = root.queryParamMap.get('hospitalId');
+    if (fromUrl && !this.urlHospitalAccepted(fromUrl)) {
+      // QA D2121: the URL must never name a hospital the page is not showing.
+      // A hospital-scoped account is pinned by its assignment, so a link (or a
+      // hand-edited URL) naming another hospital is dropped rather than left
+      // to contradict the view and the X-Hospital-Id the interceptor sends.
+      this._required.set(required);
+      void this.router.navigate([], {
+        queryParams: { hospitalId: null },
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+      });
+      return;
+    }
     if (required && this.roleContext.isSuperAdmin()) {
-      const fromUrl = root.queryParamMap.get('hospitalId');
       if (fromUrl) {
         this.roleContext.scopeToHospital(fromUrl);
       } else if (this.restoreGlobalView) {
@@ -134,4 +147,28 @@ export class HospitalScopeGateService {
     }
     this._required.set(required);
   }
+
+  /**
+   * Whether `?hospitalId=` may stay in the URL. A super-admin may open any
+   * hospital, so a well-formed id becomes the scope (the server still refuses
+   * an unknown one) and a malformed one is dropped. Any other signed-in account keeps
+   * the param only when it names the hospital it is already working in.
+   * Before sign-in nothing is decided here.
+   */
+  private urlHospitalAccepted(hospitalId: string): boolean {
+    if (this.roleContext.activeRoles.length === 0) {
+      return true;
+    }
+    if (this.roleContext.isSuperAdmin()) {
+      return isHospitalIdShape(hospitalId);
+    }
+    return hospitalId === this.roleContext.effectiveHospitalIdForRequest();
+  }
+}
+
+const HOSPITAL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A hospital id from a URL is a UUID; anything else is never sent as X-Hospital-Id. */
+export function isHospitalIdShape(value: string | null | undefined): value is string {
+  return !!value && HOSPITAL_ID_PATTERN.test(value);
 }

@@ -290,6 +290,97 @@ describe('Optional protected national IU', () => {
     expect(hide.disabled).toBe(false);
   });
 
+  // QA D2032: a save refused by an unresolved duplicate said nothing; the two
+  // duplicate links were identical.
+  it('says why a duplicate blocks saving, focuses the fix, and numbers several matches', fakeAsync(() => {
+    const fixture = TestBed.createComponent(NationalUniqueIdEditorComponent);
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      fixture.detectChanges();
+      const c = fixture.componentInstance;
+      c.change('000123456789');
+      tick(250);
+      TestBed.inject(HttpTestingController)
+        .expectOne('/patients/national-unique-id/check')
+        .flush({ accessiblePatientIds: ['p-1', 'p-2'], registeredElsewhere: false });
+      fixture.detectChanges();
+      const links = [...fixture.nativeElement.querySelectorAll('a')].map((a: Element) =>
+        a.textContent?.trim(),
+      );
+      expect(links.length).toBe(2);
+      expect(new Set(links).size).toBe(2);
+      expect(links[0]).toContain('1 sur 2');
+
+      expect(c.refuseSubmit()).toEqual({
+        key: 'NATIONAL_IU.CONFIRM_DUPLICATE',
+        fieldId: 'nationalUniqueId-override',
+      });
+      fixture.detectChanges();
+      expect(document.activeElement?.id).toBe('nationalUniqueId-override');
+      expect(
+        fixture.nativeElement.querySelector('#nationalUniqueId-refusal').textContent,
+      ).toContain('Enregistrer quand même');
+
+      c.override = true;
+      c.emit();
+      fixture.detectChanges();
+      expect(c.refusalKey).toBe('NATIONAL_IU.REASON_REQUIRED');
+      const reason = fixture.nativeElement.querySelector(
+        '#nationalUniqueId-reason',
+      ) as HTMLTextAreaElement;
+      expect(c.refuseSubmit().key).toBe('NATIONAL_IU.REASON_REQUIRED');
+      expect(document.activeElement).toBe(reason);
+      fixture.detectChanges();
+      expect(reason.getAttribute('aria-invalid')).toBe('true');
+
+      c.reason = 'Vérifié avec le patient';
+      c.emit();
+      fixture.detectChanges();
+      expect(c.refusalKey).toBe('');
+      expect(c.blockingKey()).toBeNull();
+    } finally {
+      fixture.nativeElement.remove();
+    }
+  }));
+
+  // QA D2100: the reveal and hide buttons were two @if branches, so pressing
+  // one destroyed the focused element and focus fell to the page heading.
+  it('keeps keyboard focus on the same toggle through reveal and hide', () => {
+    const fixture = TestBed.createComponent(NationalUniqueIdViewComponent);
+    fixture.componentRef.setInput('patientId', 'patient-a');
+    fixture.componentRef.setInput('masked', '•••• •••• 6789');
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      fixture.detectChanges();
+      const toggle = fixture.nativeElement.querySelector(
+        '[data-testid="national-iu-toggle"]',
+      ) as HTMLButtonElement;
+      toggle.focus();
+      toggle.click();
+      fixture.detectChanges();
+      expect(toggle.getAttribute('aria-disabled')).toBe('true');
+      expect(document.activeElement).toBe(toggle);
+      TestBed.inject(HttpTestingController)
+        .expectOne('/patients/national-unique-id/patient-a/reveal')
+        .flush({ nationalUniqueId: '0001 2345 6789' });
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('[data-testid="national-iu-toggle"]')).toBe(
+        toggle,
+      );
+      expect(document.activeElement).toBe(toggle);
+      expect(toggle.textContent).toContain('Masquer');
+      toggle.click();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).not.toContain('0001 2345 6789');
+      expect(fixture.nativeElement.querySelector('[data-testid="national-iu-toggle"]')).toBe(
+        toggle,
+      );
+      expect(document.activeElement).toBe(toggle);
+    } finally {
+      fixture.nativeElement.remove();
+    }
+  });
+
   for (const locale of ['fr', 'en', 'es']) {
     it(`renders actual ${locale} labels without raw keys`, () => {
       TestBed.inject(TranslateService).use(locale);

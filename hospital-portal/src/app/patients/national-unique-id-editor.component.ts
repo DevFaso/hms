@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   OnChanges,
@@ -16,6 +17,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { PatientService } from '../services/patient.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PATIENT_IDENTITY_EDIT_ROLES } from './patient-chart/chart-access';
+import { focusFirstInvalid } from '../shared/forms/invalid-fields';
 import {
   NationalUniqueIdChange,
   NationalUniqueIdWarning,
@@ -70,8 +72,13 @@ import {
       }
       @if (warning) {
         <div role="status">
-          @for (id of warning.accessiblePatientIds; track id) {
-            <a [routerLink]="['/patients', id]">{{ 'NATIONAL_IU.EXISTS_HERE' | translate }}</a>
+          <!-- QA D2032: with several matches each link says which one it opens. -->
+          @for (id of warning.accessiblePatientIds; track id; let i = $index, n = $count) {
+            <a [routerLink]="['/patients', id]">{{
+              n > 1
+                ? ('NATIONAL_IU.EXISTS_HERE_NUMBERED' | translate: { index: i + 1, count: n })
+                : ('NATIONAL_IU.EXISTS_HERE' | translate)
+            }}</a>
           }
           @if (warning.registeredElsewhere) {
             <p>{{ 'NATIONAL_IU.EXISTS_ELSEWHERE' | translate }}</p>
@@ -79,6 +86,9 @@ import {
           <label>
             <input
               type="checkbox"
+              [id]="inputId + '-override'"
+              [attr.aria-invalid]="refusalKey === 'NATIONAL_IU.CONFIRM_DUPLICATE' ? true : null"
+              [attr.aria-describedby]="inputId + '-refusal'"
               [(ngModel)]="override"
               [ngModelOptions]="{ standalone: true }"
               (ngModelChange)="emit()"
@@ -87,6 +97,8 @@ import {
           <label [for]="inputId + '-reason'">{{ 'NATIONAL_IU.REASON' | translate }}</label>
           <textarea
             [id]="inputId + '-reason'"
+            [attr.aria-invalid]="refusalKey === 'NATIONAL_IU.REASON_REQUIRED' ? true : null"
+            [attr.aria-describedby]="inputId + '-refusal'"
             [(ngModel)]="reason"
             [ngModelOptions]="{ standalone: true }"
             maxlength="1000"
@@ -94,12 +106,17 @@ import {
           ></textarea>
         </div>
       }
+      <!-- QA D2032: a refused save says why here, next to the control to fix. -->
+      <p [id]="inputId + '-refusal'" class="field-error" role="alert">
+        {{ refusalKey ? (refusalKey | translate) : '' }}
+      </p>
     </div>
   `,
 })
 export class NationalUniqueIdEditorComponent implements OnChanges, OnDestroy {
   private readonly patients = inject(PatientService);
   private readonly roles = inject(RoleContextService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   constructor() {
     effect(() => {
       this.roles.effectiveHospitalIdForRequest();
@@ -119,6 +136,8 @@ export class NationalUniqueIdEditorComponent implements OnChanges, OnDestroy {
   override = false;
   busy = false;
   errorKey = '';
+  /** QA D2032: why the last save was refused, shown under the field until it is fixed. */
+  refusalKey = '';
   warning: NationalUniqueIdWarning | null = null;
   private epoch = 0;
   private timer?: ReturnType<typeof setTimeout>;
@@ -150,6 +169,7 @@ export class NationalUniqueIdEditorComponent implements OnChanges, OnDestroy {
     this.warning = null;
     this.busy = false;
     this.errorKey = '';
+    this.refusalKey = '';
     this.touched = false;
     this.updated.emit({});
     this.ready.emit(true);
@@ -162,6 +182,7 @@ export class NationalUniqueIdEditorComponent implements OnChanges, OnDestroy {
     this.override = false;
     this.warning = null;
     this.errorKey = '';
+    this.refusalKey = '';
     const epoch = ++this.epoch;
     clearTimeout(this.timer);
     const canonical = normalizedNationalUniqueId(value);
@@ -207,6 +228,8 @@ export class NationalUniqueIdEditorComponent implements OnChanges, OnDestroy {
       !this.errorKey &&
       canonical !== null &&
       (!this.warning || (this.override && this.reason.trim().length > 0));
+    // A shown refusal follows the fix: gone once ready, else the next missing step.
+    if (this.refusalKey) this.refusalKey = this.blockingKey() ?? '';
     this.ready.emit(ready);
     this.updated.emit(
       this.touched && ready
@@ -217,6 +240,35 @@ export class NationalUniqueIdEditorComponent implements OnChanges, OnDestroy {
           }
         : {},
     );
+  }
+
+  /** What still blocks saving, or null when the identifier is ready. */
+  blockingKey(): string | null {
+    if (this.busy) return 'NATIONAL_IU.WAIT_CHECK';
+    if (this.errorKey) return this.errorKey;
+    if (normalizedNationalUniqueId(this.value) === null) return 'NATIONAL_IU.INVALID';
+    if (this.warning && !this.override) return 'NATIONAL_IU.CONFIRM_DUPLICATE';
+    if (this.warning && !this.reason.trim()) return 'NATIONAL_IU.REASON_REQUIRED';
+    return null;
+  }
+
+  /**
+   * QA D2032: the form calls this when its save is refused because the
+   * identifier is not ready. The reason is shown under the field, focus moves
+   * to the control to fix, and the key and that control's id are returned for
+   * the form's own message.
+   */
+  refuseSubmit(): { key: string; fieldId: string } {
+    const key = this.blockingKey() ?? 'NATIONAL_IU.WAIT_CHECK';
+    this.refusalKey = key;
+    const fieldId =
+      key === 'NATIONAL_IU.CONFIRM_DUPLICATE'
+        ? `${this.inputId}-override`
+        : key === 'NATIONAL_IU.REASON_REQUIRED'
+          ? `${this.inputId}-reason`
+          : this.inputId;
+    focusFirstInvalid(this.host.nativeElement, [fieldId]);
+    return { key, fieldId };
   }
 
   reveal(): void {

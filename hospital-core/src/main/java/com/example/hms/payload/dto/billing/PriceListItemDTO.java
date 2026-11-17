@@ -25,6 +25,8 @@ public class PriceListItemDTO {
 
     private UUID id;
     private UUID hospitalId;
+    /** QA D2071: set in the super-admin's global view only, where rows of several hospitals are listed together. */
+    private String hospitalName;
     private String code;
     /** As the hospital typed it, never translated (D-8). */
     private String label;

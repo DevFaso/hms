@@ -384,8 +384,11 @@ class PriceListImportPostgresIT {
             + "générale »). L’import ne modifie que les prix : modifiez le libellé à l’écran, ou reprenez celui de la grille.");
         PriceListImportReportDTO taken = check(utf8(HEADER + "\n"
             + "CS-AUTRE;Autre consultation;CONSULTATION;2500;;SYSTEM;CONSULTATION_DEFAULT\n"), "c.csv");
-        assertRefused(taken.getRows().get(0), "liaison_cle",
-            "Le lien CONSULTATION_DEFAULT est déjà utilisé par l’article actif CS-GEN : un seul article actif par lien.");
+        // QA D2070 (develop): the link is named in words, never by its stored key.
+        PriceListImportReportDTO.Refusal linkTaken = taken.getRows().get(0).getRefusals().get(0);
+        assertThat(linkTaken.getColumn()).isEqualTo("liaison_cle");
+        assertThat(linkTaken.getMessage()).doesNotContain("CONSULTATION_DEFAULT")
+            .endsWith("est déjà utilisé par l’article actif CS-GEN : un seul article actif par lien.");
         PriceListImportReportDTO twice = check(utf8(HEADER + "\n"
             + "HOSP-A;Journée A;BED_DAY;5000;;SYSTEM;BED_DAY\n"
             + "HOSP-B;Journée B;BED_DAY;6000;;SYSTEM;bed_day\n"), "d.csv");

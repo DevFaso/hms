@@ -458,7 +458,8 @@ public class PriceListImportService {
         if (link != null) {
             String holder = grid.activeLinks.get(linkId(link.type(), link.key()));
             if (holder != null) {
-                refuse(refusals, PriceListCsv.COL_LINK_KEY, "billing.priceList.linkTaken", link.key(), holder);
+                refuse(refusals, PriceListCsv.COL_LINK_KEY, "billing.priceList.linkTaken",
+                    links.label(grid.hospitalId, link.type(), link.key()), holder);
             }
         }
         if (!refusals.isEmpty()) {

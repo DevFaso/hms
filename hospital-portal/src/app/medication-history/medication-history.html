@@ -214,13 +214,15 @@
                     }}</span>
                   }
                   @if (e.entryType !== 'PHARMACY_FILL' && e.signedAt) {
-                    <span class="muted" [attr.data-testid]="'mh-signed-' + e.entryId"
+                    {{ ' '
+                    }}<span class="muted" [attr.data-testid]="'mh-signed-' + e.entryId"
                       >{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}
                       {{ e.signedAt | serverTime | date: 'short' }}</span
                     >
                   }
                   @if (isForeignRow(e)) {
-                    <span class="muted" [attr.data-testid]="'mh-readonly-' + e.entryId">{{
+                    {{ ' '
+                    }}<span class="muted" [attr.data-testid]="'mh-readonly-' + e.entryId">{{
                       'MED_TIMELINE.READ_ONLY' | translate
                     }}</span>
                   }

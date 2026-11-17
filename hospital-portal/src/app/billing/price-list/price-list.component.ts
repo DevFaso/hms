@@ -151,6 +151,11 @@ export class PriceListComponent implements OnInit {
     );
   });
 
+  /**
+   * QA D2071: the super-admin's global view lists every hospital's items, so
+   * the same code can appear twice; each row then names its hospital.
+   */
+  readonly showHospital = computed(() => this.items().some((item) => !!item.hospitalName));
   readonly selected = signal<PriceListItem | null>(null);
   readonly linkOptions = signal<PriceListLinkOptions | null>(null);
 

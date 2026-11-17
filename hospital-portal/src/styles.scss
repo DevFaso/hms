@@ -271,6 +271,13 @@ button {
   margin-bottom: 0;
 }
 
+/* QA D2128: a button row that does not wrap squeezed the button beside that
+   line instead (« Générer / les / quarts » on three lines). Any row the
+   message lands in wraps, whatever its own component styles say. */
+:has(> .submit-guard-msg) {
+  flex-wrap: wrap;
+}
+
 /* QA D1131 / D1190 / D1195 / D1208 (round 22): the question a dialog asks when
    Escape is pressed over typed text (escape-keeps-typed-text.ts builds it at
    run time, so its style lives here). */
