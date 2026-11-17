@@ -110,6 +110,54 @@ describe('RoiComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('loads every status for All and merges by request date while retaining the server total', () => {
+    fixture.detectChanges();
+    roiService.worklist.calls.reset();
+    roiService.worklist.and.callFake((status) =>
+      of(
+        page([
+          request({
+            id: status!,
+            status: status!,
+            requestedOn: status === 'DENIED' ? '2026-08-01' : '2026-09-01',
+          }),
+        ]),
+      ),
+    );
+    component.setStatus('ALL');
+    expect(roiService.worklist.calls.count()).toBe(4);
+    expect(component.rows().length).toBe(4);
+    expect(component.rows()[0].status).toBe('DENIED');
+    expect(component.total()).toBe(4);
+  });
+
+  it('keeps the merged All queue readable when a request date is missing', () => {
+    fixture.detectChanges();
+    roiService.worklist.and.returnValue(
+      of(page([request({ requestedOn: null as unknown as string })])),
+    );
+    component.setStatus('ALL');
+    expect(component.loadFailed()).toBeFalse();
+    expect(component.rows().length).toBe(4);
+  });
+
+  it('omits unknown hospital confirmation in the decision dialog', () => {
+    fixture.detectChanges();
+    component.openDecision(request(), 'fulfil');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.hospital-context')).toBeNull();
+  });
+
+  it('does not present a partial All queue as complete when one status fails', () => {
+    fixture.detectChanges();
+    roiService.worklist.and.callFake((status) =>
+      status === 'DENIED' ? throwError(() => new Error('offline')) : of(page([request()])),
+    );
+    component.setStatus('ALL');
+    expect(component.loadFailed()).toBeTrue();
+    expect(component.rows()).toEqual([]);
+  });
+
   it('loads the PENDING queue on init', () => {
     fixture.detectChanges();
     expect(roiService.worklist).toHaveBeenCalledWith('PENDING', 0, 200);
@@ -218,6 +266,14 @@ describe('RoiComponent', () => {
     expect(roiService.fulfil).toHaveBeenCalledWith('r1', undefined);
     expect(roiService.worklist).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  it('does not present a static selected-hospital placeholder as intake confirmation', () => {
+    fixture.detectChanges();
+    component.openIntake();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="intake-modal"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.hospital-context')).toBeNull();
   });
 
   it('intake submits patient + purpose + scope', () => {

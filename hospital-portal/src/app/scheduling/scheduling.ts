@@ -1,10 +1,18 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { debounceTime, Subject, switchMap, of } from 'rxjs';
 import {
   StaffSchedulingService,
   StaffShiftResponse,
+  StaffShiftRequest,
   StaffLeaveResponse,
   StaffLeaveStatus,
   BulkShiftRequest,
@@ -22,6 +30,9 @@ import { currentLocale, formatClockTime } from '../shared/i18n/app-locale';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { missingRequiredMessage } from '../shared/required-fields';
+import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 @Component({
   selector: 'app-scheduling',
@@ -41,6 +52,22 @@ import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
   styleUrl: './scheduling.scss',
 })
 export class SchedulingComponent implements OnInit {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly shiftFields: Record<string, string> = {
+    staffId: 'bulk-staffSearch',
+    hospitalId: 'bulk-hospitalId',
+    shiftDate: 'bulk-startDate',
+    startTime: 'bulk-startTime',
+    endTime: 'bulk-endTime',
+    shiftType: 'bulk-shiftType',
+    notes: 'bulk-notes',
+  };
+  private readonly bulkFields: Record<string, string> = {
+    ...this.shiftFields,
+    startDate: 'bulk-startDate',
+    endDate: 'bulk-endDate',
+    daysOfWeek: 'bulk-daysOfWeek',
+  };
   private readonly schedulingService = inject(StaffSchedulingService);
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
@@ -74,6 +101,7 @@ export class SchedulingComponent implements OnInit {
   leaveFilter = signal<'ALL' | StaffLeaveStatus>('ALL');
 
   // ── Bulk Schedule Modal ──────────────────────────────────────────────────
+  singleShiftMode = signal(false);
   bulkModalOpen = signal(false);
   bulkSubmitting = signal(false);
   bulkResult = signal<BulkShiftResult | null>(null);
@@ -179,8 +207,23 @@ export class SchedulingComponent implements OnInit {
     'SUNDAY',
   ];
 
+  openShiftModal(
+    date = this.weekOffset() === 0 ? this.toISODate(new Date()) : this.getWeekRange().start,
+  ): void {
+    if (!this.canManageSchedules() || this.bulkSubmitting()) return;
+    this.openBulkModal();
+    this.singleShiftMode.set(true);
+    this.bulk.startDate = date;
+    this.bulk.endDate = date;
+    this.bulk.startTime = '08:00';
+    this.bulk.endTime = '16:00';
+    this.bulk.shiftType = 'MORNING';
+    this.bulk.notes = '';
+  }
+
   openBulkModal(): void {
     if (!this.canManageSchedules()) return;
+    this.singleShiftMode.set(false);
     this.bulkResult.set(null);
     this.clearStaff();
     this.bulkModalOpen.set(true);
@@ -201,6 +244,7 @@ export class SchedulingComponent implements OnInit {
   }
 
   closeBulkModal(): void {
+    if (this.bulkSubmitting()) return;
     this.bulkModalOpen.set(false);
   }
 
@@ -228,16 +272,109 @@ export class SchedulingComponent implements OnInit {
     this.bulk.daysOfWeek = [...this.allDays];
   }
 
-  submitBulk(): void {
+  submitShift(): void {
+    if (!this.canManageSchedules() || this.bulkSubmitting()) return;
     if (!this.bulk.staffId || !this.bulk.hospitalId) {
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.bulk.staffId ? 'bulk-staffSearch' : '',
+          !this.bulk.hospitalId ? 'bulk-hospitalId' : '',
+        ].filter(Boolean),
+        Object.values(this.shiftFields),
+        this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'),
+      );
+      this.toast.error(this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'));
+      return;
+    }
+    if (
+      !this.bulk.startDate ||
+      !this.bulk.startTime ||
+      !this.bulk.endTime ||
+      this.bulk.startTime === this.bulk.endTime
+    ) {
+      const invalid = [
+        !this.bulk.startDate ? 'bulk-startDate' : '',
+        !this.bulk.startTime ? 'bulk-startTime' : '',
+        !this.bulk.endTime || this.bulk.startTime === this.bulk.endTime ? 'bulk-endTime' : '',
+      ].filter(Boolean);
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'SCHEDULING.START_DATE', value: this.bulk.startDate },
+          { labelKey: 'SCHEDULING.START_TIME', value: this.bulk.startTime },
+          { labelKey: 'SCHEDULING.END_TIME', value: this.bulk.endTime },
+        ]) ?? this.translate.instant('SCHEDULING.TOAST.SHIFT_TIME_RANGE');
+      refuseFields(this.host.nativeElement, invalid, Object.values(this.shiftFields), message);
+      this.toast.error(message);
+      return;
+    }
+    const request: StaffShiftRequest = {
+      staffId: this.bulk.staffId,
+      hospitalId: this.bulk.hospitalId,
+      shiftDate: this.bulk.startDate,
+      startTime: this.bulk.startTime,
+      endTime: this.bulk.endTime,
+      shiftType: this.bulk.shiftType,
+      notes: this.bulk.notes,
+    };
+    this.bulkSubmitting.set(true);
+    this.schedulingService.createShift(request).subscribe({
+      next: () => {
+        this.bulkSubmitting.set(false);
+        this.closeBulkModal();
+        this.toast.success(this.translate.instant('SCHEDULING.TOAST.SHIFT_CREATED'));
+        this.loadShifts();
+      },
+      error: (err) => {
+        this.bulkSubmitting.set(false);
+        const reasons = refusedFieldReasons(err, this.shiftFields);
+        refuseFields(
+          this.host.nativeElement,
+          reasons.map(([id, message]) => ({ id, message })),
+          Object.values(this.shiftFields),
+        );
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('SCHEDULING.TOAST.SHIFT_FAILED'),
+        );
+      },
+    });
+  }
+
+  submitBulk(): void {
+    if (!this.canManageSchedules() || this.bulkSubmitting()) return;
+    if (!this.bulk.staffId || !this.bulk.hospitalId) {
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.bulk.staffId ? 'bulk-staffSearch' : '',
+          !this.bulk.hospitalId ? 'bulk-hospitalId' : '',
+        ].filter(Boolean),
+        Object.values(this.bulkFields),
+        this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'));
       return;
     }
     if (!this.bulk.startDate || !this.bulk.endDate) {
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.bulk.startDate ? 'bulk-startDate' : '',
+          !this.bulk.endDate ? 'bulk-endDate' : '',
+        ].filter(Boolean),
+        Object.values(this.bulkFields),
+        this.translate.instant('SCHEDULING.TOAST.DATE_RANGE_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('SCHEDULING.TOAST.DATE_RANGE_REQUIRED'));
       return;
     }
     if (this.bulk.daysOfWeek.length === 0) {
+      refuseFields(
+        this.host.nativeElement,
+        ['bulk-daysOfWeek'],
+        Object.values(this.bulkFields),
+        this.translate.instant('SCHEDULING.TOAST.DOW_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('SCHEDULING.TOAST.DOW_REQUIRED'));
       return;
     }
@@ -265,7 +402,13 @@ export class SchedulingComponent implements OnInit {
       },
       error: (err) => {
         this.bulkSubmitting.set(false);
-        const msg = err?.error?.message ?? this.translate.instant('SCHEDULING.TOAST.BULK_FAILED');
+        const reasons = refusedFieldReasons(err, this.bulkFields);
+        refuseFields(
+          this.host.nativeElement,
+          reasons.map(([id, message]) => ({ id, message })),
+          Object.values(this.bulkFields),
+        );
+        const msg = refusalReason(err) ?? this.translate.instant('SCHEDULING.TOAST.BULK_FAILED');
         this.toast.error(msg);
       },
     });

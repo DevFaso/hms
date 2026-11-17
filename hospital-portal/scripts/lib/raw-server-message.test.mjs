@@ -70,7 +70,6 @@ const PINS = new Map([
   ['reset-password/reset-password.ts', 1],
   ['roi/roi.ts', 2],
   ['roles/role-list.ts', 2],
-  ['scheduling/scheduling.ts', 1],
   ['slot-admin/slot-admin.ts', 10],
   ['staff/staff-list.ts', 1],
   ['users/user-list.ts', 3],

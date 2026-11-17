@@ -54,10 +54,6 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/digital-signatures/digital-signatures.html::field-label::input lookupReportId()": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
     "src/app/discharge/discharge.html::field-label::input f.appointmentType": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"

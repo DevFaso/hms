@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { DigitalSignaturesComponent } from './digital-signatures';
 import {
@@ -33,7 +33,9 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
       'listSignable',
       'listByProvider',
       'listAll',
+      'listByReport',
       'sign',
+      'verify',
     ]);
     svc.listSignable.and.returnValue(of(list));
     svc.listByProvider.and.returnValue(of([]));
@@ -61,6 +63,92 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
+
+  it('cancels an obsolete lookup and separates an unavailable result from unsigned', () => {
+    setup([]);
+    const component = fixture.componentInstance;
+    const pending = new Subject<SignatureResponse[]>();
+    svc.listByReport.and.returnValue(pending);
+    component.lookupReportType.set('DISCHARGE_SUMMARY');
+    component.lookupReportId.set(reportId);
+    component.runLookup();
+    component.onLookupChange();
+    pending.next([]);
+    expect(component.lookupDone()).toBeFalse();
+    svc.listByReport.and.returnValue(throwError(() => new Error('offline')));
+    component.runLookup();
+    expect(component.lookupError()).toBeTrue();
+    expect(component.lookupSigned()).toBeNull();
+  });
+
+  it('restarts an in-flight signature read so an obsolete response cannot replace a requested refresh', () => {
+    setup([]);
+    const component = fixture.componentInstance;
+    const old = new Subject<SignatureResponse[]>();
+    svc.listAll.and.returnValue(old);
+    component.loadSignatures();
+    svc.listAll.and.returnValue(of([{ id: 'fresh' } as SignatureResponse]));
+    component.loadSignatures();
+    old.next([{ id: 'obsolete' } as SignatureResponse]);
+    expect(component.signatures().map((s) => s.id)).toEqual(['fresh']);
+    expect(component.loading()).toBeFalse();
+  });
+
+  it('rejects an invalid report UUID before requesting a lookup', () => {
+    setup([]);
+    const component = fixture.componentInstance;
+    component.lookupReportType.set('DISCHARGE_SUMMARY');
+    component.lookupReportId.set('bad-id');
+    component.runLookup();
+    expect(component.lookupValidation()).toBeTrue();
+    expect(svc.listByReport).not.toHaveBeenCalled();
+  });
+
+  it('clears loaded reports and counters when a subsequent signature reload fails', () => {
+    const el = setup([]);
+    const component = fixture.componentInstance;
+    svc.listAll.and.returnValue(
+      of([
+        { id: 'signed', reportId, reportType: 'DISCHARGE_SUMMARY', status: 'SIGNED' },
+        { id: 'revoked', reportId: 'other', reportType: 'LAB_RESULT', status: 'REVOKED' },
+      ] as SignatureResponse[]),
+    );
+    component.loadSignatures();
+    fixture.detectChanges();
+    expect(component.signedCount()).toBe(1);
+    expect(component.revokedCount()).toBe(1);
+    expect(el.querySelector('#known-report')).not.toBeNull();
+
+    svc.listAll.and.returnValue(throwError(() => new Error('offline')));
+    component.loadSignatures();
+    fixture.detectChanges();
+    expect(component.loadError()).toBeTrue();
+    expect(component.signatures()).toEqual([]);
+    expect(component.knownReports()).toEqual([]);
+    expect(component.signedCount()).toBe(0);
+    expect(component.revokedCount()).toBe(0);
+    expect(el.querySelector('#known-report')).toBeNull();
+  });
+
+  it('renders verification unavailable after a transport failure without declaring the signature invalid', () => {
+    const el = setup([]);
+    const component = fixture.componentInstance;
+    component.openVerify({
+      id: 'signed',
+      reportId,
+      reportType: 'DISCHARGE_SUMMARY',
+    } as SignatureResponse);
+    component.verifyValue.set('signature');
+    svc.verify.and.returnValue(throwError(() => new Error('offline')));
+    component.doVerify();
+    fixture.detectChanges();
+    expect(component.verifyResult()).toBeNull();
+    expect(component.verifyError()).toBeTrue();
+    expect(component.verifying()).toBeFalse();
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain(
+      'SIGNATURES.VERIFY_UNAVAILABLE',
+    );
+  });
 
   it('lists the signable reports by type and patient, with no id field and no id text', () => {
     const el = setup(rows);

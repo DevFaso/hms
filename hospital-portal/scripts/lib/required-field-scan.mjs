@@ -68,6 +68,11 @@ export function declaresRequired(tag, subForms = NONE) {
   if (subForms.has(tag.name)) return true;
   const a = tag.attrs;
   if (PICKERS.has(tag.name)) return a.has('required') || a.has('[required]');
+  // HTML fieldsets have no native required attribute, and aria-required is not
+  // allowed on their group role. An explicitly required group names its visible
+  // constraint through aria-describedby; the submit handler still refuses it.
+  if (tag.name === 'fieldset' && a.has('data-required-group') && a.get('aria-describedby'))
+    return true;
   return (
     a.has('required') ||
     a.has('[required]') ||

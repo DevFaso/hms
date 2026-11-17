@@ -349,6 +349,13 @@
     data-testid="decision-modal"
   >
     <h2>{{ decisionActionKey(d.kind) | translate }} — {{ d.row.patientName }}</h2>
+    @if (d.row.hospitalName) {
+      <p class="hospital-context">
+        {{ 'ROI.TARGET_HOSPITAL' | translate }}{{ 'COMMON.COLON' | translate }}
+        {{ d.row.hospitalName }}
+      </p>
+    }
+    <p class="hint">{{ 'ROI.ACTOR_HELP' | translate }}</p>
     @if (d.kind === 'fulfil') {
       <p class="hint">{{ 'ROI.FULFIL_HINT' | translate }}</p>
     } @else if (d.kind === 'deny') {

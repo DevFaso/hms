@@ -1,4 +1,9 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../testing/form-refusal-behaviour';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { formatClockTime, resetStoredLangForTests } from '../shared/i18n/app-locale';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -54,6 +59,7 @@ describe('SchedulingComponent', () => {
 
   beforeEach(async () => {
     schedulingSpy = jasmine.createSpyObj('StaffSchedulingService', [
+      'createShift',
       'listShifts',
       'listLeaves',
       'bulkScheduleShifts',
@@ -95,6 +101,219 @@ describe('SchedulingComponent', () => {
     fixture = TestBed.createComponent(SchedulingComponent);
     component = fixture.componentInstance;
   });
+
+  it('marks missing fields when the single shift form is submitted empty', () => {
+    fixture.detectChanges();
+    component.openShiftModal('2026-11-16');
+    fixture.detectChanges();
+    expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="single-shift-submit"]',
+      alsoMarked: ['bulk-staffSearch', 'bulk-hospitalId'],
+      sent: schedulingSpy.createShift,
+    });
+  });
+
+  it('marks the server reason beside a refused shift field', () => {
+    fixture.detectChanges();
+    component.openShiftModal('2026-11-16');
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    schedulingSpy.createShift.and.returnValue(
+      throwError(() => fieldErrorsResponse({ shiftDate: 'Choose another date' })),
+    );
+    fixture.detectChanges();
+    component.submitShift();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'bulk-startDate': 'Choose another date' });
+  });
+
+  it('creates a single shift without calling bulk scheduling and resets the next bulk mode', () => {
+    fixture.detectChanges();
+    schedulingSpy.createShift.and.returnValue(of(mockShift()));
+    component.openShiftModal('2026-11-16');
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    component.submitShift();
+    expect(schedulingSpy.createShift).toHaveBeenCalledWith(
+      jasmine.objectContaining({ shiftDate: '2026-11-16', hospitalId: 'h1' }),
+    );
+    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+    expect(component.bulkModalOpen()).toBeFalse();
+    component.openBulkModal();
+    expect(component.singleShiftMode()).toBeFalse();
+  });
+
+  it('refuses single-shift opening and submission when scheduling capability is absent', () => {
+    component.canManageSchedules.set(false);
+    component.openShiftModal();
+    component.submitShift();
+    expect(component.bulkModalOpen()).toBeFalse();
+    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
+  });
+
+  it('keeps leave reading available when scheduling writes are refused', () => {
+    schedulingSpy.capabilities.and.returnValue(of({ canManageSchedules: false }));
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const tabs = el.querySelectorAll<HTMLButtonElement>('.tabs button');
+    expect(tabs.length).toBe(2);
+    expect(el.querySelector('.page-actions')).toBeNull();
+    tabs[1].click();
+    fixture.detectChanges();
+    expect(component.activeView()).toBe('leaves');
+    expect(el.textContent).toContain('Ama Owusu');
+  });
+
+  it('marks missing bulk identity, date and weekday fields rather than refusing with a toast alone', () => {
+    fixture.detectChanges();
+    component.openBulkModal();
+    fixture.detectChanges();
+    component.submitBulk();
+    expectFieldsMarked(fixture, {
+      'bulk-staffSearch': 'SCHEDULING.TOAST.IDS_REQUIRED',
+      'bulk-hospitalId': 'SCHEDULING.TOAST.IDS_REQUIRED',
+    });
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    component.submitBulk();
+    expectFieldsMarked(fixture, {
+      'bulk-startDate': 'SCHEDULING.TOAST.DATE_RANGE_REQUIRED',
+      'bulk-endDate': 'SCHEDULING.TOAST.DATE_RANGE_REQUIRED',
+    });
+    component.bulk.startDate = '2026-11-16';
+    component.bulk.endDate = '2026-11-17';
+    component.bulk.daysOfWeek = [];
+    component.submitBulk();
+    expectFieldsMarked(fixture, { 'bulk-daysOfWeek': 'SCHEDULING.TOAST.DOW_REQUIRED' });
+    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+  });
+
+  it('marks server field errors in the bulk form as well as the single shift form', () => {
+    fixture.detectChanges();
+    component.openBulkModal();
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    component.bulk.startDate = '2026-11-16';
+    component.bulk.endDate = '2026-11-17';
+    schedulingSpy.bulkScheduleShifts.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({ endDate: 'Choose a later end date', daysOfWeek: 'Choose weekdays' }),
+      ),
+    );
+    fixture.detectChanges();
+    component.submitBulk();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, {
+      'bulk-endDate': 'Choose a later end date',
+      'bulk-daysOfWeek': 'Choose weekdays',
+    });
+  });
+
+  for (const field of ['staffId', 'hospitalId', 'startDate', 'startTime', 'endTime'] as const) {
+    it(`a single shift missing only ${field} is refused without sending a request`, () => {
+      fixture.detectChanges();
+      component.openShiftModal('2026-11-16');
+      Object.assign(component.bulk, {
+        staffId: 'st1',
+        hospitalId: 'h1',
+        startDate: '2026-11-16',
+        startTime: '08:00',
+        endTime: '16:00',
+      });
+      component.bulk[field] = '';
+      fixture.detectChanges();
+      component.submitShift();
+      expect(schedulingSpy.createShift).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalled();
+      expect(component.bulkModalOpen()).toBeTrue();
+    });
+  }
+
+  it('equal single-shift times require correction while an overnight shift can be saved', () => {
+    fixture.detectChanges();
+    component.openShiftModal('2026-11-16');
+    Object.assign(component.bulk, {
+      staffId: 'st1',
+      hospitalId: 'h1',
+      startTime: '08:00',
+      endTime: '08:00',
+    });
+    fixture.detectChanges();
+    component.submitShift();
+    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('SCHEDULING.TOAST.SHIFT_TIME_RANGE');
+    component.bulk.endTime = '01:00';
+    schedulingSpy.createShift.and.returnValue(of(mockShift({ crossMidnight: true })));
+    component.submitShift();
+    expect(schedulingSpy.createShift).toHaveBeenCalledWith(
+      jasmine.objectContaining({ startTime: '08:00', endTime: '01:00' }),
+    );
+  });
+
+  it('an in-flight request prevents another submission and closing the form', () => {
+    fixture.detectChanges();
+    component.openShiftModal('2026-11-16');
+    component.bulkSubmitting.set(true);
+    component.closeBulkModal();
+    component.submitShift();
+    component.submitBulk();
+    expect(component.bulkModalOpen()).toBeTrue();
+    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
+    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+  });
+
+  it('single-shift transport failure preserves the form and uses the local failure message', () => {
+    fixture.detectChanges();
+    component.openShiftModal('2026-11-16');
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    schedulingSpy.createShift.and.returnValue(throwError(() => new Error('offline')));
+    component.submitShift();
+    expect(toastSpy.error).toHaveBeenCalledWith('SCHEDULING.TOAST.SHIFT_FAILED');
+    expect(component.bulkSubmitting()).toBeFalse();
+    expect(component.bulkModalOpen()).toBeTrue();
+  });
+
+  it('bulk submission refuses each absent identity and range endpoint independently', () => {
+    fixture.detectChanges();
+    component.openBulkModal();
+    fixture.detectChanges();
+    const valid = {
+      staffId: 'st1',
+      hospitalId: 'h1',
+      startDate: '2026-11-16',
+      endDate: '2026-11-17',
+    };
+    for (const field of ['staffId', 'hospitalId', 'startDate', 'endDate'] as const) {
+      Object.assign(component.bulk, valid);
+      component.bulk[field] = '';
+      component.submitBulk();
+    }
+    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledTimes(4);
+  });
+
+  it('staff search handles hospital and department matches when optional job fields are absent', fakeAsync(() => {
+    staffSpy.list.and.returnValue(
+      of([
+        { id: 's1', name: 'Awa', hospitalId: 'h1', hospitalName: 'City Hospital' },
+        { id: 's2', name: 'Ben', hospitalId: 'h1', departmentName: 'Maternity' },
+        { id: 's3', name: 'Other', hospitalId: 'h1' },
+      ] as StaffResponse[]),
+    );
+    fixture.detectChanges();
+    component.openBulkModal();
+    component.onStaffQueryChange('city');
+    tick(230);
+    expect(component.staffSuggestions().map((row) => row.id)).toEqual(['s1']);
+    component.onStaffQueryChange('maternity');
+    tick(230);
+    expect(component.staffSuggestions().map((row) => row.id)).toEqual(['s2']);
+    component.onStaffQueryChange('  ');
+    expect(component.staffSuggestionsOpen()).toBeFalse();
+    component.closeSuggestions();
+    tick(160);
+  }));
 
   it('should create', () => {
     expect(component).toBeTruthy();
@@ -192,6 +411,7 @@ describe('SchedulingComponent', () => {
   });
 
   it('submitBulk validates staff, date range, and days of week', () => {
+    fixture.detectChanges();
     component.bulk.staffId = '';
     component.submitBulk();
     expect(toastSpy.error).toHaveBeenCalledTimes(1);
@@ -227,6 +447,7 @@ describe('SchedulingComponent', () => {
   });
 
   it('submitBulk flags an all-skipped result as an error', () => {
+    fixture.detectChanges();
     component.bulk.staffId = 'st1';
     component.bulk.hospitalId = 'h1';
     component.bulk.startDate = '2026-08-17';

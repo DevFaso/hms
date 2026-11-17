@@ -73,6 +73,12 @@ describe('InBasketPageComponent', () => {
     expect(fixture.nativeElement.querySelector('app-in-basket-panel')).toBeTruthy();
   });
 
+  it('shows a single inbox heading on the full page', () => {
+    setup(['ROLE_NURSE']);
+    expect(fixture.nativeElement.querySelector('h1')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('app-in-basket-panel .panel-title')).toBeNull();
+  });
+
   /* ── B7: the lab-results category and its gate ── */
 
   it('shows the lab-results category to a doctor', () => {
