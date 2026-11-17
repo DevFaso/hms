@@ -33,6 +33,7 @@
     "src/app/billing/billing.html::a.reason",
     "src/app/billing/billing.html::a.reversalReason",
     "src/app/billing/billing.html::inv.cancelReason",
+    "src/app/billing/billing.html::it.overrideReason",
     "src/app/billing/billing.html::p.reversalReason",
     "src/app/break-glass-review/break-glass-review.html::s.reason",
     "src/app/chat/chat.html::att.kind",
@@ -250,6 +251,7 @@
     "src/app/billing/price-list/price-list.component.html::p.changeReason"
   ],
   "reasons": {
+    "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
     "src/app/lab/shared/result-evolution.component.ts::<option>u": "LabResultTrendPointDTO.resultUnit is a String mapped from LabResult.resultUnit (varchar 50), falling back to the test unit. LabResultRequestDTO.resultUnit is a size-bounded String entered in lab-results.html input#lr-resultUnit and submitted by LabResultsComponent.submitForm; units are free text, not enum tokens, and must retain their measurement notation.",
     "src/app/transfusion/transfusion.html::xm.incompatibilityReason": "the laboratory's own free text: why this crossmatch came back incompatible",
     "src/app/transfusion/transfusion.html::r.reason": "free text the person issuing typed: why this emergency release was made",
