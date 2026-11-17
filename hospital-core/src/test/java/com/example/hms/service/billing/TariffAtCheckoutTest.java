@@ -240,6 +240,7 @@ class TariffAtCheckoutTest {
         BillingInvoice draft = listener.chargeVisit(event(LocalDateTime.of(2026, 11, 15, 8, 30))).orElseThrow();
 
         assertThat(draft.getInvoiceItems()).extracting(InvoiceItem::getPriceSource)
+            .isNotEmpty()
             .doesNotContain(InvoiceLinePriceSource.TARIFF);
         // A visit checked out tomorrow takes it.
         when(invoices.findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.CANCELLED)).thenReturn(List.of());
