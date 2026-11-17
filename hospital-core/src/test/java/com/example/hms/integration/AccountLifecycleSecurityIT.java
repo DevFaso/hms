@@ -178,8 +178,8 @@ class AccountLifecycleSecurityIT extends BaseIT {
         Session recovered = login(user, REPLACEMENT);
         protectedRead(user, recovered.access()).andExpect(status().isOk());
 
-        // A uniform 204 on a spent link must not be mistaken for a second successful reset.
-        confirm(raw, "Replay-Lifecycle-2026!", route).andExpect(status().isNoContent());
+        // QA D2051: a spent link is refused (400), never a second "successful" reset.
+        confirm(raw, "Replay-Lifecycle-2026!", route).andExpect(status().isBadRequest());
         assertThat(resets.findByTokenHash(hash(raw)).orElseThrow().getConsumedAt()).isEqualTo(consumed);
         assertThat(encoder.matches(REPLACEMENT, users.findById(user.getId()).orElseThrow().getPasswordHash())).isTrue();
         login(user, REPLACEMENT);
@@ -194,8 +194,14 @@ class AccountLifecycleSecurityIT extends BaseIT {
         resets.saveAndFlush(expired);
         String originalHash = users.findById(user.getId()).orElseThrow().getPasswordHash();
 
-        confirm(raw, REPLACEMENT).andExpect(status().isNoContent());
-        confirm(UUID.randomUUID().toString(), REPLACEMENT).andExpect(status().isNoContent());
+        // QA D2051: both refused with the same message, so neither says which case it was.
+        String expiredAnswer = confirm(raw, REPLACEMENT).andExpect(status().isBadRequest())
+            .andReturn().getResponse().getContentAsString();
+        String unknownAnswer = confirm(UUID.randomUUID().toString(), REPLACEMENT).andExpect(status().isBadRequest())
+            .andReturn().getResponse().getContentAsString();
+        assertThat(json.readTree(expiredAnswer).path("message").asText())
+            .isNotBlank()
+            .isEqualTo(json.readTree(unknownAnswer).path("message").asText());
         assertThat(users.findById(user.getId()).orElseThrow().getPasswordHash()).isEqualTo(originalHash);
         assertThat(resets.findByTokenHash(hash(raw)).orElseThrow().getConsumedAt()).isNull();
         login(user, PASSWORD);

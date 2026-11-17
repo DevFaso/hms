@@ -44,7 +44,8 @@ class PasswordResetControllerTest {
         queued = new ArrayList<>();
         PasswordResetRequestDispatcher dispatcher =
             PasswordResetRequestDispatcherTestSupport.onExecutor(service, queued::add);
-        mockMvc = MockMvcBuilders.standaloneSetup(new PasswordResetController(service, dispatcher)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new PasswordResetController(service, dispatcher))
+            .setControllerAdvice(new com.example.hms.exception.GlobalExceptionHandler()).build();
     }
 
     /** What the pool would do after the answer has gone. */
@@ -136,5 +137,29 @@ class PasswordResetControllerTest {
 
         assertThat(queued).isEmpty();
         verify(service, never()).requestResetByIdentifier(any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"/auth/password/confirm", "/auth/password/reset-password"})
+    @DisplayName("QA D2051: a refused link is a 400 with its message, never the 204 of a reset")
+    void aRefusedLinkIsNotASuccess(String path) throws Exception {
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.BusinessException("passwordReset.token.invalid"))
+            .when(service).confirmReset("bogus", "Valid-Pass-2026");
+        mockMvc.perform(post(path)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"bogus\",\"newPassword\":\"Valid-Pass-2026\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message").isNotEmpty());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"/auth/password/confirm", "/auth/password/reset-password"})
+    @DisplayName("a live link is still 204")
+    void aLiveLinkIs204(String path) throws Exception {
+        mockMvc.perform(post(path)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"live\",\"newPassword\":\"Valid-Pass-2026\"}"))
+            .andExpect(status().isNoContent());
+        verify(service).confirmReset("live", "Valid-Pass-2026");
     }
 }

@@ -8747,6 +8747,11 @@
   "RESET": {
     "BACK_TO_LOGIN": "Volver al inicio de sesión",
     "CONFIRM_PASSWORD": "Confirmar contraseña",
+    "ERR_LINK_INVALID": "Este enlace no es válido, ha caducado o ya se utilizó. Solicite uno nuevo.",
+    "ERR_MIN_LENGTH": "La contraseña debe tener al menos 8 caracteres.",
+    "ERR_MISMATCH": "Las contraseñas no coinciden.",
+    "ERR_REQUIRED": "Ambos campos son obligatorios.",
+    "ERR_TOKEN_MISSING": "Enlace de restablecimiento no válido o incompleto. Solicite un nuevo enlace.",
     "INVALID_MSG": "Este enlace de restablecimiento no es válido o ha caducado.",
     "INVALID_TITLE": "Enlace no válido",
     "MIN_CHARS": "Mínimo 8 caracteres",
@@ -8756,6 +8761,7 @@
     "SIGN_IN_NOW": "Iniciar sesión ahora",
     "SUBMIT": "Restablecer contraseña",
     "SUBTITLE": "Cree una nueva contraseña",
+    "SUCCESS_MSG": "Su contraseña se ha restablecido. Ya puede iniciar sesión.",
     "SUCCESS_TITLE": "Contraseña restablecida",
     "TITLE": "Restablecer contraseña"
   },

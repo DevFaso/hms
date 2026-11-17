@@ -1,6 +1,5 @@
 package com.example.hms.controller;
 
-import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.PasswordResetConfirmDTO;
 import com.example.hms.payload.dto.PasswordResetRequestDTO;
 import com.example.hms.service.PasswordResetRequestDispatcher;
@@ -71,16 +70,17 @@ public class PasswordResetController {
         return handleResetRequest(named, locale, request);
     }
 
+    /**
+     * QA D2051: 204 only when the password changed. An unknown, expired or
+     * spent link is 400 with one localized message for all three (the service
+     * refuses it), and a too-short password keeps its own message. The old
+     * catch answered 204 to every one of them, so the page said « Mot de passe
+     * réinitialisé » for a password that never changed.
+     */
     @PostMapping("/confirm")
     public ResponseEntity<Void> confirmReset(@Valid @RequestBody PasswordResetConfirmDTO dto) {
         // dto.getToken() is the RAW token from the link; service hashes and validates internally
-        try {
-            passwordResetService.confirmReset(dto.getToken(), dto.getNewPassword());
-        } catch (ResourceNotFoundException | IllegalStateException e) {
-            // Don’t reveal token validity details to avoid giving attackers useful signals.
-            log.debug("Password reset confirm failed: {}", e.getMessage());
-            // You can still return 204 to keep response uniform.
-        }
+        passwordResetService.confirmReset(dto.getToken(), dto.getNewPassword());
         return ResponseEntity.noContent().build(); // 204
     }
 

@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Component, inject, OnInit, PLATFORM_ID, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
@@ -26,6 +26,7 @@ export class ResetPasswordComponent implements OnInit {
 
   private token = '';
   private readonly http = inject(HttpClient);
+  private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly platformId = inject(PLATFORM_ID);
@@ -34,7 +35,7 @@ export class ResetPasswordComponent implements OnInit {
   ngOnInit(): void {
     this.token = this.route.snapshot.queryParamMap.get('token') ?? '';
     if (!this.token) {
-      this.error = 'Invalid or missing reset token. Please request a new password reset link.';
+      this.error = this.translate.instant('RESET.ERR_TOKEN_MISSING');
     }
   }
 
@@ -55,15 +56,15 @@ export class ResetPasswordComponent implements OnInit {
     this.error = '';
 
     if (!this.newPassword || !this.confirmPassword) {
-      this.error = 'Both fields are required.';
+      this.error = this.translate.instant('RESET.ERR_REQUIRED');
       return;
     }
     if (this.newPassword.length < 8) {
-      this.error = 'Password must be at least 8 characters.';
+      this.error = this.translate.instant('RESET.ERR_MIN_LENGTH');
       return;
     }
     if (this.newPassword !== this.confirmPassword) {
-      this.error = 'Passwords do not match.';
+      this.error = this.translate.instant('RESET.ERR_MISMATCH');
       return;
     }
 
@@ -77,13 +78,13 @@ export class ResetPasswordComponent implements OnInit {
       .subscribe({
         next: () => {
           this.loading = false;
-          this.success = 'Your password has been reset successfully. You can now sign in.';
+          this.success = this.translate.instant('RESET.SUCCESS_MSG');
         },
         error: (err) => {
           this.loading = false;
-          this.error =
-            err?.error?.message ??
-            'This reset link is invalid or has expired. Please request a new one.';
+          // QA D2051: a refused link is a 400 whose message the server localized
+          // (and which asks for a new link); never the success state.
+          this.error = err?.error?.message || this.translate.instant('RESET.ERR_LINK_INVALID');
         },
       });
   }
