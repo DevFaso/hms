@@ -3,7 +3,7 @@ import {
   expectFieldsMarked,
   fieldErrorsResponse,
 } from '../testing/form-refusal-behaviour';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { formatClockTime, resetStoredLangForTests } from '../shared/i18n/app-locale';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -208,6 +208,112 @@ describe('SchedulingComponent', () => {
       'bulk-daysOfWeek': 'Choose weekdays',
     });
   });
+
+  for (const field of ['staffId', 'hospitalId', 'startDate', 'startTime', 'endTime'] as const) {
+    it(`a single shift missing only ${field} is refused without sending a request`, () => {
+      fixture.detectChanges();
+      component.openShiftModal('2026-11-16');
+      Object.assign(component.bulk, {
+        staffId: 'st1',
+        hospitalId: 'h1',
+        startDate: '2026-11-16',
+        startTime: '08:00',
+        endTime: '16:00',
+      });
+      component.bulk[field] = '';
+      fixture.detectChanges();
+      component.submitShift();
+      expect(schedulingSpy.createShift).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalled();
+      expect(component.bulkModalOpen()).toBeTrue();
+    });
+  }
+
+  it('equal single-shift times require correction while an overnight shift can be saved', () => {
+    fixture.detectChanges();
+    component.openShiftModal('2026-11-16');
+    Object.assign(component.bulk, {
+      staffId: 'st1',
+      hospitalId: 'h1',
+      startTime: '08:00',
+      endTime: '08:00',
+    });
+    fixture.detectChanges();
+    component.submitShift();
+    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('SCHEDULING.TOAST.SHIFT_TIME_RANGE');
+    component.bulk.endTime = '01:00';
+    schedulingSpy.createShift.and.returnValue(of(mockShift({ crossMidnight: true })));
+    component.submitShift();
+    expect(schedulingSpy.createShift).toHaveBeenCalledWith(
+      jasmine.objectContaining({ startTime: '08:00', endTime: '01:00' }),
+    );
+  });
+
+  it('an in-flight request prevents another submission and closing the form', () => {
+    fixture.detectChanges();
+    component.openShiftModal('2026-11-16');
+    component.bulkSubmitting.set(true);
+    component.closeBulkModal();
+    component.submitShift();
+    component.submitBulk();
+    expect(component.bulkModalOpen()).toBeTrue();
+    expect(schedulingSpy.createShift).not.toHaveBeenCalled();
+    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+  });
+
+  it('single-shift transport failure preserves the form and uses the local failure message', () => {
+    fixture.detectChanges();
+    component.openShiftModal('2026-11-16');
+    component.bulk.staffId = 'st1';
+    component.bulk.hospitalId = 'h1';
+    schedulingSpy.createShift.and.returnValue(throwError(() => new Error('offline')));
+    component.submitShift();
+    expect(toastSpy.error).toHaveBeenCalledWith('SCHEDULING.TOAST.SHIFT_FAILED');
+    expect(component.bulkSubmitting()).toBeFalse();
+    expect(component.bulkModalOpen()).toBeTrue();
+  });
+
+  it('bulk submission refuses each absent identity and range endpoint independently', () => {
+    fixture.detectChanges();
+    component.openBulkModal();
+    fixture.detectChanges();
+    const valid = {
+      staffId: 'st1',
+      hospitalId: 'h1',
+      startDate: '2026-11-16',
+      endDate: '2026-11-17',
+    };
+    for (const field of ['staffId', 'hospitalId', 'startDate', 'endDate'] as const) {
+      Object.assign(component.bulk, valid);
+      component.bulk[field] = '';
+      component.submitBulk();
+    }
+    expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledTimes(4);
+  });
+
+  it('staff search handles hospital and department matches when optional job fields are absent', fakeAsync(() => {
+    staffSpy.list.and.returnValue(
+      of([
+        { id: 's1', name: 'Awa', hospitalId: 'h1', hospitalName: 'City Hospital' },
+        { id: 's2', name: 'Ben', hospitalId: 'h1', departmentName: 'Maternity' },
+        { id: 's3', name: 'Other', hospitalId: 'h1' },
+      ] as StaffResponse[]),
+    );
+    fixture.detectChanges();
+    component.openBulkModal();
+    component.onStaffQueryChange('city');
+    tick(230);
+    expect(component.staffSuggestions().map((row) => row.id)).toEqual(['s1']);
+    component.onStaffQueryChange('maternity');
+    tick(230);
+    expect(component.staffSuggestions().map((row) => row.id)).toEqual(['s2']);
+    component.onStaffQueryChange('  ');
+    expect(component.staffSuggestionsOpen()).toBeFalse();
+    component.closeSuggestions();
+    tick(160);
+  }));
 
   it('should create', () => {
     expect(component).toBeTruthy();

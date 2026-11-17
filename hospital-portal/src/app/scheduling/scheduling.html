@@ -571,6 +571,8 @@
       @if (!singleShiftMode()) {
         <fieldset
           id="bulk-daysOfWeek"
+          data-required-group
+          aria-describedby="bulk-days-required"
           tabindex="-1"
           class="form-group form-group--full dow-fieldset"
         >
@@ -578,6 +580,9 @@
             <span class="material-symbols-outlined">view_week</span>
             {{ 'SCHEDULING.DAYS_OF_WEEK' | translate }} <span class="required">*</span>
           </legend>
+          <p id="bulk-days-required" class="hint">
+            {{ 'SCHEDULING.TOAST.DOW_REQUIRED' | translate }}
+          </p>
           <div class="dow-presets">
             <button type="button" class="dow-preset-btn" (click)="selectWeekdays()">
               {{ 'SCHEDULING.MON_FRI' | translate }}
