@@ -38,14 +38,18 @@ import { PATIENT_IDENTITY_EDIT_ROLES } from './patient-chart/chart-access';
     <div class="iu-view" data-testid="national-iu-view">
       <span class="iu-label">{{ 'NATIONAL_IU.LABEL' | translate }}</span>
       <span class="iu-value">{{ fullValue ?? masked }}</span>
-      @if (canReveal() && !fullValue) {
-        <button type="button" class="btn-secondary" (click)="reveal()" [disabled]="busy">
-          {{ 'NATIONAL_IU.SHOW_FULL' | translate }}
-        </button>
-      }
-      @if (fullValue) {
-        <button type="button" class="btn-secondary" (click)="clear()">
-          {{ 'NATIONAL_IU.HIDE' | translate }}
+      <!-- QA D2100: one toggle whose label switches. Swapping two buttons with
+           @if destroyed the focused element and dropped focus to the page h1;
+           aria-disabled (not [disabled]) keeps focus on it while the request runs. -->
+      @if (canReveal() || fullValue) {
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="national-iu-toggle"
+          (click)="toggle()"
+          [attr.aria-disabled]="busy ? 'true' : null"
+        >
+          {{ (fullValue ? 'NATIONAL_IU.HIDE' : 'NATIONAL_IU.SHOW_FULL') | translate }}
         </button>
       }
       @if (failed) {
@@ -84,6 +88,10 @@ export class NationalUniqueIdViewComponent implements OnChanges, OnDestroy {
     this.fullValue = null;
     this.busy = false;
     this.failed = false;
+  }
+  toggle(): void {
+    if (this.fullValue) this.clear();
+    else this.reveal();
   }
   reveal(): void {
     if (!this.canReveal() || this.busy) return;
