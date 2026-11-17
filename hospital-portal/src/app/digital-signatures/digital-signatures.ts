@@ -223,6 +223,7 @@ export class DigitalSignaturesComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
+        this.signatures.set([]);
         this.loadError.set(true);
         this.loading.set(false);
       },

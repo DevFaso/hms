@@ -35,6 +35,7 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
       'listAll',
       'listByReport',
       'sign',
+      'verify',
     ]);
     svc.listSignable.and.returnValue(of(list));
     svc.listByProvider.and.returnValue(of([]));
@@ -101,6 +102,52 @@ describe('DigitalSignaturesComponent sign picker (QA D627)', () => {
     component.runLookup();
     expect(component.lookupValidation()).toBeTrue();
     expect(svc.listByReport).not.toHaveBeenCalled();
+  });
+
+  it('clears loaded reports and counters when a subsequent signature reload fails', () => {
+    const el = setup([]);
+    const component = fixture.componentInstance;
+    svc.listAll.and.returnValue(
+      of([
+        { id: 'signed', reportId, reportType: 'DISCHARGE_SUMMARY', status: 'SIGNED' },
+        { id: 'revoked', reportId: 'other', reportType: 'LAB_RESULT', status: 'REVOKED' },
+      ] as SignatureResponse[]),
+    );
+    component.loadSignatures();
+    fixture.detectChanges();
+    expect(component.signedCount()).toBe(1);
+    expect(component.revokedCount()).toBe(1);
+    expect(el.querySelector('#known-report')).not.toBeNull();
+
+    svc.listAll.and.returnValue(throwError(() => new Error('offline')));
+    component.loadSignatures();
+    fixture.detectChanges();
+    expect(component.loadError()).toBeTrue();
+    expect(component.signatures()).toEqual([]);
+    expect(component.knownReports()).toEqual([]);
+    expect(component.signedCount()).toBe(0);
+    expect(component.revokedCount()).toBe(0);
+    expect(el.querySelector('#known-report')).toBeNull();
+  });
+
+  it('renders verification unavailable after a transport failure without declaring the signature invalid', () => {
+    const el = setup([]);
+    const component = fixture.componentInstance;
+    component.openVerify({
+      id: 'signed',
+      reportId,
+      reportType: 'DISCHARGE_SUMMARY',
+    } as SignatureResponse);
+    component.verifyValue.set('signature');
+    svc.verify.and.returnValue(throwError(() => new Error('offline')));
+    component.doVerify();
+    fixture.detectChanges();
+    expect(component.verifyResult()).toBeNull();
+    expect(component.verifyError()).toBeTrue();
+    expect(component.verifying()).toBeFalse();
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain(
+      'SIGNATURES.VERIFY_UNAVAILABLE',
+    );
   });
 
   it('lists the signable reports by type and patient, with no id field and no id text', () => {
