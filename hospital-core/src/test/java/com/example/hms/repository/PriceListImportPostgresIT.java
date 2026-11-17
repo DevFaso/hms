@@ -143,7 +143,7 @@ class PriceListImportPostgresIT {
         PriceListLinks links = new PriceListLinks(labTests, treatments);
         service = new PriceListService(items, prices, links, invoiceLines, labTests, treatments,
             mock(UserRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
-        importer = new PriceListImportService(service, items, prices, imports, links, labTests, audit);
+        importer = new PriceListImportService(service, items, prices, imports, links, labTests, audit, jdbc, "1s");
         tx = new TransactionTemplate(transactions);
         actAt(hospitalA);
         when(roles.getCurrentUserId()).thenReturn(actor);
@@ -456,11 +456,118 @@ class PriceListImportPostgresIT {
         assertThat(applied.getResult()).isEqualTo(PriceListImportResult.APPLIED);
         assertThat(versionCount(hospitalA)).isEqualTo(60);
 
-        // A label typed on the screen that a spreadsheet would run is written behind an apostrophe.
-        inTx(() -> service.create(PriceListItemRequestDTO.builder().code("ADM-F").label("=HYPERLINK(\"x\")")
-            .category(PriceListCategory.OTHER_SERVICE).unitPrice(new BigDecimal("100")).build()));
-        String withFormula = new String(inTx(() -> importer.export()), StandardCharsets.UTF_8);
-        assertThat(withFormula).contains("ADM-F;\"'=HYPERLINK(\"\"x\"\")\";OTHER_SERVICE;100;15/11/2026;;");
+    }
+
+    @Test
+    @DisplayName("review #1206: a formula-looking label is refused on the screen; an older one exports escaped and "
+        + "re-imports unchanged")
+    void aFormulaLookingLabelRoundTrips() {
+        // The screen applies the import's own rule (CsvCells.isFormula) to a label.
+        PriceListItemRequestDTO formula = PriceListItemRequestDTO.builder().code("ADM-F").label("=HYPERLINK(\"x\")")
+            .category(PriceListCategory.OTHER_SERVICE).unitPrice(new BigDecimal("100")).build();
+        assertThatThrownBy(() -> inTx(() -> service.create(formula)))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("label");
+                assertThat(e.getMessage()).startsWith("Le libellé ne peut pas commencer par =, +, -, @");
+            });
+        // A label typed before the rule ("- Pansement") is still in a grid: written behind an apostrophe...
+        inTx(() -> service.create(PriceListItemRequestDTO.builder().code("ACT-PANS").label("Pansement")
+            .category(PriceListCategory.PROCEDURE).unitPrice(new BigDecimal("1000")).build()));
+        jdbc.update("UPDATE billing.price_list_items SET label = '- Pansement' WHERE hospital_id = ? AND code = ?",
+            hospitalA, "ACT-PANS");
+        byte[] exported = inTx(() -> importer.export());
+        assertThat(new String(exported, StandardCharsets.UTF_8)).contains("ACT-PANS;'- Pansement;PROCEDURE;1000;");
+        // ...and read back as stored: unchanged, not a label that differs nor a formula.
+        PriceListImportReportDTO back = check(exported, "export.csv");
+        assertThat(back.getRefused()).as(String.valueOf(back.getRows().get(0).getRefusals().stream()
+            .map(PriceListImportReportDTO.Refusal::getMessage).toList())).isZero();
+        assertThat(back.getUnchanged()).isEqualTo(1);
+        // A NEW item with such a label is refused at import, escaped or not.
+        PriceListImportReportDTO fresh = check(utf8(HEADER + "\nACT-NEW;'- Nouveau;PROCEDURE;1000;;;\n"), "n.csv");
+        assertRefused(fresh.getRows().get(0), "libelle", "Une cellule ne peut pas commencer par =, +, -, @ ou une "
+            + "tabulation : un tableur l’exécuterait comme une formule.");
+    }
+
+    @Test
+    @DisplayName("review #1206: a linked lab test deactivated since the export still re-imports unchanged")
+    void aDeactivatedLabTestStillRoundTrips() {
+        apply(fixture(), FIXTURE);
+        byte[] exported = inTx(() -> importer.export());
+        // TWP-NFS is deactivated: its code no longer resolves to a live test at A.
+        when(labTests.findLiveByCodeAtHospital(eq("TWP-NFS"), any())).thenReturn(List.of());
+        PriceListImportReportDTO dry = check(exported, "export.csv");
+        assertThat(dry.getRefused()).isZero();
+        assertThat(dry.getNewItems()).isZero();
+        assertThat(dry.getUnchanged()).isEqualTo(60);
+        // A NEW item linked to it is still refused: only an item's own stored link is taken as it was.
+        PriceListImportReportDTO fresh = check(utf8(HEADER
+            + "\nLAB-NFS2;NFS bis;LAB_TEST;3500;;LAB_TEST_DEFINITION;TWP-NFS\n"), "n.csv");
+        assertThat(fresh.getRows().get(0).getOutcome()).isEqualTo(PriceListImportRowOutcome.REFUSED);
+    }
+
+    @Test
+    @DisplayName("review #1206: an item locked by someone else refuses the apply with 'try again', never waits forever")
+    void aLockedItemRefusesTheApplyWithTryAgain() throws Exception {
+        apply(fixture(), FIXTURE);
+        byte[] change = utf8(HEADER + "\nCS-GEN;Consultation générale (médecin généraliste);CONSULTATION;2500;"
+            + "01/01/2027;SYSTEM;CONSULTATION_DEFAULT\n");
+        java.util.concurrent.CountDownLatch locked = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService other = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            java.util.concurrent.Future<?> holder = other.submit(() -> tx.executeWithoutResult(status -> {
+                jdbc.queryForList("SELECT id FROM billing.price_list_items WHERE hospital_id = ? AND code = 'CS-GEN' "
+                    + "FOR UPDATE", hospitalA);
+                locked.countDown();
+                try {
+                    release.await(30, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            assertThat(locked.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            long started = System.nanoTime();
+            assertThatThrownBy(() -> apply(change, "hausse.csv"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("Réessayez dans un instant");
+            assertThat(java.time.Duration.ofNanos(System.nanoTime() - started)).isLessThan(java.time.Duration.ofSeconds(10));
+            release.countDown();
+            holder.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            other.shutdownNow();
+        }
+        assertThat(versionCount(hospitalA)).as("nothing applied").isEqualTo(60);
+        // Once the lock is gone, the same file applies.
+        assertThat(apply(change, "hausse.csv").getNewPrices()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("review #1206: 5 000 rows (the maximum) apply, then re-price, within the time budget")
+    void theMaximumFileAppliesWithinBudget() {
+        StringBuilder grid = new StringBuilder(HEADER).append('\n');
+        StringBuilder raised = new StringBuilder(HEADER).append('\n');
+        for (int i = 0; i < com.example.hms.service.billing.PriceListCsv.MAX_ROWS; i++) {
+            String code = String.format(java.util.Locale.ROOT, "ART-%05d", i);
+            grid.append(code).append(";Article ").append(i).append(";OTHER_SERVICE;").append(100 + i)
+                .append(";01/12/2026;;\n");
+            raised.append(code).append(";Article ").append(i).append(";OTHER_SERVICE;").append(200 + i)
+                .append(";01/01/2027;;\n");
+        }
+        long started = System.nanoTime();
+        PriceListImportReportDTO first = apply(utf8(grid.toString()), "grand.csv");
+        java.time.Duration firstTook = java.time.Duration.ofNanos(System.nanoTime() - started);
+        assertThat(first.getNewItems()).isEqualTo(5_000);
+        assertThat(firstTook).as("5 000 new items").isLessThan(java.time.Duration.ofSeconds(60));
+
+        started = System.nanoTime();
+        PriceListImportReportDTO second = apply(utf8(raised.toString()), "hausse.csv");
+        java.time.Duration secondTook = java.time.Duration.ofNanos(System.nanoTime() - started);
+        assertThat(second.getNewPrices()).isEqualTo(5_000);
+        assertThat(secondTook).as("5 000 new prices").isLessThan(java.time.Duration.ofSeconds(60));
+        assertThat(versionCount(hospitalA)).isEqualTo(10_000);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM billing.price_list_prices WHERE hospital_id = ? "
+            + "AND effective_to = DATE '2026-12-31'", Integer.class, hospitalA)).isEqualTo(5_000);
     }
 
     // ───────────────────────── who and where ─────────────────────────

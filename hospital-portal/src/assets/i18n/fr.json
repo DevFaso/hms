@@ -2577,7 +2577,8 @@
         "PRICE": "Prix",
         "PREVIOUS_PRICE": "Prix actuel",
         "WHOLE_ROW": "Ligne entière",
-        "TOO_LARGE": "Le fichier dépasse 1 Mo. Découpez la grille en plusieurs fichiers."
+        "TOO_LARGE": "Le fichier dépasse 1 Mo. Découpez la grille en plusieurs fichiers.",
+        "CONCURRENT_ERROR": "Un autre utilisateur vient de créer ce code (ou ce lien) dans la grille : rien n’a été appliqué. Relancez la vérification."
       }
     }
   },

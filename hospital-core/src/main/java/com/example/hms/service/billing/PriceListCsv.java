@@ -229,7 +229,8 @@ public final class PriceListCsv {
         Map<String, String> cells = new HashMap<>();
         for (Map.Entry<String, Integer> column : columns.entrySet()) {
             int index = column.getValue();
-            cells.put(column.getKey(), index < csvRecord.size() ? clean(csvRecord.get(index)) : "");
+            // A cell this code base exported behind an apostrophe (CsvCells.safe) reads back as it was stored.
+            cells.put(column.getKey(), index < csvRecord.size() ? CsvCells.unescape(clean(csvRecord.get(index))) : "");
         }
         boolean extra = false;
         for (int i = 0; i < csvRecord.size(); i++) {
@@ -319,20 +320,24 @@ public final class PriceListCsv {
         out.write('\uFEFF');
         CSVFormat format = CSVFormat.DEFAULT.builder().setDelimiter(';').setRecordSeparator("\r\n").get();
         try (CSVPrinter printer = new CSVPrinter(out, format)) {
-            printer.printRecord(HEADER);
+            printer.printRecord(CsvCells.safeAll(HEADER));
             for (ExportRow row : rows) {
-                printer.printRecord(
-                    CsvCells.safe(row.code()),
-                    CsvCells.safe(row.label()),
-                    CsvCells.safe(row.category()),
+                printer.printRecord(CsvCells.safeAll(
+                    text(row.code()),
+                    text(row.label()),
+                    text(row.category()),
                     Long.toString(row.price().longValueExact()), // whole francs, no grouping: the import's number
                     row.effectiveFrom().format(FR_DATE_OUT),
-                    CsvCells.safe(row.linkType()),
-                    CsvCells.safe(row.linkKey()));
+                    text(row.linkType()),
+                    text(row.linkKey())));
             }
         } catch (IOException cannotHappen) {
             throw new UncheckedIOException(cannotHappen);
         }
         return out.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static String text(String value) {
+        return value == null ? "" : value;
     }
 }

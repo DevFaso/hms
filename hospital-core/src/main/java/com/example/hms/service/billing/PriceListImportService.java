@@ -23,7 +23,9 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.TransactionCallbacks;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,6 +77,12 @@ public class PriceListImportService {
     static final String FALLBACK_FILE_NAME = "grille.csv";
     static final int FILE_NAME_MAX = 255;
     private static final String REASON_PREFIX = "Import ";
+    /** How many rows are written between two flushes of an apply (one flush per row is quadratic). */
+    static final int WRITE_BATCH = 200;
+    /** A PostgreSQL duration, from configuration only (never from a request). */
+    private static final String DEFAULT_LOCK_TIMEOUT = "5s";
+    private static final java.util.regex.Pattern LOCK_TIMEOUT_FORMAT =
+        java.util.regex.Pattern.compile("\\d{1,6}(?:ms|s)");
 
     private final PriceListService priceList;
     private final PriceListItemRepository itemRepository;
@@ -83,6 +91,8 @@ public class PriceListImportService {
     private final PriceListLinks links;
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final AuditEventLogService auditEventLogService;
+    private final JdbcTemplate jdbc;
+    private final String lockTimeout;
 
     @SuppressWarnings("java:S107") // one collaborator per concern; a parameter object would only hide them
     public PriceListImportService(PriceListService priceList,
@@ -91,7 +101,9 @@ public class PriceListImportService {
                                   PriceListImportRepository importRepository,
                                   PriceListLinks links,
                                   LabTestDefinitionRepository labTestDefinitionRepository,
-                                  AuditEventLogService auditEventLogService) {
+                                  AuditEventLogService auditEventLogService,
+                                  JdbcTemplate jdbc,
+                                  @Value("${app.billing.price-list-import.lock-timeout:5s}") String lockTimeout) {
         this.priceList = priceList;
         this.itemRepository = itemRepository;
         this.priceRepository = priceRepository;
@@ -99,6 +111,14 @@ public class PriceListImportService {
         this.links = links;
         this.labTestDefinitionRepository = labTestDefinitionRepository;
         this.auditEventLogService = auditEventLogService;
+        this.jdbc = jdbc;
+        // A configuration value only, never a request's: anything that is not a plain duration (5s, 500ms) is
+        // replaced by the default, so the SET LOCAL below never carries anything else.
+        boolean valid = lockTimeout != null && LOCK_TIMEOUT_FORMAT.matcher(lockTimeout).matches();
+        if (!valid) {
+            log.warn("app.billing.price-list-import.lock-timeout is not a duration like 5s; using {}", DEFAULT_LOCK_TIMEOUT);
+        }
+        this.lockTimeout = valid ? lockTimeout : DEFAULT_LOCK_TIMEOUT;
     }
 
     // ───────────────────────────── import ─────────────────────────────
@@ -156,19 +176,46 @@ public class PriceListImportService {
         }
         String reason = (REASON_PREFIX + fileName).substring(0,
             Math.min(PriceListService.REASON_MAX, REASON_PREFIX.length() + fileName.length()));
-        for (Planned row : planned) {
-            switch (row.row().getOutcome()) {
-                case NEW_ITEM -> priceList.insertItem(actor, row.newItem(), row.price(), row.from(), reason,
-                    trace.getId());
-                case NEW_PRICE -> priceList.insertVersion(row.item(), actor, row.versions(), row.plan(), row.price(),
-                    row.from(), reason, trace.getId());
-                default -> {
-                    // UNCHANGED writes nothing; REFUSED cannot reach here.
-                }
-            }
-        }
+        write(planned, actor, reason, trace.getId());
         auditAfterCommit(actor, trace.getId(), counts);
         return report.importId(trace.getId()).result(PriceListImportResult.APPLIED).build();
+    }
+
+    /**
+     * Writes the planned rows: first every version a new price closes (one flush, so the partial unique indexes hold
+     * when the new versions go in), then the new items and versions, flushed every {@link #WRITE_BATCH} rows. A
+     * concurrent insert of the same code or link (another person on the screen) refuses the whole file.
+     */
+    private void write(List<Planned> planned, PriceListService.Maintainer actor, String reason, UUID importId) {
+        try {
+            for (Planned row : planned) {
+                if (row.row().getOutcome() == PriceListImportRowOutcome.NEW_PRICE) {
+                    priceList.closeForNewVersion(row.plan(), row.from());
+                }
+            }
+            priceRepository.flush();
+            int written = 0;
+            for (Planned row : planned) {
+                switch (row.row().getOutcome()) {
+                    case NEW_ITEM -> priceList.stageItem(actor, row.newItem(), row.price(), row.from(), reason,
+                        importId);
+                    case NEW_PRICE -> priceList.stageVersion(row.item(), actor, row.plan(), row.price(), row.from(),
+                        reason, importId);
+                    default -> {
+                        // UNCHANGED writes nothing; REFUSED cannot reach here.
+                        continue;
+                    }
+                }
+                if (++written % WRITE_BATCH == 0) {
+                    priceRepository.flush();
+                }
+            }
+            priceRepository.flush();
+        } catch (DataIntegrityViolationException concurrent) {
+            throw new BusinessException(PriceListService.isActiveLinkCollision(concurrent)
+                ? "billing.priceList.import.linkTakenConcurrently"
+                : "billing.priceList.import.codeTakenConcurrently");
+        }
     }
 
     /** What one row will do, with everything its write needs. */
@@ -207,17 +254,14 @@ public class PriceListImportService {
         /** The first line each code and each link appears on in the file. */
         final Map<String, Integer> seenCodes = new HashMap<>();
         final Map<String, Integer> seenLinks = new HashMap<>();
+        /** A linked lab test's id to the code the export writes for it (deactivated tests included). */
+        final Map<String, String> testCodes;
 
         Grid(UUID hospitalId, LocalDate today, Set<String> fileCodes, boolean lock) {
             this.hospitalId = hospitalId;
             this.today = today;
             if (lock) {
-                // The items this file names, locked first (in code order, as every import takes them), so what is
-                // read next is what the apply writes against.
-                List<String> codes = fileCodes.stream().filter(code -> !code.isEmpty()).sorted().toList();
-                for (List<String> chunk : chunksOf(codes)) {
-                    itemRepository.lockByHospitalIdAndCodes(hospitalId, chunk);
-                }
+                lockFileItems(hospitalId, fileCodes);
             }
             for (PriceListItem item : itemRepository.findByHospitalIdOrderByCodeAsc(hospitalId)) {
                 byCode.put(item.getCode(), item);
@@ -234,6 +278,30 @@ public class PriceListImportService {
                     versions.computeIfAbsent(price.getItem().getId(), id -> new ArrayList<>()).add(price);
                 }
             }
+            testCodes = testCodesOf(byCode.values().stream().filter(item -> fileCodes.contains(item.getCode()))
+                .toList());
+        }
+
+        /** The link cell the export writes for this item (a lab test by its code, as the export does). */
+        String exportedKey(PriceListItem item) {
+            if (item.getLinkType() == null) {
+                return "";
+            }
+            return item.getLinkType() == PriceListLinkType.LAB_TEST_DEFINITION
+                ? testCodes.getOrDefault(item.getLinkKey(), item.getLinkKey())
+                : item.getLinkKey();
+        }
+
+        /** What the export writes for this item in {@code column}, to compare a re-imported cell with. */
+        String exported(PriceListItem item, String column) {
+            return switch (column) {
+                case PriceListCsv.COL_CODE -> item.getCode();
+                case PriceListCsv.COL_LABEL -> item.getLabel();
+                case PriceListCsv.COL_CATEGORY -> item.getCategory().name();
+                case PriceListCsv.COL_LINK_TYPE -> item.getLinkType() == null ? "" : item.getLinkType().name();
+                case PriceListCsv.COL_LINK_KEY -> exportedKey(item);
+                default -> null;
+            };
         }
 
         ResolvedLink link(PriceListLinkType type, String rawKey) {
@@ -244,6 +312,37 @@ public class PriceListImportService {
                     return new ResolvedLink(type, null, refusal);
                 }
             });
+        }
+    }
+
+    /**
+     * Locks the items this file names (SELECT ... FOR UPDATE, in code order: the order a checkout takes its share
+     * locks in too, so the two never wait on each other in a circle). A lock held longer than the configured timeout
+     * (a long checkout, a screen edit) refuses the file with "try again" instead of waiting without end.
+     */
+    private void lockFileItems(UUID hospitalId, Set<String> fileCodes) {
+        List<String> codes = fileCodes.stream().filter(code -> !code.isEmpty()).sorted().toList();
+        boolean bounded = setLockTimeout(lockTimeout);
+        try {
+            for (List<String> chunk : chunksOf(codes)) {
+                itemRepository.lockByHospitalIdAndCodes(hospitalId, chunk);
+            }
+        } catch (org.springframework.dao.PessimisticLockingFailureException
+                 | jakarta.persistence.PessimisticLockException | jakarta.persistence.LockTimeoutException busy) {
+            throw new BusinessException("billing.priceList.import.busy");
+        }
+        if (bounded) {
+            setLockTimeout("DEFAULT");
+        }
+    }
+
+    /** SET LOCAL lock_timeout (PostgreSQL, this transaction only); false where the database has no such setting. */
+    private boolean setLockTimeout(String value) {
+        try {
+            jdbc.execute("SET LOCAL lock_timeout = " + ("DEFAULT".equals(value) ? value : "'" + value + "'"));
+            return true;
+        } catch (org.springframework.dao.DataAccessException notPostgres) {
+            return false;
         }
     }
 
@@ -282,17 +381,21 @@ public class PriceListImportService {
         PriceListImportReportDTO.Row row = PriceListImportReportDTO.Row.builder()
             .line(csv.line()).code(code).label(label).refusals(refusals).build();
 
+        PriceListItem existing = grid.byCode.get(code);
         // CSV injection: a cell a spreadsheet would run is refused, whatever the column (the price is checked as a
-        // number below, which a formula never is).
+        // number below, which a formula never is). A cell of a known item that says exactly what the export wrote
+        // for it (an older label typed before the rule) is that item's own value, not a new formula.
         for (String column : PriceListCsv.HEADER) {
-            if (!PriceListCsv.COL_PRICE.equals(column) && PriceListCsv.isFormula(csv.get(column))) {
+            String cell = csv.get(column);
+            if (!PriceListCsv.COL_PRICE.equals(column) && PriceListCsv.isFormula(cell)
+                    && (existing == null || !cell.equals(grid.exported(existing, column)))) {
                 refuse(refusals, column, "billing.priceList.import.formula");
             }
         }
         if (csv.extraCells()) {
             refuse(refusals, null, "billing.priceList.import.extraCells");
         }
-        boolean codeUsable = !PriceListCsv.isFormula(code);
+        boolean codeUsable = !PriceListCsv.isFormula(code) || existing != null;
         if (codeUsable && code.isEmpty()) {
             refuse(refusals, PriceListCsv.COL_CODE, "billing.priceList.codeRequired");
             codeUsable = false;
@@ -308,7 +411,7 @@ public class PriceListImportService {
                     String.valueOf(first));
             }
         }
-        if (!PriceListCsv.isFormula(label)) {
+        if (!PriceListCsv.isFormula(label) || existing != null) {
             if (label.isEmpty()) {
                 refuse(refusals, PriceListCsv.COL_LABEL, "billing.priceList.labelRequired");
             } else if (label.length() > PriceListService.LABEL_MAX) {
@@ -333,12 +436,13 @@ public class PriceListImportService {
         }
         LocalDate from = date != null ? date : grid.today;
         row.setEffectiveDate(from);
-        ResolvedLink link = link(csv, grid, refusals);
+        ResolvedLink link = existing != null && sameLinkAsExported(csv, grid, existing)
+            ? storedLink(csv, grid, existing, refusals)
+            : link(csv, grid, refusals);
 
         if (!refusals.isEmpty()) {
             return refused(row);
         }
-        PriceListItem existing = grid.byCode.get(code);
         return existing == null
             ? newItem(row, grid, code, label, category, link, price, from)
             : newPrice(row, grid, existing, label, category, link, price, from, replaceScheduled);
@@ -418,9 +522,6 @@ public class PriceListImportService {
     }
 
     private static PriceListCategory category(String raw, List<PriceListImportReportDTO.Refusal> refusals) {
-        if (PriceListCsv.isFormula(raw)) {
-            return null;
-        }
         if (raw.isEmpty()) {
             refuse(refusals, PriceListCsv.COL_CATEGORY, "billing.priceList.categoryRequired");
             return null;
@@ -432,6 +533,33 @@ public class PriceListImportService {
                 Arrays.stream(PriceListCategory.values()).map(Enum::name).collect(Collectors.joining(", ")));
             return null;
         }
+    }
+
+    /**
+     * PR 4 review: the row's link cells say exactly what the export writes for the known item's stored link. It is
+     * that link, whatever the lab test's code resolves to today (a deactivated test, a code now also used by another
+     * test): the stored link is compared, never normalised again.
+     */
+    private static boolean sameLinkAsExported(PriceListCsv.Row csv, Grid grid, PriceListItem item) {
+        String rawType = csv.get(PriceListCsv.COL_LINK_TYPE);
+        String rawKey = csv.get(PriceListCsv.COL_LINK_KEY);
+        String type = grid.exported(item, PriceListCsv.COL_LINK_TYPE);
+        return rawType.equalsIgnoreCase(type) && rawKey.equals(grid.exportedKey(item));
+    }
+
+    /** The known item's own link, counted once per file like any other. */
+    private static ResolvedLink storedLink(PriceListCsv.Row csv, Grid grid, PriceListItem item,
+                                           List<PriceListImportReportDTO.Refusal> refusals) {
+        if (item.getLinkType() == null) {
+            return null;
+        }
+        Integer first = grid.seenLinks.putIfAbsent(linkId(item.getLinkType(), item.getLinkKey()), csv.line());
+        if (first != null) {
+            refuse(refusals, PriceListCsv.COL_LINK_KEY, "billing.priceList.import.duplicateLink",
+                csv.get(PriceListCsv.COL_LINK_KEY), String.valueOf(first));
+            return null;
+        }
+        return new ResolvedLink(item.getLinkType(), item.getLinkKey(), null);
     }
 
     /** The row's link, checked as the screen checks it; null for no link (also when refused). */
@@ -623,7 +751,7 @@ public class PriceListImportService {
         return "grille-tarifaire-" + priceList.today() + ".csv";
     }
 
-    private Map<String, String> testCodesOf(List<PriceListItem> items) {
+    private Map<String, String> testCodesOf(java.util.Collection<PriceListItem> items) {
         List<UUID> ids = new ArrayList<>();
         for (PriceListItem item : items) {
             if (item.getLinkType() == PriceListLinkType.LAB_TEST_DEFINITION) {

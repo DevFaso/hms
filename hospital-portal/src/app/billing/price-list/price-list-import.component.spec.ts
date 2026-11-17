@@ -266,6 +266,24 @@ describe('PriceListImportComponent (billing-money plan PR 4)', () => {
     ).toContain('Seuls l’administrateur');
   });
 
+  it('says another person created the same code when the apply meets a concurrent insert', () => {
+    pick(csv());
+    button('price-list-import-check').click();
+    http.expectOne((r) => r.url === URL_IMPORT).flush(DRY_RUN_CLEAN);
+    fixture.detectChanges();
+    button('price-list-import-apply').click();
+    const refusal = fieldErrorsResponse({
+      code: 'Le code CS-GEN existe déjà dans la grille tarifaire.',
+    });
+    http
+      .expectOne((r) => r.url === URL_IMPORT)
+      .flush(refusal.error, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+    expect(
+      el().querySelector('[data-testid="price-list-import-file-error"]')!.textContent,
+    ).toContain('Un autre utilisateur vient de créer ce code');
+  });
+
   it('refuses a file over 1 MB before sending it', () => {
     pick(new File([new Uint8Array(1_048_577)], 'gros.csv', { type: 'text/csv' }));
     expect(

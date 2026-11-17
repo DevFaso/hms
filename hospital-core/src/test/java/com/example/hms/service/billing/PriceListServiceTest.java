@@ -407,4 +407,25 @@ class PriceListServiceTest {
         service.addPrice(itemId, correction);
         verify(prices).saveAndFlush(any());
     }
+
+    @Test
+    @DisplayName("review #1206: a label that starts like a spreadsheet formula is refused on the screen, FR and EN")
+    void aFormulaLookingLabelIsRefused() {
+        when(roles.canMaintainPriceList(ACTOR, HOSPITAL)).thenReturn(true);
+        for (String label : List.of("=HYPERLINK(1)", "+1", "- Pansement", "@SUM(A1)")) {
+            PriceListItemRequestDTO body = PriceListItemRequestDTO.builder().code("ADM-X").label(label)
+                .category(PriceListCategory.OTHER_SERVICE).unitPrice(new BigDecimal("100")).build();
+            assertThatThrownBy(() -> service.create(body)).as(label)
+                .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                    assertThat(e.getField()).isEqualTo("label");
+                    assertThat(e.getMessage()).startsWith("Le libellé ne peut pas commencer par =, +, -, @");
+                });
+        }
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        PriceListItemRequestDTO english = PriceListItemRequestDTO.builder().code("ADM-X").label("=1")
+            .category(PriceListCategory.OTHER_SERVICE).unitPrice(new BigDecimal("100")).build();
+        assertThatThrownBy(() -> service.create(english))
+            .hasMessageStartingWith("The label cannot start with =, +, -, @");
+        verify(items, never()).saveAndFlush(any());
+    }
 }

@@ -187,4 +187,18 @@ class PriceListCsvTest {
         assertThat(back.rows().get(0).get("libelle")).isEqualTo("Consultation générale; adulte");
         assertThat(back.rows().get(1).get("liaison_type")).isEmpty();
     }
+
+    @Test
+    @DisplayName("review #1206: a negative plain number is not a formula; an exported apostrophe reads back")
+    void plainNumbersAndUnescape() {
+        assertThat(com.example.hms.utility.CsvCells.isFormula("-5")).isFalse();
+        assertThat(com.example.hms.utility.CsvCells.isFormula("-2,50")).isFalse();
+        assertThat(com.example.hms.utility.CsvCells.isFormula("- Pansement")).isTrue();
+        assertThat(com.example.hms.utility.CsvCells.unescape("'- Pansement")).isEqualTo("- Pansement");
+        assertThat(com.example.hms.utility.CsvCells.unescape("'Pansement")).isEqualTo("'Pansement");
+        PriceListCsv.Row row = PriceListCsv.parse(PriceListCsv.write(List.of(new PriceListCsv.ExportRow("ACT-1",
+            "- Pansement", "PROCEDURE", new BigDecimal("1000"), LocalDate.of(2026, 12, 1), null, null))))
+            .rows().get(0);
+        assertThat(row.get("libelle")).isEqualTo("- Pansement");
+    }
 }

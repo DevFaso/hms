@@ -32,6 +32,16 @@ import { refuseFields } from '../../shared/forms/invalid-fields';
 
 const FILE_FIELD_ID = 'pl-import-file';
 
+/**
+ * A refusal naming the item's code or link (`fieldErrors.code` / `fieldErrors.linkKey`): another person created
+ * the same code or link between the check and the apply.
+ */
+export function concurrentInsert(err: unknown): boolean {
+  const fieldErrors = (err as { error?: { fieldErrors?: Record<string, unknown> } } | null)?.error
+    ?.fieldErrors;
+  return !!fieldErrors && ('code' in fieldErrors || 'linkKey' in fieldErrors);
+}
+
 /** The server's limit, checked here first so a too-large file is refused before it is sent. */
 export const PRICE_LIST_CSV_MAX_BYTES = 1_048_576;
 
@@ -205,6 +215,13 @@ export class PriceListImportComponent {
               this.host.nativeElement,
               refused.map(([id, message]) => ({ id, message })),
               [FILE_FIELD_ID],
+            );
+            return;
+          }
+          if (concurrentInsert(err)) {
+            // Someone created the same code or link meanwhile: the row has no line here; check again.
+            this.fileError.set(
+              this.translate.instant('BILLING.PRICE_LIST.IMPORT.CONCURRENT_ERROR'),
             );
             return;
           }

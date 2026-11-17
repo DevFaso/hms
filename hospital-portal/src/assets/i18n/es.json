@@ -2577,7 +2577,8 @@
         "PRICE": "Price",
         "PREVIOUS_PRICE": "Current price",
         "WHOLE_ROW": "Whole row",
-        "TOO_LARGE": "The file is larger than 1 MB. Split the price list into several files."
+        "TOO_LARGE": "The file is larger than 1 MB. Split the price list into several files.",
+        "CONCURRENT_ERROR": "Someone else has just created this code (or link) in the price list: nothing was applied. Check the file again."
       }
     }
   },
