@@ -106,6 +106,22 @@ public class PatientInsuranceController {
         return ResponseEntity.ok(patientInsuranceService.updatePatientInsurance(insuranceId, request, locale));
     }
 
+    /**
+     * Billing-money plan PR 6 (plan section 3.8): the "Formule" picker on the Coverage tab. The hospital admin, the
+     * billing specialist and reception link a coverage row of their hospital to one of its payer plans, or remove the
+     * link (null). A row or a plan of another hospital answers 404.
+     */
+    @PutMapping("/{insuranceId}/payer-plan")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','BILLING_SPECIALIST','RECEPTIONIST')")
+    public ResponseEntity<PatientInsuranceResponseDTO> setPayerPlan(
+        @PathVariable UUID insuranceId,
+        @RequestBody(required = false) com.example.hms.payload.dto.PatientInsurancePayerPlanRequestDTO request,
+        Locale locale
+    ) {
+        return ResponseEntity.ok(patientInsuranceService.setPayerPlan(insuranceId,
+            request == null ? null : request.getPayerPlanId(), locale));
+    }
+
     @DeleteMapping("/{insuranceId}")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR')")
     public ResponseEntity<String> deletePatientInsurance(

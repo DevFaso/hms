@@ -57,6 +57,13 @@ public class PatientInsuranceRequestDTO {
     @Schema(description = "Expiration date of the policy")
     private LocalDate expirationDate;
 
+    /**
+     * Billing-money plan PR 6: the payer plan to bill this coverage under (a plan of the acting hospital; staff with
+     * the plan-link role only). Null leaves the link as it is.
+     */
+    @Schema(description = "Payer plan (formule) of the acting hospital; null leaves the current link")
+    private UUID payerPlanId;
+
     @Builder.Default
     @JsonProperty("primary") // keep JSON as "primary" while field remains isPrimary
     @Schema(description = "Whether this is the primary insurance", defaultValue = "true")

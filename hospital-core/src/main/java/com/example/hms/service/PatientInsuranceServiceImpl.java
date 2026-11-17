@@ -18,6 +18,9 @@ import com.example.hms.repository.PatientInsuranceRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.exception.ClientSafeAccessDeniedException;
+import com.example.hms.service.billing.PayerCatalogueService;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.security.access.AccessDeniedException;
@@ -26,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -58,6 +62,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
      */
     private final PatientSubjectReadGuard subjectReadGuard;
     private final ActingScopeResolver actingScopeResolver;
+    /** Billing-money plan PR 6: the payer catalogue, which says whether a plan may be linked at a hospital. */
+    private final PayerCatalogueService payerCatalogueService;
 
     @Override
     @Transactional
@@ -130,10 +136,23 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
         enforceSelfAccessIfPatient(targetPatient, () -> patientNotFound(targetPatient.getId()));
 
+        // Billing-money plan PR 6: a plan named in the edit is linked by the same rule as the "Formule" picker.
+        PlanLink planLink = null;
+        if (dto.getPayerPlanId() != null) {
+            rejectPlanForPatientOnly(dto.getPayerPlanId());
+            UUID hospitalId = roleValidator.requireActiveHospitalId();
+            if (hospitalId == null) {
+                throw new BusinessException(HOSPITAL_REQUIRED_KEY);
+            }
+            planLink = applyRequestedPlan(existing, dto.getPayerPlanId(), hospitalId, resolveActorUserId(null),
+                () -> insuranceNotFound(insuranceId));
+        }
+
         // Apply changes (do not touch assignment here)
         patientInsuranceMapper.updateEntityFromDto(existing, dto, targetPatient);
 
         PatientInsurance saved = patientInsuranceRepository.save(existing);
+        auditPlanLink(planLink, saved);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -172,10 +191,15 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId()));
             enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
             rejectHospitalLinkForPatient(req);
-        } else {
+            rejectPlanForPatient(req.getPayerPlanId());
+        }
+        PlanLink planLink = null;
+        if (!actAsPatient) {
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
             tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalId),
+                () -> insuranceNotFound(insuranceId));
+            planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalId, actorUserId,
                 () -> insuranceNotFound(insuranceId));
         }
 
@@ -183,6 +207,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         insurance.setPatient(patient);
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
+        auditPlanLink(planLink, saved);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -292,9 +317,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         boolean actAsPatient = isActingAsPatient(ctx);
         UUID actorUserId = resolveActorUserId(ctx);
 
+        PlanLink planLink = null;
         if (actAsPatient) {
             enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId()));
             enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
+            rejectPlanForPatient(req.getPayerPlanId());
             insurance.setPatient(patient);
         } else {
             insurance.setPatient(patient);
@@ -302,9 +329,12 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
             tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalId),
                 () -> insuranceNotFound(insuranceId));
+            planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalId, actorUserId,
+                () -> insuranceNotFound(insuranceId));
         }
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
+        auditPlanLink(planLink, saved);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -331,6 +361,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         if (actAsPatient) {
             enforcePatientSelfAccess(patient, () -> patientNotFound(patientId));
             rejectHospitalLinkForPatient(req);
+            rejectPlanForPatient(req.getPayerPlanId());
         } else {
             hospitalIdForStaff = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalIdForStaff, actorUserId, ctx, locale);
@@ -340,8 +371,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             hospitalIdForStaff);
         applyProviderName(insurance, req.getProviderName(), payerCode);
 
+        PlanLink planLink = null;
         if (!actAsPatient) {
             tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalIdForStaff),
+                () -> new ResourceNotFoundException("patientinsurance.notfound", insurance.getId()));
+            planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalIdForStaff, actorUserId,
                 () -> new ResourceNotFoundException("patientinsurance.notfound", insurance.getId()));
         }
 
@@ -358,7 +392,96 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             saved = patientInsuranceRepository.save(saved);
         }
 
+        auditPlanLink(planLink, saved);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
+    }
+
+    /**
+     * Billing-money plan PR 6 (plan section 3.8): the "Formule" picker. The caller holds HOSPITAL_ADMIN,
+     * BILLING_SPECIALIST or RECEPTIONIST at the acting hospital (checked before any lookup); the coverage row is that
+     * hospital's (another's answers 404, as a missing one); the plan is that hospital's (404 otherwise), of an active
+     * payer, not ended. Null removes the link.
+     */
+    @Override
+    @Transactional
+    public PatientInsuranceResponseDTO setPayerPlan(UUID insuranceId, UUID payerPlanId, Locale locale) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw new BusinessException(HOSPITAL_REQUIRED_KEY);
+        }
+        UUID actorUserId = resolveActorUserId(null);
+        requirePlanLinker(hospitalId, actorUserId);
+        PatientInsurance insurance = getScopedInsuranceOrThrow(insuranceId);
+        PlanLink planLink = applyPayerPlan(insurance, payerPlanId, hospitalId, actorUserId,
+            () -> insuranceNotFound(insuranceId));
+        PatientInsurance saved = patientInsuranceRepository.save(insurance);
+        auditPlanLink(planLink, saved);
+        return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
+    }
+
+    /* ==================== payer plan link (billing-money plan PR 6) ==================== */
+
+    /** A change of a row's plan, audited after the row is saved (a new row has no id before). */
+    private record PlanLink(UUID hospitalId, UUID actorUserId) {
+    }
+
+    /** A plan named in a link or an edit request: linked by the picker's rule; null leaves the link as it is. */
+    private PlanLink applyRequestedPlan(PatientInsurance insurance, UUID payerPlanId, UUID hospitalId,
+                                        UUID actorUserId, Supplier<ResourceNotFoundException> notFound) {
+        if (payerPlanId == null) {
+            return null;
+        }
+        requirePlanLinker(hospitalId, actorUserId);
+        return applyPayerPlan(insurance, payerPlanId, hospitalId, actorUserId, notFound);
+    }
+
+    /**
+     * The one place a coverage row's plan changes (PayerCatalogueGuardTest). A plan of the row's hospital only: the
+     * row is tagged to the acting hospital first when it was tagged to none, and a row of another hospital answers
+     * exactly as a missing one.
+     */
+    private PlanLink applyPayerPlan(PatientInsurance insurance, UUID payerPlanId, UUID hospitalId, UUID actorUserId,
+                                    Supplier<ResourceNotFoundException> notFound) {
+        if (Objects.equals(insurance.getPayerPlanId(), payerPlanId)) {
+            return null;
+        }
+        if (payerPlanId != null) {
+            payerCatalogueService.requireLinkablePlan(payerPlanId, hospitalId);
+            if (insurance.getAssignment() == null) {
+                tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalId), notFound);
+            } else if (!insurance.isVisibleAt(hospitalId)) {
+                throw notFound.get();
+            }
+        }
+        insurance.setPayerPlanId(payerPlanId);
+        return new PlanLink(hospitalId, actorUserId);
+    }
+
+    /** Only the hospital admin, the billing specialist and reception link a coverage to a plan (plan section 3.8). */
+    private void requirePlanLinker(UUID hospitalId, UUID actorUserId) {
+        if (actorUserId == null || !roleValidator.canLinkPayerPlan(actorUserId, hospitalId)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve("patientinsurance.payerPlan.forbidden"));
+        }
+    }
+
+    /** A patient acting as a patient never picks the plan their coverage is billed under. */
+    private static void rejectPlanForPatient(UUID payerPlanId) {
+        if (payerPlanId != null) {
+            throw new FieldBusinessException("payerPlanId", "patientinsurance.payerPlan.staffOnly");
+        }
+    }
+
+    private void rejectPlanForPatientOnly(UUID payerPlanId) {
+        if (roleValidator.isPatientOnlyFromAuth()) {
+            rejectPlanForPatient(payerPlanId);
+        }
+    }
+
+    private void auditPlanLink(PlanLink planLink, PatientInsurance saved) {
+        if (planLink != null && saved != null) {
+            payerCatalogueService.auditCoverageLink(saved.getId(), saved.getPayerPlanId(), planLink.hospitalId(),
+                planLink.actorUserId());
+        }
     }
 
     /* ==================== shared helpers ==================== */
