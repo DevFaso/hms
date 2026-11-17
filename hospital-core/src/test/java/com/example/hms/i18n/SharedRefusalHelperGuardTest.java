@@ -51,7 +51,10 @@ class SharedRefusalHelperGuardTest {
         "consultation.notAssignedConsultant names no action: « …peut effectuer cette action »",
         "ConsultationServiceImpl#requireCoordinator",
         "every caller assigns a consultant: assign, acknowledging an unaddressed consult (which makes the caller"
-            + " its consultant) and an update that changes the consultant; the message says « assign »");
+            + " its consultant) and an update that changes the consultant; the message says « assign »",
+        "PatientInsuranceServiceImpl#requirePlanLinker",
+        "billing-money plan PR 6: every caller links a coverage to a payer plan (the picker, the plan named in a"
+            + " link or an edit); the message says « link a coverage to a payer plan »");
 
     @Test
     @DisplayName("QA D2101: a private refusal helper with a literal message serves one action")

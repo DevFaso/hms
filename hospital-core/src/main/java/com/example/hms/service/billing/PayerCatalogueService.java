@@ -425,8 +425,8 @@ public class PayerCatalogueService {
         planRepository.save(plan);
         audit(AuditEventType.PAYER_PLAN_CHANGED, actor,
             "Terms " + version.getId() + " added to payer plan " + plan.getId() + ", effective " + from
-                + ", closed " + idsOf(change.predecessor().map(PayerPlanTerms::getId).stream().toList())
-                + ", replaced " + idsOf(change.toReplace().stream().map(PayerPlanTerms::getId).toList()),
+                + ", closed [" + idsOf(change.predecessor().map(PayerPlanTerms::getId).stream().toList())
+                + "], replaced [" + idsOf(change.toReplace().stream().map(PayerPlanTerms::getId).toList()) + "]",
             AUDIT_ENTITY_PLAN, plan.getId());
         return toDtos(List.of(payer)).get(0);
     }
@@ -508,8 +508,8 @@ public class PayerCatalogueService {
         planRepository.save(plan);
         audit(AuditEventType.PAYER_PLAN_CHANGED, actor,
             "Rule " + rule.getId() + " added to payer plan " + plan.getId() + ", effective " + from
-                + ", closed " + idsOf(change.predecessor().map(PayerPlanRule::getId).stream().toList())
-                + ", replaced " + idsOf(change.toReplace().stream().map(PayerPlanRule::getId).toList()),
+                + ", closed [" + idsOf(change.predecessor().map(PayerPlanRule::getId).stream().toList())
+                + "], replaced [" + idsOf(change.toReplace().stream().map(PayerPlanRule::getId).toList()) + "]",
             AUDIT_ENTITY_PLAN, plan.getId());
         return toDtos(List.of(payer)).get(0);
     }
@@ -587,9 +587,9 @@ public class PayerCatalogueService {
             });
     }
 
-    /** Ids for an audit sentence: "[a, b]", "[]" when none. */
+    /** Ids for an audit sentence: "a, b", "" when none (the sentence brackets them). */
     private static String idsOf(List<UUID> ids) {
-        return ids.stream().map(String::valueOf).collect(Collectors.joining(", ", "[", "]"));
+        return ids.stream().map(String::valueOf).collect(Collectors.joining(", "));
     }
 
     // ───────────────────────────── coverage link ─────────────────────────────

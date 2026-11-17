@@ -636,7 +636,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
         // Review of #1202: an existing shared row is never re-tagged (rowAtHospital copies it instead).
         if (held == null && insurance.getId() != null) {
-            throw new IllegalStateException("A shared coverage row is copied for a hospital, never re-tagged");
+            throw new IllegalStateException("patientinsurance.sharedRow.neverRetagged");
         }
         insurance.setAssignment(assignment);
     }
