@@ -167,4 +167,51 @@ class PriceListLinksTest {
         }
         throw new AssertionError(type + " " + key + " was accepted");
     }
+
+    @Test
+    @DisplayName("QA D2070: a link is named as the form shows it, and a key that no longer resolves is shown as stored")
+    void aLinkIsNamedReadably() {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            assertThat(links.label(HOSPITAL, PriceListLinkType.SYSTEM, "BED_DAY")).isEqualTo("Journée d’hospitalisation");
+            assertThat(links.label(HOSPITAL, PriceListLinkType.TRANSFUSION_PRODUCT, "PACKED_RED_CELLS"))
+                .contains("globules rouges");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+        LabTestDefinition coded = labTest("NFS", null);
+        coded.setName("Numération formule sanguine");
+        LabTestDefinition uncoded = labTest(null, HOSPITAL);
+        uncoded.setName("Glycémie");
+        LabTestDefinition foreignTest = labTest("TP", OTHER_HOSPITAL);
+        for (LabTestDefinition d : List.of(coded, uncoded, foreignTest)) {
+            when(labTests.findById(d.getId())).thenReturn(Optional.of(d));
+        }
+        assertThat(links.label(HOSPITAL, PriceListLinkType.LAB_TEST_DEFINITION, coded.getId().toString()))
+            .isEqualTo("NFS · Numération formule sanguine");
+        assertThat(links.label(HOSPITAL, PriceListLinkType.LAB_TEST_DEFINITION, uncoded.getId().toString()))
+            .isEqualTo("Glycémie");
+        assertThat(links.label(HOSPITAL, PriceListLinkType.LAB_TEST_DEFINITION, foreignTest.getId().toString()))
+            .isEqualTo(foreignTest.getId().toString());
+
+        Treatment own = new Treatment();
+        own.setId(UUID.randomUUID());
+        own.setName("Pansement simple");
+        own.setHospital(hospital(HOSPITAL));
+        Treatment foreign = new Treatment();
+        foreign.setId(UUID.randomUUID());
+        foreign.setName("Ailleurs");
+        foreign.setHospital(hospital(OTHER_HOSPITAL));
+        when(treatments.findById(own.getId())).thenReturn(Optional.of(own));
+        when(treatments.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        assertThat(links.label(HOSPITAL, PriceListLinkType.TREATMENT, own.getId().toString())).isEqualTo("Pansement simple");
+        assertThat(links.label(HOSPITAL, PriceListLinkType.TREATMENT, foreign.getId().toString()))
+            .isEqualTo(foreign.getId().toString());
+        assertThat(links.label(HOSPITAL, PriceListLinkType.TREATMENT, "not-an-id")).isEqualTo("not-an-id");
+
+        assertThat(links.label(HOSPITAL, PriceListLinkType.PROCEDURE_CODE, "CESARIENNE")).isEqualTo("CESARIENNE");
+        assertThat(links.label(HOSPITAL, PriceListLinkType.IMAGING_STUDY, "XRAY:thorax")).isEqualTo("XRAY:thorax");
+        assertThat(links.label(HOSPITAL, null, "X")).isEqualTo("X");
+        assertThat(links.label(HOSPITAL, PriceListLinkType.SYSTEM, null)).isNull();
+    }
 }

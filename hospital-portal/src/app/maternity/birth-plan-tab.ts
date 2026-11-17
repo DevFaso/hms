@@ -58,21 +58,16 @@ export class BirthPlanTabComponent implements OnInit {
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
   ]);
-  /** Review = DOCTOR/MIDWIFE/SUPER_ADMIN. */
-  readonly canReview = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  /** Review = DOCTOR/MIDWIFE (QA D2120: a super-admin never records clinical data). */
+  readonly canReview = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']);
   /** Delete + pending-review worklist exclude NURSE. */
-  readonly canDelete = this.roleContext.hasAnyActiveRole([
+  readonly canDelete = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']);
+  readonly canSeePendingReview = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_MIDWIFE',
     'ROLE_SUPER_ADMIN',
   ]);
-  readonly canSeePendingReview = this.canDelete;
 
   readonly counts = worklistCounts<BirthPlanFilter>();
   filter = signal<BirthPlanFilter>('all');

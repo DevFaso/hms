@@ -205,7 +205,7 @@
       </div>
       <!-- QA D966: an order printed for the patient offers its copy, not the
            routing buttons that would now be refused -->
-      @if (isPrinted()) {
+      @if (canAct && isPrinted()) {
         <div class="routing-options" data-testid="printed-copy-panel">
           <p>{{ 'PHARMACY.PRINTED_COPY_HINT' | translate }}</p>
           <button class="btn btn-secondary" (click)="reprintCopy()" data-testid="reprint-copy">
@@ -218,7 +218,7 @@
         </p>
       }
       <!-- Routing options (only when out of stock and the order can still be routed) -->
-      @if (!stockResult()!.sufficient && stockResult()!.routable !== false) {
+      @if (canAct && !stockResult()!.sufficient && stockResult()!.routable !== false) {
         <div class="routing-options">
           <h3>{{ 'PHARMACY.ROUTING_OPTIONS' | translate }}</h3>
           <div class="option-buttons">
@@ -473,7 +473,7 @@
               </td>
               <td>{{ d.decidedAt | serverTime | date: 'short' }}</td>
               <td>
-                @if (d.status === 'PENDING' && d.routingType === 'PARTNER') {
+                @if (canAct && d.status === 'PENDING' && d.routingType === 'PARTNER') {
                   <button
                     class="btn btn-sm btn-success"
                     (click)="respondToPartner(d.id, true)"
@@ -491,7 +491,7 @@
                     {{ 'PHARMACY.REJECT' | translate }}
                   </button>
                 }
-                @if (d.status === 'ACCEPTED' && d.routingType === 'PARTNER') {
+                @if (canAct && d.status === 'ACCEPTED' && d.routingType === 'PARTNER') {
                   <button
                     class="btn btn-sm btn-success"
                     (click)="confirmPartnerDispense(d.id)"

@@ -51,7 +51,7 @@ public class GeneralReferralController {
     @PostMapping
     @com.example.hms.security.audit.WriteAudited(skip = true,
         reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Create referral", description = "Create a new multi-specialty referral")
     public ResponseEntity<GeneralReferralResponseDTO> createReferral(@Valid @RequestBody GeneralReferralRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(referralService.createReferral(request));
@@ -67,7 +67,7 @@ public class GeneralReferralController {
     @PostMapping("/{referralId}/submit")
     @com.example.hms.security.audit.WriteAudited(skip = true,
         reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Submit referral", description = "Submit referral to receiving provider")
     public ResponseEntity<GeneralReferralResponseDTO> submitReferral(@PathVariable UUID referralId) {
         return ResponseEntity.ok(referralService.submitReferral(referralId));
@@ -76,7 +76,7 @@ public class GeneralReferralController {
     @PostMapping("/{referralId}/acknowledge")
     @com.example.hms.security.audit.WriteAudited(skip = true,
         reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Acknowledge referral", description = "Receiving provider acknowledges referral")
     public ResponseEntity<GeneralReferralResponseDTO> acknowledgeReferral(
         @PathVariable UUID referralId,
@@ -89,7 +89,7 @@ public class GeneralReferralController {
     @PostMapping("/{referralId}/schedule")
     @com.example.hms.security.audit.WriteAudited(skip = true,
         reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Schedule referral", description = "Receiving provider schedules an appointment")
     public ResponseEntity<GeneralReferralResponseDTO> scheduleReferral(
         @PathVariable UUID referralId,
@@ -101,7 +101,7 @@ public class GeneralReferralController {
     @PostMapping("/{referralId}/start")
     @com.example.hms.security.audit.WriteAudited(skip = true,
         reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Start referral", description = "Mark referral consultation as in progress")
     public ResponseEntity<GeneralReferralResponseDTO> startReferral(@PathVariable UUID referralId) {
         return ResponseEntity.ok(referralService.startReferral(referralId));
@@ -110,7 +110,7 @@ public class GeneralReferralController {
     @PostMapping("/{referralId}/complete")
     @com.example.hms.security.audit.WriteAudited(skip = true,
         reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Complete referral", description = "Mark referral as completed with summary")
     public ResponseEntity<GeneralReferralResponseDTO> completeReferral(
         @PathVariable UUID referralId,
@@ -123,7 +123,7 @@ public class GeneralReferralController {
     @PostMapping("/{referralId}/reject")
     @com.example.hms.security.audit.WriteAudited(skip = true,
         reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Reject referral", description = "Receiving provider declines the referral")
     public ResponseEntity<GeneralReferralResponseDTO> rejectReferral(
         @PathVariable UUID referralId,
@@ -137,7 +137,7 @@ public class GeneralReferralController {
         reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
     // QA D1026 class: a nurse or a midwife who wrote (and submitted) the
     // referral withdraws it too; the service admits only its referrer.
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Cancel referral", description = "Cancel referral with reason")
     public ResponseEntity<Void> cancelReferral(
         @PathVariable UUID referralId,

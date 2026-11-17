@@ -665,19 +665,17 @@ export class DashboardService {
    *   consultations / labOrders / labResults / labTestDefinitions /
    *   admissions / prescriptions / treatmentPlans / referrals / encounters
    *
-   * On failure the whole bundle resolves to empty arrays for every
-   * key so the dashboard's per-tab "No recent items" empty-state
-   * still renders correctly — same UX semantics as the per-feed
-   * `catchError(of([]))` branches.
+   * A transport failure returns null so callers distinguish unavailable
+   * data from a successful response containing no recent records.
    */
-  getRecentActivity(limit = 10): Observable<SuperAdminRecentActivityBundle> {
+  getRecentActivity(limit = 10): Observable<SuperAdminRecentActivityBundle | null> {
     const params = new HttpParams().set('limit', limit);
     return this.http
       .get<SuperAdminRecentActivityBundle>('/api/super-admin/recent-activity', { params })
       .pipe(
         catchError((err) => {
           console.error('[super-admin] /recent-activity failed', err);
-          return of(emptyRecentActivityBundle());
+          return of(null);
         }),
       );
   }

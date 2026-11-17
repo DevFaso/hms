@@ -322,13 +322,9 @@ export class UltrasoundTabComponent implements OnInit {
     return this.canOrder && isOrderCancellable(o.status) && this.isOrderAuthor(o);
   }
 
-  readonly canOrder = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  /** Report review = DOCTOR/SUPER_ADMIN. */
-  readonly canReviewReport = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
+  readonly canOrder = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']);
+  /** Report review = DOCTOR (QA D2120: never a super-admin alone). */
+  readonly canReviewReport = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
 
   worklist = signal<UltrasoundWorklist>('all');
   readonly counts = worklistCounts<UltrasoundWorklist>();

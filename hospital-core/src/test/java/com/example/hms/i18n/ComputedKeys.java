@@ -223,6 +223,12 @@ final class ComputedKeys {
             "UserServiceImpl.java|users.identifier.taken.");
         site(r, d, "com/example/hms/service/billing/TransfusionChargeSource.java|String productCode = \"transfusion.productType.\" + request.getProductType().name()",
             "TransfusionChargeSource.java|transfusion.productType.");
+        // QA D2070: a taken price-list link named as the form shows it. The stored key of a SYSTEM or a
+        // TRANSFUSION_PRODUCT link is a PriceListSystemKey / BloodProductType name (PriceListLinks#normalise).
+        r.put("com/example/hms/service/billing/PriceListLinks.java|\"billing.priceList.systemKey.\" + storedKey",
+            enumValues("billing.priceList.systemKey.", com.example.hms.enums.PriceListSystemKey.class));
+        site(r, d, "com/example/hms/service/billing/PriceListLinks.java|\"transfusion.productType.\" + storedKey",
+            "TransfusionChargeSource.java|transfusion.productType.");
         // QA D1901: renders a stored billing code; every code is written by a BillingText.of literal site of
         // its own (or by the V301 backfill, whose codes BillingTextRendererTest renders in FR/EN/ES), and an
         // unknown code falls back to the stored text, never a raw key.

@@ -84,7 +84,7 @@
           <p>
             <span class="risk-badge risk-moderate">{{ 'PRO.DUE' | translate }}</span>
             @if (!sc.lastAdministeredAt) {
-              <span class="muted">{{ 'PRO.NEVER_SCREENED' | translate }}</span>
+              {{ ' ' }}<span class="muted">{{ 'PRO.NEVER_SCREENED' | translate }}</span>
             }
           </p>
         }
@@ -192,7 +192,7 @@
                         </span>
                       }
                     } @else {
-                      <span class="muted">—</span>
+                      {{ ' ' }}<span class="muted">—</span>
                     }
                   </td>
                 </tr>

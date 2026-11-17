@@ -212,7 +212,7 @@
                     r.patientFullName || r.patientUsername || '—'
                   }}</span>
                   @if (r.patientEmail) {
-                    <span class="muted">{{ r.patientEmail }}</span>
+                    {{ ' ' }}<span class="muted">{{ r.patientEmail }}</span>
                   }
                 </td>
                 <td>

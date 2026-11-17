@@ -1,6 +1,13 @@
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { DatePipe } from '@angular/common';
-import { Component, ElementRef, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  ChangeDetectionStrategy,
+  viewChild,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -128,6 +135,7 @@ export class PatientFormComponent implements OnInit {
   saving = false;
   nationalUniqueIdChange: NationalUniqueIdChange = {};
   nationalUniqueIdReady = true;
+  private readonly iuEditor = viewChild(NationalUniqueIdEditorComponent);
   onNationalUniqueIdUpdated(change: NationalUniqueIdChange): void {
     this.nationalUniqueIdChange = change;
     delete this.serverFieldErrors['nationalUniqueId'];
@@ -589,7 +597,17 @@ export class PatientFormComponent implements OnInit {
   }
 
   private submitRegistration(): void {
-    if (!this.nationalUniqueIdReady) return;
+    // QA D2032: an unresolved identifier (duplicate not confirmed, no reason,
+    // still checking) refused the save with no word; say why and focus the fix.
+    if (!this.nationalUniqueIdReady) {
+      const refusal = this.iuEditor()?.refuseSubmit() ?? {
+        key: 'NATIONAL_IU.WAIT_CHECK',
+        fieldId: 'nationalUniqueId',
+      };
+      focusFirstInvalid(this.host.nativeElement, [refusal.fieldId]);
+      this.toast.error(this.translate.instant(refusal.key));
+      return;
+    }
     this.saving = true;
     this.serverFieldErrors = {};
 

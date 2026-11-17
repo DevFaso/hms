@@ -64,6 +64,8 @@ export interface PriceListPrice {
 export interface PriceListItem {
   id: string;
   hospitalId: string;
+  /** QA D2071: set in the super-admin's global view only (rows of several hospitals). */
+  hospitalName?: string | null;
   code: string;
   /** As the hospital typed it: never translated. */
   label: string;

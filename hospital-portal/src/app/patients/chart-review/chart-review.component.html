@@ -409,11 +409,12 @@
                     }}</span>
                     <span class="chart-review__card-title">{{ i.studyType || '—' }}</span>
                     @if (i.bodyRegion) {
-                      <span class="chart-review__muted">· {{ i.bodyRegion }}</span>
+                      {{ ' ' }}<span class="chart-review__muted">· {{ i.bodyRegion }}</span>
                     }
                     <!-- QA D1926 (r53): not shown when marked not applicable, as on Imagerie. -->
                     @if (lateralityApplies(i.laterality)) {
-                      <span
+                      {{ ' '
+                      }}<span
                         class="chart-review__muted"
                         data-testid="chart-review-imaging-laterality"
                         >· {{ i.laterality | enumLabel: 'imagingLaterality' }}</span

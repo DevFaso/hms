@@ -160,7 +160,7 @@ class TariffCheckoutPostgresIT {
         tdrId = UUID.nameUUIDFromBytes(("TWP-TDR" + hospitalA).getBytes(StandardCharsets.UTF_8));
         tx = new TransactionTemplate(transactions);
         service = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), invoiceLines, labTests,
-            treatments, mock(UserRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
+            treatments, mock(UserRepository.class), mock(com.example.hms.repository.HospitalRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
         resolver = new TariffResolver(items, prices, CLOCK, "Africa/Ouagadougou");
         listener = new EncounterCheckoutChargeListener(encounters, invoices, treatments, assignments, numbers, resolver,
             List.of(new ConsultationChargeSource(given), new LabOrderChargeSource(labOrders),
@@ -346,7 +346,7 @@ class TariffCheckoutPostgresIT {
     void anInvoicedVersionIsNeverCorrected() {
         TariffResolver liveResolver = new TariffResolver(items, prices, Clock.systemDefaultZone(), "Africa/Ouagadougou");
         PriceListService liveService = new PriceListService(items, prices, new PriceListLinks(labTests, treatments),
-            invoiceLines, labTests, treatments, mock(UserRepository.class), roles, scope, audit,
+            invoiceLines, labTests, treatments, mock(UserRepository.class), mock(com.example.hms.repository.HospitalRepository.class), roles, scope, audit,
             Clock.systemDefaultZone(), "Africa/Ouagadougou");
         PriceListItemDTO item = inTx(() -> liveService.create(PriceListItemRequestDTO.builder().code("CS-GEN")
             .label("Consultation").category(PriceListCategory.CONSULTATION).unitPrice(new BigDecimal("2000"))

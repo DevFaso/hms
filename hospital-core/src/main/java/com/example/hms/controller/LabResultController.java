@@ -166,7 +166,7 @@ public class LabResultController {
     }
 
     @PostMapping("/{id}/sign")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'MIDWIFE', 'LAB_SCIENTIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE','LAB_SCIENTIST')")
     @Operation(summary = "Sign Lab Result", description = "Captures a clinician signature for the lab result.")
     public ResponseEntity<LabResultResponseDTO> signLabResult(
             @PathVariable UUID id,
@@ -177,7 +177,7 @@ public class LabResultController {
     }
 
     @PostMapping("/{id}/acknowledge")
-    @PreAuthorize("hasAnyRole('LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_MANAGER','LAB_SCIENTIST','LAB_DIRECTOR','QUALITY_MANAGER','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Acknowledge Lab Result", description = "Marks the lab result as acknowledged.")
     public ResponseEntity<Void> acknowledgeLabResult(
             @PathVariable UUID id,
@@ -198,7 +198,7 @@ public class LabResultController {
      * back the wrong value is exactly the event worth having on the record.
      */
     @PostMapping("/{id}/critical-read-back")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Read back a critical lab value",
         description = "The receiving clinician repeats the value back; a match acknowledges the "
             + "result and stops escalation, a mismatch is rejected and recorded.")
@@ -211,7 +211,7 @@ public class LabResultController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'HOSPITAL_ADMIN','LAB_MANAGER','LAB_SCIENTIST')")
     @Operation(summary = "Delete Lab Result", description = "Deletes a lab result by ID.")
     public ResponseEntity<String> deleteLabResult(
             @PathVariable UUID id,

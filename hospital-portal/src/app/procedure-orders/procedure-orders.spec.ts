@@ -100,6 +100,15 @@ describe('ProcedureOrdersComponent', () => {
     expect(component.showOrderModal()).toBeFalse();
   });
 
+  it('QA D2120/D2122: never offers a super-admin alone a new procedure request or a cancellation', () => {
+    expect(component.canManage).toBeTrue();
+    const scope = TestBed.inject(RoleContextService) as ReturnType<typeof roleContextStub>;
+    scope.set({ superAdmin: true, hospitalId: 'h1', roles: ['ROLE_SUPER_ADMIN'] });
+    const superAdmin = TestBed.runInInjectionContext(() => new ProcedureOrdersComponent());
+    expect(superAdmin.canManage).toBeFalse();
+    expect(superAdmin.canCancel).toBeFalse();
+  });
+
   it('filters loaded requests without fetching or changing the loaded total', () => {
     component.orders.set([
       { ...order, patientName: 'Seydou Traore', patientMrn: 'CHW1' },

@@ -39,7 +39,7 @@ public class ProcedureOrderController {
     private final com.example.hms.controller.support.ControllerAuthUtils authUtils;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Create procedure order",
                description = "Order pre-procedure interventions (surgical, diagnostic, therapeutic procedures)")
     public ResponseEntity<ProcedureOrderResponseDTO> createProcedureOrder(
@@ -110,7 +110,7 @@ public class ProcedureOrderController {
     }
 
     @PutMapping("/{orderId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Update procedure order",
                description = "Update scheduling, consent status, site marking, or order status")
     public ResponseEntity<ProcedureOrderResponseDTO> updateProcedureOrder(
@@ -124,7 +124,7 @@ public class ProcedureOrderController {
     @PostMapping("/{orderId}/cancel")
     // QA D1026 class: a nurse who placed the order ends it here as through the
     // update (which already admits her); the service keeps the author rule.
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Cancel procedure order",
                description = "Cancel procedure with reason (patient declined, condition improved, etc.)")
     public ResponseEntity<ProcedureOrderResponseDTO> cancelProcedureOrder(

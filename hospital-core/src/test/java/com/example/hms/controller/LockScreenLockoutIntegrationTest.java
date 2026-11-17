@@ -289,4 +289,59 @@ class LockScreenLockoutIntegrationTest {
             .andExpect(jsonPath("$.message").value(lockedMessage("en")));
         verify(userService, never()).changeOwnPassword(any(), any());
     }
+
+    private ResultActions ownPasswordCheck(String path, String current) throws Exception {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+            USERNAME, "jwt", AuthorityUtils.createAuthorityList("ROLE_NURSE")));
+        return mockMvc.perform(post(path).header("Accept-Language", "en")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"currentPassword\":\"" + current + "\",\"newPassword\":\"New-pass-2026\"}"));
+    }
+
+    @Test
+    @DisplayName("QA D2020: each wrong current password on a change is a LOGIN_FAILURE row, the lock an "
+        + "ACCOUNT_LOCKED row, and no row carries a password")
+    void changePasswordFailuresAndTheLockAreAudited() throws Exception {
+        for (int i = 0; i < LIMIT - 1; i++) {
+            login(WRONG).andExpect(status().isUnauthorized());
+        }
+        Mockito.clearInvocations(auditEventLogService);
+        ownPasswordCheck("/auth/me/change-password", WRONG).andExpect(status().isLocked());
+        ownPasswordCheck("/auth/me/change-password", WRONG).andExpect(status().isLocked());
+
+        ArgumentCaptor<AuditEventRequestDTO> audits = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService, Mockito.atLeastOnce()).logEvent(audits.capture());
+        // The failure that locked the account: one LOGIN_FAILURE and one ACCOUNT_LOCKED; the next try,
+        // refused because the account is locked, one ACCOUNT_LOCKED.
+        assertThat(audits.getAllValues()).filteredOn(a -> a.getEventType() == AuditEventType.LOGIN_FAILURE)
+            .singleElement().satisfies(a -> {
+                assertThat(a.getUserId()).isEqualTo(userId);
+                assertThat(a.getEventDescription()).isEqualTo("Password change refused: current password incorrect");
+            });
+        assertThat(audits.getAllValues()).filteredOn(a -> a.getEventType() == AuditEventType.ACCOUNT_LOCKED)
+            .extracting(AuditEventRequestDTO::getEventDescription)
+            .containsExactly("Password change failed too many times: account locked",
+                "Password change refused: account locked");
+        assertThat(audits.getAllValues()).allSatisfy(a -> {
+            assertThat(String.valueOf(a.getEventDescription())).doesNotContain(WRONG).doesNotContain("New-pass-2026");
+            assertThat(String.valueOf(a.getDetails())).doesNotContain(WRONG).doesNotContain("New-pass-2026");
+        });
+    }
+
+    @Test
+    @DisplayName("QA D2020: the forced setup's wrong current password is audited the same way")
+    void accountSetupFailuresAreAudited() throws Exception {
+        com.example.hms.model.User user = userRepository.findByUsername(USERNAME).orElseThrow();
+        user.setForcePasswordChange(true);
+        Mockito.clearInvocations(auditEventLogService);
+        ownPasswordCheck("/auth/me/complete-setup", WRONG).andExpect(status().isBadRequest());
+
+        ArgumentCaptor<AuditEventRequestDTO> audits = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService, Mockito.atLeastOnce()).logEvent(audits.capture());
+        assertThat(audits.getAllValues()).filteredOn(a -> a.getEventType() == AuditEventType.LOGIN_FAILURE)
+            .singleElement().satisfies(a -> {
+                assertThat(a.getUserId()).isEqualTo(userId);
+                assertThat(a.getEventDescription()).isEqualTo("Account setup refused: current password incorrect");
+            });
+    }
 }

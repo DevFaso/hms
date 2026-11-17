@@ -103,6 +103,7 @@ public class PriceListService {
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final TreatmentRepository treatmentRepository;
     private final UserRepository userRepository;
+    private final com.example.hms.repository.HospitalRepository hospitalRepository;
     private final RoleValidator roleValidator;
     private final ActingScopeResolver actingScopeResolver;
     private final AuditEventLogService auditEventLogService;
@@ -117,6 +118,7 @@ public class PriceListService {
                             LabTestDefinitionRepository labTestDefinitionRepository,
                             TreatmentRepository treatmentRepository,
                             UserRepository userRepository,
+                            com.example.hms.repository.HospitalRepository hospitalRepository,
                             RoleValidator roleValidator,
                             ActingScopeResolver actingScopeResolver,
                             AuditEventLogService auditEventLogService,
@@ -129,6 +131,7 @@ public class PriceListService {
         this.labTestDefinitionRepository = labTestDefinitionRepository;
         this.treatmentRepository = treatmentRepository;
         this.userRepository = userRepository;
+        this.hospitalRepository = hospitalRepository;
         this.roleValidator = roleValidator;
         this.actingScopeResolver = actingScopeResolver;
         this.auditEventLogService = auditEventLogService;
@@ -162,8 +165,15 @@ public class PriceListService {
         Names names = names(items, versions.values().stream().flatMap(List::stream).toList());
         LinkLabels linkLabels = linkLabels(items);
         LocalDate today = today();
+        // QA D2071: in the super-admin's global view every row names its hospital, so the same code at two
+        // hospitals can be told apart. A pinned view lists one hospital and needs no name.
+        Map<UUID, String> hospitalNames = hospitalId == null ? hospitalNames(items) : Map.of();
         return items.stream()
             .map(item -> toDto(item, versions.getOrDefault(item.getId(), List.of()), names, linkLabels, today, false))
+            .map(dto -> {
+                dto.setHospitalName(hospitalNames.get(dto.getHospitalId()));
+                return dto;
+            })
             .toList();
     }
 
@@ -236,6 +246,8 @@ public class PriceListService {
             throw new FieldBusinessException(FIELD_CODE, "billing.priceList.codeDuplicate", code);
         }
         requireLinkFree(actor.hospitalId(), body.getLinkType(), linkKey, null);
+        // QA D2070: named now, while the transaction can still read (a lost race aborts it).
+        String linkLabel = links.label(actor.hospitalId(), body.getLinkType(), linkKey);
 
         PriceListItem item = PriceListItem.builder()
             .hospitalId(actor.hospitalId())
@@ -264,7 +276,7 @@ public class PriceListService {
             // A concurrent create of the same code or link at this hospital won between the checks and the insert.
             if (isActiveLinkCollision(race)) {
                 throw new FieldBusinessException(PriceListLinks.FIELD_LINK_KEY, "billing.priceList.linkTakenConcurrently",
-                    linkKey);
+                    linkLabel);
             }
             throw new FieldBusinessException(FIELD_CODE, "billing.priceList.codeDuplicate", code);
         }
@@ -288,6 +300,7 @@ public class PriceListService {
         requireLabelLength(label);
         String linkKey = links.normalise(actor.hospitalId(), body.getLinkType(), body.getLinkKey());
         requireLinkFree(actor.hospitalId(), body.getLinkType(), linkKey, item.getId());
+        String linkLabel = links.label(actor.hospitalId(), body.getLinkType(), linkKey);
         item.setLabel(label);
         item.setCategory(body.getCategory());
         item.setLinkType(linkKey == null ? null : body.getLinkType());
@@ -298,7 +311,7 @@ public class PriceListService {
         } catch (DataIntegrityViolationException race) {
             // The transaction is aborted: the item that took the link cannot be read back.
             throw new FieldBusinessException(PriceListLinks.FIELD_LINK_KEY, "billing.priceList.linkTakenConcurrently",
-                linkKey);
+                linkLabel);
         }
         auditAfterCommit(AuditEventType.PRICE_LIST_ITEM_UPDATED, actor,
             "Price list item " + item.getId() + " updated", item.getId());
@@ -461,8 +474,9 @@ public class PriceListService {
             .filter(other -> !other.getId().equals(self))
             .findFirst();
         if (holder.isPresent()) {
+            // QA D2070: the link as the form shows it, never the stored key.
             throw new FieldBusinessException(PriceListLinks.FIELD_LINK_KEY, "billing.priceList.linkTaken",
-                linkKey, holder.get().getCode());
+                links.label(hospitalId, type, linkKey), holder.get().getCode());
         }
     }
 
@@ -558,6 +572,16 @@ public class PriceListService {
             userRepository.findAllById(chunk).forEach(user -> byId.putIfAbsent(user.getId(), displayName(user)));
         }
         return new Names(byId);
+    }
+
+    /** QA D2071: the hospitals of the global view's rows, by id, read in chunks. */
+    private Map<UUID, String> hospitalNames(Collection<PriceListItem> items) {
+        List<UUID> ids = items.stream().map(PriceListItem::getHospitalId).filter(Objects::nonNull).distinct().toList();
+        Map<UUID, String> byId = new HashMap<>();
+        for (List<UUID> chunk : chunksOf(ids)) {
+            hospitalRepository.findAllById(chunk).forEach(h -> byId.putIfAbsent(h.getId(), h.getName()));
+        }
+        return byId;
     }
 
     /** What the lab-test and service links name, read in two queries at most. */

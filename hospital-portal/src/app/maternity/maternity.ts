@@ -1,3 +1,4 @@
+import { ElapsedPipe } from '../shared/pipes/elapsed.pipe';
 import { map } from 'rxjs';
 import { worklistCounts } from './worklist-counts';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
@@ -179,6 +180,7 @@ type MaternityTab =
   selector: 'app-maternity',
   standalone: true,
   imports: [
+    ElapsedPipe,
     DateTimePipe,
     InlineDiscardAskComponent,
     InlineSubFormDirective,
@@ -219,29 +221,18 @@ export class MaternityComponent implements OnInit {
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
   ]);
-  /** mark-reviewed + calculate-risk are DOCTOR/SUPER_ADMIN only. */
-  readonly canReview = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
+  /** mark-reviewed + calculate-risk are DOCTOR only (QA D2120: never a super-admin alone). */
+  readonly canReview = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
   /** pending-review + specialist-referral worklists exclude NURSE. */
   readonly canSeeRestrictedWorklists = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_MIDWIFE',
     'ROLE_SUPER_ADMIN',
   ]);
-  readonly canCreateReferral = this.roleContext.hasAnyActiveRole([
-    'ROLE_MIDWIFE',
-    'ROLE_DOCTOR',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  readonly canDecideReferral = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  readonly canCancelReferral = this.roleContext.hasAnyActiveRole([
-    'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canCreateReferral = this.roleContext.hasAnyActiveRole(['ROLE_MIDWIFE', 'ROLE_DOCTOR']);
+  readonly canDecideReferral = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
+  readonly canCancelReferral = this.roleContext.hasAnyActiveRole(['ROLE_MIDWIFE']);
   readonly canMessage = this.canCreateReferral;
   readonly canListHospitalReferrals = this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN']);
   readonly canListAssigned = this.canDecideReferral;

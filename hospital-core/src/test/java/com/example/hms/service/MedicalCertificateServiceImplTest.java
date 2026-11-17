@@ -333,9 +333,9 @@ class MedicalCertificateServiceImplTest {
             .getMethod("issueMedicalCertificate", UUID.class, MedicalCertificateRequestDTO.class)
             .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class).value();
         java.util.Set<String> admitted = new java.util.TreeSet<>();
-        java.util.regex.Matcher quoted = java.util.regex.Pattern.compile("'(ROLE_[A-Z_]+)'").matcher(rule);
+        java.util.regex.Matcher quoted = java.util.regex.Pattern.compile("'(?:ROLE_)?([A-Z_]+)'").matcher(rule);
         while (quoted.find()) {
-            admitted.add(quoted.group(1));
+            admitted.add("ROLE_" + quoted.group(1)); // QA D2120: a holdsOwnRole gate names bare roles
         }
         java.util.Set<String> expected = new java.util.TreeSet<>();
         com.example.hms.utility.RoleValidator.LICENSED_PHYSICIAN_ROLE_CODES.forEach(code -> expected.add("ROLE_" + code));

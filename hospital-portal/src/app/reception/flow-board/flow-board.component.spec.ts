@@ -94,7 +94,10 @@ describe('FlowBoardComponent', () => {
 
   it('QA D1200: the wait time is a sentence of the reader language, not "706Attente min."', () => {
     const translate = TestBed.inject(TranslateService);
-    translate.setTranslation('fr', { RECEPTION: { WAIT_DURATION: 'Attente : {{minutes}} min' } });
+    translate.setTranslation('fr', {
+      RECEPTION: { WAIT_ELAPSED: 'Attente : {{duration}}' },
+      ELAPSED: { HOURS: '{{hours}} h {{minutes}} min', DAYS: '{{days}} j {{hours}} h' },
+    });
     translate.use('fr');
     const board = {
       scheduled: [],
@@ -116,7 +119,8 @@ describe('FlowBoardComponent', () => {
     });
     fixture.detectChanges();
     const wait = (fixture.nativeElement as HTMLElement).querySelector('.card-wait');
-    expect(wait?.textContent?.trim()).toBe('Attente : 706 min');
+    // QA D2126 class: a long wait reads as hours, never « 706 min ».
+    expect(wait?.textContent?.trim()).toBe('Attente : 11 h 46 min');
   });
 
   // QA D1445: the walk-in column, which stayed empty, is gone.
