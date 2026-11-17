@@ -88,8 +88,9 @@ public final class PriceListCsv {
         .toFormatter();
     /** Digits, then at most one decimal part after a comma or a dot (thousand spaces already removed). */
     private static final Pattern NUMBER = Pattern.compile("(-?)(\\d{1,15})(?:[.,](\\d+))?");
+    private static final char NBSP = '\u00A0';
+    private static final char NARROW_NBSP = '\u202F';
     private static final Pattern ZEROS = Pattern.compile("0{1,2}");
-    private static final Pattern EDGE_SPACES = Pattern.compile("(?:^[\\s\u00A0\u202F]++)|(?:[\\s\u00A0\u202F]++$)");
 
     private PriceListCsv() {
     }
@@ -246,7 +247,19 @@ public final class PriceListCsv {
      * typed (the price reads its own grouping spaces).
      */
     private static String clean(String cell) {
-        return EDGE_SPACES.matcher(cell).replaceAll("");
+        int start = 0;
+        int end = cell.length();
+        while (start < end && isSpace(cell.charAt(start))) {
+            start++;
+        }
+        while (end > start && isSpace(cell.charAt(end - 1))) {
+            end--;
+        }
+        return cell.substring(start, end);
+    }
+
+    private static boolean isSpace(char c) {
+        return Character.isWhitespace(c) || c == NBSP || c == NARROW_NBSP;
     }
 
     /** A cell a spreadsheet would run as a formula (CSV injection). */
