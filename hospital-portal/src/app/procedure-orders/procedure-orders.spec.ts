@@ -115,6 +115,35 @@ describe('ProcedureOrdersComponent', () => {
     expect(component.worklists).toContain('PRE_OP_CLEARANCE_PENDING');
   });
 
+  for (const saved of [true, false]) {
+    it(`reports a pending create ${saved ? 'success' : 'failure'} for the previous hospital without adding it to the new list`, () => {
+      const scope = TestBed.inject(RoleContextService) as ReturnType<typeof roleContextStub>;
+      scope.set({ superAdmin: true, roles: ['ROLE_SUPER_ADMIN'] });
+      const pending = new Subject<ProcedureOrderResponse>();
+      service.create.and.returnValue(pending);
+      const toast = TestBed.inject(ToastService);
+      spyOn(toast, 'success');
+      spyOn(toast, 'error');
+      component.openCreate();
+      component.orderForm = {
+        ...component.emptyOrderForm(),
+        patientId: 'p1',
+        procedureName: 'Act',
+        indication: 'Reason',
+      };
+      component.submitOrder();
+      expect(component.orderSaving()).toBeTrue();
+      scope.scopeToHospital('h2');
+      if (saved) pending.next(order);
+      else pending.error(new Error('request failed'));
+      expect(component.orderSaving()).toBeFalse();
+      expect(component.orders()).toEqual([]);
+      expect(saved ? toast.success : toast.error).toHaveBeenCalledWith(
+        saved ? 'HOSPITAL_SCOPE.PREVIOUS_WRITE_SAVED' : 'HOSPITAL_SCOPE.PREVIOUS_WRITE_FAILED',
+      );
+    });
+  }
+
   it('sends the consent time on the server UTC clock, whatever the browser zone (#948 review)', () => {
     // 14:00 UTC. Sent as the browser's wall clock, a New York workstation
     // stored 10:00 and the list (which reads it through serverTime) showed 06:00.

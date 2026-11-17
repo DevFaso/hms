@@ -3612,6 +3612,8 @@
     "BACK_TO_LOGIN": "Retour à la connexion"
   },
   "HOSPITAL_SCOPE": {
+    "PREVIOUS_WRITE_SAVED": "La modification a été enregistrée dans l’hôpital sélectionné lors de l’envoi. Revenez à cet hôpital pour la consulter.",
+    "PREVIOUS_WRITE_FAILED": "La modification envoyée pour l’hôpital précédemment sélectionné a échoué. Revenez à cet hôpital pour réessayer.",
     "ALL_HOSPITALS": "Tous les hôpitaux",
     "CLEAR": "Effacer la portée hôpital",
     "FILTER_BY_HOSPITAL": "Filtrer par hôpital",
@@ -9176,6 +9178,7 @@
     "LOOKUP_TITLE": "Consulter les signatures d’un rapport",
     "LOOKUP_HELP": "Consultez les signatures d’un rapport et leurs signataires. Utilisez l’action vérifier sur une signature pour vérifier son texte original.",
     "KNOWN_REPORTS": "Rapports de la liste de signatures chargée",
+    "CHOOSE_REPORT": "Choisir un rapport",
     "LOOKUP_LOADING": "Recherche en cours...",
     "INVALID_REPORT_ID": "Saisissez un UUID de rapport valide (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
     "RETRY": "Réessayer",
@@ -9695,6 +9698,7 @@
     "tasks": "Tâches",
     "title": "Boîte de réception",
     "unreadCount": "Nombre d'éléments non lus",
+    "unread": "{{count}} non lus",
     "urgent": "Urgent",
     "openVisitToSign": "Ouvrir la visite pour signer",
     "lastUpdated": "Dernière actualisation : {{time}}",

@@ -3612,6 +3612,8 @@
     "BACK_TO_LOGIN": "Volver al inicio de sesión"
   },
   "HOSPITAL_SCOPE": {
+    "PREVIOUS_WRITE_SAVED": "El cambio se guardó en el hospital seleccionado al enviarlo. Vuelva a ese hospital para verlo.",
+    "PREVIOUS_WRITE_FAILED": "El cambio enviado para el hospital seleccionado anteriormente falló. Vuelva a ese hospital para intentarlo de nuevo.",
     "ALL_HOSPITALS": "Todos los hospitales",
     "CLEAR": "Quitar el filtro de hospital",
     "FILTER_BY_HOSPITAL": "Filtrar por hospital",
@@ -9176,6 +9178,7 @@
     "LOOKUP_TITLE": "Consultar firmas de un informe",
     "LOOKUP_HELP": "Consulte si un informe tiene firmas y quién lo firmó. Use verificar en una firma para verificar su texto original.",
     "KNOWN_REPORTS": "Informes de la lista de firmas cargada",
+    "CHOOSE_REPORT": "Elegir un informe",
     "LOOKUP_LOADING": "Consultando...",
     "INVALID_REPORT_ID": "Introduzca un UUID de informe válido (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
     "RETRY": "Reintentar",
@@ -9695,6 +9698,7 @@
     "tasks": "Tareas",
     "title": "Bandeja de entrada",
     "unreadCount": "Número de elementos no leídos",
+    "unread": "{{count}} sin leer",
     "urgent": "Urgente",
     "openVisitToSign": "Abrir la visita para firmar",
     "lastUpdated": "Última actualización: {{time}}",

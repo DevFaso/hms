@@ -300,7 +300,10 @@ export class SchedulingComponent implements OnInit {
       ].filter(Boolean);
       const message =
         missingRequiredMessage(this.translate, [
-          { labelKey: 'SCHEDULING.START_DATE', value: this.bulk.startDate },
+          {
+            labelKey: this.singleShiftMode() ? 'SCHEDULING.DAY' : 'SCHEDULING.START_DATE',
+            value: this.bulk.startDate,
+          },
           { labelKey: 'SCHEDULING.START_TIME', value: this.bulk.startTime },
           { labelKey: 'SCHEDULING.END_TIME', value: this.bulk.endTime },
         ]) ?? this.translate.instant('SCHEDULING.TOAST.SHIFT_TIME_RANGE');

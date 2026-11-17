@@ -35,11 +35,15 @@
       </select></label
     >
   </div>
-}
-@if (orderSearch() || orderPriority()) {
-  <button type="button" class="btn-secondary" (click)="orderSearch.set(''); orderPriority.set('')">
-    {{ 'COMMON.CLEAR' | translate }}
-  </button>
+  @if (orderSearch() || orderPriority()) {
+    <button
+      type="button"
+      class="btn-secondary"
+      (click)="orderSearch.set(''); orderPriority.set('')"
+    >
+      {{ 'COMMON.CLEAR' | translate }}
+    </button>
+  }
 }
 @if (loading()) {
   <div class="loading-state">

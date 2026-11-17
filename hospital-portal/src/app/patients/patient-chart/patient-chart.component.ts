@@ -1306,7 +1306,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   isForeignRow(row: { hospitalId?: string }): boolean {
     const mine = this.hospitalId();
-    return !mine || (!!row.hospitalId && row.hospitalId !== mine);
+    return !!row.hospitalId && !!mine && row.hospitalId !== mine;
   }
 
   severityClass(severity?: string): string {

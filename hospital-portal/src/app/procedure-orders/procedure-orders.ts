@@ -334,15 +334,21 @@ export class ProcedureOrdersComponent implements OnInit {
     this.orderService.create(withServerDateTimes(form, ['scheduledDatetime'])).subscribe({
       next: (created) => {
         this.orderSaving.set(false);
-        if (hospitalId !== this.hospitalId) return;
+        if (hospitalId !== this.hospitalId || this.destroyRef.destroyed) {
+          this.toast.success(this.translate.instant('HOSPITAL_SCOPE.PREVIOUS_WRITE_SAVED'));
+          return;
+        }
         this.toast.success(this.translate.instant('PROCEDURES.CREATED'));
         this.closeOrderModal();
         this.orders.update((list) => [created, ...list]);
       },
       error: (err: unknown) => {
         this.orderSaving.set(false);
-        if (hospitalId !== this.hospitalId) return;
-        this.toast.error(refusalReason(err) ?? this.translate.instant('PROCEDURES.SAVE_ERROR'));
+        this.toast.error(
+          hospitalId !== this.hospitalId || this.destroyRef.destroyed
+            ? this.translate.instant('HOSPITAL_SCOPE.PREVIOUS_WRITE_FAILED')
+            : (refusalReason(err) ?? this.translate.instant('PROCEDURES.SAVE_ERROR')),
+        );
       },
     });
   }

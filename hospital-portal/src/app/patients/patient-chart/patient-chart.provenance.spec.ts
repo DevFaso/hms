@@ -106,8 +106,10 @@ describe('PatientChartComponent — timeline provenance', () => {
     expect(component.canEditProblems()).toBeFalse();
     expect(component.canRemoveProblems()).toBeFalse();
     expect(component.canCreateUpdates()).toBeFalse();
-    expect(component.isForeignRow({ hospitalId: 'h-1' })).toBeTrue();
-    expect(component.isForeignRow({})).toBeTrue();
+    // Provenance is independent of the write gates: no acting hospital
+    // does not imply every hospital (or a legacy row) is foreign.
+    expect(component.isForeignRow({ hospitalId: 'h-1' })).toBeFalse();
+    expect(component.isForeignRow({})).toBeFalse();
     // These spies expose no write method: an attempted call would throw.
     component.submitAllergy();
     component.submitDeactivateAllergy();

@@ -3612,6 +3612,8 @@
     "BACK_TO_LOGIN": "Back to sign in"
   },
   "HOSPITAL_SCOPE": {
+    "PREVIOUS_WRITE_SAVED": "The change was saved to the hospital selected when you submitted it. Return to that hospital to see it.",
+    "PREVIOUS_WRITE_FAILED": "The change submitted for the previously selected hospital failed. Return to that hospital to try again.",
     "ALL_HOSPITALS": "All hospitals",
     "CLEAR": "Clear hospital scope",
     "FILTER_BY_HOSPITAL": "Filter by hospital",
@@ -9176,6 +9178,7 @@
     "LOOKUP_TITLE": "Check report signatures",
     "LOOKUP_HELP": "Check whether a report has signatures and who signed it. Use the Verify action on a signature to verify its original signature text.",
     "KNOWN_REPORTS": "Reports in the loaded signature list",
+    "CHOOSE_REPORT": "Choose a report",
     "LOOKUP_LOADING": "Checking...",
     "INVALID_REPORT_ID": "Enter a valid report UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
     "RETRY": "Try again",
@@ -9695,6 +9698,7 @@
     "tasks": "Tasks",
     "title": "In-Basket",
     "unreadCount": "Unread count",
+    "unread": "{{count}} unread",
     "urgent": "Urgent",
     "openVisitToSign": "Open the visit to sign",
     "lastUpdated": "Last updated: {{time}}",

@@ -152,6 +152,41 @@ describe('RegistriesComponent', () => {
     expect(component.rows().length).toBe(3);
   });
 
+  it('merges large status cohorts in server priority order before limiting All to 200', () => {
+    // Neither cohort is overdue: overdueDays cannot distinguish their dates.
+    // The 201st ACTIVE row must not be required to construct the first 200.
+    const active = Array.from({ length: 201 }, (_, i) =>
+      enrollment({
+        id: `active-${i}`,
+        patientName: `Z ${i}`,
+        nextExpectedVisit: i < 199 ? '2027-01-01' : '2027-03-01',
+        overdueDays: 0,
+      }),
+    );
+    const completed = Array.from({ length: 201 }, (_, i) =>
+      enrollment({
+        id: `closed-${i}`,
+        status: 'COMPLETED',
+        patientName: `A ${i}`,
+        nextExpectedVisit: '2027-02-01',
+        enrolledOn: i === 0 ? '2026-06-01' : '2026-07-01',
+        overdueDays: 0,
+      }),
+    );
+    registryService.registry.and.callFake((_program, status) => {
+      const rows = status === 'ACTIVE' ? active : status === 'COMPLETED' ? completed : [];
+      return of(page(rows.slice(0, 200), rows.length));
+    });
+    fixture.detectChanges();
+    component.setStatusFilter('ALL');
+    expect(component.rows().map((row) => row.id)).toEqual([
+      ...active.slice(0, 199).map((row) => row.id),
+      'closed-0',
+    ]);
+    expect(component.totalRows()).toBe(402);
+    expect(component.truncated()).toBeTrue();
+  });
+
   it('carries no scope chip or hint of its own: the route gate owns them', () => {
     // The route is flagged requiresHospitalScope: the shell shows the one
     // chip and builds this page only with a hospital pinned.

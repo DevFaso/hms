@@ -27,6 +27,9 @@ describe('PatientEducationComponent dashboard metrics', () => {
     service = jasmine.createSpyObj<EducationService>('EducationService', [
       'listResources',
       'createResource',
+      'deleteResource',
+      'trackProgress',
+      'updateProgress',
     ]);
     service.listResources.and.returnValue(of(resources));
     await TestBed.configureTestingModule({
@@ -48,7 +51,10 @@ describe('PatientEducationComponent dashboard metrics', () => {
           provide: RoleContextService,
           useValue: roleContextStub({ superAdmin: false, hospitalId: 'h1', roles: ['ROLE_NURSE'] }),
         },
-        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['error']) },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(PatientEducationComponent);
@@ -57,6 +63,66 @@ describe('PatientEducationComponent dashboard metrics', () => {
   function metrics(): string[] {
     const root = fixture.nativeElement as HTMLElement;
     return Array.from(root.querySelectorAll('.care-metric strong'), (el) => el.textContent!.trim());
+  }
+
+  for (const operation of ['create', 'delete', 'assign', 'progress'] as const) {
+    for (const saved of [true, false]) {
+      it(`reports ${operation} ${saved ? 'success' : 'failure'} after leaving its hospital without touching a new operation`, () => {
+        const scope = TestBed.inject(RoleContextService) as ReturnType<typeof roleContextStub>;
+        scope.set({ superAdmin: true, roles: ['ROLE_SUPER_ADMIN'] });
+        fixture.detectChanges();
+        scope.scopeToHospital('h1');
+        fixture.detectChanges();
+        const c = fixture.componentInstance;
+        const pending = new Subject<never>();
+        if (operation === 'create') {
+          service.createResource.and.returnValue(pending);
+          c.openCreateResource();
+          c.resourceForm.title = 'Resource';
+          c.submitResource();
+        } else if (operation === 'delete') {
+          service.deleteResource.and.returnValue(pending);
+          c.confirmDelete(resources[0]);
+          c.submitDelete();
+        } else if (operation === 'assign') {
+          service.trackProgress.and.returnValue(pending);
+          c.progressPatient.set({ id: 'p1' } as never);
+          c.assignResourceId = resources[0].id;
+          c.submitAssign();
+        } else {
+          service.updateProgress.and.returnValue(pending);
+          c.openProgressUpdate({ id: 'progress-1', patientId: 'p1', resourceId: resources[0].id });
+          c.submitProgressUpdate();
+        }
+        scope.scopeToHospital('h2');
+        fixture.detectChanges();
+        expect(c.resourceSaving()).toBeFalse();
+        expect(c.deleteBusy()).toBeFalse();
+        expect(c.assignBusy()).toBeFalse();
+        expect(c.progressSaving()).toBeFalse();
+        // Returning to h1 must not make a response from the old visit current.
+        scope.scopeToHospital('h1');
+        fixture.detectChanges();
+        c.openCreateResource();
+        c.resourceSaving.set(true);
+        c.deleteBusy.set(true);
+        c.assignBusy.set(true);
+        c.progressSaving.set(true);
+        if (saved) pending.next({ ...resources[0], id: 'old-result' } as never);
+        else pending.error(new Error('old request failed'));
+        const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+        expect(saved ? toast.success : toast.error).toHaveBeenCalledWith(
+          saved ? 'HOSPITAL_SCOPE.PREVIOUS_WRITE_SAVED' : 'HOSPITAL_SCOPE.PREVIOUS_WRITE_FAILED',
+        );
+        expect(c.resources()).toEqual(resources);
+        expect(c.progressEntries()).toEqual([]);
+        expect(c.showResourceModal()).toBeTrue();
+        expect(c.resourceSaving()).toBeTrue();
+        expect(c.deleteBusy()).toBeTrue();
+        expect(c.assignBusy()).toBeTrue();
+        expect(c.progressSaving()).toBeTrue();
+      });
+    }
   }
 
   it('requires a selected hospital for resource creation even for a super-admin', () => {

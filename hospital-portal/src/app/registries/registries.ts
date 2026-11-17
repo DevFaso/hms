@@ -171,8 +171,11 @@ export class RegistriesComponent implements OnInit, OnDestroy {
                       .flatMap((page) => page.content)
                       .sort(
                         (a, b) =>
-                          b.overdueDays - a.overdueDays ||
-                          (a.patientName ?? '').localeCompare(b.patientName ?? ''),
+                          // Match findRegistry's ordering before truncating. Each
+                          // status page then contains every candidate for the
+                          // combined first page, even for cohorts over 200.
+                          a.nextExpectedVisit.localeCompare(b.nextExpectedVisit) ||
+                          a.enrolledOn.localeCompare(b.enrolledOn),
                       )
                       .slice(0, RegistriesComponent.PAGE_SIZE),
                     totalElements: pages.reduce((sum, page) => sum + page.totalElements, 0),

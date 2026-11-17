@@ -6,8 +6,7 @@
       }
       @if (badgeCount() > 0) {
         <span class="unread-summary">
-          <span class="badge">{{ badgeCount() }}</span>
-          {{ 'inBasket.unreadCount' | translate }}
+          {{ 'inBasket.unread' | translate: { count: badgeCount() } }}
         </span>
       }
       @if (lastUpdated()) {
