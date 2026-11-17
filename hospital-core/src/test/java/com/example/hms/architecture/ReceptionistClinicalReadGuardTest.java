@@ -117,6 +117,8 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("BillingInvoiceResponseDTO#notes", "billing notes"),
         Map.entry("PaymentTransactionResponseDTO#notes", "cashier notes"),
         Map.entry("InvoiceAdjustmentResponseDTO#reason", "why a discount was given"),
+        Map.entry("InvoiceItemResponseDTO#overrideReason",
+            "why the cashier changed a price-list price on a draft line (billing-money plan PR 3, D-2)"),
         Map.entry("InvoiceAdjustmentResponseDTO#reversalReason", "why a discount was reversed"),
         Map.entry("AppointmentCalendarEventDTO#reason", "the visit reason on the desk's calendar"),
         Map.entry("BedResponseDTO#notes", "a note about the bed, not the patient"),

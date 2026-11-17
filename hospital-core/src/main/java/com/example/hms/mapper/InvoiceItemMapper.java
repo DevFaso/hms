@@ -28,6 +28,8 @@ public class InvoiceItemMapper {
         item.setItemCategory(dto.getItemCategory());
         item.setAssignment(assignment);
         item.setRelatedService(relatedService);
+        // Billing-money plan PR 3: a line typed at the till is priced by hand.
+        item.setPriceSource(com.example.hms.enums.InvoiceLinePriceSource.MANUAL);
         return item;
     }
 
@@ -75,9 +77,22 @@ public class InvoiceItemMapper {
             dto.setRelatedServiceName(item.getRelatedService().getName());
         }
 
+        com.example.hms.enums.InvoiceLinePriceSource source = item.getPriceSource();
+        dto.setPriceSource(source != null ? source.name() : null);
+        dto.setTariffUnitPrice(tariffUnitPriceOf(item));
+        dto.setOverrideReason(item.getOverrideReason());
+
         dto.setCreatedAt(item.getCreatedAt());
         dto.setUpdatedAt(item.getUpdatedAt());
         return dto;
+    }
+
+    /** The price list's price for the line: the stored tariff when overridden, the line's own price when TARIFF. */
+    public static java.math.BigDecimal tariffUnitPriceOf(InvoiceItem item) {
+        if (item.getTariffUnitPrice() != null) {
+            return item.getTariffUnitPrice();
+        }
+        return item.getPriceSource() == com.example.hms.enums.InvoiceLinePriceSource.TARIFF ? item.getUnitPrice() : null;
     }
 
     private String buildAssigneeDisplay(UserRoleHospitalAssignment a) {

@@ -1660,6 +1660,7 @@
       "PRICE_LIST_ITEM_UPDATED": "Price list item {{item}} edited",
       "PRICE_LIST_ITEM_DEACTIVATED": "Price list item {{item}} deactivated, reason recorded",
       "PRICE_VERSION_ADDED": "New price {{version}} for price list item {{item}}, effective {{from}}",
+      "INVOICE_LINE_PRICE_OVERRIDDEN": "Price-list price {{version}} overridden on draft line {{line}} of invoice {{invoice}}",
       "NEWBORN_REGISTERED_FROM_DELIVERY": "Newborn registered from a recorded delivery",
       "NEWBORN_REGISTRATION_PENDING": "Newborn registration pending after a recorded delivery",
       "PARTNER_DISPENSE_OF_HELD_RX": "{{what}} confirmed dispensing prescription {{rx}}, which is held for review; the hold stands. A person must check with the patient and the partner.",
@@ -2434,6 +2435,11 @@
     "CANCEL_REASON_REQUIRED": "Give the reason for cancelling this issued invoice.",
     "ADJUSTMENT_AMOUNT_REQUIRED": "Enter the amount of the discount or waiver (greater than zero).",
     "EDIT_LINE": "Price or correct this line",
+    "TARIFF_PRICE_VALUE": "Price-list price: {{ amount }}",
+    "OVERRIDE_REASON": "Price changed — reason",
+    "OVERRIDE_REASON_VALUE": "Price changed — reason: {{ reason }}",
+    "OVERRIDE_REASON_PLACEHOLDER": "Why does this line not take the price-list price?",
+    "OVERRIDE_REASON_REQUIRED": "Give the reason for changing the price-list price of this line.",
     "ITEM_UPDATED": "Line updated",
     "ADJUSTMENT_REVERSE": "Undo the adjustment",
     "ADJUSTMENT_REVERSED": "Adjustment undone",
@@ -6980,7 +6986,8 @@
         "PRICE_LIST_ITEM_CREATED": "Price list item created",
         "PRICE_LIST_ITEM_UPDATED": "Price list item updated",
         "PRICE_LIST_ITEM_DEACTIVATED": "Price list item deactivated",
-        "PRICE_VERSION_ADDED": "New price added"
+        "PRICE_VERSION_ADDED": "New price added",
+        "INVOICE_LINE_PRICE_OVERRIDDEN": "Price-list price overridden"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",

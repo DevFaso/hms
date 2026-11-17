@@ -39,6 +39,22 @@ public interface PriceListItemRepository extends JpaRepository<PriceListItem, UU
                                          @Param("linkKey") String linkKey);
 
     /**
+     * Billing-money plan PR 3: the active item a charge is priced by, at its own hospital only, read under a share
+     * lock (SELECT ... FOR SHARE) held until the checkout commits. A same-day correction of a price takes
+     * {@link #lockByIdAtHospital} (FOR UPDATE) first, so it either waits for this checkout and then sees its lines,
+     * or runs first and this checkout reads the corrected version: a line never copies a version replaced under it.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("""
+        SELECT i FROM PriceListItem i
+        WHERE i.hospitalId = :hospitalId AND i.active = true
+          AND i.linkType = :linkType AND i.linkKey = :linkKey
+        """)
+    List<PriceListItem> findActiveByLinkForCharge(@Param("hospitalId") UUID hospitalId,
+                                                  @Param("linkType") PriceListLinkType linkType,
+                                                  @Param("linkKey") String linkKey);
+
+    /**
      * The item, locked (SELECT ... FOR UPDATE) and only at its own hospital. Every change to an item or its price
      * versions takes this lock first, so two concurrent "add price" calls are serialised: the second reads the
      * versions the first wrote.

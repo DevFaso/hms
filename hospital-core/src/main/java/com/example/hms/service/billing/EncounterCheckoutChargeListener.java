@@ -1,5 +1,6 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.enums.InvoiceLinePriceSource;
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.event.EncounterCheckedOutEvent;
 import com.example.hms.model.BillingInvoice;
@@ -68,6 +69,7 @@ public class EncounterCheckoutChargeListener {
     private final TreatmentRepository treatmentRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final InvoiceNumberAllocator invoiceNumberAllocator;
+    private final TariffResolver tariffResolver;
     /** One per visit-invoice type of the registry, in the registry's order. */
     private final List<VisitChargeSource> sources;
 
@@ -76,12 +78,14 @@ public class EncounterCheckoutChargeListener {
                                            TreatmentRepository treatmentRepository,
                                            UserRoleHospitalAssignmentRepository assignmentRepository,
                                            InvoiceNumberAllocator invoiceNumberAllocator,
+                                           TariffResolver tariffResolver,
                                            List<VisitChargeSource> sources) {
         this.encounterRepository = encounterRepository;
         this.invoiceRepository = invoiceRepository;
         this.treatmentRepository = treatmentRepository;
         this.assignmentRepository = assignmentRepository;
         this.invoiceNumberAllocator = invoiceNumberAllocator;
+        this.tariffResolver = tariffResolver;
         this.sources = sources.stream()
             .sorted(java.util.Comparator.comparing(VisitChargeSource::type))
             .toList();
@@ -149,8 +153,13 @@ public class EncounterCheckoutChargeListener {
             return Optional.empty();
         }
         VisitPriceList prices = new VisitPriceList(treatmentRepository.findByHospital_Id(hospitalId));
-        VisitChargeSource.Visit visit = new VisitChargeSource.Visit(encounter,
-            event.checkedOutAt() != null ? event.checkedOutAt() : encounter.getCheckoutTimestamp(), prices);
+        java.time.LocalDateTime checkedOutAt = event.checkedOutAt() != null
+            ? event.checkedOutAt() : encounter.getCheckoutTimestamp();
+        // Billing-money plan PR 3 (D-4): the price list of the visit's own hospital, as it stood on the checkout
+        // day (Africa/Ouagadougou); a price that starts tomorrow never prices today's visit.
+        TariffResolver.Tariffs tariffs = new TariffResolver.Tariffs(tariffResolver, hospitalId,
+            tariffResolver.businessDayOf(checkedOutAt));
+        VisitChargeSource.Visit visit = new VisitChargeSource.Visit(encounter, checkedOutAt, prices, tariffs);
 
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         // QA D1901: the note is kept as its code and the visit's code, shown
@@ -202,6 +211,7 @@ public class EncounterCheckoutChargeListener {
         String description = charge.description();
         String text = description.length() > 255 ? description.substring(0, 255) : description;
         BillingText worded = charge.text();
+        TariffResolver.Tariff tariff = charge.tariff();
         return InvoiceItem.builder()
             .itemDescription(text)
             // QA D1901: a line the server worded keeps its code (shown in each
@@ -214,7 +224,20 @@ public class EncounterCheckoutChargeListener {
             .totalPrice(unit.multiply(BigDecimal.valueOf(charge.quantity())))
             .assignment(owner)
             .relatedService(charge.service())
+            // PR 3: where the price came from; a tariff line names the version it copied (D-4).
+            .priceSource(priceSourceOf(charge))
+            .priceListItemId(tariff != null ? tariff.itemId() : null)
+            .priceListPriceId(tariff != null ? tariff.priceId() : null)
             .build();
+    }
+
+    /** The price list first, then a service of the same name, else nothing: the cashier prices it. */
+    static InvoiceLinePriceSource priceSourceOf(VisitChargeSource.VisitCharge charge) {
+        if (charge.tariff() != null) {
+            return InvoiceLinePriceSource.TARIFF;
+        }
+        return charge.service() != null && charge.unitPrice() != null
+            ? InvoiceLinePriceSource.SERVICE_NAME : InvoiceLinePriceSource.UNPRICED;
     }
 
     /** The treating clinician's assignment here, else the hospital's billing desk or administrator. */

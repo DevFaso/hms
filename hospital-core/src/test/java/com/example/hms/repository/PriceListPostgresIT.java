@@ -114,6 +114,7 @@ class PriceListPostgresIT {
 
     @Autowired private PriceListItemRepository items;
     @Autowired private PriceListPriceRepository prices;
+    @Autowired private InvoiceItemRepository invoiceLines;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private PlatformTransactionManager transactions;
 
@@ -139,9 +140,9 @@ class PriceListPostgresIT {
         hospitalA = UUID.randomUUID();
         hospitalB = UUID.randomUUID();
         actor = UUID.randomUUID();
-        service = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), labTests, treatments,
+        service = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), invoiceLines, labTests, treatments,
             mock(UserRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
-        liveService = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), labTests, treatments,
+        liveService = new PriceListService(items, prices, new PriceListLinks(labTests, treatments), invoiceLines, labTests, treatments,
             mock(UserRepository.class), roles, scope, audit, Clock.systemDefaultZone(), "Africa/Ouagadougou");
         tx = new TransactionTemplate(transactions);
         actAt(hospitalA);

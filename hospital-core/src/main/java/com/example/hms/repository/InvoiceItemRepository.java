@@ -22,4 +22,10 @@ public interface InvoiceItemRepository extends JpaRepository<InvoiceItem, UUID> 
     void deleteByBillingInvoice_Id(UUID invoiceId);
 
     List<InvoiceItem> findByBillingInvoiceId(UUID invoiceId);
+
+    /**
+     * Billing-money plan PR 3: whether an invoice line copied one of these price versions. Such a version has priced
+     * a bill and is never replaced, not even by a same-day correction.
+     */
+    boolean existsByPriceListPriceIdIn(java.util.Collection<UUID> priceListPriceIds);
 }

@@ -1420,6 +1420,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['version', 'item', 'from'],
   },
   {
+    // Billing-money plan PR 3 (D-2): a price-list price overridden on a draft line (ids only; the prices and the
+    // reason stay on the line).
+    key: 'AUDIT.DESC.INVOICE_LINE_PRICE_OVERRIDDEN',
+    re: /^Tariff price version (\S+) overridden on draft line (\S+) of invoice (\S+)$/,
+    params: ['version', 'line', 'invoice'],
+  },
+  {
     // QA D974: a discount, waiver or credit note on an invoice.
     key: 'AUDIT.DESC.INVOICE_ADJUSTMENT',
     re: /^Invoice adjustment ([A-Z_]+) on invoice (\S+)$/,

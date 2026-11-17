@@ -1152,6 +1152,84 @@ describe('BillingComponent', () => {
     });
   });
 
+  describe('a price-list line is overridden only with a reason (billing-money plan PR 3, D-2)', () => {
+    const tariffLine = {
+      id: 'line-t',
+      billingInvoiceId: 'inv-1',
+      itemDescription: 'Consultation générale',
+      itemCategory: 'SERVICE',
+      quantity: 1,
+      unitPrice: 2000,
+      totalPrice: 2000,
+      priceSource: 'TARIFF' as const,
+      tariffUnitPrice: 2000,
+      overrideReason: null,
+    };
+    const typedLine = {
+      id: 'line-m',
+      billingInvoiceId: 'inv-1',
+      itemDescription: 'Pansement',
+      itemCategory: 'SERVICE',
+      quantity: 1,
+      unitPrice: 750,
+      totalPrice: 750,
+      priceSource: 'MANUAL' as const,
+      tariffUnitPrice: null,
+      overrideReason: null,
+    };
+
+    beforeEach(() => {
+      billingSpy.getInvoiceItems.and.returnValue(of([tariffLine, typedLine]));
+      billingSpy.getInvoice.and.returnValue(
+        of(mockInvoice({ status: 'DRAFT', totalAmount: 2750 })),
+      );
+      fixture.detectChanges();
+      component.viewInvoice(mockInvoice({ status: 'DRAFT', totalAmount: 2750, balanceDue: 2750 }));
+      fixture.detectChanges();
+    });
+
+    it('shows the reason field and the price-list price only on a TARIFF line', () => {
+      const host = fixture.nativeElement as HTMLElement;
+      component.startEditLine(tariffLine);
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="line-override-reason-line-t"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="line-tariff-line-t"]')?.textContent).toContain(
+        'BILLING.TARIFF_PRICE_VALUE',
+      );
+      component.startEditLine(typedLine);
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="line-override-reason-line-m"]')).toBeNull();
+    });
+
+    it('refuses a changed price-list price without a reason, then sends it with one', () => {
+      component.startEditLine(tariffLine);
+      component.editLineUnitPrice.set(1500);
+      expect(component.overrideReasonRequired(tariffLine)).toBeTrue();
+      component.saveLine(tariffLine);
+      expect(billingSpy.updateInvoiceItem).not.toHaveBeenCalled();
+
+      billingSpy.updateInvoiceItem.and.returnValue(
+        of({ ...tariffLine, unitPrice: 1500, totalPrice: 1500, priceSource: 'MANUAL' as const }),
+      );
+      component.editLineOverrideReason.set('  Patient indigent  ');
+      component.saveLine(tariffLine);
+      expect(billingSpy.updateInvoiceItem).toHaveBeenCalledWith('line-t', {
+        billingInvoiceId: 'inv-1',
+        itemDescription: 'Consultation générale',
+        itemCategory: 'SERVICE',
+        quantity: 1,
+        unitPrice: 1500,
+        overrideReason: 'Patient indigent',
+      });
+    });
+
+    it('keeps the tariff price without asking for a reason', () => {
+      component.startEditLine(tariffLine);
+      component.editLineQuantity.set(2);
+      expect(component.overrideReasonRequired(tariffLine)).toBeFalse();
+    });
+  });
+
   describe('a zero-priced line is priced in place (QA D1088)', () => {
     const zeroLine = {
       id: 'line-0',

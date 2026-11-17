@@ -1,5 +1,7 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.enums.PriceListSystemKey;
+import com.example.hms.enums.PriceListLinkType;
 import com.example.hms.enums.ItemCategory;
 import com.example.hms.model.EncounterTreatment;
 import com.example.hms.model.Treatment;
@@ -39,11 +41,21 @@ public class ConsultationChargeSource implements VisitChargeSource {
         for (EncounterTreatment given : services) {
             Treatment treatment = given.getTreatment();
             if (treatment != null && treatment.getName() != null) {
-                lines.add(new VisitCharge(treatment.getName(), null, ItemCategory.SERVICE, 1, treatment.getPrice(),
-                    treatment));
+                // PR 3: the service's own tariff (a TREATMENT link) first, else the service's price.
+                Optional<TariffResolver.Tariff> tariff = treatment.getId() == null ? Optional.empty()
+                    : visit.tariff(PriceListLinkType.TREATMENT, treatment.getId().toString());
+                lines.add(tariff.map(t -> VisitCharge.tariffed(t, ItemCategory.SERVICE, 1))
+                    .orElseGet(() -> new VisitCharge(treatment.getName(), null, ItemCategory.SERVICE, 1,
+                        treatment.getPrice(), treatment)));
             }
         }
         if (services.isEmpty()) {
+            Optional<TariffResolver.Tariff> tariff =
+                visit.tariff(PriceListLinkType.SYSTEM, PriceListSystemKey.CONSULTATION_DEFAULT.name());
+            if (tariff.isPresent()) {
+                lines.add(VisitCharge.tariffed(tariff.get(), ItemCategory.SERVICE, 1));
+                return lines;
+            }
             Optional<Treatment> consultation = visit.prices().naming(CONSULTATION_WORDS);
             // QA D1901: the hospital's own service name as written; else the
             // server's word for it, shown in each reader's language.

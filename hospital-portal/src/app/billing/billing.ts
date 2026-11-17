@@ -896,11 +896,28 @@ export class BillingComponent implements OnInit {
   editingLineId = signal<string | null>(null);
   editLineQuantity = signal<number | null>(null);
   editLineUnitPrice = signal<number | null>(null);
+  /* Billing-money plan PR 3 (D-2): the reason a price-list price is changed on a draft line. */
+  editLineOverrideReason = signal('');
+
+  /** A line priced from the price list (overridden or not): its price changes only with a reason. */
+  isTariffLine(item: InvoiceItemResponse): boolean {
+    return item.tariffUnitPrice !== null && item.tariffUnitPrice !== undefined;
+  }
+
+  /** Whether the price now typed overrides the price list, so a reason is required. */
+  overrideReasonRequired(item: InvoiceItemResponse): boolean {
+    const price = this.editLineUnitPrice();
+    if (!this.isTariffLine(item) || price === null) return false;
+    return (
+      Number(price) !== Number(item.tariffUnitPrice) && Number(price) !== Number(item.unitPrice)
+    );
+  }
 
   startEditLine(item: InvoiceItemResponse): void {
     this.editingLineId.set(item.id);
     this.editLineQuantity.set(item.quantity ?? 1);
     this.editLineUnitPrice.set(Number(item.unitPrice) > 0 ? Number(item.unitPrice) : null);
+    this.editLineOverrideReason.set(item.overrideReason ?? '');
     // QA D1195 / D1155: the editing row is an appInlineSubForm — it takes the
     // keyboard, keeps Escape to itself (asking first over a changed value) and
     // gives the keyboard back to the line's pencil when it closes.
@@ -924,7 +941,9 @@ export class BillingComponent implements OnInit {
     // QA D1089: the button is never dead; the field that is missing or wrong says so.
     const qtyKey = lineQuantityMessageKey(this.editLineQuantity());
     const priceProblem = cfaPriceProblem(this.editLineUnitPrice());
-    if (qtyKey || priceProblem) {
+    const reasonMissing =
+      this.overrideReasonRequired(item) && this.editLineOverrideReason().trim() === '';
+    if (qtyKey || priceProblem || reasonMissing) {
       // QA D1296 class (round 28): every wrong field at once, each under its
       // own reason (the price said "required" when only the quantity was).
       // QA D1344 (round 29): a quantity of 0 says it must be above zero.
@@ -940,7 +959,17 @@ export class BillingComponent implements OnInit {
           ),
         });
       }
-      refuseFields(this.host.nativeElement, refusals, ['line-edit-qty', 'line-edit-price']);
+      if (reasonMissing) {
+        refusals.push({
+          id: 'line-edit-override-reason',
+          message: this.translate.instant('BILLING.OVERRIDE_REASON_REQUIRED'),
+        });
+      }
+      refuseFields(this.host.nativeElement, refusals, [
+        'line-edit-qty',
+        'line-edit-price',
+        'line-edit-override-reason',
+      ]);
       return;
     }
     this.itemSaving.set(true);
@@ -951,6 +980,9 @@ export class BillingComponent implements OnInit {
         itemCategory: item.itemCategory as InvoiceItemCategory,
         quantity: this.editLineQuantity() ?? 1,
         unitPrice: this.editLineUnitPrice() ?? 0,
+        ...(this.isTariffLine(item)
+          ? { overrideReason: this.editLineOverrideReason().trim() || undefined }
+          : {}),
       })
       .subscribe({
         next: () => {

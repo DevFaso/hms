@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.InvoiceLinePriceSource;
 import com.example.hms.enums.ItemCategory;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -29,6 +30,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Objects;
+import java.util.UUID;
 
 @Entity
 @Table(name = "invoice_items", schema = "billing",
@@ -94,12 +96,41 @@ public class InvoiceItem extends BaseEntity {
     private Treatment relatedService;
 
     /**
+     * Billing-money plan PR 3 (V303): the price-list item and the version whose unit price this line copied when
+     * it was posted. Plain ids (the FKs are in the schema): a later price never rewrites the line (D-4), and
+     * nothing here loads the catalogue.
+     */
+    @Column(name = "price_list_item_id")
+    private UUID priceListItemId;
+
+    @Column(name = "price_list_price_id")
+    private UUID priceListPriceId;
+
+    /** Where {@link #unitPrice} came from. A line typed at the till is MANUAL. */
+    @Builder.Default
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "price_source", nullable = false, length = 20)
+    private InvoiceLinePriceSource priceSource = InvoiceLinePriceSource.MANUAL;
+
+    /** The tariff's unit price when a cashier overrode it on a draft line (D-2); null otherwise. */
+    @Column(name = "tariff_unit_price", precision = 12, scale = 2)
+    private BigDecimal tariffUnitPrice;
+
+    /** The cashier's reason for that override, as typed. */
+    @Column(name = "override_reason", length = 500)
+    private String overrideReason;
+
+    /**
      * QA D72: this ran on update only, so a NEW line reached the insert with
      * no total and bean validation refused it ("totalPrice must not be null").
      */
     @PrePersist
     @PreUpdate
     public void validateAndCalculate() {
+        if (priceSource == null) {
+            priceSource = InvoiceLinePriceSource.MANUAL;
+        }
         // If linked to a service and unitPrice is not set, default from service
         if (relatedService != null && unitPrice == null) {
             unitPrice = relatedService.getPrice();

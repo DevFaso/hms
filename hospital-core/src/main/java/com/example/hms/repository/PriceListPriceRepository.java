@@ -30,4 +30,17 @@ public interface PriceListPriceRepository extends JpaRepository<PriceListPrice, 
         ORDER BY p.effectiveFrom DESC, p.createdAt DESC
         """)
     List<PriceListPrice> findByItemIds(@Param("itemIds") Collection<UUID> itemIds);
+
+    /**
+     * Billing-money plan PR 3: the version of one item in force on {@code day} at its hospital (a replaced version,
+     * whose range is empty, never matches). At most one by construction; newest start first all the same.
+     */
+    @Query("""
+        SELECT p FROM PriceListPrice p
+        WHERE p.item.id = :itemId AND p.hospitalId = :hospitalId
+          AND p.effectiveFrom <= :day AND (p.effectiveTo IS NULL OR p.effectiveTo >= :day)
+        ORDER BY p.effectiveFrom DESC, p.createdAt DESC
+        """)
+    List<PriceListPrice> findInForce(@Param("itemId") UUID itemId, @Param("hospitalId") UUID hospitalId,
+                                     @Param("day") java.time.LocalDate day);
 }

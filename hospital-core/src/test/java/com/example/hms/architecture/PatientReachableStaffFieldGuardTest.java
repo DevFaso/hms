@@ -166,6 +166,7 @@ class PatientReachableStaffFieldGuardTest {
         Map.entry("HighRiskPregnancyCarePlanResponseDTO$SupportResourceDTO", Rule.patients("resources for the patient")),
         Map.entry("BillingInvoiceResponseDTO", Rule.patients(BILLING_OPEN)),
         Map.entry("InvoiceAdjustmentResponseDTO", Rule.patients(BILLING_OPEN)),
+        Map.entry("InvoiceItemResponseDTO", Rule.patients(BILLING_OPEN)),
         Map.entry("PaymentTransactionResponseDTO", Rule.patients(BILLING_OPEN)),
         Map.entry("PharmacyClaimResponseDTO", Rule.patients(BILLING_OPEN)),
         Map.entry("PharmacyPaymentResponseDTO", Rule.patients(BILLING_OPEN)));

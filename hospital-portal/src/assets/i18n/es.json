@@ -1660,6 +1660,7 @@
       "PRICE_LIST_ITEM_UPDATED": "Artículo de la lista de precios {{item}} modificado",
       "PRICE_LIST_ITEM_DEACTIVATED": "Artículo de la lista de precios {{item}} desactivado, motivo registrado",
       "PRICE_VERSION_ADDED": "Nuevo precio {{version}} para el artículo {{item}}, vigente el {{from}}",
+      "INVOICE_LINE_PRICE_OVERRIDDEN": "Precio de la lista {{version}} modificado en la línea {{line}} de la factura borrador {{invoice}}",
       "NEWBORN_REGISTERED_FROM_DELIVERY": "Recién nacido registrado a partir de un parto",
       "NEWBORN_REGISTRATION_PENDING": "Registro del recién nacido pendiente tras un parto",
       "PARTNER_DISPENSE_OF_HELD_RX": "{{what}} confirmó la entrega de la receta {{rx}}, suspendida para revisión; la suspensión se mantiene. Una persona debe comprobarlo con el paciente y el socio.",
@@ -2434,6 +2435,11 @@
     "CANCEL_REASON_REQUIRED": "Indique el motivo de la anulación de esta factura emitida.",
     "ADJUSTMENT_AMOUNT_REQUIRED": "Indique el importe del descuento o de la exoneración (mayor que cero).",
     "EDIT_LINE": "Tarifar o corregir esta línea",
+    "TARIFF_PRICE_VALUE": "Precio de la lista: {{ amount }}",
+    "OVERRIDE_REASON": "Precio modificado — motivo",
+    "OVERRIDE_REASON_VALUE": "Precio modificado — motivo: {{ reason }}",
+    "OVERRIDE_REASON_PLACEHOLDER": "¿Por qué esta línea no toma el precio de la lista?",
+    "OVERRIDE_REASON_REQUIRED": "Indique el motivo del cambio del precio de la lista para esta línea.",
     "ITEM_UPDATED": "Línea actualizada",
     "ADJUSTMENT_REVERSE": "Anular el ajuste",
     "ADJUSTMENT_REVERSED": "Ajuste anulado",
@@ -6980,7 +6986,8 @@
         "PRICE_LIST_ITEM_CREATED": "Artículo de la lista creado",
         "PRICE_LIST_ITEM_UPDATED": "Artículo de la lista modificado",
         "PRICE_LIST_ITEM_DEACTIVATED": "Artículo de la lista desactivado",
-        "PRICE_VERSION_ADDED": "Nuevo precio añadido"
+        "PRICE_VERSION_ADDED": "Nuevo precio añadido",
+        "INVOICE_LINE_PRICE_OVERRIDDEN": "Precio de la lista modificado"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",

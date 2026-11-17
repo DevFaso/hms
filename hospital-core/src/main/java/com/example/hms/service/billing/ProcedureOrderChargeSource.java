@@ -1,5 +1,7 @@
 package com.example.hms.service.billing;
 
+import java.util.Optional;
+import com.example.hms.enums.PriceListLinkType;
 import com.example.hms.enums.ItemCategory;
 import com.example.hms.enums.ProcedureOrderStatus;
 import com.example.hms.model.ProcedureOrder;
@@ -36,7 +38,14 @@ public class ProcedureOrderChargeSource implements VisitChargeSource {
         for (ProcedureOrder order : procedureOrderRepository.findAllById(ids)) {
             String procedure = order.getProcedureName();
             if (procedure != null && !procedure.isBlank()) {
-                lines.add(VisitCharge.of(procedure, ItemCategory.SERVICE, 1, visit.prices().sameName(procedure)));
+                // PR 3: the tariff linked to the order's code (else its name, folded the same way) first, else the
+                // service of the same name.
+                String code = order.getProcedureCode();
+                String key = code != null && !code.isBlank() ? code : procedure;
+                Optional<TariffResolver.Tariff> tariff = visit.tariff(PriceListLinkType.PROCEDURE_CODE, key);
+                lines.add(tariff.map(t -> VisitCharge.tariffed(t, ItemCategory.SERVICE, 1))
+                    .orElseGet(() -> VisitCharge.of(procedure, ItemCategory.SERVICE, 1,
+                        visit.prices().sameName(procedure))));
             }
         }
         return lines;

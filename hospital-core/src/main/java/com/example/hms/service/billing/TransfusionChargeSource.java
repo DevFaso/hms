@@ -1,5 +1,6 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.enums.PriceListLinkType;
 import com.example.hms.enums.BloodUnitStatus;
 import com.example.hms.enums.ItemCategory;
 import com.example.hms.enums.TransfusionRequestStatus;
@@ -68,7 +69,14 @@ public class TransfusionChargeSource implements VisitChargeSource {
             // reader's language. The hospital names its priced services in its
             // own language (French), so the price is matched on the French words.
             BillingText text = BillingText.of(TRANSFUSION_CODE, BillingText.code(productCode));
-            lines.add(VisitCharge.worded(text, ItemCategory.SERVICE, units, priceOf(visit, productCode, text)));
+            // PR 3: the tariff linked to the product first, else the service named as the product.
+            Optional<TariffResolver.Tariff> tariff =
+                visit.tariff(PriceListLinkType.TRANSFUSION_PRODUCT, request.getProductType().name());
+            if (tariff.isPresent()) {
+                lines.add(VisitCharge.tariffed(tariff.get(), ItemCategory.SERVICE, units));
+            } else {
+                lines.add(VisitCharge.worded(text, ItemCategory.SERVICE, units, priceOf(visit, productCode, text)));
+            }
         }
         return lines;
     }

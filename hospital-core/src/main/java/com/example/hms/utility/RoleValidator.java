@@ -286,6 +286,15 @@ public class RoleValidator {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
     }
 
+    /**
+     * Billing-money plan PR 3 (owner decision D-2, plan section 3.8): who may override a tariff price on a draft line,
+     * with a reason - a billing specialist (the cashier) or a hospital admin assignment AT that hospital. Never the
+     * platform super-admin on their own, never the accountant (who sets prices, D-1).
+     */
+    public boolean canOverrideTariff(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE);
+    }
+
     /** Billing-money plan PR 2 (plan section 3.8): who reads a hospital's price list there. */
     public boolean canReadPriceList(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,
