@@ -1069,8 +1069,7 @@ public class GlobalExceptionHandler {
 
     /** The request path for a log line, with line breaks removed so a crafted URI cannot forge a log entry. */
     private static String logPath(WebRequest request) {
-        String description = request.getDescription(false);
-        return description == null ? null : description.replaceAll("[\r\n\t]", "_");
+        return String.valueOf(request.getDescription(false)).replaceAll("[\r\n\t]", "_");
     }
 
     private static boolean isSuperAdminWrite(WebRequest req) {
