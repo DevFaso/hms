@@ -132,6 +132,9 @@ class HospitalRepositoryCallerCoverageTest {
     private static final Map<String, String> RECORDED = Map.ofEntries(
         entry("AppointmentServiceImpl#findAllById",
             "names the hospitals of appointments already read under the caller's scope: a label lookup, not a list of tenants"),
+        // QA D2071: same shape as the two label lookups around it.
+        entry("PriceListService#findAllById",
+            "names the hospitals of price-list rows already read in the verified super-admin's global view: a label lookup, not a list of tenants"),
         entry("PatientPortalServiceImpl#findAllById",
             "names the hospitals on the patient's own primary-care entries: a label lookup, not a list of tenants"),
         entry("HospitalLifecycleStatusServiceImpl#findIdsByLifecycleStateIn",

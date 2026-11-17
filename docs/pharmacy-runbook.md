@@ -24,6 +24,8 @@
    - Si rupture partielle → dispenser ce qui est disponible, router le reste via `/pharmacy/stock-routing`.
    - Si rupture totale → trois options : partenaire (Tier 2), impression patient (Tier 3), back-order.
 3. `/pharmacy/checkout` — encaisser (espèces ou mobile money), imprimer le reçu FR.
+   - **Mobile money = saisie manuelle.** e-Keneya n’est relié à aucun opérateur : choisir l’opérateur (Orange Money, Moov Money ou autre opérateur) et taper la référence de la transaction lue sur le téléphone du patient. Vérifier ensuite la référence sur le relevé marchand de l’opérateur. La clôture de caisse totalise Orange Money et Moov Money à part ; une ancienne ligne sans opérateur s’affiche « Opérateur non précisé ».
+   - **Jamais de données de carte.** Ne saisir ni numéro de carte, ni cryptogramme, ni code PIN dans la référence ou les notes : un numéro de carte (13 à 19 chiffres valides) est refusé.
 
 ### 2.2 Soir — responsable pharmacie
 1. `/pharmacy/inventory` — revoir alertes de réapprovisionnement.

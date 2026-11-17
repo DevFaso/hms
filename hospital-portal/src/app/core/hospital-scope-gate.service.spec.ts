@@ -15,6 +15,17 @@ import { RoleContextService } from './role-context.service';
 @Component({ standalone: true, changeDetection: ChangeDetectionStrategy.Eager, template: '' })
 class BlankComponent {}
 
+const HOSPITAL_A = '11111111-1111-4111-8111-111111111111';
+const HOSPITAL_B = '22222222-2222-4222-8222-222222222222';
+
+/** Lets a navigation the gate started from its NavigationEnd handler finish. */
+async function settle(router: Router): Promise<void> {
+  for (let i = 0; i < 5 && router.getCurrentNavigation(); i++) {
+    await new Promise((resolve) => setTimeout(resolve));
+  }
+  await new Promise((resolve) => setTimeout(resolve));
+}
+
 describe('HospitalScopeGateService', () => {
   let router: Router;
   let roleContext: RoleContextService;
@@ -138,9 +149,73 @@ describe('HospitalScopeGateService', () => {
 
   it('pins the super-admin from ?hospitalId= so a shared link opens scoped', async () => {
     asSuperAdminInGlobalView();
-    await router.navigateByUrl('/gated?hospitalId=h2');
-    expect(roleContext.effectiveHospitalIdForRequest()).toBe('h2');
+    await router.navigateByUrl(`/gated?hospitalId=${HOSPITAL_B}`);
+    expect(roleContext.effectiveHospitalIdForRequest()).toBe(HOSPITAL_B);
     expect(gate.blocked()).toBeFalse();
+  });
+
+  describe('QA D2121: the URL, the scope and the view agree after a reload or deep link', () => {
+    it('a super-admin reload keeps the URL hospital when the session bootstrap answers late', async () => {
+      // app.component on a hard refresh: token roles, stored profile, defaults.
+      asSuperAdminInGlobalView();
+      await router.navigateByUrl(`/gated?hospitalId=${HOSPITAL_B}`);
+      // The GET /auth/session/bootstrap reply lands after the first navigation.
+      roleContext.markSuperAdminGlobalDefaults();
+      expect(roleContext.globalView()).toBeFalse();
+      expect(roleContext.effectiveHospitalIdForRequest()).toBe(HOSPITAL_B);
+      expect(gate.blocked()).toBeFalse();
+      expect(gate.showNetworkDirectory()).toBeFalse();
+      expect(router.url).toBe(`/gated?hospitalId=${HOSPITAL_B}`);
+    });
+
+    it('moving between scoped links in one tab follows each link', async () => {
+      asSuperAdminInGlobalView();
+      await router.navigateByUrl(`/gated?hospitalId=${HOSPITAL_A}`);
+      await router.navigateByUrl(`/parent/child?hospitalId=${HOSPITAL_B}`);
+      roleContext.markSuperAdminGlobalDefaults();
+      expect(roleContext.effectiveHospitalIdForRequest()).toBe(HOSPITAL_B);
+      expect(gate.showNetworkDirectory()).toBeFalse();
+    });
+
+    it('a super-admin link with a malformed hospital id is dropped and the directory stays', async () => {
+      asSuperAdminInGlobalView();
+      await router.navigateByUrl('/gated?hospitalId=not-a-hospital&filter=x');
+      await settle(router);
+      expect(router.url).toBe('/gated?filter=x');
+      expect(roleContext.globalView()).toBeTrue();
+      expect(roleContext.effectiveHospitalIdForRequest()).toBeNull();
+      expect(gate.showNetworkDirectory()).toBeTrue();
+    });
+
+    it('a hospital-scoped account keeps a link naming its own hospital', async () => {
+      roleContext.setRoles(['ROLE_HOSPITAL_ADMIN']);
+      roleContext.activeHospitalId = HOSPITAL_A;
+      await router.navigateByUrl(`/gated?hospitalId=${HOSPITAL_A}`);
+      await settle(router);
+      expect(router.url).toBe(`/gated?hospitalId=${HOSPITAL_A}`);
+      expect(roleContext.effectiveHospitalIdForRequest()).toBe(HOSPITAL_A);
+    });
+
+    for (const path of ['/gated', '/open']) {
+      it(`a hospital-scoped account never keeps another hospital in the URL (${path})`, async () => {
+        roleContext.setRoles(['ROLE_HOSPITAL_ADMIN']);
+        roleContext.setPermittedHospitalIds([HOSPITAL_A, HOSPITAL_B]);
+        roleContext.activeHospitalId = HOSPITAL_A;
+        const scope = spyOn(roleContext, 'scopeToHospital').and.callThrough();
+        await router.navigateByUrl(`${path}?hospitalId=${HOSPITAL_B}&tab=2`);
+        await settle(router);
+        expect(router.url).toBe(`${path}?tab=2`);
+        expect(scope).not.toHaveBeenCalled();
+        expect(roleContext.effectiveHospitalIdForRequest()).toBe(HOSPITAL_A);
+        expect(gate.blocked()).toBeFalse();
+      });
+    }
+
+    it('leaves the URL alone before anyone is signed in', async () => {
+      await router.navigateByUrl(`/open?hospitalId=${HOSPITAL_B}`);
+      await settle(router);
+      expect(router.url).toBe(`/open?hospitalId=${HOSPITAL_B}`);
+    });
   });
 
   it('keeps the current pick when the URL carries no hospital, so one pick serves every gated page', async () => {
@@ -236,7 +311,7 @@ describe('HospitalScopeGateService', () => {
         [GLOBAL_HOSPITAL_HISTORY_STATE]: true,
       }),
     );
-    await router.navigateByUrl('/gated?hospitalId=h2');
+    await router.navigateByUrl(`/gated?hospitalId=${HOSPITAL_B}`);
     expect(location.getState()).toEqual(
       jasmine.objectContaining({
         [GLOBAL_HOSPITAL_HISTORY_STATE]: false,

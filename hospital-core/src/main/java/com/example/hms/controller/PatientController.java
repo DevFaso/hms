@@ -130,7 +130,7 @@ public class PatientController {
      * with a reason, audited; never a hard delete).
      */
     private static final String ALLERGY_WRITE_ROLES =
-        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')";
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')";
 
     /**
      * QA D1224 (round 24): a diagnosis entered in error is removed (set
@@ -139,7 +139,7 @@ public class PatientController {
      * diagnosis stays the doctor's.
      */
     private static final String DIAGNOSIS_REMOVE_ROLES =
-        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')";
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')";
 
     /**
      * E9 #69 — allergies are readable by every clinical role. A radiologist
@@ -714,7 +714,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @PostMapping("/{id}/diagnoses")
-    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     public ResponseEntity<PatientProblemResponseDTO> createPatientDiagnosis(
         @PathVariable UUID id,
         @Valid @RequestBody PatientDiagnosisRequestDTO request,
@@ -740,7 +740,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @PutMapping("/{id}/diagnoses/{diagnosisId}")
-    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     public ResponseEntity<PatientProblemResponseDTO> updatePatientDiagnosis(
         @PathVariable UUID id,
         @PathVariable UUID diagnosisId,
@@ -845,7 +845,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @PostMapping("/{patientId}/chart-updates")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     public ResponseEntity<PatientChartUpdateResponseDTO> createPatientChartUpdate(
         @PathVariable UUID patientId,
         @Valid @RequestBody DoctorPatientChartUpdateRequestDTO request,

@@ -12,7 +12,13 @@ describe('CashClosingComponent (QA D1059)', () => {
     cashierName: 'Awa Billing',
     byMethod: [
       { source: 'BILLING', method: 'CASH', count: 2, amount: 4500 },
-      { source: 'PHARMACY', method: 'MOBILE_MONEY', count: 1, amount: 3600 },
+      {
+        source: 'PHARMACY',
+        method: 'MOBILE_MONEY',
+        operator: 'ORANGE_MONEY',
+        count: 1,
+        amount: 3600,
+      },
     ],
     entries: [
       { id: 'p1', source: 'BILLING', amount: 1500, status: 'CONFIRMED', method: 'CASH' },
@@ -51,6 +57,38 @@ describe('CashClosingComponent (QA D1059)', () => {
     expect(el.querySelectorAll('[data-testid="cash-closing-entries"] tbody tr').length).toBe(4);
     expect(el.querySelectorAll('[data-testid="cash-closing-entries"] tr.reversed').length).toBe(1);
     expect(el.querySelector('[data-testid="cash-closing-total"]')?.textContent).toContain('8');
+  });
+
+  it('billing plan PR 9: totals Orange Money and Moov Money apart, and names an older row "not stated"', () => {
+    const { el } = render({
+      ...closing,
+      byMethod: [
+        {
+          source: 'BILLING',
+          method: 'MOBILE_MONEY',
+          operator: 'ORANGE_MONEY',
+          count: 2,
+          amount: 3000,
+        },
+        {
+          source: 'BILLING',
+          method: 'MOBILE_MONEY',
+          operator: 'MOOV_MONEY',
+          count: 1,
+          amount: 500,
+        },
+        { source: 'BILLING', method: 'MOBILE_MONEY', operator: null, count: 1, amount: 700 },
+      ],
+    });
+    const operators = Array.from(
+      el.querySelectorAll('[data-testid="cash-closing-operator"]'),
+      (n) => n.textContent?.trim(),
+    );
+    expect(operators).toEqual([
+      '— MOBILE_MONEY.OPERATOR.ORANGE_MONEY',
+      '— MOBILE_MONEY.OPERATOR.MOOV_MONEY',
+      '— MOBILE_MONEY.OPERATOR.NOT_STATED',
+    ]);
   });
 
   it('says so when nothing was received', () => {

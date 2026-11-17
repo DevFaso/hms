@@ -55,6 +55,21 @@ class RoleExpansionTest {
     }
 
     @Test
+    @DisplayName("QA D1973 / D2050: the login picker offers what the account holds, never an inherited role")
+    void theLoginPickerOffersHeldRolesOnly() {
+        assertThat(RoleExpansion.selectableAtLogin(List.of("ROLE_SUPER_ADMIN"))).containsExactly("ROLE_SUPER_ADMIN");
+        assertThat(RoleExpansion.selectableAtLogin(List.of("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN")))
+            .containsExactly("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN");
+        // The doctor equivalence still applies: a surgeon may sign in as a doctor.
+        assertThat(RoleExpansion.selectableAtLogin(List.of("ROLE_SUPER_ADMIN", "ROLE_SURGEON")))
+            .containsExactly("ROLE_SUPER_ADMIN", "ROLE_SURGEON", "ROLE_DOCTOR");
+        assertThat(RoleExpansion.selectableAtLogin(List.of("ROLE_DOCTOR", "ROLE_NURSE")))
+            .containsExactly("ROLE_DOCTOR", "ROLE_NURSE");
+        // Every request of a super-admin session is still widened.
+        assertThat(RoleExpansion.expand(List.of("ROLE_SUPER_ADMIN"))).contains("ROLE_DOCTOR");
+    }
+
+    @Test
     @DisplayName("blanks and duplicates are dropped, input order is kept")
     void normalises() {
         assertThat(RoleExpansion.expand(Arrays.asList(" ROLE_NURSE ", null, "", "ROLE_NURSE", "ROLE_MIDWIFE")))

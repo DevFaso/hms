@@ -156,3 +156,25 @@ export function gluedLifecycleNotes(html) {
   }
   return out;
 }
+
+/**
+ * QA D2033 (round 58): the medication history read « …Prescrite par Aminata
+ * OuédraogoSignée 14/11/2026 18:13 » — the « Signée » stamp, a plain
+ * `<span class="muted">` in its own `@if` block, ran into the prescriber span.
+ * The hint rule reads `-hint` / `-meta` / `-sub` classes; secondary text styled
+ * as muted (`muted`, `text-muted`, `vss-muted`, `cred-modal__muted` …) is the
+ * same kind of trailing note and is read like a hint.
+ */
+export const MUTED_OPEN =
+  /<(?:span|small|strong|em|b|time)\b[^>]*?\bclass="(?=[^"]*\b[\w-]*muted[\w-]*\b)[^"]*"/g;
+
+/** Every glued muted note of a template: `{ line, tag }`. */
+export function gluedMutedNotes(html) {
+  const out = [];
+  for (const m of html.matchAll(MUTED_OPEN)) {
+    if (gluedBefore(html, m.index)) {
+      out.push({ line: html.slice(0, m.index).split('\n').length, tag: m[0].slice(0, 80) });
+    }
+  }
+  return out;
+}

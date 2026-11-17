@@ -3610,6 +3610,20 @@
     </changeSet>
 
     <!-- =================================================================
+         V308 (billing-money plan PR 9, scorecard M5): mobile_money_operator
+         (ORANGE_MONEY, MOOV_MONEY, AUTRE) on billing.payment_transactions,
+         billing.pharmacy_payments and clinical.pharmacy_sales, so the cash
+         close totals Orange Money and Moov Money apart. NULL on older rows
+         and for every other method. Plain idempotent DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V308-mobile-money-operator" author="hms-team" runOnChange="false">
+        <sqlFile path="V308__mobile_money_operator.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V312 (go-live scorecard K1/K3) - the patient notification delivery
          ledger, clinical.patient_notification_deliveries: one row per
          (event, subject, channel) for appointment confirmations and

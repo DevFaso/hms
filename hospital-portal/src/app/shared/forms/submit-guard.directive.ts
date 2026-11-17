@@ -431,7 +431,28 @@ export function isBlank(el: Element | null): boolean {
   return false;
 }
 
-/** The visible label of field `id`, without its required-field star or the control's own text. */
+/**
+ * What a label holds besides the field's name. The control itself (a wrapping
+ * label would read a select's options) and the message refuseFields put after
+ * the field; QA D2123: a Material Symbols icon, whose text is its ligature
+ * name (« badge Membre du personnel, local_hospital Hôpital »), and anything
+ * hidden from assistive technology; QA D2125: the help text under the field
+ * (« Jours entre les visites Selon le protocole du programme… »).
+ */
+const LABEL_NOISE = [
+  'input',
+  'select',
+  'textarea',
+  '.invalid-field-msg',
+  '[class*="material-symbols"]',
+  '[class*="material-icons"]',
+  'mat-icon',
+  '[aria-hidden="true"]',
+  '[class*="hint"]',
+  '[class*="help"]',
+].join(', ');
+
+/** The visible label of field `id`, without its required-field star, icons, help text or the control's own text. */
 function labelOf(root: ParentNode, id: string): string {
   const el = root.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
   const label =
@@ -441,7 +462,7 @@ function labelOf(root: ParentNode, id: string): string {
     // A label that wraps its control would otherwise read the options of a
     // select, or the message refuseFields put after the field.
     const copy = label.cloneNode(true) as HTMLElement;
-    copy.querySelectorAll('input, select, textarea, .invalid-field-msg').forEach((n) => n.remove());
+    copy.querySelectorAll(LABEL_NOISE).forEach((n) => n.remove());
     text = copy.textContent ?? text;
   }
   // QA D1600 (round 44): a label that is a sentence ("… pour mes soins.") keeps

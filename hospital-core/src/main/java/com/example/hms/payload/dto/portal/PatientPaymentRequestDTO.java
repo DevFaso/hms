@@ -42,11 +42,21 @@ public class PatientPaymentRequestDTO {
     @Size(max = 120)
     @Schema(description = "Optional reference or transaction ID from external payment provider",
             example = "TXN-20260308-ABC123")
+    @com.example.hms.validation.NoCardNumber
     private String transactionReference;
 
     @Size(max = 1000)
     @Schema(description = "Optional notes about the payment", example = "Partial payment for consultation")
+    @com.example.hms.validation.NoCardNumber
     private String notes;
+
+    /**
+     * Billing plan PR 9: the Mobile Money operator. The portal asks for it; the
+     * mobile apps do not send it yet, so it stays optional here and a missing
+     * one is stored as "not stated".
+     */
+    @Schema(description = "Mobile Money operator, for a MOBILE_MONEY payment", example = "ORANGE_MONEY")
+    private com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator;
 
     /**
      * QA D433: a card, transfer or mobile-money payment is declared with the

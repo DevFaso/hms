@@ -61,6 +61,13 @@ import { joinReasons } from '../shared/required-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { serverFieldErrors } from '../shared/forms/server-field-errors';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
+import {
+  MOBILE_MONEY_OPERATORS,
+  MobileMoneyOperator,
+  containsCardNumber,
+  isMobileMoney,
+  mobileMoneyOperatorLabelKey,
+} from '../shared/mobile-money-operator';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 /** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
@@ -70,7 +77,7 @@ const EMAIL_TO_ID = 'email-to';
 const EMAIL_CC_ID = 'email-cc';
 const EMAIL_FIELD_IDS = [EMAIL_TO_ID, EMAIL_CC_ID];
 /** QA D1306 class: the payment form's fields a refusal marks or clears. */
-const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-reference'];
+const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-operator', 'payment-reference'];
 
 /** QA D1294: a blank or zero unit price says so (not "a payment amount"). */
 const LINE_PRICE_REQUIRED_KEY = 'BILLING.LINE_UNIT_PRICE_REQUIRED';
@@ -254,6 +261,11 @@ export class BillingComponent implements OnInit {
   /** QA D146: the method and the reference are recorded, not discarded. */
   paymentMethod = signal<StaffPaymentMethod>('CASH');
   paymentReference = signal('');
+  /** Billing plan PR 9: Orange Money, Moov Money or another operator, for a Mobile Money payment. */
+  paymentOperator = signal<MobileMoneyOperator | null>(null);
+  readonly mobileMoneyOperators = MOBILE_MONEY_OPERATORS;
+  readonly operatorLabelKey = mobileMoneyOperatorLabelKey;
+  readonly isMobileMoney = isMobileMoney;
   paymentSaving = signal(false);
   readonly paymentMethods: StaffPaymentMethod[] = STAFF_PAYMENT_METHODS;
 
@@ -1279,6 +1291,7 @@ export class BillingComponent implements OnInit {
     this.paymentPending.set(0);
     this.paymentMethod.set('CASH');
     this.paymentReference.set('');
+    this.paymentOperator.set(null);
     this.showPaymentModal.set(true);
     // QA D634: the modal prefilled the whole balance and said nothing of a
     // pending patient declaration, so the cashier took the money twice once
@@ -1325,7 +1338,13 @@ export class BillingComponent implements OnInit {
     if (amount === null) return; // refused above; narrows the type
     const reference = this.paymentReference().trim();
     this.paymentSaving.set(true);
-    const payment = { amount, method: this.paymentMethod(), reference: reference || undefined };
+    const operator = isMobileMoney(this.paymentMethod()) ? this.paymentOperator() : null;
+    const payment = {
+      amount,
+      method: this.paymentMethod(),
+      reference: reference || undefined,
+      ...(operator ? { mobileMoneyOperator: operator } : {}),
+    };
     this.billingService.recordPayment(inv.id, payment).subscribe({
       next: (updated) => {
         this.paymentSaving.set(false);
@@ -1366,10 +1385,22 @@ export class BillingComponent implements OnInit {
         message: this.translate.instant('BILLING.PAYMENT_EXCEEDS_BALANCE'),
       });
     }
+    if (isMobileMoney(this.paymentMethod()) && !this.paymentOperator()) {
+      refusals.push({
+        id: 'payment-operator',
+        message: this.translate.instant('MOBILE_MONEY.OPERATOR_REQUIRED'),
+      });
+    }
     if (this.paymentReferenceRequired() && !this.paymentReference().trim()) {
       refusals.push({
         id: 'payment-reference',
         message: this.translate.instant('BILLING.PAYMENT_REFERENCE_REQUIRED'),
+      });
+    } else if (containsCardNumber(this.paymentReference())) {
+      // Owner decision D-15: never a card number (the server refuses it too).
+      refusals.push({
+        id: 'payment-reference',
+        message: this.translate.instant('MOBILE_MONEY.CARD_NUMBER_REFUSED'),
       });
     }
     return refusals;

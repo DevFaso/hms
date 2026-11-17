@@ -26,7 +26,11 @@ describe('BirthPlanTabComponent', () => {
 
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
   const texts = (selector: string): string[] =>
-    Array.from(host().querySelectorAll(selector)).map((el) => el.textContent?.trim() ?? '');
+    Array.from(host().querySelectorAll(selector)).map((el) => {
+      const label = el.cloneNode(true) as HTMLElement;
+      label.querySelectorAll('.worklist-count').forEach((badge) => badge.remove());
+      return label.textContent?.trim() ?? '';
+    });
 
   function page(content: BirthPlanResponse[]): PageResponse<BirthPlanResponse> {
     return { content, totalElements: content.length, totalPages: 1, number: 0, size: 20 };
@@ -108,6 +112,32 @@ describe('BirthPlanTabComponent', () => {
     expect(host().querySelector('table')).toBeNull();
   });
 
+  it('counts server totals per hospital and patient without querying restricted nurse worklists', () => {
+    create(['ROLE_NURSE']);
+    service.search.and.callFake((params = {}) =>
+      of({
+        content: [],
+        totalElements: params.providerReviewed ? 12 : 47,
+        totalPages: 3,
+        number: 0,
+        size: 1,
+      }),
+    );
+    fixture.componentInstance.onFilterPatientPicked({ id: 'patient-selected' } as never);
+    fixture.detectChanges();
+    expect(
+      Array.from(host().querySelectorAll('.worklist-count')).map((el) => el.textContent?.trim()),
+    ).toEqual(['47', '12']);
+    expect(service.search).toHaveBeenCalledWith({
+      hospitalId: 'h-1',
+      patientId: 'patient-selected',
+      providerReviewed: true,
+      page: 0,
+      size: 1,
+    });
+    expect(service.pendingReview).not.toHaveBeenCalled();
+  });
+
   it('gives a nurse edit but not review, delete or the pending-review worklist', () => {
     create(['ROLE_NURSE']);
     const tabs = texts('.tab-btn');
@@ -139,11 +169,23 @@ describe('BirthPlanTabComponent', () => {
 
   it('reads the pending-review worklist from its own endpoint', () => {
     create(['ROLE_MIDWIFE']);
-    const pending = Array.from(host().querySelectorAll('.tab-btn')).find(
-      (b) => b.textContent?.trim() === 'À valider',
+    const pending = Array.from(host().querySelectorAll('.tab-btn')).find((b) =>
+      b.textContent?.trim().startsWith('À valider'),
     ) as HTMLElement;
     pending.click();
     fixture.detectChanges();
+    expect(service.pendingReview).toHaveBeenCalledWith('h-1', 0);
+  });
+
+  it('keeps the pending-review worklist readable by a super-admin without write controls', () => {
+    create(['ROLE_SUPER_ADMIN']);
+    expect(fixture.componentInstance.canSeePendingReview).toBeTrue();
+    expect(host().querySelector('.filter-bar .btn-primary')).toBeNull();
+    const titles = Array.from(host().querySelectorAll('.actions-cell button')).map((b) =>
+      b.getAttribute('title'),
+    );
+    expect(titles).toEqual(['COMMON.VIEW']);
+    fixture.componentInstance.setFilter('pending-review');
     expect(service.pendingReview).toHaveBeenCalledWith('h-1', 0);
   });
 

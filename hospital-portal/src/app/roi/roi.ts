@@ -161,9 +161,13 @@ export class RoiComponent implements OnInit, OnDestroy {
                   map((pages) => ({
                     content: pages
                       .flatMap((page) => page.content ?? [])
+                      // Review #1196/#1198 L2: PENDING first, then newest first, BEFORE
+                      // the cut — oldest-first let old decided requests push
+                      // pending ones past row 200, out of sight.
                       .sort(
                         (a, b) =>
-                          (a.requestedOn ?? '').localeCompare(b.requestedOn ?? '') ||
+                          Number(b.status === 'PENDING') - Number(a.status === 'PENDING') ||
+                          (b.requestedOn ?? '').localeCompare(a.requestedOn ?? '') ||
                           a.id.localeCompare(b.id),
                       )
                       .slice(0, RoiComponent.PAGE_SIZE),

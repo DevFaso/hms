@@ -36,14 +36,14 @@ public class DischargeApprovalController {
 
     @Operation(summary = "Create a discharge approval request (nurse)")
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE')")
     public ResponseEntity<DischargeApprovalResponseDTO> requestDischarge(@Valid @RequestBody DischargeApprovalRequestDTO request) {
         return ResponseEntity.ok(service.requestDischarge(request));
     }
 
     @Operation(summary = "Approve a discharge request (doctor)")
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     public ResponseEntity<DischargeApprovalResponseDTO> approve(
         @PathVariable UUID id,
         // QA D1372 (round 31): the approve path's own required field is named with the doctor ids.
@@ -54,7 +54,7 @@ public class DischargeApprovalController {
 
     @Operation(summary = "Reject a discharge request (doctor)")
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     public ResponseEntity<DischargeApprovalResponseDTO> reject(
         @PathVariable UUID id,
         // QA D1372 (round 31): the reject path's own required field is named with the doctor ids.
@@ -65,7 +65,7 @@ public class DischargeApprovalController {
 
     @Operation(summary = "Cancel a pending discharge request (nurse)")
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE')")
     public ResponseEntity<DischargeApprovalResponseDTO> cancel(
         @PathVariable UUID id,
         // QA D503 class: optional and only cross-checked; the caller is the session.

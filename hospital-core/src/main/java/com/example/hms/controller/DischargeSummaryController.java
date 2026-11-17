@@ -40,7 +40,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Create a discharge summary")
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     public ResponseEntity<DischargeSummaryResponseDTO> createDischargeSummary(
         @Valid @RequestBody DischargeSummaryRequestDTO request,
         Locale locale
@@ -51,7 +51,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Update a discharge summary (only if not finalized)")
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     public ResponseEntity<DischargeSummaryResponseDTO> updateDischargeSummary(
         @PathVariable UUID id,
         @Valid @RequestBody DischargeSummaryRequestDTO request,
@@ -63,7 +63,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Finalize a discharge summary (lock it with provider signature)")
     @PostMapping("/{id}/finalize")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     public ResponseEntity<DischargeSummaryResponseDTO> finalizeDischargeSummary(
         @PathVariable UUID id,
         @RequestParam String providerSignature,
@@ -156,7 +156,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Delete a discharge summary (only if not finalized)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     public ResponseEntity<Void> deleteDischargeSummary(
         @PathVariable UUID id,
         @RequestParam UUID deletedByProviderId

@@ -296,8 +296,33 @@ class PdfInvoiceServiceTest {
         String text = textOf(service.generateReceiptPdf(invoice, payment, Locale.ENGLISH));
 
         assertThat(text).contains("pdf.receipt.title", "pdf.invoice.hospital Hospital B",
-            "pdf.receipt.invoice INV-2042", "pdf.receipt.amount 1 000 F CFA", "pdf.receipt.reference MM-42",
-            "pdf.receipt.method pdf.payment.method.MOBILE_MONEY", "pdf.invoice.balanceDue 500 F CFA");
+            "pdf.receipt.invoice INV-2042", "pdf.receipt.amount 1 000 F CFA",
+            // Billing plan PR 9: an older Mobile Money row says its operator was not stated.
+            "pdf.receipt.methodWithReference pdf.payment.operator.NOT_STATED MM-42",
+            "pdf.invoice.balanceDue 500 F CFA");
+    }
+
+    /** Billing plan PR 9: the receipt reads "Orange Money, réf. …"; a cash receipt keeps its own lines. */
+    @Test
+    void receiptNamesTheMobileMoneyOperatorWithTheReference() throws Exception {
+        PaymentTransaction payment = PaymentTransaction.builder()
+            .amount(new BigDecimal("1000.00")).paymentDate(LocalDate.of(2026, 11, 17))
+            .paymentMethod(PaymentMethod.MOBILE_MONEY)
+            .mobileMoneyOperator(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY)
+            .referenceNumber("OM-778812").status(PaymentStatus.CONFIRMED).build();
+        payment.setId(UUID.randomUUID());
+
+        String text = textOf(service.generateReceiptPdf(invoice, payment, Locale.FRENCH));
+
+        assertThat(text).contains("pdf.receipt.methodWithReference pdf.payment.operator.ORANGE_MONEY OM-778812")
+            .doesNotContain("pdf.receipt.reference");
+
+        PaymentTransaction transfer = PaymentTransaction.builder()
+            .amount(new BigDecimal("1000.00")).paymentDate(LocalDate.of(2026, 11, 17))
+            .paymentMethod(PaymentMethod.BANK_TRANSFER).referenceNumber("VIR-1").status(PaymentStatus.CONFIRMED).build();
+        transfer.setId(UUID.randomUUID());
+        assertThat(textOf(service.generateReceiptPdf(invoice, transfer, Locale.FRENCH)))
+            .contains("pdf.receipt.method pdf.payment.method.BANK_TRANSFER", "pdf.receipt.reference VIR-1");
     }
 
     /** QA D228: a readable number and the balance as of that payment, not as of today. */

@@ -1,6 +1,6 @@
 import { RoleContextService } from '../../core/role-context.service';
 import { isFrontDeskOnly } from '../patient-chart/chart-access';
-import { refuseFields } from '../../shared/forms/invalid-fields';
+import { focusFirstInvalid, refuseFields } from '../../shared/forms/invalid-fields';
 import { refusedFieldReasons } from '../../shared/refusal-reason';
 import {
   earliestBirthDate,
@@ -17,6 +17,7 @@ import {
   inject,
   signal,
   ElementRef,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -105,6 +106,7 @@ export class PatientDemographicsEditComponent implements OnInit {
   readonly saving = signal(false);
   nationalUniqueIdChange: NationalUniqueIdChange = {};
   nationalUniqueIdReady = true;
+  private readonly iuEditor = viewChild(NationalUniqueIdEditorComponent);
   nationalUniqueIdError: string | null = null;
   onNationalUniqueIdUpdated(change: NationalUniqueIdChange): void {
     this.nationalUniqueIdChange = change;
@@ -231,7 +233,16 @@ export class PatientDemographicsEditComponent implements OnInit {
   }
 
   submit(): void {
-    if (!this.nationalUniqueIdReady) return;
+    // QA D2032: an unresolved identifier refused the save with no word.
+    if (!this.nationalUniqueIdReady) {
+      const refusal = this.iuEditor()?.refuseSubmit() ?? {
+        key: 'NATIONAL_IU.WAIT_CHECK',
+        fieldId: 'demoNationalUniqueId',
+      };
+      focusFirstInvalid(this.host.nativeElement, [refusal.fieldId]);
+      this.error.set(this.translate.instant(refusal.key));
+      return;
+    }
     // The date of birth is required too (NOT NULL on the record): a cleared
     // one would be sent as "" and kept by the server, while the dialog said
     // "saved" (review round 10).

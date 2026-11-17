@@ -192,6 +192,32 @@
             }
           </select>
         </div>
+        @if (copayIsMobileMoney()) {
+          <!-- Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close. -->
+          <div class="form-group">
+            <label for="copayOperator"
+              >{{ 'MOBILE_MONEY.OPERATOR_LABEL' | translate }}
+              <span class="required">*</span></label
+            >
+            <select
+              required
+              aria-required="true"
+              id="copayOperator"
+              name="copayOperator"
+              data-server-field="copayMobileMoneyOperator"
+              [ngModel]="copayOperator()"
+              (ngModelChange)="copayOperator.set($event)"
+            >
+              <option [ngValue]="null">{{ 'MOBILE_MONEY.OPERATOR_CHOOSE' | translate }}</option>
+              @for (o of mobileMoneyOperators; track o.value) {
+                <option [ngValue]="o.value">{{ o.labelKey | translate }}</option>
+              }
+            </select>
+            <p class="hint" data-testid="mobile-money-manual-entry">
+              {{ 'MOBILE_MONEY.MANUAL_ENTRY_NOTICE' | translate }}
+            </p>
+          </div>
+        }
         @if (copayNeedsReference()) {
           <div class="form-group">
             <label for="copayReference"
@@ -208,6 +234,7 @@
               (ngModelChange)="copayReference.set($event)"
               [placeholder]="'RECEPTION.PAYMENT_REFERENCE_PLACEHOLDER' | translate"
             />
+            <p class="hint">{{ 'MOBILE_MONEY.NO_CARD_DETAILS' | translate }}</p>
           </div>
         }
       }

@@ -64,7 +64,7 @@ public class RefillApprovalController {
     @Operation(summary = "Approve a refill request",
             description = "Marks the request APPROVED and notifies the patient. Provider notes are optional.")
     @PutMapping("/{refillId}/approve")
-    @PreAuthorize(PROVIDER_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')")
     public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> approve(
             Authentication auth,
             @PathVariable UUID refillId,
@@ -77,7 +77,7 @@ public class RefillApprovalController {
             description = "Marks the request DENIED and notifies the patient. Provider notes (the reason the "
                     + "patient is told) are required.")
     @PutMapping("/{refillId}/reject")
-    @PreAuthorize(PROVIDER_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')")
     public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> reject(
             Authentication auth,
             @PathVariable UUID refillId,
@@ -92,7 +92,7 @@ public class RefillApprovalController {
                     + "queue and can still be approved or denied later. Provider notes are required — "
                     + "they are relayed to the patient as the reason for the hold.")
     @PutMapping("/{refillId}/pause")
-    @PreAuthorize(PROVIDER_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')")
     public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> pause(
             Authentication auth,
             @PathVariable UUID refillId,

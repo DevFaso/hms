@@ -50,7 +50,7 @@ public class TreatmentConsentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize(ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RECEPTIONIST','NURSE','MIDWIFE','DOCTOR','HOSPITAL_ADMIN')")
     @Operation(summary = "Record a consent-to-treat",
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<TreatmentConsentResponseDTO> record(
@@ -82,7 +82,7 @@ public class TreatmentConsentController {
     }
 
     @PostMapping("/{consentId}/revoke")
-    @PreAuthorize(ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RECEPTIONIST','NURSE','MIDWIFE','DOCTOR','HOSPITAL_ADMIN')")
     @Operation(summary = "Revoke a consent (never delete)",
         description = "A revocation reason is mandatory.",
         security = @SecurityRequirement(name = "bearerAuth"))

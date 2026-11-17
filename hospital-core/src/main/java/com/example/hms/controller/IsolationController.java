@@ -49,6 +49,7 @@ public class IsolationController {
 
     @PostMapping("/precautions")
     @Operation(summary = "Put a patient on an isolation precaution")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     public ResponseEntity<IsolationPrecautionResponseDTO> startPrecaution(
         @Valid @RequestBody IsolationPrecautionRequestDTO request) {
         return new ResponseEntity<>(isolationService.startPrecaution(request), HttpStatus.CREATED);
@@ -56,6 +57,7 @@ public class IsolationController {
 
     @PostMapping("/precautions/{precautionId}/discontinue")
     @Operation(summary = "Lift a precaution, with the reason it was lifted")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     public ResponseEntity<IsolationPrecautionResponseDTO> discontinuePrecaution(
         @PathVariable UUID precautionId,
         @Valid @RequestBody DiscontinuePrecautionRequestDTO request) {

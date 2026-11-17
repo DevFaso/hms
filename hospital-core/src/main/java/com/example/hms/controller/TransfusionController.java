@@ -68,7 +68,8 @@ public class TransfusionController {
      * are roles only), so that clause never matched; the role list was always
      * the whole guard.
      */
-    private static final String PRESCRIBER = "hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE')";
+    private static final String PRESCRIBER =
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','MIDWIFE')";
 
     /** Who runs the bench: typing, receiving units, crossmatching, issuing. */
     private static final String LABORATORY =
@@ -88,7 +89,7 @@ public class TransfusionController {
     // ── Type and screen ─────────────────────────────────────────────────
 
     @PostMapping("/blood-groups")
-    @PreAuthorize(LABORATORY)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')")
     @Operation(summary = "Record a type and screen",
                description = "Supersedes the patient's previous current result. An ABO/Rh that "
                    + "disagrees with the standing group requires a correction reason.")
@@ -199,7 +200,7 @@ public class TransfusionController {
     // ── Crossmatch and issue ────────────────────────────────────────────
 
     @PostMapping("/requests/{requestId}/crossmatch")
-    @PreAuthorize(LABORATORY)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')")
     @Operation(summary = "Record a crossmatch verdict",
                description = "Refused when the pair is ABO/Rh incompatible, when the antibody screen "
                    + "has lapsed, or when the unit is expired or the wrong product.")
@@ -219,7 +220,7 @@ public class TransfusionController {
     }
 
     @PostMapping("/requests/{requestId}/issue/{unitId}")
-    @PreAuthorize(LABORATORY)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')")
     @Operation(summary = "Issue a unit from the lab to the ward",
                description = "Requires a compatible, unexpired crossmatch — except group O red cells on an "
                    + "EMERGENCY request, as the emergency release rules allow.")
@@ -238,7 +239,7 @@ public class TransfusionController {
     }
 
     @PostMapping("/requests/{requestId}/emergency-release")
-    @PreAuthorize(LABORATORY)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')")
     @Operation(summary = "Issue a red-cell unit on a documented emergency decision",
                description = "O positive on a documented decision, or serologically incompatible on a reason and "
                    + "a named doctor or laboratory director who is not the caller. An ABO exclusion stays refused.")
@@ -252,7 +253,7 @@ public class TransfusionController {
     // ── Bedside ─────────────────────────────────────────────────────────
 
     @PostMapping("/administrations")
-    @PreAuthorize(BEDSIDE)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','MIDWIFE','NURSE')")
     @Operation(summary = "Hang an issued unit",
                description = "Requires a second clinician who independently verified the unit against "
                    + "the patient. The two cannot be the same person.")
@@ -271,7 +272,7 @@ public class TransfusionController {
     }
 
     @PostMapping("/administrations/{administrationId}/complete")
-    @PreAuthorize(BEDSIDE)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','MIDWIFE','NURSE')")
     @Operation(summary = "Record that a unit finished")
     public ResponseEntity<TransfusionAdministrationResponseDTO> completeAdministration(
         @PathVariable UUID administrationId,
@@ -281,7 +282,7 @@ public class TransfusionController {
     }
 
     @PostMapping("/administrations/{administrationId}/stop")
-    @PreAuthorize(BEDSIDE)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','MIDWIFE','NURSE')")
     @Operation(summary = "Stop a transfusion in progress", description = "A reason is required.")
     public ResponseEntity<TransfusionAdministrationResponseDTO> stopAdministration(
         @PathVariable UUID administrationId,
@@ -300,7 +301,7 @@ public class TransfusionController {
     }
 
     @PostMapping("/administrations/{administrationId}/reaction")
-    @PreAuthorize(BEDSIDE)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','SURGEON','MIDWIFE','NURSE')")
     @Operation(summary = "Report a transfusion reaction",
                description = "Stops the transfusion and quarantines the unit — the first step of every "
                    + "reaction protocol, so the record cannot show the infusion still running.")

@@ -45,7 +45,7 @@ public class MedicalHistoryController {
     // ========== Social History Endpoints ==========
 
     @PostMapping("/social")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Create social history record", description = "Create a new social history record for a patient")
     public ResponseEntity<SocialHistoryResponseDTO> createSocialHistory(
             @Valid @RequestBody SocialHistoryRequestDTO requestDTO) {
@@ -80,7 +80,7 @@ public class MedicalHistoryController {
     }
 
     @PutMapping("/social/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Update social history", description = "Update an existing social history record")
     public ResponseEntity<SocialHistoryResponseDTO> updateSocialHistory(
             @PathVariable UUID id,
@@ -100,7 +100,7 @@ public class MedicalHistoryController {
     // ========== Family History Endpoints ==========
 
     @PostMapping("/family")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Create family history record", description = "Create a new family history record for a patient")
     public ResponseEntity<FamilyHistoryResponseDTO> createFamilyHistory(
             @Valid @RequestBody FamilyHistoryRequestDTO requestDTO) {
@@ -154,7 +154,7 @@ public class MedicalHistoryController {
     }
 
     @PutMapping("/family/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Update family history", description = "Update an existing family history record")
     public ResponseEntity<FamilyHistoryResponseDTO> updateFamilyHistory(
             @PathVariable UUID id,
@@ -174,7 +174,7 @@ public class MedicalHistoryController {
     // ========== Immunization Endpoints ==========
 
     @PostMapping("/immunizations")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')")
     @Operation(summary = "Create immunization record", description = "Create a new immunization record for a patient")
     public ResponseEntity<ImmunizationResponseDTO> createImmunization(
             @Valid @RequestBody ImmunizationRequestDTO requestDTO) {
@@ -242,7 +242,7 @@ public class MedicalHistoryController {
     }
 
     @PatchMapping("/immunizations/{id}/mark-reminder-sent")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_RECEPTIONIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','RECEPTIONIST')")
     @Operation(summary = "Mark reminder as sent", description = "Mark that a reminder has been sent for an immunization")
     public ResponseEntity<Void> markReminderSent(@PathVariable UUID id) {
         immunizationService.markReminderSent(id);
@@ -250,7 +250,7 @@ public class MedicalHistoryController {
     }
 
     @PutMapping("/immunizations/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')")
     @Operation(summary = "Update immunization", description = "Update an existing immunization record")
     public ResponseEntity<ImmunizationResponseDTO> updateImmunization(
             @PathVariable UUID id,

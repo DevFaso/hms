@@ -41,7 +41,7 @@ class PrescriptionControllerTest {
     void requestClarification_preAuthorize_isPharmacistOnly() throws Exception {
         List<String> roles = extractRolesFromMethod("requestClarification",
                 UUID.class, com.example.hms.payload.dto.PrescriptionClarificationRequestDTO.class, Locale.class);
-        assertThat(roles).containsExactlyInAnyOrder("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN");
+        assertThat(roles).containsExactlyInAnyOrder("PHARMACIST", "PHARMACY_VERIFIER"); // QA D2120: never a super-admin alone
     }
 
     @Test

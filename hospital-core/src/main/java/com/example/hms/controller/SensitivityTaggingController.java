@@ -63,7 +63,7 @@ public class SensitivityTaggingController {
         description = "A null category clears the override, after which the department default applies.")
     @WriteAudited(skip = true, reason = "service emits DATA_UPDATE after commit with from/to categories")
     @PutMapping("/encounters/{encounterId}/sensitivity")
-    @PreAuthorize(TAG_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','HOSPITAL_ADMIN')")
     public ResponseEntity<SensitivityTagResponseDTO> tagEncounter(
             @PathVariable UUID encounterId,
             @Valid @RequestBody SensitivityTagRequestDTO body,

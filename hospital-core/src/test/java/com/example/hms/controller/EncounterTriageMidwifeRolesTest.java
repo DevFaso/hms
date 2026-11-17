@@ -27,6 +27,6 @@ class EncounterTriageMidwifeRolesTest {
         assertThat(matches).as("exactly one %s on EncounterController", handler).hasSize(1);
         PreAuthorize preAuthorize = matches.get(0).getAnnotation(PreAuthorize.class);
         assertThat(preAuthorize).isNotNull();
-        assertThat(preAuthorize.value()).contains("'ROLE_MIDWIFE'");
+        assertThat(preAuthorize.value()).containsPattern("'(ROLE_)?MIDWIFE'");
     }
 }

@@ -39,6 +39,7 @@ public class PharmacySaleMapper {
                 .totalAmount(sale.getTotalAmount())
                 .currency(sale.getCurrency())
                 .referenceNumber(sale.getReferenceNumber())
+                .mobileMoneyOperator(sale.getMobileMoneyOperator() != null ? sale.getMobileMoneyOperator().name() : null)
                 .status(sale.getStatus() != null ? sale.getStatus().name() : null)
                 .notes(sale.getNotes())
                 .lines(lineDTOs)

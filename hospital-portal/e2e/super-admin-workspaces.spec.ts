@@ -159,6 +159,104 @@ test.describe('super-admin workspaces', () => {
       contentType: 'image/png',
     });
   });
+  test('maternity filter badges use hospital totals, retain zero and isolate unavailable worklists', async ({
+    page,
+  }, testInfo) => {
+    const reads: { url: URL; hospital: string | undefined }[] = [];
+    let highRiskTotal = 11;
+    await page.route('**/api/maternal-history/**', (route) => {
+      const url = new URL(route.request().url());
+      reads.push({ url, hospital: route.request().headers()['x-hospital-id'] });
+      const worklist = url.pathname.split('/').pop()!;
+      const totals: Record<string, number> = {
+        'high-risk': highRiskTotal,
+        'pending-review': 3,
+        'specialist-referral': 2,
+        'psychosocial-concerns': 0,
+        search: 25,
+      };
+      return route.fulfill({
+        json: {
+          content: [],
+          totalElements: totals[worklist],
+          totalPages: 2,
+          number: 0,
+          size: Number(url.searchParams.get('size')),
+        },
+      });
+    });
+    await page.route('**/api/birth-plans/**', (route) => {
+      const url = new URL(route.request().url());
+      reads.push({ url, hospital: route.request().headers()['x-hospital-id'] });
+      const total = url.pathname.endsWith('/pending-review')
+        ? 4
+        : url.searchParams.get('providerReviewed') === 'true'
+          ? 8
+          : 17;
+      return route.fulfill({
+        json: {
+          content: [],
+          totalElements: total,
+          totalPages: 2,
+          number: 0,
+          size: Number(url.searchParams.get('size')),
+        },
+      });
+    });
+    await page.route('**/api/ultrasound/**', (route) => {
+      const url = new URL(route.request().url());
+      reads.push({ url, hospital: route.request().headers()['x-hospital-id'] });
+      if (url.pathname.endsWith('/high-risk')) return route.fulfill({ status: 503, json: {} });
+      const count = url.pathname.endsWith('/pending')
+        ? 1
+        : url.pathname.endsWith('/follow-up-required')
+          ? 2
+          : url.pathname.endsWith('/anomalies')
+            ? 0
+            : 3;
+      return route.fulfill({
+        json: Array.from({ length: count }, (_, i) => ({
+          id: `${i}`,
+          patientId: HOME,
+          patientDisplayName: `Count patient ${i}`,
+          scanType: 'GROWTH',
+          status: 'ORDERED',
+        })),
+      });
+    });
+    await page.goto('/maternity');
+    await expect(page.getByTestId('hospital-network-workspace')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    expect(reads).toHaveLength(0);
+    await page.goto(`/maternity?hospitalId=${TARGET}`);
+    const screen = page.locator('app-maternity');
+    await expect(screen.locator('.worklist-count')).toHaveText(['11', '3', '2', '0', '25']);
+    highRiskTotal = 16;
+    await screen.getByRole('button', { name: 'Actualiser', exact: true }).click();
+    await expect(screen.locator('.worklist-count')).toHaveText(['16', '3', '2', '0', '25']);
+    await screen.getByRole('button', { name: 'Plans de naissance', exact: true }).click();
+    await expect(screen.locator('app-birth-plan-tab .worklist-count')).toHaveText(['17', '4', '8']);
+    await screen.getByRole('button', { name: 'Échographie', exact: true }).click();
+    await expect(screen.locator('app-ultrasound-tab .worklist-count')).toHaveText([
+      '3',
+      '1',
+      '—',
+      '2',
+      '0',
+    ]);
+    expect(reads.length).toBeGreaterThan(10);
+    expect(
+      reads.every(
+        ({ url, hospital }) =>
+          hospital === TARGET &&
+          (url.pathname.includes(TARGET) || url.searchParams.get('hospitalId') === TARGET),
+      ),
+    ).toBe(true);
+    await testInfo.attach('maternity-filter-counts', {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: 'image/png',
+    });
+  });
   test('maternity four-digit MRN search remains hospital-scoped and requires choosing a patient', async ({
     page,
   }, testInfo) => {

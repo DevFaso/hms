@@ -19,7 +19,11 @@ import {
   SuperAdminRecentItem,
   SuperAdminSummary,
 } from '../services/dashboard.service';
+import { IntegrationHealthService } from '../services/integration-health.service';
+import { IntegrationHealthSummary } from '../services/integration-health.model';
 import { ActionPanel, PlatformService, PlatformSummary } from '../services/platform.service';
+import { DashPipe } from '../shared/pipes/dash.pipe';
+import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { formatLabNumber } from '../lab/shared/lab-value.pipe';
@@ -75,6 +79,8 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
   selector: 'app-super-admin',
   standalone: true,
   imports: [
+    DashPipe,
+    KeyLabelPipe,
     DateTimePipe,
     ServerTimePipe,
     CommonModule,
@@ -96,6 +102,7 @@ export class SuperAdminComponent implements OnInit {
   }
 
   private readonly platform = inject(PlatformService);
+  private readonly integrationHealth = inject(IntegrationHealthService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly loading = signal(true);
@@ -104,6 +111,23 @@ export class SuperAdminComponent implements OnInit {
   readonly platformUnavailable = signal(false);
   readonly activityLoading = signal(false);
   readonly auditFailuresOnly = signal(false);
+  readonly showRoutineAudit = signal(false);
+  readonly activityUnavailable = signal(false);
+  readonly healthLoading = signal(true);
+  readonly healthUnavailable = signal(false);
+  readonly health = signal<IntegrationHealthSummary | null>(null);
+  readonly healthCards = computed(() => [
+    { key: 'FAILING', count: this.health()?.failingCount, icon: 'error' },
+    { key: 'DEGRADED', count: this.health()?.degradedCount, icon: 'warning' },
+    { key: 'NO_HISTORY', count: this.health()?.noHistoryCount, icon: 'help' },
+    { key: 'HEALTHY', count: this.health()?.healthyCount, icon: 'check_circle' },
+  ]);
+  readonly routineAuditCount = computed(
+    () =>
+      this.recentAudit().filter(
+        (event) => event.eventType === 'TOKEN_REFRESH' && event.status === 'SUCCESS',
+      ).length,
+  );
   private loadRequest = 0;
 
   private readonly summary = signal<SuperAdminSummary | null>(null);
@@ -346,7 +370,13 @@ export class SuperAdminComponent implements OnInit {
     () => this.summary()?.recentAuditEvents ?? [],
   );
   readonly visibleAudit = computed(() =>
-    this.recentAudit().filter((event) => !this.auditFailuresOnly() || event.status === 'FAILURE'),
+    this.recentAudit().filter(
+      (event) =>
+        (!this.auditFailuresOnly() || event.status === 'FAILURE') &&
+        (this.showRoutineAudit() ||
+          event.eventType !== 'TOKEN_REFRESH' ||
+          event.status !== 'SUCCESS'),
+    ),
   );
 
   readonly generatedAt = computed<string | null>(() => this.summary()?.generatedAt ?? null);
@@ -445,6 +475,35 @@ export class SuperAdminComponent implements OnInit {
     },
   ];
 
+  readonly quickLinkGroups = [
+    {
+      key: 'NETWORK',
+      routes: [
+        '/organizations',
+        '/hospitals',
+        '/super-admin/subscriptions',
+        '/super-admin/data-residency',
+      ],
+    },
+    { key: 'ACCESS', routes: ['/users', '/roles'] },
+    {
+      key: 'PLATFORM',
+      routes: [
+        '/super-admin/integrations',
+        '/super-admin/platform',
+        '/super-admin/feature-flags',
+        '/super-admin/analytics',
+      ],
+    },
+    {
+      key: 'SECURITY',
+      routes: ['/super-admin/audit-logs', '/super-admin/audit-search', '/super-admin/emergency'],
+    },
+  ].map((group) => ({
+    ...group,
+    links: group.routes.flatMap((route) => this.quickLinks.filter((link) => link.route === route)),
+  }));
+
   ngOnInit(): void {
     this.loadAll();
   }
@@ -477,6 +536,22 @@ export class SuperAdminComponent implements OnInit {
     this.summaryUnavailable.set(false);
     this.platformUnavailable.set(false);
     this.activityLoading.set(true);
+    this.activityUnavailable.set(false);
+    this.healthLoading.set(true);
+    this.healthUnavailable.set(false);
+    this.health.set(null);
+    this.integrationHealth
+      .getInventory()
+      .pipe(
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((health) => {
+        if (request !== this.loadRequest) return;
+        this.health.set(health);
+        this.healthLoading.set(false);
+        this.healthUnavailable.set(health === null);
+      });
     const summaryFailed = signal(false);
     const platformFailed = signal(false);
 
@@ -521,24 +596,26 @@ export class SuperAdminComponent implements OnInit {
         this.errored.set(summaryFailed() && platformFailed());
       });
 
-    // Aggregate recent-activity bundle — one call, 9 feeds. The service
-    // already swallows transport errors into an empty bundle so we
-    // don't need a per-tab catchError here.
+    // A failed aggregate feed is unavailable, not a successful empty response.
     this.dashboard
       .getRecentActivity(10)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe((bundle) => {
         if (request !== this.loadRequest) return;
         this.activityLoading.set(false);
+        this.activityUnavailable.set(bundle === null);
         this.recent.set({
-          consultations: bundle.consultations ?? [],
-          labOrders: bundle.labOrders ?? [],
-          labResults: bundle.labResults ?? [],
-          labTestDefinitions: bundle.labTestDefinitions ?? [],
-          admissions: bundle.admissions ?? [],
-          prescriptions: bundle.prescriptions ?? [],
-          treatmentPlans: bundle.treatmentPlans ?? [],
-          referrals: bundle.referrals ?? [],
+          consultations: bundle?.consultations ?? [],
+          labOrders: bundle?.labOrders ?? [],
+          labResults: bundle?.labResults ?? [],
+          labTestDefinitions: bundle?.labTestDefinitions ?? [],
+          admissions: bundle?.admissions ?? [],
+          prescriptions: bundle?.prescriptions ?? [],
+          treatmentPlans: bundle?.treatmentPlans ?? [],
+          referrals: bundle?.referrals ?? [],
           // bundle.encounters is fetched too; not surfaced as an activity
           // tab today (that's a separate frontend follow-up — the tab
           // map currently has 8 keys, encounters is on the cards row).
