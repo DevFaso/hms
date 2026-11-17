@@ -136,6 +136,9 @@
             (click)="setWorklist(w)"
           >
             {{ 'MATERNITY.WORKLIST_' + w.toUpperCase().replaceAll('-', '_') | translate }}
+            <span class="worklist-count" [title]="'MATERNITY.WORKLIST_COUNT_HELP' | translate">{{
+              boardCounts.values()[w] ?? '—'
+            }}</span>
           </button>
         }
       </div>
@@ -228,7 +231,7 @@
                     }}
                   </span>
                   @if (h.calculatedRiskScore !== null && h.calculatedRiskScore !== undefined) {
-                    <span class="muted score">{{ h.calculatedRiskScore }}</span>
+                    {{ ' ' }}<span class="muted score">{{ h.calculatedRiskScore }}</span>
                   }
                 </td>
                 <td class="flags-cell">
@@ -526,7 +529,7 @@
                   {{ r.slaDueAt ? (r.slaDueAt | serverTime | date: 'short') : '—' }}
                   @if (isOverdue(r)) {
                     <span class="risk-badge risk-high">{{
-                      'CARE_DASH.OVERDUE_MINUTES' | translate: { count: overdueMinutes(r) }
+                      'CARE_DASH.OVERDUE_BY' | translate: { duration: overdueMinutes(r) | elapsed }
                     }}</span>
                   }
                 </td>
@@ -1312,7 +1315,7 @@
               {{ r.slaDueAt | serverTime | dateTime }}
               @if (isOverdue(r)) {
                 <span class="risk-badge risk-high">{{
-                  'CARE_DASH.OVERDUE_MINUTES' | translate: { count: overdueMinutes(r) }
+                  'CARE_DASH.OVERDUE_BY' | translate: { duration: overdueMinutes(r) | elapsed }
                 }}</span>
               }
             </p>
@@ -1424,7 +1427,7 @@
                     <strong>{{
                       m.senderDisplayName || ('MATERNITY.UNKNOWN_SENDER' | translate)
                     }}</strong>
-                    <span class="muted">{{ m.sentAt | serverTime | date: 'short' }}</span>
+                    {{ ' ' }}<span class="muted">{{ m.sentAt | serverTime | date: 'short' }}</span>
                   </div>
                   <p>{{ m.body }}</p>
                 </div>

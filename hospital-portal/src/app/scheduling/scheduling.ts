@@ -248,6 +248,16 @@ export class SchedulingComponent implements OnInit {
     this.bulkModalOpen.set(false);
   }
 
+  /**
+   * QA D2124: the weekday chips read « lun. mar. … » in French, not the enum's
+   * « MON TUE ». The locale names the day, as the week header does (QA D348).
+   */
+  dayChipLabel(day: DayOfWeek, width: 'short' | 'long' = 'short'): string {
+    // 1 January 2024 was a Monday: allDays' order from there.
+    const date = new Date(2024, 0, 1 + this.allDays.indexOf(day));
+    return date.toLocaleDateString(currentLocale(), { weekday: width });
+  }
+
   isDaySelected(day: DayOfWeek): boolean {
     return this.bulk.daysOfWeek.includes(day);
   }
@@ -277,10 +287,8 @@ export class SchedulingComponent implements OnInit {
     if (!this.bulk.staffId || !this.bulk.hospitalId) {
       refuseFields(
         this.host.nativeElement,
-        [
-          !this.bulk.staffId ? 'bulk-staffSearch' : '',
-          !this.bulk.hospitalId ? 'bulk-hospitalId' : '',
-        ].filter(Boolean),
+        // QA D2128: the hospital follows the staff pick, so the staff field is the one to fix.
+        ['bulk-staffSearch'],
         Object.values(this.shiftFields),
         this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'),
       );
@@ -348,10 +356,8 @@ export class SchedulingComponent implements OnInit {
     if (!this.bulk.staffId || !this.bulk.hospitalId) {
       refuseFields(
         this.host.nativeElement,
-        [
-          !this.bulk.staffId ? 'bulk-staffSearch' : '',
-          !this.bulk.hospitalId ? 'bulk-hospitalId' : '',
-        ].filter(Boolean),
+        // QA D2128: the hospital follows the staff pick, so the staff field is the one to fix.
+        ['bulk-staffSearch'],
         Object.values(this.bulkFields),
         this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'),
       );

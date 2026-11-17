@@ -19,6 +19,7 @@ import { templatesIn } from './inline-templates.mjs';
 import {
   gluedBadges,
   gluedBefore,
+  gluedMutedNotes,
   gluedHints,
   gluedLifecycleNotes,
 } from './badge-spacing-scan.mjs';
@@ -165,4 +166,34 @@ test('QA D1288 guard: the scan sees the round-27 guarantor note', () => {
   assert.equal(gluedLifecycleNotes(pair).length, 1);
   // A reason that is not an inline element's text, or that starts a block, is not this class.
   assert.deepEqual(gluedLifecycleNotes('<p>{{ o.cancellationReason }}</p>'), []);
+});
+
+// QA D2033 (round 58): « …Aminata OuédraogoSignée 14/11/2026 18:13 ». The
+// first run found 29 glued muted notes in 14 templates; all were spaced with
+// {{ ' ' }}. Allowlist: none.
+test('QA D2033: no muted note runs into the text before it, in any template', () => {
+  const found = [];
+  for (const { file, text, lineOffset } of templatesIn(appDir)) {
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    for (const g of gluedMutedNotes(text))
+      found.push(`${rel}:${g.line + (lineOffset ?? 0)} ${g.tag}`);
+  }
+  assert.deepEqual(found, [], "separate it with {{ ' ' }}");
+});
+
+test('QA D2033 guard: the scan sees the signed stamp after the prescriber', () => {
+  const cell = `<td>{{ e.hospitalName }}
+      @if (e.prescriberName) {
+        <span class="muted">{{ 'MED_TIMELINE.PRESCRIBED_BY' | translate: { name: e.prescriberName } }}</span>
+      }
+      @if (e.signedAt) {
+        <span class="muted">{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}</span>
+      }
+    </td>`;
+  assert.equal(gluedMutedNotes(cell).length, 1);
+  const fixed = cell.replace(
+    '<span class="muted">{{ \'PRESCRIPTIONS',
+    "{{ ' ' }}<span class=\"muted\">{{ 'PRESCRIPTIONS",
+  );
+  assert.deepEqual(gluedMutedNotes(fixed), []);
 });

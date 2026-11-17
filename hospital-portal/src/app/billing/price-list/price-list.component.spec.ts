@@ -87,7 +87,11 @@ describe('PriceListComponent (billing-money plan PR 2)', () => {
     resetStoredLangForTests();
   });
 
-  function setup(roles: string[], superAdmin = false): HTMLElement {
+  function setup(
+    roles: string[],
+    superAdmin = false,
+    rows: PriceListItem[] = [CS_GEN],
+  ): HTMLElement {
     TestBed.configureTestingModule({
       imports: [PriceListComponent, TranslateModule.forRoot()],
       providers: [
@@ -111,7 +115,7 @@ describe('PriceListComponent (billing-money plan PR 2)', () => {
     fixture = TestBed.createComponent(PriceListComponent);
     document.body.appendChild(fixture.nativeElement);
     fixture.detectChanges();
-    http.expectOne((r) => r.method === 'GET' && r.url === BASE).flush([CS_GEN]);
+    http.expectOne((r) => r.method === 'GET' && r.url === BASE).flush(rows);
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
@@ -158,6 +162,26 @@ describe('PriceListComponent (billing-money plan PR 2)', () => {
     expect(row.textContent).toMatch(/2\s000/);
     expect(row.textContent).toMatch(/2\s500/);
     expect(row.textContent).toContain('Consultation par défaut');
+  });
+
+  // QA D2071: the super-admin's global view listed CS-GEN twice with no way to
+  // tell whose price was whose.
+  it('names the hospital of each row in the global view', () => {
+    const host = setup(['ROLE_SUPER_ADMIN'], true, [
+      { ...CS_GEN, hospitalName: 'Clinique A' },
+      { ...CS_GEN, id: 'item-2', hospitalId: 'hosp-2', hospitalName: 'Clinique B' },
+    ]);
+    expect(host.querySelector('thead')!.textContent).toContain('Établissement');
+    const cells = [...host.querySelectorAll('[data-testid="price-list-hospital"]')].map((c) =>
+      c.textContent?.trim(),
+    );
+    expect(cells).toEqual(['Clinique A', 'Clinique B']);
+  });
+
+  it('adds no hospital column when the list belongs to one hospital', () => {
+    const host = setup(['ROLE_BILLING_SPECIALIST']);
+    expect(host.querySelector('thead')!.textContent).not.toContain('Établissement');
+    expect(host.querySelector('[data-testid="price-list-hospital"]')).toBeNull();
   });
 
   it('opens the item with its price history: who, when, why and the status', () => {

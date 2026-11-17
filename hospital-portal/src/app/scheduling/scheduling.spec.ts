@@ -108,7 +108,7 @@ describe('SchedulingComponent', () => {
     fixture.detectChanges();
     expectEmptySubmitRefusal(fixture, {
       button: '[data-testid="single-shift-submit"]',
-      alsoMarked: ['bulk-staffSearch', 'bulk-hospitalId'],
+      alsoMarked: ['bulk-staffSearch'],
       sent: schedulingSpy.createShift,
     });
   });
@@ -171,7 +171,6 @@ describe('SchedulingComponent', () => {
     component.submitBulk();
     expectFieldsMarked(fixture, {
       'bulk-staffSearch': 'SCHEDULING.TOAST.IDS_REQUIRED',
-      'bulk-hospitalId': 'SCHEDULING.TOAST.IDS_REQUIRED',
     });
     component.bulk.staffId = 'st1';
     component.bulk.hospitalId = 'h1';
@@ -186,6 +185,18 @@ describe('SchedulingComponent', () => {
     component.submitBulk();
     expectFieldsMarked(fixture, { 'bulk-daysOfWeek': 'SCHEDULING.TOAST.DOW_REQUIRED' });
     expect(schedulingSpy.bulkScheduleShifts).not.toHaveBeenCalled();
+  });
+
+  it('never asks for a pasted hospital UUID: the hospital follows the staff pick (QA D2128)', () => {
+    fixture.detectChanges();
+    component.openBulkModal();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const hospital = el.querySelector('#bulk-hospitalId') as HTMLElement;
+    expect(hospital.tagName).toBe('DIV');
+    expect(hospital.textContent).toContain('SCHEDULING.HOSPITAL_FROM_STAFF');
+    expect(el.querySelector('input[placeholder*="UUID"]')).toBeNull();
+    expect(el.textContent).not.toContain('PASTE_HOSPITAL_UUID');
   });
 
   it('marks server field errors in the bulk form as well as the single shift form', () => {
@@ -592,6 +603,32 @@ describe('SchedulingComponent', () => {
         expect(labels[0]).toBe(monday);
         expect(labels.join(' ')).not.toMatch(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/);
       });
+
+      it(`names the bulk-planning weekday chips in ${lang} (QA D2124)`, () => {
+        localStorage.setItem('lang', lang);
+        resetStoredLangForTests();
+        const chips = component.allDays.map((d) => component.dayChipLabel(d));
+        expect(chips[0]).toBe(monday);
+        expect(chips.join(' ')).not.toMatch(/MON|TUE|WED|THU|FRI|SAT|SUN|Mon|Sun/);
+        expect(component.dayChipLabel('SUNDAY', 'long')).toBe(
+          lang === 'fr' ? 'dimanche' : 'domingo',
+        );
+      });
     }
+
+    it('the template names the chips through the locale, never the enum text (QA D2124)', () => {
+      localStorage.setItem('lang', 'fr');
+      resetStoredLangForTests();
+      fixture.detectChanges();
+      component.openBulkModal();
+      fixture.detectChanges();
+      const chips = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.dow-chip'),
+      );
+      expect(chips.length).toBe(7);
+      expect(chips.map((c) => c.textContent?.trim()).join(' ')).not.toMatch(/MON|TUE|SUN/);
+      expect(chips[0].textContent?.trim()).toBe('lun.');
+      expect(chips[0].getAttribute('aria-label')).toBe('lundi');
+    });
   });
 });

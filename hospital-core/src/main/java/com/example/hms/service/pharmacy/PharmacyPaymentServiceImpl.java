@@ -151,6 +151,9 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 
         validateCreateRequest(dto, hospitalId);
+        // Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close.
+        com.example.hms.enums.MobileMoneyOperator operator = com.example.hms.service.payment.MobileMoneyOperators
+                .require(dto.getPaymentMethod(), dto.getMobileMoneyOperator(), "mobileMoneyOperator");
 
         Dispense dispense = loadDispenseForPayment(dto, hospitalId);
 
@@ -195,6 +198,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
         PharmacyPayment entity = paymentMapper.toEntity(dto, dispense, patient, hospital, receivedBy);
         entity.setReferenceNumber(providerReference);
+        entity.setMobileMoneyOperator(operator);
         entity.setCurrency(currency);
         entity.setReceiptNumber(allocateReceiptNumber(hospital));
         PharmacyPayment saved = paymentRepository.save(entity);

@@ -31,9 +31,20 @@ import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-
 import { joinReasons } from '../../shared/required-fields';
 import { FieldRefusal, refuseFields } from '../../shared/forms/invalid-fields';
 import { CFA_WHOLE_AMOUNT_KEY } from '../../shared/cfa-amount';
+import {
+  MOBILE_MONEY_OPERATORS,
+  MobileMoneyOperator,
+  containsCardNumber,
+  isMobileMoney,
+} from '../../shared/mobile-money-operator';
 
 /** The fields the check-in may refuse (QA D1306, D1320). */
-const REFUSABLE_IDS = ['checkinIdentityConfirmed', 'copayAmount', 'copayReference'];
+const REFUSABLE_IDS = [
+  'checkinIdentityConfirmed',
+  'copayAmount',
+  'copayOperator',
+  'copayReference',
+];
 
 /**
  * QA D1320 (round 29): what is wrong with a typed copay — nothing when blank
@@ -78,6 +89,10 @@ export class CheckinDialogComponent {
   /** QA D975: the copay used to be recorded as cash, always, with no reference. */
   copayMethod = signal<string>('CASH');
   copayReference = signal('');
+  /** Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close. */
+  copayOperator = signal<MobileMoneyOperator | null>(null);
+  readonly mobileMoneyOperators = MOBILE_MONEY_OPERATORS;
+  readonly copayIsMobileMoney = computed(() => isMobileMoney(this.copayMethod()));
   readonly methods = DESK_PAYMENT_METHODS;
   readonly copayNeedsReference = computed(() => deskMethodNeedsReference(this.copayMethod()));
   identityConfirmed = signal(false);
@@ -119,12 +134,25 @@ export class CheckinDialogComponent {
     }
     const amountKey = copayAmountMessageKey(this.copayAmount());
     if (amountKey) out.push({ id: 'copayAmount', message: this.translate.instant(amountKey) });
+    const copayTaken = (this.copayAmount() ?? 0) > 0;
+    if (copayTaken && this.copayIsMobileMoney() && !this.copayOperator()) {
+      out.push({
+        id: 'copayOperator',
+        message: this.translate.instant('MOBILE_MONEY.OPERATOR_REQUIRED'),
+      });
+    }
     const referenceMissing =
-      (this.copayAmount() ?? 0) > 0 && this.copayNeedsReference() && !this.copayReference().trim();
+      copayTaken && this.copayNeedsReference() && !this.copayReference().trim();
     if (referenceMissing) {
       out.push({
         id: 'copayReference',
         message: this.translate.instant('SUBMIT_GUARD.PAYMENT_REFERENCE'),
+      });
+    } else if (copayTaken && containsCardNumber(this.copayReference())) {
+      // Owner decision D-15: never a card number (the server refuses it too).
+      out.push({
+        id: 'copayReference',
+        message: this.translate.instant('MOBILE_MONEY.CARD_NUMBER_REFUSED'),
       });
     }
     return out;
@@ -156,6 +184,9 @@ export class CheckinDialogComponent {
         ? {
             copayMethod: this.copayMethod(),
             copayReference: this.copayReference().trim() || null,
+            ...(this.copayIsMobileMoney()
+              ? { copayMobileMoneyOperator: this.copayOperator() }
+              : {}),
           }
         : {}),
       identityConfirmed: this.identityConfirmed(),

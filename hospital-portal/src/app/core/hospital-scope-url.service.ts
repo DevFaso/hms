@@ -1,5 +1,5 @@
 import { Location } from '@angular/common';
-import { GLOBAL_HOSPITAL_HISTORY_STATE } from './hospital-scope-gate.service';
+import { GLOBAL_HOSPITAL_HISTORY_STATE, isHospitalIdShape } from './hospital-scope-gate.service';
 import { Injectable, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -46,7 +46,7 @@ export class HospitalScopeUrlService {
       return null;
     }
     const queryHospitalId = route.snapshot.queryParamMap.get('hospitalId');
-    if (queryHospitalId) {
+    if (isHospitalIdShape(queryHospitalId)) {
       this.roleContext.scopeToHospital(queryHospitalId);
       return queryHospitalId;
     }

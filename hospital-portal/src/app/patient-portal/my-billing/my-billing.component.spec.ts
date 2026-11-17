@@ -251,6 +251,10 @@ describe('MyBillingComponent', () => {
     component.payAmount = 50;
     component.payMethod = 'MOBILE_MONEY';
     component.payReference = 'MM-123';
+    // Billing plan PR 9: the portal asks the Mobile Money operator.
+    (host().querySelector('.pay-submit-btn') as HTMLElement).click();
+    expect(portal.payInvoice).not.toHaveBeenCalled();
+    component.payOperator = 'MOOV_MONEY';
     (host().querySelector('.pay-submit-btn') as HTMLElement).click();
     fixture.detectChanges();
 
@@ -258,6 +262,7 @@ describe('MyBillingComponent', () => {
       amount: 50,
       paymentMethod: 'MOBILE_MONEY',
       transactionReference: 'MM-123',
+      mobileMoneyOperator: 'MOOV_MONEY',
     });
     expect(text('.pay-success')).toBe(
       `Paiement de ${formatCfa(50)} déclaré, en attente de confirmation`,

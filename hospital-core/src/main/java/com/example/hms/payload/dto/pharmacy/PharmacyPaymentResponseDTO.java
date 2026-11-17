@@ -33,6 +33,8 @@ public class PharmacyPaymentResponseDTO {
     private BigDecimal amount;
     private String currency;
     private String referenceNumber;
+    /** Billing plan PR 9: ORANGE_MONEY / MOOV_MONEY / AUTRE; null when not stated or not Mobile Money. */
+    private String mobileMoneyOperator;
     private UUID receivedBy;
     private String notes;
     /** QA D404: POSTED, or VOIDED when the dispense was cancelled. */

@@ -1,3 +1,5 @@
+import { map } from 'rxjs';
+import { worklistCounts } from './worklist-counts';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -325,6 +327,7 @@ export class UltrasoundTabComponent implements OnInit {
   readonly canReviewReport = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
 
   worklist = signal<UltrasoundWorklist>('all');
+  readonly counts = worklistCounts<UltrasoundWorklist>();
   readonly worklists: UltrasoundWorklist[] = [
     'all',
     'pending',
@@ -441,12 +444,28 @@ export class UltrasoundTabComponent implements OnInit {
 
   setWorklist(w: UltrasoundWorklist): void {
     this.worklist.set(w);
-    this.load();
+    this.load(false);
   }
 
-  load(): void {
+  private loadCounts(hospitalId: string): void {
+    this.counts.load({
+      all: () =>
+        this.ultrasoundService.ordersByHospital(hospitalId).pipe(map((rows) => rows.length)),
+      pending: () =>
+        this.ultrasoundService.pendingOrders(hospitalId).pipe(map((rows) => rows.length)),
+      'high-risk': () =>
+        this.ultrasoundService.highRiskOrders(hospitalId).pipe(map((rows) => rows.length)),
+      'follow-up': () =>
+        this.ultrasoundService.followUpRequired(hospitalId).pipe(map((rows) => rows.length)),
+      anomalies: () =>
+        this.ultrasoundService.anomalies(hospitalId).pipe(map((rows) => rows.length)),
+    });
+  }
+
+  load(refreshCounts = true): void {
     if (!this.hospitalId) return;
     const hospitalId = this.hospitalId;
+    if (refreshCounts) this.loadCounts(hospitalId);
     this.loading.set(true);
     if (this.isReportList()) {
       const source =

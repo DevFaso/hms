@@ -329,6 +329,20 @@
     "BABY_OUTCOMES": "Resultado de cada bebé",
     "FETAL_DEATH_EVENT_RECORDED": "Mortinato registrado como evento de muerte fetal (sin historia clínica): se cuenta en el registro de mortalidad."
   },
+  "MOBILE_MONEY": {
+    "OPERATOR_LABEL": "Operador",
+    "OPERATOR_CHOOSE": "Elija el operador",
+    "OPERATOR_REQUIRED": "Elija el operador del pago por dinero móvil (Orange Money, Moov Money u otro operador).",
+    "OPERATOR": {
+      "ORANGE_MONEY": "Orange Money",
+      "MOOV_MONEY": "Moov Money",
+      "AUTRE": "Otro operador",
+      "NOT_STATED": "Operador no indicado"
+    },
+    "MANUAL_ENTRY_NOTICE": "Pago introducido manualmente: compruebe la referencia en el extracto del operador.",
+    "NO_CARD_DETAILS": "Nunca introduzca un número de tarjeta, CVV ni PIN: solo la referencia de la transacción.",
+    "CARD_NUMBER_REFUSED": "Este campo parece contener un número de tarjeta. e-Keneya nunca guarda números de tarjeta: introduzca solo la referencia de la transacción."
+  },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Volver a organizaciones",
     "LOADING": "Cargando ciclo de vida…",
@@ -1727,6 +1741,12 @@
       "LOCK_SCREEN_UNLOCK_FAILED": "Error al desbloquear la pantalla: contraseña incorrecta",
       "LOCK_SCREEN_LOCKED_NOW": "Demasiadas contraseñas incorrectas en la pantalla bloqueada: cuenta bloqueada, sesión cerrada",
       "LOCK_SCREEN_REFUSED_LOCKED": "Desbloqueo de pantalla rechazado: la cuenta está bloqueada, sesión cerrada",
+      "PASSWORD_CHANGE_WRONG_CURRENT": "Cambio de contraseña rechazado: contraseña actual incorrecta",
+      "PASSWORD_CHANGE_LOCKED_NOW": "Demasiadas contraseñas actuales incorrectas al cambiar la contraseña: cuenta bloqueada",
+      "PASSWORD_CHANGE_REFUSED_LOCKED": "Cambio de contraseña rechazado: la cuenta está bloqueada",
+      "ACCOUNT_SETUP_WRONG_CURRENT": "Configuración de la cuenta rechazada: contraseña actual incorrecta",
+      "ACCOUNT_SETUP_LOCKED_NOW": "Demasiadas contraseñas actuales incorrectas en la configuración de la cuenta: cuenta bloqueada",
+      "ACCOUNT_SETUP_REFUSED_LOCKED": "Configuración de la cuenta rechazada: la cuenta está bloqueada",
       "ACCESS_TOKEN_REVOKED_LOCKOUT": "Token de acceso revocado por el bloqueo desde la pantalla bloqueada",
       "REFRESH_TOKEN_REVOKED_LOCKOUT": "Token de actualización revocado por el bloqueo desde la pantalla bloqueada",
       "TOKEN_PAIR_ROTATED": "Tokens de sesión renovados (jti de renovación anterior={{jti}})",
@@ -2493,6 +2513,7 @@
       "LOAD_FAILED": "No se pudo cargar la lista de precios.",
       "EMPTY": "Ningún artículo en la lista.",
       "CODE": "Código",
+      "HOSPITAL": "Hospital",
       "CODE_HINT": "El código de tarifa del hospital (p. ej. CS-GEN). No cambia una vez creado.",
       "LABEL": "Descripción",
       "LINK": "Vínculo",
@@ -3156,6 +3177,7 @@
     "VISIT": "Visita",
     "WAITING_LONG": "Esperando > 30m",
     "WAIT_MINUTES": "Espera {{minutes}} min",
+    "WAIT_ELAPSED": "Espera {{duration}}",
     "WARD": "Sala",
     "WARD_OCCUPANCY": "Ocupación por sala",
     "WELCOME_DESC": "Su panel se irá completando a medida que use el sistema.",
@@ -5341,6 +5363,7 @@
     "THIRD_PARTY_LOADED": "Solicitudes de terceros cargadas",
     "REQUEST_DIRECTORY": "Seguimiento de solicitudes",
     "QUEUE_HELP": "Una cola por hospital, de la solicitud más antigua a la más reciente.",
+    "ALL_ORDER_HELP": "Todos los estados: primero las solicitudes pendientes y luego las más recientes; se muestran como máximo 200 filas.",
     "STATUS_FILTER": "Filtrar solicitudes por estado",
     "SEARCH": "Buscar paciente, solicitante o motivo",
     "ALL_REQUESTERS": "Todos los tipos de solicitantes",
@@ -8597,6 +8620,7 @@
     "CLOSE_ENTRY_REASON": "Motivo del cierre",
     "CLOSE_ENTRY_CONFIRM": "Cerrar la entrada",
     "WAIT_DURATION": "Espera: {{minutes}} min",
+    "WAIT_ELAPSED": "Espera: {{duration}}",
     "PAYMENT_EXCEEDS_WITH_PENDING": "El paciente declaró {{pending}} sobre este saldo, pendiente de confirmación: ingrese como máximo {{max}}.",
     "COPAY_AMOUNT_NEGATIVE": "El copago no puede ser negativo.",
     "WINDOW_FROM": "Desde el {{date}}",
@@ -8955,6 +8979,7 @@
     "OPTIONAL": "Opcional",
     "OVERTIME": "Horas extra",
     "PASTE_HOSPITAL_UUID": "Pegar UUID del hospital",
+    "HOSPITAL_FROM_STAFF": "Lo fija el miembro del personal elegido",
     "PENDING_LEAVES": "Permisos pendientes",
     "PREVIOUS": "Anterior",
     "PROVIDER_AVAILABILITY": "Disponibilidad del profesional",
@@ -11125,6 +11150,7 @@
     "SOCIAL_EMPTY": "Registre al menos un elemento (hábitos, ocupación, situación de vida o notas) antes de guardar una nueva versión."
   },
   "MATERNITY": {
+    "WORKLIST_COUNT_HELP": "Cantidad de la lista del hospital y del paciente seleccionados. — indica que está cargando o no está disponible. La búsqueda de texto no cambia estas cantidades.",
     "NETWORK_HELP": "Seleccione un hospital para antecedentes, derivaciones y listas de atención materna.",
     "FOREIGN_RECORDED_AT": "Registrado en {{hospital}}, solo lectura aquí",
     "GA": "Edad gestacional",
@@ -13072,7 +13098,7 @@
     "NO_EXPIRY": "No caduca"
   },
   "REGISTRIES": {
-    "ALL_MERGED_HINT": "Todos los estados combina la primera página cargada de cada estado, ordenada aquí por días de retraso y nombre; se muestran como máximo 200 filas.",
+    "ALL_MERGED_HINT": "Todos los estados combina la primera página cargada de cada estado, ordenada aquí por próxima visita esperada y fecha de inscripción; se muestran como máximo 200 filas.",
     "TITLE": "Registros de enfermedades",
     "SUBTITLE": "Quién está inscrito en cada programa de atención y quién tiene una visita atrasada.",
     "ENROLL": "Inscribir paciente",
@@ -13699,6 +13725,7 @@
     "UNASSIGNED": "Sin asignar",
     "RECEIVING_TEAM": "Profesional destinatario",
     "OVERDUE_MINUTES": "Retraso de {{count}} min",
+    "OVERDUE_BY": "Retraso de {{duration}}",
     "MRN_HINT": "Expediente: 4 dígitos pueden encontrar pacientes; confirme su identidad. Identificador nacional exacto: 12 dígitos.",
     "SEARCH_PATIENT_MRN": "Nombre o expediente (incluidos 4 dígitos)",
     "SEARCH_PATIENT_RECORD": "Buscar paciente o expediente",
@@ -13996,6 +14023,10 @@
     "EXISTS_ELSEWHERE": "Este identificador puede estar registrado en otro centro. Consúltelo con el paciente.",
     "SAVE_ANYWAY": "Guardar de todos modos",
     "REASON": "Motivo para guardar un identificador duplicado",
-    "SEARCH_EXACT": "Buscar por identificador único exacto (12 dígitos)"
+    "SEARCH_EXACT": "Buscar por identificador único exacto (12 dígitos)",
+    "CONFIRM_DUPLICATE": "Este identificador ya está en uso. Marque « Guardar de todos modos » e indique un motivo, o corrija el identificador.",
+    "REASON_REQUIRED": "Indique el motivo para guardar un identificador duplicado.",
+    "WAIT_CHECK": "El identificador aún se está verificando. Inténtelo de nuevo en un momento.",
+    "EXISTS_HERE_NUMBERED": "Registro existente {{index}} de {{count}} con este identificador: abrirlo."
   }
 }

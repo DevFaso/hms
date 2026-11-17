@@ -14,8 +14,13 @@ describe('PaymentPendingPanelComponent', () => {
   let fixture: ComponentFixture<PaymentPendingPanelComponent>;
 
   const mockReceptionService = {
-    recordPayment: (_invoiceId: string, _amount: number, _method?: string, _reference?: string) =>
-      of({}),
+    recordPayment: (
+      _invoiceId: string,
+      _amount: number,
+      _method?: string,
+      _reference?: string,
+      _operator?: string,
+    ) => of({}),
   };
 
   const mockToastService = {
@@ -188,8 +193,12 @@ describe('PaymentPendingPanelComponent', () => {
     expect(spy).not.toHaveBeenCalled();
 
     component.payReference.set(' OM-778812 ');
+    // Billing plan PR 9: the operator is required too.
     component.submitPayment();
-    expect(spy).toHaveBeenCalledWith('inv-1', 1500, 'MOBILE_MONEY', 'OM-778812');
+    expect(spy).not.toHaveBeenCalled();
+    component.payOperator.set('ORANGE_MONEY');
+    component.submitPayment();
+    expect(spy).toHaveBeenCalledWith('inv-1', 1500, 'MOBILE_MONEY', 'OM-778812', 'ORANGE_MONEY');
   });
 
   it('QA D948: shows francs CFA without decimals', () => {

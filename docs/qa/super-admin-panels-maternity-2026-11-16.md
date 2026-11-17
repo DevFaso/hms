@@ -65,11 +65,14 @@ that static scanning can establish correct clinical meaning.
   server message; Spanish signature subtitle encoding repaired. ROI decision
   dialogs omit unknown hospital confirmation, matching intake behavior. ROI
   date and registry name comparators tolerate absent display fields.
-- Registry All is a client merge of six capped status pages, sorted by overdue
-  days then name and capped at 200. New copy says this explicitly; individual
-  status default ordering is unchanged. ROI retains oldest-first queue ordering
-  deliberately, including when capped; switching to newest-first was a review
-  preference rather than an established requirement.
+- Registry All is a client merge of six capped status pages, sorted by next
+  expected visit then enrolment date (the server's findRegistry order) and
+  capped at 200. New copy says this explicitly; individual status default
+  ordering is unchanged. (Corrected after the #1196/#1198 review, L1: this line
+  and the hint first said "overdue days then name", which the code never did.)
+- ROI All (review L2, 2026-11-17): the merged queue puts PENDING requests first,
+  then newest first, before the 200-row cut, so a pending request can never
+  fall off behind old decided ones. Individual status views are unchanged.
 - Missing maternal names no longer match the translated fallback phrase. The
   global procedure browser assertion waits for network idle before checking
   that no clinical worklist request was fired. Duplicate SEARCH_PATIENTS keys
