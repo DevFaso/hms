@@ -5,6 +5,7 @@ import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -827,8 +828,15 @@ public class JwtTokenProvider {
             jwtParser()
                 .parseSignedClaims(authToken);
             return true;
+        } catch (ExpiredJwtException ex) {
+            // Normal client condition: the portal refreshes. Not a fault, so never ERROR
+            // (log panels and alerts key on it); the token and its claims are not logged.
+            log.debug("JWT rejected: access token expired.");
+            return false;
         } catch (JwtException | IllegalArgumentException ex) {
-            log.error("❌ JWT validation error: {}", ex.getMessage());
+            // Malformed, bad signature, unsupported or blank: can indicate probing, so WARN.
+            // Only the failure class is logged, never the token or the exception message.
+            log.warn("JWT rejected: {}.", ex.getClass().getSimpleName());
             return false;
         }
     }

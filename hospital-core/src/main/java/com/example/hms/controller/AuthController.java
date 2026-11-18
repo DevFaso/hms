@@ -467,7 +467,7 @@ public class AuthController {
         } catch (BadCredentialsException ex) {
             loginAttemptService.recordFailure(loginRequest.getUsername());
             auditLoginFailure(loginRequest.getUsername(), "Login failed: bad credentials");
-            log.warn("🔐 [LOGIN] Bad credentials for user='{}'", loginRequest.getUsername());
+            log.warn("🔐 [LOGIN] Sign-in refused: bad credentials.");
             // D64: the refusal is shown on the sign-in screen, so it speaks the
             // caller's language rather than always English.
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -496,7 +496,7 @@ public class AuthController {
             // locked out at the exact moment activation succeeds.
             loginAttemptService.recordFailure(loginRequest.getUsername());
             auditLoginFailure(loginRequest.getUsername(), "Login failed: account not active");
-            log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
+            log.warn("🔐 [LOGIN] Sign-in refused: account not active.");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.login.inactive")));
         } catch (RuntimeException ex) {

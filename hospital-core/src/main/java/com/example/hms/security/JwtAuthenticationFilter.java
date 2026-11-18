@@ -186,7 +186,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String rawHeader = request.getHeader(HEADER_STRING);
             boolean prefixOk = rawHeader != null && rawHeader.startsWith(TOKEN_PREFIX);
             int tokenLen = prefixOk ? rawHeader.length() - TOKEN_PREFIX.length() : 0;
-            log.warn("[JWT] Token provided but invalid for path={} headerPresent={} headerPrefixOk={} tokenLen={}",
+            // DEBUG: an expired token (routine, the portal refreshes) lands here too;
+            // JwtTokenProvider#validateToken already logs the probing-shaped rejections at WARN.
+            log.debug("[JWT] Token provided but invalid for path={} headerPresent={} headerPrefixOk={} tokenLen={}",
                 path, rawHeader != null, prefixOk, tokenLen);
         }
         return true;
