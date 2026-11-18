@@ -157,6 +157,26 @@ Micrometer OTLP registry reads `GRAFANA_OTLP_AUTH_HEADER` via
 `application.properties`. Keep them in sync, or metrics and traces will disagree
 about whether they are authorized.
 
+**Spring Boot 4 needs `spring-boot-opentelemetry` for Micrometer's OTLP push.**
+`OtlpMetricsExportAutoConfiguration` is `@ConditionalOnClass(OpenTelemetryProperties)`,
+a class from that module. Until it was added to `hospital-core/build.gradle` no
+`OtlpMeterRegistry` was ever created, so `http_server_requests`, `hikaricp_*`,
+`process_uptime` and the business counters never reached Grafana Cloud on dev or
+prod, with no log line at all. `OtlpMetricsExportTest` pins it; at startup
+`OtlpMetricsExportValidator` logs an ERROR if the flag is on but no registry exists,
+and a rejected push (401, 404) is a Micrometer WARN with the HTTP status (never the
+token).
+
+That module also maps `OTEL_*` variables onto Boot's properties. It is switched off
+(`management.opentelemetry.map-environment-variables=false`): left on,
+`OTEL_METRICS_EXPORTER=none` (meant for the agent) would disable Micrometer's export,
+and the agent's endpoint and headers would replace the three variables above.
+
+Do **not** set `OTEL_INSTRUMENTATION_MICROMETER_ENABLED` or
+`MANAGEMENT_METRICS_USEGLOBALREGISTRY`. The agent's Micrometer bridge (agent 2.12)
+does not hook Boot 4's metrics auto-configuration, so it adds nothing here; if it ever
+did, every meter would be pushed twice.
+
 ### 4. Verify
 
 ```bash
