@@ -566,6 +566,27 @@ export const routes: Routes = [
           import('./billing/price-list/price-list.component').then((m) => m.PriceListComponent),
       },
 
+      // Billing-money plan PR 6: the hospital's payer catalogue (organismes
+      // payeurs, formules and their rules). Read by every role that bills or
+      // links a coverage; writes are the hospital admin's and the accountant's
+      // only (action-permissions.ts).
+      {
+        path: 'billing/organismes',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_RECEPTIONIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/payers/payers.component').then((m) => m.PayersComponent),
+      },
+
       // Billing
       {
         path: 'billing',

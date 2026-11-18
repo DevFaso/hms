@@ -115,9 +115,12 @@ public class ActingScopeResolver {
         Set<String> roles = new LinkedHashSet<>();
         Map<UUID, UUID> hospitalOrganizations = new LinkedHashMap<>();
         Map<UUID, FacilityType> hospitalFacilityTypes = new LinkedHashMap<>();
+        Map<UUID, Set<String>> hospitalRoles = new LinkedHashMap<>();
+        Set<String> globalRoles = new LinkedHashSet<>();
         for (TenantRoleAssignment assignment : assignments == null ? List.<TenantRoleAssignment>of() : assignments) {
             if (assignment.active()) {
                 collect(assignment, hospitals, organizations, roles, hospitalOrganizations);
+                collectWhere(assignment, hospitalRoles, globalRoles);
                 if (assignment.hospitalId() != null) {
                     // Never null at a facility (TenantRoleAssignment refuses it).
                     hospitalFacilityTypes.putIfAbsent(assignment.hospitalId(), assignment.facilityType());
@@ -135,6 +138,8 @@ public class ActingScopeResolver {
             // are not a read scope (Q6, option A).
             .permittedOrganizationIds(Collections.unmodifiableSet(organizations))
             .assignedRoles(Collections.unmodifiableSet(roles))
+            .hospitalRoles(Collections.unmodifiableMap(hospitalRoles))
+            .globalRoles(Collections.unmodifiableSet(globalRoles))
             .hospitalOrganizations(Collections.unmodifiableMap(hospitalOrganizations))
             .providerFacilityTypes(Collections.unmodifiableSet(providerTypes))
             .hospitalFacilityTypes(Collections.unmodifiableMap(hospitalFacilityTypes))
@@ -196,7 +201,20 @@ public class ActingScopeResolver {
             .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    /** One active assignment's contribution to the live context. */
+    /** QA D2120 review: where each role is held (a hospital, or none), for ClinicalActor. */
+    private static void collectWhere(TenantRoleAssignment assignment, Map<UUID, Set<String>> hospitalRoles,
+                                     Set<String> globalRoles) {
+        String role = roleCode(assignment);
+        if (role == null) {
+            return;
+        }
+        if (assignment.hospitalId() != null) {
+            hospitalRoles.computeIfAbsent(assignment.hospitalId(), id -> new LinkedHashSet<>()).add(role);
+        } else {
+            globalRoles.add(role);
+        }
+    }
+
     private static void collect(TenantRoleAssignment assignment, Set<UUID> hospitals, Set<UUID> organizations,
                                 Set<String> roles, Map<UUID, UUID> hospitalOrganizations) {
         String role = roleCode(assignment);

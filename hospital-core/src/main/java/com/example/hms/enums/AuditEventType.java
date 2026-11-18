@@ -110,7 +110,18 @@ public enum AuditEventType {
     INVOICE_UPDATED,
     PAYMENT_POSTED,
     PAYMENT_REJECTED,
+    /** Billing-money plan PR 8: money handed back to a patient on a refund (paid out), ids only. */
     REFUND_ISSUED,
+    /** Billing-money plan PR 8: a refund asked for, approved, rejected or withdrawn (ids only). */
+    REFUND_REQUESTED,
+    REFUND_APPROVED,
+    REFUND_REJECTED,
+    REFUND_CANCELLED,
+    /**
+     * Billing-money plan PR 8: a received payment reversed (entered in error) or a pharmacy payment voided. It was
+     * written as REFUND_ISSUED, so the audit log claimed refunds that were never made.
+     */
+    PAYMENT_REVERSED,
     CLAIM_SUBMITTED,
     /** Billing-money plan PR 2: a price-list item created, edited or deactivated (ids only). */
     PRICE_LIST_ITEM_CREATED,
@@ -118,6 +129,12 @@ public enum AuditEventType {
     PRICE_LIST_ITEM_DEACTIVATED,
     /** Billing-money plan PR 2: a new price version of an item (item id, version id, effective date). */
     PRICE_VERSION_ADDED,
+    /** Billing-money plan PR 6: a payer created, edited or deactivated (ids only). */
+    PAYER_CHANGED,
+    /** Billing-money plan PR 6: a payer plan created or edited, or one of its rules added or ended (ids only). */
+    PAYER_PLAN_CHANGED,
+    /** Billing-money plan PR 6: a patient's coverage linked to a payer plan, or unlinked (ids only). */
+    PATIENT_COVERAGE_PLAN_LINKED,
     /** Billing-money plan PR 4: a price-list CSV file applied (import id and row counts only). */
     PRICE_LIST_IMPORTED,
     /** Billing-money plan PR 3 (D-2): a tariff price overridden on a draft line, with a reason (ids only). */

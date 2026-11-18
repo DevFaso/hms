@@ -491,6 +491,30 @@
       "ACTIVITY_UNAVAILABLE": "Activité clinique récente indisponible. Actualisez pour réessayer.",
       "AUDIT_SAMPLE": "Échantillon : {{count}} derniers événements d’audit reçus. Les filtres portent uniquement sur cet échantillon.",
       "ROUTINE_AUDIT": "Inclure les renouvellements de jeton réussis ({{count}})"
+    },
+    "ACTIVITY": {
+      "PREVIEW": "Éléments récents affichés : {{count}} (10 maximum par catégorie). Les badges indiquent les totaux.",
+      "VIEW_ALL": "Voir tous les éléments",
+      "NOT_RECORDED": "Non renseigné",
+      "CATALOG": "Catalogue partagé",
+      "HOSPITAL": "Hôpital",
+      "GLOBAL": "Tous les hôpitaux",
+      "STATUS": "Statut",
+      "TARGET_DETAILS": "Détails de la cible",
+      "SHOW_LESS": "Afficher moins d’événements",
+      "SHOW_MORE": "Afficher les {{count}} événements correspondants",
+      "DATE_encounterDate": "Consultation",
+      "DATE_admissionDateTime": "Date d’admission",
+      "DATE_resultDate": "Résultat",
+      "DATE_orderDatetime": "Demande d’examen",
+      "DATE_submittedAt": "Soumission",
+      "DATE_timelineStartDate": "Début du plan",
+      "DATE_consentTimestamp": "Consentement enregistré",
+      "DATE_requestedAt": "Demande",
+      "DATE_admissionDate": "Date d’admission",
+      "DATE_orderedAt": "Demande d’examen",
+      "DATE_createdAt": "Création",
+      "DATE_UNKNOWN": "Date indisponible"
     }
   },
   "AUDIT_SEARCH": {
@@ -2009,7 +2033,21 @@
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerte de doublon outrepassée (« Commander quand même », motif : {{reason}}) : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Doublon possible, sans « Commander quand même » : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "NATIONAL_IU_ACTION": "Identifiant unique du patient : {{operation}}",
-      "PRICE_LIST_IMPORTED": "Import de grille {{import}} appliqué : {{items}} nouveaux articles, {{prices}} nouveaux prix, {{unchanged}} inchangés"
+      "PRICE_LIST_IMPORTED": "Import de grille {{import}} appliqué : {{items}} nouveaux articles, {{prices}} nouveaux prix, {{unchanged}} inchangés",
+      "REFUND_EVENT": "{{what}} : remboursement {{refund}} sur la facture {{invoice}}",
+      "SUPPORT_SESSION_MONEY_REFUSED": "Session de support refusée : {{what}} (mouvement d’argent)",
+      "PHARMACY_PAYMENT_VOIDED_IDS": "Paiement pharmacie {{payment}} annulé pour la délivrance annulée {{dispense}}",
+      "SUPPORT_SESSION_CLINICAL_REFUSED": "Session de support refusée : un acte clinique ({{roles}}) pendant une prise en main du compte",
+      "PAYER_CREATED": "Organisme payeur {{payer}} créé",
+      "PAYER_UPDATED": "Organisme payeur {{payer}} modifié",
+      "PAYER_DEACTIVATED": "Organisme payeur {{payer}} désactivé, motif enregistré",
+      "PAYER_PLAN_CREATED": "Formule {{plan}} de l’organisme {{payer}} créée",
+      "PAYER_PLAN_UPDATED": "Formule {{plan}} de l’organisme {{payer}} modifiée",
+      "PAYER_RULE_ADDED": "Règle {{rule}} ajoutée à la formule {{plan}}, en vigueur le {{from}} ; fermée : [{{closed}}] ; remplacées : [{{replaced}}]",
+      "PAYER_RULE_ENDED": "Règle {{rule}} de la formule {{plan}} terminée, motif enregistré",
+      "COVERAGE_PLAN_LINKED": "Couverture du patient {{insurance}} liée à la formule {{plan}}",
+      "COVERAGE_PLAN_UNLINKED": "Couverture du patient {{insurance}} détachée de sa formule",
+      "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2298,6 +2336,13 @@
       "UPDATE": "modifié",
       "CLEAR": "effacé",
       "SHOW_FULL": "affiché en entier"
+    },
+    "REFUND_EVENT": {
+      "REFUND_REQUESTED": "Remboursement demandé",
+      "REFUND_APPROVED": "Remboursement approuvé",
+      "REFUND_REJECTED": "Remboursement refusé",
+      "REFUND_PAID_OUT": "Remboursement remis au patient",
+      "REFUND_CANCELLED": "Remboursement annulé"
     }
   },
   "BILLING": {
@@ -2484,7 +2529,10 @@
       "SOURCES": {
         "BILLING": "Factures",
         "PHARMACY": "Pharmacie"
-      }
+      },
+      "REFUNDED": "Remboursements remis (sorties de caisse)",
+      "NET": "Solde attendu en caisse",
+      "REFUND_TAG": "remboursement"
     },
     "CANCEL_REASON": "Motif de l’annulation",
     "CANCEL_REASON_PLACEHOLDER": "Pourquoi cette facture émise est-elle annulée ? Le motif est conservé avec elle.",
@@ -2601,6 +2649,133 @@
         "TOO_LARGE": "Le fichier dépasse 1 Mo. Découpez la grille en plusieurs fichiers.",
         "CONCURRENT_ERROR": "Un autre utilisateur vient de créer ce code (ou ce lien) dans la grille : rien n’a été appliqué. Relancez la vérification."
       }
+    },
+    "REFUNDS": {
+      "TITLE": "Demandes de remboursement",
+      "REFUND": "Rembourser",
+      "REFUNDED_TOTAL": "Déjà remboursé au patient : {{amount}}",
+      "LOAD_FAILED": "Les remboursements n’ont pas pu être chargés.",
+      "EMPTY": "Aucun remboursement sur cette facture.",
+      "REQUESTED_ON": "Demandé le",
+      "AMOUNT": "Montant",
+      "METHOD": "Mode de remboursement",
+      "REASON": "Motif",
+      "BY": "par {{name}}",
+      "STATUSES": {
+        "REQUESTED": "Demandé, à approuver",
+        "APPROVED": "Approuvé, à remettre",
+        "REJECTED": "Refusé",
+        "PAID": "Remis au patient",
+        "CANCELLED": "Annulé"
+      },
+      "DECIDED_BY": "Décidé par {{name}}",
+      "PAID_ON": "Remis le {{date}} par {{name}}",
+      "OTHER_APPROVER": "Un autre responsable doit approuver : vous avez fait cette demande.",
+      "APPROVE": "Approuver",
+      "REJECT": "Refuser",
+      "HAND_OVER": "Remis au patient",
+      "CANCEL": "Annuler la demande",
+      "RECEIPT": "Reçu de remboursement",
+      "REQUEST_TITLE": "Rembourser le patient",
+      "REFERENCE": "Référence de la transaction",
+      "APPROVAL_NOTE": "La demande doit être approuvée par un autre responsable (administrateur ou comptable), puis remise au patient à la caisse.",
+      "SUBMIT_REQUEST": "Demander le remboursement",
+      "REJECT_TITLE": "Refuser le remboursement de {{amount}}",
+      "CANCEL_TITLE": "Annuler la demande de remboursement de {{amount}}",
+      "AMOUNT_REQUIRED": "Indiquez le montant à rembourser (supérieur à 0).",
+      "REFERENCE_REQUIRED": "Indiquez la référence de la transaction (mobile money ou virement).",
+      "REASON_REQUIRED": "Motif obligatoire : indiquez pourquoi l’argent est rendu au patient.",
+      "DECISION_REASON_REQUIRED": "Motif obligatoire.",
+      "REQUESTED_TOAST": "Demande de remboursement enregistrée : un autre responsable doit l’approuver.",
+      "APPROVED_TOAST": "Remboursement approuvé.",
+      "REJECTED_TOAST": "Remboursement refusé.",
+      "CANCELLED_TOAST": "Demande de remboursement annulée.",
+      "PAID_TOAST": "Remboursement remis au patient.",
+      "FAILED": "Le remboursement n’a pas pu être enregistré.",
+      "QUEUE_OPEN": "Remboursements à approuver",
+      "QUEUE_TITLE": "Remboursements à approuver ou à remettre",
+      "QUEUE_EMPTY": "Aucun remboursement en attente.",
+      "OPEN_INVOICE": "Ouvrir la facture",
+      "INVOICE": "Facture",
+      "REFERENCE_AT_HANDOVER": "La référence de la transaction sera demandée à la remise, quand l’argent est envoyé.",
+      "HAND_OVER_TITLE": "Remettre le remboursement de {{amount}}",
+      "RECEIPT_NUMBER": "Reçu n° {{number}}"
+    },
+    "PAYERS": {
+      "TITLE": "Organismes payeurs",
+      "SUBTITLE": "Les mutuelles, assureurs, employeurs et programmes qui prennent en charge une part des soins, avec leurs formules et leurs règles. Rien n’est encore appliqué aux factures.",
+      "BACK_TO_BILLING": "Retour à la facturation",
+      "NEW_PAYER": "Nouvel organisme payeur",
+      "EDIT": "Modifier l’organisme payeur",
+      "DEACTIVATE": "Désactiver",
+      "DEACTIVATE_CONFIRM": "Désactiver cet organisme payeur ?",
+      "DEACTIVATE_NOTE": "Ses formules ne pourront plus être liées à un patient. Son historique et les liens existants sont conservés.",
+      "DEACTIVATE_REASON": "Motif de la désactivation",
+      "DEACTIVATED": "Organisme payeur désactivé.",
+      "SHOW_INACTIVE": "Afficher les organismes désactivés",
+      "LOADING": "Chargement des organismes payeurs…",
+      "LOAD_FAILED": "Les organismes payeurs n’ont pas pu être chargés.",
+      "EMPTY": "Aucun organisme payeur.",
+      "CODE": "Code de l’organisme",
+      "CODE_HINT": "Le code de l’établissement (ex. MUT-TEST-A). Il ne change plus une fois créé.",
+      "NAME": "Nom",
+      "TYPE": "Type d’organisme",
+      "PLANS": "Formules",
+      "NO_PLAN": "Aucune formule",
+      "STATE": "État",
+      "ACTIVE": "Actif",
+      "INACTIVE": "Désactivé",
+      "NEW_PLAN": "Nouvelle formule",
+      "EDIT_PLAN": "Modifier la formule",
+      "PLAN_CODE": "Code de la formule",
+      "PLAN_NAME": "Nom de la formule",
+      "DEFAULT_RATE": "Taux de prise en charge (%)",
+      "INVOICE_CEILING": "Plafond par facture (F CFA)",
+      "ANNUAL_CEILING": "Plafond annuel par bénéficiaire (F CFA)",
+      "ANNUAL_CEILING_HINT": "Par patient couvert et par année civile.",
+      "NO_CEILING": "Pas de plafond",
+      "PERIOD": "Période",
+      "EFFECTIVE_FROM": "Date d’effet",
+      "EFFECTIVE_TO": "Dernier jour (facultatif)",
+      "RULES": "Exclusions et taux particuliers",
+      "NO_RULES": "Aucune règle : le taux de la formule s’applique à tout.",
+      "NEW_RULE": "Nouvelle règle",
+      "RULE_NOTE": "Une règle porte sur une catégorie entière ou sur un article de la grille. Elle remplace la règle en vigueur pour la même cible à partir de sa date ; les factures déjà établies ne changent pas.",
+      "RULE_TARGET": "Porte sur",
+      "TARGET_CATEGORY": "Une catégorie",
+      "TARGET_ITEM": "Un article de la grille",
+      "CATEGORY": "Catégorie",
+      "ITEM": "Article de la grille",
+      "EXCLUDE": "Exclu : l’organisme ne prend rien en charge",
+      "EXCLUDED": "Exclu",
+      "RULE_RATE": "Taux de prise en charge (%)",
+      "RULE_RATE_HINT": "Laissez vide pour garder le taux de la formule.",
+      "ACT_CEILING": "Plafond par acte (F CFA)",
+      "RULE_TERMS": "Prise en charge",
+      "RATE_VALUE": "{{rate}} %",
+      "RATE_DEFAULT": "Taux de la formule",
+      "ACT_CEILING_VALUE": "au plus {{amount}} par acte",
+      "FROM": "Du",
+      "TO": "Au",
+      "STATUS": "Statut",
+      "END_REASON": "Motif de la fin",
+      "END_RULE": "Mettre fin à la règle",
+      "END_RULE_CONFIRM": "Mettre fin à cette règle ?",
+      "END_RULE_NOTE": "La règle cesse de s’appliquer à partir d’aujourd’hui (une règle pas encore commencée est retirée). Elle reste dans l’historique.",
+      "REPLACE_SCHEDULED": "Remplacer la règle prévue",
+      "SAVED": "Organisme payeur enregistré.",
+      "PLAN_SAVED": "Formule enregistrée.",
+      "RULE_SAVED": "Règle enregistrée.",
+      "RULE_ENDED": "Règle terminée.",
+      "SAVE_FAILED": "L’enregistrement a échoué.",
+      "NEW_TERMS": "Nouveaux taux et plafonds",
+      "TERMS_HISTORY": "Historique des taux et plafonds",
+      "TERMS_NOTE": "Les nouveaux taux et plafonds s’appliquent à partir de leur date ; les actuels jusqu’à la veille. Les factures déjà établies ne changent pas.",
+      "TERMS_EDIT_NOTE": "Les taux et plafonds changent par « Nouveaux taux et plafonds », à partir d’une date.",
+      "TERMS_REASON": "Motif du changement (facultatif)",
+      "TERMS_SAVED": "Nouveaux taux et plafonds enregistrés.",
+      "NEXT_TERMS": "Prévu à partir du {{date}} : {{rate}} %",
+      "REPLACE_TERMS": "Remplacer les taux et plafonds prévus"
     }
   },
   "CHAT": {
@@ -4781,7 +4956,8 @@
     "ADT_INTAKE": "Admissions ADT automatiques",
     "UNSIGNED_NOTES": "Notes non signées",
     "PRICE_LIST": "Grille tarifaire",
-    "PATIENT_NOTIFICATIONS": "Notifications aux patients"
+    "PATIENT_NOTIFICATIONS": "Notifications aux patients",
+    "PAYERS": "Organismes payeurs"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -6188,7 +6364,8 @@
       "LEFT_TO_DECLARE": "Reste à déclarer",
       "AMOUNT_EXCEEDS_PENDING": "Vous pouvez déclarer au plus {{max}} : {{pending}} déjà déclarés sont en attente de confirmation.",
       "CREDITED_TO": "Imputé sur la facture {{number}}",
-      "FULLY_DECLARED": "Solde déclaré, en attente de confirmation par la caisse"
+      "FULLY_DECLARED": "Solde déclaré, en attente de confirmation par la caisse",
+      "REFUNDED": "Remboursé : {{amount}} le {{date}}"
     },
     "CARE_TEAM": {
       "TITLE": "Mon équipe soignante",
@@ -7085,7 +7262,15 @@
         "INVOICE_LINE_PRICE_RESTORED": "Prix de la grille rétabli",
         "INVOICE_LINE_DELETED": "Ligne de facture supprimée",
         "INVOICE_LINE_PRICE_OVERRIDDEN": "Prix de la grille modifié",
-        "PRICE_LIST_IMPORTED": "Grille tarifaire importée"
+        "PRICE_LIST_IMPORTED": "Grille tarifaire importée",
+        "REFUND_REQUESTED": "Remboursement demandé",
+        "REFUND_APPROVED": "Remboursement approuvé",
+        "REFUND_REJECTED": "Remboursement refusé",
+        "REFUND_CANCELLED": "Remboursement annulé",
+        "PAYMENT_REVERSED": "Paiement contre-passé",
+        "PAYER_CHANGED": "Organisme payeur modifié",
+        "PAYER_PLAN_CHANGED": "Formule d’organisme payeur modifiée",
+        "PATIENT_COVERAGE_PLAN_LINKED": "Couverture du patient liée à une formule"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7619,7 +7804,9 @@
         "FETAL_DEATH_EVENT": "Événement de décès fœtal",
         "IMAGING_ORDER": "Demande d'imagerie",
         "PRICE_LIST_IMPORT": "Import de grille tarifaire",
-        "PATIENT_NOTIFICATION_DELIVERY": "Envoi de notification au patient"
+        "PATIENT_NOTIFICATION_DELIVERY": "Envoi de notification au patient",
+        "PAYER": "Organisme payeur",
+        "PAYER_PLAN": "Formule d’organisme payeur"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -7792,6 +7979,19 @@
         "NEW_PRICE": "Nouveau prix",
         "UNCHANGED": "Inchangé",
         "REFUSED": "Refusé"
+      },
+      "PAYER_TYPE": {
+        "AMU": "Assurance maladie universelle",
+        "MUTUELLE": "Mutuelle",
+        "ASSUREUR_PRIVE": "Assureur privé",
+        "EMPLOYEUR": "Employeur",
+        "ONG_PROGRAMME": "ONG ou programme"
+      },
+      "PAYER_COVERAGE_STATUS": {
+        "SCHEDULED": "Prévue",
+        "IN_FORCE": "En vigueur",
+        "ENDED": "Terminée",
+        "CANCELLED": "Retirée avant application"
       }
     },
     "DOCUMENTS": {
@@ -11044,7 +11244,13 @@
     "DEACTIVATE_GUARANTOR_MESSAGE": "Le garant reste au dossier, marqué inactif. Indiquez pourquoi ; le motif est conservé dans la piste d’audit.",
     "GUARANTOR_DEACTIVATED": "{{name}} n’est plus un garant actif.",
     "GUARANTOR_REACTIVATED": "{{name}} est de nouveau un garant actif.",
-    "DEACTIVATION_REASON": "Motif"
+    "DEACTIVATION_REASON": "Motif",
+    "PLAN": "Formule",
+    "NO_PLAN": "Aucune formule (texte libre)",
+    "PICK_PLAN": "Choisir la formule",
+    "PLAN_HINT": "La formule de l’organisme payeur au titre de laquelle cette couverture est facturée. Sans formule, le patient paie toute la facture.",
+    "PLAN_SAVED": "Formule enregistrée.",
+    "PLAN_SAVE_ERROR": "La formule n’a pas pu être enregistrée."
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",

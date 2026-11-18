@@ -225,7 +225,7 @@
           <small class="field-error" id="gender-server-error" role="alert">{{ reason }}</small>
         }
       </div>
-      @if (!frontDeskOnly()) {
+      @if (writesClinicalFields()) {
         <div class="form-group">
           <label for="bloodType">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</label>
           <select id="bloodType" [(ngModel)]="form.bloodType" name="bloodType">
@@ -387,29 +387,31 @@
         />
       </div>
 
-      <div class="form-group full-width section-divider">
-        <h3 class="section-title">{{ 'PATIENTS.MEDICAL_INFO' | translate }}</h3>
-      </div>
-      <div class="form-group full-width">
-        <label for="allergies">{{ 'PATIENTS.ALLERGIES' | translate }}</label>
-        <textarea
-          id="allergies"
-          [(ngModel)]="form.allergies"
-          name="allergies"
-          rows="2"
-          [placeholder]="'PATIENTS.ALLERGIES_PLACEHOLDER' | translate"
-        ></textarea>
-      </div>
-      <div class="form-group full-width">
-        <label for="medicalHistory">{{ 'PATIENTS.MEDICAL_HISTORY' | translate }}</label>
-        <textarea
-          id="medicalHistory"
-          [(ngModel)]="form.medicalHistorySummary"
-          name="medicalHistorySummary"
-          rows="3"
-          [placeholder]="'PATIENTS.MEDICAL_HISTORY_PLACEHOLDER' | translate"
-        ></textarea>
-      </div>
+      @if (writesClinicalFields()) {
+        <div class="form-group full-width section-divider">
+          <h3 class="section-title">{{ 'PATIENTS.MEDICAL_INFO' | translate }}</h3>
+        </div>
+        <div class="form-group full-width">
+          <label for="allergies">{{ 'PATIENTS.ALLERGIES' | translate }}</label>
+          <textarea
+            id="allergies"
+            [(ngModel)]="form.allergies"
+            name="allergies"
+            rows="2"
+            [placeholder]="'PATIENTS.ALLERGIES_PLACEHOLDER' | translate"
+          ></textarea>
+        </div>
+        <div class="form-group full-width">
+          <label for="medicalHistory">{{ 'PATIENTS.MEDICAL_HISTORY' | translate }}</label>
+          <textarea
+            id="medicalHistory"
+            [(ngModel)]="form.medicalHistorySummary"
+            name="medicalHistorySummary"
+            rows="3"
+            [placeholder]="'PATIENTS.MEDICAL_HISTORY_PLACEHOLDER' | translate"
+          ></textarea>
+        </div>
+      }
     </div>
 
     <!-- Cross-hospital existing-patient match: offer LINK instead of a duplicate -->

@@ -67,6 +67,47 @@ class ImpersonationLimitsTest {
             .containsExactly("/auth/me/**", "/auth/credentials/**", "/auth/verify-password");
     }
 
+    @Test
+    @DisplayName("billing-money plan PR 8 review: the money paths refuse every write under impersonation, with an audit row")
+    void theMoneyRuleRefusesWritesAndKeepsReads() {
+        ImpersonationContextHolder.set(ImpersonationContext.of(UUID.randomUUID(), "support.agent"));
+        ImpersonationLimits money = ImpersonationLimits.forMoney(() -> audit);
+        MockHttpServletRequest write = new MockHttpServletRequest("POST", "/billing-invoices/x/refunds");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        assertThatThrownBy(() -> money.preHandle(write, response, null))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+        assertThat(money.preHandle(new MockHttpServletRequest("GET", "/billing-invoices/x/refunds"),
+            new MockHttpServletResponse(), null)).isTrue();
+        org.mockito.Mockito.verify(audit).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.SECURITY_ALERT_TRIGGERED
+                && e.getEventDescription().endsWith("(money)")));
+        assertThat(ImpersonationLimits.MONEY_PATHS).contains("/billing-invoices/**", "/invoice-items/**",
+            "/billing/price-list/**", "/billing/payers/**", "/pharmacy/payments/**", "/pharmacy-sales/**");
+    }
+
+    @Test
+    @DisplayName("the service-side money check refuses only while impersonating")
+    void theServiceSideMoneyCheck() {
+        org.assertj.core.api.Assertions.assertThatCode(() -> ImpersonationLimits.refuseMoneyWrite(() -> audit, "copay"))
+            .doesNotThrowAnyException();
+        ImpersonationContextHolder.set(ImpersonationContext.of(UUID.randomUUID(), "support.agent"));
+        assertThatThrownBy(() -> ImpersonationLimits.refuseMoneyWrite(() -> audit, "copay"))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("both refusal keys are in the bundles (FR and EN)")
+    void bothRefusalKeysResolve() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        for (java.util.Locale locale : java.util.List.of(java.util.Locale.FRENCH, java.util.Locale.ENGLISH)) {
+            for (String key : java.util.List.of(ImpersonationLimits.ACCOUNT_CHANGE_REFUSED,
+                    ImpersonationLimits.MONEY_WRITE_REFUSED)) {
+                assertThat(com.example.hms.utility.MessageUtil.resolve(locale, key)).as(locale + " " + key)
+                    .isNotEqualTo(key);
+            }
+        }
+    }
+
     private static MockHttpServletRequest request(String method) {
         return new MockHttpServletRequest(method, "/auth/me/change-username");
     }

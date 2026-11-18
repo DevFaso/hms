@@ -35,6 +35,7 @@
     "BILLING.EMAIL_CC": "Cc",
     "BILLING.EMAIL_MESSAGE": "Message",
     "BILLING.NOTES": "Notes",
+    "BILLING.PAYMENT_METHODS.MOBILE_MONEY": "Mobile money",
     "BIRTH_PLAN.SECTION_INTRO": "Introduction",
     "BREAK_GLASS_REVIEW.COL_PATIENT": "Patient",
     "BREAK_GLASS_REVIEW.NOTE": "Note",
@@ -316,7 +317,6 @@
     "PLATFORM.VERSION": "Version",
     "PLATFORM.WEBHOOKS": "Webhooks",
     "PORTAL.APPOINTMENTS.DATE": "Date",
-    "BILLING.PAYMENT_METHODS.MOBILE_MONEY": "Mobile money",
     "PORTAL.BILLING.MOBILE_MONEY": "Mobile money",
     "PORTAL.ENUM.ABNORMAL_FLAG.NORMAL": "Normal",
     "PORTAL.ENUM.ADMISSION_TYPE.OBSERVATION": "Observation",
@@ -462,6 +462,7 @@
     "TRIAGE.SPO2": "SpO₂",
     "ULTRASOUND.FINDING_NORMAL": "Normal",
     "ULTRASOUND.FINDING_URGENT": "Urgent",
+    "ULTRASOUND.FLAG_TONE_NORMAL": "Normal",
     "ULTRASOUND.OBSERVATIONS": "Observations",
     "ULTRASOUND.WORKLIST_ANOMALIES": "Anomalies",
     "UNSIGNED_NOTES.PATIENT": "Patient",
@@ -474,8 +475,7 @@
     "inBasket.labColPatient": "Patient",
     "inBasket.labNormal": "Normal",
     "inBasket.messages": "Messages",
-    "inBasket.urgent": "Urgent",
-    "ULTRASOUND.FLAG_TONE_NORMAL": "Normal"
+    "inBasket.urgent": "Urgent"
   },
   "es": {
     "CHART.LAB_STATUS_NORMAL": "Normal",

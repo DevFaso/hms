@@ -136,6 +136,12 @@ public class PdfInvoiceService {
             w.right(BOLD, 11, t.get(BALANCE_DUE, money(com.example.hms.utility.InvoiceBalance.dueOf(invoice))));
             // QA D1466: a copay above the visit total: what the hospital owes back.
             BigDecimal refundDue = com.example.hms.utility.InvoiceBalance.refundDueOf(invoice);
+            // Billing-money plan PR 8 (QA D1900): what refunds already handed back.
+            BigDecimal refunded = nz(invoice.getAmountRefunded());
+            if (refunded.signum() > 0) {
+                w.down(16);
+                w.right(BODY, 11, t.get("pdf.invoice.refunded", money(refunded)));
+            }
             if (refundDue.signum() > 0) {
                 w.down(16);
                 w.right(BOLD, 11, t.get("pdf.invoice.refundDue", money(refundDue)));
@@ -271,6 +277,53 @@ public class PdfInvoiceService {
     }
 
     /**
+     * Billing-money plan PR 8 (QA D1900): "Reçu de remboursement", the receipt of a refund handed to the patient,
+     * with the cashier who paid it out and the signature line "Reçu par le patient". In the reader's language.
+     */
+    public byte[] generateRefundReceiptPdf(BillingInvoice invoice, com.example.hms.model.InvoiceRefund refund,
+                                           String receiptNumber, String paidByName, Locale locale) {
+        PdfLabels t = PdfLabels.of(messageSource, locale);
+        try (var doc = new PDDocument()) {
+            var w = new Writer(doc);
+            w.logo();
+            w.text(BOLD, 16, MARGIN, t.get("pdf.refund.title"));
+            w.down(20);
+            w.text(BODY, 11, MARGIN, t.get(HOSPITAL, hospitalName(invoice)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.number", safe(receiptNumber)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.invoice", safe(invoice.getInvoiceNumber())));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get(PATIENT, patientLine(invoice)));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.date",
+                refund.getPaidAt() != null ? t.fmt(refund.getPaidAt()) : ""));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.method",
+                methodLabel(t, refund.getMethod(), refund.getMobileMoneyOperator())));
+            if (refund.getReference() != null && !refund.getReference().isBlank()) {
+                w.down(15);
+                w.text(BODY, 11, MARGIN, t.get("pdf.receipt.reference", refund.getReference()));
+            }
+            w.down(15);
+            // PR 8 review: the paper the patient keeps says what the money is, never the staff's typed reason.
+            w.paragraph(BODY, 11, MARGIN, t.get("pdf.refund.purpose"));
+            w.down(28);
+            w.text(BOLD, 14, MARGIN, t.get("pdf.refund.amount", money(refund.getAmount())));
+            w.down(36);
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.paidBy", safe(paidByName)));
+            w.down(40);
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.cashierSignature"));
+            w.down(40);
+            w.text(BODY, 11, MARGIN, t.get("pdf.refund.patientSignature"));
+            return w.finish();
+        } catch (IOException e) {
+            // No new English sentence (ExceptionProseRatchetTest): the I/O failure itself.
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    /**
      * Whole francs with an ASCII-space thousands separator and the currency: "2 500 F CFA".
      * The franc CFA has no minor unit; the locale's own grouping character (a narrow
      * no-break space in French) is not a WinAnsi glyph, so it is not used.
@@ -323,15 +376,23 @@ public class PdfInvoiceService {
     }
 
     private static String methodLabel(PdfLabels t, PaymentTransaction p) {
-        if (p.getPaymentMethod() == null) {
+        return methodLabel(t, p.getPaymentMethod(), p.getMobileMoneyOperator());
+    }
+
+    /**
+     * The method in the paper's language. Billing plan PR 9: a Mobile Money payment (or, PR 8, refund) prints its
+     * operator, or says it was not stated.
+     */
+    private static String methodLabel(PdfLabels t, com.example.hms.enums.PaymentMethod method,
+                                      com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator) {
+        if (method == null) {
             return "";
         }
-        // Billing plan PR 9: a Mobile Money payment prints its operator, or says it was not stated.
-        if (p.getPaymentMethod() == com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {
-            String operator = p.getMobileMoneyOperator() != null ? p.getMobileMoneyOperator().name() : "NOT_STATED";
+        if (method == com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {
+            String operator = mobileMoneyOperator != null ? mobileMoneyOperator.name() : "NOT_STATED";
             return t.getOrCode("pdf.payment.operator." + operator, operator);
         }
-        String code = p.getPaymentMethod().name();
+        String code = method.name();
         return t.getOrCode("pdf.payment.method." + code, code);
     }
 

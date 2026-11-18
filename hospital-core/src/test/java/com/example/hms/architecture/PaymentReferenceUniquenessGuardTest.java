@@ -43,7 +43,10 @@ class PaymentReferenceUniquenessGuardTest {
         "com/example/hms/model/pharmacy/PharmacyPayment", Set.of("setReferenceNumber"),
         "com/example/hms/model/pharmacy/PharmacyPayment$PharmacyPaymentBuilder", Set.of("referenceNumber"),
         "com/example/hms/model/pharmacy/PharmacySale", Set.of("setReferenceNumber"),
-        "com/example/hms/model/pharmacy/PharmacySale$PharmacySaleBuilder", Set.of("referenceNumber"));
+        "com/example/hms/model/pharmacy/PharmacySale$PharmacySaleBuilder", Set.of("referenceNumber"),
+        // Billing-money plan PR 8: a refund paid out by mobile money or transfer carries the operator's reference.
+        "com/example/hms/model/InvoiceRefund", Set.of("setReference"),
+        "com/example/hms/model/InvoiceRefund$InvoiceRefundBuilder", Set.of("reference"));
 
     /** "OuterClass.method" → "CHECKED" or why it records no new provider transaction. */
     private static final Map<String, String> WRITERS = new LinkedHashMap<>();
@@ -53,6 +56,10 @@ class PaymentReferenceUniquenessGuardTest {
             "CHECKED: every caller runs rejectReusedReference first (patient, staff and copay payments)");
         WRITERS.put("PharmacyPaymentServiceImpl.createPayment", "CHECKED: a typed mobile-money reference, before anything is charged");
         WRITERS.put("PharmacySaleServiceImpl.createSale", "CHECKED: a mobile-money walk-in sale");
+        WRITERS.put("InvoiceRefundService.pay",
+            "CHECKED: the reference given when the money is sent (PR 8 review), before the refund is marked paid");
+        WRITERS.put("InvoiceRefundService.request",
+            "CHECKED: a non-cash refund's reference, before the refund is asked for (money out, PR 8)");
         WRITERS.put("PharmacyPaymentMapper.toEntity",
             "VIA PharmacyPaymentServiceImpl.createPayment: the mapper copies the request; its only caller checks the"
                 + " reference first and then sets the stored one itself");

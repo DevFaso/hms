@@ -559,9 +559,27 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { subject: 'phrase:CROSS_HOSPITAL_SUBJECT', extra: 'phrase:CROSS_HOSPITAL_PURPOSE' },
   },
   {
+    // Billing-money plan PR 8 review: a support session never moves money as the user it impersonates.
+    key: 'AUDIT.DESC.SUPPORT_SESSION_MONEY_REFUSED',
+    re: /^Support session refused: (.+) \(money\)$/,
+    params: ['what'],
+  },
+  {
+    // Billing-money plan PR 8 review: a cancelled dispense's payment voided (ids only; older rows below).
+    key: 'AUDIT.DESC.PHARMACY_PAYMENT_VOIDED_IDS',
+    re: /^Pharmacy payment (\S+) voided for cancelled dispense (\S+)$/,
+    params: ['payment', 'dispense'],
+  },
+  {
     key: 'AUDIT.DESC.SUPPORT_SESSION_REFUSED',
     re: /^Support session refused: (.+) \(sign-in or recovery details\)$/,
     params: ['what'],
+  },
+  {
+    // QA D2120 review: ClinicalActorAuditRegistrar, a clinical act tried during a support session.
+    key: 'AUDIT.DESC.SUPPORT_SESSION_CLINICAL_REFUSED',
+    re: /^Support session refused: a clinical act \((.*)\) during impersonation$/,
+    params: ['roles'],
   },
   {
     key: 'AUDIT.DESC.IMPERSONATION_STARTED',
@@ -1430,6 +1448,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { what: 'phrase:PAYMENT_EVENT' },
   },
   {
+    // Billing-money plan PR 8 (QA D1900): each step of a refund (ids only; the amount and reason stay on the row).
+    key: 'AUDIT.DESC.REFUND_EVENT',
+    re: /^(Refund requested|Refund approved|Refund rejected|Refund paid out|Refund cancelled): refund (\S+) on invoice (\S+)$/,
+    params: ['what', 'refund', 'invoice'],
+    localise: { what: 'phrase:REFUND_EVENT' },
+  },
+  {
     // Billing-money plan PR 2: the price list (ids only; the label, price and reason stay on the rows).
     key: 'AUDIT.DESC.PRICE_LIST_ITEM_CREATED',
     re: /^Price list item (\S+) created with price version (\S+)$/,
@@ -1449,6 +1474,58 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.PRICE_VERSION_ADDED',
     re: /^Price version (\S+) added to price list item (\S+), effective (\S+)$/,
     params: ['version', 'item', 'from'],
+  },
+  {
+    // Billing-money plan PR 6: the payer catalogue (ids only; names, rates and reasons stay on the rows).
+    key: 'AUDIT.DESC.PAYER_CREATED',
+    re: /^Payer (\S+) created$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_UPDATED',
+    re: /^Payer (\S+) updated$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_DEACTIVATED',
+    re: /^Payer (\S+) deactivated$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_PLAN_CREATED',
+    re: /^Payer plan (\S+) of payer (\S+) created$/,
+    params: ['plan', 'payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_PLAN_UPDATED',
+    re: /^Payer plan (\S+) of payer (\S+) updated$/,
+    params: ['plan', 'payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_RULE_ADDED',
+    re: /^Rule (\S+) added to payer plan (\S+), effective (\S+), closed \[([^\]]*)\], replaced \[([^\]]*)\]$/,
+    params: ['rule', 'plan', 'from', 'closed', 'replaced'],
+  },
+  {
+    // Review of #1202: plan terms are dated versions (ids only).
+    key: 'AUDIT.DESC.PAYER_TERMS_ADDED',
+    re: /^Terms (\S+) added to payer plan (\S+), effective (\S+), closed \[([^\]]*)\], replaced \[([^\]]*)\]$/,
+    params: ['terms', 'plan', 'from', 'closed', 'replaced'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_RULE_ENDED',
+    re: /^Rule (\S+) of payer plan (\S+) ended$/,
+    params: ['rule', 'plan'],
+  },
+  {
+    key: 'AUDIT.DESC.COVERAGE_PLAN_LINKED',
+    re: /^Patient insurance (\S+) linked to payer plan (\S+)$/,
+    params: ['insurance', 'plan'],
+  },
+  {
+    key: 'AUDIT.DESC.COVERAGE_PLAN_UNLINKED',
+    re: /^Patient insurance (\S+) unlinked from its payer plan$/,
+    params: ['insurance'],
   },
   {
     // Billing-money plan PR 4: a price-list CSV file applied (the import id and the counts only).

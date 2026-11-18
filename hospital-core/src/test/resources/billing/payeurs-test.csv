@@ -1,0 +1,12 @@
+code_payeur;nom_payeur;type_payeur;code_formule;nom_formule;ligne;portee;cle;taux_pct;exclu;plafond_par_acte;plafond_par_facture;plafond_annuel_beneficiaire;date_effet;remarque
+MUT-TEST-A;Mutuelle Test A (FICTIVE);MUTUELLE;MTA-ESS;Formule Test Essentielle;FORMULE;;;75;NON;;30000;150000;01/12/2026;Taux par défaut 75 %, plafond 30 000 F par facture, 150 000 F par bénéficiaire et par année civile
+MUT-TEST-A;Mutuelle Test A (FICTIVE);MUTUELLE;MTA-ESS;Formule Test Essentielle;REGLE;CATEGORIE;IMAGING;50;NON;;;;01/12/2026;Imagerie prise en charge à 50 %
+MUT-TEST-A;Mutuelle Test A (FICTIVE);MUTUELLE;MTA-ESS;Formule Test Essentielle;REGLE;CATEGORIE;OTHER_SERVICE;;OUI;;;;01/12/2026;Médicaments, consommables et frais administratifs exclus
+MUT-TEST-A;Mutuelle Test A (FICTIVE);MUTUELLE;MTA-ESS;Formule Test Essentielle;REGLE;ACTE;LAB-WIDAL;;OUI;;;;01/12/2026;Sérodiagnostic de Widal exclu
+MUT-TEST-A;Mutuelle Test A (FICTIVE);MUTUELLE;MTA-ESS;Formule Test Essentielle;REGLE;ACTE;ACT-CIRC;;OUI;;;;01/12/2026;Circoncision exclue
+ASS-TEST-B;Assurance Test B (FICTIVE);ASSUREUR_PRIVE;ATB-CONF;Formule Test Confort;FORMULE;;;90;NON;;100000;500000;01/12/2026;Taux par défaut 90 %, plafond 100 000 F par facture, 500 000 F par bénéficiaire et par année civile
+ASS-TEST-B;Assurance Test B (FICTIVE);ASSUREUR_PRIVE;ATB-CONF;Formule Test Confort;REGLE;CATEGORIE;IMAGING;;NON;10000;;;01/12/2026;Imagerie au taux par défaut, part assureur plafonnée à 10 000 F par acte
+ASS-TEST-B;Assurance Test B (FICTIVE);ASSUREUR_PRIVE;ATB-CONF;Formule Test Confort;REGLE;ACTE;ACC-CESAR;;NON;120000;;;01/12/2026;Césarienne au taux par défaut, part assureur plafonnée à 120 000 F
+ASS-TEST-B;Assurance Test B (FICTIVE);ASSUREUR_PRIVE;ATB-CONF;Formule Test Confort;REGLE;ACTE;ADM-CERTIF;;OUI;;;;01/12/2026;Certificat médical exclu
+ASS-TEST-B;Assurance Test B (FICTIVE);ASSUREUR_PRIVE;ATB-CONF;Formule Test Confort;REGLE;ACTE;ACT-CIRC;;OUI;;;;01/12/2026;Circoncision exclue
+NON-ASSURE;Patient non assuré;SANS_PAYEUR;;;FORMULE;;;0;NON;;;;01/12/2026;Ne pas créer dans l'application : c'est l'absence de formule liée. Le patient paie 100 % de la facture

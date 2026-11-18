@@ -136,6 +136,9 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
     private static final Map<String, String> NO_REQUIRED_FIELD = Map.ofEntries(
         Map.entry("POST /appointments/search",
             SEARCH_FILTER),
+        Map.entry("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
+            "a cash hand-over needs nothing; the reference (and mobile-money operator) is required by the service only"
+                + " for the method that sends money (billing-money plan PR 8 review)"),
         Map.entry("POST /patients/national-unique-id/check",
             "optional identity read: an absent IU means no duplicate; PostgreSQL empty-query regression checks no patient, alias or audit write"),
         Map.entry("POST /patients/national-unique-id/search",
@@ -206,6 +209,8 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             "stops a scheduled purge (keeps data); no reason, the state is checked"),
         Map.entry("POST /super-admin/providers/{providerId}/verify",
             "every field is an optional correction or a cross-check flag"),
+        Map.entry("PUT /patient-insurances/{insuranceId}/payer-plan",
+            "billing-money plan PR 6: a null plan removes the link, so an empty body is a valid unlink"),
         Map.entry("POST /break-glass/{sessionId}/revoke",
             "ends one's own emergency access early; the reason is optional"),
         Map.entry("POST /encounters/{encounterId}/nursing-intake",

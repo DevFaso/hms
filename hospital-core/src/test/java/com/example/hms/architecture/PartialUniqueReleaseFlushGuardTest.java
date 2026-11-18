@@ -91,13 +91,20 @@ class PartialUniqueReleaseFlushGuardTest {
         // price version per start / one open-ended version per item (closing effective_to releases it).
         Map.entry("price_list_items", "PriceListItem"),
         Map.entry("price_list_prices", "PriceListPrice"),
+        // Billing-money plan PR 6 (V305): one live rule per target and start / one open-ended rule per target
+        // (closing effective_to releases it; the service flushes the closes before the insert).
+        Map.entry("payer_plan_rules", "PayerPlanRule"),
+        // Review of #1202: plan terms versioned like prices (one live version per start, one open-ended).
+        Map.entry("payer_plan_terms", "PayerPlanTerms"),
         // Billing-money plan PR 4 (V304): a file applies once per hospital; a trace row is never edited.
-        Map.entry("price_list_imports", "PriceListImport"));
+        Map.entry("price_list_imports", "PriceListImport"),
+        // Billing-money plan PR 8 (V307): one refund per client request key and hospital; the key never moves.
+        Map.entry("invoice_refunds", "InvoiceRefund"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =
         Set.of("Hospital", "User", "LabResult", "StockLot", "Encounter", "BillingInvoice", "MedicationCatalogItem",
-            "PriceListImport");
+            "PriceListImport", "InvoiceRefund");
 
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow();
 

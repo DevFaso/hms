@@ -648,6 +648,17 @@ export interface PortalInvoiceDetail {
     amount: number;
     invoiceItemDescription?: string | null;
   }[];
+  /** Billing-money plan PR 8 (QA D1900): money handed back to me ("Remboursé : 500 F CFA le …"). */
+  refunds: PortalInvoiceRefund[];
+}
+
+/** Billing-money plan PR 8: a refund handed back to the patient (amount, how, when; never the staff's reasons). */
+export interface PortalInvoiceRefund {
+  id: string;
+  amount: number;
+  method?: string | null;
+  mobileMoneyOperator?: string | null;
+  paidAt?: string | null;
 }
 
 export interface PortalInvoice {
@@ -1468,6 +1479,7 @@ export class PatientPortalService {
           items: PortalInvoiceLine[] | null;
           payments: PortalInvoicePayment[] | null;
           adjustments?: PortalInvoiceDetail['adjustments'] | null;
+          refunds?: PortalInvoiceRefund[] | null;
         }>
       >(`${this.base}/billing/invoices/${invoiceId}`)
       .pipe(
@@ -1484,6 +1496,7 @@ export class PatientPortalService {
             ...a,
             amount: Number(a.amount ?? 0),
           })),
+          refunds: (r.data.refunds ?? []).map((f) => ({ ...f, amount: Number(f.amount ?? 0) })),
         })),
       );
   }

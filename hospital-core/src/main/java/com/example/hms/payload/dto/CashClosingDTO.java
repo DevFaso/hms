@@ -17,6 +17,12 @@ import java.util.UUID;
  * the signed-in cashier received on one day at the acting hospital, invoice
  * payments and pharmacy payments, totalled by payment method, with what was
  * reversed or voided since, so the till can be counted against it.
+ *
+ * <p>Billing-money plan PR 8 (QA D1900): money goes both ways. Every line has a
+ * direction: IN for money received, OUT for a refund handed back to a patient.
+ * A refund is counted OUT on the day it was paid, in the closing of the cashier
+ * who paid it, never on the day the money came in, so it rewrites no past
+ * day's figures. What should be in the till is {@link #netAmount}.
  */
 @Getter
 @Setter
@@ -41,6 +47,11 @@ public class CashClosingDTO {
     /** Received that day and since reversed or voided: not in the till. */
     private long reversedCount;
     private BigDecimal reversedAmount;
+    /** Billing-money plan PR 8: refunds this cashier handed back that day (money OUT). */
+    private long refundedCount;
+    private BigDecimal refundedAmount;
+    /** What should be in the till: received and still counted, less refunded. */
+    private BigDecimal netAmount;
 
     @Getter
     @Setter
@@ -56,6 +67,8 @@ public class CashClosingDTO {
          * (older rows) or for any other method.
          */
         private String operator;
+        /** IN (received) or OUT (refunded); one row per source, method, operator and direction. */
+        private String direction;
         private long count;
         private BigDecimal amount;
     }
@@ -81,7 +94,12 @@ public class CashClosingDTO {
         private String operator;
         private String reference;
         private BigDecimal amount;
-        /** CONFIRMED / REVERSED for an invoice payment, POSTED / VOIDED for a pharmacy one. */
+        /**
+         * CONFIRMED / REVERSED for an invoice payment, POSTED / VOIDED for a pharmacy one, PAID for a refund handed
+         * back.
+         */
         private String status;
+        /** IN for money received, OUT for a refund handed back (billing-money plan PR 8). */
+        private String direction;
     }
 }

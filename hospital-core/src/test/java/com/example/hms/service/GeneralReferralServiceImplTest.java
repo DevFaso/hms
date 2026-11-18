@@ -699,4 +699,22 @@ class GeneralReferralServiceImplTest {
 
         assertThat(result).isEmpty();
     }
+    @Test
+    void recentOversight_appliesVerifiedHospitalPinBeforePageLimit() {
+        var hospitalId = java.util.UUID.randomUUID();
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 3);
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .superAdmin(true).headerOverridden(true).activeHospitalId(hospitalId).build());
+        try {
+            org.mockito.Mockito.when(referralRepository.findByHospital_Id(hospitalId, pageable))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+            service.getRecentForSuperAdmin(pageable);
+            org.mockito.Mockito.verify(referralRepository).findByHospital_Id(hospitalId, pageable);
+            org.mockito.Mockito.verify(referralRepository, org.mockito.Mockito.never()).findAll(pageable);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
 }

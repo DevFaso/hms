@@ -79,7 +79,8 @@ public class DigitalSignatureController {
      * Revoke a signature
      */
     @PostMapping("/{signatureId}/revoke")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','HOSPITAL_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','HOSPITAL_ADMIN')"
+        + " or hasRole('SUPER_ADMIN')")
     @Operation(summary = "Revoke a digital signature", 
         description = "Revoke an existing signature (requires elevated permissions)")
     public ResponseEntity<SignatureResponseDTO> revokeSignature(

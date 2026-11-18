@@ -1820,4 +1820,22 @@ class ConsultationServiceImplTest {
             assertThat(service.cancelConsultation(consultationId, "duplicate").getStatus()).isEqualTo(ConsultationStatus.CANCELLED);
         }
     }
+    @Test
+    void recentOversight_appliesVerifiedHospitalPinBeforePageLimit() {
+        var hospitalId = java.util.UUID.randomUUID();
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 3);
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .superAdmin(true).headerOverridden(true).activeHospitalId(hospitalId).build());
+        try {
+            org.mockito.Mockito.when(consultationRepository.findByHospital_Id(hospitalId, pageable))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+            service.getRecentForSuperAdmin(pageable);
+            org.mockito.Mockito.verify(consultationRepository).findByHospital_Id(hospitalId, pageable);
+            org.mockito.Mockito.verify(consultationRepository, org.mockito.Mockito.never()).findAll(pageable);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
 }

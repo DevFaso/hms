@@ -85,6 +85,18 @@ class CancelVoidReasonGuardTest {
             "PaymentReasonRequestDTO.reason (@NotBlank) -> service/BillingInvoiceServiceImplTest#reversePayment_needsAReasonAndAConfirmedRow_D142");
         HANDLERS.put("POST /billing-invoices/{invoiceId}/adjustments/{adjustmentId}/reverse",
             "AdjustmentReversalRequestDTO.reason (@NotBlank) -> service/BillingInvoiceServiceImplTest#reverseAdjustment_needsAReasonALiveRowAndAStandingInvoice_D1105");
+        // Billing-money plan PR 8: refunds. Each step that ends one names its reason; the others move money out
+        // only after another person approved it.
+        HANDLERS.put("POST /billing-invoices/{invoiceId}/refunds/{refundId}/reject",
+            "InvoiceRefundReasonRequestDTO.reason -> service/billing/InvoiceRefundServiceTest#rejectingNeedsAReasonAndASecondDecisionIsRefused");
+        HANDLERS.put("POST /billing-invoices/{invoiceId}/refunds/{refundId}/cancel",
+            "InvoiceRefundReasonRequestDTO.reason -> service/billing/InvoiceRefundServiceTest#whoMayCancel");
+        HANDLERS.put("POST /billing-invoices/{invoiceId}/refunds",
+            "NOT A VOID: asks for a refund, with a required reason (InvoiceRefundServiceTest#anEmptyRequestNamesEveryMissingField); nothing moves until another person approves");
+        HANDLERS.put("POST /billing-invoices/{invoiceId}/refunds/{refundId}/approve",
+            "NOT A VOID: approves a refund asked for with its reason; another person decides (D-3)");
+        HANDLERS.put("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
+            "NOT A VOID: hands over a refund already asked for with a reason and approved by another person");
         HANDLERS.put("DELETE /billing-invoices/{id}",
             "NOT A VOID: only a DRAFT is deleted (billing.invoice.deleteOnlyDraft, QA D613); an issued invoice is cancelled with a reason");
         HANDLERS.put("DELETE /invoice-items/{id}",
@@ -437,6 +449,9 @@ class CancelVoidReasonGuardTest {
         // Billing-money plan PR 2: retiring a price-list item keeps its history with who, when and why.
         CLINICAL_HANDLERS.put("POST /billing/price-list/{id}/deactivate",
             "PriceListDeactivateRequestDTO.reason -> service/billing/PriceListServiceTest#deactivatingNeedsAReason");
+        // Billing-money plan PR 6: retiring a payer keeps who, when and why (ending a rule too: PayerCatalogueServiceTest).
+        CLINICAL_HANDLERS.put("POST /billing/payers/{payerId}/deactivate",
+            "PayerReasonRequestDTO.reason -> service/billing/PayerCatalogueServiceTest#deactivatingAPayerNeedsAReason");
         CLINICAL_HANDLERS.put("POST /admissions/order-sets/{orderSetId}/deactivate",
             "NOT A CLINICAL RECORD: retires an order-set template; no patient's order changes");
         CLINICAL_HANDLERS.put("PUT /drug-interactions/{id}/deactivate",
