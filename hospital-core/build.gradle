@@ -108,6 +108,9 @@ dependencies {
     // TestRestTemplate (@AutoConfigureTestRestTemplate) lives in its own module.
     testImplementation 'org.springframework.boot:spring-boot-resttestclient'
     testImplementation 'org.springframework.security:spring-security-test'
+    // OtlpMetricsExportTest decodes the OTLP payload. Already on the runtime classpath (via
+    // micrometer-registry-otlp, runtime scope); the version is the one that brings.
+    testImplementation 'io.opentelemetry.proto:opentelemetry-proto:1.10.0-alpha'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
 
     // Testcontainers — drives LiquibaseSchemaIT against real PostgreSQL so
