@@ -129,7 +129,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     // (defense-in-depth against log-aggregator misconfiguration / PII leak);
                     // the path + the ticket-issuance trail let ops correlate when needed.
                     log.warn("[WS-TICKET] Refusing ticket for a disabled/unverified account on path={}", path);
-                    respondUnauthorized(response, null);
+                    respondUnauthorized(response);
                     return true;
                 }
                 var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
@@ -143,7 +143,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
         log.warn("[WS-TICKET] Invalid or expired ticket on path={}", path);
-        respondUnauthorized(response, null);
+        respondUnauthorized(response);
         return true;
     }
 
@@ -170,7 +170,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (isKnownMissingPrincipal(extractedSubject)) {
             log.debug("[JWT] Short-circuiting cached missing user on path={}", path);
-            respondUnauthorized(response, extractedSubject);
+            respondUnauthorized(response);
             return false;
         }
 
@@ -217,7 +217,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // rejection with no line at INFO — is real and recorded in tasklist.md; the fix is a
             // warn-once-per-jti path like isKnownMissingPrincipal's, not a blanket level change.
             log.debug("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
-            respondUnauthorized(response, extractedSubject);
+            respondUnauthorized(response);
             return false;
         }
 
@@ -227,7 +227,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 30 s by GlobalSessionRevocationService so this stays a hot path.
         if (isRevokedByGlobalIat(jwt)) {
             log.warn("[JWT] Token rejected by global session revocation on path={}", path);
-            respondUnauthorized(response, extractedSubject);
+            respondUnauthorized(response);
             return false;
         }
 
@@ -235,7 +235,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             log.trace("[JWT] Token present and valid (len={})", jwt.length());
         }
         if (!applyAuthentication(jwt, request, extractedSubject)) {
-            respondUnauthorized(response, extractedSubject);
+            respondUnauthorized(response);
             return false;
         }
 
@@ -467,7 +467,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return true;
     }
 
-    private void respondUnauthorized(HttpServletResponse response, String subject) {
+    private void respondUnauthorized(HttpServletResponse response) {
         if (!response.isCommitted()) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setHeader("WWW-Authenticate", "Bearer realm=\"Hospital\"");
