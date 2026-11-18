@@ -88,6 +88,15 @@ public class BillingInvoice extends BaseEntity {
     @Column(name = "amount_paid", nullable = false, precision = 12, scale = 2)
     private BigDecimal amountPaid;
 
+    /**
+     * Billing-money plan PR 8 (V307, QA D1900): what was handed back to the patient on refunds paid out. The amount
+     * paid keeps every franc that came in; what is still to give back is {@code InvoiceBalance.refundDueOf}.
+     */
+    @Builder.Default
+    @NotNull @DecimalMin("0.00") @Digits(integer = 10, fraction = 2)
+    @Column(name = "amount_refunded", nullable = false, precision = 12, scale = 2)
+    private BigDecimal amountRefunded = BigDecimal.ZERO;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)

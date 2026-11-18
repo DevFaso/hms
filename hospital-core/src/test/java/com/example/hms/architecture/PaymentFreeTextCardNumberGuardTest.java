@@ -54,6 +54,7 @@ class PaymentFreeTextCardNumberGuardTest {
         NOT_PAYMENT_TEXT.put("CheckInRequestDTO.chiefComplaint", "the visit's clinical reason, not the copay");
         NOT_PAYMENT_TEXT.put("CheckInRequestDTO.notes", "the receptionist's check-in notes, not the copay");
         NOT_PAYMENT_TEXT.put("CheckInRequestDTO.consentSignedName", "the consent signer's name, not the copay");
+        NOT_PAYMENT_TEXT.put("InvoiceRefundRequestDTO.method", "a method code, checked against PaymentMethod.CODES");
     }
 
     @Test
@@ -63,7 +64,9 @@ class PaymentFreeTextCardNumberGuardTest {
         assertThat(requests).extracting(Class::getSimpleName)
             .as("the scan must keep finding the payment entry points this guard was written for")
             .contains("StaffPaymentRequestDTO", "PatientPaymentRequestDTO", "CheckInRequestDTO",
-                "PharmacyPaymentRequestDTO", "PharmacySaleRequestDTO", "PaymentReasonRequestDTO");
+                "PharmacyPaymentRequestDTO", "PharmacySaleRequestDTO", "PaymentReasonRequestDTO",
+                // Billing-money plan PR 8: the refund request and the reason a refund is rejected or withdrawn.
+                "InvoiceRefundRequestDTO", "InvoiceRefundReasonRequestDTO");
 
         Set<String> checked = new TreeSet<>();
         List<String> missing = new ArrayList<>();
@@ -87,7 +90,9 @@ class PaymentFreeTextCardNumberGuardTest {
                 "PatientPaymentRequestDTO.transactionReference", "PatientPaymentRequestDTO.notes",
                 "CheckInRequestDTO.copayReference", "PharmacyPaymentRequestDTO.referenceNumber",
                 "PharmacyPaymentRequestDTO.notes", "PharmacySaleRequestDTO.referenceNumber",
-                "PharmacySaleRequestDTO.notes", "PaymentReasonRequestDTO.reason");
+                "PharmacySaleRequestDTO.notes", "PaymentReasonRequestDTO.reason",
+                "InvoiceRefundRequestDTO.reference", "InvoiceRefundRequestDTO.reason",
+                "InvoiceRefundReasonRequestDTO.reason");
         assertThat(missing)
             .as("a payment or refund free-text field that would store a card number (D-15): add @NoCardNumber,"
                 + " or list it in NOT_PAYMENT_TEXT with the reason it is not payment text")

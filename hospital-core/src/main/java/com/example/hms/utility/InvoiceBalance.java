@@ -25,25 +25,44 @@ public final class InvoiceBalance {
             return BigDecimal.ZERO;
         }
         BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        return total.subtract(keptOf(invoice)).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Billing-money plan PR 8: the money the hospital still holds on the invoice: every franc received less what
+     * was handed back on refunds paid out. Never below zero.
+     */
+    public static BigDecimal keptOf(BillingInvoice invoice) {
+        if (invoice == null) {
+            return BigDecimal.ZERO;
+        }
         BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
-        return total.subtract(paid).max(BigDecimal.ZERO);
+        BigDecimal refunded = invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO;
+        return paid.subtract(refunded).max(BigDecimal.ZERO);
     }
 
     /**
      * QA D1466: what the hospital holds above the bill and owes back. A check-in
      * copay above the visit's total folds whole onto the visit invoice (the money
      * was received, its row moves unsplit), so the amount paid may pass the total.
-     * Nothing further is owed, and this is the refund due. No refund workflow
-     * exists: it is stated as owed on the billing page, the patient's billing page and the PDF
-     * (the mobile apps show the balance, which is 0: tasklist standing debt).
-     * Nothing on a cancelled invoice.
+     * Nothing further is owed, and this is the refund due, less what refunds
+     * already handed back (billing-money plan PR 8, QA D1900). Nothing on a
+     * cancelled invoice.
      */
     public static BigDecimal refundDueOf(BillingInvoice invoice) {
         if (invoice == null || invoice.getStatus() == InvoiceStatus.CANCELLED) {
             return BigDecimal.ZERO;
         }
         BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
-        BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
-        return paid.subtract(total).max(BigDecimal.ZERO);
+        return keptOf(invoice).subtract(total).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Billing-money plan PR 8: what a new refund request may still ask for: the refund due less the refunds already
+     * asked for or approved and not yet paid ({@code openRefunds}). Never below zero.
+     */
+    public static BigDecimal refundableOf(BillingInvoice invoice, BigDecimal openRefunds) {
+        BigDecimal open = openRefunds != null ? openRefunds : BigDecimal.ZERO;
+        return refundDueOf(invoice).subtract(open).max(BigDecimal.ZERO);
     }
 }

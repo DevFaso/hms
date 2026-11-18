@@ -17,6 +17,14 @@ public record PortalInvoiceDetailDTO(
     List<InvoiceItemResponseDTO> items,
     List<PaymentTransactionResponseDTO> payments,
     /** QA D974: what was discounted, waived or credited (type and amount; the clerk's reason stays with billing). */
-    List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> adjustments
+    List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> adjustments,
+    /** Billing-money plan PR 8 (QA D1900): the refunds handed back to the patient (paid out only). */
+    List<PortalRefundDTO> refunds
 ) {
+    /** The detail without refunds (an invoice with none, or a caller that does not read them). */
+    public PortalInvoiceDetailDTO(BillingInvoiceResponseDTO invoice, List<InvoiceItemResponseDTO> items,
+                                  List<PaymentTransactionResponseDTO> payments,
+                                  List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> adjustments) {
+        this(invoice, items, payments, adjustments, List.of());
+    }
 }

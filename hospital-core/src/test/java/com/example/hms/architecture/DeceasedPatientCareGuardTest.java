@@ -201,7 +201,7 @@ class DeceasedPatientCareGuardTest {
     /** Controller -> why none of its writes is new care. */
     private static final Map<String, String> WHOLE_CONTROLLER = Map.ofEntries(
         Map.entry("BillingInvoice", BILLING), Map.entry("Eligibility", BILLING), Map.entry("InvoiceEmail", BILLING),
-        Map.entry("InvoiceItem", BILLING), Map.entry("PriceList", BILLING), Map.entry("Payer", BILLING), Map.entry("PatientGuarantor", BILLING), Map.entry("PatientInsurance", BILLING),
+        Map.entry("InvoiceItem", BILLING), Map.entry("InvoiceRefund", BILLING), Map.entry("PriceList", BILLING), Map.entry("Payer", BILLING), Map.entry("PatientGuarantor", BILLING), Map.entry("PatientInsurance", BILLING),
         Map.entry("PharmacyClaim", BILLING), Map.entry("PharmacyPayment", BILLING),
         Map.entry("DischargeApproval", "discharge and stay close-out"),
         Map.entry("DischargeSummary", "discharge and stay close-out"),

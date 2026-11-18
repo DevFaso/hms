@@ -116,6 +116,10 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("BedBoardDTO.BedBoardEntryDTO#notes", "a note about the bed, not the patient"),
         Map.entry("BillingInvoiceResponseDTO#notes", "billing notes"),
         Map.entry("PaymentTransactionResponseDTO#notes", "cashier notes"),
+        // Billing-money plan PR 8: why money is handed back, written by the till (the copay desk among them).
+        Map.entry("InvoiceRefundDTO#reason", "why a refund is asked for: money, written at the till"),
+        Map.entry("InvoiceRefundDTO#decisionReason", "why a refund was rejected: money"),
+        Map.entry("InvoiceRefundDTO#cancelReason", "why a refund request was withdrawn: money"),
         Map.entry("InvoiceAdjustmentResponseDTO#reason", "why a discount was given"),
         Map.entry("InvoiceItemResponseDTO#overrideReason",
             "why the cashier changed a price-list price on a draft line (billing-money plan PR 3, D-2)"),
@@ -168,6 +172,8 @@ class ReceptionistClinicalReadGuardTest {
      */
     private static final Map<String, String> THE_DESK_WRITES_IT = Map.ofEntries(
         Map.entry("AppointmentRequestDTO#notes", "booking notes the desk writes"),
+        Map.entry("InvoiceRefundRequestDTO#reason", "why the copay till asks to hand money back: no clinical content"),
+        Map.entry("InvoiceRefundReasonRequestDTO#reason", "why a refund is rejected or withdrawn: money"),
         Map.entry("AppointmentRequestDTO#reason", "the visit reason the desk books"),
         Map.entry("AppointmentRequestDTO#statusReason", "why the appointment moved"),
         Map.entry("AppointmentRequestDTO#overbookReason", "QA D1429: why the desk books outside the published slots"),

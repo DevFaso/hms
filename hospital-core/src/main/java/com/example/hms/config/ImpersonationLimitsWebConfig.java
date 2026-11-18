@@ -8,7 +8,7 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Registers {@link ImpersonationLimits} on the caller's own account paths.
+ * Registers {@link ImpersonationLimits} on the caller's own account paths, and on the money paths.
  * The audit service comes through an {@link ObjectProvider}, like
  * {@code ActingScopeWebConfig}'s interceptor, so {@code @WebMvcTest} slices
  * (which load every {@code WebMvcConfigurer}) start, and enforce the rule.
@@ -26,5 +26,9 @@ public class ImpersonationLimitsWebConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new ImpersonationLimits(auditProvider::getIfAvailable))
             .addPathPatterns(ImpersonationLimits.ACCOUNT_PATHS.toArray(String[]::new));
+        // Billing-money plan PR 8 review: a support session never moves money as the user it impersonates.
+        registry.addInterceptor(ImpersonationLimits.forMoney(auditProvider::getIfAvailable))
+            .addPathPatterns(ImpersonationLimits.MONEY_PATHS.toArray(String[]::new))
+            .excludePathPatterns(ImpersonationLimits.MONEY_PATH_READS.toArray(String[]::new));
     }
 }

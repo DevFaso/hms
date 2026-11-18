@@ -86,6 +86,9 @@ class BillingInvoiceServiceImplTest {
     @Mock
     private com.example.hms.repository.pharmacy.PharmacySaleRepository pharmacySaleRepository;
 
+    @Mock
+    private com.example.hms.repository.InvoiceRefundRepository invoiceRefundRepository;
+
     private static final UUID HOSPITAL_ID = UUID.randomUUID();
 
     private BillingInvoiceServiceImpl billingInvoiceService;
@@ -117,8 +120,9 @@ class BillingInvoiceServiceImplTest {
             transactionManager,
             // QA D1129: the real registry over the mocked ledgers.
             new com.example.hms.service.payment.PaymentReferenceRegistry(paymentTransactionRepository,
-                pharmacyPaymentRepository, pharmacySaleRepository)
+                pharmacyPaymentRepository, pharmacySaleRepository, invoiceRefundRepository)
         );
+        billingInvoiceService.setRefundRepository(invoiceRefundRepository);
     }
 
     @AfterEach
@@ -2498,6 +2502,103 @@ class BillingInvoiceServiceImplTest {
         assertEquals(0, new BigDecimal("700").compareTo(byOperator.get("null")));
         assertEquals("ORANGE_MONEY", closing.getEntries().get(0).getOperator());
         assertNull(closing.getEntries().get(3).getOperator());
+    }
+
+    /** Billing-money plan PR 8 (QA D1900): a refund handed back is money OUT of the till of the day it was paid. */
+    @Test
+    void cashClosing_countsARefundPaidOutThatDayAsMoneyOut_D1900() {
+        UUID cashier = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(cashier);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(HOSPITAL_ID);
+        LocalDate day = LocalDate.of(2026, 11, 17);
+        PaymentTransaction cash = PaymentTransaction.builder().amount(new BigDecimal("2000"))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.CONFIRMED).build();
+        cash.setCreatedAt(day.atTime(9, 0));
+        when(paymentTransactionRepository.findReceivedByCashier(cashier, HOSPITAL_ID, day.atStartOfDay(),
+            day.plusDays(1).atStartOfDay())).thenReturn(List.of(cash));
+        com.example.hms.model.InvoiceRefund refund = com.example.hms.model.InvoiceRefund.builder()
+            .amount(new BigDecimal("500")).method(PaymentMethod.CASH)
+            .status(com.example.hms.enums.InvoiceRefundStatus.PAID).paidBy(cashier).paidAt(day.atTime(15, 0)).build();
+        refund.setId(UUID.randomUUID());
+        when(invoiceRefundRepository.findPaidByCashier(cashier, HOSPITAL_ID, day.atStartOfDay(),
+            day.plusDays(1).atStartOfDay())).thenReturn(List.of(refund));
+
+        com.example.hms.payload.dto.CashClosingDTO closing = billingInvoiceService.cashClosing(day, Locale.FRENCH);
+
+        assertEquals(0, new BigDecimal("2000").compareTo(closing.getReceivedAmount()));
+        assertEquals(1L, closing.getRefundedCount());
+        assertEquals(0, new BigDecimal("500").compareTo(closing.getRefundedAmount()));
+        assertEquals(0, new BigDecimal("1500").compareTo(closing.getNetAmount()));
+        assertEquals(List.of("IN", "OUT"), closing.getEntries().stream()
+            .map(com.example.hms.payload.dto.CashClosingDTO.Entry::getDirection).toList());
+        assertEquals(List.of("IN", "OUT"), closing.getByMethod().stream()
+            .map(com.example.hms.payload.dto.CashClosingDTO.MethodTotal::getDirection).toList());
+    }
+
+    /** Billing-money plan PR 8: a reversal is audited as PAYMENT_REVERSED, never as a refund (REFUND_ISSUED). */
+    @Test
+    void reversePayment_isAuditedAsAReversalNotARefund() {
+        AuditEventLogService audit = mock(AuditEventLogService.class);
+        billingInvoiceService.setAuditEventLogService(audit);
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        invoice.setAmountPaid(new BigDecimal("100.00"));
+        invoice.setStatus(InvoiceStatus.PAID);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+        var row = ledgerRow(invoice, "100.00", com.example.hms.enums.PaymentStatus.CONFIRMED);
+
+        billingInvoiceService.reversePayment(invoice.getId(), row.getId(), "Entered in error", UUID.randomUUID(),
+            Locale.ENGLISH);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> logged =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(audit).logEvent(logged.capture());
+        assertEquals(com.example.hms.enums.AuditEventType.PAYMENT_REVERSED, logged.getValue().getEventType());
+    }
+
+    /** Billing-money plan PR 8: money already handed back on a refund came out of what was received. */
+    @Test
+    void reversePayment_cannotTakeTheMoneyHeldBelowWhatWasRefunded() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        invoice.setTotalAmount(new BigDecimal("1500.00"));
+        invoice.setAmountPaid(new BigDecimal("2000.00"));
+        invoice.setAmountRefunded(new BigDecimal("500.00"));
+        invoice.setStatus(InvoiceStatus.PAID);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        var row = ledgerRow(invoice, "2000.00", com.example.hms.enums.PaymentStatus.CONFIRMED);
+        UUID invoiceId = invoice.getId();
+        UUID rowId = row.getId();
+        UUID staff = UUID.randomUUID();
+
+        BusinessException refused = assertThrows(BusinessException.class,
+            () -> billingInvoiceService.reversePayment(invoiceId, rowId, "Entered in error", staff, Locale.ENGLISH));
+
+        assertEquals("billing.payment.reversalBelowRefunded", refused.getMessageKey());
+        assertEquals(com.example.hms.enums.PaymentStatus.CONFIRMED, row.getStatus());
+        assertEquals(new BigDecimal("2000.00"), invoice.getAmountPaid());
+    }
+
+    /** QA D1902: the refusal to cancel a paid invoice no longer sends the clerk back to a draft. */
+    @Test
+    void cancellingAPaidInvoiceGivesTheStepsThatWork_D1902() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        for (Locale locale : List.of(Locale.FRENCH, Locale.ENGLISH, Locale.forLanguageTag("es"))) {
+            LocaleContextHolder.setLocale(locale);
+            BillingInvoice invoice = existingInvoice(InvoiceStatus.PAID, "500");
+            BillingInvoiceRequestDTO request = BillingInvoiceRequestDTO.builder()
+                .invoiceDate(invoice.getInvoiceDate()).dueDate(invoice.getDueDate())
+                .status(InvoiceStatus.CANCELLED).cancelReason("Erreur").build();
+            UUID invoiceId = invoice.getId();
+
+            BusinessException refused = assertThrows(BusinessException.class,
+                () -> billingInvoiceService.updateInvoice(invoiceId, request, locale));
+
+            assertEquals("billing.invoice.statusLockedByPayments", refused.getMessageKey());
+            String text = refused.getMessage().toLowerCase(Locale.ROOT);
+            org.assertj.core.api.Assertions.assertThat(text)
+                .as(locale + ": " + text)
+                .doesNotContain("brouillon").doesNotContain("draft").doesNotContain("borrador");
+        }
     }
 
     @Test

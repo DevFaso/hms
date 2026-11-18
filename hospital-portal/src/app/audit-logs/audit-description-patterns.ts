@@ -559,6 +559,18 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { subject: 'phrase:CROSS_HOSPITAL_SUBJECT', extra: 'phrase:CROSS_HOSPITAL_PURPOSE' },
   },
   {
+    // Billing-money plan PR 8 review: a support session never moves money as the user it impersonates.
+    key: 'AUDIT.DESC.SUPPORT_SESSION_MONEY_REFUSED',
+    re: /^Support session refused: (.+) \(money\)$/,
+    params: ['what'],
+  },
+  {
+    // Billing-money plan PR 8 review: a cancelled dispense's payment voided (ids only; older rows below).
+    key: 'AUDIT.DESC.PHARMACY_PAYMENT_VOIDED_IDS',
+    re: /^Pharmacy payment (\S+) voided for cancelled dispense (\S+)$/,
+    params: ['payment', 'dispense'],
+  },
+  {
     key: 'AUDIT.DESC.SUPPORT_SESSION_REFUSED',
     re: /^Support session refused: (.+) \(sign-in or recovery details\)$/,
     params: ['what'],
@@ -1434,6 +1446,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^(Payment recorded|Payment reversed|Pending payment confirmed|Pending payment rejected|Check-in copay recorded): payment (\S+) on invoice (\S+)$/,
     params: ['what', 'payment', 'invoice'],
     localise: { what: 'phrase:PAYMENT_EVENT' },
+  },
+  {
+    // Billing-money plan PR 8 (QA D1900): each step of a refund (ids only; the amount and reason stay on the row).
+    key: 'AUDIT.DESC.REFUND_EVENT',
+    re: /^(Refund requested|Refund approved|Refund rejected|Refund paid out|Refund cancelled): refund (\S+) on invoice (\S+)$/,
+    params: ['what', 'refund', 'invoice'],
+    localise: { what: 'phrase:REFUND_EVENT' },
   },
   {
     // Billing-money plan PR 2: the price list (ids only; the label, price and reason stay on the rows).
