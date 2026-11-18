@@ -21,7 +21,7 @@ spring:
 
 logging:
   level:
-    '[com.example.hms]': ${LOG_LEVEL_HMS:DEBUG}
+    '[com.example.hms]': ${LOG_LEVEL_HMS:INFO}
     # Per-request security chatter, demoted out of DEBUG.
     #
     # JwtAuthenticationFilter, JwtTokenProvider, CustomUserDetailsService and

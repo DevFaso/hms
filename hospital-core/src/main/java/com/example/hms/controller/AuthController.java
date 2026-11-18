@@ -240,7 +240,7 @@ public class AuthController {
             log.info("[BOOTSTRAP] Signup failed: {}", result.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
         }
-        log.info("[BOOTSTRAP] Super Admin created: {}", result.getUsername());
+        log.info("[BOOTSTRAP] Super Admin created.");
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
@@ -251,14 +251,12 @@ public class AuthController {
         // KC-5 prep: short-circuit the legacy issuer when the soak flag is on.
         // Callers must migrate to the Keycloak Auth Code + PKCE flow.
         if (authProps.oidcRequired()) {
-            log.warn("🔐 [LOGIN] Rejected — legacy issuer disabled (app.auth.oidc.required=true). user='{}'",
-                    loginRequest.getUsername());
+            log.warn("🔐 [LOGIN] Rejected — legacy issuer disabled (app.auth.oidc.required=true).");
             return legacyIssuerGone(
                     MessageUtil.resolve("auth.api.legacyLoginDisabled"));
         }
         long start = System.nanoTime();
-        log.info("🔐 [LOGIN] Attempting login for user='{}' at {}", loginRequest.getUsername(),
-                java.time.Instant.now());
+        log.debug("🔐 [LOGIN] Attempting login.");
 
         // ── Lockout check (T-12) ──
         // One lookup, the same for a known and an unknown name: see
@@ -266,7 +264,7 @@ public class AuthController {
         long remainMs = loginAttemptService.remainingLockMs(loginRequest.getUsername());
         if (remainMs > 0) {
             long remainMin = Math.max(1, (remainMs + 59_999) / 60_000);
-            log.warn("🔐 [LOGIN] Account '{}' is locked", loginRequest.getUsername());
+            log.warn("🔐 [LOGIN] Sign-in refused: account is locked.");
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.ACCOUNT_LOCKED)
                     .eventDescription("Login rejected — account locked")
@@ -319,8 +317,7 @@ public class AuthController {
             // If the user holds more than one role and has NOT yet chosen, ask them to pick.
             if (allRoles.size() > 1 && (loginRequest.getSelectedRole() == null || loginRequest.getSelectedRole().isBlank())) {
                 long elapsedMs = (System.nanoTime() - start) / 1_000_000;
-                log.info("🔐 [LOGIN] Multi-role selection required for user='{}' roles={} in {}ms",
-                        loginRequest.getUsername(), allRoles, elapsedMs);
+                log.debug("🔐 [LOGIN] Multi-role selection required roles={} in {}ms", allRoles, elapsedMs);
 
                 // QA D536: the picker answer carries the account's real
                 // credential flags; it used to default them to false, so a
@@ -345,8 +342,8 @@ public class AuthController {
                 // exact strings, so "Role_Doctor" must not skip the challenge.
                 String selected = allRoles.stream().filter(r -> r.equalsIgnoreCase(typed)).findFirst().orElse(null);
                 if (selected == null) {
-                    log.warn("🔐 [LOGIN] User '{}' tried to select role '{}' but holds only {}",
-                            loginRequest.getUsername(), typed, allRoles);
+                    log.warn("🔐 [LOGIN] Sign-in refused: the selected role '{}' is not one the account holds ({}).",
+                            typed, allRoles);
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
                             .body(new MessageResponse(MessageUtil.resolve("auth.login.roleNotHeld", typed)));
                 }
@@ -384,8 +381,7 @@ public class AuthController {
                         .build());
 
                 long elapsedMs = (System.nanoTime() - start) / 1_000_000;
-                log.info("🔐 [LOGIN] MFA required for user='{}', enrolled={} in {}ms",
-                        user.getUsername(), mfaEnabled, elapsedMs);
+                log.debug("🔐 [LOGIN] MFA required, enrolled={} in {}ms", mfaEnabled, elapsedMs);
 
                 var body = JwtResponse.builder()
                         .mfaRequired(true)
@@ -449,7 +445,7 @@ public class AuthController {
                     .build();
 
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
-            log.info("🔐 [LOGIN] Success user='{}' effectiveRoles={} in {}ms", loginRequest.getUsername(), effectiveRoles, elapsedMs);
+            log.debug("🔐 [LOGIN] Success effectiveRoles={} in {}ms", effectiveRoles, elapsedMs);
             // S-01: deliver refresh token via HttpOnly cookie (in addition to JSON body during rollout)
             writeRefreshCookie(httpResponse, refreshToken);
             // ── Idle session timeout — seed the idle window on token issue ──
@@ -467,7 +463,7 @@ public class AuthController {
         } catch (BadCredentialsException ex) {
             loginAttemptService.recordFailure(loginRequest.getUsername());
             auditLoginFailure(loginRequest.getUsername(), "Login failed: bad credentials");
-            log.warn("🔐 [LOGIN] Bad credentials for user='{}'", loginRequest.getUsername());
+            log.warn("🔐 [LOGIN] Sign-in refused: bad credentials.");
             // D64: the refusal is shown on the sign-in screen, so it speaks the
             // caller's language rather than always English.
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -496,12 +492,12 @@ public class AuthController {
             // locked out at the exact moment activation succeeds.
             loginAttemptService.recordFailure(loginRequest.getUsername());
             auditLoginFailure(loginRequest.getUsername(), "Login failed: account not active");
-            log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
+            log.warn("🔐 [LOGIN] Sign-in refused: account not active.");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.login.inactive")));
         } catch (RuntimeException ex) {
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
-            log.error("🔐 [LOGIN] Unexpected failure user='{}' after {}ms : {} - {}", loginRequest.getUsername(),
+            log.error("🔐 [LOGIN] Unexpected failure after {}ms : {} - {}",
                     elapsedMs, ex.getClass().getSimpleName(), ex.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.login.failed")));
@@ -915,7 +911,7 @@ public class AuthController {
         String username = jwtTokenProvider.getUsernameFromJWT(refreshToken);
         var user = userRepository.findByUsername(username).orElse(null);
         if (user == null || !user.isActive()) {
-            log.warn("🔄 [REFRESH] User '{}' not found or inactive", username);
+            log.warn("🔄 [REFRESH] Refused — user not found or inactive");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.api.accountUnavailable")));
         }
@@ -934,7 +930,7 @@ public class AuthController {
         // refresh path and silently elevate the caller back to super-admin
         // without ever emitting an IMPERSONATION_ENDED audit event.
         if (impersonationSessionTracker.hasActive(user.getId())) {
-            log.warn("🔄 [REFRESH] Refused — user '{}' has an active impersonation session", username);
+            log.warn("🔄 [REFRESH] Refused — an impersonation session is active");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new MessageResponse(
                         MessageUtil.resolve("auth.api.stopImpersonation")));
@@ -959,7 +955,7 @@ public class AuthController {
                     org.springframework.security.core.authority.SimpleGrantedAuthority::new)
                 .toList();
         if (idleSessionGate.shouldReject(user.getId(), refreshAuthorities)) {
-            log.warn("🔄 [REFRESH] Refused — user '{}' has been idle past the configured window", username);
+            log.warn("🔄 [REFRESH] Refused — idle past the configured window");
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.TOKEN_REFRESH)
                     .eventDescription("Refresh refused — idle timeout")
@@ -1043,7 +1039,7 @@ public class AuthController {
             long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
             long refreshExp = jwtTokenProvider.getExpiration(newRefreshToken).getTime();
 
-            log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
+            log.debug("🔄 [REFRESH] Tokens rotated");
 
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.TOKEN_REFRESH)
@@ -1107,8 +1103,7 @@ public class AuthController {
 
         // Security: only allow verifying the password for the currently authenticated user
         if (!currentUsername.equalsIgnoreCase(request.getUsername())) {
-            log.warn("🔒 [VERIFY-PWD] Username mismatch: authenticated='{}' requested='{}'",
-                    currentUsername, request.getUsername());
+            log.warn("🔒 [VERIFY-PWD] Refused — requested username differs from the authenticated one");
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new MessageResponse(MessageUtil.resolve("auth.api.differentUserPassword")));
         }
@@ -1130,18 +1125,18 @@ public class AuthController {
         }
 
         if (check == LoginAttemptService.PasswordCheck.ACCEPTED) {
-            log.info("🔒 [VERIFY-PWD] Password verified for user='{}'", currentUsername);
+            log.debug("🔒 [VERIFY-PWD] Password verified");
             return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("auth.api.passwordVerified")));
         }
         if (check != LoginAttemptService.PasswordCheck.LOCKED) {
             auditLoginFailure(currentUsername, "Lock-screen unlock failed: bad credentials");
         }
         if (check == LoginAttemptService.PasswordCheck.REJECTED) {
-            log.warn("🔒 [VERIFY-PWD] Wrong password for user='{}'", currentUsername);
+            log.warn("🔒 [VERIFY-PWD] Wrong password");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.verifyPassword.invalid")));
         }
-        log.warn("🔒 [VERIFY-PWD] Account locked for user='{}': ending the session", currentUsername);
+        log.warn("🔒 [VERIFY-PWD] Account locked: ending the session");
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.ACCOUNT_LOCKED)
                 .eventDescription(check == LoginAttemptService.PasswordCheck.LOCKED
@@ -1339,8 +1334,7 @@ public class AuthController {
                     .body(new MessageResponse(ex.getMessage()));
         }
 
-        log.info("🔑 [CHANGE-USR] Username changed for user='{}' -> '{}'; forceUsernameChange cleared.",
-                currentUsername, newUsername);
+        log.info("🔑 [CHANGE-USR] Username changed; forceUsernameChange cleared.");
         return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("auth.username.changed")));
     }
 
@@ -1723,7 +1717,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         String username = authentication.getName();
-        log.debug("[SESSION-BOOTSTRAP] Resolving session context for user='{}'", username);
+        log.debug("[SESSION-BOOTSTRAP] Resolving session context");
         SessionBootstrapResponseDTO response = authBootstrapService.resolveCurrentSession(username);
         // AC-13: a provider user whose token carries no second factor is told
         // so here; every other request answers 403 mfa.enrollment.required.
