@@ -34,8 +34,18 @@ public record AuditSearchFilter(
     LocalDateTime fromDate,
     LocalDateTime toDate,
     /** MVP-9b: optional region scope. Joins through assignment.hospital.organization.region. */
-    OrganizationRegion tenantRegion
+    OrganizationRegion tenantRegion,
+    boolean excludeRoutineSuccesses
 ) {
+    /** Preserve existing callers and saved searches: no events are suppressed unless requested. */
+    public AuditSearchFilter(UUID userId, String userNameLike, List<AuditEventType> eventTypes,
+                            AuditStatus status, UUID hospitalId, UUID organizationId,
+                            UUID impersonatorUserId, String entityType, String resourceId,
+                            LocalDateTime fromDate, LocalDateTime toDate, OrganizationRegion tenantRegion) {
+        this(userId, userNameLike, eventTypes, status, hospitalId, organizationId,
+            impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion, false);
+    }
+
     /** All-null filter — useful default when the caller wants every event. */
     public static AuditSearchFilter empty() {
         return new AuditSearchFilter(

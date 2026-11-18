@@ -94,6 +94,7 @@ class SuperAdminAuditSearchEventTypeTest {
         mvc.perform(get("/super-admin/audit-search")).andExpect(status().isOk());
 
         assertThat(searchedWith().eventTypes()).isNull();
+        assertThat(searchedWith().excludeRoutineSuccesses()).isFalse();
     }
 
     @Test
@@ -115,4 +116,18 @@ class SuperAdminAuditSearchEventTypeTest {
         verify(service).exportCsv(filter.capture(), anyInt());
         assertThat(filter.getValue().eventTypes()).containsExactly(AuditEventType.USER_DELETE);
     }
+    @Test
+    void routineSuppressionIsExplicitAndSharedBySearchAndCsv() throws Exception {
+        when(service.search(any(), any())).thenReturn(new AuditSearchPageDTO());
+        when(service.exportCsv(any(), anyInt())).thenReturn(new byte[0]);
+        mvc.perform(get("/super-admin/audit-search").param("excludeRoutineSuccesses", "true"))
+            .andExpect(status().isOk());
+        assertThat(searchedWith().excludeRoutineSuccesses()).isTrue();
+        mvc.perform(get("/super-admin/audit-search/csv").param("excludeRoutineSuccesses", "true"))
+            .andExpect(status().isOk());
+        ArgumentCaptor<AuditSearchFilter> filter = ArgumentCaptor.forClass(AuditSearchFilter.class);
+        verify(service).exportCsv(filter.capture(), anyInt());
+        assertThat(filter.getValue().excludeRoutineSuccesses()).isTrue();
+    }
+
 }

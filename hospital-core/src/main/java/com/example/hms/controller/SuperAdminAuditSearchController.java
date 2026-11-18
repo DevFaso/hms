@@ -69,11 +69,12 @@ public class SuperAdminAuditSearchController {
         // MVP-9b — narrow the search to one regulatory region; joins
         // through assignment.hospital.organization.region in the service.
         @RequestParam(required = false) OrganizationRegion tenantRegion,
+        @RequestParam(defaultValue = "false") boolean excludeRoutineSuccesses,
         Pageable pageable
     ) {
         AuditSearchFilter filter = new AuditSearchFilter(
             userId, userName, eventTypeFilter(eventType, eventTypes), status, hospitalId, organizationId,
-            impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion);
+            impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion, excludeRoutineSuccesses);
         return ResponseEntity.ok(service.search(filter, pageable));
     }
 
@@ -113,11 +114,12 @@ public class SuperAdminAuditSearchController {
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
         @RequestParam(required = false) OrganizationRegion tenantRegion,
+        @RequestParam(defaultValue = "false") boolean excludeRoutineSuccesses,
         @RequestParam(name = "maxRows", required = false, defaultValue = "10000") int maxRows
     ) {
         AuditSearchFilter filter = new AuditSearchFilter(
             userId, userName, eventTypeFilter(eventType, eventTypes), status, hospitalId, organizationId,
-            impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion);
+            impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion, excludeRoutineSuccesses);
         byte[] csv = service.exportCsv(filter, maxRows);
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType("text/csv"))

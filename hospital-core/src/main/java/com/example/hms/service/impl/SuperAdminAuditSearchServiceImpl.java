@@ -190,6 +190,15 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
         if (f.status() != null) {
             predicates.add(cb.equal(root.get("status"), f.status()));
         }
+        if (f.excludeRoutineSuccesses()) {
+            // Filter before paging/counting. Failures (including failed reads and refreshes)
+            // remain visible, as do every other event type and rows with unknown status.
+            Predicate routine = root.get("eventType").in(
+                com.example.hms.enums.AuditEventType.DATA_ACCESS,
+                com.example.hms.enums.AuditEventType.TOKEN_REFRESH);
+            predicates.add(cb.or(cb.isNull(root.get("status")), cb.isNull(root.get("eventType")),
+                cb.not(cb.and(cb.equal(root.get("status"), com.example.hms.enums.AuditStatus.SUCCESS), routine))));
+        }
     }
 
     /**

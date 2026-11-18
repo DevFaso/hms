@@ -90,6 +90,18 @@
     </section>
 
     <section class="filter-card">
+      <label class="filter-field">
+        <input
+          type="checkbox"
+          [ngModel]="excludeRoutineSuccesses()"
+          (ngModelChange)="excludeRoutineSuccesses.set($event)"
+        />
+        {{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.EXCLUDE_ROUTINE' | translate }}
+      </label>
+      <label class="filter-field">
+        {{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.HOSPITAL_FILTER' | translate }}
+        <input type="text" [ngModel]="hospitalId()" (ngModelChange)="hospitalId.set($event)" />
+      </label>
       <div class="filter-grid">
         <label class="filter-field">
           <span>{{ 'AUDIT_SEARCH.FILTER.USER_NAME' | translate }}</span>
@@ -150,6 +162,7 @@
           <span>{{ 'AUDIT_SEARCH.FILTER.FROM_DATE' | translate }}</span>
           <input
             type="datetime-local"
+            step="1"
             [ngModel]="fromDate()"
             (ngModelChange)="fromDate.set($event)"
           />
@@ -158,6 +171,7 @@
           <span>{{ 'AUDIT_SEARCH.FILTER.TO_DATE' | translate }}</span>
           <input
             type="datetime-local"
+            step="1"
             [attr.min]="fromDate() || null"
             [ngModel]="toDate()"
             (ngModelChange)="toDate.set($event)"
@@ -319,6 +333,7 @@
           <span>{{ 'AUDIT_SEARCH.FILTER.FROM_DATE' | translate }}</span>
           <input
             type="datetime-local"
+            step="1"
             [ngModel]="fromDate()"
             (ngModelChange)="fromDate.set($event)"
           />
@@ -327,6 +342,7 @@
           <span>{{ 'AUDIT_SEARCH.FILTER.TO_DATE' | translate }}</span>
           <input
             type="datetime-local"
+            step="1"
             [attr.min]="fromDate() || null"
             [ngModel]="toDate()"
             (ngModelChange)="toDate.set($event)"

@@ -1,13 +1,16 @@
 import {
   Component,
+  DestroyRef,
   OnInit,
   computed,
   inject,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { catchError, of } from 'rxjs';
@@ -65,6 +68,11 @@ import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 })
 export class SuperAdminAuditSearchComponent implements OnInit {
   private readonly service = inject(AuditSearchService);
+  private readonly destroyRef = inject(DestroyRef);
+  private searchRequest = 0;
+  private readonly route = inject(ActivatedRoute);
+  readonly excludeRoutineSuccesses = signal(false);
+  readonly hospitalId = signal('');
   private readonly enumLabels = inject(EnumLabelService);
   /** QA D619: an audit entity token as its keyed label (core/enum-label.service). */
   entityLabel(raw: string | null | undefined): string | null {
@@ -156,6 +164,20 @@ export class SuperAdminAuditSearchComponent implements OnInit {
       .pipe(catchError(() => of([] as SavedAuditSearch[])))
       .subscribe(() => this.refreshSavedSearches());
 
+    const params = this.route.snapshot.queryParamMap;
+    this.excludeRoutineSuccesses.set(params.get('excludeRoutineSuccesses') === 'true');
+    this.hospitalId.set(params.get('hospitalId') ?? '');
+    const status = params.get('status') ?? '';
+    this.status.set(this.statusOptions.includes(status) ? status : '');
+    for (const [key, target] of [
+      ['fromDate', this.fromDate],
+      ['toDate', this.toDate],
+    ] as const) {
+      const value = params.get(key);
+      if (value && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) {
+        target.set(this.fromIsoForInput(value) + ':' + value.slice(17, 19));
+      }
+    }
     this.runSearch();
   }
 
@@ -165,6 +187,8 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   }
 
   resetFilters(): void {
+    this.excludeRoutineSuccesses.set(false);
+    this.hospitalId.set('');
     this.userName.set('');
     this.impersonatorUserId.set('');
     this.entityType.set('');
@@ -192,18 +216,21 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   }
 
   runSearch(): void {
+    const request = ++this.searchRequest;
     this.loading.set(true);
     this.errored.set(false);
 
     this.service
       .search({ ...this.currentFilterSnapshot(), page: this.pageNumber(), size: DEFAULT_PAGE_SIZE })
       .pipe(
+        takeUntilDestroyed(this.destroyRef),
         catchError(() => {
-          this.errored.set(true);
+          if (request === this.searchRequest) this.errored.set(true);
           return of(null);
         }),
       )
       .subscribe((page) => {
+        if (request !== this.searchRequest) return;
         this.page.set(page);
         this.loading.set(false);
       });
@@ -322,6 +349,8 @@ export class SuperAdminAuditSearchComponent implements OnInit {
 
   private currentFilterSnapshot(): AuditSearchFilter {
     return {
+      excludeRoutineSuccesses: this.excludeRoutineSuccesses() || undefined,
+      hospitalId: this.trimOrUndefined(this.hospitalId()),
       userName: this.trimOrUndefined(this.userName()),
       impersonatorUserId: this.trimOrUndefined(this.impersonatorUserId()),
       entityType: this.trimOrUndefined(this.entityType()),
@@ -367,6 +396,8 @@ export class SuperAdminAuditSearchComponent implements OnInit {
 
   applySaved(saved: SavedAuditSearch): void {
     const f = saved.filter;
+    this.excludeRoutineSuccesses.set(f.excludeRoutineSuccesses ?? false);
+    this.hospitalId.set(f.hospitalId ?? '');
     this.userName.set(f.userName ?? '');
     this.impersonatorUserId.set(f.impersonatorUserId ?? '');
     this.entityType.set(f.entityType ?? '');

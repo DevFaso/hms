@@ -10,7 +10,7 @@ import {
 } from './audit-search.model';
 
 /** Scalar value an HttpParams entry can carry once stringified. */
-type ParamValue = string | number | undefined;
+type ParamValue = string | number | boolean | undefined;
 
 /**
  * Builds an `HttpParams` instance from a flat map. Drops null,
@@ -38,6 +38,7 @@ export class AuditSearchService {
 
   search(filter: AuditSearchFilter): Observable<AuditSearchPage> {
     let params = buildParams({
+      excludeRoutineSuccesses: filter.excludeRoutineSuccesses,
       userId: filter.userId,
       userName: filter.userName,
       status: filter.status,
@@ -69,6 +70,7 @@ export class AuditSearchService {
    */
   exportCsv(filter: AuditSearchFilter, maxRows = 10_000): Observable<Blob> {
     let params = buildParams({
+      excludeRoutineSuccesses: filter.excludeRoutineSuccesses,
       userId: filter.userId,
       userName: filter.userName,
       status: filter.status,

@@ -252,4 +252,51 @@ class AuditEventLogHospitalAnchorIT {
         // Only the user row matches "_": its actor's sign-in name is an_admin_a.
         assertThat(ids(underscore)).containsExactly(userRowA.getId());
     }
+    @Test
+    void oversightFilterFindsOlderFailuresBeforePagingAndUsesTheSameCountAndExport() {
+        LocalDateTime start = LocalDateTime.of(2026, 11, 17, 8, 0);
+        for (int i = 0; i < 12; i++) {
+            em.persist(AuditEventLog.builder().actorType(ActorType.SYSTEM).actorLabel("Oversight test")
+                .eventType(AuditEventType.DATA_ACCESS).status(AuditStatus.SUCCESS)
+                .eventDescription("Routine read").entityType("OVERSIGHT_TEST")
+                .eventTimestamp(start.plusMinutes(i + 10)).build());
+        }
+        AuditEventLog failedRead = em.persist(AuditEventLog.builder()
+            .actorType(ActorType.SYSTEM).actorLabel("Oversight test")
+            .eventType(AuditEventType.DATA_ACCESS).status(AuditStatus.FAILURE)
+            .eventDescription("Failed read").entityType("OVERSIGHT_TEST")
+            .eventTimestamp(start.plusMinutes(1)).build());
+        AuditEventLog securityChange = em.persist(AuditEventLog.builder()
+            .actorType(ActorType.SYSTEM).actorLabel("Oversight test")
+            .eventType(AuditEventType.SECURITY_ALERT_TRIGGERED).status(AuditStatus.SUCCESS)
+            .eventDescription("Security change").entityType("OVERSIGHT_TEST")
+            .eventTimestamp(start.plusMinutes(2)).build());
+        em.persist(AuditEventLog.builder().actorType(ActorType.SYSTEM).actorLabel("Oversight test")
+            .eventType(AuditEventType.TOKEN_REFRESH).status(AuditStatus.FAILURE)
+            .eventDescription("Failed refresh").entityType("OVERSIGHT_TEST")
+            .eventTimestamp(start.plusMinutes(3)).build());
+        em.persist(AuditEventLog.builder().actorType(ActorType.SYSTEM).actorLabel("Oversight test")
+            .eventType(AuditEventType.TOKEN_REFRESH).status(AuditStatus.SUCCESS)
+            .eventDescription("Routine refresh").entityType("OVERSIGHT_TEST")
+            .eventTimestamp(start.plusMinutes(4)).build());
+        em.flush();
+        var search = new SuperAdminAuditSearchServiceImpl(repository,
+            new AuditEventLogMapper(Mockito.mock(com.example.hms.repository.PatientRepository.class)));
+        var filter = new AuditSearchFilter(null, null, null, null, null, null,
+            null, "OVERSIGHT_TEST", null, start, start.plusDays(1), null, true);
+        var page = search.search(filter, PageRequest.of(0, 1));
+        assertThat(page.getTotalElements()).isEqualTo(3);
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(search.search(filter, PageRequest.of(0, 10)).getContent())
+            .extracting(row -> row.getId()).contains(failedRead.getId(), securityChange.getId());
+        var failures = new AuditSearchFilter(null, null, null, AuditStatus.FAILURE, null, null,
+            null, "OVERSIGHT_TEST", null, start, start.plusDays(1), null, true);
+        assertThat(search.search(failures, PageRequest.of(0, 5)).getTotalElements()).isEqualTo(2);
+        assertThat(new String(search.exportCsv(filter, 10), java.nio.charset.StandardCharsets.UTF_8)
+            .lines().count()).isEqualTo(4);
+        var all = new AuditSearchFilter(null, null, null, null, null, null,
+            null, "OVERSIGHT_TEST", null, start, start.plusDays(1), null);
+        assertThat(search.search(all, PageRequest.of(0, 5)).getTotalElements()).isEqualTo(16);
+    }
+
 }

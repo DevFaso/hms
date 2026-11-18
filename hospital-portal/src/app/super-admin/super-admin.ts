@@ -8,6 +8,12 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormsModule } from '@angular/forms';
+import { AuditSearchService } from '../services/audit-search.service';
+import { AuditSearchFilter, AuditSearchPage, AuditSearchRow } from '../services/audit-search.model';
+import { RoleContextService } from '../core/role-context.service';
+import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { auditTargetKey, recordedAuditValue } from './audit-presentation';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -15,7 +21,6 @@ import { catchError, of } from 'rxjs';
 
 import {
   DashboardService,
-  RecentAuditEvent,
   SuperAdminRecentItem,
   SuperAdminSummary,
 } from '../services/dashboard.service';
@@ -86,6 +91,8 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
   selector: 'app-super-admin',
   standalone: true,
   imports: [
+    FormsModule,
+    RoleLabelPipe,
     DashPipe,
     KeyLabelPipe,
     DateTimePipe,
@@ -102,6 +109,24 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 })
 export class SuperAdminComponent implements OnInit {
   private readonly dashboard = inject(DashboardService);
+  private readonly auditSearch = inject(AuditSearchService);
+  private readonly roleContext = inject(RoleContextService);
+  private auditRequest = 0;
+  readonly auditPage = signal<AuditSearchPage | null>(null);
+  readonly auditLoading = signal(false);
+  readonly auditUnavailable = signal(false);
+  readonly auditDays = signal(1);
+  readonly auditBounds = signal(this.newAuditBounds());
+  readonly auditTotal = computed(() => this.auditPage()?.totalElements ?? 0);
+  readonly auditFilter = computed<AuditSearchFilter>(() => ({
+    ...this.auditBounds(),
+    status: this.auditFailuresOnly() ? 'FAILURE' : undefined,
+    excludeRoutineSuccesses: !this.showRoutineAudit(),
+    hospitalId: this.roleContext.selectedHospitalId() ?? undefined,
+  }));
+  readonly auditQueryParams = computed(() => this.auditFilter());
+  readonly recordedAuditValue = recordedAuditValue;
+  readonly auditTargetKey = auditTargetKey;
   private readonly enumLabels = inject(EnumLabelService);
   /** QA D619: an audit entity token as its keyed label (core/enum-label.service). */
   entityLabel(raw: string | null | undefined): string | null {
@@ -120,9 +145,7 @@ export class SuperAdminComponent implements OnInit {
   readonly auditFailuresOnly = signal(false);
   readonly showRoutineAudit = signal(false);
   readonly auditExpanded = signal(false);
-  readonly displayedAudit = computed(() =>
-    this.auditExpanded() ? this.visibleAudit() : this.visibleAudit().slice(0, 5),
-  );
+  readonly displayedAudit = computed(() => this.auditPage()?.content ?? []);
   readonly activityUnavailable = signal(false);
   readonly healthLoading = signal(true);
   readonly healthUnavailable = signal(false);
@@ -133,12 +156,6 @@ export class SuperAdminComponent implements OnInit {
     { key: 'NO_HISTORY', count: this.health()?.noHistoryCount, icon: 'help' },
     { key: 'HEALTHY', count: this.health()?.healthyCount, icon: 'check_circle' },
   ]);
-  readonly routineAuditCount = computed(
-    () =>
-      this.recentAudit().filter(
-        (event) => event.eventType === 'TOKEN_REFRESH' && event.status === 'SUCCESS',
-      ).length,
-  );
   private loadRequest = 0;
 
   private readonly summary = signal<SuperAdminSummary | null>(null);
@@ -388,18 +405,67 @@ export class SuperAdminComponent implements OnInit {
     () => this.platformSummary()?.actions ?? null,
   );
 
-  readonly recentAudit = computed<RecentAuditEvent[]>(
-    () => this.summary()?.recentAuditEvents ?? [],
-  );
-  readonly visibleAudit = computed(() =>
-    this.recentAudit().filter(
-      (event) =>
-        (!this.auditFailuresOnly() || event.status === 'FAILURE') &&
-        (this.showRoutineAudit() ||
-          event.eventType !== 'TOKEN_REFRESH' ||
-          event.status !== 'SUCCESS'),
-    ),
-  );
+  private newAuditBounds(): { fromDate: string; toDate: string } {
+    const now = new Date();
+    const from = new Date(now.getTime() - (this.auditDays?.() ?? 1) * 86400000);
+    return { fromDate: from.toISOString().slice(0, 19), toDate: now.toISOString().slice(0, 19) };
+  }
+
+  setAuditFailures(value: boolean): void {
+    this.auditFailuresOnly.set(value);
+    this.auditExpanded.set(false);
+    this.loadAudit();
+  }
+
+  setAuditRoutine(value: boolean): void {
+    this.showRoutineAudit.set(value);
+    this.auditExpanded.set(false);
+    this.loadAudit();
+  }
+
+  setAuditDays(value: number): void {
+    this.auditDays.set(Number(value));
+    this.auditBounds.set(this.newAuditBounds());
+    this.auditExpanded.set(false);
+    this.loadAudit();
+  }
+
+  expandAudit(): void {
+    this.auditExpanded.set(!this.auditExpanded());
+    this.loadAudit();
+  }
+
+  loadAudit(): void {
+    const request = ++this.auditRequest;
+    this.auditLoading.set(true);
+    this.auditUnavailable.set(false);
+    this.auditPage.set(null);
+    this.auditSearch
+      .search({ ...this.auditFilter(), page: 0, size: this.auditExpanded() ? 10 : 5 })
+      .pipe(
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((page) => {
+        if (request !== this.auditRequest) return;
+        this.auditPage.set(page);
+        this.auditUnavailable.set(page === null);
+        this.auditLoading.set(false);
+      });
+  }
+
+  auditTargetLabel(event: AuditSearchRow): string | null {
+    const target = recordedAuditValue(event.resourceName);
+    const technical =
+      target.includes('/') || target.includes('?') || /^[a-z]+(?:-[a-z]+)+$/.test(target);
+    return (!technical && this.entityLabel(target)) || this.entityLabel(event.entityType);
+  }
+
+  auditScopeKey(event: AuditSearchRow): string {
+    return event.entityType === 'PLATFORM'
+      ? 'SUPER_ADMIN.AUDIT_OVERSIGHT.PLATFORM'
+      : 'SUPER_ADMIN.AUDIT_OVERSIGHT.SCOPE_UNKNOWN';
+  }
 
   readonly generatedAt = computed<string | null>(() => this.summary()?.generatedAt ?? null);
 
@@ -531,6 +597,8 @@ export class SuperAdminComponent implements OnInit {
   }
 
   loadAll(): void {
+    this.auditBounds.set(this.newAuditBounds());
+    this.loadAudit();
     const request = ++this.loadRequest;
     // Single-roundtrip load (F5 from
     // docs/super-admin-cross-tenant-design.md). Replaces the prior
