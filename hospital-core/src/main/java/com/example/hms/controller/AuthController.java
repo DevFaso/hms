@@ -5,7 +5,6 @@ import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
-import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
 import com.example.hms.payload.dto.SessionBootstrapResponseDTO;
@@ -85,7 +84,7 @@ import java.util.UUID;
 @Slf4j
 public class AuthController {
 
-    private static final String EMAIL_VERIFICATION_FAILED = "Email verification failed.";
+    private static final String EMAIL_VERIFICATION_FAILED = "auth.api.emailVerificationFailed";
     private static final String BEARER_PREFIX = "Bearer ";
     // QA D911 (re-test 3): the profile shows these as they are; bundle keys.
     private static final String NOT_AUTHENTICATED = "auth.session.notAuthenticated";
@@ -214,7 +213,7 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<Object> registerUser() {
         return ResponseEntity.status(HttpStatus.GONE)
-                .body(new MessageResponse("Public self-registration is no longer available."));
+                .body(new MessageResponse(MessageUtil.resolve("auth.api.registrationClosed")));
     }
 
     @GetMapping("/bootstrap-status")
@@ -255,7 +254,7 @@ public class AuthController {
             log.warn("🔐 [LOGIN] Rejected — legacy issuer disabled (app.auth.oidc.required=true). user='{}'",
                     loginRequest.getUsername());
             return legacyIssuerGone(
-                    "Legacy username/password login is disabled. Sign in via Single Sign-On.");
+                    MessageUtil.resolve("auth.api.legacyLoginDisabled"));
         }
         long start = System.nanoTime();
         log.info("🔐 [LOGIN] Attempting login for user='{}' at {}", loginRequest.getUsername(),
@@ -300,11 +299,21 @@ public class AuthController {
             // role picker; the picker offered "FACTOR PASSWORD" as a card; and
             // selecting it passed the holds-this-role check below and minted a
             // token whose only role no guard admits.
-            var allRoles = authentication.getAuthorities().stream()
+            //
+            // QA D1973 / D2050: the picker offers the roles the account holds on
+            // its own (the principal's authorities, before the login's
+            // RoleExpansion widening), never one only super-admin inheritance
+            // added: the session bootstrap does not list those, so the portal
+            // signed the user out with no word after such a pick.
+            var heldAuthorities = authentication.getPrincipal()
+                    instanceof org.springframework.security.core.userdetails.UserDetails details
+                    ? details.getAuthorities()
+                    : authentication.getAuthorities();
+            var allRoles = com.example.hms.security.RoleExpansion.selectableAtLogin(heldAuthorities.stream()
                     .map(GrantedAuthority::getAuthority)
                     .filter(authority -> authority != null && authority.startsWith(ROLE_PREFIX))
                     .distinct()
-                    .toList();
+                    .toList());
 
             // ── Multi-role selection gate ──
             // If the user holds more than one role and has NOT yet chosen, ask them to pick.
@@ -538,9 +547,9 @@ public class AuthController {
         // so the link answered 500 with the account half activated.
         if (!userService.verifyEmail(dto.getEmail(), dto.getToken())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
+                    .body(new EmailVerificationResponseDTO(MessageUtil.resolve(EMAIL_VERIFICATION_FAILED), false));
         }
-        return ResponseEntity.ok(new EmailVerificationResponseDTO("Email verified successfully.", true));
+        return ResponseEntity.ok(new EmailVerificationResponseDTO(MessageUtil.resolve("auth.api.emailVerified"), true));
     }
 
     @Operation(summary = "Verify email via link",
@@ -671,7 +680,7 @@ public class AuthController {
         String bodyRefresh = body != null ? body.get("refreshToken") : null;
         revokePresentedSession(request, response, bodyRefresh, "logout");
         SecurityContextHolder.clearContext();
-        return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
+        return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("auth.api.loggedOut")));
     }
 
     /**
@@ -781,7 +790,7 @@ public class AuthController {
         if (!jwtTokenProvider.isRefreshToken(refreshToken)) {
             log.warn("🔄 [REFRESH] Invalid or expired refresh token");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+                    .body(new MessageResponse(MessageUtil.resolve(REFRESH_INVALID_MESSAGE)));
         }
 
         // Force-logout-all revokes refresh tokens too: one issued before it
@@ -793,7 +802,7 @@ public class AuthController {
         if (globalSessionRevocationService.revokesFresh(jwtTokenProvider.getIssuedAt(refreshToken))) {
             log.warn("🔄 [REFRESH] Refused — refresh token predates the last force-logout-all");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+                    .body(new MessageResponse(MessageUtil.resolve(REFRESH_INVALID_MESSAGE)));
         }
 
         // Replay detection: an already-used refresh token is refused here; the
@@ -808,7 +817,7 @@ public class AuthController {
             }
             log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.api.refreshUsed")));
         }
         return null;
     }
@@ -821,10 +830,10 @@ public class AuthController {
 
     /** The 409: a readable sentence (clients show it); the status is what a client acts on. */
     private static final String REFRESH_SUPERSEDED_MESSAGE =
-            "This session was just refreshed by another tab or request. Retry with the latest token.";
+            "auth.api.refreshSuperseded";
 
     private static final String REFRESH_INVALID_MESSAGE =
-            "Refresh token is invalid or has expired. Please log in again.";
+            "auth.api.refreshInvalid";
 
     /** A provider user's refresh token without a (current) second factor: sign in, with the code. */
     private static final String REFRESH_SECOND_FACTOR_KEY = "auth.refresh.secondFactorRequired";
@@ -849,7 +858,7 @@ public class AuthController {
         // replayed inside the grace, and theft alerting must still see it.
         log.warn("🔄 [REFRESH] Superseded (or a replay within the grace) — refresh token jti={} was just rotated", jti);
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new MessageResponse(REFRESH_SUPERSEDED_MESSAGE));
+                .body(new MessageResponse(MessageUtil.resolve(REFRESH_SUPERSEDED_MESSAGE)));
     }
 
     /**
@@ -885,7 +894,7 @@ public class AuthController {
         if (authProps.oidcRequired()) {
             log.warn("🔄 [REFRESH] Rejected — legacy issuer disabled (app.auth.oidc.required=true)");
             return legacyIssuerGone(
-                    "Legacy token refresh is disabled. Sign in via Single Sign-On.");
+                    MessageUtil.resolve("auth.api.legacyRefreshDisabled"));
         }
 
         // S-01: prefer the HttpOnly refresh cookie over a body-borne refresh token.
@@ -894,7 +903,7 @@ public class AuthController {
         if (refreshToken == null || refreshToken.isBlank()) {
             log.warn("🔄 [REFRESH] Missing refresh token (cookie + body both empty)");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("Refresh token is required."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.api.refreshRequired")));
         }
 
         ResponseEntity<Object> refusal = refreshRefusal(refreshToken);
@@ -908,14 +917,14 @@ public class AuthController {
         if (user == null || !user.isActive()) {
             log.warn("🔄 [REFRESH] User '{}' not found or inactive", username);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse("User account not found or inactive."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.api.accountUnavailable")));
         }
         // QA D114: a refresh token minted before the last password change mints nothing.
         if (com.example.hms.security.PasswordChangeCutoff.predates(
                 jwtTokenProvider.getIssuedAt(refreshToken), user.getPasswordChangedAt())) {
             log.warn("🔄 [REFRESH] Refused — refresh token predates the last password change");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+                    .body(new MessageResponse(MessageUtil.resolve(REFRESH_INVALID_MESSAGE)));
         }
 
         // Closes Copilot review #4 on PR #224 — refuse to mint a new
@@ -928,7 +937,7 @@ public class AuthController {
             log.warn("🔄 [REFRESH] Refused — user '{}' has an active impersonation session", username);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new MessageResponse(
-                        "Active support-impersonation session — call /super-admin/impersonation/stop before refreshing."));
+                        MessageUtil.resolve("auth.api.stopImpersonation")));
         }
 
         // Resolve current roles from tenant assignments (authoritative source)
@@ -962,7 +971,7 @@ public class AuthController {
                     .header("WWW-Authenticate",
                         com.example.hms.security.IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE)
                     .body(new MessageResponse(
-                        "Session timed out due to inactivity. Please log in again."));
+                        MessageUtil.resolve("auth.api.idleTimeout")));
         }
 
         // Spend the refresh token atomically BEFORE minting: of two concurrent
@@ -971,7 +980,7 @@ public class AuthController {
         // winner rotated, so two tabs refreshing at once stay signed in.
         if (refreshJti == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+                    .body(new MessageResponse(MessageUtil.resolve(REFRESH_INVALID_MESSAGE)));
         }
         // Rotated is recorded BEFORE the token is spent: a sibling tab that
         // sees it spent always sees it rotated too, so it is told
@@ -1101,7 +1110,7 @@ public class AuthController {
             log.warn("🔒 [VERIFY-PWD] Username mismatch: authenticated='{}' requested='{}'",
                     currentUsername, request.getUsername());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new MessageResponse("Cannot verify password for a different user."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.api.differentUserPassword")));
         }
         var user = userRepository.findByUsername(currentUsername).orElse(null);
         if (user == null) {
@@ -1122,7 +1131,7 @@ public class AuthController {
 
         if (check == LoginAttemptService.PasswordCheck.ACCEPTED) {
             log.info("🔒 [VERIFY-PWD] Password verified for user='{}'", currentUsername);
-            return ResponseEntity.ok(new MessageResponse("Password verified."));
+            return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("auth.api.passwordVerified")));
         }
         if (check != LoginAttemptService.PasswordCheck.LOCKED) {
             auditLoginFailure(currentUsername, "Lock-screen unlock failed: bad credentials");
@@ -1161,6 +1170,42 @@ public class AuthController {
             return true;
         } catch (BadCredentialsException ex) {
             return false;
+        }
+    }
+
+    /**
+     * QA D2020 (round 57): a wrong current password on a password change or the forced setup is a counted failure
+     * in the account's sign-in bucket (D2001), and could lock the account, yet it wrote no audit row: an admin saw
+     * four sign-in failures and a lock. Each refused check now leaves a {@code LOGIN_FAILURE} row, and the one that
+     * locks the account (or a check refused because it is locked) an {@code ACCOUNT_LOCKED} row, as the lock screen
+     * does. The rows carry the account id and a fixed description: never the typed password, never a typed name.
+     */
+    private void auditOwnPasswordCheck(LoginAttemptService.PasswordCheck check, UUID userId, String surface) {
+        if (check == LoginAttemptService.PasswordCheck.ACCEPTED) {
+            return;
+        }
+        String resourceId = userId == null ? null : userId.toString();
+        if (check != LoginAttemptService.PasswordCheck.LOCKED) {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.LOGIN_FAILURE)
+                    .eventDescription(surface + " refused: current password incorrect")
+                    .userId(userId)
+                    .resourceId(resourceId)
+                    .entityType("USER")
+                    .status(AuditStatus.FAILURE)
+                    .build());
+        }
+        if (check != LoginAttemptService.PasswordCheck.REJECTED) {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.ACCOUNT_LOCKED)
+                    .eventDescription(check == LoginAttemptService.PasswordCheck.LOCKED
+                            ? surface + " refused: account locked"
+                            : surface + " failed too many times: account locked")
+                    .userId(userId)
+                    .resourceId(resourceId)
+                    .entityType("USER")
+                    .status(AuditStatus.FAILURE)
+                    .build());
         }
     }
 
@@ -1207,6 +1252,7 @@ public class AuthController {
             // Restore the original authentication after verify sub-call
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
+        auditOwnPasswordCheck(check, user.getId(), "Password change");
         if (check == LoginAttemptService.PasswordCheck.REJECTED) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve("auth.password.currentIncorrect")));
@@ -1371,6 +1417,7 @@ public class AuthController {
             resetSecurityContextToAnonymous();
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
+        auditOwnPasswordCheck(check, user.getId(), "Account setup");
         if (check == LoginAttemptService.PasswordCheck.REJECTED) {
             // 400, not 401: the session is fine, and the portal treats a 401
             // as an expired session (refresh, then sign-out).
@@ -1462,11 +1509,8 @@ public class AuthController {
 
     @PostMapping("/reset-password")
     public ResponseEntity<Void> legacyConfirmPasswordReset(@Valid @RequestBody PasswordResetConfirmDTO dto) {
-        try {
-            authNotification.passwordReset().confirmReset(dto.getToken(), dto.getNewPassword());
-        } catch (ResourceNotFoundException | IllegalStateException e) {
-            log.debug("Password reset confirm failed: {}", e.getMessage());
-        }
+        // QA D2051: a bad, expired or spent link is the service's 400, not a 204.
+        authNotification.passwordReset().confirmReset(dto.getToken(), dto.getNewPassword());
         return ResponseEntity.noContent().build();
     }
 
@@ -1475,7 +1519,7 @@ public class AuthController {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Object> echoToken(@RequestHeader(value = "Authorization", required = false) String authz) {
         if (authz == null || !authz.startsWith(BEARER_PREFIX)) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Missing or invalid Authorization header"));
+            return ResponseEntity.badRequest().body(new MessageResponse(MessageUtil.resolve("auth.api.authorizationHeaderInvalid")));
         }
         String token = authz.substring(BEARER_PREFIX.length());
         try {
@@ -1584,13 +1628,14 @@ public class AuthController {
 
     @PostMapping("/credentials/recovery/{contactId}/send-code")
     public ResponseEntity<java.util.Map<String, String>> sendRecoveryContactVerificationCode(
-            @PathVariable UUID contactId) {
+            @PathVariable UUID contactId,
+            @Valid @RequestBody com.example.hms.payload.dto.credential.RecoveryContactConfirmationRequest confirmation) {
         UUID userId = resolveCurrentUserId();
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        String contactType = userCredentialLifecycleService.sendRecoveryContactVerificationCode(userId, contactId);
-        return ResponseEntity.ok(java.util.Map.of("message", "Verification code sent", "contactType", contactType));
+        String contactType = userCredentialLifecycleService.sendRecoveryContactVerificationCode(userId, contactId, confirmation.confirmedContactValue());
+        return ResponseEntity.ok(java.util.Map.of("message", MessageUtil.resolve("auth.api.verificationCodeSent"), "contactType", contactType));
     }
 
     @PostMapping("/credentials/recovery/{contactId}/verify")

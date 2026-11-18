@@ -11,12 +11,38 @@ import {
 } from '../../services/registration-extras.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
+import { Payer, PayerCatalogueService } from '../../services/payer-catalogue.service';
 
 describe('CoverageTabComponent (P3 #21 additions)', () => {
   let fixture: ComponentFixture<CoverageTabComponent>;
   let component: CoverageTabComponent;
   let extrasSpy: jasmine.SpyObj<RegistrationExtrasService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
+  let insuranceSpy: jasmine.SpyObj<PatientInsuranceService>;
+  let payersSpy: jasmine.SpyObj<PayerCatalogueService>;
+
+  /** Billing-money plan PR 6: the test clinic's fictional payer (never a real insurer). */
+  const MUT_A = {
+    id: 'payer-a',
+    hospitalId: 'h1',
+    code: 'MUT-TEST-A',
+    name: 'Mutuelle Test A (FICTIVE)',
+    payerType: 'MUTUELLE',
+    active: true,
+    plans: [
+      {
+        id: 'plan-a',
+        payerId: 'payer-a',
+        code: 'MTA-ESS',
+        name: 'Formule Test Essentielle',
+        defaultCoveragePercent: 75,
+        effectiveFrom: '2026-12-01',
+        status: 'SCHEDULED',
+        linkable: true,
+        rules: [],
+      },
+    ],
+  } as Payer;
 
   const guarantor = (overrides: Partial<Guarantor> = {}): Guarantor => ({
     id: 'g1',
@@ -58,12 +84,15 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
   });
 
   beforeEach(async () => {
-    const insuranceSpy = jasmine.createSpyObj('PatientInsuranceService', [
+    insuranceSpy = jasmine.createSpyObj('PatientInsuranceService', [
       'forPatient',
       'link',
       'update',
       'delete',
+      'setPayerPlan',
     ]);
+    payersSpy = jasmine.createSpyObj('PayerCatalogueService', ['list']);
+    payersSpy.list.and.returnValue(of([MUT_A]));
     insuranceSpy.forPatient.and.returnValue(of([]));
     const registrationSpy = jasmine.createSpyObj('RegistrationService', ['list']);
     registrationSpy.list.and.returnValue(of([]));
@@ -91,6 +120,7 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
         { provide: RegistrationExtrasService, useValue: extrasSpy },
         { provide: RoleContextService, useValue: roleCtxSpy },
         { provide: ToastService, useValue: toastSpy },
+        { provide: PayerCatalogueService, useValue: payersSpy },
       ],
     }).compileComponents();
 
@@ -252,5 +282,82 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
     component.submitConsent();
 
     expect(toastSpy.error).toHaveBeenCalledWith('Patient is not registered at this hospital.');
+  });
+
+  // ── Billing-money plan PR 6: the "Formule" picker ──
+
+  it('shows the plan a coverage is billed under, and free-text coverage as no plan', () => {
+    insuranceSpy.forPatient.and.returnValue(
+      of([
+        {
+          id: 'i1',
+          patientId: 'p1',
+          providerName: 'Mutuelle Test A',
+          policyNumber: 'MTA-TEST-0002',
+          payerPlanId: 'plan-a',
+          payerPlanName: 'Formule Test Essentielle',
+          planPayerName: 'Mutuelle Test A (FICTIVE)',
+        },
+        { id: 'i2', patientId: 'p1', providerName: 'Ancienne assurance', policyNumber: 'X-1' },
+      ]),
+    );
+    fixture.detectChanges();
+    const cells = fixture.nativeElement.querySelectorAll('[data-testid="coverage-plan"]');
+    expect(cells.length).toBe(2);
+    expect(cells[0].textContent).toContain('Mutuelle Test A (FICTIVE) — Formule Test Essentielle');
+    expect(cells[1].textContent).toContain('COVERAGE.NO_PLAN');
+  });
+
+  it('links a coverage to a plan of the hospital and shows the answer', () => {
+    insuranceSpy.forPatient.and.returnValue(
+      of([{ id: 'i1', patientId: 'p1', providerName: 'Mutuelle Test A', policyNumber: 'P-1' }]),
+    );
+    insuranceSpy.setPayerPlan.and.returnValue(
+      of({
+        id: 'i1',
+        patientId: 'p1',
+        providerName: 'Mutuelle Test A',
+        policyNumber: 'P-1',
+        payerPlanId: 'plan-a',
+        payerPlanName: 'Formule Test Essentielle',
+        planPayerName: 'Mutuelle Test A (FICTIVE)',
+      }),
+    );
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="coverage-plan-pick"]').click();
+    fixture.detectChanges();
+    expect(payersSpy.list).toHaveBeenCalledWith(false);
+    expect(component.planOptions()).toEqual([
+      { id: 'plan-a', label: 'Mutuelle Test A (FICTIVE) — Formule Test Essentielle' },
+    ]);
+    component.planChoice = 'plan-a';
+    fixture.nativeElement.querySelector('[data-testid="coverage-plan-save"]').click();
+    fixture.detectChanges();
+
+    expect(insuranceSpy.setPayerPlan).toHaveBeenCalledWith('i1', 'plan-a');
+    expect(toastSpy.success).toHaveBeenCalled();
+    expect(component.planTarget()).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="coverage-plan"]').textContent,
+    ).toContain('Formule Test Essentielle');
+  });
+
+  it('removing the plan sends null, and a refusal keeps the dialog open with the reason', () => {
+    insuranceSpy.forPatient.and.returnValue(
+      of([{ id: 'i1', patientId: 'p1', payerPlanId: 'plan-a', payerPlanName: 'Formule' }]),
+    );
+    insuranceSpy.setPayerPlan.and.returnValue(
+      throwError(() => ({ status: 404, error: { message: 'Formule introuvable : plan-b' } })),
+    );
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="coverage-plan-pick"]').click();
+    fixture.detectChanges();
+    component.planChoice = null;
+    component.submitPlan();
+    fixture.detectChanges();
+
+    expect(insuranceSpy.setPayerPlan).toHaveBeenCalledWith('i1', null);
+    expect(toastSpy.error).toHaveBeenCalled();
+    expect(component.planTarget()).not.toBeNull();
   });
 });

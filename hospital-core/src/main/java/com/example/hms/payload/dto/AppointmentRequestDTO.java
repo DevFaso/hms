@@ -25,6 +25,9 @@ import java.util.UUID;
 @OneOf(fields = {"hospitalId", "hospitalCode", "hospitalName"}, message = "{appointment.hospital.required}")
 public class AppointmentRequestDTO {
 
+    /** One UUID per booking intent; retain it across retries. Optional for older clients. */
+    private UUID bookingRequestId;
+
     private UUID id;
 
     @NotNull(message = "{appointment.date.required}")

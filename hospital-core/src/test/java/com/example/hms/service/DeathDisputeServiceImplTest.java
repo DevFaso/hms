@@ -58,6 +58,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DeathDisputeServiceImplTest {
+    private final com.example.hms.repository.UserRepository displayUsers = org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class);
 
     private final OrderReviewHoldService orderReview = org.mockito.Mockito.mock(OrderReviewHoldService.class);
 
@@ -85,7 +86,7 @@ class DeathDisputeServiceImplTest {
         com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         service = new DeathDisputeServiceImpl(Clock.fixed(Instant.parse("2026-11-07T10:00:00Z"), ZoneOffset.UTC),
-            disputes, records, patients, chartAccess, roles, assignments, inBasket, audit, orderReview);
+            disputes, records, patients, chartAccess, roles, assignments, inBasket, audit, orderReview, new com.example.hms.service.support.ClinicalActorNames(displayUsers));
         patient = new Patient();
         patient.setId(patientId);
         patient.setDeceasedAt(NOW.minusDays(2));
@@ -124,10 +125,16 @@ class DeathDisputeServiceImplTest {
     @Test
     @DisplayName("opens at this hospital, leaves the record as it was, audits it, and files URGENT review in this transaction")
     void opens() {
+        User display = new User();
+        display.setFirstName("Awa");
+        display.setLastName("Ouédraogo");
+        when(displayUsers.findById(doctor)).thenReturn(Optional.of(display));
         var result = service.dispute(patientId, statement());
+        assertThat(result.getDisputedByName()).isEqualTo("Awa Ouédraogo");
 
         ArgumentCaptor<DeathDispute> row = ArgumentCaptor.forClass(DeathDispute.class);
         verify(disputes).save(row.capture());
+        assertThat(row.getValue().getDisputedByName()).isEqualTo("Awa Ouédraogo");
         assertThat(row.getValue().getHospitalId()).isEqualTo(hospitalB);
         assertThat(row.getValue().getDeathRecordVersion()).isEqualTo(3L);
         assertThat(row.getValue().getReason()).isEqualTo("Seen alive");
@@ -218,6 +225,21 @@ class DeathDisputeServiceImplTest {
         verify(inBasket, never()).createItem(any());
     }
 
+    @Test
+    void anExistingOpenDisputeResolvesItsLegacyLoginByStableActorIdWithoutRewritingHistory() {
+        DeathDispute open = openDispute();
+        open.setDisputedByName("historic.login");
+        var display = new User();
+        display.setFirstName("Awa");
+        display.setLastName("Ouédraogo");
+        display.setUsername("changed.login");
+        when(displayUsers.findById(doctor)).thenReturn(Optional.of(display));
+        when(disputes.findOpen(record.getId(), hospitalB)).thenReturn(Optional.of(open));
+        assertThat(service.dispute(patientId, statement()).getDisputedByName()).isEqualTo("Awa Ouédraogo");
+        assertThat(open.getDisputedByName()).isEqualTo("historic.login");
+        verify(disputes, never()).save(any());
+    }
+
     private DeathDispute openDispute() {
         DeathDispute open = DeathDispute.builder().deathRecordId(record.getId()).deathRecordVersion(3L).patientId(patientId)
             .hospitalId(hospitalB).disputedById(doctor).disputedAt(NOW.minusHours(10)).reason("Seen alive")
@@ -235,10 +257,16 @@ class DeathDisputeServiceImplTest {
     @Test
     @DisplayName("death upheld: closed with who, when and why, the record untouched, the review items removed, audited")
     void upheld() {
+        var display = new User();
+        display.setFirstName("Awa");
+        display.setLastName("Ouédraogo");
+        when(displayUsers.findById(doctor)).thenReturn(Optional.of(display));
         DeathDispute open = openDispute();
         actingAdminAt(hospitalB);
 
         var result = service.uphold(open.getId(), DeathDisputeOutcomeDTO.builder().reason("Family confirmed").build());
+        assertThat(result.getResolvedByName()).isEqualTo("Awa Ouédraogo");
+        assertThat(open.getResolvedByName()).isEqualTo("Awa Ouédraogo");
 
         assertThat(open.getStatus()).isEqualTo(DeathDisputeStatus.UPHELD);
         assertThat(open.getResolutionReason()).isEqualTo("Family confirmed");

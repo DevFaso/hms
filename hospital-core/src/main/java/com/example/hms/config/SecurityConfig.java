@@ -532,6 +532,10 @@ public class SecurityConfig {
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/ws-ticket"),
                     PathPatternRequestMatcher.withDefaults().matcher("/me/push-devices/**"),
                     PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
+                    // Anonymous legacy recovery: like /auth/password/**, these use
+                    // a one-time reset token, never a cookie-authenticated session.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/request-reset"),
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/reset-password"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
                     // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs
                     // that bypass Angular's HttpClient and therefore carry no XSRF token)
@@ -713,6 +717,13 @@ public class SecurityConfig {
                 // QA D92: the invoice form picks its patient with the shared
                 // picker, so the two billing roles reach the picker's two
                 // reads, and only those; the rest of /patients stays closed to them.
+                .requestMatchers(HttpMethod.POST, API_PATIENTS + "/national-unique-id/search")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                    ROLE_LAB_SCIENTIST, ROLE_PHARMACIST, ROLE_RADIOLOGIST, ROLE_PHYSIOTHERAPIST,
+                    ROLE_SUPER_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+                .requestMatchers(HttpMethod.POST, API_PATIENTS + "/national-unique-id/check",
+                    API_PATIENTS + "/national-unique-id/*/reveal")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.GET, API_PATIENTS + "/search", API_PATIENTS + "/lookup")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,

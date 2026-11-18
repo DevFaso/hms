@@ -141,7 +141,14 @@
     "SORT_BY": "Sort by",
     "SORT_NAME": "Unit name A–Z",
     "SORT_AVAILABLE": "Most available beds first",
-    "SORT_OCCUPIED": "Most occupied beds first"
+    "SORT_OCCUPIED": "Most occupied beds first",
+    "CAPACITY_TITLE": "Capacity overview",
+    "CAPACITY_SCOPE_HELP": "Counts include active beds in active units and remain independent of the unit filter.",
+    "OTHER_STATES": "Other bed states",
+    "CAPACITY_FILTER_HELP": "Showing active units with beds matching the selected availability.",
+    "NO_MATCHING_UNITS": "No units match this availability filter.",
+    "OCCUPANCY": "Occupancy",
+    "OCCUPIED_RATIO": "{{occupied}} / {{total}} occupied"
   },
   "ERROR_403": {
     "BACK": "Back to dashboard",
@@ -322,6 +329,20 @@
     "BABY_OUTCOMES": "Outcome of each baby",
     "FETAL_DEATH_EVENT_RECORDED": "Stillbirth recorded as a fetal-death event (no patient record): it is counted in the mortality register."
   },
+  "MOBILE_MONEY": {
+    "OPERATOR_LABEL": "Operator",
+    "OPERATOR_CHOOSE": "Choose the operator",
+    "OPERATOR_REQUIRED": "Choose the operator of the mobile-money payment (Orange Money, Moov Money or another operator).",
+    "OPERATOR": {
+      "ORANGE_MONEY": "Orange Money",
+      "MOOV_MONEY": "Moov Money",
+      "AUTRE": "Other operator",
+      "NOT_STATED": "Operator not stated"
+    },
+    "MANUAL_ENTRY_NOTICE": "Payment entered manually — check the reference against the operator’s statement.",
+    "NO_CARD_DETAILS": "Never enter a card number, CVV or PIN: only the transaction reference.",
+    "CARD_NUMBER_REFUSED": "This field looks like it holds a card number. e-Keneya never stores card numbers: enter only the transaction reference."
+  },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Back to organizations",
     "LOADING": "Loading lifecycle…",
@@ -456,7 +477,21 @@
     "AUDIT_ALL": "All recent events",
     "AUDIT_FAILURES": "Failures",
     "AUDIT_EMPTY": "No events in this recent sample match this filter.",
-    "TOOLS_HELP": "Manage organizations, access and platform settings"
+    "TOOLS_HELP": "Manage organizations, access and platform settings",
+    "CONTROL": {
+      "GROUP_NETWORK": "Network",
+      "GROUP_ACCESS": "Access",
+      "GROUP_PLATFORM": "Platform",
+      "GROUP_SECURITY": "Security",
+      "HEALTH_TITLE": "Integration health and attention",
+      "HEALTH_HELP": "Recorded integration states across organizations. No history means health is unknown.",
+      "OPEN_INTEGRATIONS": "Manage integrations",
+      "HEALTH_UNAVAILABLE": "Integration health unavailable. Refresh to retry.",
+      "CONFIGURATION": "Platform configuration",
+      "ACTIVITY_UNAVAILABLE": "Recent clinical activity unavailable. Refresh to retry.",
+      "AUDIT_SAMPLE": "Sample: latest {{count}} audit events received. Filters apply to this sample only.",
+      "ROUTINE_AUDIT": "Include successful token refreshes ({{count}})"
+    }
   },
   "AUDIT_SEARCH": {
     "TITLE": "Cross-Tenant Audit Search",
@@ -1422,7 +1457,11 @@
     "NO_ROOM_ASSIGNED": "No room assigned",
     "DIAGNOSIS_FROM_SUMMARY": "The diagnosis written in the discharge summary of this stay. Change it on the summary.",
     "INSTRUCTIONS_IN_SUMMARY": "Already in the discharge summary",
-    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "The discharge summary of this stay is finalized: its instructions are the ones the patient receives."
+    "SUMMARY_FINALIZED_NO_INSTRUCTIONS": "The discharge summary of this stay is finalized: its instructions are the ones the patient receives.",
+    "OVERVIEW_TITLE": "Loaded admissions",
+    "MATCHING_COUNT": "Matching admissions: {{count}}",
+    "MISSING_BED_SUBSET": "Active with bed details missing",
+    "MISSING_BED_HINT": "Missing bed details are a subset of active admissions and are already included in that count."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "The analytics could not be loaded. Try again.",
@@ -1656,6 +1695,14 @@
     "WRITE_DELETE": "Deleted: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "record",
     "DESC": {
+      "PRICE_LIST_ITEM_CREATED": "Price list item {{item}} created with price {{version}}",
+      "PRICE_LIST_ITEM_UPDATED": "Price list item {{item}} edited",
+      "PRICE_LIST_ITEM_DEACTIVATED": "Price list item {{item}} deactivated, reason recorded",
+      "PRICE_VERSION_ADDED": "New price {{version}} for price list item {{item}}, effective {{from}}",
+      "INVOICE_LINE_PRICE_OVERRIDDEN": "Price-list price {{version}} overridden on draft line {{line}} of invoice {{invoice}}",
+      "INVOICE_LINE_PRICE_RESTORED": "Price-list price {{version}} restored on draft line {{line}} of invoice {{invoice}}",
+      "INVOICE_LINE_DELETED": "Draft line {{line}} of invoice {{invoice}} deleted",
+      "INVOICE_LINE_DELETED_TARIFF": "Draft line {{line}} of invoice {{invoice}} deleted (price-list price {{version}})",
       "NEWBORN_REGISTERED_FROM_DELIVERY": "Newborn registered from a recorded delivery",
       "NEWBORN_REGISTRATION_PENDING": "Newborn registration pending after a recorded delivery",
       "PARTNER_DISPENSE_OF_HELD_RX": "{{what}} confirmed dispensing prescription {{rx}}, which is held for review; the hold stands. A person must check with the patient and the partner.",
@@ -1708,6 +1755,12 @@
       "LOCK_SCREEN_UNLOCK_FAILED": "Lock-screen unlock failed: wrong password",
       "LOCK_SCREEN_LOCKED_NOW": "Too many wrong passwords on the lock screen: account locked, session ended",
       "LOCK_SCREEN_REFUSED_LOCKED": "Lock-screen unlock refused: the account is locked, session ended",
+      "PASSWORD_CHANGE_WRONG_CURRENT": "Password change refused: wrong current password",
+      "PASSWORD_CHANGE_LOCKED_NOW": "Too many wrong current passwords on a password change: account locked",
+      "PASSWORD_CHANGE_REFUSED_LOCKED": "Password change refused: the account is locked",
+      "ACCOUNT_SETUP_WRONG_CURRENT": "Account setup refused: wrong current password",
+      "ACCOUNT_SETUP_LOCKED_NOW": "Too many wrong current passwords on the account setup: account locked",
+      "ACCOUNT_SETUP_REFUSED_LOCKED": "Account setup refused: the account is locked",
       "ACCESS_TOKEN_REVOKED_LOCKOUT": "Access token revoked at the lock-screen lockout",
       "REFRESH_TOKEN_REVOKED_LOCKOUT": "Refresh token revoked at the lock-screen lockout",
       "TOKEN_PAIR_ROTATED": "Session tokens renewed (previous refresh jti={{jti}})",
@@ -1776,6 +1829,7 @@
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE_STATED": "Emergency release — serologically incompatible, of unit {{unit}} against request {{request}}, O negative stated not obtainable in time, stock shown {{shown}}",
       "CROSS_HOSPITAL_READ": "Read from another hospital on the treatment relationship: {{subject}}{{extra}}",
       "SUPPORT_SESSION_REFUSED": "Support session refused: {{what}} (sign-in or recovery details)",
+      "SUPPORT_SESSION_CLINICAL_REFUSED": "Support session refused: a clinical act ({{roles}}) during impersonation",
       "IMPERSONATION_STARTED": "Support session started as {{user}}. Reason: {{reason}}",
       "IMPERSONATION_ENDED": "Support session as {{user}} ended",
       "USER_ACTION_REFUSED": "User {{action}} refused: the caller may not administer this account",
@@ -1954,7 +2008,19 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_DELIVERY": "Delivery records as born alive a baby a death certificate declares stillborn",
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Duplicate warning overridden (\"Order anyway\", reason: {{reason}}): imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
-      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists"
+      "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
+      "NATIONAL_IU_ACTION": "Patient unique identifier: {{operation}}",
+      "PAYER_CREATED": "Payer {{payer}} created",
+      "PAYER_UPDATED": "Payer {{payer}} updated",
+      "PAYER_DEACTIVATED": "Payer {{payer}} deactivated, reason recorded",
+      "PAYER_PLAN_CREATED": "Plan {{plan}} of payer {{payer}} created",
+      "PAYER_PLAN_UPDATED": "Plan {{plan}} of payer {{payer}} updated",
+      "PAYER_RULE_ADDED": "Rule {{rule}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
+      "PAYER_RULE_ENDED": "Rule {{rule}} of plan {{plan}} ended, reason recorded",
+      "COVERAGE_PLAN_LINKED": "Patient coverage {{insurance}} linked to plan {{plan}}",
+      "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
+      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
+      "PRICE_LIST_IMPORTED": "Price list import {{import}} applied: {{items}} new items, {{prices}} new prices, {{unchanged}} unchanged"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2237,6 +2303,12 @@
       "PASSWORD_LOCKED": "too many wrong passwords",
       "SIGNING_IMPERSONATION": "support session",
       "SIGNING_NOT_ENROLLED": "authenticator required for this account"
+    },
+    "NATIONAL_IU_ACTION": {
+      "CREATE": "created",
+      "UPDATE": "updated",
+      "CLEAR": "cleared",
+      "SHOW_FULL": "shown in full"
     }
   },
   "BILLING": {
@@ -2430,6 +2502,14 @@
     "CANCEL_REASON_REQUIRED": "Give the reason for cancelling this issued invoice.",
     "ADJUSTMENT_AMOUNT_REQUIRED": "Enter the amount of the discount or waiver (greater than zero).",
     "EDIT_LINE": "Price or correct this line",
+    "TARIFF_PRICE_VALUE": "Price-list price: {{ amount }}",
+    "REMOVE_REASON": "Reason for removing this price-list line",
+    "REMOVE_REASON_PLACEHOLDER": "Why is this price-list line taken off the invoice?",
+    "REMOVE_REASON_REQUIRED": "Give the reason for removing this price-list line.",
+    "OVERRIDE_REASON": "Price changed — reason",
+    "OVERRIDE_REASON_VALUE": "Price changed — reason: {{ reason }}",
+    "OVERRIDE_REASON_PLACEHOLDER": "Why does this line not take the price-list price?",
+    "OVERRIDE_REASON_REQUIRED": "Give the reason for changing the price-list price of this line.",
     "ITEM_UPDATED": "Line updated",
     "ADJUSTMENT_REVERSE": "Undo the adjustment",
     "ADJUSTMENT_REVERSED": "Adjustment undone",
@@ -2439,7 +2519,176 @@
     "ADJUSTMENT_REVERSAL_NOTE": "The amount goes back on what is owed. Money already received, such as the copay paid at check-in, stays recorded.",
     "ADJUSTMENT_REVERSAL_FAILED": "The adjustment could not be undone.",
     "EMAIL_ADDRESS_INVALID": "Not a valid e-mail address: {{ addresses }}",
-    "LINE_QUANTITY_POSITIVE": "Enter a whole quantity greater than zero."
+    "LINE_QUANTITY_POSITIVE": "Enter a whole quantity greater than zero.",
+    "PRICE_LIST": {
+      "TITLE": "Price list",
+      "SUBTITLE": "The hospital’s prices with their effective dates. A price already applied never changes: add a new price instead.",
+      "BACK_TO_BILLING": "Back to billing",
+      "NEW_ITEM": "New item",
+      "EDIT": "Edit item",
+      "NEW_PRICE": "New price",
+      "DEACTIVATE": "Deactivate",
+      "DEACTIVATE_CONFIRM": "Deactivate this price list item?",
+      "DEACTIVATE_NOTE": "The item can no longer be billed or take a new price. Its history is kept.",
+      "DEACTIVATED": "Item deactivated.",
+      "CATEGORY": "Category",
+      "ALL_CATEGORIES": "All categories",
+      "SEARCH": "Search (code or label)",
+      "SHOW_INACTIVE": "Show deactivated items",
+      "LOADING": "Loading the price list…",
+      "LOAD_FAILED": "The price list could not be loaded.",
+      "EMPTY": "No item in the price list.",
+      "CODE": "Code",
+      "HOSPITAL": "Hospital",
+      "CODE_HINT": "The hospital’s tariff code (e.g. CS-GEN). It never changes once created.",
+      "LABEL": "Label",
+      "LINK": "Link",
+      "LINK_TO": "Link to",
+      "NOT_LINKED": "Not linked (price chosen at the till)",
+      "LINKED_LAB_TEST": "Lab test",
+      "LINKED_TREATMENT": "Service",
+      "LINKED_SYSTEM": "System element",
+      "LINKED_PRODUCT": "Blood product",
+      "LINKED_MODALITY": "Imaging modality",
+      "LINKED_STUDY": "Imaging study type",
+      "LINKED_STUDY_HINT": "As written on the imaging order (e.g. radiographie thorax face).",
+      "LINKED_PROCEDURE": "Procedure code",
+      "UNIT_PRICE": "Unit price (F CFA)",
+      "EFFECTIVE_SINCE": "In force since",
+      "EFFECTIVE_FROM": "Effective date",
+      "NEXT_PRICE": "Planned price",
+      "NEXT_PRICE_FROM": "{{amount}} from {{date}}",
+      "NO_PRICE_TODAY": "No price today",
+      "CURRENT_PRICE": "Price in force: {{amount}}",
+      "STATE": "State",
+      "ACTIVE": "Active",
+      "INACTIVE": "Deactivated",
+      "HISTORY": "Price history",
+      "HISTORY_EMPTY": "No price recorded.",
+      "FROM": "From",
+      "TO": "To",
+      "STATUS": "Status",
+      "CHANGE_REASON": "Reason for the change",
+      "ADDED_BY": "Added by",
+      "NEW_PRICE_NOTE": "The current price applies until the day before the effective date. Invoices already posted do not change.",
+      "REPLACE_SCHEDULED": "Replace the planned price",
+      "SAVED": "Item saved.",
+      "PRICE_SAVED": "New price saved.",
+      "SAVE_FAILED": "Saving failed.",
+      "DEACTIVATE_REASON": "Reason for deactivating",
+      "IMPORT_BUTTON": "Import a price list (CSV)",
+      "EXPORT_BUTTON": "Export the price list (CSV)",
+      "EXPORT_FAILED": "The price list could not be exported.",
+      "IMPORT": {
+        "TITLE": "Import a price list (CSV)",
+        "INTRO": "One row per tariff code, semicolon separated, prices in whole CFA francs (2000 or 2 000), effective date DD/MM/YYYY (blank: today). The import changes prices only: an equal price is unchanged, a different price becomes a new price from its effective date. If a single row is refused, nothing is applied.",
+        "TEMPLATE": "Download the template",
+        "FILE": "CSV file",
+        "NO_FILE": "Choose a CSV file.",
+        "REPLACE_SCHEDULED": "Replace prices planned on the same date",
+        "CHECK": "Check the file",
+        "CHECKING": "Checking…",
+        "APPLY": "Apply the import",
+        "APPLYING": "Importing…",
+        "APPLY_HINT": "Check the file first: the import applies only when no row is refused.",
+        "COUNT_VALID": "Valid rows",
+        "COUNT_NEW_ITEMS": "New",
+        "COUNT_NEW_PRICES": "New prices",
+        "COUNT_UNCHANGED": "Unchanged",
+        "COUNT_REFUSED": "Refused",
+        "ALREADY_IMPORTED": "This file was already imported on {{date}}: applying it again will record nothing.",
+        "ALREADY_APPLIED": "Already imported: nothing new was recorded.",
+        "APPLIED": "Import applied: {{newItems}} new items, {{newPrices}} new prices, {{unchanged}} unchanged.",
+        "APPLY_FAILED": "At least one row is refused: nothing was applied. Fix the file and check it again.",
+        "FAILED": "The file could not be checked.",
+        "ONLY_REFUSED": "Show refused rows only",
+        "LINE": "Line",
+        "COLUMN": "Column",
+        "OUTCOME": "Result",
+        "REASON": "Reason",
+        "PRICE": "Price",
+        "PREVIOUS_PRICE": "Current price",
+        "WHOLE_ROW": "Whole row",
+        "TOO_LARGE": "The file is larger than 1 MB. Split the price list into several files.",
+        "CONCURRENT_ERROR": "Someone else has just created this code (or link) in the price list: nothing was applied. Check the file again."
+      }
+    },
+    "PAYERS": {
+      "TITLE": "Payers",
+      "SUBTITLE": "The mutuelles, insurers, employers and programmes that pay a share of a visit, with their plans and coverage rules. Nothing is applied to an invoice yet.",
+      "BACK_TO_BILLING": "Back to billing",
+      "NEW_PAYER": "New payer",
+      "EDIT": "Edit the payer",
+      "DEACTIVATE": "Deactivate",
+      "DEACTIVATE_CONFIRM": "Deactivate this payer?",
+      "DEACTIVATE_NOTE": "Its plans can no longer be linked to a patient. Its history and existing links are kept.",
+      "DEACTIVATE_REASON": "Reason for deactivating",
+      "DEACTIVATED": "Payer deactivated.",
+      "SHOW_INACTIVE": "Show deactivated payers",
+      "LOADING": "Loading the payers…",
+      "LOAD_FAILED": "The payers could not be loaded.",
+      "EMPTY": "No payer yet.",
+      "CODE": "Payer code",
+      "CODE_HINT": "The hospital’s own code (e.g. MUT-TEST-A). It never changes once created.",
+      "NAME": "Name",
+      "TYPE": "Type",
+      "PLANS": "Plans",
+      "NO_PLAN": "No plan",
+      "STATE": "State",
+      "ACTIVE": "Active",
+      "INACTIVE": "Deactivated",
+      "NEW_PLAN": "New plan",
+      "EDIT_PLAN": "Edit the plan",
+      "PLAN_CODE": "Plan code",
+      "PLAN_NAME": "Plan name",
+      "DEFAULT_RATE": "Coverage rate (%)",
+      "INVOICE_CEILING": "Ceiling per invoice (F CFA)",
+      "ANNUAL_CEILING": "Annual ceiling per beneficiary (F CFA)",
+      "ANNUAL_CEILING_HINT": "Per patient covered and per calendar year.",
+      "NO_CEILING": "No ceiling",
+      "PERIOD": "Offered",
+      "EFFECTIVE_FROM": "Effective from",
+      "EFFECTIVE_TO": "Last day (optional)",
+      "RULES": "Exclusions and specific rates",
+      "NO_RULES": "No rule: the plan rate applies to everything.",
+      "NEW_RULE": "New rule",
+      "RULE_NOTE": "A rule applies to a whole category or to one price list item. It replaces the rule in force for the same target from its date; the invoices already issued do not change.",
+      "RULE_TARGET": "Applies to",
+      "TARGET_CATEGORY": "A category",
+      "TARGET_ITEM": "A price list item",
+      "CATEGORY": "Category",
+      "ITEM": "Price list item",
+      "EXCLUDE": "Excluded: the payer pays nothing",
+      "EXCLUDED": "Excluded",
+      "RULE_RATE": "Coverage rate (%)",
+      "RULE_RATE_HINT": "Leave empty to keep the plan rate.",
+      "ACT_CEILING": "Ceiling per act (F CFA)",
+      "RULE_TERMS": "Coverage",
+      "RATE_VALUE": "{{rate}} %",
+      "RATE_DEFAULT": "Plan rate",
+      "ACT_CEILING_VALUE": "at most {{amount}} per act",
+      "FROM": "From",
+      "TO": "To",
+      "STATUS": "Status",
+      "END_REASON": "Reason for ending",
+      "END_RULE": "End the rule",
+      "END_RULE_CONFIRM": "End this rule?",
+      "END_RULE_NOTE": "The rule stops applying from today (a rule not started yet is withdrawn). It stays in the history.",
+      "REPLACE_SCHEDULED": "Replace the planned rule",
+      "SAVED": "Payer saved.",
+      "PLAN_SAVED": "Plan saved.",
+      "RULE_SAVED": "Rule saved.",
+      "RULE_ENDED": "Rule ended.",
+      "SAVE_FAILED": "The change could not be saved.",
+      "NEW_TERMS": "New rate and ceilings",
+      "TERMS_HISTORY": "Rate and ceilings history",
+      "TERMS_NOTE": "The new terms apply from their date; those in force until the day before. Invoices already issued do not change.",
+      "TERMS_EDIT_NOTE": "The rate and ceilings change by “New rate and ceilings”, from a date.",
+      "TERMS_REASON": "Reason for the change (optional)",
+      "TERMS_SAVED": "New rate and ceilings saved.",
+      "NEXT_TERMS": "Planned from {{date}}: {{rate}} %",
+      "REPLACE_TERMS": "Replace the planned rate and ceilings"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -3066,6 +3315,7 @@
     "VISIT": "Visit",
     "WAITING_LONG": "Waiting > 30m",
     "WAIT_MINUTES": "{{minutes}}m wait",
+    "WAIT_ELAPSED": "Waiting {{duration}}",
     "WARD": "Ward",
     "WARD_OCCUPANCY": "Ward Occupancy",
     "WELCOME_DESC": "Your dashboard will populate as you start using the system.",
@@ -3453,7 +3703,18 @@
     "ROWS_PER_PAGE": "Rows per page",
     "PREVIOUS_PAGE": "Previous page",
     "NEXT_PAGE": "Next page",
-    "PAGE_OF": "Page {{page}} of {{total}}"
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "HISTORY_NOTE_CREATED": "Created",
+    "HISTORY_NOTE_UPDATED": "Updated",
+    "HISTORY_NOTE_ADDENDUM": "Addendum recorded",
+    "HISTORY_NOTE_SIGNED": "Signed",
+    "HISTORY_NOTE_COSIGNED": "Co-signed",
+    "OVERVIEW_TITLE": "Loaded consultations",
+    "LIST_TITLE": "Consultation list",
+    "MATCHING_COUNT": "Matching consultations: {{count}}",
+    "CURRENT_NOTE": "Current clinical note",
+    "NOTE_STATUS_SIGNED": "Note signed",
+    "NOTE_STATUS_UNSIGNED": "Note unsigned"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -3523,6 +3784,8 @@
     "BACK_TO_LOGIN": "Back to sign in"
   },
   "HOSPITAL_SCOPE": {
+    "PREVIOUS_WRITE_SAVED": "The change was saved to the hospital selected when you submitted it. Return to that hospital to see it.",
+    "PREVIOUS_WRITE_FAILED": "The change submitted for the previously selected hospital failed. Return to that hospital to try again.",
     "ALL_HOSPITALS": "All hospitals",
     "CLEAR": "Clear hospital scope",
     "FILTER_BY_HOSPITAL": "Filter by hospital",
@@ -4603,7 +4866,9 @@
     "PROVIDER_AUDIT": "Audit trail",
     "DHIS2": "DHIS2 export",
     "ADT_INTAKE": "ADT intake",
-    "UNSIGNED_NOTES": "Unsigned notes"
+    "UNSIGNED_NOTES": "Unsigned notes",
+    "PRICE_LIST": "Price list",
+    "PAYERS": "Payers"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -5089,6 +5354,8 @@
     "PHONE_PLACEHOLDER": "e.g. +226 25 30 00 00"
   },
   "PANEL": {
+    "NETWORK_HELP": "Select a hospital to manage care-team panels and patient assignments.",
+    "ACTIVE_ASSIGNMENTS": "Active assignments",
     "TITLE": "Panel Management",
     "ASSIGN": "Empanel a patient",
     "ASSIGN_HINT": "Assigning a new owner for a role automatically ends the previous one — the history is kept.",
@@ -5235,6 +5502,7 @@
     "THIRD_PARTY_LOADED": "Third-party requests loaded",
     "REQUEST_DIRECTORY": "Request tracking",
     "QUEUE_HELP": "One hospital queue, ordered oldest first.",
+    "ALL_ORDER_HELP": "All statuses: pending requests first, then the newest; at most 200 rows are displayed.",
     "STATUS_FILTER": "Filter requests by status",
     "SEARCH": "Search patient, requester or request details",
     "ALL_REQUESTERS": "All requester types",
@@ -5244,7 +5512,14 @@
     "EMPTY_HELP": "Choose another status or log a new request.",
     "REQUEST_DETAILS": "Purpose and scope",
     "RESULTS": "Shown: {{shown}} / {{loaded}} loaded requests",
-    "LOADED_SEARCH": "Search applies to loaded requests only"
+    "LOADED_SEARCH": "Search applies to loaded requests only",
+    "STATUS_ALL": "All statuses",
+    "LOADED": "Requests loaded",
+    "COUNT_SCOPE_HELP": "Requester counts cover loaded requests in the selected status and hospital.",
+    "SHOW_ALL": "View all requests",
+    "TARGET_HOSPITAL": "Target hospital",
+    "HOSPITAL_SELECTED": "Selected hospital",
+    "ACTOR_HELP": "The decision is recorded under your authenticated account. Selecting a hospital does not change your acting identity."
   },
   "PATIENTS": {
     "DECEASED": "Deceased",
@@ -5528,7 +5803,8 @@
     "STANDARD_ACCESS": "Standard access controls apply to this record.",
     "MANAGE_ACCESS": "Manage access",
     "CLINICAL_ESSENTIALS": "Clinical essentials",
-    "CLINICAL_SUMMARY_HELP": "Clinical alerts remain visible above. Open the detailed record to review documented care."
+    "CLINICAL_SUMMARY_HELP": "Clinical alerts remain visible above. Open the detailed record to review documented care.",
+    "RECORD_ACTIONS": "More actions"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -6253,6 +6529,13 @@
       "PENDING_SIGNATURE": "Not finalised — awaiting the clinician’s signature"
     },
     "ENUM": {
+      "RECOVERY_CONTACT_TYPE": {
+        "EMAIL": "Email",
+        "PHONE": "Phone",
+        "SECURITY_KEY": "Security key",
+        "PERSONAL_CONTACT": "Personal contact",
+        "OTHER": "Other contact"
+      },
       "LAB_ORDER_CHANNEL": {
         "ELECTRONIC": "Electronic",
         "EMAIL": "Email",
@@ -6915,7 +7198,18 @@
         "DELIVERY_BABY_OUTCOME_CORRECTED": "Baby outcome corrected",
         "STILLBIRTH_CERTIFICATE_CONFLICT": "Stillbirth certificate conflict",
         "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
-        "IMAGING_ORDER_DUPLICATE_PLACED": "Duplicate imaging order placed"
+        "IMAGING_ORDER_DUPLICATE_PLACED": "Duplicate imaging order placed",
+        "PRICE_LIST_ITEM_CREATED": "Price list item created",
+        "PRICE_LIST_ITEM_UPDATED": "Price list item updated",
+        "PRICE_LIST_ITEM_DEACTIVATED": "Price list item deactivated",
+        "PRICE_VERSION_ADDED": "New price added",
+        "INVOICE_LINE_PRICE_RESTORED": "Price-list price restored",
+        "INVOICE_LINE_DELETED": "Invoice line deleted",
+        "INVOICE_LINE_PRICE_OVERRIDDEN": "Price-list price overridden",
+        "PAYER_CHANGED": "Payer changed",
+        "PAYER_PLAN_CHANGED": "Payer plan changed",
+        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan",
+        "PRICE_LIST_IMPORTED": "Price list imported"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7298,6 +7592,8 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "PRICE_LIST_ITEM": "Price list item",
+        "BILLING": "Billing",
         "SAFEGUARDING": "Child-protection vigilance review",
         "DELIVERY_RECORD": "Delivery record",
         "ORDER_REVIEW_HOLD": "Order review hold",
@@ -7445,7 +7741,10 @@
         "WARD": "Ward",
         "WEBHOOK": "Partner webhook",
         "FETAL_DEATH_EVENT": "Fetal-death event",
-        "IMAGING_ORDER": "Imaging order"
+        "IMAGING_ORDER": "Imaging order",
+        "PAYER": "Payer",
+        "PAYER_PLAN": "Payer plan",
+        "PRICE_LIST_IMPORT": "Price list import"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -7582,6 +7881,55 @@
         "PRIOR_INADEQUATE_OR_UNAVAILABLE": "Previous study inadequate or unavailable",
         "DIFFERENT_REGION_OR_QUESTION": "Different region or clinical question",
         "OTHER": "Other"
+      },
+      "PRICE_LIST_CATEGORY": {
+        "CONSULTATION": "Consultation",
+        "LAB_TEST": "Laboratory",
+        "IMAGING": "Imaging",
+        "PROCEDURE": "Procedure",
+        "BED_DAY": "Bed day",
+        "TRANSFUSION": "Transfusion",
+        "DELIVERY": "Delivery",
+        "OTHER_SERVICE": "Other (medicines, supplies, fees)"
+      },
+      "PRICE_LIST_LINK_TYPE": {
+        "SYSTEM": "System",
+        "LAB_TEST_DEFINITION": "Lab test",
+        "PROCEDURE_CODE": "Procedure",
+        "IMAGING_STUDY": "Imaging study",
+        "TRANSFUSION_PRODUCT": "Blood product",
+        "TREATMENT": "Service"
+      },
+      "PRICE_LIST_PRICE_STATUS": {
+        "SCHEDULED": "Planned",
+        "IN_FORCE": "In force",
+        "ENDED": "Ended",
+        "REPLACED": "Replaced before it applied"
+      },
+      "PRICE_LIST_SYSTEM_KEY": {
+        "CONSULTATION_DEFAULT": "Default consultation",
+        "BED_DAY": "Bed day",
+        "DELIVERY_VAGINAL": "Vaginal delivery",
+        "DELIVERY_CAESAREAN": "Caesarean section"
+      },
+      "PAYER_TYPE": {
+        "AMU": "Universal health insurance",
+        "MUTUELLE": "Mutual insurer",
+        "ASSUREUR_PRIVE": "Private insurer",
+        "EMPLOYEUR": "Employer",
+        "ONG_PROGRAMME": "NGO or programme"
+      },
+      "PAYER_COVERAGE_STATUS": {
+        "SCHEDULED": "Planned",
+        "IN_FORCE": "In force",
+        "ENDED": "Ended",
+        "CANCELLED": "Withdrawn before it applied"
+      },
+      "PRICE_LIST_IMPORT_ROW_OUTCOME": {
+        "NEW_ITEM": "New item",
+        "NEW_PRICE": "New price",
+        "UNCHANGED": "Unchanged",
+        "REFUSED": "Refused"
       }
     },
     "DOCUMENTS": {
@@ -7955,6 +8303,11 @@
     "PRN_MIN_INTERVAL_VALUE": "At least {{hours}} h between doses"
   },
   "PROFILE": {
+    "RECOVERY_CONFIRM_TITLE": "Confirm your recovery contact",
+    "RECOVERY_CONFIRM_ADDRESS": "Read this address or number carefully: {{contact}}. Confirm that it is correct and that you can receive a code there.",
+    "RECOVERY_SEND_CODE": "Confirm and send code",
+    "RECOVERY_PHONE_EXAMPLE": "+226 70 12 34 56",
+    "RECOVERY_TYPE_UNVERIFIABLE": "Verification codes cannot be sent to this contact type.",
     "RECOVERY_REMOVE_CONFIRM": "Remove this recovery contact?",
     "ACCOUNT_AGE": "Account Age",
     "ACCOUNT_DETAILS": "Account Details",
@@ -8432,6 +8785,7 @@
     "CLOSE_ENTRY_REASON": "Why is the entry closed",
     "CLOSE_ENTRY_CONFIRM": "Close the entry",
     "WAIT_DURATION": "{{minutes}} min wait",
+    "WAIT_ELAPSED": "Waiting: {{duration}}",
     "PAYMENT_EXCEEDS_WITH_PENDING": "The patient has declared {{pending}} on this balance, pending confirmation: enter at most {{max}}.",
     "COPAY_AMOUNT_NEGATIVE": "The copay cannot be negative.",
     "WINDOW_FROM": "From {{date}}",
@@ -8631,6 +8985,11 @@
   "RESET": {
     "BACK_TO_LOGIN": "Back to Login",
     "CONFIRM_PASSWORD": "Confirm Password",
+    "ERR_LINK_INVALID": "This reset link is invalid, has expired or was already used. Please request a new one.",
+    "ERR_MIN_LENGTH": "Password must be at least 8 characters.",
+    "ERR_MISMATCH": "Passwords do not match.",
+    "ERR_REQUIRED": "Both fields are required.",
+    "ERR_UNAVAILABLE": "We could not confirm whether your password was reset. Please try again.",
     "INVALID_MSG": "This reset link is invalid or has expired.",
     "INVALID_TITLE": "Invalid Link",
     "MIN_CHARS": "Minimum 8 characters",
@@ -8640,6 +8999,7 @@
     "SIGN_IN_NOW": "Sign in now",
     "SUBMIT": "Reset Password",
     "SUBTITLE": "Create a new password",
+    "SUCCESS_MSG": "Your password has been reset successfully. You can now sign in.",
     "SUCCESS_TITLE": "Password Reset",
     "TITLE": "Reset Password"
   },
@@ -8784,6 +9144,7 @@
     "OPTIONAL": "Optional",
     "OVERTIME": "Overtime",
     "PASTE_HOSPITAL_UUID": "Paste hospital UUID",
+    "HOSPITAL_FROM_STAFF": "Set by the staff member you choose",
     "PENDING_LEAVES": "Pending Leaves",
     "PREVIOUS": "Previous",
     "PROVIDER_AVAILABILITY": "Provider Availability",
@@ -8843,8 +9204,17 @@
       "BULK_ALL_SKIPPED": "No shifts were created. All candidate dates were skipped.",
       "BULK_FAILED": "Bulk scheduling failed. Please try again.",
       "SHIFTS_LOAD_FAILED": "Failed to load shifts",
-      "LEAVE_LOAD_FAILED": "Failed to load leave requests"
-    }
+      "LEAVE_LOAD_FAILED": "Failed to load leave requests",
+      "SHIFT_TIME_RANGE": "Start and end times must be different.",
+      "SHIFT_FIELDS_REQUIRED": "Select a date and different start and end times.",
+      "SHIFT_CREATED": "Shift created.",
+      "SHIFT_FAILED": "Unable to create the shift. Please try again."
+    },
+    "ADD_SHIFT": "Add shift",
+    "SINGLE_SUBTITLE": "Assign a staff member to a shift.",
+    "EMPTY_WEEK_TITLE": "No shifts planned this week",
+    "EMPTY_WEEK_HINT": "Add your first shift or use bulk scheduling to fill the week.",
+    "NO_SHIFTS_PLANNED": "No shift planned"
   },
   "SETUP": {
     "CHOOSE_USERNAME": "Choose Username",
@@ -8974,7 +9344,7 @@
     "SIGNED_AT": "Signed At",
     "SIGNED_BY": "Signed By",
     "SIGNER": "Signer",
-    "SUBTITLE": "Manage digital signatures and certificates",
+    "SUBTITLE": "Manage report signatures and verification",
     "TITLE": "Digital Signatures",
     "VALID": "Valid",
     "VALID_RESULT": "Valid",
@@ -9014,7 +9384,20 @@
     "PICK_REPORT": "Choose a report to sign",
     "SIGNABLE_LOADING": "Loading your reports…",
     "NO_SIGNABLE_REPORTS": "You have no unsigned report to sign in this hospital.",
-    "SIGNABLE_LOAD_ERROR": "Could not load your reports to sign."
+    "SIGNABLE_LOAD_ERROR": "Could not load your reports to sign.",
+    "VERIFY_UNAVAILABLE": "Verification could not be completed. Please try again; signature validity has not been determined.",
+    "LOOKUP_TITLE": "Check report signatures",
+    "LOOKUP_HELP": "Check whether a report has signatures and who signed it. Use the Verify action on a signature to verify its original signature text.",
+    "KNOWN_REPORTS": "Reports in the loaded signature list",
+    "CHOOSE_REPORT": "Choose a report",
+    "LOOKUP_LOADING": "Checking...",
+    "INVALID_REPORT_ID": "Enter a valid report UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
+    "RETRY": "Try again",
+    "MATCHING_COUNT": "Matching signatures: {{count}}",
+    "RESET_FILTERS": "Reset filters",
+    "LOAD_ERROR": "Unable to load signatures. Please try again.",
+    "NO_MATCHES": "No signatures match these filters.",
+    "EMPTY_HELP": "Signatures will appear here after reports are signed. You can also check a report using its reference."
   },
   "STAFF": {
     "ADD_STAFF": "Add Staff",
@@ -9434,7 +9817,16 @@
     "NO_PATIENTS": "No patients",
     "COLUMN_PATIENTS": "{{column}} patients",
     "START_VISIT": "Start the visit",
-    "START_FAILED": "The visit could not be started."
+    "START_FAILED": "The visit could not be started.",
+    "AVG_ELAPSED": "Average elapsed time",
+    "ELAPSED_HELP": "Elapsed time is measured from arrival, or from the encounter date when arrival is missing. The average covers all active patients on this hospital board.",
+    "LONGEST_ELAPSED": "Longest elapsed time",
+    "ALL_PROVIDERS": "All providers",
+    "ACUITY_FILTER": "Urgency",
+    "ALL_ACUITIES": "All urgency levels",
+    "LONGEST_FIRST": "Longest elapsed first",
+    "ELAPSED": "Since arrival / encounter date",
+    "STAGE_TIME_UNAVAILABLE": "Time in the current stage is unavailable."
   },
   "CHECKOUT": {
     "TITLE": "Check-Out Patient",
@@ -9517,8 +9909,20 @@
     "tasks": "Tasks",
     "title": "In-Basket",
     "unreadCount": "Unread count",
+    "unread": "{{count}} unread",
     "urgent": "Urgent",
-    "openVisitToSign": "Open the visit to sign"
+    "openVisitToSign": "Open the visit to sign",
+    "lastUpdated": "Last updated: {{time}}",
+    "refreshing": "Refreshing...",
+    "loadFailed": "Unable to refresh your inbox. Please try again.",
+    "staleData": "Previously loaded items and counts may be out of date.",
+    "retry": "Try again",
+    "emptyTitle": "Your inbox is empty",
+    "emptyHint": "Results, prescriptions, messages and tasks addressed to you will appear here.",
+    "emptyCategory": "No items in this category",
+    "emptyCategoryHint": "Choose another category or view all inbox items.",
+    "showAll": "View all items",
+    "summaryLoadFailed": "Unable to update unread counts. Refresh your inbox to try again."
   },
   "common": {
     "loading": "Loading…"
@@ -9668,7 +10072,12 @@
     "TITLE": "Discharge",
     "WARNING_SIGNS": "Warning signs",
     "WOUND_CARE": "Wound care",
-    "NOT_ADMITTED": "This patient has no open hospital stay here: a discharge is requested only for an admitted patient."
+    "NOT_ADMITTED": "This patient has no open hospital stay here: a discharge is requested only for an admitted patient.",
+    "OVERVIEW_TITLE": "Discharge overview",
+    "COUNT_SCOPE_HELP": "Counts reflect loaded requests and summaries under their respective filters. Request approval and summary finalization are separate workflow steps.",
+    "REQUESTS_LOADED": "Requests loaded",
+    "NO_FILTERED_APPROVALS": "No requests with status: {{status}}",
+    "SHOW_ALL_REQUESTS": "View all requests"
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Allergies recorded at other hospitals are withheld: this patient has opted out of record sharing. This list may be incomplete.",
@@ -10444,6 +10853,8 @@
     }
   },
   "MED_TIMELINE": {
+    "SUPPLY_DAY": "{{count}} day",
+    "SUPPLY_DAYS": "{{count}} days",
     "TITLE": "Medication History",
     "SUBTITLE": "Prescription and pharmacy-fill timeline with interaction checks",
     "PICK_PATIENT": "Pick a patient to load their medication timeline.",
@@ -10580,7 +10991,16 @@
     "URGENCY_ELECTIVE": "Elective",
     "URGENCY_URGENT": "Urgent",
     "URGENCY_EMERGENT": "Emergent",
-    "PAST_DATE": "The planned date and time cannot be in the past."
+    "PAST_DATE": "The planned date and time cannot be in the past.",
+    "SEARCH": "Search patient, record number, procedure or code",
+    "ALL_URGENCIES": "All urgencies",
+    "VISIBLE_COUNT": "{{shown}} / {{total}} requests loaded",
+    "NO_MATCHES": "No requests match these filters.",
+    "CONSENT_NOT_RECORDED_CANCELLED": "Consent was not recorded before cancellation.",
+    "WORKLIST_PRE_OP_CLEARANCE_PENDING": "Preoperative clearance pending",
+    "WORKLIST_READY_FOR_PROCEDURE": "Ready for procedure",
+    "WORKLIST_POSTPONED": "Postponed",
+    "NETWORK_HELP": "Choose a hospital to view its procedure requests, consent records and schedules."
   },
   "REGISTRATIONS": {
     "DEACTIVATE_TITLE": "Deactivate this registration?",
@@ -10640,7 +11060,14 @@
     "LIMIT_NOTICE": "200 records were loaded. More records may exist; local search and totals cover only this loaded set.",
     "RESULT_RANGE": "{{start}}–{{end}} of {{total}} loaded records",
     "ROWS_PER_PAGE": "Rows per page",
-    "PAGE_OF": "Page {{page}} of {{total}}"
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "OVERVIEW_TITLE": "Registrations and stays",
+    "COUNT_SCOPE_HELP": "Up to {{limit}} registrations are loaded for the selected activity filter. Stay counts describe this set; an active registration does not mean an admitted patient.",
+    "LOADED_COUNT": "Registrations loaded",
+    "LOAD_LIMIT_NOTICE": "The first {{limit}} registrations are shown. More matching registrations may exist.",
+    "REGISTRATION_STATUS": "Registration status",
+    "NOT_RECORDED": "Not recorded",
+    "OPEN_PATIENT_RECORD": "Open patient record"
   },
   "COVERAGE": {
     "PROVIDER_DEFAULTS_TO_PAYER": "Defaults to the payer code",
@@ -10721,7 +11148,13 @@
     "DEACTIVATE_GUARANTOR_MESSAGE": "The guarantor stays on file, marked inactive. Say why; the reason is kept in the audit trail.",
     "GUARANTOR_DEACTIVATED": "{{name}} is no longer an active guarantor.",
     "GUARANTOR_REACTIVATED": "{{name}} is an active guarantor again.",
-    "DEACTIVATION_REASON": "Reason"
+    "DEACTIVATION_REASON": "Reason",
+    "PLAN": "Plan (formule)",
+    "NO_PLAN": "No plan (free text)",
+    "PICK_PLAN": "Choose the plan",
+    "PLAN_HINT": "The payer plan this coverage is billed under. Without a plan, the patient pays the whole invoice.",
+    "PLAN_SAVED": "Plan saved.",
+    "PLAN_SAVE_ERROR": "The plan could not be saved."
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",
@@ -10888,6 +11321,8 @@
     "SOCIAL_EMPTY": "Record at least one item (habits, occupation, living situation or notes) before saving a new version."
   },
   "MATERNITY": {
+    "WORKLIST_COUNT_HELP": "Worklist count for the selected hospital and patient, if selected. — means loading or unavailable. Text search does not change these counts.",
+    "NETWORK_HELP": "Select a hospital for maternal histories, referrals and maternity worklists.",
     "FOREIGN_RECORDED_AT": "Recorded at {{hospital}}, read only here",
     "GA": "Gestational age",
     "GA_SHORT": "{{weeks}} wk {{days}} d",
@@ -11825,7 +12260,13 @@
     "STATUS_COMPLETED": "Completed",
     "STATUS_CONFIRMED_UNDERSTANDING": "Understanding confirmed",
     "STATUS_NEEDS_CLARIFICATION": "Needs clarification",
-    "STATUS_FEEDBACK_PROVIDED": "Feedback provided"
+    "STATUS_FEEDBACK_PROVIDED": "Feedback provided",
+    "HOSPITAL_SCOPE": "Resources and assignments for the selected hospital.",
+    "NETWORK_SCOPE": "Network library. Select a hospital to manage resources or assign them to a patient.",
+    "PICK_HOSPITAL": "Select a hospital to view patient progress.",
+    "SEARCH_SCOPE": "Search and filters apply to the loaded resources.",
+    "NO_MATCHES": "No resources match these filters.",
+    "EMPTY_HELP": "Add a resource at the selected hospital, or clear the filters to see the available library."
   },
   "ON_CALL": {
     "TITLE": "On-Call Rota",
@@ -12828,6 +13269,7 @@
     "NO_EXPIRY": "Does not expire"
   },
   "REGISTRIES": {
+    "ALL_MERGED_HINT": "All statuses combines the first loaded page of each status, sorted here by next expected visit then enrolment date; at most 200 rows are displayed.",
     "TITLE": "Disease Registries",
     "SUBTITLE": "Who is enrolled in each care programme, and who is overdue for a visit.",
     "ENROLL": "Enrol patient",
@@ -12881,7 +13323,16 @@
     "STATUS_UPDATED": "Status updated.",
     "ACTION_FAILED": "The action could not be completed.",
     "COUNTS_UNAVAILABLE": "Counts unavailable — showing the last known values.",
-    "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} enrolments."
+    "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} enrolments.",
+    "ALL_STATUSES": "All statuses",
+    "OVERDUE_ONLY": "Overdue visits only",
+    "SORT": "Sort loaded patients",
+    "SORT_PRIORITY": "Registry order",
+    "SORT_NAME": "Patient name A–Z",
+    "SORT_NEXT_VISIT": "Next visit: earliest first",
+    "SEARCH_SCOPE": "Search, overdue filtering and sorting apply to loaded patients. Totals describe the selected programme and status.",
+    "EMPTY_SELECTED": "No patients in {{program}} with status: {{status}}, at this hospital.",
+    "NETWORK_HELP": "Choose a hospital to view programme cohorts, enrolments and overdue follow-up visits."
   },
   "RECORD_ACCESS": {
     "RESTRICTED_ARIA": "Restricted records",
@@ -13442,6 +13893,15 @@
     "RELOAD": "Reload page"
   },
   "CARE_DASH": {
+    "UNASSIGNED": "Not assigned",
+    "RECEIVING_TEAM": "Receiving clinician",
+    "OVERDUE_MINUTES": "Overdue by {{count}} min",
+    "OVERDUE_BY": "Overdue by {{duration}}",
+    "MRN_HINT": "Record number: 4 digits can find candidates; confirm their full identity. Exact national ID: 12 digits.",
+    "SEARCH_PATIENT_MRN": "Name or record number (including 4 digits)",
+    "SEARCH_PATIENT_RECORD": "Search patient or record number",
+    "PAGE_FILTERS": "Filters apply to this loaded page.",
+    "LOCAL_FILTERS": "Filters apply to displayed assignments.",
     "EDUCATION_EYEBROW": "PATIENT LEARNING",
     "REGISTRY_EYEBROW": "CARE PROGRAMMES",
     "PANEL_EYEBROW": "CARE TEAM PANELS",
@@ -13720,5 +14180,24 @@
     "RECORD_BY_PHYSICIAN": "The review is recorded by a doctor or surgeon of this hospital.",
     "RECORDED": "Review recorded",
     "RECORD_FAILED": "The review could not be recorded."
+  },
+  "NATIONAL_IU": {
+    "LABEL": "Unique identifier (UI)",
+    "HINT": "Optional. Exactly 12 digits; spaces and dashes are accepted.",
+    "SHOW_FULL": "Show full identifier (audited)",
+    "HIDE": "Hide identifier",
+    "CLEAR": "Clear identifier",
+    "CHECKING": "Checking for an existing record…",
+    "INVALID": "Enter exactly 12 digits, or leave this field empty.",
+    "UNAVAILABLE": "The identifier could not be checked or displayed. Please try again.",
+    "EXISTS_HERE": "A patient with this identifier already exists. Open the record.",
+    "EXISTS_ELSEWHERE": "This identifier may already be registered elsewhere. Please check with the patient.",
+    "SAVE_ANYWAY": "Save anyway",
+    "REASON": "Reason for saving a duplicate identifier",
+    "SEARCH_EXACT": "Search by exact unique identifier (12 digits)",
+    "CONFIRM_DUPLICATE": "This identifier is already in use. Tick « Save anyway » and give a reason, or correct the identifier.",
+    "REASON_REQUIRED": "Give the reason for saving a duplicate identifier.",
+    "WAIT_CHECK": "The identifier is still being checked. Try again in a moment.",
+    "EXISTS_HERE_NUMBERED": "Existing record {{index}} of {{count}} with this identifier: open it."
   }
 }

@@ -757,23 +757,19 @@
                           {{ 'PLATFORM.LINK' | translate }}
                         </button>
                       } @else {
-                        @if (row.link.enabled) {
-                          <button
-                            class="btn btn-sm btn-outline"
-                            [disabled]="isLinkBusy(row.hospitalId)"
-                            (click)="setHospitalLinkEnabled(row, false)"
-                          >
-                            {{ 'PLATFORM.DISABLE_LINK' | translate }}
-                          </button>
-                        } @else {
-                          <button
-                            class="btn btn-sm btn-success"
-                            [disabled]="isLinkBusy(row.hospitalId)"
-                            (click)="setHospitalLinkEnabled(row, true)"
-                          >
-                            {{ 'PLATFORM.ENABLE_LINK' | translate }}
-                          </button>
-                        }
+                        <!-- QA D2100 class: one toggle, so keyboard focus survives the switch. -->
+                        <button
+                          class="btn btn-sm"
+                          [class.btn-outline]="row.link.enabled"
+                          [class.btn-success]="!row.link.enabled"
+                          [disabled]="isLinkBusy(row.hospitalId)"
+                          (click)="setHospitalLinkEnabled(row, !row.link.enabled)"
+                        >
+                          {{
+                            (row.link.enabled ? 'PLATFORM.DISABLE_LINK' : 'PLATFORM.ENABLE_LINK')
+                              | translate
+                          }}
+                        </button>
                         <button
                           class="btn btn-sm btn-danger"
                           [disabled]="isLinkBusy(row.hospitalId)"
@@ -1245,7 +1241,8 @@
                 }}</a>
               } @else if (item.documentationUrl) {
                 <span class="url-text">{{ item.documentationUrl }}</span>
-                <span class="muted-text">{{ 'PLATFORM.PLACEHOLDER_URL' | translate }}</span>
+                {{ ' '
+                }}<span class="muted-text">{{ 'PLATFORM.PLACEHOLDER_URL' | translate }}</span>
               } @else {
                 <span>—</span>
               }
@@ -1258,7 +1255,8 @@
                 }}</a>
               } @else if (item.sandboxUrl) {
                 <span class="url-text">{{ item.sandboxUrl }}</span>
-                <span class="muted-text">{{ 'PLATFORM.PLACEHOLDER_URL' | translate }}</span>
+                {{ ' '
+                }}<span class="muted-text">{{ 'PLATFORM.PLACEHOLDER_URL' | translate }}</span>
               } @else {
                 <span>—</span>
               }
@@ -1271,7 +1269,8 @@
                 }}</a>
               } @else if (item.onboardingGuideUrl) {
                 <span class="url-text">{{ item.onboardingGuideUrl }}</span>
-                <span class="muted-text">{{ 'PLATFORM.PLACEHOLDER_URL' | translate }}</span>
+                {{ ' '
+                }}<span class="muted-text">{{ 'PLATFORM.PLACEHOLDER_URL' | translate }}</span>
               } @else {
                 <span>—</span>
               }

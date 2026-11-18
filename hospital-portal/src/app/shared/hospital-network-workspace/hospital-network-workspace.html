@@ -3,7 +3,7 @@
     <div>
       <p class="network-eyebrow">{{ 'HOSPITAL_NETWORK.EYEBROW' | translate }}</p>
       <h1>{{ moduleTitleKey() | translate }}</h1>
-      <p>{{ 'HOSPITAL_NETWORK.SUBTITLE' | translate }}</p>
+      <p>{{ moduleHelpKey() | translate }}</p>
     </div>
     <app-hospital-scope-chip [preserveScope]="true" />
   </header>
@@ -135,12 +135,6 @@
           (pageChange)="page.set($event)"
         />
       </div>
-      <p class="network-result" role="status">
-        {{
-          'HOSPITAL_NETWORK.RESULTS'
-            | translate: { count: filtered().length, total: hospitals().length }
-        }}
-      </p>
     }
   </section>
 </div>

@@ -1,6 +1,5 @@
 import { RoleContextService } from '../../core/role-context.service';
-import { isFrontDeskOnly } from '../patient-chart/chart-access';
-import { refuseFields } from '../../shared/forms/invalid-fields';
+import { focusFirstInvalid, refuseFields } from '../../shared/forms/invalid-fields';
 import { refusedFieldReasons } from '../../shared/refusal-reason';
 import {
   earliestBirthDate,
@@ -17,6 +16,7 @@ import {
   inject,
   signal,
   ElementRef,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -33,6 +33,8 @@ import {
   refuseInvalidPhones,
 } from '../../shared/forms/phone-field.directive';
 import { joinReasons, missingRequiredMessage } from '../../shared/required-fields';
+import { NationalUniqueIdEditorComponent } from '../national-unique-id-editor.component';
+import { NationalUniqueIdChange } from '../national-unique-id';
 
 /**
  * QA D926: the front desk corrects a registered patient's identity, contact
@@ -69,7 +71,13 @@ const DEMOGRAPHICS_LABEL_KEYS: Readonly<Record<string, string>> = {
 @Component({
   selector: 'app-patient-demographics-edit',
   standalone: true,
-  imports: [PhoneFieldDirective, FormsModule, TranslateModule, DialogFocusDirective],
+  imports: [
+    PhoneFieldDirective,
+    FormsModule,
+    TranslateModule,
+    DialogFocusDirective,
+    NationalUniqueIdEditorComponent,
+  ],
   templateUrl: './patient-demographics-edit.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
@@ -85,9 +93,14 @@ export class PatientDemographicsEditComponent implements OnInit {
   private readonly patientService = inject(PatientService);
   private readonly roleContext = inject(RoleContextService);
 
-  /** RCPT-CLIN: the blood type is not the desk's to read, so not its box to change. */
-  frontDeskOnly(): boolean {
-    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  /**
+   * QA D2120 review: the blood group, allergies and history summary are clinical fields, which
+   * the server keeps unless a doctor, nurse or midwife writes them (PatientServiceImpl
+   * writesClinicalFields); they are offered to those roles only, not to the desk, an admin or a
+   * super-admin alone.
+   */
+  writesClinicalFields(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
   }
 
   private readonly toast = inject(ToastService);
@@ -95,6 +108,17 @@ export class PatientDemographicsEditComponent implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly saving = signal(false);
+  nationalUniqueIdChange: NationalUniqueIdChange = {};
+  nationalUniqueIdReady = true;
+  private readonly iuEditor = viewChild(NationalUniqueIdEditorComponent);
+  nationalUniqueIdError: string | null = null;
+  onNationalUniqueIdUpdated(change: NationalUniqueIdChange): void {
+    this.nationalUniqueIdChange = change;
+    this.nationalUniqueIdError = null;
+  }
+  get identityScope(): string | null {
+    return this.roleContext.activeHospitalId;
+  }
   readonly error = signal<string | null>(null);
 
   /** The editable copy; compared with {@link patient} on save. */
@@ -213,6 +237,16 @@ export class PatientDemographicsEditComponent implements OnInit {
   }
 
   submit(): void {
+    // QA D2032: an unresolved identifier refused the save with no word.
+    if (!this.nationalUniqueIdReady) {
+      const refusal = this.iuEditor()?.refuseSubmit() ?? {
+        key: 'NATIONAL_IU.WAIT_CHECK',
+        fieldId: 'demoNationalUniqueId',
+      };
+      focusFirstInvalid(this.host.nativeElement, [refusal.fieldId]);
+      this.error.set(this.translate.instant(refusal.key));
+      return;
+    }
     // The date of birth is required too (NOT NULL on the record): a cleared
     // one would be sent as "" and kept by the server, while the dialog said
     // "saved" (review round 10).
@@ -249,7 +283,7 @@ export class PatientDemographicsEditComponent implements OnInit {
       );
       return;
     }
-    const body = this.changes();
+    const body = { ...this.changes(), ...this.nationalUniqueIdChange };
     if (Object.keys(body).length === 0) {
       this.dismissed.emit();
       return;
@@ -268,6 +302,7 @@ export class PatientDemographicsEditComponent implements OnInit {
       },
       error: (err) => {
         this.saving.set(false);
+        this.nationalUniqueIdError = err?.error?.fieldErrors?.nationalUniqueId ?? null;
         // QA D1422: the server's own refusal of a field is marked on it too.
         const refused = refusedFieldReasons(err, {
           ...DEMOGRAPHICS_FIELD_IDS,

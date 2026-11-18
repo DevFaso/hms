@@ -5,6 +5,20 @@
       <p class="page-subtitle">{{ 'BILLING.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <!-- Billing-money plan PR 2: the hospital's price list, for the roles its route admits -->
+      @if (canReadPriceList) {
+        <a class="btn-secondary" routerLink="/billing/tarifs" data-testid="price-list-link">
+          <span class="material-symbols-outlined" aria-hidden="true">sell</span>
+          {{ 'BILLING.PRICE_LIST.TITLE' | translate }}
+        </a>
+      }
+      <!-- Billing-money plan PR 6: the payer catalogue, for the roles its route admits -->
+      @if (canReadPriceList) {
+        <a class="btn-secondary" routerLink="/billing/organismes" data-testid="payers-link">
+          <span class="material-symbols-outlined" aria-hidden="true">health_and_safety</span>
+          {{ 'BILLING.PAYERS.TITLE' | translate }}
+        </a>
+      }
       <!-- QA D1059: the cashier's daily cash closing -->
       @if (canRecordPayment) {
         <button
@@ -519,6 +533,34 @@
                             (ngModelChange)="editLineUnitPrice.set($event)"
                             (keydown.enter)="saveLine(it)"
                           />
+                          <!-- Billing-money plan PR 3 (D-2): a price-list line shows its tariff, and
+                               changing its price asks why; the reason is kept with the line. -->
+                          @if (isTariffLine(it)) {
+                            <div class="cell-secondary" [attr.data-testid]="'line-tariff-' + it.id">
+                              {{
+                                'BILLING.TARIFF_PRICE_VALUE'
+                                  | translate: { amount: formatCurrency(it.tariffUnitPrice ?? 0) }
+                              }}
+                            </div>
+                            <label class="line-edit-label" for="line-edit-override-reason"
+                              >{{ 'BILLING.OVERRIDE_REASON' | translate }}
+                              @if (overrideReasonRequired(it)) {
+                                *
+                              }
+                            </label>
+                            <input
+                              type="text"
+                              maxlength="500"
+                              id="line-edit-override-reason"
+                              class="line-edit-input"
+                              [required]="overrideReasonRequired(it)"
+                              [attr.data-testid]="'line-override-reason-' + it.id"
+                              [placeholder]="'BILLING.OVERRIDE_REASON_PLACEHOLDER' | translate"
+                              [ngModel]="editLineOverrideReason()"
+                              (ngModelChange)="editLineOverrideReason.set($event)"
+                              (keydown.enter)="saveLine(it)"
+                            />
+                          }
                         </td>
                         <td class="amount">
                           {{
@@ -556,6 +598,23 @@
                         <td>{{ it.quantity }}</td>
                         <td class="amount" [class.unpriced]="!(it.unitPrice > 0)">
                           {{ formatCurrency(it.unitPrice) }}
+                          @if (it.overrideReason && isTariffLine(it)) {
+                            <div
+                              class="cell-secondary"
+                              [attr.data-testid]="'line-override-' + it.id"
+                            >
+                              {{
+                                'BILLING.TARIFF_PRICE_VALUE'
+                                  | translate: { amount: formatCurrency(it.tariffUnitPrice ?? 0) }
+                              }}
+                            </div>
+                            <div class="cell-secondary">
+                              {{
+                                'BILLING.OVERRIDE_REASON_VALUE'
+                                  | translate: { reason: it.overrideReason }
+                              }}
+                            </div>
+                          }
                         </td>
                         <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
                         @if (canDelete || canEditLines(inv)) {
@@ -580,6 +639,7 @@
                                 [disabled]="itemSaving()"
                                 [title]="'BILLING.REMOVE_LINE' | translate"
                                 [attr.aria-label]="'BILLING.REMOVE_LINE' | translate"
+                                [attr.data-testid]="'line-delete-' + it.id"
                                 (click)="removeItem(it)"
                               >
                                 <span class="material-symbols-outlined">delete</span>
@@ -588,6 +648,53 @@
                           </td>
                         }
                       </tr>
+                      <!-- Review #1197 M2: a price-list line is removed only with a reason. -->
+                      @if (removingLineId() === it.id) {
+                        <tr
+                          appInlineSubForm
+                          #removeForm="inlineSubForm"
+                          (dismissed)="cancelRemoveLine()"
+                          [inlineSubFormReturn]="
+                            '[data-testid=&quot;line-delete-' + it.id + '&quot;]'
+                          "
+                          [attr.data-testid]="'line-remove-' + it.id"
+                        >
+                          <td colspan="5">
+                            <label class="line-edit-label" for="line-remove-reason"
+                              >{{ 'BILLING.REMOVE_REASON' | translate }} *</label
+                            >
+                            <input
+                              required
+                              type="text"
+                              maxlength="500"
+                              id="line-remove-reason"
+                              class="line-edit-input"
+                              [attr.data-testid]="'line-remove-reason-' + it.id"
+                              [placeholder]="'BILLING.REMOVE_REASON_PLACEHOLDER' | translate"
+                              [ngModel]="removeLineReason()"
+                              (ngModelChange)="removeLineReason.set($event)"
+                              (keydown.enter)="confirmRemoveTariffLine(it)"
+                            />
+                            <button
+                              type="button"
+                              class="btn-danger btn-sm"
+                              [disabled]="itemSaving()"
+                              [attr.data-testid]="'line-remove-confirm-' + it.id"
+                              (click)="confirmRemoveTariffLine(it)"
+                            >
+                              {{ 'COMMON.DELETE' | translate }}
+                            </button>
+                            <button
+                              type="button"
+                              class="btn-secondary btn-sm"
+                              (click)="cancelRemoveLine()"
+                            >
+                              {{ 'COMMON.CANCEL' | translate }}
+                            </button>
+                            <app-inline-discard-ask [form]="removeForm" />
+                          </td>
+                        </tr>
+                      }
                     }
                   }
                 </tbody>
@@ -803,7 +910,14 @@
                           p.paymentDate ? (p.paymentDate | serverTime | date: 'mediumDate') : '—'
                         }}
                       </td>
-                      <td>{{ p.paymentMethod | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</td>
+                      <td>
+                        {{ p.paymentMethod | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
+                        @if (isMobileMoney(p.paymentMethod)) {
+                          <div class="cell-secondary" data-testid="payment-operator">
+                            {{ operatorLabelKey(p.mobileMoneyOperator) | translate }}
+                          </div>
+                        }
+                      </td>
                       <td>{{ p.referenceNumber || '—' }}</td>
                       <td class="amount">{{ formatCurrency(p.amount) }}</td>
                       <td>
@@ -1267,6 +1381,28 @@
             }
           </select>
         </div>
+        @if (isMobileMoney(paymentMethod())) {
+          <!-- Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close. -->
+          <div class="field">
+            <label for="payment-operator">{{ 'MOBILE_MONEY.OPERATOR_LABEL' | translate }} *</label>
+            <select
+              required
+              aria-required="true"
+              id="payment-operator"
+              data-server-field="mobileMoneyOperator"
+              [ngModel]="paymentOperator()"
+              (ngModelChange)="paymentOperator.set($event)"
+            >
+              <option [ngValue]="null">{{ 'MOBILE_MONEY.OPERATOR_CHOOSE' | translate }}</option>
+              @for (o of mobileMoneyOperators; track o.value) {
+                <option [ngValue]="o.value">{{ o.labelKey | translate }}</option>
+              }
+            </select>
+            <p class="muted-note" data-testid="mobile-money-manual-entry">
+              {{ 'MOBILE_MONEY.MANUAL_ENTRY_NOTICE' | translate }}
+            </p>
+          </div>
+        }
         <div class="field">
           <!-- QA D1007: the methods the server refuses without a reference say so. -->
           <label for="payment-reference"
@@ -1285,6 +1421,9 @@
           />
         </div>
         <p class="muted-note">{{ 'BILLING.PAYMENT_NOTE' | translate }}</p>
+        <p class="muted-note" data-testid="payment-no-card-details">
+          {{ 'MOBILE_MONEY.NO_CARD_DETAILS' | translate }}
+        </p>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closePayment()">

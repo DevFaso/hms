@@ -3558,4 +3558,103 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- X2 booking identities; V301-V319 are reserved for Claude. -->
+    <changeSet id="V320-appointment-booking-identity" author="hms-team" runOnChange="false">
+        <sqlFile path="V320__appointment_booking_identity.sql"
+                 relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V302 (billing-money plan PR 2, scorecard M1) - each hospital's price
+         list: billing.price_list_items (the hospital's code, label as typed,
+         category, optional link a charge source matches in PR 3; one active
+         item per link) and billing.price_list_prices (effective-dated,
+         insert-only versions in whole francs; only effective_to is set by the
+         service when a newer version starts). Plain idempotent DDL, no DO
+         block. V301-V319 are reserved for the billing-money plan.
+         ================================================================= -->
+    <changeSet id="V302-billing-price-list" author="hms-team" runOnChange="false">
+        <sqlFile path="V302__billing_price_list.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- X8 / P1: optional encrypted national IU with keyed lookup; private
+         per-patient EMPI hash aliases allow reasoned duplicates. V320 is
+         already used by the merged X2 booking-idempotency task. Legacy
+         alias uniqueness is replaced before its blanket constraint is removed. -->
+    <changeSet id="V321-patient-national-unique-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V321__patient_national_unique_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V303 (billing-money plan PR 3, scorecard M1) - a checkout line is
+         priced from the hospital's price list: billing.invoice_items gains
+         price_list_item_id / price_list_price_id (the version whose price the
+         line copied, composite FK to that item's version), price_source
+         (TARIFF, SERVICE_NAME, MANUAL, UNPRICED, LEGACY; existing lines with a
+         service become SERVICE_NAME, the rest stay LEGACY), and the cashier's
+         override (tariff_unit_price + override_reason, D-2). Also normalises
+         PROCEDURE_CODE link keys to upper case. Plain idempotent DDL, no DO
+         block.
+         ================================================================= -->
+    <changeSet id="V303-billing-invoice-line-tariff" author="hms-team" runOnChange="false">
+        <sqlFile path="V303__billing_invoice_line_tariff.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V308 (billing-money plan PR 9, scorecard M5): mobile_money_operator
+         (ORANGE_MONEY, MOOV_MONEY, AUTRE) on billing.payment_transactions,
+         billing.pharmacy_payments and clinical.pharmacy_sales, so the cash
+         close totals Orange Money and Moov Money apart. NULL on older rows
+         and for every other method. Plain idempotent DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V308-mobile-money-operator" author="hms-team" runOnChange="false">
+        <sqlFile path="V308__mobile_money_operator.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V304 (billing-money plan PR 4, scorecard M1) - the price-list CSV
+         import keeps a trace of every file checked or applied
+         (billing.price_list_imports: file name, SHA-256, row counts, status
+         DRY_RUN / APPLIED, who and when); the same file applies once per
+         hospital (partial UNIQUE on the SHA-256 of APPLIED rows), and
+         price_list_prices.import_id now references its import at the same
+         hospital. Plain idempotent DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V304-billing-price-list-imports" author="hms-team" runOnChange="false">
+        <sqlFile path="V304__billing_price_list_imports.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V305 (billing-money plan PR 6, scorecard M1) - each hospital's payer
+         catalogue: billing.payers (code, name as typed, type), billing.
+         payer_plans (code, name, dates offered), billing.payer_plan_terms
+         (default coverage %, per-invoice and annual ceilings; insert-only
+         dated versions) and billing.payer_plan_rules (category- or item-level
+         rate, exclusion or per-act ceiling; effective-dated, insert-only like
+         prices), plus clinical.patient_insurances.payer_plan_id (nullable FK;
+         existing free-text coverage is untouched). Coverage is not applied
+         to invoices yet (PR 7, V306). Plain idempotent DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V305-billing-payer-catalogue" author="hms-team" runOnChange="false">
+        <sqlFile path="V305__billing_payer_catalogue.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -15,6 +15,9 @@ import { PatientService } from '../services/patient.service';
 import { RoleContextService } from '../core/role-context.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 import { ToastService } from '../core/toast.service';
+import en from '../../assets/i18n/en.json';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 
 function enrollment(overrides: Partial<ProgramEnrollment> = {}): ProgramEnrollment {
   return {
@@ -103,6 +106,123 @@ describe('RegistriesComponent', () => {
   function root(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
   }
+
+  it('QA D2120: offers a clinician enrolment, visits and status changes', () => {
+    registryService.registry.and.returnValue(of(page([enrollment()])));
+    fixture.detectChanges();
+
+    expect(root().querySelector('[data-testid="open-enroll"]')).not.toBeNull();
+    expect(root().querySelector('[data-testid="record-visit"]')).not.toBeNull();
+    expect(root().querySelector('[data-testid="change-status"]')).not.toBeNull();
+  });
+
+  it('QA D2120: shows a super-admin the cohort and no clinical action on it', () => {
+    scope.set({ superAdmin: true, hospitalId: 'h1', roles: ['ROLE_SUPER_ADMIN'] });
+    registryService.registry.and.returnValue(of(page([enrollment()])));
+    const readOnly = TestBed.createComponent(RegistriesComponent);
+    readOnly.detectChanges();
+    const el = readOnly.nativeElement as HTMLElement;
+
+    expect(el.querySelectorAll('tbody tr').length).toBeGreaterThan(0);
+    expect(el.querySelector('[data-testid="open-enroll"]')).toBeNull();
+    expect(el.querySelector('[data-testid="record-visit"]')).toBeNull();
+    expect(el.querySelector('[data-testid="change-status"]')).toBeNull();
+  });
+
+  it('combines explicit status pages for All because an omitted status defaults to ACTIVE on the server', () => {
+    fixture.detectChanges();
+    registryService.registry.calls.reset();
+    registryService.registry.and.callFake((_program, status) =>
+      of(page([enrollment({ id: status!, status: status! })])),
+    );
+    component.setStatusFilter('ALL');
+    expect(registryService.registry.calls.count()).toBe(6);
+    expect(
+      registryService.registry.calls.allArgs().every((args) => args[1] !== undefined),
+    ).toBeTrue();
+    expect(component.rows().length).toBe(6);
+    expect(component.totalRows()).toBe(6);
+  });
+
+  it('merges All and sorts names without crashing on missing patient display names', () => {
+    fixture.detectChanges();
+    registryService.registry.and.returnValue(
+      of(page([enrollment({ patientName: null as unknown as string })])),
+    );
+    component.setStatusFilter('ALL');
+    expect(component.rows().length).toBe(6);
+    component.sortBy.set('name');
+    expect(component.visibleRows().length).toBe(6);
+  });
+
+  it('filters overdue loaded patients and sorts dates only when selected, retaining source totals', () => {
+    registryService.registry.and.returnValue(
+      of(
+        page(
+          [
+            enrollment({ id: 'later', nextExpectedVisit: '2026-10-20', overdueDays: 1 }),
+            enrollment({ id: 'earlier', nextExpectedVisit: '2026-10-01', overdueDays: 10 }),
+            enrollment({ id: 'ontime', overdueDays: 0 }),
+          ],
+          300,
+        ),
+      ),
+    );
+    fixture.detectChanges();
+    expect(component.visibleRows()[0].id).toBe('later');
+    component.overdueOnly.set(true);
+    component.sortBy.set('nextVisit');
+    expect(component.visibleRows().map((row) => row.id)).toEqual(['earlier', 'later']);
+    expect(component.totalRows()).toBe(300);
+    expect(component.rows().length).toBe(3);
+  });
+
+  it('merges large status cohorts in server priority order before limiting All to 200', () => {
+    // Neither cohort is overdue: overdueDays cannot distinguish their dates.
+    // The 201st ACTIVE row must not be required to construct the first 200.
+    const active = Array.from({ length: 201 }, (_, i) =>
+      enrollment({
+        id: `active-${i}`,
+        patientName: `Z ${i}`,
+        nextExpectedVisit: i < 199 ? '2027-01-01' : '2027-03-01',
+        overdueDays: 0,
+      }),
+    );
+    const completed = Array.from({ length: 201 }, (_, i) =>
+      enrollment({
+        id: `closed-${i}`,
+        status: 'COMPLETED',
+        patientName: `A ${i}`,
+        nextExpectedVisit: '2027-02-01',
+        enrolledOn: i === 0 ? '2026-06-01' : '2026-07-01',
+        overdueDays: 0,
+      }),
+    );
+    registryService.registry.and.callFake((_program, status) => {
+      const rows = status === 'ACTIVE' ? active : status === 'COMPLETED' ? completed : [];
+      return of(page(rows.slice(0, 200), rows.length));
+    });
+    fixture.detectChanges();
+    component.setStatusFilter('ALL');
+    expect(component.rows().map((row) => row.id)).toEqual([
+      ...active.slice(0, 199).map((row) => row.id),
+      'closed-0',
+    ]);
+    expect(component.totalRows()).toBe(402);
+    expect(component.truncated()).toBeTrue();
+  });
+
+  // Review #1196/#1198 L1: the hint claimed "overdue days then name"; the merge
+  // sorts by next expected visit then enrolment date (the test above).
+  it('describes the All order the merge really uses, in every locale', () => {
+    const hints = [en, fr, es].map((t) => t.REGISTRIES.ALL_MERGED_HINT.toLowerCase());
+    expect(hints[0]).toContain('next expected visit then enrolment date');
+    expect(hints[1]).toContain('prochaine visite attendue puis par date d’inscription');
+    expect(hints[2]).toContain('próxima visita esperada y fecha de inscripción');
+    for (const hint of hints) {
+      expect(hint).not.toMatch(/overdue|retard|retraso|name|nom|nombre/);
+    }
+  });
 
   it('carries no scope chip or hint of its own: the route gate owns them', () => {
     // The route is flagged requiresHospitalScope: the shell shows the one

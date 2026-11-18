@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.utility.CsvCells;
 import com.example.hms.enums.PharmacyClaimStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.pharmacy.PharmacyClaim;
@@ -111,7 +112,7 @@ public class PharmacyClaimExportService {
     }
 
     private static String csv(Object v) {
-        return v == null ? "" : v.toString();
+        return v == null ? "" : CsvCells.safe(v.toString());
     }
 
     private static String id(UUID id) {
@@ -122,7 +123,7 @@ public class PharmacyClaimExportService {
         if (v == null || v.isEmpty()) {
             return "";
         }
-        String cleaned = v.replace("\r", " ").replace("\n", " ");
+        String cleaned = CsvCells.safe(v.replace("\r", " ").replace("\n", " "));
         if (cleaned.contains(",") || cleaned.contains("\"")) {
             return "\"" + cleaned.replace("\"", "\"\"") + "\"";
         }

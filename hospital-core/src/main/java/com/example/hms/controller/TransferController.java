@@ -46,7 +46,7 @@ public class TransferController {
 
     /** Ordering and executing a move is clinical; the desk does not do it. */
     private static final String CLINICAL_ROLES =
-        "hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')";
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')";
 
     private final TransferService transferService;
 

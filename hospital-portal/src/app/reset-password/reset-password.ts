@@ -1,9 +1,17 @@
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { Component, inject, OnInit, PLATFORM_ID, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  inject,
+  ElementRef,
+  OnInit,
+  PLATFORM_ID,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
@@ -25,7 +33,10 @@ export class ResetPasswordComponent implements OnInit {
   currentYear = new Date().getFullYear();
 
   private token = '';
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly passwordFields = ['newPassword', 'confirmPassword'];
   private readonly http = inject(HttpClient);
+  private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly platformId = inject(PLATFORM_ID);
@@ -33,9 +44,8 @@ export class ResetPasswordComponent implements OnInit {
 
   ngOnInit(): void {
     this.token = this.route.snapshot.queryParamMap.get('token') ?? '';
-    if (!this.token) {
-      this.error = 'Invalid or missing reset token. Please request a new password reset link.';
-    }
+    // A missing URL token renders the translated invalid-link state, not a form.
+    // There is no editable token field to mark or focus.
   }
 
   get tokenMissing(): boolean {
@@ -53,17 +63,24 @@ export class ResetPasswordComponent implements OnInit {
   submit(): void {
     if (!this.isBrowser || this.loading) return;
     this.error = '';
+    refuseFields(this.host.nativeElement, [], this.passwordFields);
 
     if (!this.newPassword || !this.confirmPassword) {
-      this.error = 'Both fields are required.';
+      this.error = this.translate.instant('RESET.ERR_REQUIRED');
+      const missing = this.passwordFields.filter((id) =>
+        id === 'newPassword' ? !this.newPassword : !this.confirmPassword,
+      );
+      refuseFields(this.host.nativeElement, missing, this.passwordFields, this.error);
       return;
     }
     if (this.newPassword.length < 8) {
-      this.error = 'Password must be at least 8 characters.';
+      this.error = this.translate.instant('RESET.ERR_MIN_LENGTH');
+      refuseFields(this.host.nativeElement, ['newPassword'], this.passwordFields, this.error);
       return;
     }
     if (this.newPassword !== this.confirmPassword) {
-      this.error = 'Passwords do not match.';
+      this.error = this.translate.instant('RESET.ERR_MISMATCH');
+      refuseFields(this.host.nativeElement, ['confirmPassword'], this.passwordFields, this.error);
       return;
     }
 
@@ -77,13 +94,16 @@ export class ResetPasswordComponent implements OnInit {
       .subscribe({
         next: () => {
           this.loading = false;
-          this.success = 'Your password has been reset successfully. You can now sign in.';
+          this.success = this.translate.instant('RESET.SUCCESS_MSG');
         },
         error: (err) => {
           this.loading = false;
+          // Only a 400 confirms a refusal. A transport/server failure leaves the
+          // outcome unknown, including when the reset committed before a timeout.
           this.error =
-            err?.error?.message ??
-            'This reset link is invalid or has expired. Please request a new one.';
+            err?.status === 400
+              ? err?.error?.message || this.translate.instant('RESET.ERR_LINK_INVALID')
+              : this.translate.instant('RESET.ERR_UNAVAILABLE');
         },
       });
   }

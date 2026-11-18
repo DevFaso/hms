@@ -53,7 +53,8 @@ class InvoiceItemServiceImplTest {
 
     private final InvoiceItemServiceImpl service = new InvoiceItemServiceImpl(itemRepository, invoiceRepository,
         assignmentRepository, treatmentRepository, new InvoiceItemMapper(), billingInvoiceService,
-        mock(MessageSource.class), roleValidator, actingScopeResolver);
+        mock(MessageSource.class), roleValidator, actingScopeResolver,
+        mock(com.example.hms.service.AuditEventLogService.class));
 
     private BillingInvoice invoice;
     private UserRoleHospitalAssignment callerAssignment;
@@ -72,8 +73,8 @@ class InvoiceItemServiceImplTest {
         when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
         when(actingScopeResolver.requirePinned()).thenReturn(HOSPITAL_ID);
         when(roleValidator.getCurrentUserId()).thenReturn(callerId);
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(callerId, HOSPITAL_ID))
-            .thenReturn(Optional.of(callerAssignment));
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(callerId, HOSPITAL_ID))
+            .thenReturn(java.util.List.of(callerAssignment));
         when(itemRepository.save(any(InvoiceItem.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 

@@ -78,6 +78,7 @@ describe('PatientFormComponent', () => {
     const roleCtx = {
       isSuperAdmin: () => false,
       hasAnyActiveRole: () => false,
+      effectiveHospitalIdForRequest: () => 'h1',
     } as unknown as RoleContextService;
 
     await TestBed.configureTestingModule({
@@ -240,6 +241,19 @@ describe('PatientFormComponent', () => {
       hospitalId: 'h1',
     });
   }
+
+  it('waits for the IU duplicate decision, then includes the approved identity value in registration', () => {
+    fillValidForm();
+    component.nationalUniqueIdChange = { nationalUniqueId: '000123456789' };
+    component.nationalUniqueIdReady = false;
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    component.nationalUniqueIdReady = true;
+    component.onSubmit();
+    expect(userSpy.adminRegister.calls.mostRecent().args[0].patient?.nationalUniqueId).toBe(
+      '000123456789',
+    );
+  });
 
   it('QA D1403 + D1414: a future date, an impossible date and a digit name are refused on their field, in the same press', () => {
     for (const [field, value] of [

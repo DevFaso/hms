@@ -86,6 +86,18 @@ public class HospitalContext {
     private final Set<String> assignedRoles = Collections.emptySet();
 
     /**
+     * QA D2120 review: the role codes of the live active assignments AT each
+     * hospital, so a clinical gate counts only what the caller holds where the
+     * request acts ({@code ClinicalActor.holdsOwnRole}). Never a scope input.
+     */
+    @Builder.Default
+    private final Map<UUID, Set<String>> hospitalRoles = Collections.emptyMap();
+
+    /** The role codes of the live active assignments bound to no hospital (a global SUPER_ADMIN row). */
+    @Builder.Default
+    private final Set<String> globalRoles = Collections.emptySet();
+
+    /**
      * The caller holds ROLE_PATIENT and nothing else: their requests are
      * bounded by ownership of their own records, not by a hospital (design
      * Q1), so no hospital is pinned for them unless they name one.

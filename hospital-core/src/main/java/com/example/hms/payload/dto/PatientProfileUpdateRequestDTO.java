@@ -17,6 +17,16 @@ import java.util.List;
 @Builder
 public class PatientProfileUpdateRequestDTO {
 
+    /** Optional; null/omitted retains, explicit empty clears. */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    private String nationalUniqueId;
+
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    private boolean allowNationalUniqueIdDuplicate;
+
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+    private String nationalUniqueIdDuplicateReason;
+
     // QA D926: the front desk corrects the identity a patient was registered
     // with. Each field is optional (null = unchanged); a required one sent
     // blank is refused, never cleared.

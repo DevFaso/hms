@@ -291,9 +291,8 @@ class OwnEmailChangeIT extends BaseIT {
                 .content(objectMapper.writeValueAsString(
                     Map.of("token", rawToken, "newPassword", "Old-Mailbox-Pass-1"))))
             .andReturn();
-        // The confirm endpoint answers 204 whatever the token (it never reveals
-        // validity), so the proof is that the password did NOT change.
-        assertThat(reset.getResponse().getStatus()).isEqualTo(204);
+        // QA D2051: the old mailbox's link is refused (400), and the password did NOT change.
+        assertThat(reset.getResponse().getStatus()).isEqualTo(400);
         String hashAfter = userRepository.findById(patient.getId()).orElseThrow().getPasswordHash();
         assertThat(passwordEncoder.matches("Old-Mailbox-Pass-1", hashAfter))
             .as("the old mailbox's reset link must not work after the move").isFalse();

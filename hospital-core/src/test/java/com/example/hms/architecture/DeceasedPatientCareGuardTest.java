@@ -137,6 +137,7 @@ class DeceasedPatientCareGuardTest {
         Appointment#deleteAppointment | removes a visit
         Appointment#runReminderSweep | the sweep already skips the deceased
         Appointment#searchAppointments | a read over POST
+        PatientNationalUniqueId#check,search,reveal | X8 identity reads only, including after a death; ReadsOnlyPostGuardTest drives the filter and PatientNationalUniqueIdPostgresIT proves no death/identity mutation
         BirthPlan#updateBirthPlan,providerReview,deleteBirthPlan | an existing record, late documentation
         Consultation#acknowledgeConsultation,updateConsultation,completeConsultation,declineConsultation,cancelConsultation,assignConsultation,reassignConsultation | closes or documents a request made before the death
         Dispense#claimQueueRow,takeOverQueueRow,releaseQueueRow | the work queue: nothing leaves the pharmacy
@@ -200,7 +201,7 @@ class DeceasedPatientCareGuardTest {
     /** Controller -> why none of its writes is new care. */
     private static final Map<String, String> WHOLE_CONTROLLER = Map.ofEntries(
         Map.entry("BillingInvoice", BILLING), Map.entry("Eligibility", BILLING), Map.entry("InvoiceEmail", BILLING),
-        Map.entry("InvoiceItem", BILLING), Map.entry("PatientGuarantor", BILLING), Map.entry("PatientInsurance", BILLING),
+        Map.entry("InvoiceItem", BILLING), Map.entry("PriceList", BILLING), Map.entry("Payer", BILLING), Map.entry("PatientGuarantor", BILLING), Map.entry("PatientInsurance", BILLING),
         Map.entry("PharmacyClaim", BILLING), Map.entry("PharmacyPayment", BILLING),
         Map.entry("DischargeApproval", "discharge and stay close-out"),
         Map.entry("DischargeSummary", "discharge and stay close-out"),

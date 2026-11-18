@@ -1,5 +1,14 @@
 import { formatDecimal } from '../../shared/i18n/app-locale';
-import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  linkedSignal,
+  signal,
+} from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -20,6 +29,7 @@ import { convertValue, knownAnalyte, unitConversion } from './lab-unit-conversio
 import { serverInstant } from '../../shared/date-utils';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-result-evolution',
   imports: [
     FormsModule,

@@ -25,65 +25,121 @@
     </div>
   </div>
 
-  <!-- Report lookup: is a given report signed, and by whom? -->
-  <div class="lookup-panel">
-    <select
-      [attr.aria-label]="'SIGNATURES.REPORT_TYPE' | translate"
-      [title]="'SIGNATURES.REPORT_TYPE' | translate"
-      [ngModel]="lookupReportType()"
-      (ngModelChange)="lookupReportType.set($event)"
-    >
-      <option value="">{{ 'SIGNATURES.REPORT_TYPE' | translate }}</option>
-      @for (t of reportTypes; track t) {
-        <option [value]="t">{{ formatReportType(t) }}</option>
+  <!-- Report lookup: is a given report signed, and by whom?
+       Review L4: only for the roles GET /signatures/report/{type}/{id} accepts. -->
+  @if (canLookup) {
+    <section class="lookup-panel" aria-label="{{ 'SIGNATURES.LOOKUP' | translate }}">
+      <p id="lookup-help">{{ 'SIGNATURES.LOOKUP_HELP' | translate }}</p>
+      @if (knownReports().length) {
+        <label class="lookup-field" for="known-report"
+          >{{ 'SIGNATURES.KNOWN_REPORTS' | translate }}
+          <select
+            id="known-report"
+            [ngModel]="knownReportChoice()"
+            (ngModelChange)="chooseKnownReport($event)"
+          >
+            <option value="">{{ 'SIGNATURES.CHOOSE_REPORT' | translate }}</option>
+            @for (report of knownReports(); track report.id) {
+              <option [value]="report.id">
+                {{ report.reportType | enumLabel: 'signatureType' }} &middot;
+                {{ report.signedByName }} &middot;
+                {{ formatDate(report.signatureDateTime) }}
+              </option>
+            }
+          </select>
+        </label>
       }
-    </select>
-    <input
-      type="text"
-      [placeholder]="'SIGNATURES.REPORT_ID_PLACEHOLDER' | translate"
-      [ngModel]="lookupReportId()"
-      (ngModelChange)="lookupReportId.set($event)"
-      (keydown.enter)="runLookup()"
-    />
-    <button type="button" class="btn-secondary" (click)="runLookup()" [disabled]="lookupLoading()">
-      {{ 'SIGNATURES.LOOKUP' | translate }}
-    </button>
+      <div class="lookup-fields">
+        <div class="lookup-field">
+          <label for="lookup-type">{{ 'SIGNATURES.REPORT_TYPE' | translate }}</label>
+          <select
+            id="lookup-type"
+            [ngModel]="lookupReportType()"
+            (ngModelChange)="onLookupChange(); lookupReportType.set($event)"
+          >
+            <option value="">{{ 'SIGNATURES.REPORT_TYPE' | translate }}</option>
+            @for (t of reportTypes; track t) {
+              <option [value]="t">{{ formatReportType(t) }}</option>
+            }
+          </select>
+        </div>
+        <div class="lookup-field">
+          <label for="lookup-id">{{ 'SIGNATURES.REPORT_ID' | translate }}</label>
+          <input
+            id="lookup-id"
+            type="text"
+            [placeholder]="'SIGNATURES.REPORT_ID_PLACEHOLDER' | translate"
+            [ngModel]="lookupReportId()"
+            (ngModelChange)="onLookupChange(); lookupReportId.set($event)"
+            (keydown.enter)="runLookup()"
+            aria-describedby="lookup-help lookup-validation"
+            [attr.aria-invalid]="lookupValidation()"
+          />
+        </div>
+        <button
+          type="button"
+          class="btn-secondary"
+          (click)="runLookup()"
+          [disabled]="lookupLoading()"
+        >
+          {{ (lookupLoading() ? 'SIGNATURES.LOOKUP_LOADING' : 'SIGNATURES.LOOKUP') | translate }}
+        </button>
+        @if (lookupDone() || lookupReportId()) {
+          <button
+            type="button"
+            class="btn-icon"
+            (click)="clearLookup()"
+            [attr.aria-label]="'COMMON.CLEAR' | translate"
+          >
+            <span class="material-icons" aria-hidden="true">close</span>
+          </button>
+        }
+      </div>
+      <p id="lookup-validation" class="lookup-validation" role="status">
+        @if (lookupValidation()) {
+          {{ 'SIGNATURES.INVALID_REPORT_ID' | translate }}
+        }
+      </p>
+    </section>
     @if (lookupDone()) {
-      <button
-        [attr.aria-label]="'COMMON.CLEAR' | translate"
-        type="button"
-        class="btn-icon"
-        (click)="clearLookup()"
-      >
-        <span class="material-icons">close</span>
-      </button>
-    }
-  </div>
-  @if (lookupDone()) {
-    <div class="lookup-result">
-      @if (lookupSigned() !== null) {
-        <span class="badge" [class]="lookupSigned() ? 'badge-success' : 'badge-warning'">
-          {{
-            (lookupSigned() ? 'SIGNATURES.REPORT_SIGNED' : 'SIGNATURES.REPORT_NOT_SIGNED')
-              | translate
-          }}
-        </span>
-      }
-      @if (lookupSignatures().length > 0) {
-        <ul class="lookup-list">
-          @for (sig of lookupSignatures(); track sig.id) {
-            <li>
-              <span class="badge" [class]="statusClass(sig.status)">{{
-                sig.status | enumLabel: 'signatureStatus'
-              }}</span>
-              {{ sig.signedByName }} · {{ formatDate(sig.signatureDateTime) }}
-            </li>
+      <div class="lookup-result" [attr.role]="lookupError() ? 'alert' : 'status'">
+        @if (lookupError()) {
+          <span class="lookup-validation">{{ 'SIGNATURES.LOOKUP_ERROR' | translate }}</span>
+          <button type="button" class="btn-secondary" (click)="runLookup()">
+            {{ 'SIGNATURES.RETRY' | translate }}
+          </button>
+        } @else {
+          <span class="badge" [class]="lookupSigned() ? 'badge-success' : 'badge-warning'">
+            {{
+              (lookupSigned() ? 'SIGNATURES.REPORT_SIGNED' : 'SIGNATURES.REPORT_NOT_SIGNED')
+                | translate
+            }}
+          </span>
+          @if (lookupSignatures().length > 0) {
+            <ul class="lookup-list">
+              @for (sig of lookupSignatures(); track sig.id) {
+                <li>
+                  <span class="badge" [class]="statusClass(sig.status)">{{
+                    sig.status | enumLabel: 'signatureStatus'
+                  }}</span>
+                  {{ sig.signedByName }} - {{ formatDate(sig.signatureDateTime) }}
+                  <button
+                    type="button"
+                    class="btn-icon"
+                    (click)="openDetail(sig)"
+                    [attr.aria-label]="'SIGNATURES.DETAIL_TITLE' | translate"
+                  >
+                    <span class="material-icons" aria-hidden="true">visibility</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            {{ ' ' }}<span class="muted">{{ 'SIGNATURES.LOOKUP_NONE' | translate }}</span>
           }
-        </ul>
-      } @else {
-        <span class="muted">{{ 'SIGNATURES.LOOKUP_NONE' | translate }}</span>
-      }
-    </div>
+        }
+      </div>
+    }
   }
 
   <!-- Filters -->
@@ -120,6 +176,25 @@
     </select>
   </div>
 
+  @if (hasFilters()) {
+    <div class="filter-feedback">
+      <span>{{
+        'SIGNATURES.MATCHING_COUNT' | translate: { count: filteredSignatures().length }
+      }}</span>
+      <button type="button" class="btn-secondary" (click)="resetFilters()">
+        {{ 'SIGNATURES.RESET_FILTERS' | translate }}
+      </button>
+    </div>
+  }
+  @if (!loading() && loadError()) {
+    <div class="load-error" role="alert">
+      <p>{{ 'SIGNATURES.LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadSignatures()">
+        {{ 'SIGNATURES.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
   <!-- Loading -->
   @if (loading()) {
     <div class="loading-state">
@@ -129,7 +204,7 @@
   }
 
   <!-- Table -->
-  @if (!loading()) {
+  @if (!loading() && !loadError()) {
     <div class="table-container">
       <table class="data-table">
         <thead>
@@ -187,7 +262,16 @@
       @if (filteredSignatures().length === 0) {
         <div class="empty-state">
           <span class="material-icons">draw</span>
-          <p>{{ 'SIGNATURES.NO_SIGNATURES' | translate }}</p>
+          <p>
+            {{ (hasFilters() ? 'SIGNATURES.NO_MATCHES' : 'SIGNATURES.NO_SIGNATURES') | translate }}
+          </p>
+          @if (hasFilters()) {
+            <button type="button" class="btn-secondary" (click)="resetFilters()">
+              {{ 'SIGNATURES.RESET_FILTERS' | translate }}
+            </button>
+          } @else {
+            <p class="muted">{{ 'SIGNATURES.EMPTY_HELP' | translate }}</p>
+          }
         </div>
       }
     </div>
@@ -350,12 +434,21 @@
               type="text"
               [placeholder]="'SIGNATURES.VERIFY_PLACEHOLDER' | translate"
               [ngModel]="verifyValue()"
-              (ngModelChange)="verifyValue.set($event)"
+              (ngModelChange)="
+                verifyValue.set($event); verifyResult.set(null); verifyError.set(false)
+              "
+              [disabled]="verifying()"
             />
           </div>
+          @if (verifyError()) {
+            <p class="lookup-validation" role="alert">
+              {{ 'SIGNATURES.VERIFY_UNAVAILABLE' | translate }}
+            </p>
+          }
           @if (verifyResult()) {
             <div
               class="verify-result"
+              role="status"
               [class.valid]="verifyResult()!.valid"
               [class.invalid]="!verifyResult()!.valid"
             >

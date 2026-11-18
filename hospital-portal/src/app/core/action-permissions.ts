@@ -10,6 +10,8 @@
  *
  * Imaging writes (user decision 2026-11-14) need a clinical role the caller
  * holds on their own: SUPER_ADMIN and the admin roles never act on imaging.
+ * QA D2120 extended the rule to every clinical write (encounters, lab orders,
+ * specimens, …): no clinical action lists ROLE_SUPER_ADMIN.
  *
  * Role-level only: a service-layer rule (the acting hospital, the author of a
  * draft) is checked by the page on top of the role gate.
@@ -22,11 +24,11 @@ export interface ActionPermission {
 export const ACTION_PERMISSIONS = {
   labOrderCreate: {
     endpoint: 'LabOrderController#createLabOrder',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE'],
   },
   labOrderUpdate: {
     endpoint: 'LabOrderController#updateLabOrder',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE'],
   },
   labOrderDelete: {
     endpoint: 'LabOrderController#deleteLabOrder',
@@ -38,7 +40,8 @@ export const ACTION_PERMISSIONS = {
   },
   labResultDelete: {
     endpoint: 'LabResultController#deleteLabResult',
-    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_LAB_MANAGER', 'ROLE_LAB_SCIENTIST'],
+    // QA D2120 review (owner): a data fix the super-admin keeps.
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_LAB_MANAGER', 'ROLE_LAB_SCIENTIST', 'ROLE_SUPER_ADMIN'],
   },
   imagingOrderCreate: {
     endpoint: 'ImagingOrderController#createOrder',
@@ -60,7 +63,6 @@ export const ACTION_PERMISSIONS = {
       'ROLE_LAB_MANAGER',
       'ROLE_LAB_DIRECTOR',
       'ROLE_QUALITY_MANAGER',
-      'ROLE_SUPER_ADMIN',
     ],
   },
   labSpecimenReceive: {
@@ -71,7 +73,6 @@ export const ACTION_PERMISSIONS = {
       'ROLE_LAB_MANAGER',
       'ROLE_LAB_DIRECTOR',
       'ROLE_QUALITY_MANAGER',
-      'ROLE_SUPER_ADMIN',
     ],
   },
   labSpecimenReject: {
@@ -82,7 +83,6 @@ export const ACTION_PERMISSIONS = {
       'ROLE_LAB_MANAGER',
       'ROLE_LAB_DIRECTOR',
       'ROLE_QUALITY_MANAGER',
-      'ROLE_SUPER_ADMIN',
     ],
   },
   imagingReportsByHospital: {
@@ -138,11 +138,11 @@ export const ACTION_PERMISSIONS = {
   },
   encounterCreate: {
     endpoint: 'EncounterController#create',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_RECEPTIONIST', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_RECEPTIONIST', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   encounterUpdate: {
     endpoint: 'EncounterController#update',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   encounterDelete: {
     endpoint: 'EncounterController#delete',
@@ -167,34 +167,34 @@ export const ACTION_PERMISSIONS = {
   },
   encounterTriage: {
     endpoint: 'EncounterController#submitTriage',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+    roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
   },
   encounterCompleteTriage: {
     endpoint: 'EncounterController#completeTriage',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+    roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
   },
   encounterCompleteExamination: {
     endpoint: 'EncounterController#completeExamination',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   encounterReadyForDischarge: {
     endpoint: 'EncounterController#markReadyForDischarge',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   encounterCheckout: {
     endpoint: 'EncounterController#checkOut',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   // QA D1015: the midwife starts the visits booked with her (the service
   // refuses her any other one).
   encounterStart: {
     endpoint: 'EncounterController#startEncounter',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_MIDWIFE'],
+    roles: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
   },
   // QA D954: closing a visit nobody has seen (LWBS / cancelled).
   encounterCloseUnseen: {
     endpoint: 'EncounterController#closeUnseen',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST'],
   },
   // QA D961: a medical certificate is a physician's act. Product decision
   // 2026-10-28: any licensed physician (general practitioner, physician,
@@ -295,6 +295,93 @@ export const ACTION_PERMISSIONS = {
   laborArrivalWithoutHandover: {
     endpoint: 'LaborController#recordArrivalWithoutHandover',
     roles: ['ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+  },
+  // Billing-money plan PR 2 (owner decision D-1): the price list is kept by the
+  // hospital admin and the accountant only (never the cashier or the super-admin).
+  priceListCreate: {
+    endpoint: 'PriceListController#create',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  priceListUpdate: {
+    endpoint: 'PriceListController#update',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  priceListAddPrice: {
+    endpoint: 'PriceListController#addPrice',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  priceListDeactivate: {
+    endpoint: 'PriceListController#deactivate',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  // Billing-money plan PR 4: the CSV import, for the same two roles.
+  priceListImport: {
+    endpoint: 'PriceListController#importCsv',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  // Review #1196/#1198 L4: the digital-signatures page gates every panel from
+  // here (the report lookup was offered to admins the endpoint refuses). The
+  // list, lookup and audit entries are reads, mirrored for the same reason.
+  signatureSign: {
+    endpoint: 'DigitalSignatureController#signReport',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST', 'ROLE_PHARMACIST'],
+  },
+  signatureRevoke: {
+    endpoint: 'DigitalSignatureController#revokeSignature',
+    // QA D2120 review (owner): a governance act the super-admin keeps.
+    roles: ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+  },
+  signatureListAll: {
+    endpoint: 'DigitalSignatureController#getAllSignatures',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+  },
+  signatureReportLookup: {
+    endpoint: 'DigitalSignatureController#getSignaturesByReport',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST', 'ROLE_PHARMACIST'],
+  },
+  signatureAuditTrail: {
+    endpoint: 'DigitalSignatureController#getSignatureAuditTrail',
+    roles: ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+  },
+  // Billing-money plan PR 6 (owner decision D-1): the payer catalogue is kept
+  // by the hospital admin and the accountant only (never the cashier or the
+  // super-admin).
+  payerCreate: {
+    endpoint: 'PayerController#create',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerUpdate: {
+    endpoint: 'PayerController#update',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerDeactivate: {
+    endpoint: 'PayerController#deactivate',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerPlanCreate: {
+    endpoint: 'PayerController#createPlan',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerPlanUpdate: {
+    endpoint: 'PayerController#updatePlan',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerTermsAdd: {
+    endpoint: 'PayerController#addTerms',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerRuleAdd: {
+    endpoint: 'PayerController#addRule',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerRuleEnd: {
+    endpoint: 'PayerController#endRule',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  // Plan section 3.8: the "Formule" picker on the Coverage tab.
+  patientInsuranceSetPayerPlan: {
+    endpoint: 'PatientInsuranceController#setPayerPlan',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_BILLING_SPECIALIST', 'ROLE_RECEPTIONIST'],
   },
 } as const satisfies Record<string, ActionPermission>;
 

@@ -4,6 +4,8 @@
     <div class="field">
       <label for="pn-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
       <app-patient-picker
+        [showMrnHint]="true"
+        [hospitalId]="hospitalId"
         required
         inputId="pn-patient"
         [selected]="patient()"

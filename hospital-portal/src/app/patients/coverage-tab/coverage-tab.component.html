@@ -20,6 +20,7 @@
           <tr>
             <th scope="col">{{ 'COVERAGE.PROVIDER' | translate }}</th>
             <th scope="col">{{ 'COVERAGE.POLICY' | translate }}</th>
+            <th scope="col">{{ 'COVERAGE.PLAN' | translate }}</th>
             <th scope="col">{{ 'COVERAGE.SUBSCRIBER' | translate }}</th>
             <th scope="col">{{ 'COVERAGE.VALIDITY' | translate }}</th>
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
@@ -39,6 +40,27 @@
                 {{ i.policyNumber || '—' }}
                 @if (i.groupNumber) {
                   <span class="muted">{{ 'COVERAGE.GROUP' | translate }} {{ i.groupNumber }}</span>
+                }
+              </td>
+              <td data-testid="coverage-plan">
+                @if (i.payerPlanId) {
+                  {{ i.planPayerName }} — {{ i.payerPlanName }}
+                } @else {
+                  <span class="muted">{{ 'COVERAGE.NO_PLAN' | translate }}</span>
+                }
+                @if (canLinkPlan) {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    data-testid="coverage-plan-pick"
+                    [title]="'COVERAGE.PICK_PLAN' | translate"
+                    [attr.aria-label]="'COVERAGE.PICK_PLAN' | translate"
+                    (click)="openPlan(i)"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true"
+                      >health_and_safety</span
+                    >
+                  </button>
                 }
               </td>
               <td>
@@ -381,6 +403,20 @@
             />
           </div>
         </div>
+        @if (canLinkPlan) {
+          <div class="form-row">
+            <div class="field">
+              <label for="cov-link-plan">{{ 'COVERAGE.PLAN' | translate }}</label>
+              <select id="cov-link-plan" [(ngModel)]="linkPlan">
+                <option [ngValue]="null">{{ 'COVERAGE.NO_PLAN' | translate }}</option>
+                @for (o of planOptions(); track o.id) {
+                  <option [ngValue]="o.id">{{ o.label }}</option>
+                }
+              </select>
+              <small class="muted">{{ 'COVERAGE.PLAN_HINT' | translate }}</small>
+            </div>
+          </div>
+        }
         <div class="checkbox-row">
           <label>
             <input type="checkbox" [(ngModel)]="linkPrimary" />
@@ -487,6 +523,69 @@
           [appSubmitGuard]="!editForm.providerName || !editForm.policyNumber"
           [submitGuardFields]="['cov-provider', 'cov-edit-policy']"
           (click)="submitEdit()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Formule (billing-money plan PR 6) ══ -->
+@if (planTarget(); as target) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closePlan()" (keydown.escape)="closePlan()">
+    <div
+      class="modal"
+      aria-labelledby="coverage-tab-plan-title"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closePlan()"
+    >
+      <div class="modal-header">
+        <h2 id="coverage-tab-plan-title">{{ 'COVERAGE.PICK_PLAN' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closePlan()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          <strong>{{ target.providerName }}</strong> — {{ target.policyNumber }}
+        </p>
+        <div class="field">
+          <label for="cov-plan">{{ 'COVERAGE.PLAN' | translate }}</label>
+          <select id="cov-plan" data-testid="coverage-plan-select" [(ngModel)]="planChoice">
+            <option [ngValue]="null">{{ 'COVERAGE.NO_PLAN' | translate }}</option>
+            @if (target.payerPlanId && !hasPlanOption(target.payerPlanId)) {
+              <option [ngValue]="target.payerPlanId">
+                {{ target.planPayerName }} — {{ target.payerPlanName }}
+              </option>
+            }
+            @for (o of planOptions(); track o.id) {
+              <option [ngValue]="o.id">{{ o.label }}</option>
+            }
+          </select>
+          <small class="muted">{{ 'COVERAGE.PLAN_HINT' | translate }}</small>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closePlan()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="coverage-plan-save"
+          [disabled]="planSaving()"
+          (click)="submitPlan()"
         >
           {{ 'COMMON.SAVE' | translate }}
         </button>

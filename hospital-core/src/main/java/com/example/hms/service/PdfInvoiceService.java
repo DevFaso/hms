@@ -231,8 +231,15 @@ public class PdfInvoiceService {
             w.down(15);
             w.text(BODY, 11, MARGIN, t.get("pdf.receipt.date", t.fmt(payment.getPaymentDate())));
             w.down(15);
-            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.method", methodLabel(t, payment)));
-            if (payment.getReferenceNumber() != null && !payment.getReferenceNumber().isBlank()) {
+            boolean hasReference = payment.getReferenceNumber() != null && !payment.getReferenceNumber().isBlank();
+            if (hasReference && payment.getPaymentMethod() == com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {
+                // Billing plan PR 9: "Orange Money, réf. …" on one line.
+                w.text(BODY, 11, MARGIN, t.get("pdf.receipt.methodWithReference", methodLabel(t, payment),
+                    payment.getReferenceNumber()));
+            } else {
+                w.text(BODY, 11, MARGIN, t.get("pdf.receipt.method", methodLabel(t, payment)));
+            }
+            if (hasReference && payment.getPaymentMethod() != com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {
                 w.down(15);
                 w.text(BODY, 11, MARGIN, t.get("pdf.receipt.reference", payment.getReferenceNumber()));
             }
@@ -318,6 +325,11 @@ public class PdfInvoiceService {
     private static String methodLabel(PdfLabels t, PaymentTransaction p) {
         if (p.getPaymentMethod() == null) {
             return "";
+        }
+        // Billing plan PR 9: a Mobile Money payment prints its operator, or says it was not stated.
+        if (p.getPaymentMethod() == com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {
+            String operator = p.getMobileMoneyOperator() != null ? p.getMobileMoneyOperator().name() : "NOT_STATED";
+            return t.getOrCode("pdf.payment.operator." + operator, operator);
         }
         String code = p.getPaymentMethod().name();
         return t.getOrCode("pdf.payment.method." + code, code);

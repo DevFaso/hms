@@ -163,7 +163,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({PessimisticLockingFailureException.class, OptimisticLockingFailureException.class})
     public ResponseEntity<Object> handleConcurrentModification(RuntimeException ex, WebRequest request) {
         if (log.isWarnEnabled()) {
-            log.warn("Concurrent modification at path {}: {}", request.getDescription(false),
+            log.warn("Concurrent modification at path {}: {}", logPath(request),
                     ex.getClass().getSimpleName());
         }
         return buildErrorResponse(HttpStatus.CONFLICT,
@@ -257,7 +257,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(io.jsonwebtoken.JwtException.class)
     public ResponseEntity<Object> handleJwt(io.jsonwebtoken.JwtException ex, WebRequest request) {
         if (log.isWarnEnabled()) {
-            log.warn("Token no longer valid at path {}", request.getDescription(false));
+            log.warn("Token no longer valid at path {}", logPath(request));
         }
         return buildErrorResponse(HttpStatus.UNAUTHORIZED, localized("error.session.expired", "Session expired. Please log in again."), request);
     }
@@ -275,7 +275,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<Object> handleUnauthorized(UnauthorizedException ex, WebRequest request) {
-        log.warn("Unauthorized at path {}: {}", request.getDescription(false), ex.getMessage());
+        log.warn("Unauthorized at path {}: {}", logPath(request), ex.getMessage());
         return buildErrorResponse(HttpStatus.UNAUTHORIZED, passThrough(ex.getMessage()), request);
     }
 
@@ -297,7 +297,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleDataIntegrityViolation(DataIntegrityViolationException ex, WebRequest request) {
         String detail = ex.getMostSpecificCause().getMessage();
         log.error("Data integrity violation at path {}: {}",
-            request.getDescription(false), detail, ex);
+            logPath(request), detail, ex);
         return buildErrorResponse(HttpStatus.BAD_REQUEST, describeIntegrityViolation(detail), request);
     }
 
@@ -336,7 +336,7 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException ex, WebRequest request) {
         if (log.isWarnEnabled()) {
             log.warn("Unreadable request body at path {}: {}",
-                request.getDescription(false), ex.getMostSpecificCause().getClass().getSimpleName());
+                logPath(request), ex.getMostSpecificCause().getClass().getSimpleName());
         }
         // QA D1349 (round 30): the values the read already recorded as
         // malformed before it failed for good are named with the failing one.
@@ -374,7 +374,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleMalformedRequestBody(MalformedRequestBodyException ex, WebRequest request) {
         if (log.isWarnEnabled()) {
             log.warn("Malformed request body at path {}: {} value(s)",
-                request.getDescription(false), ex.getMalformedPaths().size());
+                logPath(request), ex.getMalformedPaths().size());
         }
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (String path : ex.getMalformedPaths()) {
@@ -770,7 +770,7 @@ public class GlobalExceptionHandler {
         // A Hibernate proxy tried to load an entity that was deleted from the DB (dangling FK).
         // Log the full detail for ops investigation but return a sanitised message to the caller.
         log.error("Data integrity issue — referenced entity not found at path {}: {}",
-            request.getDescription(false), ex.getMessage(), ex);
+            logPath(request), ex.getMessage(), ex);
         return buildErrorResponse(
             HttpStatus.INTERNAL_SERVER_ERROR,
             localized("error.reference.missing",
@@ -826,7 +826,7 @@ public class GlobalExceptionHandler {
         // told which parameter, in its own language, and nothing else.
         if (log.isWarnEnabled()) {
             log.warn("Parameter type mismatch at path {}: parameter {} expected {}",
-                request.getDescription(false), ex.getName(),
+                logPath(request), ex.getName(),
                 ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "value");
         }
         return invalidParameterResponse(ex.getName(), request);
@@ -841,7 +841,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleInvalidQueryParameter(InvalidQueryParameterException ex, WebRequest request) {
         if (log.isWarnEnabled()) {
             log.warn("Unknown query parameter value at path {}: parameter {}",
-                request.getDescription(false), ex.getParameter());
+                logPath(request), ex.getParameter());
         }
         return invalidParameterResponse(ex.getParameter(), request);
     }
@@ -876,7 +876,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleNotificationTransportUnavailable(
             NotificationTransportUnavailableException ex, WebRequest request) {
         // No stack trace: the gateway already logged which property is missing.
-        log.warn("Notification transport unavailable at path {}", request.getDescription(false));
+        log.warn("Notification transport unavailable at path {}", logPath(request));
         return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
     }
 
@@ -908,10 +908,10 @@ public class GlobalExceptionHandler {
         }
         if (status.is4xxClientError()) {
             log.warn("FHIR operation refused at path {} with {}: {}",
-                request.getDescription(false), status.value(), ex.getMessage());
+                logPath(request), status.value(), ex.getMessage());
             return buildErrorResponse(status, passThrough(ex.getMessage()), request);
         }
-        log.error("FHIR operation failed at path {}", request.getDescription(false), ex);
+        log.error("FHIR operation failed at path {}", logPath(request), ex);
         return buildErrorResponse(status,
             localized("error.unexpected", "An unexpected error occurred. Please try again or contact support."), request);
     }
@@ -920,7 +920,7 @@ public class GlobalExceptionHandler {
     @SuppressWarnings("java:S2629")
     public ResponseEntity<Object> handleRuntimeException(RuntimeException ex, WebRequest request) {
     // Log full stack to aid debugging of 500s (safe: message already generic in response)
-    log.error("Unhandled runtime exception at path {}: {}", request.getDescription(false), ex.getMessage(), ex);
+    log.error("Unhandled runtime exception at path {}: {}", logPath(request), ex.getMessage(), ex);
     // Never echo the exception text: it can carry SQL, class names or row data (D32).
     // The exception text stays in the log (D53): it is an internal Java
     // message ("Cannot invoke ... because ... is null") no user can act on,
@@ -954,7 +954,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(ChartRestrictedException.class)
     public ResponseEntity<Object> handleChartRestricted(ChartRestrictedException ex, WebRequest request) {
-        String path = request.getDescription(false);
+        String path = logPath(request);
         log.warn("Restricted chart {} refused at path {}", ex.getPatientId(), path);
         Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
         body.put("code", ChartRestrictedException.CODE);
@@ -984,7 +984,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MfaStepUpRefusedException.class)
     public ResponseEntity<Object> handleMfaStepUpRefused(MfaStepUpRefusedException ex, WebRequest request) {
         if (log.isWarnEnabled()) {
-            log.warn("MFA step-up refused ({}) at path {}", ex.getCode(), request.getDescription(false));
+            log.warn("MFA step-up refused ({}) at path {}", ex.getCode(), logPath(request));
         }
         Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
         body.put("code", ex.getCode());
@@ -999,7 +999,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HospitalScopeRefusedException.class)
     public ResponseEntity<Object> handleHospitalScopeRefused(HospitalScopeRefusedException ex, WebRequest request) {
         if (log.isWarnEnabled()) {
-            log.warn("Hospital scope refused ({}) at path {}", ex.getReason(), request.getDescription(false));
+            log.warn("Hospital scope refused ({}) at path {}", ex.getReason(), logPath(request));
         }
         // QA D258: the message in the caller's language, not the thrower's English.
         Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
@@ -1029,7 +1029,7 @@ public class GlobalExceptionHandler {
                 com.example.hms.utility.MessageUtil.resolveOrRaw(raw, ex.getArgs()), req);
         }
         if (log.isWarnEnabled()) {
-            log.warn("Access refused at path {}", req.getDescription(false));
+            log.warn("Access refused at path {}", logPath(req));
         }
         Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
             localized("error.access.denied", "Access denied"), req);
@@ -1052,12 +1052,37 @@ public class GlobalExceptionHandler {
             // in the request locale here, and a resolved sentence passes unchanged.
             return buildErrorResponse(HttpStatus.FORBIDDEN, passThrough(ex.getMessage()), req);
         }
+        // QA D2120/D2122: when the clinical gate (ClinicalActor.holdsOwnRole) is what refused,
+        // say why in the caller's language. The code stays ACCESS_DENIED for every 403.
+        String message = clinicalRefusalMessage(req);
         // The opaque default is localized now (D174), so clients that hid it by
         // comparing the English literal key on this code instead.
-        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
-            localized("error.access.denied", "Access denied"), req);
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, message, req);
         body.put(FIELD_CODE, CODE_ACCESS_DENIED);
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /** The request path for a log line, with line breaks removed so a crafted URI cannot forge a log entry. */
+    private static String logPath(WebRequest request) {
+        return String.valueOf(request.getDescription(false)).replaceAll("[\r\n\t]", "_");
+    }
+
+    /**
+     * QA D2120 review: the sentence of a 403. Only when ClinicalActor.holdsOwnRole is what refused
+     * (it leaves its reason on the request) does the caller read why; any other refusal stays opaque.
+     */
+    private String clinicalRefusalMessage(WebRequest req) {
+        String reason = req instanceof org.springframework.web.context.request.RequestAttributes attributes
+            ? com.example.hms.security.ClinicalActor.refusalOf(attributes) : null;
+        if (com.example.hms.security.ClinicalActor.REFUSED_IMPERSONATION.equals(reason)) {
+            return localized("error.access.clinicalImpersonation",
+                "A clinical action is not possible during an account takeover.");
+        }
+        if (com.example.hms.security.ClinicalActor.REFUSED_ROLE.equals(reason)) {
+            return localized("error.access.clinicalRoleRequired",
+                "This is a clinical action: it needs a clinical role you hold at this hospital.");
+        }
+        return localized("error.access.denied", "Access denied");
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

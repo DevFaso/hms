@@ -383,7 +383,7 @@ export class Login implements OnInit, AfterViewInit {
           // app.component.ts already does this on hard-refresh /
           // re-hydration; this seeds the same state on the cold-login
           // path so the bug doesn't appear in the brand-new session.
-          this.roleContext.markSuperAdminGlobalDefaults();
+          this.roleContext.resetSuperAdminScope();
 
           // ── Session scope (E9 #55b): the live session decides, never the token ──
           // The login body is DB-fresh, so it stands in when the server cannot

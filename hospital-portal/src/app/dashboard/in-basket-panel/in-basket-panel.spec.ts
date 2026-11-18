@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 import { InBasketPanelComponent } from './in-basket-panel';
 import {
   InBasketService,
@@ -117,6 +117,33 @@ describe('InBasketPanelComponent', () => {
     expect(component.items().length).toBe(0);
   });
 
+  it('keeps a successful empty inbox visible when only counts fail, then clears the summary warning on retry', () => {
+    inBasketSpy.getItems.and.returnValue(of(mockPage([])));
+    inBasketSpy.getSummary.and.returnValue(throwError(() => new Error('counts offline')));
+    fixture.detectChanges();
+    expect(component.loadError()).toBeFalse();
+    expect(component.summaryError()).toBeTrue();
+    expect(component.lastUpdated()).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.empty-state')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.summary-error').textContent).toContain(
+      'inBasket.summaryLoadFailed',
+    );
+    inBasketSpy.getSummary.and.returnValue(of(mockSummary()));
+    component.refresh();
+    fixture.detectChanges();
+    expect(component.summaryError()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.summary-error')).toBeNull();
+  });
+
+  it('keeps the inbox error when only the items call fails', () => {
+    inBasketSpy.getItems.and.returnValue(throwError(() => new Error('items offline')));
+    fixture.detectChanges();
+    expect(component.loadError()).toBeTrue();
+    expect(component.summaryError()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
+  });
+
   it('should filter items by type', () => {
     const items = [
       mockItem({ id: '1', itemType: 'RESULT' }),
@@ -181,11 +208,11 @@ describe('InBasketPanelComponent', () => {
   });
 
   it('should return correct type icon', () => {
-    expect(component.typeIcon('RESULT')).toBe('🧪');
-    expect(component.typeIcon('ORDER')).toBe('📋');
-    expect(component.typeIcon('MESSAGE')).toBe('✉️');
-    expect(component.typeIcon('TASK')).toBe('✅');
-    expect(component.typeIcon('UNKNOWN')).toBe('📌');
+    expect(component.typeIcon('RESULT')).toBe('science');
+    expect(component.typeIcon('ORDER')).toBe('prescriptions');
+    expect(component.typeIcon('MESSAGE')).toBe('mail');
+    expect(component.typeIcon('TASK')).toBe('task_alt');
+    expect(component.typeIcon('UNKNOWN')).toBe('inbox');
   });
 
   it('formats dates in the product language by default — French, 24-hour', () => {

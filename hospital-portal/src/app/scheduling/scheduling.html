@@ -19,7 +19,11 @@
     </div>
     @if (isSchedulingAdmin && canManageSchedules()) {
       <div class="page-actions">
-        <button class="btn-primary" (click)="openBulkModal()">
+        <button class="btn-primary" (click)="openShiftModal()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'SCHEDULING.ADD_SHIFT' | translate }}
+        </button>
+        <button class="btn-ghost" (click)="openBulkModal()">
           <span class="material-symbols-outlined">date_range</span>
           {{ 'SCHEDULING.BULK_SCHEDULE' | translate }}
         </button>
@@ -101,6 +105,9 @@
           }
         </h3>
         <div class="week-nav">
+          <button class="btn-ghost today-button" (click)="goToCurrentWeek()">
+            {{ 'SCHEDULING.TODAY' | translate }}
+          </button>
           <button
             class="week-btn"
             (click)="changeWeek(-1)"
@@ -108,13 +115,7 @@
           >
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
-          <button
-            class="week-label"
-            (click)="goToCurrentWeek()"
-            [title]="'SCHEDULING.GO_TO_CURRENT_WEEK' | translate"
-          >
-            {{ getWeekLabel() }}
-          </button>
+          <span class="week-label" aria-live="polite">{{ getWeekLabel() }}</span>
           <button
             class="week-btn"
             (click)="changeWeek(1)"
@@ -131,12 +132,27 @@
           <span>{{ 'SCHEDULING.LOADING_SHIFTS' | translate }}</span>
         </div>
       } @else {
+        @if (shifts().length === 0 && isSchedulingAdmin && canManageSchedules()) {
+          <div class="week-empty-hint">
+            <span class="material-symbols-outlined" aria-hidden="true">event_available</span>
+            <div>
+              <strong>{{ 'SCHEDULING.EMPTY_WEEK_TITLE' | translate }}</strong>
+              <p>{{ 'SCHEDULING.EMPTY_WEEK_HINT' | translate }}</p>
+            </div>
+            <button class="btn-ghost" (click)="openShiftModal()">
+              {{ 'SCHEDULING.ADD_SHIFT' | translate }}
+            </button>
+          </div>
+        }
         <div class="week-grid">
           @for (day of getWeekDays(); track day.date) {
             <div class="day-column" [class.today]="day.isToday">
               <div class="day-header">
                 <span class="day-name">{{ day.label }}</span>
                 <span class="day-date">{{ formatShortDate(day.date) }}</span>
+                @if (day.isToday) {
+                  {{ ' ' }}<span class="today-badge">{{ 'SCHEDULING.TODAY' | translate }}</span>
+                }
               </div>
               <div class="day-shifts">
                 @for (shift of getShiftsForDay(day.date); track shift.id) {
@@ -172,7 +188,19 @@
                     </span>
                   </div>
                 } @empty {
-                  <div class="no-shift">{{ 'SCHEDULING.NO_SHIFTS' | translate }}</div>
+                  <div class="no-shift">{{ 'SCHEDULING.NO_SHIFTS_PLANNED' | translate }}</div>
+                }
+                @if (isSchedulingAdmin && canManageSchedules()) {
+                  <button
+                    class="add-day-shift"
+                    (click)="openShiftModal(day.date)"
+                    [attr.aria-label]="
+                      ('SCHEDULING.ADD_SHIFT' | translate) + ' - ' + formatDate(day.date)
+                    "
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                    {{ 'SCHEDULING.ADD_SHIFT' | translate }}
+                  </button>
                 }
               </div>
             </div>
@@ -311,22 +339,31 @@
         <span class="material-symbols-outlined modal-icon">date_range</span>
         <div>
           <h2 id="bulk-modal-title" class="modal-title">
-            {{ 'SCHEDULING.BULK_SCHEDULE_SHIFTS' | translate }}
+            {{
+              (singleShiftMode() ? 'SCHEDULING.ADD_SHIFT' : 'SCHEDULING.BULK_SCHEDULE_SHIFTS')
+                | translate
+            }}
           </h2>
-          <p class="modal-subtitle">{{ 'SCHEDULING.BULK_SUBTITLE' | translate }}</p>
+          <p class="modal-subtitle">
+            {{
+              (singleShiftMode() ? 'SCHEDULING.SINGLE_SUBTITLE' : 'SCHEDULING.BULK_SUBTITLE')
+                | translate
+            }}
+          </p>
         </div>
       </div>
       <button
         class="modal-close"
         (click)="closeBulkModal()"
-        [attr.aria-label]="'SCHEDULING.ARIA.CLOSE_BULK_MODAL' | translate"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+        [disabled]="bulkSubmitting()"
       >
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
 
     <!-- Body -->
-    <div class="modal-body">
+    <div class="modal-body" [inert]="bulkSubmitting()">
       <!-- Staff Search + Hospital (auto-filled) -->
       <div class="form-row">
         <!-- ── Staff picker ── -->
@@ -416,14 +453,15 @@
 
         <!-- ── Hospital (auto-filled or manual fallback) ── -->
         <div class="form-group">
-          <label class="form-label" for="bulk-hospitalId">
-            <span class="material-symbols-outlined">local_hospital</span>
-            {{ 'ENCOUNTERS.HOSPITAL' | translate }} <span class="required">*</span>
-          </label>
+          <!-- QA D2128: nothing to type here, so a caption, not a label for a control. -->
+          <span class="form-label" id="bulk-hospital-label">
+            <span class="material-symbols-outlined" aria-hidden="true">local_hospital</span>
+            {{ 'ENCOUNTERS.HOSPITAL' | translate }}
+          </span>
 
           @if (selectedStaff()) {
             <!-- Read-only chip showing the matched hospital -->
-            <div class="hospital-locked">
+            <div class="hospital-locked" role="note" aria-labelledby="bulk-hospital-label">
               <span class="material-symbols-outlined lock-icon">lock</span>
               <div class="locked-info">
                 <span class="locked-name">{{
@@ -434,14 +472,20 @@
               </div>
             </div>
           } @else {
-            <input
-              required
+            <!--
+              QA D2128: never ask for a pasted hospital UUID. A shift belongs to
+              the staff member's hospital, so the hospital follows the pick.
+            -->
+            <div
+              class="hospital-locked hospital-pending"
               id="bulk-hospitalId"
-              class="form-input"
-              type="text"
-              [placeholder]="'SCHEDULING.PASTE_HOSPITAL_UUID' | translate"
-              [(ngModel)]="bulk.hospitalId"
-            />
+              role="note"
+              aria-labelledby="bulk-hospital-label"
+            >
+              <span class="material-symbols-outlined lock-icon" aria-hidden="true">badge</span>
+              {{ ' '
+              }}<span class="locked-sub">{{ 'SCHEDULING.HOSPITAL_FROM_STAFF' | translate }}</span>
+            </div>
           }
         </div>
       </div>
@@ -451,7 +495,8 @@
         <div class="form-group">
           <label class="form-label" for="bulk-startDate">
             <span class="material-symbols-outlined">today</span>
-            {{ 'SCHEDULING.START_DATE' | translate }} <span class="required">*</span>
+            {{ (singleShiftMode() ? 'SCHEDULING.DAY' : 'SCHEDULING.START_DATE') | translate }}
+            <span class="required">*</span>
           </label>
           <input
             required
@@ -461,20 +506,22 @@
             [(ngModel)]="bulk.startDate"
           />
         </div>
-        <div class="form-group">
-          <label class="form-label" for="bulk-endDate">
-            <span class="material-symbols-outlined">event</span>
-            {{ 'SCHEDULING.END_DATE' | translate }} <span class="required">*</span>
-          </label>
-          <input
-            required
-            id="bulk-endDate"
-            class="form-input"
-            type="date"
-            [attr.min]="bulk.startDate || null"
-            [(ngModel)]="bulk.endDate"
-          />
-        </div>
+        @if (!singleShiftMode()) {
+          <div class="form-group">
+            <label class="form-label" for="bulk-endDate">
+              <span class="material-symbols-outlined">event</span>
+              {{ 'SCHEDULING.END_DATE' | translate }} <span class="required">*</span>
+            </label>
+            <input
+              required
+              id="bulk-endDate"
+              class="form-input"
+              type="date"
+              [attr.min]="bulk.startDate || null"
+              [(ngModel)]="bulk.endDate"
+            />
+          </div>
+        }
       </div>
 
       <!-- Times + Shift Type -->
@@ -528,36 +575,48 @@
       </div>
 
       <!-- Days of Week -->
-      <fieldset class="form-group form-group--full dow-fieldset">
-        <legend class="form-label">
-          <span class="material-symbols-outlined">view_week</span>
-          {{ 'SCHEDULING.DAYS_OF_WEEK' | translate }} <span class="required">*</span>
-        </legend>
-        <div class="dow-presets">
-          <button type="button" class="dow-preset-btn" (click)="selectWeekdays()">
-            {{ 'SCHEDULING.MON_FRI' | translate }}
-          </button>
-          <button type="button" class="dow-preset-btn" (click)="selectWeekend()">
-            {{ 'SCHEDULING.SAT_SUN' | translate }}
-          </button>
-          <button type="button" class="dow-preset-btn" (click)="selectAllDays()">
-            {{ 'SCHEDULING.ALL_DAYS' | translate }}
-          </button>
-        </div>
-        <div class="dow-grid">
-          @for (day of allDays; track day) {
-            <button
-              type="button"
-              class="dow-chip"
-              [class.selected]="isDaySelected(day)"
-              [attr.aria-pressed]="isDaySelected(day)"
-              (click)="toggleDay(day)"
-            >
-              {{ day.slice(0, 3) }}
+      @if (!singleShiftMode()) {
+        <fieldset
+          id="bulk-daysOfWeek"
+          data-required-group
+          aria-describedby="bulk-days-required"
+          tabindex="-1"
+          class="form-group form-group--full dow-fieldset"
+        >
+          <legend class="form-label">
+            <span class="material-symbols-outlined">view_week</span>
+            {{ 'SCHEDULING.DAYS_OF_WEEK' | translate }} <span class="required">*</span>
+          </legend>
+          <p id="bulk-days-required" class="hint">
+            {{ 'SCHEDULING.TOAST.DOW_REQUIRED' | translate }}
+          </p>
+          <div class="dow-presets">
+            <button type="button" class="dow-preset-btn" (click)="selectWeekdays()">
+              {{ 'SCHEDULING.MON_FRI' | translate }}
             </button>
-          }
-        </div>
-      </fieldset>
+            <button type="button" class="dow-preset-btn" (click)="selectWeekend()">
+              {{ 'SCHEDULING.SAT_SUN' | translate }}
+            </button>
+            <button type="button" class="dow-preset-btn" (click)="selectAllDays()">
+              {{ 'SCHEDULING.ALL_DAYS' | translate }}
+            </button>
+          </div>
+          <div class="dow-grid">
+            @for (day of allDays; track day) {
+              <button
+                type="button"
+                class="dow-chip"
+                [class.selected]="isDaySelected(day)"
+                [attr.aria-pressed]="isDaySelected(day)"
+                [attr.aria-label]="dayChipLabel(day, 'long')"
+                (click)="toggleDay(day)"
+              >
+                {{ dayChipLabel(day) }}
+              </button>
+            }
+          </div>
+        </fieldset>
+      }
 
       <!-- Notes -->
       <div class="form-group form-group--full">
@@ -575,28 +634,30 @@
       </div>
 
       <!-- Skip Conflicts Toggle -->
-      <div class="form-group form-group--full toggle-row">
-        <p class="toggle-description">
-          <span class="material-symbols-outlined">skip_next</span>
-          <span>
-            {{ 'SCHEDULING.SKIP_CONFLICTING' | translate }}
-            <span class="toggle-hint">
-              {{ 'SCHEDULING.SKIP_HINT' | translate }}
+      @if (!singleShiftMode()) {
+        <div class="form-group form-group--full toggle-row">
+          <p class="toggle-description">
+            <span class="material-symbols-outlined">skip_next</span>
+            <span>
+              {{ 'SCHEDULING.SKIP_CONFLICTING' | translate }}
+              <span class="toggle-hint">
+                {{ 'SCHEDULING.SKIP_HINT' | translate }}
+              </span>
             </span>
-          </span>
-        </p>
-        <div class="toggle-switch">
-          <input
-            id="bulk-skip"
-            type="checkbox"
-            [attr.aria-label]="'SCHEDULING.ARIA.SKIP_CONFLICTING' | translate"
-            [(ngModel)]="bulk.skipConflicts"
-          />
-          <span class="toggle-track" aria-hidden="true">
-            <span class="toggle-thumb"></span>
-          </span>
+          </p>
+          <div class="toggle-switch">
+            <input
+              id="bulk-skip"
+              type="checkbox"
+              [attr.aria-label]="'SCHEDULING.ARIA.SKIP_CONFLICTING' | translate"
+              [(ngModel)]="bulk.skipConflicts"
+            />
+            <span class="toggle-track" aria-hidden="true">
+              <span class="toggle-thumb"></span>
+            </span>
+          </div>
         </div>
-      </div>
+      }
 
       <!-- Result Summary (shown after submit) -->
       @if (bulkResult()) {
@@ -633,24 +694,49 @@
 
     <!-- Footer -->
     <div class="modal-footer">
-      <button class="btn-ghost" (click)="closeBulkModal()">
+      <button class="btn-ghost" (click)="closeBulkModal()" [disabled]="bulkSubmitting()">
         {{ 'COMMON.CANCEL' | translate }}
       </button>
-      <button
-        appSubmitGuard
-        submitGuardRequired
-        class="btn-primary"
-        (click)="submitBulk()"
-        [disabled]="bulkSubmitting()"
-      >
-        @if (bulkSubmitting()) {
-          <span class="spinner-sm"></span>
-          {{ 'SCHEDULING.SCHEDULING' | translate }}
-        } @else {
-          <span class="material-symbols-outlined">bolt</span>
-          {{ 'SCHEDULING.GENERATE_SHIFTS' | translate }}
-        }
-      </button>
+      @if (singleShiftMode()) {
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          data-testid="single-shift-submit"
+          (click)="submitShift()"
+          [disabled]="bulkSubmitting()"
+        >
+          @if (bulkSubmitting()) {
+            <span class="spinner-sm"></span>
+            {{ 'SCHEDULING.SCHEDULING' | translate }}
+          } @else {
+            <span class="material-symbols-outlined">bolt</span>
+            {{
+              (singleShiftMode() ? 'SCHEDULING.ADD_SHIFT' : 'SCHEDULING.GENERATE_SHIFTS')
+                | translate
+            }}
+          }
+        </button>
+      } @else {
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitBulk()"
+          [disabled]="bulkSubmitting()"
+        >
+          @if (bulkSubmitting()) {
+            <span class="spinner-sm"></span>
+            {{ 'SCHEDULING.SCHEDULING' | translate }}
+          } @else {
+            <span class="material-symbols-outlined">bolt</span>
+            {{
+              (singleShiftMode() ? 'SCHEDULING.ADD_SHIFT' : 'SCHEDULING.GENERATE_SHIFTS')
+                | translate
+            }}
+          }
+        </button>
+      }
     </div>
   </dialog>
 }

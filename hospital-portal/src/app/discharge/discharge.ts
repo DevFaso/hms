@@ -104,16 +104,9 @@ export class DischargeComponent implements OnInit {
   private staffId: string | null = null;
   private assignmentId: string | null = null;
 
-  readonly canDecide = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
-  readonly canRequest = this.roleContext.hasAnyActiveRole([
-    'ROLE_NURSE',
-    'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  readonly canEditSummaries = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canDecide = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
+  readonly canRequest = this.roleContext.hasAnyActiveRole(['ROLE_NURSE', 'ROLE_MIDWIFE']);
+  readonly canEditSummaries = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
   private readonly isSuperAdmin = this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN']);
 
   /**

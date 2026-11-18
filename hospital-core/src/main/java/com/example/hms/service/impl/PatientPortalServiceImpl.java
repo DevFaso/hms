@@ -693,6 +693,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
 
         // Resolve staff — explicit pick or first available in department
+        var bookingIdentity = com.example.hms.service.support.AppointmentBookingIdentity.portal(
+            authUtils.resolveUserId(auth).orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER)), patientId, dto);
+        var replay = bookingIdentity.replay(appointmentRepository);
+        if (replay.isPresent()) {
+            return appointmentMapper.toAppointmentResponseDTO(replay.get());
+        }
+
         Staff staff;
         if (dto.getStaffId() != null) {
             staff = staffRepository.findByIdAndActiveTrue(dto.getStaffId())
@@ -711,6 +718,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             staff = clinicianWithPublishedSlot(available, dto);
         }
 
+        staffRepository.findLockedById(staff.getId());
         java.time.LocalDateTime requestedStart = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
         // QA D1093: a patient's own booking takes exactly one published, free
         // slot of the clinician, at this hospital and department. The time
@@ -763,7 +771,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         appointment.setCreatedBy(patientEntity.getUser());
         appointment.setAssignment(assignment);
 
+        bookingIdentity.stamp(appointment);
         Appointment saved = appointmentRepository.save(appointment);
+        appointmentRepository.flush();
         // QA D1093: the slot is taken, so nobody else is offered it.
         slotPolicy.takeSlot(slot, saved);
         // QA D985: a recall the patient answers by booking is scheduled.
@@ -1427,6 +1437,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         return PatientProfileDTO.builder()
                 .id(p.getId())
+                .nationalUniqueIdMasked(com.example.hms.security.PatientNationalUniqueId.masked(p.getNationalUniqueId()))
                 .firstName(p.getFirstName())
                 .lastName(p.getLastName())
                 .middleName(p.getMiddleName())
@@ -2523,11 +2534,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 created.setLinkedByUserId(patient.getUser() != null ? patient.getUser().getId() : null);
                 return created;
             });
+        if (insurance.getAssignment() == null && assignment != null) {
+            if (insurance.getId() != null) {
+                // Review of #1202 (the re-tag class): a shared row, visible to every hospital, is never taken away
+                // from the others; this hospital gets its own copy, found again by the lookup above next time.
+                insurance = sharedRowCopy(insurance);
+            }
+            insurance.setAssignment(assignment);
+        }
         if (plan != null) {
             insurance.setGroupNumber(plan);
-        }
-        if (insurance.getAssignment() == null && assignment != null) {
-            insurance.setAssignment(assignment);
         }
         boolean thisHospitals = insurance.getAssignment() != null && insurance.getAssignment().getHospital() != null
             && hospitalId != null && hospitalId.equals(insurance.getAssignment().getHospital().getId());
@@ -2536,6 +2552,23 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             insurance.setPrimary(true);
         }
         patientInsuranceRepository.save(insurance);
+    }
+
+    /** A new, untagged row with a shared row's coverage details (review of #1202). */
+    private static PatientInsurance sharedRowCopy(PatientInsurance shared) {
+        PatientInsurance copy = new PatientInsurance();
+        copy.setPatient(shared.getPatient());
+        copy.setPayerCode(shared.getPayerCode());
+        copy.setProviderName(shared.getProviderName());
+        copy.setPolicyNumber(shared.getPolicyNumber());
+        copy.setGroupNumber(shared.getGroupNumber());
+        copy.setSubscriberName(shared.getSubscriberName());
+        copy.setSubscriberRelationship(shared.getSubscriberRelationship());
+        copy.setEffectiveDate(shared.getEffectiveDate());
+        copy.setExpirationDate(shared.getExpirationDate());
+        copy.setLinkedAs(shared.getLinkedAs());
+        copy.setLinkedByUserId(shared.getLinkedByUserId());
+        return copy;
     }
 
     /** The patient's own role at the hospital (ROLE_PATIENT first), which tags the coverage for its desk. */

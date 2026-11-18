@@ -581,7 +581,7 @@ export class PostpartumTabComponent {
   }
 
   private actingHospitalId(): string | undefined {
-    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? undefined;
+    return this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
   }
 
   /* ── Observation ── */

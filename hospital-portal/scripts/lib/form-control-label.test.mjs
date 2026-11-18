@@ -23,7 +23,6 @@ const KNOWN = {
   'chat/chat.html': 1,
   'consultations/consultations.html': 1,
   'departments/department-list.html': 2,
-  'digital-signatures/digital-signatures.html': 1,
   'discharge/discharge.html': 7,
 };
 

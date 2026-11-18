@@ -76,12 +76,15 @@ class DispenseControllerTest {
     }
 
     @Test
-    @DisplayName("G13 AC-14: claim, take-over and release have exactly the gate of the work queue")
+    @DisplayName("G13 AC-14: claim, take-over and release admit the work queue's roles, less a super-admin alone (QA D2120)")
     void claimEndpointsHaveTheWorkQueueGate() throws Exception {
         String queueGate = gateOf("getWorkQueue", Pageable.class, QueueClaimFilter.class);
-        assertThat(gateOf("claimQueueRow", UUID.class)).isEqualTo(queueGate);
-        assertThat(gateOf("takeOverQueueRow", UUID.class)).isEqualTo(queueGate);
-        assertThat(gateOf("releaseQueueRow", UUID.class)).isEqualTo(queueGate);
+        assertThat(queueGate).isEqualTo("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')");
+        String claimGate = "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, "
+            + "'PHARMACIST','PHARMACY_VERIFIER','HOSPITAL_ADMIN')";
+        assertThat(gateOf("claimQueueRow", UUID.class)).isEqualTo(claimGate);
+        assertThat(gateOf("takeOverQueueRow", UUID.class)).isEqualTo(claimGate);
+        assertThat(gateOf("releaseQueueRow", UUID.class)).isEqualTo(claimGate);
     }
 
     @Test

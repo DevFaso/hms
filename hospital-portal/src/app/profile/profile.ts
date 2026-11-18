@@ -78,6 +78,7 @@ export class ProfileComponent implements OnInit {
   private readonly oidcAuth = inject(OidcAuthService);
   private readonly auditDescriptions = inject(AuditDescriptionService);
   private readonly patientPortal = inject(PatientPortalService);
+  readonly nationalUniqueIdMasked = signal<string | null>(null);
 
   private static readonly VALID_TABS: readonly ProfileTab[] = [
     'overview',
@@ -471,6 +472,28 @@ export class ProfileComponent implements OnInit {
   verificationSending = signal(false);
   verificationError = signal('');
   verificationCodeSent = signal(false);
+  private confirmedRecoveryContact: { id: string; value: string } | null = null;
+
+  async confirmRecoveryContact(contact: RecoveryContact): Promise<void> {
+    if (!contact.id || this.verificationSending()) return;
+    const id = contact.id;
+    const value = contact.contactValue;
+    const confirmed = await this.confirm.ask({
+      titleKey: 'PROFILE.RECOVERY_CONFIRM_TITLE',
+      messageKey: 'PROFILE.RECOVERY_CONFIRM_ADDRESS',
+      params: { contact: value },
+      confirmKey: 'PROFILE.RECOVERY_SEND_CODE',
+    });
+    if (
+      !confirmed ||
+      !this.credentials()?.recoveryContacts.some(
+        (current) => current.id === id && current.contactValue === value,
+      )
+    )
+      return;
+    this.confirmedRecoveryContact = { id, value };
+    this.sendVerificationCode(contact);
+  }
 
   openAddRecovery(): void {
     this.showAddRecovery.set(true);
@@ -595,17 +618,25 @@ export class ProfileComponent implements OnInit {
   }
 
   sendVerificationCode(contact: RecoveryContact): void {
-    if (!contact.id) return;
+    if (!contact.id || this.verificationSending()) return;
+    if (
+      this.confirmedRecoveryContact?.id !== contact.id ||
+      this.confirmedRecoveryContact?.value !== contact.contactValue
+    )
+      return;
+    if (this.verifyingContactId() !== contact.id) {
+      this.verificationCode.set('');
+      this.verificationCodeSent.set(false);
+    }
     this.verifyingContactId.set(contact.id);
-    this.verificationCode.set('');
     this.verificationError.set('');
     this.verificationSending.set(true);
-    this.verificationCodeSent.set(false);
 
-    this.profileService.sendRecoveryVerificationCode(contact.id).subscribe({
+    this.profileService.sendRecoveryVerificationCode(contact.id, contact.contactValue).subscribe({
       next: () => {
         this.verificationSending.set(false);
         this.verificationCodeSent.set(true);
+        this.verificationCode.set('');
         this.toast.success(
           this.translate.instant('PROFILE.VERIFICATION_CODE_SENT', {
             contact: contact.contactValue,
@@ -649,6 +680,7 @@ export class ProfileComponent implements OnInit {
   }
 
   cancelVerification(): void {
+    this.confirmedRecoveryContact = null;
     this.verifyingContactId.set(null);
     this.verificationCode.set('');
     this.verificationError.set('');
@@ -693,6 +725,14 @@ export class ProfileComponent implements OnInit {
     this.profileService.getUserProfile(userId).subscribe({
       next: (profile) => {
         this.user.set(profile);
+        this.nationalUniqueIdMasked.set(null);
+        if (this.isPatientOnly()) {
+          this.patientPortal.getMyProfile().subscribe({
+            next: (patient) =>
+              this.nationalUniqueIdMasked.set(patient.nationalUniqueIdMasked ?? null),
+            error: () => this.nationalUniqueIdMasked.set(null),
+          });
+        }
         this.resetEditForm(profile);
 
         // Sync stored profile ID if stale

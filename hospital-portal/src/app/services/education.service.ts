@@ -12,7 +12,7 @@ import { Observable } from 'rxjs';
  *    updates: SUPER_ADMIN/DOCTOR/NURSE
  * There is no separate "assignment" concept: the first POST /progress for a
  * (patient, resource) pair with NOT_STARTED is the assign primitive.
- * hospitalId is always taken from the JWT. progressPercentage >= 100
+ * hospitalId is resolved from the request hospital scope (X-Hospital-Id for super-admin selection). progressPercentage >= 100
  * auto-completes; a rating recomputes the resource's averageRating.
  */
 

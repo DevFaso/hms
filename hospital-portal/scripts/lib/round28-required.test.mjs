@@ -302,3 +302,19 @@ test('QA D1311 guard: the scan sees the round-28 Spanish "Nacido en" for everyon
     [],
   );
 });
+
+// Required checkbox groups use a visible group constraint, not invalid aria-required.
+test('required fieldsets must explicitly name the visible constraint', () => {
+  const group = (attrs) => ({ name: 'fieldset', attrs: new Map(attrs) });
+  assert.equal(declaresRequired(group([['data-required-group', '']])), false);
+  assert.equal(declaresRequired(group([['aria-describedby', 'constraint']])), false);
+  assert.equal(
+    declaresRequired(
+      group([
+        ['data-required-group', ''],
+        ['aria-describedby', 'constraint'],
+      ]),
+    ),
+    true,
+  );
+});

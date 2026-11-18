@@ -1,6 +1,13 @@
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { DatePipe } from '@angular/common';
-import { Component, ElementRef, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  ChangeDetectionStrategy,
+  viewChild,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -20,7 +27,6 @@ import {
 } from '../shared/delivery-warnings';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
-import { isFrontDeskOnly } from './patient-chart/chart-access';
 import { ReceptionService, DuplicateCandidate } from '../reception/reception.service';
 import { RegistrationService } from '../services/registration.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -46,6 +52,8 @@ import {
 } from '../shared/patient-identity';
 import { bornLabelKey, genderedKey } from '../shared/i18n/born-label';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { NationalUniqueIdEditorComponent } from './national-unique-id-editor.component';
+import { NationalUniqueIdChange } from './national-unique-id';
 
 /**
  * QA D1118: the card names what the match is really on. A record found by the
@@ -82,6 +90,7 @@ export function matchBasisSuffix(matches: readonly Pick<RegistrationMatch, 'matc
   selector: 'app-patient-form',
   standalone: true,
   imports: [
+    NationalUniqueIdEditorComponent,
     DashPipe,
     PhoneFieldDirective,
     SubmitGuardDirective,
@@ -113,9 +122,14 @@ export class PatientFormComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly roleContext = inject(RoleContextService);
 
-  /** RCPT-CLIN: the blood type is not the desk's to read, so not its box to fill. */
-  frontDeskOnly(): boolean {
-    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  /**
+   * QA D2120 review: the blood group, allergies and history summary are clinical fields, which
+   * the server keeps unless a doctor, nurse or midwife writes them (PatientServiceImpl
+   * writesClinicalFields); they are offered to those roles only, not to the desk, an admin or a
+   * super-admin alone.
+   */
+  writesClinicalFields(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
   }
   private readonly receptionService = inject(ReceptionService);
   private readonly registrationService = inject(RegistrationService);
@@ -123,6 +137,13 @@ export class PatientFormComponent implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   saving = false;
+  nationalUniqueIdChange: NationalUniqueIdChange = {};
+  nationalUniqueIdReady = true;
+  private readonly iuEditor = viewChild(NationalUniqueIdEditorComponent);
+  onNationalUniqueIdUpdated(change: NationalUniqueIdChange): void {
+    this.nationalUniqueIdChange = change;
+    delete this.serverFieldErrors['nationalUniqueId'];
+  }
   hospitals: HospitalResponse[] = [];
   /** true when the logged-in user already has a hospital in their JWT / context */
   hasContextHospital = false;
@@ -580,6 +601,17 @@ export class PatientFormComponent implements OnInit {
   }
 
   private submitRegistration(): void {
+    // QA D2032: an unresolved identifier (duplicate not confirmed, no reason,
+    // still checking) refused the save with no word; say why and focus the fix.
+    if (!this.nationalUniqueIdReady) {
+      const refusal = this.iuEditor()?.refuseSubmit() ?? {
+        key: 'NATIONAL_IU.WAIT_CHECK',
+        fieldId: 'nationalUniqueId',
+      };
+      focusFirstInvalid(this.host.nativeElement, [refusal.fieldId]);
+      this.toast.error(this.translate.instant(refusal.key));
+      return;
+    }
     this.saving = true;
     this.serverFieldErrors = {};
 
@@ -594,6 +626,7 @@ export class PatientFormComponent implements OnInit {
     let deliveryReport: NotificationDeliveryStatus[] = [];
     const patient: PatientCreateRequest = {
       ...this.form,
+      ...this.nationalUniqueIdChange,
       phoneNumberPrimary: this.effectivePhone,
       email,
       phoneVerificationId:

@@ -1,7 +1,13 @@
 <div class="filter-bar">
+  <button type="button" class="btn-secondary" (click)="load()">
+    {{ 'COMMON.REFRESH' | translate }}
+  </button>
   <div class="tabs">
     <button class="tab-btn" [class.active]="filter() === 'all'" (click)="setFilter('all')">
       {{ 'MATERNITY.WORKLIST_ALL' | translate }}
+      <span class="worklist-count" [title]="'MATERNITY.WORKLIST_COUNT_HELP' | translate">{{
+        counts.values()['all'] ?? '—'
+      }}</span>
     </button>
     @if (canSeePendingReview) {
       <button
@@ -10,6 +16,9 @@
         (click)="setFilter('pending-review')"
       >
         {{ 'BIRTH_PLAN.PENDING_REVIEW' | translate }}
+        <span class="worklist-count" [title]="'MATERNITY.WORKLIST_COUNT_HELP' | translate">{{
+          counts.values()['pending-review'] ?? '—'
+        }}</span>
       </button>
     }
     <button
@@ -18,10 +27,15 @@
       (click)="setFilter('reviewed')"
     >
       {{ 'BIRTH_PLAN.REVIEWED' | translate }}
+      <span class="worklist-count" [title]="'MATERNITY.WORKLIST_COUNT_HELP' | translate">{{
+        counts.values()['reviewed'] ?? '—'
+      }}</span>
     </button>
   </div>
   <div class="mode-picker">
     <app-patient-picker
+      [showMrnHint]="true"
+      [hospitalId]="hospitalId"
       inputId="bp-filter-patient"
       [selected]="filterPatient()"
       (selectedChange)="onFilterPatientPicked($event)"
@@ -319,6 +333,8 @@
           <div class="field">
             <label for="bp-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
             <app-patient-picker
+              [showMrnHint]="true"
+              [hospitalId]="hospitalId"
               required
               inputId="bp-patient"
               [selected]="planPatient()"

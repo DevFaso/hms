@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
@@ -48,11 +48,14 @@ describe('PanelComponent', () => {
   let toast: jasmine.SpyObj<ToastService>;
   /** The caller's active roles; the role context answers from them. */
   let heldRoles: string[];
+  /** The single role picked at login, for the exact-role checks (none by default). */
+  let pickedRoles: string[];
   let staffList: StaffResponse[];
   let scopedHospitalId: string | null;
 
   beforeEach(async () => {
     heldRoles = ['ROLE_SUPER_ADMIN'];
+    pickedRoles = [];
     staffList = [];
     scopedHospitalId = 'h1';
     panelService = jasmine.createSpyObj<PanelService>('PanelService', [
@@ -103,6 +106,8 @@ describe('PanelComponent', () => {
             selectedHospitalId: () => scopedHospitalId,
             permittedHospitalIds: ['h1'],
             hasAnyActiveRole: (roles: string[]) => roles.some((r) => heldRoles.includes(r)),
+            hasAnyActiveRoleExactly: (roles: string[]) =>
+              roles.some((r) => pickedRoles.includes(r)),
           },
         },
         { provide: ToastService, useValue: toast },
@@ -111,6 +116,62 @@ describe('PanelComponent', () => {
 
     fixture = TestBed.createComponent(PanelComponent);
     component = fixture.componentInstance;
+  });
+
+  it('a super-admin without a local staff profile sees management rather than a personal panel', () => {
+    panelService.myPanel.and.returnValue(throwError(() => new HttpErrorResponse({ status: 400 })));
+    panelService.overview.and.returnValue(
+      of([{ providerStaffId: 's1', providerName: 'Team', panelRole: 'CHW', activeCount: 3 }]),
+    );
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#my-panel-heading')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#panel-overview-heading')).not.toBeNull();
+    expect(component.activeAssignments()).toBe(3);
+    expect(fixture.nativeElement.textContent).not.toContain('PANEL.NO_STAFF_PROFILE');
+  });
+
+  it('a super-admin acting as such never asks for « my panel », which could only be refused (QA D2127)', () => {
+    pickedRoles = ['ROLE_SUPER_ADMIN'];
+    fixture.detectChanges();
+    expect(panelService.myPanel).not.toHaveBeenCalled();
+    expect(panelService.overview).toHaveBeenCalled();
+    expect(component.noStaffProfile()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('#my-panel-heading')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#panel-overview-heading')).not.toBeNull();
+  });
+
+  it('provider role and name narrow the overview without changing its management totals', () => {
+    component.overviewRows.set([
+      { providerStaffId: 's1', providerName: 'Awa', panelRole: 'CHW', activeCount: 3 },
+      { providerStaffId: 's2', providerName: 'Awa', panelRole: 'PRIMARY_PROVIDER', activeCount: 5 },
+    ]);
+    component.providerSearch.set('awa');
+    component.providerRoleFilter.set('CHW');
+    expect(component.visibleOverviewRows().map((row) => row.providerStaffId)).toEqual(['s1']);
+    expect(component.activeAssignments()).toBe(8);
+  });
+
+  it('an administrator who also has a clinical panel retains its separate personal total', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      PANEL: {
+        COUNT: '{{count}} patients',
+        SHOWING_FIRST: '{{shown}} of {{total}} personal patients',
+      },
+    });
+    translate.use('en');
+    panelService.myPanel.and.returnValue(of(page([assignment()])));
+    panelService.overview.and.returnValue(
+      of([{ providerStaffId: 's1', panelRole: 'CHW', activeCount: 9 }]),
+    );
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#my-panel-heading')).not.toBeNull();
+    expect(component.myPanelTotal()).toBe(1);
+    expect(component.activeAssignments()).toBe(9);
+    expect(fixture.nativeElement.querySelector('.count-line').textContent).toContain('1 patients');
+    component.myPanelTotal.set(25);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('1 of 25 personal patients');
   });
 
   it('loads my panel (and, for admins, the overview) on init', () => {

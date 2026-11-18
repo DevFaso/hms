@@ -35,6 +35,12 @@ export interface AuditDescriptionPattern {
 
 export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
+    key: 'AUDIT.DESC.NATIONAL_IU_ACTION',
+    re: /^Patient identity: (.+)$/,
+    params: ['operation'],
+    localise: { operation: 'phrase:NATIONAL_IU_ACTION' },
+  },
+  {
     key: 'AUDIT.DESC.PATIENT_RECORD_VIEWED',
     re: /^Patient record viewed$/,
   },
@@ -205,6 +211,31 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
     key: 'AUDIT.DESC.LOCK_SCREEN_REFUSED_LOCKED',
     re: /^Lock-screen unlock refused: account locked; session ended$/,
+  },
+  // QA D2020: a refused current password on a password change or the forced setup.
+  {
+    key: 'AUDIT.DESC.PASSWORD_CHANGE_WRONG_CURRENT',
+    re: /^Password change refused: current password incorrect$/,
+  },
+  {
+    key: 'AUDIT.DESC.PASSWORD_CHANGE_LOCKED_NOW',
+    re: /^Password change failed too many times: account locked$/,
+  },
+  {
+    key: 'AUDIT.DESC.PASSWORD_CHANGE_REFUSED_LOCKED',
+    re: /^Password change refused: account locked$/,
+  },
+  {
+    key: 'AUDIT.DESC.ACCOUNT_SETUP_WRONG_CURRENT',
+    re: /^Account setup refused: current password incorrect$/,
+  },
+  {
+    key: 'AUDIT.DESC.ACCOUNT_SETUP_LOCKED_NOW',
+    re: /^Account setup failed too many times: account locked$/,
+  },
+  {
+    key: 'AUDIT.DESC.ACCOUNT_SETUP_REFUSED_LOCKED',
+    re: /^Account setup refused: account locked$/,
   },
   {
     key: 'AUDIT.DESC.ACCESS_TOKEN_REVOKED_LOCKOUT',
@@ -531,6 +562,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.SUPPORT_SESSION_REFUSED',
     re: /^Support session refused: (.+) \(sign-in or recovery details\)$/,
     params: ['what'],
+  },
+  {
+    // QA D2120 review: ClinicalActorAuditRegistrar, a clinical act tried during a support session.
+    key: 'AUDIT.DESC.SUPPORT_SESSION_CLINICAL_REFUSED',
+    re: /^Support session refused: a clinical act \((.*)\) during impersonation$/,
+    params: ['roles'],
   },
   {
     key: 'AUDIT.DESC.IMPERSONATION_STARTED',
@@ -1397,6 +1434,109 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^(Payment recorded|Payment reversed|Pending payment confirmed|Pending payment rejected|Check-in copay recorded): payment (\S+) on invoice (\S+)$/,
     params: ['what', 'payment', 'invoice'],
     localise: { what: 'phrase:PAYMENT_EVENT' },
+  },
+  {
+    // Billing-money plan PR 2: the price list (ids only; the label, price and reason stay on the rows).
+    key: 'AUDIT.DESC.PRICE_LIST_ITEM_CREATED',
+    re: /^Price list item (\S+) created with price version (\S+)$/,
+    params: ['item', 'version'],
+  },
+  {
+    key: 'AUDIT.DESC.PRICE_LIST_ITEM_UPDATED',
+    re: /^Price list item (\S+) updated$/,
+    params: ['item'],
+  },
+  {
+    key: 'AUDIT.DESC.PRICE_LIST_ITEM_DEACTIVATED',
+    re: /^Price list item (\S+) deactivated$/,
+    params: ['item'],
+  },
+  {
+    key: 'AUDIT.DESC.PRICE_VERSION_ADDED',
+    re: /^Price version (\S+) added to price list item (\S+), effective (\S+)$/,
+    params: ['version', 'item', 'from'],
+  },
+  {
+    // Billing-money plan PR 6: the payer catalogue (ids only; names, rates and reasons stay on the rows).
+    key: 'AUDIT.DESC.PAYER_CREATED',
+    re: /^Payer (\S+) created$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_UPDATED',
+    re: /^Payer (\S+) updated$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_DEACTIVATED',
+    re: /^Payer (\S+) deactivated$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_PLAN_CREATED',
+    re: /^Payer plan (\S+) of payer (\S+) created$/,
+    params: ['plan', 'payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_PLAN_UPDATED',
+    re: /^Payer plan (\S+) of payer (\S+) updated$/,
+    params: ['plan', 'payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_RULE_ADDED',
+    re: /^Rule (\S+) added to payer plan (\S+), effective (\S+), closed \[([^\]]*)\], replaced \[([^\]]*)\]$/,
+    params: ['rule', 'plan', 'from', 'closed', 'replaced'],
+  },
+  {
+    // Review of #1202: plan terms are dated versions (ids only).
+    key: 'AUDIT.DESC.PAYER_TERMS_ADDED',
+    re: /^Terms (\S+) added to payer plan (\S+), effective (\S+), closed \[([^\]]*)\], replaced \[([^\]]*)\]$/,
+    params: ['terms', 'plan', 'from', 'closed', 'replaced'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_RULE_ENDED',
+    re: /^Rule (\S+) of payer plan (\S+) ended$/,
+    params: ['rule', 'plan'],
+  },
+  {
+    key: 'AUDIT.DESC.COVERAGE_PLAN_LINKED',
+    re: /^Patient insurance (\S+) linked to payer plan (\S+)$/,
+    params: ['insurance', 'plan'],
+  },
+  {
+    key: 'AUDIT.DESC.COVERAGE_PLAN_UNLINKED',
+    re: /^Patient insurance (\S+) unlinked from its payer plan$/,
+    params: ['insurance'],
+  },
+  {
+    // Billing-money plan PR 4: a price-list CSV file applied (the import id and the counts only).
+    key: 'AUDIT.DESC.PRICE_LIST_IMPORTED',
+    re: /^Price list import (\S+) applied: (\d+) new items, (\d+) new prices, (\d+) unchanged$/,
+    params: ['import', 'items', 'prices', 'unchanged'],
+  },
+  {
+    // Billing-money plan PR 3 (D-2): a price-list price overridden on a draft line (ids only; the prices and the
+    // reason stay on the line).
+    key: 'AUDIT.DESC.INVOICE_LINE_PRICE_OVERRIDDEN',
+    re: /^Tariff price version (\S+) overridden on draft line (\S+) of invoice (\S+)$/,
+    params: ['version', 'line', 'invoice'],
+  },
+  {
+    // Review #1197: an overridden line set back to its price-list price, and a draft line deleted (ids only;
+    // the reason a price-list line was removed is in the row's details).
+    key: 'AUDIT.DESC.INVOICE_LINE_PRICE_RESTORED',
+    re: /^Tariff price version (\S+) restored on draft line (\S+) of invoice (\S+)$/,
+    params: ['version', 'line', 'invoice'],
+  },
+  {
+    key: 'AUDIT.DESC.INVOICE_LINE_DELETED_TARIFF',
+    re: /^Draft line (\S+) of invoice (\S+) deleted \(tariff price version (\S+)\)$/,
+    params: ['line', 'invoice', 'version'],
+  },
+  {
+    key: 'AUDIT.DESC.INVOICE_LINE_DELETED',
+    re: /^Draft line (\S+) of invoice (\S+) deleted$/,
+    params: ['line', 'invoice'],
   },
   {
     // QA D974: a discount, waiver or credit note on an invoice.

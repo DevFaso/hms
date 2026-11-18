@@ -57,7 +57,7 @@ public class PrescriptionController {
     private final MessageSource messageSource;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Create Prescription", description = "Creates a new prescription (doctor, nurse or midwife).")
     public ResponseEntity<PrescriptionResponseDTO> create(
         @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
@@ -86,7 +86,7 @@ public class PrescriptionController {
      * check.
      */
     @PostMapping("/{id}/sign")
-    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Sign a prescription",
         description = "Records the prescriber's signature: signer, timestamp and a digest of the "
             + "signed content. Only the prescribing clinician can sign, and only a DRAFT or "
@@ -108,7 +108,7 @@ public class PrescriptionController {
      * every guard, so the annotation now says what always held.
      */
     @PostMapping("/{id}/cosign")
-    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Co-sign a prescription that requires it",
         description = "Records a second prescriber's co-signature on a prescription flagged "
             + "requiresCosign. The co-signer must not be the prescribing clinician, and only a "
@@ -128,7 +128,7 @@ public class PrescriptionController {
      * learn about the rule.
      */
     @PostMapping("/{id}/pharmacist-verify")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER')")
     @Operation(summary = "Verify a prescription as a pharmacist",
         description = "Records the pharmacist check that a controlled or co-sign-required "
             + "prescription needs before a nurse may administer it. Server identity and server "
@@ -153,7 +153,7 @@ public class PrescriptionController {
      * then. The service checks the hospital role and the prescriber.
      */
     @PostMapping("/{id}/pediatric-dose-review")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER','DOCTOR')")
     @Operation(summary = "Record the paediatric dose review an order needs before it is signed",
         description = "For a child under the medication's manual-review age, or outside every weight band, "
             + "the dose check gives no automatic verdict. A pharmacist or a physician other than the "
@@ -186,7 +186,7 @@ public class PrescriptionController {
      * releases it. Only at the order's own hospital (a shared patient's order elsewhere is read-only).
      */
     @PostMapping("/{id}/allergy-review")
-    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Review the allergy conflict of a signed prescription",
         description = "CONTINUE (with a plan) or STOP, with a mandatory rationale and the token of the conflict "
             + "shown. Recorded on the order with the reviewer and the time, and audited. The eMAR and pharmacy "
@@ -207,7 +207,7 @@ public class PrescriptionController {
      * the absence of a matcher).
      */
     @PostMapping("/{id}/request-clarification")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST','PHARMACY_VERIFIER')")
     @Operation(summary = "Send a prescription back to its prescriber for clarification",
         description = "Moves a prescription awaiting a fill to PENDING_CLARIFICATION with the "
             + "pharmacist's reason, takes it off the work queue, and notifies the prescriber. "
@@ -227,7 +227,7 @@ public class PrescriptionController {
      * additionally requires a staff profile at the prescription's hospital.
      */
     @PostMapping("/{id}/resolve-clarification")
-    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
     @Operation(summary = "Resolve a pharmacist's clarification request",
         description = "Records the prescriber's answer and returns a PENDING_CLARIFICATION "
             + "prescription to SIGNED so the pharmacy can fill or route it. Any doctor with a "
@@ -343,7 +343,7 @@ public class PrescriptionController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Update Prescription", description = "Updates an existing prescription.")
     public ResponseEntity<PrescriptionResponseDTO> update(
         @PathVariable UUID id,
@@ -367,7 +367,7 @@ public class PrescriptionController {
     }
 
     @PostMapping("/{id}/dispatch-sms")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')")
     @Operation(summary = "Hand a prescription to a community or partner pharmacy by SMS",
         description = """
             Sends the pharmacy the prescription summary together with a reference token and the \

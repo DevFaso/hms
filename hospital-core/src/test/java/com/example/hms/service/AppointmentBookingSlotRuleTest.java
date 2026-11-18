@@ -159,6 +159,70 @@ class AppointmentBookingSlotRuleTest {
     }
 
     @Test
+    void retryReturnsTheOriginalSummaryWithoutBookingOrNotifyingAgain() {
+        AppointmentRequestDTO request = request(null);
+        request.setBookingRequestId(UUID.randomUUID());
+        var identity = com.example.hms.service.support.AppointmentBookingIdentity.staff(
+            desk.getId(), patient.getId(), hospital.getId(), request);
+        Appointment existing = new Appointment();
+        existing.setId(UUID.randomUUID());
+        existing.setPatient(patient);
+        existing.setStaff(staff);
+        existing.setHospital(hospital);
+        existing.setDepartment(department);
+        existing.setStatus(com.example.hms.enums.AppointmentStatus.SCHEDULED);
+        identity.stamp(existing);
+        when(appointmentRepository.findAllByBookingRequestKey(identity.key())).thenReturn(List.of(existing));
+
+        var result = service.createAppointment(request, Locale.FRENCH, "desk");
+
+        assertThat(result.getId()).isEqualTo(existing.getId());
+        verify(appointmentRepository, never()).save(any());
+        verify(webhookPublisher, never()).publish(any(), any(), any(), any());
+        verify(slotPolicy, never()).requireNoLiveHold(any(), any(), any());
+        verify(patientRegistrationGuard).requireRegisteredAt(patient.getId(), hospital.getId());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void changedPayloadOrTransferredPatientIsRefusedBeforeLocksAndSideEffects(boolean transferred) {
+        AppointmentRequestDTO request = request(null);
+        request.setBookingRequestId(UUID.randomUUID());
+        var identity = com.example.hms.service.support.AppointmentBookingIdentity.staff(
+            desk.getId(), patient.getId(), hospital.getId(), request);
+        Appointment existing = new Appointment();
+        existing.setPatient(patient);
+        existing.setHospital(hospital);
+        existing.setStatus(com.example.hms.enums.AppointmentStatus.SCHEDULED);
+        identity.stamp(existing);
+        when(appointmentRepository.findAllByBookingRequestKey(identity.key())).thenReturn(List.of(existing));
+        if (transferred) {
+            Patient other = new Patient();
+            other.setId(UUID.randomUUID());
+            existing.setPatient(other);
+        } else {
+            request.setNotes("A changed booking payload");
+        }
+        assertThatThrownBy(() -> service.createAppointment(request, Locale.FRENCH, "desk"))
+            .isInstanceOf(FieldBusinessException.class);
+        verify(staffRepository, never()).findLockedById(any());
+        verify(appointmentRepository, never()).save(any());
+        verify(webhookPublisher, never()).publish(any(), any(), any(), any());
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void registrationAuthorizationRunsBeforeAnyReplayLookup() {
+        AppointmentRequestDTO request = request(null);
+        doThrow(new com.example.hms.exception.ResourceNotFoundException("patient.notFound", patient.getId()))
+            .when(patientRegistrationGuard).requireRegisteredAt(patient.getId(), hospital.getId());
+        assertThatThrownBy(() -> service.createAppointment(request, Locale.FRENCH, "desk"))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(appointmentRepository, never()).findAllByBookingRequestKey(any());
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("staff off the slots: the reason the rule returns is kept on the visit, and audited without its text")
     void theDesksReasonIsKeptAndAudited() {
         when(slotPolicy.overbookReasonOffSlot(staff.getId(), START, hospital.getId(), "Urgence signalée"))

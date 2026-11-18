@@ -188,6 +188,8 @@ final class ComputedKeys {
             "PdfInvoiceService.java|pdf.invoice.statusValue.");
         site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.payment.method.\" + code",
             "PdfInvoiceService.java|pdf.payment.method.");
+        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.payment.operator.\" + operator",
+            "PdfInvoiceService.java|pdf.payment.operator.");
         site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.invoice.category.\" + category.name()",
             "PdfInvoiceService.java|pdf.invoice.category.");
         site(r, d, "com/example/hms/service/PrenatalSchedulingServiceImpl.java|\"prenatal.schedule.recommendation.\" + recommendationKey(type)",
@@ -220,6 +222,12 @@ final class ComputedKeys {
         site(r, d, "com/example/hms/service/UserServiceImpl.java|\"users.identifier.taken.\" + field",
             "UserServiceImpl.java|users.identifier.taken.");
         site(r, d, "com/example/hms/service/billing/TransfusionChargeSource.java|String productCode = \"transfusion.productType.\" + request.getProductType().name()",
+            "TransfusionChargeSource.java|transfusion.productType.");
+        // QA D2070: a taken price-list link named as the form shows it. The stored key of a SYSTEM or a
+        // TRANSFUSION_PRODUCT link is a PriceListSystemKey / BloodProductType name (PriceListLinks#normalise).
+        r.put("com/example/hms/service/billing/PriceListLinks.java|\"billing.priceList.systemKey.\" + storedKey",
+            enumValues("billing.priceList.systemKey.", com.example.hms.enums.PriceListSystemKey.class));
+        site(r, d, "com/example/hms/service/billing/PriceListLinks.java|\"transfusion.productType.\" + storedKey",
             "TransfusionChargeSource.java|transfusion.productType.");
         // QA D1901: renders a stored billing code; every code is written by a BillingText.of literal site of
         // its own (or by the V301 backfill, whose codes BillingTextRendererTest renders in FR/EN/ES), and an
@@ -463,6 +471,10 @@ final class ComputedKeys {
         r.put("PdfInvoiceService.java|pdf.invoice.category.", enumValues("pdf.invoice.category.", ItemCategory.class));
         r.put("PdfInvoiceService.java|pdf.invoice.statusValue.", enumValues("pdf.invoice.statusValue.", InvoiceStatus.class));
         r.put("PdfInvoiceService.java|pdf.payment.method.", enumValues("pdf.payment.method.", PaymentMethod.class));
+        // Billing plan PR 9: a Mobile Money operator, or NOT_STATED for a row recorded before V308.
+        r.put("PdfInvoiceService.java|pdf.payment.operator.", union(
+            enumValues("pdf.payment.operator.", com.example.hms.enums.MobileMoneyOperator.class),
+            values("pdf.payment.operator.", List.of("NOT_STATED"))));
         r.put("PharmacyClaimServiceImpl.java|pharmacy.claim.status.",
             enumValues("pharmacy.claim.status.", PharmacyClaimStatus.class));
         r.put("ResultReviewServiceImpl.java|signature.type.", enumValues("signature.type.", SignatureType.class));

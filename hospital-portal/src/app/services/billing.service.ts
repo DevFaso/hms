@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { MobileMoneyOperator } from '../shared/mobile-money-operator';
 
 /*
  * Billing invoices — /billing-invoices (+ /invoice-items). Bare DTOs and
@@ -72,7 +73,16 @@ export interface InvoiceItemResponse {
   unitPrice: number;
   totalPrice: number;
   staffDisplay?: string;
+  /** Billing-money plan PR 3: where the unit price came from. */
+  priceSource?: InvoiceLinePriceSource | null;
+  /** The price list's price for this line ("Prix de la grille"), overridden or not; null when none. */
+  tariffUnitPrice?: number | null;
+  /** Why the price-list price was overridden, as typed. */
+  overrideReason?: string | null;
 }
+
+/** Backend InvoiceLinePriceSource. */
+export type InvoiceLinePriceSource = 'TARIFF' | 'SERVICE_NAME' | 'MANUAL' | 'UNPRICED' | 'LEGACY';
 
 /** Backend ItemCategory. */
 export type InvoiceItemCategory = 'SERVICE' | 'MEDICATION' | 'LAB_TEST' | 'GENERAL';
@@ -89,6 +99,8 @@ export interface InvoiceItemRequest {
   itemCategory: InvoiceItemCategory;
   quantity: number;
   unitPrice: number;
+  /** Billing-money plan PR 3 (D-2): required when a price-list price is changed. */
+  overrideReason?: string;
 }
 
 /**
@@ -146,6 +158,8 @@ export interface StaffPaymentRequest {
   method: StaffPaymentMethod;
   reference?: string;
   notes?: string;
+  /** Billing plan PR 9: required by the server when the method is MOBILE_MONEY. */
+  mobileMoneyOperator?: MobileMoneyOperator;
 }
 
 export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED';
@@ -157,6 +171,8 @@ export interface PaymentRow {
   paymentDate: string;
   paymentMethod: string;
   referenceNumber?: string | null;
+  /** Billing plan PR 9: ORANGE_MONEY / MOOV_MONEY / AUTRE; null when not stated. */
+  mobileMoneyOperator?: MobileMoneyOperator | null;
   notes?: string | null;
   status: PaymentStatus;
   reversalReason?: string | null;
@@ -218,7 +234,14 @@ export interface CashClosing {
   date: string;
   cashierId?: string;
   cashierName?: string | null;
-  byMethod: { source: 'BILLING' | 'PHARMACY'; method: string; count: number; amount: number }[];
+  /** Billing plan PR 9: one row per source, method and Mobile Money operator. */
+  byMethod: {
+    source: 'BILLING' | 'PHARMACY';
+    method: string;
+    operator?: MobileMoneyOperator | null;
+    count: number;
+    amount: number;
+  }[];
   entries: {
     id: string;
     source: 'BILLING' | 'PHARMACY';
@@ -226,6 +249,7 @@ export interface CashClosing {
     document?: string | null;
     patientName?: string | null;
     method?: string | null;
+    operator?: MobileMoneyOperator | null;
     reference?: string | null;
     amount: number;
     status: string;
@@ -311,8 +335,10 @@ export class BillingService {
     return this.http.put<InvoiceItemResponse>(`/invoice-items/${id}`, req);
   }
 
-  deleteInvoiceItem(id: string): Observable<string> {
-    return this.http.delete(`/invoice-items/${id}`, { responseType: 'text' });
+  /** Billing-money plan PR 3 (review #1197 M2): a price-list line is deleted only with a reason. */
+  deleteInvoiceItem(id: string, reason?: string): Observable<string> {
+    const params = reason ? { reason } : undefined;
+    return this.http.delete(`/invoice-items/${id}`, { responseType: 'text', params });
   }
 
   createInvoice(req: BillingInvoiceRequest): Observable<BillingInvoiceResponse> {

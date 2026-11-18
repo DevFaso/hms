@@ -54,6 +54,21 @@ class ImagingReportKindGuardTest {
         "ImagingReportServiceImpl#updateReportStatus", "imaging.report.signedNoVoid");
 
     @Test
+    void everyAuthoringPathUsesTheLocalizedStatusRefusal() throws IOException {
+        String code = SourceScan.stripComments(Files.readString(
+            MAIN.resolve("service/impl/ImagingReportServiceImpl.java"), StandardCharsets.UTF_8));
+        for (String method : List.of("createReport", "updateReport")) {
+            assertThat(SourceScan.methodBody(code, method)).contains("applyAuthoredStatus(");
+        }
+        assertThat(SourceScan.methodBody(code, "applyAuthoredStatus"))
+            .contains("\"imaging.report.authoredStatus.invalid\"");
+        String pdf = SourceScan.stripComments(Files.readString(MAIN.resolve("service/PatientRecordPdfService.java")));
+        assertThat(SourceScan.methodBody(pdf, "imagingConclusions")).contains("identifiedImagingConclusion(");
+        assertThat(SourceScan.methodBody(pdf, "identifiedImagingConclusion"))
+            .contains("getReportStatus()", "getReportVersion()", "getSignedAt()", "getCreatedAt()", "getImpression()");
+    }
+
+    @Test
     void noMainCodeWritesALiteralFinal() throws IOException {
         List<String> offenders = new ArrayList<>();
         scan((file, code) -> {

@@ -108,6 +108,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     private final com.example.hms.repository.DeathRecordRepository deathRecords;
     private final com.example.hms.repository.DeathDisputeRepository disputes;
     private final com.example.hms.repository.MedicationAdministrationRecordRepository doses;
+    private final com.example.hms.service.support.ClinicalActorNames actorNames;
 
     @Override
     public void afterPropertiesSet() {
@@ -434,8 +435,10 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             throw new AccessDeniedException("Only a clinician or pharmacist of this hospital can read the review list.");
         }
         patientChartAccess.require(patientId, hospital);
-        return holdRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, hospital).stream()
-            .map(this::toRow)
+        var rows = holdRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, hospital);
+        var names = actorNames.batch(rows.stream().map(OrderReviewHold::getDecidedById).toList());
+        return rows.stream()
+            .map(hold -> toRow(hold, names))
             .toList();
     }
 
@@ -540,7 +543,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     private OrderReviewRowDTO decide(OrderReviewHold hold, OrderReviewStatus outcome, UUID actor, String reason, String what) {
         hold.setStatus(outcome);
         hold.setDecidedById(actor);
-        hold.setDecidedByName(currentUsername());
+        hold.setDecidedByName(actorNames.display(actor, currentUsername()));
         hold.setDecidedAt(LocalDateTime.now(clock));
         hold.setReason(reason);
         OrderReviewHold saved = holdRepository.save(hold);
@@ -656,6 +659,10 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     }
 
     private OrderReviewRowDTO toRow(OrderReviewHold hold) {
+        return toRow(hold, actorNames::display);
+    }
+
+    private OrderReviewRowDTO toRow(OrderReviewHold hold, java.util.function.BiFunction<UUID, String, String> names) {
         OrderReviewRowDTO.OrderReviewRowDTOBuilder row = OrderReviewRowDTO.builder()
             .id(hold.getId())
             .disputeId(hold.getDisputeId())
@@ -663,7 +670,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             .orderId(hold.getOrderId())
             .orderVersion(hold.getOrderVersion())
             .status(hold.getStatus())
-            .decidedByName(hold.getDecidedByName())
+            .decidedByName(names.apply(hold.getDecidedById(), hold.getDecidedByName()))
             .decidedAt(hold.getDecidedAt())
             .reason(hold.getReason())
             .replacementOrderId(hold.getReplacementOrderId());

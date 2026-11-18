@@ -1,5 +1,6 @@
 package com.example.hms.service.reporting;
 
+import com.example.hms.utility.CsvCells;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.ReportPeriod;
@@ -247,11 +248,11 @@ public class ReportGenerationService {
             CSVFormat.DEFAULT.builder().setHeader("rank", "icd_code", "diagnosis", "count").build())) {
             int rank = 0;
             for (DiagnosisCount row : rows) {
-                printer.printRecord(
+                printer.printRecord(CsvCells.safeAll(
                     ++rank,
                     row.getCode() == null ? "" : row.getCode(),
                     row.getDisplay(),
-                    row.getTotal());
+                    row.getTotal()));
             }
         } catch (IOException ex) {
             throw new UncheckedIOException("CSV generation failed", ex);
@@ -272,7 +273,7 @@ public class ReportGenerationService {
                 for (int i = 0; i < columns; i++) {
                     row[i + 1] = entry.getValue()[i];
                 }
-                printer.printRecord(row);
+                printer.printRecord(CsvCells.safeAll(row));
             }
         } catch (IOException ex) {
             throw new UncheckedIOException("CSV generation failed", ex);

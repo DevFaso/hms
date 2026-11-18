@@ -6,15 +6,20 @@
       <p class="subtitle">{{ 'REGISTRIES.SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
-      <button
-        type="button"
-        class="btn-primary"
-        (click)="openEnrollForm($event)"
-        data-testid="open-enroll"
-      >
-        <span class="material-symbols-outlined">person_add</span>
-        {{ 'REGISTRIES.ENROLL' | translate }}
+      <button type="button" class="btn-secondary" (click)="load()" [disabled]="loading()">
+        {{ 'COMMON.REFRESH' | translate }}
       </button>
+      @if (canAct) {
+        <button
+          type="button"
+          class="btn-primary"
+          (click)="openEnrollForm($event)"
+          data-testid="open-enroll"
+        >
+          <span class="material-symbols-outlined">person_add</span>
+          {{ 'REGISTRIES.ENROLL' | translate }}
+        </button>
+      }
     </div>
   </div>
 
@@ -42,7 +47,10 @@
         </div>
       </div>
     </div>
-    <p class="care-scope-note">{{ 'CARE_DASH.LOADED_SCOPE' | translate }}</p>
+    <p class="care-scope-note">{{ 'REGISTRIES.SEARCH_SCOPE' | translate }}</p>
+    @if (statusFilter() === 'ALL') {
+      <p class="hint">{{ 'REGISTRIES.ALL_MERGED_HINT' | translate }}</p>
+    }
   </section>
   <!-- Programme filter. Plain toggle buttons, not the ARIA tab pattern:
        these filter one table rather than switching panels, and half a
@@ -64,6 +72,18 @@
 
   <!-- Status chips: counts across the whole programme, filter on click -->
   <div class="status-chips">
+    <button
+      type="button"
+      class="status-chip"
+      [class.active]="statusFilter() === 'ALL'"
+      [attr.aria-pressed]="statusFilter() === 'ALL'"
+      (click)="setStatusFilter('ALL')"
+    >
+      {{ 'REGISTRIES.ALL_STATUSES' | translate }}
+      @if (!countsFailed()) {
+        <span class="chip-count">{{ allCount() }}</span>
+      }
+    </button>
     @for (s of statuses; track s) {
       <button
         type="button"
@@ -97,6 +117,21 @@
   </div>
 
   <div class="care-toolbar">
+    <label
+      ><input
+        type="checkbox"
+        [ngModel]="overdueOnly()"
+        (ngModelChange)="overdueOnly.set($event)"
+      />{{ 'REGISTRIES.OVERDUE_ONLY' | translate }}</label
+    >
+    <label
+      ><span class="sr-only">{{ 'REGISTRIES.SORT' | translate }}</span
+      ><select [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)">
+        <option value="server">{{ 'REGISTRIES.SORT_PRIORITY' | translate }}</option>
+        <option value="name">{{ 'REGISTRIES.SORT_NAME' | translate }}</option>
+        <option value="nextVisit">{{ 'REGISTRIES.SORT_NEXT_VISIT' | translate }}</option>
+      </select></label
+    >
     <label class="care-search"
       ><span class="material-symbols-outlined" aria-hidden="true">search</span
       ><input
@@ -146,7 +181,20 @@
   @if (!loading() && !loadFailed() && rows().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">group_off</span>
-      <p>{{ 'REGISTRIES.EMPTY' | translate }}</p>
+      <p>
+        {{
+          'REGISTRIES.EMPTY_SELECTED'
+            | translate
+              : {
+                  program: ('REGISTRIES.PROGRAM.' + activeProgram() | translate),
+                  status:
+                    ((statusFilter() === 'ALL'
+                      ? 'REGISTRIES.ALL_STATUSES'
+                      : 'REGISTRIES.STATUS.' + statusFilter()
+                    ) | translate),
+                }
+        }}
+      </p>
     </div>
   }
 
@@ -221,7 +269,7 @@
                   }
                 </td>
                 <td class="col-actions">
-                  @if (row.status === 'ACTIVE') {
+                  @if (canAct && row.status === 'ACTIVE') {
                     <button
                       type="button"
                       class="btn-row"
@@ -233,16 +281,18 @@
                       {{ 'REGISTRIES.RECORD_VISIT' | translate }}
                     </button>
                   }
-                  <button
-                    type="button"
-                    class="btn-row"
-                    [disabled]="actingOnId() !== null"
-                    (click)="openStatusModal(row, $event)"
-                    data-testid="change-status"
-                  >
-                    <span class="material-symbols-outlined">swap_horiz</span>
-                    {{ 'REGISTRIES.CHANGE_STATUS' | translate }}
-                  </button>
+                  @if (canAct) {
+                    <button
+                      type="button"
+                      class="btn-row"
+                      [disabled]="actingOnId() !== null"
+                      (click)="openStatusModal(row, $event)"
+                      data-testid="change-status"
+                    >
+                      <span class="material-symbols-outlined">swap_horiz</span>
+                      {{ 'REGISTRIES.CHANGE_STATUS' | translate }}
+                    </button>
+                  }
                 </td>
               </tr>
             }

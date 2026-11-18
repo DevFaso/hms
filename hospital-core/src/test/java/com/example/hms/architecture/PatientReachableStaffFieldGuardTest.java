@@ -129,6 +129,9 @@ class PatientReachableStaffFieldGuardTest {
             site("service/EncounterServiceImpl.java#getEncounterById", "toPatientPortalEncounterResponseDTO("))),
         Map.entry("EncounterNoteResponseDTO", Rule.projected("D1910/D1960: only the signed note reaches the patient",
             site("mapper/EncounterMapper.java#toPatientPortalEncounterResponseDTO", "getLatestSignedEncounterNote()"))),
+        Map.entry("InvoiceItemResponseDTO", Rule.projected(
+            "#1197 M1: the patient's line shows the price charged, never the cashier's override or the grid price",
+            site("service/BillingInvoiceServiceImpl.java#getPortalInvoiceDetail", "InvoiceItemMapper::forPatient"))),
         Map.entry("AppointmentResponseDTO", Rule.projected("D1429: the overbooking reason comes off on the way out",
             site("controller/support/PatientResponseShaping.java#shape", "setOverbookReason(null)"))),
         // ── The patient's by design ──

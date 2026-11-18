@@ -117,6 +117,8 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("BillingInvoiceResponseDTO#notes", "billing notes"),
         Map.entry("PaymentTransactionResponseDTO#notes", "cashier notes"),
         Map.entry("InvoiceAdjustmentResponseDTO#reason", "why a discount was given"),
+        Map.entry("InvoiceItemResponseDTO#overrideReason",
+            "why the cashier changed a price-list price on a draft line (billing-money plan PR 3, D-2)"),
         Map.entry("InvoiceAdjustmentResponseDTO#reversalReason", "why a discount was reversed"),
         Map.entry("AppointmentCalendarEventDTO#reason", "the visit reason on the desk's calendar"),
         Map.entry("BedResponseDTO#notes", "a note about the bed, not the patient"),
@@ -148,7 +150,17 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("StaffShiftResponseDTO#cancellationReason", "staff rota"),
         Map.entry("StaffShiftResponseDTO#notes", "staff rota"),
         Map.entry("TreatmentConsentResponseDTO#notes", "the desk records consents"),
-        Map.entry("UserRecoveryContactDTO#notes", "the caller's own account"));
+        Map.entry("UserRecoveryContactDTO#notes", "the caller's own account"),
+        // Billing-money plan PR 2: the desk reads the hospital's price list to quote a price (plan section 3.8).
+        // None of it is about a patient: a tariff, why the admin changed or retired it, what it is linked to.
+        Map.entry("PriceListPriceDTO#changeReason", "why the admin or accountant changed a tariff: no patient"),
+        Map.entry("PriceListItemDTO#deactivationReason", "why a tariff item was retired: no patient"),
+        Map.entry("PriceListLinkOptionsDTO#imagingModalities", "the imaging modality names, a fixed list: no patient"),
+        Map.entry("PriceListLinkOptionsDTO#treatments", "the hospital's catalogue of services, by name: no patient"),
+        // Billing-money plan PR 6: the desk reads the payer catalogue to pick a patient's plan (plan section 3.8).
+        Map.entry("PayerDTO#deactivationReason", "why the admin or accountant retired a payer: no patient"),
+        Map.entry("PayerPlanRuleDTO#endReason", "why the admin or accountant ended a coverage rule: no patient"),
+        Map.entry("PayerPlanTermsDTO#changeReason", "why the admin or accountant changed a plan's rate: no patient"));
 
     /**
      * Request type#field the role may send, and why it overwrites no clinician's text: a new
@@ -181,6 +193,10 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("PatientProfileUpdateRequestDTO#bloodType", "refused for the desk: PatientController#patchPatient"),
         Map.entry("PatientProfileUpdateRequestDTO#careTeamNotes", "refused for the desk: PatientController#patchPatient"),
         Map.entry("PatientProfileUpdateRequestDTO#chronicConditions", "refused for the desk: PatientController#patchPatient"),
+        Map.entry("PatientProfileUpdateRequestDTO#nationalUniqueIdDuplicateReason",
+            "owner-approved X8 administrative identity override; PatientNationalUniqueIdService requires confirmation, redacts identity data and audits atomically; PatientNationalUniqueIdPostgresIT proves refusal/override/rollback"),
+        Map.entry("PatientRequestDTO#nationalUniqueIdDuplicateReason",
+            "owner-approved X8 administrative identity override; every create/replace path uses the same protected boundary, enforced by PatientNationalUniqueIdGuardTest"),
         Map.entry("PatientRequestDTO#allergies", "a NEW patient: what the desk is told at registration, imported as rows; a PUT never writes it"),
         Map.entry("PatientRequestDTO#bloodType", "a NEW patient; on a PUT the desk's value is dropped and the stored one kept (PatientServiceImpl#updatePatient)"),
         Map.entry("PatientRequestDTO#careTeamNotes", "a NEW patient; on a PUT the desk's value is dropped and the stored one kept (PatientServiceImpl#updatePatient)"),

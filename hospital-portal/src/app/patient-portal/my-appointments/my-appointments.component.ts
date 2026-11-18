@@ -1,4 +1,5 @@
 import { refusalReason } from '../../shared/refusal-reason';
+import { createBookingRequestId } from '../../shared/booking-request-id';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import {
   Component,
@@ -414,10 +415,13 @@ export class MyAppointmentsComponent implements OnInit {
 
   // ── Booking form actions ─────────────────────────────────────────
 
+  private bookingRequestId = createBookingRequestId();
+
   openBookingForm(): void {
     // QA D1124: the opener stays on the page (QA D1146: focus returns to it);
     // a second open while the form is up would wipe what was typed.
     if (this.showBookingForm()) return;
+    this.bookingRequestId = createBookingRequestId();
     this.showBookingForm.set(true);
     this.bookingError.set(null);
     this.bookingSuccess.set(false);
@@ -498,6 +502,7 @@ export class MyAppointmentsComponent implements OnInit {
   }
 
   submitBooking(): void {
+    if (this.bookingLoading() || this.bookingSuccess()) return;
     if (
       !this.selectedHospitalId ||
       !this.selectedDepartmentId ||
@@ -528,6 +533,7 @@ export class MyAppointmentsComponent implements OnInit {
     this.bookingError.set(null);
 
     const dto: BookAppointmentRequest = {
+      bookingRequestId: this.bookingRequestId,
       hospitalId: this.selectedHospitalId,
       departmentId: this.selectedDepartmentId,
       staffId: this.selectedProviderId || undefined,

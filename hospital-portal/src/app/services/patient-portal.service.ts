@@ -4,10 +4,12 @@ import { HttpClient, HttpResponse } from '@angular/common/http';
 import { Observable, map, catchError, of, defer } from 'rxjs';
 import { allRows, PageSlice } from '../shared/all-pages';
 import type { AfterVisitSummary as EncounterAfterVisitSummary } from './encounter.service';
+import { MobileMoneyOperator } from '../shared/mobile-money-operator';
 
 /* ── DTOs matching backend PatientPortalController ── */
 
 export interface PatientProfileDTO {
+  nationalUniqueIdMasked?: string | null;
   /** The patient id, as the backend sends it. */
   id: string;
   firstName: string;
@@ -627,6 +629,8 @@ export interface PortalInvoicePayment {
   paymentDate?: string | null;
   paymentMethod?: string | null;
   referenceNumber?: string | null;
+  /** Billing plan PR 9: null when not stated or not Mobile Money. */
+  mobileMoneyOperator?: MobileMoneyOperator | null;
   status: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED' | string;
   reversalReason?: string | null;
   createdAt?: string | null;
@@ -982,6 +986,7 @@ export interface PreCheckInResponse {
 // ── Self-Scheduling Interfaces ─────────────────────────────────────
 
 export interface BookAppointmentRequest {
+  bookingRequestId?: string;
   hospitalId: string;
   departmentId: string;
   staffId?: string;
@@ -1030,6 +1035,8 @@ export interface PatientPaymentRequest {
   paymentMethod: string;
   transactionReference?: string;
   notes?: string;
+  /** Billing plan PR 9: the portal asks for it on a Mobile Money declaration. */
+  mobileMoneyOperator?: MobileMoneyOperator;
 }
 
 export interface ProxyResponse {

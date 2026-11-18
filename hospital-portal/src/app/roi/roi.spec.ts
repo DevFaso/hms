@@ -110,6 +110,92 @@ describe('RoiComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('loads every status for All, pending first then newest, while retaining the server total', () => {
+    fixture.detectChanges();
+    roiService.worklist.calls.reset();
+    roiService.worklist.and.callFake((status) =>
+      of(
+        page([
+          request({
+            id: status!,
+            status: status!,
+            requestedOn: status === 'DENIED' ? '2026-10-01' : '2026-09-01',
+          }),
+        ]),
+      ),
+    );
+    component.setStatus('ALL');
+    expect(roiService.worklist.calls.count()).toBe(4);
+    expect(component.rows().length).toBe(4);
+    // Review L2: PENDING leads although DENIED is newer; then newest first.
+    expect(component.rows().map((r) => r.status)).toEqual([
+      'PENDING',
+      'DENIED',
+      'CANCELLED',
+      'FULFILLED',
+    ]);
+    expect(component.total()).toBe(4);
+  });
+
+  // Review #1196/#1198 L2: oldest-first then the 200 cut dropped pending requests
+  // behind 200 older decided ones.
+  it('never cuts a pending request from All behind older decided ones', () => {
+    fixture.detectChanges();
+    const decided = Array.from({ length: 200 }, (_, i) =>
+      request({ id: `done-${i}`, status: 'FULFILLED', requestedOn: '2026-01-01' }),
+    );
+    const pending = [
+      request({ id: 'pend-old', status: 'PENDING', requestedOn: '2026-06-01' }),
+      request({ id: 'pend-new', status: 'PENDING', requestedOn: '2026-07-01' }),
+    ];
+    roiService.worklist.and.callFake((status) =>
+      of(
+        status === 'PENDING'
+          ? page(pending)
+          : status === 'FULFILLED'
+            ? { ...page(decided), totalElements: 200 }
+            : page([]),
+      ),
+    );
+    component.setStatus('ALL');
+    fixture.detectChanges();
+    expect(component.rows().length).toBe(200);
+    expect(
+      component
+        .rows()
+        .slice(0, 2)
+        .map((r) => r.id),
+    ).toEqual(['pend-new', 'pend-old']);
+    expect(fixture.nativeElement.textContent).toContain('ROI.ALL_ORDER_HELP');
+  });
+
+  it('keeps the merged All queue readable when a request date is missing', () => {
+    fixture.detectChanges();
+    roiService.worklist.and.returnValue(
+      of(page([request({ requestedOn: null as unknown as string })])),
+    );
+    component.setStatus('ALL');
+    expect(component.loadFailed()).toBeFalse();
+    expect(component.rows().length).toBe(4);
+  });
+
+  it('omits unknown hospital confirmation in the decision dialog', () => {
+    fixture.detectChanges();
+    component.openDecision(request(), 'fulfil');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.hospital-context')).toBeNull();
+  });
+
+  it('does not present a partial All queue as complete when one status fails', () => {
+    fixture.detectChanges();
+    roiService.worklist.and.callFake((status) =>
+      status === 'DENIED' ? throwError(() => new Error('offline')) : of(page([request()])),
+    );
+    component.setStatus('ALL');
+    expect(component.loadFailed()).toBeTrue();
+    expect(component.rows()).toEqual([]);
+  });
+
   it('loads the PENDING queue on init', () => {
     fixture.detectChanges();
     expect(roiService.worklist).toHaveBeenCalledWith('PENDING', 0, 200);
@@ -218,6 +304,14 @@ describe('RoiComponent', () => {
     expect(roiService.fulfil).toHaveBeenCalledWith('r1', undefined);
     expect(roiService.worklist).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  it('does not present a static selected-hospital placeholder as intake confirmation', () => {
+    fixture.detectChanges();
+    component.openIntake();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="intake-modal"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.hospital-context')).toBeNull();
   });
 
   it('intake submits patient + purpose + scope', () => {

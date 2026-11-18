@@ -80,6 +80,9 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         }
         // QA D1611: a counter sale is paid at the till; an insurer's share is never counted as paid.
         com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(dto.getPaymentMethod(), "paymentMethod");
+        // Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close.
+        com.example.hms.enums.MobileMoneyOperator operator = com.example.hms.service.payment.MobileMoneyOperators
+                .require(dto.getPaymentMethod(), dto.getMobileMoneyOperator(), "mobileMoneyOperator");
         // QA D1129: the same mobile-money transaction is not counted at two tills.
         if (dto.getPaymentMethod() == com.example.hms.enums.PharmacyPaymentMethod.MOBILE_MONEY) {
             referenceRegistry.requireUnused(activeHospitalId, dto.getReferenceNumber(), "referenceNumber");
@@ -109,6 +112,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .paymentMethod(dto.getPaymentMethod())
                 .currency(dto.getCurrency() != null ? dto.getCurrency() : "XOF")
                 .referenceNumber(dto.getReferenceNumber())
+                .mobileMoneyOperator(operator)
                 .status(PharmacySaleStatus.COMPLETED)
                 .notes(dto.getNotes())
                 .totalAmount(BigDecimal.ZERO)

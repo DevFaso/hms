@@ -533,6 +533,13 @@ public class AppointmentServiceImpl implements AppointmentService {
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());
 
+        var bookingIdentity = com.example.hms.service.support.AppointmentBookingIdentity.staff(
+            currentUser.getId(), patient.getId(), hospital.getId(), request);
+        var replay = bookingIdentity.replay(appointmentRepository);
+        if (replay.isPresent()) {
+            return bookingSummary(replay.get());
+        }
+
         // --- Staff resolution ---
         final Staff staff = resolveStaff(request);
 
@@ -555,9 +562,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // slot, else the session template's slot length, else 30 minutes). An
         // end time in the request is ignored: a patient booked a clinician's
         // whole day through this endpoint.
-        if (request.getStartTime() == null || request.getAppointmentDate() == null) {
-            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.timeRange.invalid");
-        }
+        requireBookingStart(request);
         LocalTime endTime = slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), endTime);
@@ -566,6 +571,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         // QA D1063: a slot held for a waitlist offer is not given to anyone else.
         slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
 
+        // Serialize the existing overlap check with other bookings for this clinician.
+        staffRepository.findLockedById(staff.getId());
         requireClinicianFreeForBooking(staff, request, requestedStart, requestedEnd, locale);
 
         // QA D1429: staff may book outside a published free slot, with a reason; a
@@ -600,7 +607,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setAssignment(assignment);
         appointment.setOverbookReason(overbookReason);
 
+        bookingIdentity.stamp(appointment);
         Appointment saved = appointmentRepository.save(appointment);
+        appointmentRepository.flush();
         if (patientSlot != null) {
             slotPolicy.takeSlot(patientSlot, saved);
         }
@@ -643,7 +652,17 @@ public class AppointmentServiceImpl implements AppointmentService {
             }
         }
 
-        // --- Return lean summary (no null bloat) ---
+        return bookingSummary(saved);
+    }
+
+    private static void requireBookingStart(AppointmentRequestDTO request) {
+        if (request.getStartTime() == null || request.getAppointmentDate() == null) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.timeRange.invalid");
+        }
+    }
+
+    private AppointmentSummaryDTO bookingSummary(Appointment saved) {
+        // Return the same shape for a creation and a replay.
         Patient p = saved.getPatient();
         Staff s = saved.getStaff();
         Department d = saved.getDepartment();

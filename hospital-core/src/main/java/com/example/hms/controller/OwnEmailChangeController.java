@@ -129,7 +129,7 @@ public class OwnEmailChangeController {
     }
 
     private static ResponseEntity<Object> notAuthenticated() {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MessageResponse("Not authenticated."));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MessageResponse(MessageUtil.resolve("auth.session.notAuthenticated")));
     }
 
     /**

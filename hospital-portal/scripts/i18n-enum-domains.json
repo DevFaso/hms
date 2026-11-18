@@ -20,6 +20,9 @@
   "profileType": {
     "reason": "UserResponseDTO.profileType is a String UserMapper.deriveProfileType DERIVES: STAFF or PATIENT (null otherwise). PORTAL.ENUM.PROFILE_TYPE keys both; check by hand when that method changes (QA D528/D663)."
   },
+  "recoveryContactType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/RecoveryContactType.java"
+  },
   "medicationCategory": {
     "reason": "MedicationCatalogItem.category is a free-text String column; rows carry coded therapeutic classes (ANALGESIC, ANTIBIOTIC ...) that PORTAL.ENUM.MEDICATION_CATEGORY keys, any other typed text falls back to the pipe's Title Case (QA D528/D663)."
   },
@@ -50,7 +53,9 @@
   "stockTransactionType": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/StockTransactionType.java"
   },
-  "pharmacyType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PharmacyType.java" },
+  "pharmacyType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PharmacyType.java"
+  },
   "procedureUrgency": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/ProcedureUrgency.java"
   },
@@ -72,8 +77,33 @@
       "hospital-core/src/main/java/com/example/hms/enums/PermissionMatrixAuditAction.java"
     ]
   },
-  "auditStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/AuditStatus.java" },
-  "bedStatus": { "enum": "hospital-core/src/main/java/com/example/hms/enums/BedStatus.java" },
+  "payerCoverageStatus": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PayerCoverageStatus.java"
+  },
+  "payerType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PayerType.java"
+  },
+  "priceListCategory": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListCategory.java"
+  },
+  "priceListLinkType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListLinkType.java"
+  },
+  "priceListPriceStatus": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListPriceStatus.java"
+  },
+  "priceListImportRowOutcome": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListImportRowOutcome.java"
+  },
+  "priceListSystemKey": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListSystemKey.java"
+  },
+  "auditStatus": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/AuditStatus.java"
+  },
+  "bedStatus": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/BedStatus.java"
+  },
   "bloodProductType": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/BloodProductType.java"
   },
@@ -134,7 +164,9 @@
   "isolationPrecautionType": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/IsolationPrecautionType.java"
   },
-  "jobTitle": { "enum": "hospital-core/src/main/java/com/example/hms/enums/JobTitle.java" },
+  "jobTitle": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/JobTitle.java"
+  },
   "labOrderStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/LabOrderStatus.java"
   },
@@ -147,7 +179,9 @@
   "labSpecimenStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/LabSpecimenStatus.java"
   },
-  "leaveType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveType.java" },
+  "leaveType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveType.java"
+  },
   "leaveStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveStatus.java"
   },
@@ -205,7 +239,9 @@
   "relationship": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/ProxyRelationship.java"
   },
-  "facilityType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/FacilityType.java" },
+  "facilityType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/FacilityType.java"
+  },
   "hospitalLifecycleState": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/HospitalLifecycleState.java"
   },
@@ -222,11 +258,15 @@
   "routingDecisionStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/RoutingDecisionStatus.java"
   },
-  "routingType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/RoutingType.java" },
+  "routingType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/RoutingType.java"
+  },
   "shiftStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftStatus.java"
   },
-  "shiftType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftType.java" },
+  "shiftType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftType.java"
+  },
   "signatureStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureStatus.java"
   },
@@ -257,7 +297,9 @@
   "vitalType": {
     "reason": "vital types are composed portal-side from the reading fields, not sent as an enum"
   },
-  "wardType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/WardType.java" },
+  "wardType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/WardType.java"
+  },
   "timelineCategory": {
     "reason": "no enum holds it: PatientTimelineEntryDTO.category is a String that PatientServiceImpl and VisitTimelineRows write from their CATEGORY_* constants (the chronology registry, QA D959); every category is keyed in PORTAL.ENUM.TIMELINE_CATEGORY, and the backend registry guard fails when a category has no label in enum-label.service.ts or icon in patient-chart.component.ts."
   },
@@ -275,5 +317,8 @@
   },
   "acuityLevel": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/AcuityLevel.java"
+  },
+  "signatureType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureType.java"
   }
 }

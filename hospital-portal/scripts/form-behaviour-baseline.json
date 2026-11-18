@@ -1082,10 +1082,6 @@
       "count": 1,
       "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
     },
-    "src/app/scheduling/scheduling.html::server-field-errors-unmapped::component": {
-      "count": 1,
-      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
-    },
     "src/app/shared/prescription-clarification/prescription-clarification.component.html::empty-submit-untested::(click)=submit": {
       "count": 1,
       "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"

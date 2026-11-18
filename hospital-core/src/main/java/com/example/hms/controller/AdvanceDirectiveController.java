@@ -50,7 +50,7 @@ public class AdvanceDirectiveController {
     }
 
     @PostMapping(value = "/patient/{patientId}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize(CLINICAL_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Record an advance directive for a patient")
     public ResponseEntity<AdvanceDirectiveResponseDTO> create(
         @PathVariable UUID patientId,
@@ -60,7 +60,7 @@ public class AdvanceDirectiveController {
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize(CLINICAL_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Update an advance directive")
     public ResponseEntity<AdvanceDirectiveResponseDTO> update(
         @PathVariable UUID id,
@@ -74,7 +74,7 @@ public class AdvanceDirectiveController {
      * that it ever applied.
      */
     @PutMapping("/{id}/revoke")
-    @PreAuthorize(CLINICAL_ROLES)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Revoke an advance directive",
         description = "Marks the directive REVOKED. Directives are never deleted — a directive "
             + "that was once in force is part of the record.")

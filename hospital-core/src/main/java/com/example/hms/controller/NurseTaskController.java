@@ -101,7 +101,7 @@ public class NurseTaskController {
     }
 
     @PostMapping("/medications/mar/{taskId}/verify")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Run the bedside five-rights barcode-scan check on a MAR task (P1 #8)")
     public ResponseEntity<MarVerificationResponseDTO> verifyMedication(
         @PathVariable("taskId") UUID taskId,
@@ -137,7 +137,7 @@ public class NurseTaskController {
     }
 
     @PutMapping("/medications/mar/{taskId}/administer")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Record medication administration outcome for a MAR task")
     public ResponseEntity<NurseMedicationTaskResponseDTO> administerMedication(
         @PathVariable("taskId") UUID taskId,
@@ -201,7 +201,7 @@ public class NurseTaskController {
     }
 
     @PostMapping("/handoffs")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE')")
     @Operation(summary = "Record a new SBAR handoff for a patient")
     public ResponseEntity<NurseHandoffSummaryDTO> createHandoff(
         @Valid @RequestBody NurseHandoffCreateRequestDTO request,
@@ -231,7 +231,7 @@ public class NurseTaskController {
     }
 
     @PutMapping("/handoffs/{handoffId}/complete")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Mark a patient transfer or handoff as completed")
     public ResponseEntity<Void> completeHandoff(
         @PathVariable UUID handoffId,
@@ -310,7 +310,7 @@ public class NurseTaskController {
     }
 
     @PostMapping("/patients/{patientId}/vitals")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Inline vital sign capture from the nurse station")
     public ResponseEntity<com.example.hms.payload.dto.NurseVitalCaptureResponseDTO> captureVitals(
         @PathVariable UUID patientId,
@@ -360,7 +360,7 @@ public class NurseTaskController {
     }
 
     @PostMapping("/tasks")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE')")
     @Operation(summary = "Create a new bedside nursing task")
     public ResponseEntity<NurseTaskItemDTO> createNursingTask(
         @Valid @RequestBody NurseTaskCreateRequestDTO request,
@@ -376,7 +376,7 @@ public class NurseTaskController {
     }
 
     @PutMapping("/tasks/{taskId}/complete")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Mark a nursing task as completed")
     public ResponseEntity<NurseTaskItemDTO> completeNursingTask(
         @PathVariable UUID taskId,
@@ -419,7 +419,7 @@ public class NurseTaskController {
     }
 
     @PostMapping("/patients/{patientId}/care-note")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'NURSE','MIDWIFE','DOCTOR')")
     @Operation(summary = "Create a quick bedside care note (DAR or SOAPIE) from the nurse dashboard")
     public ResponseEntity<NurseCareNoteResponseDTO> createCareNote(
         @PathVariable UUID patientId,

@@ -55,13 +55,32 @@ export class SessionScopeService {
   }
 
   /**
-   * Apply an authoritative bootstrap: the roles, the permitted set exactly as
-   * the server states it (never collapsed by role), the active hospital, the
-   * super-admin global default, and the stored profile that later bootstraps
-   * fall back to.
+   * Apply the authoritative identity and hospital scope. Internal sessions
+   * retain their selected token roles; SSO retains live assignment roles.
+   * The permitted hospitals are never collapsed by role.
    */
   applyBootstrap(bootstrap: SessionBootstrapResponse, extras: ProfileExtras = {}): void {
-    const roles = bootstrap.roles?.length ? bootstrap.roles : this.auth.getRoles();
+    // Internal login narrows the token to the role selected by the user. The
+    // bootstrap lists account assignments, not permission to change that choice.
+    // SSO keeps its existing live-assignment hydration contract.
+    const tokenRoles = this.auth.getRoles();
+    if (
+      bootstrap.authSource === 'internal' &&
+      tokenRoles.some((role) => !bootstrap.roles?.includes(role))
+    ) {
+      // A selected role was revoked. End this session rather than promoting
+      // another assignment or leaving JWT-based guard fallbacks authorized.
+      this.auth.logout();
+      this.roleContext.setRoles([]);
+      this.applyScope([], null);
+      return;
+    }
+    const roles =
+      bootstrap.authSource === 'internal' && tokenRoles.length
+        ? tokenRoles
+        : bootstrap.roles?.length
+          ? bootstrap.roles
+          : tokenRoles;
     this.roleContext.setRoles(roles);
     this.roleContext.setProviderUser(bootstrap.providerUser === true);
     this.roleContext.markSessionResolved();

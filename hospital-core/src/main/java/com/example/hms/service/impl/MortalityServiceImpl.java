@@ -179,6 +179,7 @@ public class MortalityServiceImpl implements MortalityService {
     private final com.example.hms.repository.FetalDeathEventRepository fetalDeathEventRepository;
     /** QA D1714: the way from a registered baby to its delivery, to link a stillbirth death record to its event. */
     private final com.example.hms.repository.DeliveryNewbornRepository deliveryNewbornRepository;
+    private final com.example.hms.service.support.ClinicalActorNames actorNames;
 
     @Override
     public RecordDeathResponseDTO recordDeath(DeathRecordRequestDTO request) {
@@ -353,7 +354,7 @@ public class MortalityServiceImpl implements MortalityService {
             .declaresStillbirth(deathRecord);
         deathRecord.setEnteredInErrorAt(LocalDateTime.now(clock));
         deathRecord.setEnteredInErrorById(actorId);
-        deathRecord.setEnteredInErrorByName(actorName);
+        deathRecord.setEnteredInErrorByName(actorNames.display(actorId, actorName));
         deathRecord.setEnteredInErrorReason(reason);
         DeathRecord saved = deathRecordRepository.save(deathRecord);
 
@@ -362,7 +363,7 @@ public class MortalityServiceImpl implements MortalityService {
         patientRepository.save(patient);
 
         List<com.example.hms.model.DeathDispute> open = disputeRepository.lockOpenForRecord(recordId);
-        DeathDisputeServiceImpl.closeAll(open, inBasketService, actorId, actorName, reason, deathRecord.getEnteredInErrorAt());
+        DeathDisputeServiceImpl.closeAll(open, inBasketService, actorId, deathRecord.getEnteredInErrorByName(), reason, deathRecord.getEnteredInErrorAt());
         // The holds stand and stay visible; none stays bound to a dispute now closed.
         open.forEach(dispute -> orderReview.disputeClosed(dispute.getId()));
 
@@ -649,13 +650,11 @@ public class MortalityServiceImpl implements MortalityService {
             .stillbirthRows(stillbirths.rows())
             .earlyNeonatalDeaths(countOfType(all, PerinatalDeathType.EARLY_NEONATAL))
             .lateNeonatalDeaths(countOfType(all, PerinatalDeathType.LATE_NEONATAL))
-            .deaths(all.stream().map(death -> {
-                DeathRecordResponseDTO dto = mapper.toDto(death);
-                dto.setDisputed(disputed.contains(death.getId()));
+            .deaths(mapper.toDtos(all).stream().map(dto -> {
+                dto.setDisputed(disputed.contains(dto.getId()));
                 return dto;
             }).toList())
-            .enteredInError(deathRecordRepository.findEnteredInError(hospitalId, start, end).stream()
-                .map(mapper::toDto).toList())
+            .enteredInError(mapper.toDtos(deathRecordRepository.findEnteredInError(hospitalId, start, end)))
             .build();
     }
 
@@ -711,7 +710,7 @@ public class MortalityServiceImpl implements MortalityService {
                 .gestationalAgeWeeks(event.getGestationalAgeWeeks())
                 .noSignsOfLife(event.isNoSignsOfLife())
                 .source(event.getSource())
-                .recordedByName(event.getRecordedBy() == null ? null : event.getRecordedBy().getUsername())
+                .recordedByName(com.example.hms.service.support.ClinicalActorNames.display(event.getRecordedBy(), null))
                 .whoStillbirth(result.whoStillbirth())
                 .icdFetalDeath(result.icdFetalDeath())
                 .classificationIncomplete(result.incomplete())

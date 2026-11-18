@@ -1,3 +1,5 @@
+import { map } from 'rxjs';
+import { worklistCounts } from './worklist-counts';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { personName } from '../shared/pipes/person-name.pipe';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
@@ -49,29 +51,25 @@ export class BirthPlanTabComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
-  private hospitalId: string | null = null;
+  protected hospitalId: string | null = null;
 
   /** Create/update includes NURSE on the backend. */
   readonly canEdit = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
   ]);
-  /** Review = DOCTOR/MIDWIFE/SUPER_ADMIN. */
-  readonly canReview = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  /** Review = DOCTOR/MIDWIFE (QA D2120: a super-admin never records clinical data). */
+  readonly canReview = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']);
   /** Delete + pending-review worklist exclude NURSE. */
-  readonly canDelete = this.roleContext.hasAnyActiveRole([
+  readonly canDelete = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']);
+  readonly canSeePendingReview = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_MIDWIFE',
     'ROLE_SUPER_ADMIN',
   ]);
-  readonly canSeePendingReview = this.canDelete;
 
+  readonly counts = worklistCounts<BirthPlanFilter>();
   filter = signal<BirthPlanFilter>('all');
   plans = signal<BirthPlanResponse[]>([]);
   loading = signal(false);
@@ -100,14 +98,14 @@ export class BirthPlanTabComponent implements OnInit {
   deleteBusy = signal(false);
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    this.hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     this.load();
   }
 
   setFilter(filter: BirthPlanFilter): void {
     this.filter.set(filter);
     this.page.set(0);
-    this.load();
+    this.load(false);
   }
 
   onFilterPatientPicked(p: PatientResponse | null): void {
@@ -119,18 +117,52 @@ export class BirthPlanTabComponent implements OnInit {
   prev(): void {
     if (this.page() > 0) {
       this.page.update((p) => p - 1);
-      this.load();
+      this.load(false);
     }
   }
 
   next(): void {
     if (this.page() + 1 < this.totalPages()) {
       this.page.update((p) => p + 1);
-      this.load();
+      this.load(false);
     }
   }
 
-  load(): void {
+  private loadCounts(hospitalId: string): void {
+    const patientId = this.filterPatient()?.id;
+    const filters: BirthPlanFilter[] = this.canSeePendingReview
+      ? ['all', 'pending-review', 'reviewed']
+      : ['all', 'reviewed'];
+    this.counts.load(
+      Object.fromEntries(
+        filters.map((filter) => [
+          filter,
+          () => {
+            const source =
+              filter === 'pending-review' && !patientId
+                ? this.birthPlanService.pendingReview(hospitalId, 0, 1)
+                : this.birthPlanService.search({
+                    hospitalId,
+                    patientId,
+                    providerReviewed:
+                      filter === 'reviewed'
+                        ? true
+                        : filter === 'pending-review'
+                          ? false
+                          : undefined,
+                    page: 0,
+                    size: 1,
+                  });
+            return source.pipe(map((page) => page.totalElements));
+          },
+        ]),
+      ),
+    );
+  }
+
+  load(refreshCounts = true): void {
+    if (!this.hospitalId) return;
+    if (refreshCounts) this.loadCounts(this.hospitalId);
     const filter = this.filter();
     if (filter === 'pending-review' && !this.canSeePendingReview) return;
     this.loading.set(true);

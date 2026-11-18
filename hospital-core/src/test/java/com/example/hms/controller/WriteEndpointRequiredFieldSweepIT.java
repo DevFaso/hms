@@ -136,6 +136,10 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
     private static final Map<String, String> NO_REQUIRED_FIELD = Map.ofEntries(
         Map.entry("POST /appointments/search",
             SEARCH_FILTER),
+        Map.entry("POST /patients/national-unique-id/check",
+            "optional identity read: an absent IU means no duplicate; PostgreSQL empty-query regression checks no patient, alias or audit write"),
+        Map.entry("POST /patients/national-unique-id/search",
+            "optional exact identity read: an absent IU returns no matches; PostgreSQL empty-query regression checks no patient, alias or audit write"),
         Map.entry("POST /billing-invoices/search",
             SEARCH_FILTER),
         Map.entry("POST /departments/filter",
@@ -202,6 +206,8 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             "stops a scheduled purge (keeps data); no reason, the state is checked"),
         Map.entry("POST /super-admin/providers/{providerId}/verify",
             "every field is an optional correction or a cross-check flag"),
+        Map.entry("PUT /patient-insurances/{insuranceId}/payer-plan",
+            "billing-money plan PR 6: a null plan removes the link, so an empty body is a valid unlink"),
         Map.entry("POST /break-glass/{sessionId}/revoke",
             "ends one's own emergency access early; the reason is optional"),
         Map.entry("POST /encounters/{encounterId}/nursing-intake",
@@ -294,6 +300,10 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
      */
     private static final Map<String, String> NOT_A_FIELD_ONCE_FILLED = Map.ofEntries(
         Map.entry("POST /auth/me/complete-setup", "state: the account has no pending username or password change"),
+        // QA D2051: a sample token names no live reset link; refused 400, one message for every bad link.
+        Map.entry("POST /auth/password/confirm", "state: the sample token is no live reset link"),
+        Map.entry("POST /auth/password/reset-password", "state: the sample token is no live reset link"),
+        Map.entry("POST /auth/reset-password", "state: the sample token is no live reset link"),
         Map.entry("POST /high-risk-care-plans", "role: the sweep's caller is not obstetric clinical staff"),
         Map.entry("PUT /high-risk-care-plans/{planId}", "role: the sweep's caller is not obstetric clinical staff"),
         Map.entry("POST /high-risk-care-plans/{planId}/care-team-notes", "role: limited to the care team or the patient"),

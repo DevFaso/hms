@@ -14,7 +14,6 @@
   "pinned": [
     "src/app/lab/shared/result-evolution.component.ts::<option>u",
     "src/app/encounters/encounters.html::<option>department",
-    "src/app/admin-governance/credentials-tab.html::contact.contactType",
     "src/app/admin-governance/credentials-tab.html::mfa.channel",
     "src/app/admin-governance/credentials-tab.html::mfa.method",
     "src/app/admin-governance/policies-tab.html::rule.priority",
@@ -34,6 +33,7 @@
     "src/app/billing/billing.html::a.reason",
     "src/app/billing/billing.html::a.reversalReason",
     "src/app/billing/billing.html::inv.cancelReason",
+    "src/app/billing/billing.html::it.overrideReason",
     "src/app/billing/billing.html::p.reversalReason",
     "src/app/break-glass-review/break-glass-review.html::s.reason",
     "src/app/chat/chat.html::att.kind",
@@ -219,7 +219,6 @@
     "src/app/profile/profile.html::event.eventType",
     "src/app/profile/profile.html::mfa.channel",
     "src/app/profile/profile.html::mfa.method",
-    "src/app/profile/profile.html::rc.contactType",
     "src/app/reception/insurance-issues-panel/insurance-issues-panel.component.html::issue.issueType",
     "src/app/reception/recalls-panel/recalls-panel.component.html::recall.reason",
     "src/app/reception/reception-cockpit/reception-cockpit.component.html::item.appointmentReason",
@@ -248,9 +247,14 @@
     "src/app/transfusion/transfusion.html::xm.incompatibilityReason",
     "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::a.reaction",
     "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::m.frequency",
-    "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::h.relationship"
+    "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::h.relationship",
+    "src/app/billing/price-list/price-list.component.html::p.changeReason",
+    "src/app/billing/payers/payers.component.html::payer.deactivationReason",
+    "src/app/billing/payers/payers.component.html::rule.endReason",
+    "src/app/billing/payers/payers.component.html::t.changeReason"
   ],
   "reasons": {
+    "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
     "src/app/lab/shared/result-evolution.component.ts::<option>u": "LabResultTrendPointDTO.resultUnit is a String mapped from LabResult.resultUnit (varchar 50), falling back to the test unit. LabResultRequestDTO.resultUnit is a size-bounded String entered in lab-results.html input#lr-resultUnit and submitted by LabResultsComponent.submitForm; units are free text, not enum tokens, and must retain their measurement notation.",
     "src/app/transfusion/transfusion.html::xm.incompatibilityReason": "the laboratory's own free text: why this crossmatch came back incompatible",
     "src/app/transfusion/transfusion.html::r.reason": "free text the person issuing typed: why this emergency release was made",
@@ -260,6 +264,10 @@
     "src/app/registrations/registrations.html::r.deactivationReason": "False positive (round 34, D1430): the reason a person typed when deactivating the registration; free text.",
     "src/app/mortality/mortality.html::e.enteredInErrorReason": "free text the administrator typed (QA D1488), not a wire token",
     "src/app/mortality/mortality.html::x.reason": "free text the doctor typed when disputing a death, not a wire token",
-    "src/app/patients/order-review-panel/order-review-panel.component.html::row.reason": "free text the prescriber typed on a held order, not a wire token"
+    "src/app/patients/order-review-panel/order-review-panel.component.html::row.reason": "free text the prescriber typed on a held order, not a wire token",
+    "src/app/billing/price-list/price-list.component.html::p.changeReason": "Billing-money plan PR 2: PriceListPriceDTO.changeReason is the free text the hospital admin or accountant typed for a price change (owner-approved pin, 2026-11-16), shown as typed; not a wire token.",
+    "src/app/billing/payers/payers.component.html::payer.deactivationReason": "Billing-money plan PR 6: PayerDTO.deactivationReason is the free text the hospital admin or accountant typed when retiring a payer, shown as typed; not a wire token.",
+    "src/app/billing/payers/payers.component.html::rule.endReason": "Billing-money plan PR 6: PayerPlanRuleDTO.endReason is the free text the hospital admin or accountant typed when ending a coverage rule, shown as typed; not a wire token.",
+    "src/app/billing/payers/payers.component.html::t.changeReason": "Review of #1202: PayerPlanTermsDTO.changeReason is the free text the hospital admin or accountant typed for new plan terms, shown as typed; not a wire token."
   }
 }

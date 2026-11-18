@@ -61,6 +61,13 @@ export class EnumLabelService implements OnDestroy {
    * under `PORTAL.ENUM.*`; this map exists so a missing translation key never
    * leaks into the UI. Keep groups alphabetically ordered within each section. */
   private static readonly LABELS: Record<string, Record<string, string>> = {
+    recoveryContactType: {
+      EMAIL: 'Email',
+      PHONE: 'Phone',
+      SECURITY_KEY: 'Security key',
+      PERSONAL_CONTACT: 'Personal contact',
+      OTHER: 'Other contact',
+    },
     /* ── Staff specialisations (users/user-list.ts) ───────── */
     specialization: {
       CARDIOLOGY: 'Cardiology',
@@ -376,6 +383,58 @@ export class EnumLabelService implements OnDestroy {
       PLATELETS: 'Platelets',
       CRYOPRECIPITATE: 'Cryoprecipitate',
     },
+    /* Billing-money plan PR 2: the price list (fallbacks; the locales hold the labels). */
+    priceListCategory: {
+      CONSULTATION: 'Consultation',
+      LAB_TEST: 'Laboratory',
+      IMAGING: 'Imaging',
+      PROCEDURE: 'Procedure',
+      BED_DAY: 'Bed day',
+      TRANSFUSION: 'Transfusion',
+      DELIVERY: 'Delivery',
+      OTHER_SERVICE: 'Other (medicines, supplies, fees)',
+    },
+    priceListLinkType: {
+      SYSTEM: 'System',
+      LAB_TEST_DEFINITION: 'Lab test',
+      PROCEDURE_CODE: 'Procedure',
+      IMAGING_STUDY: 'Imaging study',
+      TRANSFUSION_PRODUCT: 'Blood product',
+      TREATMENT: 'Service',
+    },
+    priceListPriceStatus: {
+      SCHEDULED: 'Planned',
+      IN_FORCE: 'In force',
+      ENDED: 'Ended',
+      REPLACED: 'Replaced before it applied',
+    },
+    /* Billing-money plan PR 6: the payer catalogue (fallbacks; the locales hold the labels). */
+    payerType: {
+      AMU: 'Universal health insurance',
+      MUTUELLE: 'Mutual insurer',
+      ASSUREUR_PRIVE: 'Private insurer',
+      EMPLOYEUR: 'Employer',
+      ONG_PROGRAMME: 'NGO or programme',
+    },
+    payerCoverageStatus: {
+      SCHEDULED: 'Planned',
+      IN_FORCE: 'In force',
+      ENDED: 'Ended',
+      CANCELLED: 'Withdrawn before it applied',
+    },
+    /* Billing-money plan PR 4: what a row of an imported price list does. */
+    priceListImportRowOutcome: {
+      NEW_ITEM: 'New item',
+      NEW_PRICE: 'New price',
+      UNCHANGED: 'Unchanged',
+      REFUSED: 'Refused',
+    },
+    priceListSystemKey: {
+      CONSULTATION_DEFAULT: 'Default consultation',
+      BED_DAY: 'Bed day',
+      DELIVERY_VAGINAL: 'Vaginal delivery',
+      DELIVERY_CAESAREAN: 'Caesarean section',
+    },
     /* Acronym modalities (CT, MRI, PET, XRAY, DEXA) are mangled by the
      * Title-Case prettifier ("Ct", "Mri"), so they need explicit labels. */
     imagingModality: {
@@ -576,6 +635,20 @@ export class EnumLabelService implements OnDestroy {
       DRAFT: 'Draft',
       COMPLETED: 'Completed',
       REFERRED: 'Referred',
+    },
+    signatureType: {
+      DISCHARGE_SUMMARY: 'Discharge summary',
+      LAB_RESULT: 'Lab result',
+      IMAGING_REPORT: 'Imaging report',
+      OPERATIVE_NOTE: 'Operative note',
+      CONSULTATION_NOTE: 'Consultation note',
+      PROGRESS_NOTE: 'Progress note',
+      PROCEDURE_REPORT: 'Procedure report',
+      PATHOLOGY_REPORT: 'Pathology report',
+      ED_NOTE: 'Emergency department note',
+      MEDICATION_ORDER: 'Medication order',
+      CARE_PLAN: 'Care plan',
+      GENERIC_REPORT: 'Other report',
     },
     signatureStatus: {
       PENDING: 'Pending',

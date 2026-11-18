@@ -1,4 +1,10 @@
 <div class="page-container">
+  @if (isSuperAdmin()) {
+    <app-hospital-scope-chip [preserveScope]="true" />
+  }
+  <p class="care-scope-note" role="status">
+    {{ (hasScope() ? 'EDUCATION.HOSPITAL_SCOPE' : 'EDUCATION.NETWORK_SCOPE') | translate }}
+  </p>
   <div class="page-header">
     <div>
       <span class="care-eyebrow">{{ 'CARE_DASH.EDUCATION_EYEBROW' | translate }}</span>
@@ -6,13 +12,21 @@
       <p class="page-subtitle">{{ 'EDUCATION.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
-      @if (activeTab() === 'resources' && canManageResources) {
+      <button
+        type="button"
+        class="btn-secondary"
+        (click)="loadResources()"
+        [disabled]="resourcesLoading()"
+      >
+        {{ 'COMMON.REFRESH' | translate }}
+      </button>
+      @if (activeTab() === 'resources' && canManageResources && hasScope()) {
         <button type="button" class="btn-primary" (click)="openCreateResource()">
           <span class="material-symbols-outlined">add</span>
           {{ 'EDUCATION.NEW_RESOURCE' | translate }}
         </button>
       }
-      @if (activeTab() === 'progress' && canTrackProgress && progressPatient()) {
+      @if (activeTab() === 'progress' && canTrackProgress && hasScope() && progressPatient()) {
         <button type="button" class="btn-primary" (click)="openAssign()">
           <span class="material-symbols-outlined">assignment_add</span>
           {{ 'EDUCATION.ASSIGN' | translate }}
@@ -48,7 +62,7 @@
           </div>
         </div>
       </div>
-      <p class="care-scope-note">{{ 'CARE_DASH.LOADED_SCOPE' | translate }}</p>
+      <p class="care-scope-note">{{ 'EDUCATION.SEARCH_SCOPE' | translate }}</p>
     </section>
   }
   <div class="filter-bar">
@@ -131,7 +145,19 @@
     @if (!resourcesLoading() && !resourcesError() && filteredResources().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined empty-icon">school</span>
-        <h3>{{ 'EDUCATION.NO_RESOURCES' | translate }}</h3>
+        <h3>
+          {{ (resources().length ? 'EDUCATION.NO_MATCHES' : 'EDUCATION.NO_RESOURCES') | translate }}
+        </h3>
+        <p>{{ 'EDUCATION.EMPTY_HELP' | translate }}</p>
+        @if (searchTerm() || categoryFilter() || typeFilter()) {
+          <button type="button" class="btn-secondary" (click)="resetResourceFilters()">
+            {{ 'COMMON.CLEAR' | translate }}
+          </button>
+        } @else if (canManageResources && hasScope()) {
+          <button type="button" class="btn-primary" (click)="openCreateResource()">
+            {{ 'EDUCATION.NEW_RESOURCE' | translate }}
+          </button>
+        }
       </div>
     }
     @if (!resourcesLoading() && !resourcesError() && filteredResources().length > 0) {
@@ -172,7 +198,7 @@
                     >
                   }
                   @if (r.description) {
-                    <span class="muted">{{ r.description }}</span>
+                    {{ ' ' }}<span class="muted">{{ r.description }}</span>
                   }
                 </td>
                 <td>{{ 'EDUCATION.CAT_' + r.category | translate }}</td>
@@ -193,7 +219,7 @@
                   </span>
                 </td>
                 <td class="actions-cell">
-                  @if (canManageResources) {
+                  @if (canManageResources && hasScope()) {
                     <button
                       type="button"
                       class="btn-secondary btn-sm"
@@ -204,7 +230,7 @@
                       <span class="material-symbols-outlined">edit</span>
                     </button>
                   }
-                  @if (canDeleteResource) {
+                  @if (canDeleteResource && hasScope()) {
                     <button
                       type="button"
                       class="btn-secondary btn-sm danger"
@@ -224,12 +250,17 @@
     }
   }
 
+  @if (activeTab() === 'progress' && !hasScope()) {
+    <p class="care-scope-note" role="status">{{ 'EDUCATION.PICK_HOSPITAL' | translate }}</p>
+  }
+
   <!-- ══ Progress ══ -->
-  @if (activeTab() === 'progress' && canTrackProgress) {
+  @if (activeTab() === 'progress' && canTrackProgress && hasScope()) {
     <div class="filter-bar">
       <div class="mode-picker">
         <app-patient-picker
           inputId="edu-patient"
+          [hospitalId]="roleHospitalId()"
           [selected]="progressPatient()"
           (selectedChange)="onProgressPatientPicked($event)"
         />

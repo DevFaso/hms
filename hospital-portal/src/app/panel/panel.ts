@@ -124,10 +124,22 @@ export class PanelComponent implements OnInit {
   /* ── admin overview ── */
   overviewRows = signal<PanelOverviewRow[]>([]);
   readonly providerSearch = signal('');
+  readonly providerRoleFilter = signal<PanelRole | ''>('');
+  readonly activeAssignments = computed(() =>
+    this.overviewRows().reduce((sum, row) => sum + row.activeCount, 0),
+  );
+  refresh(): void {
+    this.loadMyPanel();
+    if (this.isAdmin()) this.loadOverview();
+    const selected = this.drilldownProvider();
+    if (selected) this.openDrilldown(selected);
+  }
   readonly visibleOverviewRows = computed(() => {
     const term = this.providerSearch().trim().toLocaleLowerCase();
     return this.overviewRows().filter(
-      (row) => !term || row.providerName?.toLocaleLowerCase().includes(term),
+      (row) =>
+        (!this.providerRoleFilter() || row.panelRole === this.providerRoleFilter()) &&
+        (!term || row.providerName?.toLocaleLowerCase().includes(term)),
     );
   });
   readonly loadedProviders = computed(
@@ -171,7 +183,13 @@ export class PanelComponent implements OnInit {
   ngOnInit(): void {
     // The route gate builds this page only with a hospital pinned, and
     // rebuilds it on a scope change, so every load starts from empty state.
-    this.loadMyPanel();
+    // QA D2127: a super-admin acting as such has no staff row at the scoped
+    // hospital, so « my panel » is not asked for: it could only be refused.
+    if (this.roleCtx.hasAnyActiveRoleExactly(['ROLE_SUPER_ADMIN'])) {
+      this.noStaffProfile.set(true);
+    } else {
+      this.loadMyPanel();
+    }
     if (this.isAdmin()) {
       this.loadOverview();
     }

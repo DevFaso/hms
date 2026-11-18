@@ -1,0 +1,680 @@
+<div class="page-container price-list">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'BILLING.PRICE_LIST.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'BILLING.PRICE_LIST.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      <a class="btn-secondary" routerLink="/billing">
+        <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+        {{ 'BILLING.PRICE_LIST.BACK_TO_BILLING' | translate }}
+      </a>
+      <button
+        type="button"
+        class="btn-secondary"
+        data-testid="price-list-export"
+        [disabled]="exporting()"
+        (click)="exportCsv()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">download</span>
+        {{ 'BILLING.PRICE_LIST.EXPORT_BUTTON' | translate }}
+      </button>
+      @if (canImport) {
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="price-list-import"
+          (click)="openImport()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+          {{ 'BILLING.PRICE_LIST.IMPORT_BUTTON' | translate }}
+        </button>
+      }
+      @if (canCreate) {
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="price-list-new"
+          (click)="openCreate()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          {{ 'BILLING.PRICE_LIST.NEW_ITEM' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="price-list-filters">
+    <div class="field">
+      <label for="pl-filter-category">{{ 'BILLING.PRICE_LIST.CATEGORY' | translate }}</label>
+      <select
+        id="pl-filter-category"
+        data-testid="price-list-category-filter"
+        [ngModel]="category()"
+        (ngModelChange)="pickCategory($event)"
+      >
+        <option [ngValue]="null">{{ 'BILLING.PRICE_LIST.ALL_CATEGORIES' | translate }}</option>
+        @for (c of categories; track c) {
+          <option [ngValue]="c">{{ c | enumLabel: 'priceListCategory' }}</option>
+        }
+      </select>
+    </div>
+    <div class="field">
+      <label for="pl-filter-search">{{ 'BILLING.PRICE_LIST.SEARCH' | translate }}</label>
+      <input
+        id="pl-filter-search"
+        type="search"
+        [ngModel]="search()"
+        (ngModelChange)="search.set($event)"
+      />
+    </div>
+    <label class="checkbox-inline" for="pl-filter-inactive">
+      <input
+        id="pl-filter-inactive"
+        type="checkbox"
+        data-testid="price-list-include-inactive"
+        [ngModel]="includeInactive()"
+        (ngModelChange)="toggleInactive($event)"
+      />
+      {{ 'BILLING.PRICE_LIST.SHOW_INACTIVE' | translate }}
+    </label>
+  </div>
+
+  @if (loading()) {
+    <p class="field-hint" role="status">{{ 'BILLING.PRICE_LIST.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="field-hint" role="alert">{{ 'BILLING.PRICE_LIST.LOAD_FAILED' | translate }}</p>
+  } @else if (visibleItems().length === 0) {
+    <p class="field-hint" data-testid="price-list-empty">
+      {{ 'BILLING.PRICE_LIST.EMPTY' | translate }}
+    </p>
+  } @else {
+    <table class="data-table" data-testid="price-list-table">
+      <caption class="sr-only">
+        {{
+          'BILLING.PRICE_LIST.TITLE' | translate
+        }}
+      </caption>
+      <thead>
+        <tr>
+          @if (showHospital()) {
+            <th scope="col">{{ 'BILLING.PRICE_LIST.HOSPITAL' | translate }}</th>
+          }
+          <th scope="col">{{ 'BILLING.PRICE_LIST.CODE' | translate }}</th>
+          <th scope="col">{{ 'BILLING.PRICE_LIST.LABEL' | translate }}</th>
+          <th scope="col">{{ 'BILLING.PRICE_LIST.CATEGORY' | translate }}</th>
+          <th scope="col">{{ 'BILLING.PRICE_LIST.LINK' | translate }}</th>
+          <th scope="col" class="numeric">{{ 'BILLING.PRICE_LIST.UNIT_PRICE' | translate }}</th>
+          <th scope="col">{{ 'BILLING.PRICE_LIST.EFFECTIVE_SINCE' | translate }}</th>
+          <th scope="col">{{ 'BILLING.PRICE_LIST.NEXT_PRICE' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of visibleItems(); track item.id) {
+          <tr [class.inactive]="!item.active" [attr.data-testid]="'price-list-row-' + item.code">
+            @if (showHospital()) {
+              <td data-testid="price-list-hospital">{{ item.hospitalName || '—' }}</td>
+            }
+            <td>
+              <button type="button" class="link-button" (click)="open(item)">
+                {{ item.code }}
+              </button>
+            </td>
+            <td>
+              {{ item.label }}
+              @if (!item.active) {
+                <span class="badge badge-muted">{{
+                  'BILLING.PRICE_LIST.INACTIVE' | translate
+                }}</span>
+              }
+            </td>
+            <td>{{ item.category | enumLabel: 'priceListCategory' }}</td>
+            <td>
+              @if (item.linkType) {
+                {{ item.linkType | enumLabel: 'priceListLinkType' }}{{ 'COMMON.COLON' | translate }}
+                <ng-container *ngTemplateOutlet="linkTarget; context: { $implicit: item }" />
+              } @else {
+                <span class="muted">{{ 'BILLING.PRICE_LIST.NOT_LINKED' | translate }}</span>
+              }
+            </td>
+            <td class="numeric">
+              @if (item.currentPrice) {
+                {{ item.currentPrice.unitPrice | cfa }}
+              } @else {
+                <span class="muted">{{ 'BILLING.PRICE_LIST.NO_PRICE_TODAY' | translate }}</span>
+              }
+            </td>
+            <td>
+              {{
+                item.currentPrice
+                  ? (item.currentPrice.effectiveFrom | serverTime | date: 'mediumDate')
+                  : '—'
+              }}
+            </td>
+            <td>
+              @if (item.nextPrice) {
+                {{
+                  'BILLING.PRICE_LIST.NEXT_PRICE_FROM'
+                    | translate
+                      : {
+                          amount: (item.nextPrice.unitPrice | cfa),
+                          date: (item.nextPrice.effectiveFrom | serverTime | date: 'mediumDate'),
+                        }
+                }}
+              } @else {
+                —
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  <!-- ═══ ITEM DETAIL AND PRICE HISTORY ═══ -->
+  @if (selected(); as item) {
+    <section
+      class="price-list-detail card"
+      data-testid="price-list-detail"
+      aria-labelledby="pl-detail-title"
+    >
+      <div class="detail-head">
+        <h2 id="pl-detail-title">{{ item.code }} — {{ item.label }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeDetail()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <dl class="detail-grid">
+        <dt>{{ 'BILLING.PRICE_LIST.CATEGORY' | translate }}</dt>
+        <dd>{{ item.category | enumLabel: 'priceListCategory' }}</dd>
+        <dt>{{ 'BILLING.PRICE_LIST.LINK' | translate }}</dt>
+        <dd>
+          @if (item.linkType) {
+            {{ item.linkType | enumLabel: 'priceListLinkType' }}{{ 'COMMON.COLON' | translate }}
+            <ng-container *ngTemplateOutlet="linkTarget; context: { $implicit: item }" />
+          } @else {
+            {{ 'BILLING.PRICE_LIST.NOT_LINKED' | translate }}
+          }
+        </dd>
+        <dt>{{ 'BILLING.PRICE_LIST.STATE' | translate }}</dt>
+        <dd>
+          {{
+            (item.active ? 'BILLING.PRICE_LIST.ACTIVE' : 'BILLING.PRICE_LIST.INACTIVE') | translate
+          }}
+        </dd>
+      </dl>
+      @if (item.active) {
+        <div class="detail-actions">
+          @if (canAddPrice) {
+            <button
+              type="button"
+              class="btn-primary"
+              data-testid="price-list-add-price"
+              (click)="openPrice()"
+            >
+              {{ 'BILLING.PRICE_LIST.NEW_PRICE' | translate }}
+            </button>
+          }
+          @if (canUpdate) {
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="price-list-edit"
+              (click)="openEdit(item)"
+            >
+              {{ 'BILLING.PRICE_LIST.EDIT' | translate }}
+            </button>
+          }
+          @if (canDeactivate) {
+            <button
+              type="button"
+              class="btn-danger"
+              data-testid="price-list-deactivate"
+              (click)="askDeactivate(item)"
+            >
+              {{ 'BILLING.PRICE_LIST.DEACTIVATE' | translate }}
+            </button>
+          }
+        </div>
+      }
+      <h3>{{ 'BILLING.PRICE_LIST.HISTORY' | translate }}</h3>
+      @if (!item.history || item.history.length === 0) {
+        <p class="field-hint">{{ 'BILLING.PRICE_LIST.HISTORY_EMPTY' | translate }}</p>
+      } @else {
+        <table class="data-table" data-testid="price-list-history">
+          <caption class="sr-only">
+            {{
+              'BILLING.PRICE_LIST.HISTORY' | translate
+            }}
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col" class="numeric">{{ 'BILLING.PRICE_LIST.UNIT_PRICE' | translate }}</th>
+              <th scope="col">{{ 'BILLING.PRICE_LIST.FROM' | translate }}</th>
+              <th scope="col">{{ 'BILLING.PRICE_LIST.TO' | translate }}</th>
+              <th scope="col">{{ 'BILLING.PRICE_LIST.STATUS' | translate }}</th>
+              <th scope="col">{{ 'BILLING.PRICE_LIST.CHANGE_REASON' | translate }}</th>
+              <th scope="col">{{ 'BILLING.PRICE_LIST.ADDED_BY' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of item.history; track p.id) {
+              <tr>
+                <td class="numeric">{{ p.unitPrice | cfa }}</td>
+                <td>{{ p.effectiveFrom | serverTime | date: 'mediumDate' }}</td>
+                <td>
+                  {{ p.effectiveTo ? (p.effectiveTo | serverTime | date: 'mediumDate') : '—' }}
+                </td>
+                <td>{{ p.status | enumLabel: 'priceListPriceStatus' }}</td>
+                <td>{{ p.changeReason || '—' }}</td>
+                <td>
+                  {{ p.createdByName || '—' }}
+                  @if (p.createdAt) {
+                    · {{ p.createdAt | serverTime | date: 'short' }}
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+</div>
+
+<!-- ═══ DEACTIVATE (asks why first) ═══ -->
+@if (deactivating(); as item) {
+  <app-reason-dialog
+    titleKey="BILLING.PRICE_LIST.DEACTIVATE_CONFIRM"
+    messageKey="BILLING.PRICE_LIST.DEACTIVATE_NOTE"
+    labelKey="BILLING.PRICE_LIST.DEACTIVATE_REASON"
+    confirmKey="BILLING.PRICE_LIST.DEACTIVATE"
+    [busy]="deactivateBusy()"
+    (confirmed)="deactivate(item, $event)"
+    (cancelled)="deactivating.set(null)"
+  >
+    <p>{{ item.code }} — {{ item.label }}</p>
+  </app-reason-dialog>
+}
+
+<!-- ═══ CSV IMPORT (PR 4) ═══ -->
+@if (importOpen()) {
+  <app-price-list-import (closed)="importOpen.set(false)" (applied)="imported()" />
+}
+
+<!-- ═══ CREATE / EDIT AN ITEM ═══ -->
+@if (itemDialog(); as mode) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeItemDialog()"
+    (keydown.escape)="closeItemDialog()"
+  >
+    <div
+      class="modal"
+      appDialogA11y
+      tabindex="-1"
+      aria-labelledby="pl-item-title"
+      (dialogClose)="closeItemDialog()"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2 id="pl-item-title">
+          {{
+            (mode === 'create' ? 'BILLING.PRICE_LIST.NEW_ITEM' : 'BILLING.PRICE_LIST.EDIT')
+              | translate
+          }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeItemDialog()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <form class="modal-body" (ngSubmit)="saveItem()" novalidate>
+        <div class="field">
+          <label for="pl-code">
+            {{ 'BILLING.PRICE_LIST.CODE' | translate }}{{ mode === 'create' ? ' *' : '' }}
+          </label>
+          <input
+            id="pl-code"
+            name="code"
+            maxlength="40"
+            autocomplete="off"
+            [required]="mode === 'create'"
+            [disabled]="mode !== 'create'"
+            [(ngModel)]="itemForm.code"
+          />
+          @if (mode === 'create') {
+            <small class="field-hint">{{ 'BILLING.PRICE_LIST.CODE_HINT' | translate }}</small>
+          }
+        </div>
+        <div class="field">
+          <label for="pl-label">{{ 'BILLING.PRICE_LIST.LABEL' | translate }} *</label>
+          <input id="pl-label" name="label" maxlength="255" required [(ngModel)]="itemForm.label" />
+        </div>
+        <div class="field">
+          <label for="pl-category">{{ 'BILLING.PRICE_LIST.CATEGORY' | translate }} *</label>
+          <select id="pl-category" name="category" required [(ngModel)]="itemForm.category">
+            <option [ngValue]="null"></option>
+            @for (c of categories; track c) {
+              <option [ngValue]="c">{{ c | enumLabel: 'priceListCategory' }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="pl-link-type">{{ 'BILLING.PRICE_LIST.LINK_TO' | translate }}</label>
+          <select
+            id="pl-link-type"
+            name="linkType"
+            [ngModel]="itemForm.linkType"
+            (ngModelChange)="pickLinkType($event)"
+          >
+            <option [ngValue]="null">{{ 'BILLING.PRICE_LIST.NOT_LINKED' | translate }}</option>
+            @for (t of linkTypes; track t) {
+              <option [ngValue]="t">{{ t | enumLabel: 'priceListLinkType' }}</option>
+            }
+          </select>
+        </div>
+        @switch (itemForm.linkType) {
+          @case ('LAB_TEST_DEFINITION') {
+            <div class="field">
+              <label for="pl-link-key"
+                >{{ 'BILLING.PRICE_LIST.LINKED_LAB_TEST' | translate }} *</label
+              >
+              <select id="pl-link-key" name="linkKey" required [(ngModel)]="itemForm.linkKey">
+                <option value=""></option>
+                @for (o of linkOptions()?.labTests ?? []; track o.id) {
+                  <option [value]="o.id">{{ o.code }} · {{ o.name }}</option>
+                }
+              </select>
+            </div>
+          }
+          @case ('TREATMENT') {
+            <div class="field">
+              <label for="pl-link-key"
+                >{{ 'BILLING.PRICE_LIST.LINKED_TREATMENT' | translate }} *</label
+              >
+              <select id="pl-link-key" name="linkKey" required [(ngModel)]="itemForm.linkKey">
+                <option value=""></option>
+                @for (o of linkOptions()?.treatments ?? []; track o.id) {
+                  <option [value]="o.id">{{ o.name }}</option>
+                }
+              </select>
+            </div>
+          }
+          @case ('SYSTEM') {
+            <div class="field">
+              <label for="pl-link-key"
+                >{{ 'BILLING.PRICE_LIST.LINKED_SYSTEM' | translate }} *</label
+              >
+              <select id="pl-link-key" name="linkKey" required [(ngModel)]="itemForm.linkKey">
+                <option value=""></option>
+                @for (k of linkOptions()?.systemKeys ?? []; track k) {
+                  <option [value]="k">{{ k | enumLabel: 'priceListSystemKey' }}</option>
+                }
+              </select>
+            </div>
+          }
+          @case ('TRANSFUSION_PRODUCT') {
+            <div class="field">
+              <label for="pl-link-key"
+                >{{ 'BILLING.PRICE_LIST.LINKED_PRODUCT' | translate }} *</label
+              >
+              <select id="pl-link-key" name="linkKey" required [(ngModel)]="itemForm.linkKey">
+                <option value=""></option>
+                @for (k of linkOptions()?.transfusionProducts ?? []; track k) {
+                  <option [value]="k">{{ k | enumLabel: 'bloodProductType' }}</option>
+                }
+              </select>
+            </div>
+          }
+          @case ('IMAGING_STUDY') {
+            <div class="field">
+              <label for="pl-link-modality"
+                >{{ 'BILLING.PRICE_LIST.LINKED_MODALITY' | translate }} *</label
+              >
+              <select
+                id="pl-link-modality"
+                name="modality"
+                required
+                [(ngModel)]="itemForm.modality"
+              >
+                <option value=""></option>
+                @for (m of linkOptions()?.imagingModalities ?? []; track m) {
+                  <option [value]="m">{{ m | enumLabel: 'imagingModality' }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="pl-link-key">{{ 'BILLING.PRICE_LIST.LINKED_STUDY' | translate }} *</label>
+              <input
+                id="pl-link-key"
+                name="linkKey"
+                maxlength="200"
+                required
+                [(ngModel)]="itemForm.linkKey"
+              />
+              <small class="field-hint">{{
+                'BILLING.PRICE_LIST.LINKED_STUDY_HINT' | translate
+              }}</small>
+            </div>
+          }
+          @case ('PROCEDURE_CODE') {
+            <div class="field">
+              <label for="pl-link-key"
+                >{{ 'BILLING.PRICE_LIST.LINKED_PROCEDURE' | translate }} *</label
+              >
+              <input
+                id="pl-link-key"
+                name="linkKey"
+                maxlength="120"
+                required
+                [(ngModel)]="itemForm.linkKey"
+              />
+            </div>
+          }
+        }
+        @if (mode === 'create') {
+          <div class="field">
+            <label for="pl-unit-price">{{ 'BILLING.PRICE_LIST.UNIT_PRICE' | translate }} *</label>
+            <input
+              id="pl-unit-price"
+              name="unitPrice"
+              type="number"
+              min="0"
+              step="1"
+              inputmode="numeric"
+              required
+              [(ngModel)]="itemForm.unitPrice"
+            />
+          </div>
+          <div class="field">
+            <label for="pl-effective-from"
+              >{{ 'BILLING.PRICE_LIST.EFFECTIVE_FROM' | translate }} *</label
+            >
+            <input
+              id="pl-effective-from"
+              name="effectiveFrom"
+              type="date"
+              required
+              [min]="today"
+              [ngModel]="itemForm.effectiveFrom"
+              (ngModelChange)="itemDateChanged($event)"
+            />
+          </div>
+          <div class="field">
+            <label for="pl-change-reason">{{
+              'BILLING.PRICE_LIST.CHANGE_REASON' | translate
+            }}</label>
+            <textarea
+              id="pl-change-reason"
+              name="changeReason"
+              rows="2"
+              maxlength="500"
+              [(ngModel)]="itemForm.changeReason"
+            ></textarea>
+          </div>
+        }
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeItemDialog()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="submit"
+            class="btn-primary"
+            data-testid="price-list-item-save"
+            [disabled]="itemSaving()"
+            appSubmitGuard
+            submitGuardRequired
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ═══ NEW PRICE ═══ -->
+@if (priceDialog() && selected(); as item) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closePriceDialog()"
+    (keydown.escape)="closePriceDialog()"
+  >
+    <div
+      class="modal"
+      appDialogA11y
+      tabindex="-1"
+      aria-labelledby="pl-price-title"
+      (dialogClose)="closePriceDialog()"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2 id="pl-price-title">
+          {{ 'BILLING.PRICE_LIST.NEW_PRICE' | translate }} — {{ item.code }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closePriceDialog()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <form class="modal-body" (ngSubmit)="savePrice()" novalidate>
+        @if (item.currentPrice) {
+          <p class="muted-note">
+            {{
+              'BILLING.PRICE_LIST.CURRENT_PRICE'
+                | translate: { amount: (item.currentPrice.unitPrice | cfa) }
+            }}
+          </p>
+        }
+        <div class="field">
+          <label for="pp-unit-price">{{ 'BILLING.PRICE_LIST.UNIT_PRICE' | translate }} *</label>
+          <input
+            id="pp-unit-price"
+            name="unitPrice"
+            type="number"
+            min="0"
+            step="1"
+            inputmode="numeric"
+            required
+            [(ngModel)]="priceForm.unitPrice"
+          />
+        </div>
+        <div class="field">
+          <label for="pp-effective-from"
+            >{{ 'BILLING.PRICE_LIST.EFFECTIVE_FROM' | translate }} *</label
+          >
+          <input
+            id="pp-effective-from"
+            name="effectiveFrom"
+            type="date"
+            required
+            [min]="today"
+            [ngModel]="priceForm.effectiveFrom"
+            (ngModelChange)="priceDateChanged($event)"
+          />
+        </div>
+        <div class="field">
+          <label for="pp-change-reason"
+            >{{ 'BILLING.PRICE_LIST.CHANGE_REASON' | translate }} *</label
+          >
+          <textarea
+            id="pp-change-reason"
+            name="changeReason"
+            rows="2"
+            maxlength="500"
+            required
+            [(ngModel)]="priceForm.changeReason"
+          ></textarea>
+        </div>
+        @if (replaceQuestion(); as question) {
+          <p
+            class="field-error"
+            role="alert"
+            id="pp-replace-question"
+            data-testid="price-list-replace-question"
+          >
+            {{ question }}
+          </p>
+          <label class="checkbox-inline" for="pp-replace-scheduled">
+            <input
+              id="pp-replace-scheduled"
+              name="replaceScheduled"
+              type="checkbox"
+              aria-describedby="pp-replace-question"
+              [(ngModel)]="priceForm.replaceScheduled"
+            />
+            {{ 'BILLING.PRICE_LIST.REPLACE_SCHEDULED' | translate }}
+          </label>
+        }
+        <p class="muted-note">{{ 'BILLING.PRICE_LIST.NEW_PRICE_NOTE' | translate }}</p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closePriceDialog()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="submit"
+            class="btn-primary"
+            data-testid="price-list-price-save"
+            [disabled]="priceSaving()"
+            appSubmitGuard
+            submitGuardRequired
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- What a link names: a system key or a blood product read in the reader's language, a lab
+     test or service by its name, an imaging or procedure key as written. -->
+<ng-template #linkTarget let-item>
+  @switch (item.linkType) {
+    @case ('SYSTEM') {
+      {{ item.linkKey | enumLabel: 'priceListSystemKey' }}
+    }
+    @case ('TRANSFUSION_PRODUCT') {
+      {{ item.linkKey | enumLabel: 'bloodProductType' }}
+    }
+    @default {
+      {{ item.linkLabel || item.linkKey }}
+    }
+  }
+</ng-template>

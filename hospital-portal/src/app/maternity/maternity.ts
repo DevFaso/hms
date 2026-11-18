@@ -1,3 +1,6 @@
+import { ElapsedPipe } from '../shared/pipes/elapsed.pipe';
+import { map } from 'rxjs';
+import { worklistCounts } from './worklist-counts';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -177,6 +180,7 @@ type MaternityTab =
   selector: 'app-maternity',
   standalone: true,
   imports: [
+    ElapsedPipe,
     DateTimePipe,
     InlineDiscardAskComponent,
     InlineSubFormDirective,
@@ -209,37 +213,26 @@ export class MaternityComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   /* ── Context ── */
-  private hospitalId: string | null = null;
-  private patientNames = new Map<string, string>();
+  protected hospitalId: string | null = null;
+  private patientNames = signal(new Map<string, string>());
 
   /* ── Role gates (effective backend roles — permission authorities are dead) ── */
   readonly canManageHistory = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
   ]);
-  /** mark-reviewed + calculate-risk are DOCTOR/SUPER_ADMIN only. */
-  readonly canReview = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
+  /** mark-reviewed + calculate-risk are DOCTOR only (QA D2120: never a super-admin alone). */
+  readonly canReview = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
   /** pending-review + specialist-referral worklists exclude NURSE. */
   readonly canSeeRestrictedWorklists = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_MIDWIFE',
     'ROLE_SUPER_ADMIN',
   ]);
-  readonly canCreateReferral = this.roleContext.hasAnyActiveRole([
-    'ROLE_MIDWIFE',
-    'ROLE_DOCTOR',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  readonly canDecideReferral = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  readonly canCancelReferral = this.roleContext.hasAnyActiveRole([
-    'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canCreateReferral = this.roleContext.hasAnyActiveRole(['ROLE_MIDWIFE', 'ROLE_DOCTOR']);
+  readonly canDecideReferral = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
+  readonly canCancelReferral = this.roleContext.hasAnyActiveRole(['ROLE_MIDWIFE']);
   readonly canMessage = this.canCreateReferral;
   readonly canListHospitalReferrals = this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN']);
   readonly canListAssigned = this.canDecideReferral;
@@ -276,8 +269,19 @@ export class MaternityComponent implements OnInit {
   activeTab = signal<MaternityTab>('board');
 
   /* ── Board (maternal histories) ── */
+  readonly boardCounts = worklistCounts<BoardWorklist>();
   worklist = signal<BoardWorklist>('high-risk');
   histories = signal<MaternalHistoryResponse[]>([]);
+  readonly boardSearch = signal('');
+  readonly visibleHistories = computed(() =>
+    this.histories().filter(
+      (row) =>
+        !this.boardSearch().trim() ||
+        (this.patientNames().get(row.patientId) ?? '')
+          .toLocaleLowerCase()
+          .includes(this.boardSearch().trim().toLocaleLowerCase()),
+    ),
+  );
   historiesLoading = signal(false);
   boardPage = signal(0);
   boardTotalPages = signal(0);
@@ -311,6 +315,34 @@ export class MaternityComponent implements OnInit {
   /* ── Referrals ── */
   referralMode = signal<ReferralListMode>('patient');
   referrals = signal<ObgynReferralResponse[]>([]);
+  readonly referralSearch = signal('');
+  readonly referralUrgency = signal('');
+  readonly referralStatus = signal('');
+  readonly overdueOnly = signal(false);
+  readonly visibleReferrals = computed(() =>
+    this.referrals().filter(
+      (row) =>
+        (!this.referralSearch().trim() ||
+          [this.patientDisplay(row), row.patient?.mrn, row.obgyn?.displayName].some((value) =>
+            value?.toLocaleLowerCase().includes(this.referralSearch().trim().toLocaleLowerCase()),
+          )) &&
+        (!this.referralUrgency() || row.urgency === this.referralUrgency()) &&
+        (!this.referralStatus() || row.status === this.referralStatus()) &&
+        (!this.overdueOnly() || this.isOverdue(row)),
+    ),
+  );
+  refreshWorkspace(): void {
+    if (this.activeTab() === 'board') this.loadBoard();
+    if (this.activeTab() === 'referrals') {
+      this.loadReferrals();
+      this.loadSummary();
+    }
+  }
+  overdueMinutes(row: ObgynReferralResponse): number {
+    return row.slaDueAt && this.isOverdue(row)
+      ? Math.max(1, Math.floor((Date.now() - serverInstant(row.slaDueAt).getTime()) / 60000))
+      : 0;
+  }
   referralsLoading = signal(false);
   referralPage = signal(0);
   referralTotalPages = signal(0);
@@ -352,7 +384,7 @@ export class MaternityComponent implements OnInit {
   );
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    this.hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     if (!this.canManageHistory) {
       this.activeTab.set(
         this.canSeeReferrals ? 'referrals' : this.canSeePrenatal ? 'prenatal' : 'board',
@@ -397,7 +429,7 @@ export class MaternityComponent implements OnInit {
     if (!this.hospitalId) return;
     this.patientService.list(this.hospitalId).subscribe({
       next: (patients) => {
-        this.patientNames = new Map((patients ?? []).map((p) => [p.id, personName(p)]));
+        this.patientNames.set(new Map((patients ?? []).map((p) => [p.id, personName(p)])));
       },
       error: () => {
         // Names stay blank; the table says the name is unavailable.
@@ -440,7 +472,7 @@ export class MaternityComponent implements OnInit {
   patientName(patientId: string): string {
     // QA D992 class: never a slice of the UUID; say the name is unavailable.
     return (
-      this.patientNames.get(patientId) ||
+      this.patientNames().get(patientId) ||
       (this.translate.instant('MATERNITY.PATIENT_NAME_UNAVAILABLE') as string)
     );
   }
@@ -448,26 +480,50 @@ export class MaternityComponent implements OnInit {
   setWorklist(w: BoardWorklist): void {
     this.worklist.set(w);
     this.boardPage.set(0);
-    this.loadBoard();
+    this.loadBoard(false);
   }
 
   boardPrev(): void {
     if (this.boardPage() > 0) {
       this.boardPage.update((p) => p - 1);
-      this.loadBoard();
+      this.loadBoard(false);
     }
   }
 
   boardNext(): void {
     if (this.boardPage() + 1 < this.boardTotalPages()) {
       this.boardPage.update((p) => p + 1);
-      this.loadBoard();
+      this.loadBoard(false);
     }
   }
 
-  loadBoard(): void {
+  private loadBoardCounts(hospitalId: string): void {
+    this.boardCounts.load(
+      Object.fromEntries(
+        this.visibleWorklists().map((worklist) => [
+          worklist,
+          () => {
+            const source =
+              worklist === 'high-risk'
+                ? this.maternityService.highRisk(hospitalId, 0, 1)
+                : worklist === 'pending-review'
+                  ? this.maternityService.pendingReview(hospitalId, 0, 1)
+                  : worklist === 'specialist-referral'
+                    ? this.maternityService.specialistReferral(hospitalId, 0, 1)
+                    : worklist === 'psychosocial'
+                      ? this.maternityService.psychosocialConcerns(hospitalId, 0, 1)
+                      : this.maternityService.search(hospitalId, { page: 0, size: 1 });
+            return source.pipe(map((page) => page.totalElements));
+          },
+        ]),
+      ),
+    );
+  }
+
+  loadBoard(refreshCounts = true): void {
     if (!this.hospitalId || !this.canManageHistory) return;
     const hospitalId = this.hospitalId;
+    if (refreshCounts) this.loadBoardCounts(hospitalId);
     const page = this.boardPage();
     this.historiesLoading.set(true);
     const source =

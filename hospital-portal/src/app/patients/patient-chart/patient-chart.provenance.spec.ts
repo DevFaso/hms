@@ -37,7 +37,7 @@ describe('PatientChartComponent — timeline provenance', () => {
     };
   }
 
-  function setup(entries: TimelineEntry[]) {
+  function setup(entries: TimelineEntry[], hospitalId: string | null = 'h-1') {
     const timeline: PatientTimeline = {
       patientId: 'p-1',
       patientName: 'Awa Traoré',
@@ -71,7 +71,7 @@ describe('PatientChartComponent — timeline provenance', () => {
           provide: RoleContextService,
           useValue: roleContextStub({
             superAdmin: false,
-            hospitalId: 'h-1',
+            hospitalId,
             roles: ['ROLE_DOCTOR'],
           }),
         },
@@ -98,6 +98,27 @@ describe('PatientChartComponent — timeline provenance', () => {
     component = fixture.componentInstance;
     component.patientId = 'p-1';
   }
+
+  it('an unscoped chart is readable but cannot submit local clinical writes', () => {
+    setup([], null);
+    expect(component.canViewAllergies()).toBeTrue();
+    expect(component.canEditAllergies()).toBeFalse();
+    expect(component.canEditProblems()).toBeFalse();
+    expect(component.canRemoveProblems()).toBeFalse();
+    expect(component.canCreateUpdates()).toBeFalse();
+    // Provenance is independent of the write gates: no acting hospital
+    // does not imply every hospital (or a legacy row) is foreign.
+    expect(component.isForeignRow({ hospitalId: 'h-1' })).toBeFalse();
+    expect(component.isForeignRow({})).toBeFalse();
+    // These spies expose no write method: an attempted call would throw.
+    component.submitAllergy();
+    component.submitDeactivateAllergy();
+    component.submitProblem();
+    component.submitDeleteProblem();
+    component.submitUpdate();
+    expect(component.allergySaving()).toBeFalse();
+    expect(component.problemSaving()).toBeFalse();
+  });
 
   it('QA D1380: the timeline shows the server total and pages with the stated reason', () => {
     setup([entry({ category: 'NOTE' })]);

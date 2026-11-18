@@ -1,3 +1,4 @@
+import { provideRouter } from '@angular/router';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import {
   HttpErrorResponse,
@@ -95,6 +96,7 @@ describe('BillingComponent', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: BillingService, useValue: billingSpy },
         { provide: ToastService, useValue: toastSpy },
         { provide: PermissionService, useValue: permissionSpy },
@@ -331,12 +333,68 @@ describe('BillingComponent', () => {
     component.openPayment(component.invoices()[0]);
     component.paymentAmount.set(500);
     component.paymentMethod.set('MOBILE_MONEY');
+    component.paymentOperator.set('ORANGE_MONEY');
     component.paymentReference.set(' MM-778 ');
     component.recordPayment();
     expect(billingSpy.recordPayment).toHaveBeenCalledWith('inv-1', {
       amount: 500,
       method: 'MOBILE_MONEY',
       reference: 'MM-778',
+      mobileMoneyOperator: 'ORANGE_MONEY',
+    });
+  });
+
+  it('billing plan PR 9: the operator picker shows for Mobile Money only, with the manual-entry notice', () => {
+    fixture.detectChanges();
+    component.openPayment(component.invoices()[0]);
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    expect(host.querySelector('#payment-operator')).toBeNull();
+    expect(host.querySelector('[data-testid="payment-no-card-details"]')).not.toBeNull();
+
+    component.paymentMethod.set('MOBILE_MONEY');
+    fixture.detectChanges();
+    const picker = host.querySelector<HTMLSelectElement>('#payment-operator');
+    expect(picker).not.toBeNull();
+    // A blank choice, then Orange Money, Moov Money and another operator.
+    expect(picker!.options.length).toBe(4);
+    expect(host.querySelector('[data-testid="mobile-money-manual-entry"]')).not.toBeNull();
+  });
+
+  it('billing plan PR 9: a Mobile Money payment without an operator is refused on the picker', () => {
+    fixture.detectChanges();
+    component.openPayment(component.invoices()[0]);
+    component.paymentAmount.set(500);
+    component.paymentMethod.set('MOBILE_MONEY');
+    component.paymentReference.set('OM-1');
+    component.recordPayment();
+    expect(billingSpy.recordPayment).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
+  it('D-15: a card number typed as the reference is refused before anything is sent', () => {
+    fixture.detectChanges();
+    component.openPayment(component.invoices()[0]);
+    component.paymentAmount.set(500);
+    component.paymentMethod.set('CARD');
+    component.paymentReference.set('4111 1111 1111 1111');
+    component.recordPayment();
+    expect(billingSpy.recordPayment).not.toHaveBeenCalled();
+  });
+
+  it('billing plan PR 9: a cash payment sends no operator, even after Mobile Money was picked', () => {
+    fixture.detectChanges();
+    billingSpy.recordPayment.and.returnValue(of(mockInvoice({ status: 'PARTIALLY_PAID' })));
+    component.openPayment(component.invoices()[0]);
+    component.paymentAmount.set(500);
+    component.paymentMethod.set('MOBILE_MONEY');
+    component.paymentOperator.set('MOOV_MONEY');
+    component.paymentMethod.set('CASH');
+    component.recordPayment();
+    expect(billingSpy.recordPayment).toHaveBeenCalledWith('inv-1', {
+      amount: 500,
+      method: 'CASH',
+      reference: undefined,
     });
   });
 
@@ -948,6 +1006,7 @@ describe('BillingComponent', () => {
       fixture.detectChanges();
       component.openPayment(component.invoices()[0]);
       component.paymentMethod.set('MOBILE_MONEY');
+      component.paymentOperator.set('MOOV_MONEY');
       component.paymentAmount.set(500);
       component.paymentReference.set('');
       component.recordPayment();
@@ -1147,6 +1206,117 @@ describe('BillingComponent', () => {
       fixture.detectChanges();
       const reason = fixture.nativeElement.querySelector('[data-testid="cancel-reason"]');
       expect(reason?.textContent).toContain('Doublon');
+    });
+  });
+
+  describe('a price-list line is overridden only with a reason (billing-money plan PR 3, D-2)', () => {
+    const tariffLine = {
+      id: 'line-t',
+      billingInvoiceId: 'inv-1',
+      itemDescription: 'Consultation générale',
+      itemCategory: 'SERVICE',
+      quantity: 1,
+      unitPrice: 2000,
+      totalPrice: 2000,
+      priceSource: 'TARIFF' as const,
+      tariffUnitPrice: 2000,
+      overrideReason: null,
+    };
+    const typedLine = {
+      id: 'line-m',
+      billingInvoiceId: 'inv-1',
+      itemDescription: 'Pansement',
+      itemCategory: 'SERVICE',
+      quantity: 1,
+      unitPrice: 750,
+      totalPrice: 750,
+      priceSource: 'MANUAL' as const,
+      tariffUnitPrice: null,
+      overrideReason: null,
+    };
+
+    beforeEach(() => {
+      billingSpy.getInvoiceItems.and.returnValue(of([tariffLine, typedLine]));
+      billingSpy.getInvoice.and.returnValue(
+        of(mockInvoice({ status: 'DRAFT', totalAmount: 2750 })),
+      );
+      fixture.detectChanges();
+      component.viewInvoice(mockInvoice({ status: 'DRAFT', totalAmount: 2750, balanceDue: 2750 }));
+      fixture.detectChanges();
+    });
+
+    it('shows the reason field and the price-list price only on a TARIFF line', () => {
+      const host = fixture.nativeElement as HTMLElement;
+      component.startEditLine(tariffLine);
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="line-override-reason-line-t"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="line-tariff-line-t"]')?.textContent).toContain(
+        'BILLING.TARIFF_PRICE_VALUE',
+      );
+      component.startEditLine(typedLine);
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="line-override-reason-line-m"]')).toBeNull();
+    });
+
+    it('refuses a changed price-list price without a reason, then sends it with one', () => {
+      component.startEditLine(tariffLine);
+      component.editLineUnitPrice.set(1500);
+      expect(component.overrideReasonRequired(tariffLine)).toBeTrue();
+      component.saveLine(tariffLine);
+      expect(billingSpy.updateInvoiceItem).not.toHaveBeenCalled();
+
+      billingSpy.updateInvoiceItem.and.returnValue(
+        of({ ...tariffLine, unitPrice: 1500, totalPrice: 1500, priceSource: 'MANUAL' as const }),
+      );
+      component.editLineOverrideReason.set('  Patient indigent  ');
+      component.saveLine(tariffLine);
+      expect(billingSpy.updateInvoiceItem).toHaveBeenCalledWith('line-t', {
+        billingInvoiceId: 'inv-1',
+        itemDescription: 'Consultation générale',
+        itemCategory: 'SERVICE',
+        quantity: 1,
+        unitPrice: 1500,
+        overrideReason: 'Patient indigent',
+      });
+    });
+
+    it('#1197 L1: a second override asks a fresh reason, never re-sends the old one', () => {
+      component.startEditLine({ ...tariffLine, unitPrice: 1500, overrideReason: 'Remise' });
+      expect(component.editLineOverrideReason()).toBe('');
+    });
+
+    it('#1197 M2: removing a price-list line asks the reason in place and sends it', async () => {
+      const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      await component.removeItem(tariffLine);
+      expect(ask).not.toHaveBeenCalled();
+      expect(component.removingLineId()).toBe('line-t');
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="line-remove-reason-line-t"]',
+        ),
+      ).not.toBeNull();
+
+      component.confirmRemoveTariffLine(tariffLine);
+      expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
+
+      billingSpy.deleteInvoiceItem.and.returnValue(of('ok'));
+      component.removeLineReason.set('  Doublon  ');
+      component.confirmRemoveTariffLine(tariffLine);
+      expect(billingSpy.deleteInvoiceItem).toHaveBeenCalledWith('line-t', 'Doublon');
+    });
+
+    it('#1197 M2: a typed line is still removed through the confirmation, with no reason', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      billingSpy.deleteInvoiceItem.and.returnValue(of('ok'));
+      await component.removeItem(typedLine);
+      expect(billingSpy.deleteInvoiceItem).toHaveBeenCalledWith('line-m', undefined);
+    });
+
+    it('keeps the tariff price without asking for a reason', () => {
+      component.startEditLine(tariffLine);
+      component.editLineQuantity.set(2);
+      expect(component.overrideReasonRequired(tariffLine)).toBeFalse();
     });
   });
 
@@ -1459,6 +1629,7 @@ describe('BillingComponent', () => {
         providers: [
           provideHttpClient(withXhr()),
           provideHttpClientTesting(),
+          provideRouter([]),
           { provide: BillingService, useValue: billingSpy },
           { provide: ToastService, useValue: toastSpy },
           { provide: PermissionService, useValue: permissionSpy },
@@ -1468,6 +1639,56 @@ describe('BillingComponent', () => {
       const reception = TestBed.createComponent(BillingComponent).componentInstance;
       expect(reception.canRecordPayment).toBeTrue();
       expect(reception.canReversePayment).toBeFalse();
+    });
+  });
+
+  describe('price list link (billing-money plan PR 2)', () => {
+    async function asOnly(role: string): Promise<ComponentFixture<BillingComponent>> {
+      TestBed.resetTestingModule();
+      const roleCtx = {
+        hasAnyActiveRole: (roles: string[]) => roles.includes(role),
+      } as unknown as RoleContextService;
+      const permissionSpy = jasmine.createSpyObj('PermissionService', ['hasAnyPermission']);
+      permissionSpy.hasAnyPermission.and.returnValue(false);
+      await TestBed.configureTestingModule({
+        imports: [BillingComponent, TranslateModule.forRoot()],
+        providers: [
+          provideHttpClient(withXhr()),
+          provideHttpClientTesting(),
+          provideRouter([]),
+          { provide: BillingService, useValue: billingSpy },
+          { provide: ToastService, useValue: toastSpy },
+          { provide: PermissionService, useValue: permissionSpy },
+          { provide: RoleContextService, useValue: roleCtx },
+        ],
+      }).compileComponents();
+      const f = TestBed.createComponent(BillingComponent);
+      f.detectChanges();
+      return f;
+    }
+
+    it('shows the price list button to every role its route admits', async () => {
+      for (const role of [
+        'ROLE_SUPER_ADMIN',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ACCOUNTANT',
+        'ROLE_BILLING_SPECIALIST',
+        'ROLE_RECEPTIONIST',
+      ]) {
+        const f = await asOnly(role);
+        expect(f.componentInstance.canReadPriceList).withContext(role).toBeTrue();
+        expect((f.nativeElement as HTMLElement).querySelector('[data-testid="price-list-link"]'))
+          .withContext(role)
+          .not.toBeNull();
+      }
+    });
+
+    it('hides it from ROLE_ADMIN, which /billing admits but /billing/tarifs does not', async () => {
+      const f = await asOnly('ROLE_ADMIN');
+      expect(f.componentInstance.canReadPriceList).toBeFalse();
+      expect(
+        (f.nativeElement as HTMLElement).querySelector('[data-testid="price-list-link"]'),
+      ).toBeNull();
     });
   });
 
@@ -1691,6 +1912,7 @@ describe('BillingComponent as a billing specialist (QA D181)', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: BillingService, useValue: billingSpy },
         {
           provide: ToastService,

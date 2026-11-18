@@ -1,0 +1,37 @@
+{
+  "$comment": [
+    "Component permissions that offer an action to ROLE_SUPER_ADMIN alongside a clinical role (QA D2120).",
+    "Each pin is a NON-clinical action (configuration, demographics, records office) with its reason;",
+    "a clinical action is never pinned: drop ROLE_SUPER_ADMIN from its list, as the server does."
+  ],
+  "pinned": {
+    "src/app/lab/lab-test-config/lab-test-config.ts::super-admin-clinical-action::canEditReflexRules": {
+      "count": 1,
+      "why": "lab reflex rule configuration, no patient (LabReflexRuleController is in NOT_A_CLINICAL_ACT)"
+    },
+    "src/app/patient-education/patient-education.ts::super-admin-clinical-action::canManageResources": {
+      "count": 1,
+      "why": "education content library, no patient (PatientEducationController#createResource/updateResource)"
+    },
+    "src/app/patients/patient-detail.ts::super-admin-clinical-action::canEditDemographics": {
+      "count": 1,
+      "why": "patient demographics, not a clinical record (PatientController#patchPatient)"
+    },
+    "src/app/patients/patient-detail.ts::super-admin-clinical-action::canEditPhoto": {
+      "count": 1,
+      "why": "identification photo (PatientPhotoController)"
+    },
+    "src/app/pharmacy/drug-interactions.ts::super-admin-clinical-action::canManage": {
+      "count": 1,
+      "why": "drug-interaction catalogue configuration (DrugInteractionAdminController)"
+    },
+    "src/app/roi/roi.ts::super-admin-clinical-action::canDecide": {
+      "count": 1,
+      "why": "release of information, records office (RoiWorklistController)"
+    },
+    "src/app/transfusion/transfusion.ts::super-admin-clinical-action::canStock": {
+      "count": 1,
+      "why": "blood-bank stock receipt and disposal (TransfusionController#receiveUnit/#discardUnit, NOT_A_CLINICAL_ACT)"
+    }
+  }
+}

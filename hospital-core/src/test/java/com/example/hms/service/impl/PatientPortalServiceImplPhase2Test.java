@@ -500,6 +500,9 @@ class PatientPortalServiceImplPhase2Test {
             stubPatientResolution();
             UUID apptId = UUID.randomUUID();
             Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            // A legacy payload key describes the original slot, not the moved visit.
+            appointment.setBookingRequestKey("legacy-original-slot");
+            appointment.setBookingRequestFingerprint("legacy-original-payload");
 
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
             when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -520,6 +523,8 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result).isNotNull();
             assertThat(appointment.getAppointmentDate()).isEqualTo(RESCHEDULE_DATE);
             assertThat(appointment.getStartTime()).isEqualTo(LocalTime.of(14, 0));
+            assertThat(appointment.getBookingRequestKey()).isNull();
+            assertThat(appointment.getBookingRequestFingerprint()).isNull();
             assertThat(appointment.getEndTime()).isEqualTo(LocalTime.of(14, 30));
             // QA D977: a moved appointment is booked at its new time, as the desk lands it.
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
@@ -1728,6 +1733,58 @@ class PatientPortalServiceImplPhase2Test {
                     .thenReturn(Optional.of(new PatientHospitalRegistration()));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
+        }
+
+        @Test
+        void retryOfAnyClinicianBookingReturnsOriginalWithoutSelectingAnotherClinician() {
+            stubSchedulingBasics();
+            var dto = PortalBookAppointmentRequestDTO.builder().hospitalId(hospitalId)
+                .departmentId(departmentId).date(BOOKING_DATE).startTime(LocalTime.of(10, 0))
+                .bookingRequestId(UUID.randomUUID()).build();
+            var identity = com.example.hms.service.support.AppointmentBookingIdentity.portal(userId, patientId, dto);
+            Appointment existing = new Appointment();
+            existing.setStatus(AppointmentStatus.SCHEDULED);
+            existing.setPatient(patient);
+            existing.setHospital(hospital);
+            identity.stamp(existing);
+            when(appointmentRepository.findAllByBookingRequestKey(identity.key())).thenReturn(List.of(existing));
+            AppointmentResponseDTO expected = new AppointmentResponseDTO();
+            when(appointmentMapper.toAppointmentResponseDTO(existing)).thenReturn(expected);
+
+            assertThat(service.scheduleMyAppointment(auth, dto, Locale.FRENCH)).isSameAs(expected);
+
+            verify(staffRepository, never()).findActiveProvidersByHospitalAndDepartment(any(), any());
+            verify(appointmentRepository, never()).save(any());
+            verify(slotPolicy, never()).takeSlot(any(), any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+        void changedPayloadOrTransferredPatientIsRefusedBeforeProviderSelection(boolean transferred) {
+            stubSchedulingBasics();
+            var dto = PortalBookAppointmentRequestDTO.builder().hospitalId(hospitalId)
+                .departmentId(departmentId).date(BOOKING_DATE).startTime(LocalTime.of(10, 0))
+                .bookingRequestId(UUID.randomUUID()).build();
+            var identity = com.example.hms.service.support.AppointmentBookingIdentity.portal(userId, patientId, dto);
+            Appointment existing = new Appointment();
+            existing.setPatient(patient);
+            existing.setHospital(hospital);
+            existing.setStatus(AppointmentStatus.SCHEDULED);
+            identity.stamp(existing);
+            when(appointmentRepository.findAllByBookingRequestKey(identity.key())).thenReturn(List.of(existing));
+            if (transferred) {
+                Patient other = new Patient();
+                other.setId(UUID.randomUUID());
+                existing.setPatient(other);
+            } else {
+                dto.setNotes("A changed booking payload");
+            }
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.FRENCH))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            verify(staffRepository, never()).findActiveProvidersByHospitalAndDepartment(any(), any());
+            verify(staffRepository, never()).findLockedById(any());
+            verify(appointmentRepository, never()).save(any());
+            verify(slotPolicy, never()).takeSlot(any(), any());
         }
 
         @Test

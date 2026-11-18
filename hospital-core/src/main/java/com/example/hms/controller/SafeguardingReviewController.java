@@ -46,7 +46,8 @@ public class SafeguardingReviewController {
         "hasAnyRole('DOCTOR','PHYSICIAN','SURGEON','MIDWIFE','NURSE','HOSPITAL_ADMIN')";
 
     /** The responsible clinician records the review. */
-    public static final String RECORDERS = "hasAnyRole('DOCTOR','PHYSICIAN','SURGEON')";
+    public static final String RECORDERS =
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','PHYSICIAN','SURGEON')";
 
     private final SafeguardingReviewService service;
 

@@ -53,6 +53,9 @@ class PartialUniqueReleaseFlushGuardTest {
 
     /** Table of each partial unique index -> the entity that writes it. */
     private static final Map<String, String> ENTITY_OF_TABLE = Map.ofEntries(
+        // X2 (V320): cancelling a formerly-live legacy booking releases its request identity.
+        Map.entry("appointments", "Appointment"),
+        Map.entry("identity_aliases", "EmpiIdentityAlias"),
         Map.entry("death_records", "DeathRecord"),
         Map.entry("fetal_death_events", "FetalDeathEvent"),
         // r53: one open safeguarding review per patient and hospital; recording it releases the slot.
@@ -83,11 +86,23 @@ class PartialUniqueReleaseFlushGuardTest {
         Map.entry("pharmacy_claims", "PharmacyClaim"),
         // V290: one active labour per patient; a transfer closes the source before it opens the next.
         Map.entry("labor_episodes", "LaborEpisode"),
-        Map.entry("smart_phrases", "SmartPhrase"));
+        Map.entry("smart_phrases", "SmartPhrase"),
+        // Billing-money plan PR 2 (V302): one active item per link (deactivating releases it) and one live
+        // price version per start / one open-ended version per item (closing effective_to releases it).
+        Map.entry("price_list_items", "PriceListItem"),
+        Map.entry("price_list_prices", "PriceListPrice"),
+        // Billing-money plan PR 6 (V305): one live rule per target and start / one open-ended rule per target
+        // (closing effective_to releases it; the service flushes the closes before the insert).
+        Map.entry("payer_plan_rules", "PayerPlanRule"),
+        // Review of #1202: plan terms versioned like prices (one live version per start, one open-ended).
+        Map.entry("payer_plan_terms", "PayerPlanTerms"),
+        // Billing-money plan PR 4 (V304): a file applies once per hospital; a trace row is never edited.
+        Map.entry("price_list_imports", "PriceListImport"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =
-        Set.of("Hospital", "User", "LabResult", "StockLot", "Encounter", "BillingInvoice", "MedicationCatalogItem");
+        Set.of("Hospital", "User", "LabResult", "StockLot", "Encounter", "BillingInvoice", "MedicationCatalogItem",
+            "PriceListImport");
 
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow();
 
@@ -95,7 +110,7 @@ class PartialUniqueReleaseFlushGuardTest {
         "CREATE\\s+UNIQUE\\s+INDEX[^;]*?\\bON\\s+(?:[a-z_]+\\.)?([a-z_]+)\\s*\\([^;]*?\\bWHERE\\b[^;]*?;",
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern RELEASE = Pattern.compile(
-        "\\.set(?:Superseded|Status|Active|IsActive|EndedAt|Current)\\(|[Rr]epository\\.delete(?:All)?\\(");
+        "\\.set(?:Superseded|Status|Active|IsActive|EndedAt|Current|EffectiveTo)\\(|[Rr]epository\\.delete(?:All)?\\(");
     private static final Pattern FLUSH = Pattern.compile("saveAndFlush\\(|\\.flush\\(\\)");
     /** A method's header: a modifier, a return type, a name, a parameter list and an opening brace. */
     private static final Pattern METHOD = Pattern.compile(
@@ -159,6 +174,47 @@ class PartialUniqueReleaseFlushGuardTest {
             """, sites, new ArrayList<>());
         assertThat(sites).containsOnlyKeys("probe.java#PatientBloodGroup");
         assertThat(sites.get("probe.java#PatientBloodGroup")).isOne();
+    }
+
+    @Test
+    void identityAliasReleaseIsScannedAndRequiresAFlushBeforeReplacement() {
+        Map<String, Integer> sites = new TreeMap<>();
+        scan("empi-alias-probe.java", """
+            class P {
+                public void unflushed() {
+                    repository.delete(previous);
+                    repository.save(EmpiIdentityAlias.builder().build());
+                }
+                public void flushed() {
+                    repository.delete(previous);
+                    repository.flush();
+                    repository.save(EmpiIdentityAlias.builder().build());
+                }
+            }
+            """, sites, new ArrayList<>());
+        assertThat(sites).containsOnlyKeys("empi-alias-probe.java#EmpiIdentityAlias");
+        assertThat(sites.get("empi-alias-probe.java#EmpiIdentityAlias")).isOne();
+    }
+
+    @Test
+    void appointmentIdentityReleaseIsScannedAndRequiresAFlushBeforeReplacement() {
+        Map<String, Integer> sites = new TreeMap<>();
+        scan("appointment-probe.java", """
+            class P {
+                public void unflushed() {
+                    existing.setStatus(CANCELLED);
+                    repository.save(existing);
+                    repository.save(Appointment.builder().build());
+                }
+                public void flushed() {
+                    existing.setStatus(CANCELLED);
+                    repository.saveAndFlush(existing);
+                    repository.save(Appointment.builder().build());
+                }
+            }
+            """, sites, new ArrayList<>());
+        assertThat(sites).containsOnlyKeys("appointment-probe.java#Appointment");
+        assertThat(sites.get("appointment-probe.java#Appointment")).isOne();
     }
 
     private static void scan(String file, String source, Map<String, Integer> sites, List<String> where) {

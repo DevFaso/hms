@@ -54,6 +54,19 @@ class FetalDeathEventServiceTest {
     private Patient mother;
     private User recorder;
 
+    @Test
+    void fetalDeathActorLabelsUseHumanNamesAndKeepAuthoredReasons() {
+        recorder.setUsername("login.id");
+        recorder.setFirstName("Awa");
+        recorder.setLastName("Ouédraogo");
+        FetalDeathEvent event = FetalDeathEvent.builder().recordedBy(recorder).supersededBy(recorder)
+            .gestationalAgeWeeks(30).noSignsOfLife(true).supersedeReason("User-authored correction").build();
+        var dto = FetalDeathEventService.toDto(event);
+        assertThat(dto.getRecordedByName()).isEqualTo("Awa Ouédraogo");
+        assertThat(dto.getSupersededByName()).isEqualTo("Awa Ouédraogo");
+        assertThat(dto.getSupersedeReason()).isEqualTo("User-authored correction");
+    }
+
     @BeforeEach
     void setUp() {
         hospital = new Hospital();

@@ -53,6 +53,22 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
     expect(box()).toBeNull();
   });
 
+  it('QA D2120 review: the blood type is offered to a clinician, never to an admin or a super-admin alone', () => {
+    const fixture = create();
+    const roles = TestBed.inject(RoleContextService);
+    const box = () => (fixture.nativeElement as HTMLElement).querySelector('#demoBloodType');
+    for (const role of ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']) {
+      roles.setRoles([role]);
+      fixture.componentRef.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      expect(box()).withContext(role).toBeNull();
+    }
+    roles.setRoles(['ROLE_MIDWIFE']);
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(box()).not.toBeNull();
+  });
+
   it('opens on the chart as it stands, the legacy address included', () => {
     const c = create().componentInstance;
     expect(c.form.firstName).toBe('Ibrahim');
@@ -78,6 +94,22 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
     });
     expect(saved).toHaveBeenCalledWith(updated);
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  it('an IU-only correction waits for confirmation and does not clear other identity fields', () => {
+    const c = create().componentInstance;
+    patients.patchDemographics.and.returnValue(
+      of({ ...patient, nationalUniqueIdMasked: '•••• •••• 6789' }),
+    );
+    c.nationalUniqueIdChange = { nationalUniqueId: '000123456789' };
+    c.nationalUniqueIdReady = false;
+    c.submit();
+    expect(patients.patchDemographics).not.toHaveBeenCalled();
+    c.nationalUniqueIdReady = true;
+    c.submit();
+    expect(patients.patchDemographics).toHaveBeenCalledWith('p-1', {
+      nationalUniqueId: '000123456789',
+    });
   });
 
   for (const change of [

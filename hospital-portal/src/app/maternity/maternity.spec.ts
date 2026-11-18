@@ -102,6 +102,43 @@ describe('MaternityComponent — tabs', () => {
     });
   });
 
+  it('shows server totals beyond the current page and never requests restricted nurse counts', () => {
+    maternity.highRisk.and.returnValue(
+      of({ content: [], totalElements: 42, totalPages: 3, number: 0, size: 1 }),
+    );
+    maternity.psychosocialConcerns.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 1 }),
+    );
+    maternity.search.and.returnValue(
+      of({ content: [], totalElements: 70, totalPages: 4, number: 0, size: 1 }),
+    );
+    create(['ROLE_NURSE']);
+    expect(
+      Array.from(host().querySelectorAll('.worklist-count')).map((el) => el.textContent?.trim()),
+    ).toEqual(['42', '0', '70']);
+    expect(maternity.highRisk).toHaveBeenCalledWith('h-1', 0, 1);
+    expect(maternity.pendingReview).not.toHaveBeenCalled();
+    expect(maternity.specialistReferral).not.toHaveBeenCalled();
+    fixture.componentInstance.boardSearch.set('no matching name');
+    fixture.detectChanges();
+    expect(fixture.componentInstance.boardCounts.values()['high-risk']).toBe(42);
+  });
+
+  it('overdue, urgency and status filters narrow referral rows without changing the source', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    cmp.referrals.set([
+      { id: 'a', status: 'SUBMITTED', urgency: 'URGENT', slaDueAt: '2020-01-01T00:00:00Z' },
+      { id: 'b', status: 'COMPLETED', urgency: 'URGENT', slaDueAt: '2020-01-01T00:00:00Z' },
+    ]);
+    cmp.overdueOnly.set(true);
+    cmp.referralUrgency.set('URGENT');
+    cmp.referralStatus.set('SUBMITTED');
+    expect(cmp.visibleReferrals().map((row) => row.id)).toEqual(['a']);
+    expect(cmp.referrals().length).toBe(2);
+    expect(cmp.overdueMinutes(cmp.referrals()[0])).toBeGreaterThan(0);
+  });
+
   it('gives a receptionist the prenatal tab alone, and loads nothing it would be refused', () => {
     create(['ROLE_RECEPTIONIST']);
     expect(host().querySelector('h1')?.textContent?.trim()).toBe('Maternité');

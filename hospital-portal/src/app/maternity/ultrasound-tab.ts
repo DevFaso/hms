@@ -1,9 +1,12 @@
+import { map } from 'rxjs';
+import { worklistCounts } from './worklist-counts';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   ElementRef,
   inject,
   OnInit,
@@ -306,7 +309,7 @@ export class UltrasoundTabComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  private hospitalId: string | null = null;
+  protected hospitalId: string | null = null;
 
   /** Order + report writes = DOCTOR/MIDWIFE/SUPER_ADMIN (effective backend roles). */
   /** QA D1081: an ultrasound order is rewritten or cancelled by its author only. */
@@ -319,15 +322,12 @@ export class UltrasoundTabComponent implements OnInit {
     return this.canOrder && isOrderCancellable(o.status) && this.isOrderAuthor(o);
   }
 
-  readonly canOrder = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_MIDWIFE',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  /** Report review = DOCTOR/SUPER_ADMIN. */
-  readonly canReviewReport = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
+  readonly canOrder = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']);
+  /** Report review = DOCTOR (QA D2120: never a super-admin alone). */
+  readonly canReviewReport = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
 
   worklist = signal<UltrasoundWorklist>('all');
+  readonly counts = worklistCounts<UltrasoundWorklist>();
   readonly worklists: UltrasoundWorklist[] = [
     'all',
     'pending',
@@ -337,6 +337,18 @@ export class UltrasoundTabComponent implements OnInit {
   ];
 
   orders = signal<UltrasoundOrderResponse[]>([]);
+  readonly orderSearch = signal('');
+  readonly orderPriority = signal('');
+  readonly visibleOrders = computed(() =>
+    this.orders().filter(
+      (row) =>
+        (!this.orderSearch().trim() ||
+          [row.patientDisplayName, row.patientMrn].some((value) =>
+            value?.toLocaleLowerCase().includes(this.orderSearch().trim().toLocaleLowerCase()),
+          )) &&
+        (!this.orderPriority() || row.priority === this.orderPriority()),
+    ),
+  );
   reports = signal<UltrasoundReportResponse[]>([]);
   loading = signal(false);
 
@@ -426,18 +438,34 @@ export class UltrasoundTabComponent implements OnInit {
   reportActionBusy = signal(false);
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    this.hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     this.load();
   }
 
   setWorklist(w: UltrasoundWorklist): void {
     this.worklist.set(w);
-    this.load();
+    this.load(false);
   }
 
-  load(): void {
+  private loadCounts(hospitalId: string): void {
+    this.counts.load({
+      all: () =>
+        this.ultrasoundService.ordersByHospital(hospitalId).pipe(map((rows) => rows.length)),
+      pending: () =>
+        this.ultrasoundService.pendingOrders(hospitalId).pipe(map((rows) => rows.length)),
+      'high-risk': () =>
+        this.ultrasoundService.highRiskOrders(hospitalId).pipe(map((rows) => rows.length)),
+      'follow-up': () =>
+        this.ultrasoundService.followUpRequired(hospitalId).pipe(map((rows) => rows.length)),
+      anomalies: () =>
+        this.ultrasoundService.anomalies(hospitalId).pipe(map((rows) => rows.length)),
+    });
+  }
+
+  load(refreshCounts = true): void {
     if (!this.hospitalId) return;
     const hospitalId = this.hospitalId;
+    if (refreshCounts) this.loadCounts(hospitalId);
     this.loading.set(true);
     if (this.isReportList()) {
       const source =

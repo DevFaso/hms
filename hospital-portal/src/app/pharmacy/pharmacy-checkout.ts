@@ -26,9 +26,15 @@ import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
 import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
+import {
+  MOBILE_MONEY_OPERATORS,
+  MobileMoneyOperator,
+  containsCardNumber,
+  mobileMoneyOperatorLabelKey,
+} from '../shared/mobile-money-operator';
 
 /** The payment fields the checkout may refuse. */
-const CHECKOUT_FIELDS = ['amount', 'ref'];
+const CHECKOUT_FIELDS = ['amount', 'operator', 'ref'];
 
 /**
  * T-43 / T-44: pharmacy checkout and French printable receipt.
@@ -75,6 +81,10 @@ export class PharmacyCheckoutComponent implements OnInit {
   amount: number | null = null;
   paymentMethod: PharmacyPaymentMethod = 'CASH';
   referenceNumber = '';
+  /** Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close. */
+  mobileMoneyOperator: MobileMoneyOperator | null = null;
+  readonly mobileMoneyOperators = MOBILE_MONEY_OPERATORS;
+  readonly operatorLabelKey = mobileMoneyOperatorLabelKey;
   notes = '';
 
   loading = signal(false);
@@ -218,10 +228,22 @@ export class PharmacyCheckoutComponent implements OnInit {
     }
     // QA D1033: a mobile-money payment is recorded with the transaction
     // reference the patient's phone shows; the server refuses one without it.
+    if (this.paymentMethod === 'MOBILE_MONEY' && !this.mobileMoneyOperator) {
+      refusals.push({
+        id: 'operator',
+        message: this.translate.instant('MOBILE_MONEY.OPERATOR_REQUIRED'),
+      });
+    }
     if (this.paymentMethod === 'MOBILE_MONEY' && !this.referenceNumber.trim()) {
       refusals.push({
         id: 'ref',
         message: this.translate.instant('PHARMACY_CHECKOUT.REFERENCE_REQUIRED'),
+      });
+    } else if (containsCardNumber(this.referenceNumber)) {
+      // Owner decision D-15: never a card number (the server refuses it too).
+      refusals.push({
+        id: 'ref',
+        message: this.translate.instant('MOBILE_MONEY.CARD_NUMBER_REFUSED'),
       });
     }
     if (refusals.length > 0 || amount === null) {
@@ -245,6 +267,9 @@ export class PharmacyCheckoutComponent implements OnInit {
       amount,
       currency: 'XOF',
       referenceNumber: this.referenceNumber.trim() || undefined,
+      ...(this.paymentMethod === 'MOBILE_MONEY' && this.mobileMoneyOperator
+        ? { mobileMoneyOperator: this.mobileMoneyOperator }
+        : {}),
       receivedBy: userId,
       notes: this.notes || undefined,
     };
@@ -273,6 +298,7 @@ export class PharmacyCheckoutComponent implements OnInit {
     this.amount = null;
     this.paymentMethod = 'CASH';
     this.referenceNumber = '';
+    this.mobileMoneyOperator = null;
     this.notes = '';
     this.dispense.set(null);
     this.receipt.set(null);

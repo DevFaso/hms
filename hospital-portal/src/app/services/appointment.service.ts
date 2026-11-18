@@ -56,6 +56,7 @@ export interface AppointmentResponse {
 }
 
 export interface AppointmentUpsertRequest {
+  bookingRequestId?: string;
   appointmentDate: string;
   startTime: string;
   endTime?: string;

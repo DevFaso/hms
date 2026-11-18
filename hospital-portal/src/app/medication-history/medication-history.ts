@@ -111,7 +111,7 @@ export class MedicationHistoryComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    this.hospitalId = this.roleContext.effectiveHospitalIdForRequest();
   }
 
   /**

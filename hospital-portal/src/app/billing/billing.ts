@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   BillingService,
@@ -60,6 +61,13 @@ import { joinReasons } from '../shared/required-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { serverFieldErrors } from '../shared/forms/server-field-errors';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
+import {
+  MOBILE_MONEY_OPERATORS,
+  MobileMoneyOperator,
+  containsCardNumber,
+  isMobileMoney,
+  mobileMoneyOperatorLabelKey,
+} from '../shared/mobile-money-operator';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 /** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
@@ -69,7 +77,7 @@ const EMAIL_TO_ID = 'email-to';
 const EMAIL_CC_ID = 'email-cc';
 const EMAIL_FIELD_IDS = [EMAIL_TO_ID, EMAIL_CC_ID];
 /** QA D1306 class: the payment form's fields a refusal marks or clears. */
-const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-reference'];
+const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-operator', 'payment-reference'];
 
 /** QA D1294: a blank or zero unit price says so (not "a payment amount"). */
 const LINE_PRICE_REQUIRED_KEY = 'BILLING.LINE_UNIT_PRICE_REQUIRED';
@@ -104,6 +112,7 @@ export function lineQuantityMessageKey(qty: number | string | null | undefined):
     PatientPickerComponent,
     DialogA11yDirective,
     CashClosingComponent,
+    RouterLink,
   ],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -146,6 +155,15 @@ export class BillingComponent implements OnInit {
     'ROLE_BILLING_SPECIALIST',
     'ROLE_ACCOUNTANT',
     'ROLE_RECEPTIONIST',
+  ]);
+  /** Billing-money plan PR 2: the /billing/tarifs RoleGuard's reader list (not ROLE_ADMIN). */
+  readonly canReadPriceList = this.roleContext.hasAnyActiveRole([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_ACCOUNTANT',
+    'ROLE_BILLING_SPECIALIST',
+    'ROLE_RECEPTIONIST',
+    'ROLE_CLAIMS_REVIEWER',
   ]);
   /** QA D974: the server lets these roles discount, waive or credit an issued invoice. */
   readonly canAdjust = this.roleContext.hasAnyActiveRole([
@@ -243,6 +261,11 @@ export class BillingComponent implements OnInit {
   /** QA D146: the method and the reference are recorded, not discarded. */
   paymentMethod = signal<StaffPaymentMethod>('CASH');
   paymentReference = signal('');
+  /** Billing plan PR 9: Orange Money, Moov Money or another operator, for a Mobile Money payment. */
+  paymentOperator = signal<MobileMoneyOperator | null>(null);
+  readonly mobileMoneyOperators = MOBILE_MONEY_OPERATORS;
+  readonly operatorLabelKey = mobileMoneyOperatorLabelKey;
+  readonly isMobileMoney = isMobileMoney;
   paymentSaving = signal(false);
   readonly paymentMethods: StaffPaymentMethod[] = STAFF_PAYMENT_METHODS;
 
@@ -885,11 +908,29 @@ export class BillingComponent implements OnInit {
   editingLineId = signal<string | null>(null);
   editLineQuantity = signal<number | null>(null);
   editLineUnitPrice = signal<number | null>(null);
+  /* Billing-money plan PR 3 (D-2): the reason a price-list price is changed on a draft line. */
+  editLineOverrideReason = signal('');
+
+  /** A line priced from the price list (overridden or not): its price changes only with a reason. */
+  isTariffLine(item: InvoiceItemResponse): boolean {
+    return item.tariffUnitPrice !== null && item.tariffUnitPrice !== undefined;
+  }
+
+  /** Whether the price now typed overrides the price list, so a reason is required. */
+  overrideReasonRequired(item: InvoiceItemResponse): boolean {
+    const price = this.editLineUnitPrice();
+    if (!this.isTariffLine(item) || price === null) return false;
+    return (
+      Number(price) !== Number(item.tariffUnitPrice) && Number(price) !== Number(item.unitPrice)
+    );
+  }
 
   startEditLine(item: InvoiceItemResponse): void {
     this.editingLineId.set(item.id);
     this.editLineQuantity.set(item.quantity ?? 1);
     this.editLineUnitPrice.set(Number(item.unitPrice) > 0 ? Number(item.unitPrice) : null);
+    // Review #1197 L1: a new override asks a fresh reason; the old one is shown under the line, never re-sent.
+    this.editLineOverrideReason.set('');
     // QA D1195 / D1155: the editing row is an appInlineSubForm — it takes the
     // keyboard, keeps Escape to itself (asking first over a changed value) and
     // gives the keyboard back to the line's pencil when it closes.
@@ -913,7 +954,9 @@ export class BillingComponent implements OnInit {
     // QA D1089: the button is never dead; the field that is missing or wrong says so.
     const qtyKey = lineQuantityMessageKey(this.editLineQuantity());
     const priceProblem = cfaPriceProblem(this.editLineUnitPrice());
-    if (qtyKey || priceProblem) {
+    const reasonMissing =
+      this.overrideReasonRequired(item) && this.editLineOverrideReason().trim() === '';
+    if (qtyKey || priceProblem || reasonMissing) {
       // QA D1296 class (round 28): every wrong field at once, each under its
       // own reason (the price said "required" when only the quantity was).
       // QA D1344 (round 29): a quantity of 0 says it must be above zero.
@@ -929,7 +972,17 @@ export class BillingComponent implements OnInit {
           ),
         });
       }
-      refuseFields(this.host.nativeElement, refusals, ['line-edit-qty', 'line-edit-price']);
+      if (reasonMissing) {
+        refusals.push({
+          id: 'line-edit-override-reason',
+          message: this.translate.instant('BILLING.OVERRIDE_REASON_REQUIRED'),
+        });
+      }
+      refuseFields(this.host.nativeElement, refusals, [
+        'line-edit-qty',
+        'line-edit-price',
+        'line-edit-override-reason',
+      ]);
       return;
     }
     this.itemSaving.set(true);
@@ -940,6 +993,9 @@ export class BillingComponent implements OnInit {
         itemCategory: item.itemCategory as InvoiceItemCategory,
         quantity: this.editLineQuantity() ?? 1,
         unitPrice: this.editLineUnitPrice() ?? 0,
+        ...(this.isTariffLine(item)
+          ? { overrideReason: this.editLineOverrideReason().trim() || undefined }
+          : {}),
       })
       .subscribe({
         next: () => {
@@ -960,19 +1016,59 @@ export class BillingComponent implements OnInit {
       });
   }
 
+  /* Review #1197 M2: a price-list line is removed only with a reason, asked in place. */
+  removingLineId = signal<string | null>(null);
+  removeLineReason = signal('');
+
+  cancelRemoveLine(): void {
+    this.removingLineId.set(null);
+    this.removeLineReason.set('');
+  }
+
   async removeItem(item: InvoiceItemResponse): Promise<void> {
     const inv = this.selectedInvoice();
     if (!inv || this.itemSaving()) return;
+    if (this.isTariffLine(item)) {
+      this.removingLineId.set(item.id);
+      this.removeLineReason.set('');
+      return;
+    }
     // QA D147: a line deletion is not silent. QA D1229: asked in the app.
     const confirmed = await this.confirmService.ask({
       titleKey: 'BILLING.ITEM_REMOVE_CONFIRM',
       confirmKey: 'COMMON.DELETE',
     });
     if (!confirmed || this.itemSaving()) return;
+    this.deleteLine(item);
+  }
+
+  /** Deletes a price-list line with the reason typed in its row. */
+  confirmRemoveTariffLine(item: InvoiceItemResponse): void {
+    const reason = this.removeLineReason().trim();
+    if (!reason) {
+      refuseFields(
+        this.host.nativeElement,
+        [
+          {
+            id: 'line-remove-reason',
+            message: this.translate.instant('BILLING.REMOVE_REASON_REQUIRED'),
+          },
+        ],
+        ['line-remove-reason'],
+      );
+      return;
+    }
+    this.deleteLine(item, reason);
+  }
+
+  private deleteLine(item: InvoiceItemResponse, reason?: string): void {
+    const inv = this.selectedInvoice();
+    if (!inv || this.itemSaving()) return;
     this.itemSaving.set(true);
-    this.billingService.deleteInvoiceItem(item.id).subscribe({
+    this.billingService.deleteInvoiceItem(item.id, reason).subscribe({
       next: () => {
         this.itemSaving.set(false);
+        this.cancelRemoveLine();
         this.toast.success(this.translate.instant('BILLING.ITEM_REMOVED'));
         this.refreshSelected(inv.id);
       },
@@ -1195,6 +1291,7 @@ export class BillingComponent implements OnInit {
     this.paymentPending.set(0);
     this.paymentMethod.set('CASH');
     this.paymentReference.set('');
+    this.paymentOperator.set(null);
     this.showPaymentModal.set(true);
     // QA D634: the modal prefilled the whole balance and said nothing of a
     // pending patient declaration, so the cashier took the money twice once
@@ -1241,7 +1338,13 @@ export class BillingComponent implements OnInit {
     if (amount === null) return; // refused above; narrows the type
     const reference = this.paymentReference().trim();
     this.paymentSaving.set(true);
-    const payment = { amount, method: this.paymentMethod(), reference: reference || undefined };
+    const operator = isMobileMoney(this.paymentMethod()) ? this.paymentOperator() : null;
+    const payment = {
+      amount,
+      method: this.paymentMethod(),
+      reference: reference || undefined,
+      ...(operator ? { mobileMoneyOperator: operator } : {}),
+    };
     this.billingService.recordPayment(inv.id, payment).subscribe({
       next: (updated) => {
         this.paymentSaving.set(false);
@@ -1282,10 +1385,22 @@ export class BillingComponent implements OnInit {
         message: this.translate.instant('BILLING.PAYMENT_EXCEEDS_BALANCE'),
       });
     }
+    if (isMobileMoney(this.paymentMethod()) && !this.paymentOperator()) {
+      refusals.push({
+        id: 'payment-operator',
+        message: this.translate.instant('MOBILE_MONEY.OPERATOR_REQUIRED'),
+      });
+    }
     if (this.paymentReferenceRequired() && !this.paymentReference().trim()) {
       refusals.push({
         id: 'payment-reference',
         message: this.translate.instant('BILLING.PAYMENT_REFERENCE_REQUIRED'),
+      });
+    } else if (containsCardNumber(this.paymentReference())) {
+      // Owner decision D-15: never a card number (the server refuses it too).
+      refusals.push({
+        id: 'payment-reference',
+        message: this.translate.instant('MOBILE_MONEY.CARD_NUMBER_REFUSED'),
       });
     }
     return refusals;

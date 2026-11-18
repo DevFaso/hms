@@ -8,6 +8,9 @@ import { AppointmentFormComponent } from '../appointments/appointment-form';
 import { AppointmentListComponent } from '../appointments/appointment-list';
 import { BillingComponent } from '../billing/billing';
 import { CashClosingComponent } from '../billing/cash-closing/cash-closing.component';
+import { PayersComponent } from '../billing/payers/payers.component';
+import { PriceListImportComponent } from '../billing/price-list/price-list-import.component';
+import { PriceListComponent } from '../billing/price-list/price-list.component';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 import { FeatureFlagsComponent } from '../feature-flags/feature-flags';
 import { MyAppointmentsComponent } from '../patient-portal/my-appointments/my-appointments.component';
@@ -26,6 +29,7 @@ import { CoverageTabComponent } from '../patients/coverage-tab/coverage-tab.comp
 import { DocumentsTabComponent } from '../patients/documents-tab/documents-tab.component';
 import { FluidBalanceTabComponent } from '../patients/fluid-balance/fluid-balance-tab.component';
 import { MedicalHistoryTabComponent } from '../patients/medical-history-tab/medical-history-tab.component';
+import { NationalUniqueIdEditorComponent } from '../patients/national-unique-id-editor.component';
 import { OrderReviewPanelComponent } from '../patients/order-review-panel/order-review-panel.component';
 import { PatientChartComponent } from '../patients/patient-chart/patient-chart.component';
 import { PatientDemographicsEditComponent } from '../patients/patient-demographics-edit/patient-demographics-edit.component';
@@ -97,6 +101,17 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'CashClosingComponent',
     file: 'billing/cash-closing/cash-closing.component',
     type: CashClosingComponent,
+  },
+  { name: 'PayersComponent', file: 'billing/payers/payers.component', type: PayersComponent },
+  {
+    name: 'PriceListImportComponent',
+    file: 'billing/price-list/price-list-import.component',
+    type: PriceListImportComponent,
+  },
+  {
+    name: 'PriceListComponent',
+    file: 'billing/price-list/price-list.component',
+    type: PriceListComponent,
   },
   {
     name: 'CheckoutDialogComponent',
@@ -187,6 +202,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'MedicalHistoryTabComponent',
     file: 'patients/medical-history-tab/medical-history-tab.component',
     type: MedicalHistoryTabComponent,
+  },
+  {
+    name: 'NationalUniqueIdEditorComponent',
+    file: 'patients/national-unique-id-editor.component',
+    type: NationalUniqueIdEditorComponent,
   },
   {
     name: 'OrderReviewPanelComponent',

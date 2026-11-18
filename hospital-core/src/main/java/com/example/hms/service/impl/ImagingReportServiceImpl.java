@@ -576,10 +576,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             return;
         }
         if (!AUTHORABLE_STATUSES.contains(requested)) {
-            throw new com.example.hms.exception.FieldBusinessException("reportStatus", 
-                ("%s cannot be set by authoring a report. FINAL is reached only by signing; "
-                    + "CANCELLED and ERROR only through the status endpoint, which records a reason.")
-                    .formatted(requested));
+            throw new com.example.hms.exception.FieldBusinessException("reportStatus",
+                "imaging.report.authoredStatus.invalid");
         }
         if (creating
             && !REVISION_STATUSES.contains(requested)

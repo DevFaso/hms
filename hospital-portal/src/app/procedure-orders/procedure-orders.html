@@ -5,7 +5,10 @@
       <p class="page-subtitle">{{ 'PROCEDURES.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
-      @if (canManage) {
+      <button type="button" class="btn-secondary" (click)="load()" [disabled]="loading()">
+        {{ 'COMMON.REFRESH' | translate }}
+      </button>
+      @if (canManage && hasScope()) {
         <button type="button" class="btn-primary" (click)="openCreate()">
           <span class="material-symbols-outlined">add</span>
           {{ 'PROCEDURES.NEW_ORDER' | translate }}
@@ -21,6 +24,7 @@
           type="button"
           class="tab-btn"
           [class.active]="worklist() === w"
+          [attr.aria-pressed]="worklist() === w"
           (click)="setWorklist(w)"
         >
           {{ 'PROCEDURES.WORKLIST_' + w.toUpperCase().replaceAll('-', '_') | translate }}
@@ -29,6 +33,36 @@
     </div>
   </div>
 
+  <div class="filter-bar procedure-tools">
+    <label
+      ><span class="sr-only">{{ 'PROCEDURES.SEARCH' | translate }}</span
+      ><input
+        type="search"
+        [ngModel]="search()"
+        (ngModelChange)="search.set($event)"
+        [placeholder]="'PROCEDURES.SEARCH' | translate"
+    /></label>
+    <label
+      ><span class="sr-only">{{ 'PROCEDURES.URGENCY' | translate }}</span
+      ><select [ngModel]="urgencyFilter()" (ngModelChange)="urgencyFilter.set($event)">
+        <option value="">{{ 'PROCEDURES.ALL_URGENCIES' | translate }}</option>
+        @for (urgency of urgencies; track urgency) {
+          <option [value]="urgency">{{ 'PROCEDURES.URGENCY_' + urgency | translate }}</option>
+        }
+      </select></label
+    >
+    @if (search() || urgencyFilter()) {
+      <button type="button" class="btn-secondary" (click)="resetFilters()">
+        {{ 'COMMON.CLEAR' | translate }}
+      </button>
+    }
+    @if (!loading() && !loadError()) {
+      <span role="status">{{
+        'PROCEDURES.VISIBLE_COUNT'
+          | translate: { shown: visibleOrders().length, total: orders().length }
+      }}</span>
+    }
+  </div>
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
@@ -44,13 +78,15 @@
       </button>
     </div>
   }
-  @if (!loading() && !loadError() && orders().length === 0) {
+  @if (!loading() && !loadError() && visibleOrders().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">surgical</span>
-      <h3>{{ 'PROCEDURES.NO_ORDERS' | translate }}</h3>
+      <h3>
+        {{ (orders().length ? 'PROCEDURES.NO_MATCHES' : 'PROCEDURES.NO_ORDERS') | translate }}
+      </h3>
     </div>
   }
-  @if (!loading() && !loadError() && orders().length > 0) {
+  @if (!loading() && !loadError() && visibleOrders().length > 0) {
     <div class="data-table">
       <table>
         <thead>
@@ -65,7 +101,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (o of orders(); track o.id) {
+          @for (o of visibleOrders(); track o.id) {
             <tr class="data-row">
               <td>
                 {{ o.patientName || '—' }}
@@ -97,7 +133,7 @@
                     {{ 'PROCEDURES.CONSENT_PENDING' | translate }}
                   </span>
                 } @else {
-                  <span class="muted">—</span>
+                  {{ ' ' }}<span class="muted">—</span>
                 }
               </td>
               <td>
@@ -158,7 +194,7 @@
           <p>
             <strong>{{ o.patientName }}</strong>
             @if (o.patientMrn) {
-              <span class="muted">· {{ o.patientMrn }}</span>
+              {{ ' ' }}<span class="muted">· {{ o.patientMrn }}</span>
             }
             ·
             <span class="{{ urgencyClass(o.urgency) }}">
@@ -254,7 +290,14 @@
               <p class="muted">{{ o.consentFormLocation }}</p>
             }
           } @else {
-            <p class="muted">{{ 'PROCEDURES.CONSENT_PENDING' | translate }}</p>
+            <p class="muted">
+              {{
+                (o.status === 'CANCELLED'
+                  ? 'PROCEDURES.CONSENT_NOT_RECORDED_CANCELLED'
+                  : 'PROCEDURES.CONSENT_PENDING'
+                ) | translate
+              }}
+            </p>
           }
         </div>
         @if (o.cancellationReason) {

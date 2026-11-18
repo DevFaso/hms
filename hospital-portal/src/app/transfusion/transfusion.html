@@ -20,7 +20,7 @@
           {{ 'TRANSFUSION.NEW_REQUEST' | translate }}
         </button>
       }
-      @if (tab() === 'units' && canLab) {
+      @if (tab() === 'units' && canStock) {
         <button class="btn-primary" (click)="openUnitModal()">
           <span class="material-symbols-outlined">add</span>
           {{ 'TRANSFUSION.RECEIVE_UNIT' | translate }}
@@ -212,7 +212,7 @@
                   }}</span>
                 </td>
                 <td>
-                  @if (canLab && u.status !== 'TRANSFUSED' && u.status !== 'DISCARDED') {
+                  @if (canStock && u.status !== 'TRANSFUSED' && u.status !== 'DISCARDED') {
                     <button
                       class="action-link delete"
                       (click)="discardUnit(u)"

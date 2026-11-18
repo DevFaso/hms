@@ -32,6 +32,14 @@ export interface PatientInsurance {
   primary?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  /** Billing-money plan PR 6: the payer plan (formule) this coverage is billed under; absent for free text. */
+  payerPlanId?: string | null;
+  payerPlanCode?: string | null;
+  /** As the hospital typed it: never translated. */
+  payerPlanName?: string | null;
+  planPayerCode?: string | null;
+  /** As the hospital typed it: never translated. */
+  planPayerName?: string | null;
 }
 
 export interface LinkInsuranceRequest {
@@ -43,6 +51,8 @@ export interface LinkInsuranceRequest {
   policyNumber: string;
   /** QA D925: the insurer's name; a new policy is named after its payer when absent. */
   providerName?: string;
+  /** Billing-money plan PR 6: a payer plan of the acting hospital; absent leaves the link as it is. */
+  payerPlanId?: string;
 }
 
 export interface PatientInsuranceUpdateRequest {
@@ -73,6 +83,17 @@ export class PatientInsuranceService {
 
   update(insuranceId: string, req: PatientInsuranceUpdateRequest): Observable<PatientInsurance> {
     return this.http.put<PatientInsurance>(`${this.baseUrl}/${insuranceId}`, req);
+  }
+
+  /**
+   * Billing-money plan PR 6: the "Formule" picker. Links the coverage to a
+   * payer plan of the acting hospital, or removes the link (null). Hospital
+   * admin, billing specialist and reception only.
+   */
+  setPayerPlan(insuranceId: string, payerPlanId: string | null): Observable<PatientInsurance> {
+    return this.http.put<PatientInsurance>(`${this.baseUrl}/${insuranceId}/payer-plan`, {
+      payerPlanId,
+    });
   }
 
   /** Backend responds 200 text/plain — request text to avoid a JSON parse error. */

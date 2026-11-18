@@ -4,6 +4,7 @@ import com.example.hms.config.MessageBundles;
 import com.example.hms.enums.ImagingLaterality;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderStatus;
+import com.example.hms.enums.ImagingReportStatus;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -26,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PatientRecordPdfImagingLabelsTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {"_fr", "_es"})
+    @ValueSource(strings = {"_en", "_fr", "_es"})
     void everyImagingCodeHasALabel(String bundle) throws Exception {
         Properties p = new Properties();
         for (String area : MessageBundles.AREAS) {
@@ -36,7 +37,7 @@ class PatientRecordPdfImagingLabelsTest {
             }
         }
         List<String> missing = new ArrayList<>();
-        Stream.of(ImagingModality.values(), ImagingOrderStatus.values(), ImagingLaterality.values())
+        Stream.of(ImagingModality.values(), ImagingOrderStatus.values(), ImagingLaterality.values(), ImagingReportStatus.values())
             .flatMap(Stream::of)
             .map(Enum::name)
             .filter(code -> !p.containsKey("pdf.record.enum." + code) && !p.containsKey("cds.enum." + code))

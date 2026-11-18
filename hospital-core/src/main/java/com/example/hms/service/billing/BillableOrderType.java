@@ -1,5 +1,6 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.enums.PriceListLinkType;
 import com.example.hms.model.Admission;
 import com.example.hms.model.EncounterTreatment;
 import com.example.hms.model.ImagingOrder;
@@ -27,24 +28,26 @@ import java.util.List;
 public enum BillableOrderType {
 
     /** The services recorded on the visit, else one consultation line. */
-    CONSULTATION(Route.VISIT_INVOICE, List.of(EncounterTreatment.class)),
+    CONSULTATION(Route.VISIT_INVOICE, List.of(EncounterTreatment.class),
+        List.of(PriceListLinkType.TREATMENT, PriceListLinkType.SYSTEM)),
     /** Each lab order not withdrawn. */
-    LAB_ORDER(Route.VISIT_INVOICE, List.of(LabOrder.class)),
+    LAB_ORDER(Route.VISIT_INVOICE, List.of(LabOrder.class), List.of(PriceListLinkType.LAB_TEST_DEFINITION)),
     /** Each imaging order not withdrawn (QA D972, round 18). */
-    IMAGING_ORDER(Route.VISIT_INVOICE, List.of(ImagingOrder.class)),
+    IMAGING_ORDER(Route.VISIT_INVOICE, List.of(ImagingOrder.class), List.of(PriceListLinkType.IMAGING_STUDY)),
     /** Each procedure order not withdrawn. */
-    PROCEDURE_ORDER(Route.VISIT_INVOICE, List.of(ProcedureOrder.class)),
+    PROCEDURE_ORDER(Route.VISIT_INVOICE, List.of(ProcedureOrder.class), List.of(PriceListLinkType.PROCEDURE_CODE)),
     /** Each transfusion request whose blood was issued, by the units issued. */
-    TRANSFUSION(Route.VISIT_INVOICE, List.of(TransfusionRequest.class)),
+    TRANSFUSION(Route.VISIT_INVOICE, List.of(TransfusionRequest.class),
+        List.of(PriceListLinkType.TRANSFUSION_PRODUCT)),
     /** The days of the stay an inpatient visit belongs to. */
-    BED_DAYS(Route.VISIT_INVOICE, List.of(Admission.class)),
+    BED_DAYS(Route.VISIT_INVOICE, List.of(Admission.class), List.of(PriceListLinkType.SYSTEM)),
     /**
      * A dispensed medicine is paid at the pharmacy checkout (its own payment,
      * QA D264); on the visit invoice it would be billed twice.
      */
-    PHARMACY_DISPENSE(Route.PHARMACY_CHECKOUT, List.of(Prescription.class)),
+    PHARMACY_DISPENSE(Route.PHARMACY_CHECKOUT, List.of(Prescription.class), List.of()),
     /** A birth is charged when the delivery is recorded ({@code DeliveryChargeService}, QA D516). */
-    DELIVERY(Route.DELIVERY_CHARGE, List.of(DeliveryRecord.class));
+    DELIVERY(Route.DELIVERY_CHARGE, List.of(DeliveryRecord.class), List.of(PriceListLinkType.SYSTEM));
 
     /** Where an item is charged. */
     public enum Route {
@@ -58,10 +61,12 @@ public enum BillableOrderType {
 
     private final Route route;
     private final List<Class<?>> entities;
+    private final List<PriceListLinkType> linkTypes;
 
-    BillableOrderType(Route route, List<Class<?>> entities) {
+    BillableOrderType(Route route, List<Class<?>> entities, List<PriceListLinkType> linkTypes) {
         this.route = route;
         this.entities = entities;
+        this.linkTypes = linkTypes;
     }
 
     public Route route() {
@@ -71,6 +76,15 @@ public enum BillableOrderType {
     /** The records this kind of charge is derived from. */
     public List<Class<?>> entities() {
         return entities;
+    }
+
+    /**
+     * Billing-money plan PR 3: the price-list links this charge is priced by (plan section 3.3). Every type charged
+     * on an invoice declares at least one, and its charge code looks each one up ({@code BillableOrderRegistryGuardTest});
+     * a medicine is priced at the pharmacy and declares none.
+     */
+    public List<PriceListLinkType> linkTypes() {
+        return linkTypes;
     }
 
     /** Whether this item is a line on the visit invoice. */

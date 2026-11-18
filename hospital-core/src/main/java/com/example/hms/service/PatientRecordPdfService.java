@@ -293,10 +293,26 @@ public class PatientRecordPdfService {
         }
         String joined = reports.stream()
             .filter(r -> r.getImpression() != null && !r.getImpression().isBlank())
-            .map(r -> t.get("ADDENDUM".equals(r.getReportStatus())
-                ? "pdf.record.imaging.addendum" : "pdf.record.imaging.impression", r.getImpression()))
+            .map(r -> identifiedImagingConclusion(r, t))
             .collect(java.util.stream.Collectors.joining(SEPARATOR));
         return joined.isEmpty() ? null : joined;
+    }
+
+    private static String identifiedImagingConclusion(ChartReviewDTO.ImagingReportEntryDTO report, PdfLabels t) {
+        List<String> identity = new ArrayList<>();
+        String kind = label(t, report.getReportStatus());
+        if (kind != null) identity.add(kind);
+        if (report.getReportVersion() != null) {
+            identity.add(t.get("pdf.record.imaging.versionNumber", report.getReportVersion()));
+        }
+        LocalDateTime date = report.getSignedAt() != null ? report.getSignedAt() : report.getCreatedAt();
+        if (date != null) identity.add(t.fmt(date));
+        boolean addendum = "ADDENDUM".equals(report.getReportStatus());
+        if (identity.isEmpty()) {
+            return t.get(addendum ? "pdf.record.imaging.addendum" : "pdf.record.imaging.impression", report.getImpression());
+        }
+        return t.get(addendum ? "pdf.record.imaging.identifiedAddendum" : "pdf.record.imaging.identifiedImpression",
+            String.join(", ", identity), report.getImpression());
     }
 
     static String label(PdfLabels t, String code) {

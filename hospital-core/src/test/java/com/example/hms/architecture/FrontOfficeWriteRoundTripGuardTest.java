@@ -54,6 +54,8 @@ class FrontOfficeWriteRoundTripGuardTest {
             "controller/FrontDeskRoundTripIT.java#insuranceEditsPersist"),
         Map.entry("PatientInsuranceController#updatePatientInsurance",
             "controller/FrontDeskRoundTripIT.java#insuranceEditsPersist"),
+        Map.entry("PatientInsuranceController#setPayerPlan",
+            "controller/FrontDeskRoundTripIT.java#aCoverageIsLinkedToAPayerPlanOfItsHospital"),
         Map.entry("ReceptionController#updateEncounterStatus",
             "controller/FrontDeskRoundTripIT.java#aFlowBoardMovePersists"),
         Map.entry("UserController#updateUser",
