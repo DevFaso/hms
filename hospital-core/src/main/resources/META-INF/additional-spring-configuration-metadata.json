@@ -7,6 +7,44 @@
       "defaultValue": "uploads"
     },
     {
+      "name": "app.storage.type",
+      "type": "java.lang.String",
+      "description": "Where uploaded files are kept: 'local' (the app.upload.dir directory) or 's3' (an S3-compatible bucket such as Cloudflare R2). Env APP_STORAGE_TYPE. See docs/runbooks/object-storage.md.",
+      "defaultValue": "local"
+    },
+    {
+      "name": "app.storage.s3.endpoint",
+      "type": "java.lang.String",
+      "description": "S3 API endpoint of the bucket (for R2: https://<account-id>.r2.cloudflarestorage.com). Env S3_ENDPOINT. Required when app.storage.type=s3."
+    },
+    {
+      "name": "app.storage.s3.bucket",
+      "type": "java.lang.String",
+      "description": "Bucket name (private). Env S3_BUCKET. Required when app.storage.type=s3."
+    },
+    {
+      "name": "app.storage.s3.access-key-id",
+      "type": "java.lang.String",
+      "description": "Access key id of a token scoped to the bucket. Env S3_ACCESS_KEY_ID. Required when app.storage.type=s3."
+    },
+    {
+      "name": "app.storage.s3.secret-access-key",
+      "type": "java.lang.String",
+      "description": "Secret access key of that token. Env S3_SECRET_ACCESS_KEY. Required when app.storage.type=s3. Never logged."
+    },
+    {
+      "name": "app.storage.s3.region",
+      "type": "java.lang.String",
+      "description": "Signing region; R2 uses 'auto'. Env S3_REGION.",
+      "defaultValue": "auto"
+    },
+    {
+      "name": "app.storage.backfill-on-startup",
+      "type": "java.lang.Boolean",
+      "description": "Cut-over only: once the application is ready, copy every file of the old upload directory that the bucket lacks (idempotent, never deletes). Env APP_STORAGE_BACKFILL_ON_STARTUP.",
+      "defaultValue": false
+    },
+    {
       "name": "app.public-base-url",
       "type": "java.lang.String",
       "description": "Public-facing base URL prepended to uploaded file paths returned to the browser. Set PUBLIC_BASE_URL to the production domain (e.g. https://dev.e-keneya.com).",
