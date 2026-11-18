@@ -14,6 +14,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'io.micrometer:micrometer-registry-otlp'
+    // Required for Micrometer OTLP push on Boot 4: OtlpMetricsExportAutoConfiguration is
+    // @ConditionalOnClass(OpenTelemetryProperties), which lives here. Without it no
+    // OtlpMeterRegistry is ever built (see application.properties, OtlpMetricsExportTest).
+    implementation 'org.springframework.boot:spring-boot-opentelemetry'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -104,6 +108,9 @@ dependencies {
     // TestRestTemplate (@AutoConfigureTestRestTemplate) lives in its own module.
     testImplementation 'org.springframework.boot:spring-boot-resttestclient'
     testImplementation 'org.springframework.security:spring-security-test'
+    // OtlpMetricsExportTest decodes the OTLP payload. Already on the runtime classpath (via
+    // micrometer-registry-otlp, runtime scope); the version is the one that brings.
+    testImplementation 'io.opentelemetry.proto:opentelemetry-proto:1.10.0-alpha'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
 
     // Testcontainers — drives LiquibaseSchemaIT against real PostgreSQL so
