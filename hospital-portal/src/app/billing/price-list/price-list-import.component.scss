@@ -1,0 +1,55 @@
+@use '../../shared/styles/page-common';
+
+.modal-wide {
+  width: min(64rem, calc(100vw - 2rem));
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+
+  label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+}
+
+.import-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.75rem 0;
+
+  div {
+    min-width: 7rem;
+  }
+
+  dt {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+}
+
+.table-scroll {
+  max-height: 50vh;
+  overflow: auto;
+}
+
+tr.refused td {
+  background: var(--danger-bg, rgba(220, 38, 38, 0.06));
+}
+
+.field-error {
+  margin: 0 0 0.25rem;
+  color: var(--danger, #b91c1c);
+  font-size: 0.85rem;
+}

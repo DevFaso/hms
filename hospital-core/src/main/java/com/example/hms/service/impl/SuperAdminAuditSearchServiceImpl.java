@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.utility.CsvCells;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Hospital;
@@ -113,10 +114,12 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
      * comma, CR, or LF is wrapped in double-quotes with embedded
      * quotes doubled. Plain fields pass through unwrapped.
      */
-    private String csvField(String value) {
-        if (value == null) {
+    private String csvField(String raw) {
+        if (raw == null) {
             return "";
         }
+        // A user, resource or hospital name a spreadsheet would run as a formula: the one shared rule.
+        String value = CsvCells.safe(raw);
         boolean needsQuote = value.indexOf('"') >= 0
             || value.indexOf(',') >= 0
             || value.indexOf('\n') >= 0

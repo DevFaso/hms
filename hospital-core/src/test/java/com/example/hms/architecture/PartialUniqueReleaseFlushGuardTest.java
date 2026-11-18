@@ -90,11 +90,14 @@ class PartialUniqueReleaseFlushGuardTest {
         // Billing-money plan PR 2 (V302): one active item per link (deactivating releases it) and one live
         // price version per start / one open-ended version per item (closing effective_to releases it).
         Map.entry("price_list_items", "PriceListItem"),
-        Map.entry("price_list_prices", "PriceListPrice"));
+        Map.entry("price_list_prices", "PriceListPrice"),
+        // Billing-money plan PR 4 (V304): a file applies once per hospital; a trace row is never edited.
+        Map.entry("price_list_imports", "PriceListImport"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =
-        Set.of("Hospital", "User", "LabResult", "StockLot", "Encounter", "BillingInvoice", "MedicationCatalogItem");
+        Set.of("Hospital", "User", "LabResult", "StockLot", "Encounter", "BillingInvoice", "MedicationCatalogItem",
+            "PriceListImport");
 
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow();
 

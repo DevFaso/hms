@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.utility.CsvCells;
 import com.example.hms.enums.LabTestDefinitionApprovalStatus;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
@@ -228,10 +229,8 @@ public class LabTestDefinitionController {
 
     private static String escapeCsv(String val) {
         if (val == null) return "";
-        // Neutralize CSV formula injection (values starting with =, +, -, @, tab, CR)
-        if (!val.isEmpty() && "=+-@\t\r".indexOf(val.charAt(0)) >= 0) {
-            val = "'" + val;
-        }
+        // Neutralize CSV formula injection (values starting with =, +, -, @, tab, CR): the one shared rule.
+        val = CsvCells.safe(val);
         if (val.contains(",") || val.contains("\"") || val.contains("\n")) {
             return "\"" + val.replace("\"", "\"\"") + "\"";
         }

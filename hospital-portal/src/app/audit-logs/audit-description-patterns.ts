@@ -1451,6 +1451,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['version', 'item', 'from'],
   },
   {
+    // Billing-money plan PR 4: a price-list CSV file applied (the import id and the counts only).
+    key: 'AUDIT.DESC.PRICE_LIST_IMPORTED',
+    re: /^Price list import (\S+) applied: (\d+) new items, (\d+) new prices, (\d+) unchanged$/,
+    params: ['import', 'items', 'prices', 'unchanged'],
+  },
+  {
     // Billing-money plan PR 3 (D-2): a price-list price overridden on a draft line (ids only; the prices and the
     // reason stay on the line).
     key: 'AUDIT.DESC.INVOICE_LINE_PRICE_OVERRIDDEN',

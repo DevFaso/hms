@@ -86,6 +86,9 @@
   "priceListPriceStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListPriceStatus.java"
   },
+  "priceListImportRowOutcome": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListImportRowOutcome.java"
+  },
   "priceListSystemKey": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/PriceListSystemKey.java"
   },
