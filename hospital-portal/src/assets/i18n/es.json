@@ -403,6 +403,28 @@
     }
   },
   "SUPER_ADMIN": {
+    "AUDIT_OVERSIGHT": {
+      "EVENTS": "Eventos recientes de supervisión",
+      "PERIOD": "Período",
+      "DAY": "Últimas 24 horas",
+      "WEEK": "Últimos 7 días",
+      "MONTH": "Últimos 30 días",
+      "INCLUDE_ROUTINE": "Incluir lecturas de datos y renovaciones de token exitosas",
+      "EXCLUDE_ROUTINE": "Excluir lecturas de datos y renovaciones de token exitosas",
+      "HISTORY": "Los filtros buscan en el historial del período elegido. Se incluyen los demás tipos y todos los fallos.",
+      "COUNT": "{{shown}} eventos mostrados de {{total}} coincidentes",
+      "EMPTY": "Ningún evento coincide con este período y estos filtros.",
+      "UNAVAILABLE": "Historial de auditoría no disponible. Actualice para reintentar.",
+      "EVENT": "Evento / destino",
+      "ACTOR": "Actor",
+      "SCOPE": "Ámbito",
+      "TIME": "Fecha y hora",
+      "PLATFORM": "Actividad de la plataforma",
+      "SCOPE_UNKNOWN": "Ámbito no registrado",
+      "IMPERSONATOR": "Suplantado por {{actor}}",
+      "SHOW_TEN": "Mostrar hasta 10 eventos",
+      "HOSPITAL_FILTER": "Filtro de hospital (ID)"
+    },
     "ACTIVITY": {
       "PREVIEW": "Registros recientes mostrados: {{count}} (hasta 10 por categoría). Las insignias indican los totales.",
       "VIEW_ALL": "Ver todos los registros",

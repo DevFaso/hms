@@ -75,6 +75,7 @@ export interface AggregatedAuditFilter {
 }
 
 export interface AuditSearchFilter {
+  excludeRoutineSuccesses?: boolean;
   userId?: string;
   userName?: string;
   eventTypes?: string[];

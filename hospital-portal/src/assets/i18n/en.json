@@ -403,6 +403,28 @@
     }
   },
   "SUPER_ADMIN": {
+    "AUDIT_OVERSIGHT": {
+      "EVENTS": "Recent oversight events",
+      "PERIOD": "Period",
+      "DAY": "Last 24 hours",
+      "WEEK": "Last 7 days",
+      "MONTH": "Last 30 days",
+      "INCLUDE_ROUTINE": "Include successful data reads and token refreshes",
+      "EXCLUDE_ROUTINE": "Exclude successful data reads and token refreshes",
+      "HISTORY": "Filters search audit history for the selected period. All other event types and all failures remain eligible.",
+      "COUNT": "Showing {{shown}} of {{total}} matching events",
+      "EMPTY": "No events match this period and these filters.",
+      "UNAVAILABLE": "Audit history is unavailable. Refresh to try again.",
+      "EVENT": "Event / target",
+      "ACTOR": "Actor",
+      "SCOPE": "Scope",
+      "TIME": "Time",
+      "PLATFORM": "Platform activity",
+      "SCOPE_UNKNOWN": "Scope not recorded",
+      "IMPERSONATOR": "Impersonated by {{actor}}",
+      "SHOW_TEN": "Show up to 10 events",
+      "HOSPITAL_FILTER": "Hospital filter (ID)"
+    },
     "ACTIVITY": {
       "PREVIEW": "Recent records shown: {{count}} (up to 10 per category). Badges show totals.",
       "VIEW_ALL": "View all records",
