@@ -145,9 +145,9 @@ class FhirBulkExportStatusControllerTest {
     @Test
     void downloadStreamsACompletedJobsFile() throws Exception {
         job.setStatus(FhirBulkExportJob.Status.COMPLETED);
-        Path file = tempDir.resolve("Patient.ndjson");
-        Files.writeString(file, "{\"resourceType\":\"Patient\"}\n");
-        when(service.resolveOutputFile(job, "Patient.ndjson")).thenReturn(file);
+        byte[] line = "{\"resourceType\":\"Patient\"}\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        when(service.openOutputFile(job, "Patient.ndjson")).thenReturn(
+            new com.example.hms.storage.StoredObject(new java.io.ByteArrayInputStream(line), line.length));
 
         ResponseEntity<Resource> response = controller.download(jobId, "Patient.ndjson");
 
@@ -155,7 +155,7 @@ class FhirBulkExportStatusControllerTest {
         assertThat(response.getHeaders().getContentType().toString())
             .isEqualTo("application/fhir+ndjson");
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().contentLength()).isGreaterThan(0);
+        assertThat(response.getBody().contentLength()).isEqualTo(line.length);
     }
 
     @Test

@@ -21,6 +21,7 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.storage.FileStorage;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.io.BufferedWriter;
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -60,15 +62,21 @@ import java.util.stream.Stream;
  * {@code @Async}, because the codebase has no {@code @EnableAsync} and
  * adding it would silently activate the one dormant {@code @Async}
  * method elsewhere — that claims QUEUED jobs atomically and streams
- * NDJSON to local disk, one file per resource type, writing as it
- * pages so a large tenant never has to fit in memory.
+ * NDJSON to a local scratch directory, one file per resource type,
+ * writing as it pages so a large tenant never has to fit in memory.
  *
- * <p>Output lands under
- * {@code app.fhir.operations.bulk-export.storage-dir}/{jobId}/ — a
- * sibling of the public upload tree (V126 patient-photo precedent),
- * never under permitAll {@code /uploads/**}. Files reach clients only
- * through the authenticated download endpoint on
+ * <p>The scratch files are written under
+ * {@code app.fhir.operations.bulk-export.storage-dir}/{jobId}/ and, once
+ * the job is done, published to {@link FileStorage} under
+ * {@code fhir-bulk-exports/<jobId>/} (the private bucket in production)
+ * and removed: the scratch directory only lives as long as one run, so a
+ * deploy cannot lose a finished export. Files reach clients only through
+ * the authenticated download endpoint on
  * {@link FhirBulkExportStatusController}.
+ *
+ * <p>A deploy that stops the service mid-run loses only that run's scratch
+ * files: nothing was published, and the job stays IN_PROGRESS (as it did
+ * when the output was on a volume); the operator re-kicks $export.
  *
  * <p>Failure marks the job FAILED with the message and removes partial
  * output; a job whose row flips to CANCELLED mid-run is noticed at the
@@ -94,6 +102,7 @@ public class FhirBulkExportRunner {
     private static final List<String> TYPE_ORDER = List.of(
         TYPE_PATIENT, TYPE_ENCOUNTER, TYPE_OBSERVATION, TYPE_CONDITION, TYPE_MEDICATION_REQUEST);
 
+    private static final String NDJSON_TYPE = "application/fhir+ndjson";
     private static final int PATIENT_PAGE_SIZE = 100;
     private static final int RESOURCE_PAGE_SIZE = 200;
 
@@ -115,6 +124,7 @@ public class FhirBulkExportRunner {
     private final TransactionTemplate readTx;
     private final TransactionTemplate writeTx;
     private final Path storageRoot;
+    private final FileStorage storage;
 
     @SuppressWarnings("java:S107") // orchestrator wiring — one dependency per resource type
     public FhirBulkExportRunner(
@@ -134,7 +144,8 @@ public class FhirBulkExportRunner {
         MedicationRequestFhirMapper medicationRequestMapper,
         FhirContext fhirContext,
         PlatformTransactionManager transactionManager,
-        FhirOperationsProperties operationsProperties
+        FhirOperationsProperties operationsProperties,
+        FileStorage storage
     ) {
         this.service = service;
         this.jobRepository = jobRepository;
@@ -156,6 +167,7 @@ public class FhirBulkExportRunner {
         this.writeTx = new TransactionTemplate(transactionManager);
         this.storageRoot = Paths.get(
             operationsProperties.getBulkExport().getStorageDir()).toAbsolutePath().normalize();
+        this.storage = storage;
     }
 
     @SchedulerLock(name = "FhirBulkExportRunner.runSweep", lockAtMostFor = "PT1H", lockAtLeastFor = "PT5S")
@@ -193,6 +205,7 @@ public class FhirBulkExportRunner {
         } catch (Exception ex) {
             log.warn("FHIR bulk-export job {} failed: {}", jobId, ex.getMessage(), ex);
             markFailed(jobId, ex);
+            unpublishQuietly(jobId, jobDir);
             deleteQuietly(jobDir);
         }
     }
@@ -228,9 +241,42 @@ public class FhirBulkExportRunner {
                 }
             }
             sink.close();
+            publish(job.getId(), jobDir, sink.counts().keySet());
             recordOutput(job, sink);
         }
+        deleteQuietly(jobDir);
         complete(job.getId(), processed);
+    }
+
+    /** Copy each finished NDJSON file from the scratch directory into the file store. */
+    private void publish(UUID jobId, Path jobDir, Set<String> types) throws IOException {
+        for (String type : types) {
+            String fileName = fileNameOf(type);
+            Path file = jobDir.resolve(fileName);
+            try (InputStream in = Files.newInputStream(file)) {
+                storage.put(FhirBulkExportService.outputKey(jobId, fileName), in, Files.size(file), NDJSON_TYPE);
+            }
+        }
+    }
+
+    /** Remove whatever a failed run already published; the scratch files say which. */
+    private void unpublishQuietly(UUID jobId, Path jobDir) {
+        if (!Files.isDirectory(jobDir)) return;
+        try (Stream<Path> files = Files.list(jobDir)) {
+            for (Path file : files.toList()) {
+                try {
+                    storage.delete(FhirBulkExportService.outputKey(jobId, file.getFileName().toString()));
+                } catch (IOException | RuntimeException ex) {
+                    log.warn("Could not remove published bulk-export file of job {}: {}", jobId, ex.toString());
+                }
+            }
+        } catch (IOException ex) {
+            log.warn("Could not list bulk-export scratch dir of job {}: {}", jobId, ex.toString());
+        }
+    }
+
+    private static String fileNameOf(String type) {
+        return type + ".ndjson";
     }
 
     private PageResult exportRegistrationPage(
@@ -353,7 +399,7 @@ public class FhirBulkExportRunner {
             fileRepository.save(FhirBulkExportFile.builder()
                 .job(job)
                 .resourceType(type)
-                .fileName(type + ".ndjson")
+                .fileName(fileNameOf(type))
                 .resourceCount(count)
                 .build())));
     }
@@ -445,7 +491,7 @@ public class FhirBulkExportRunner {
         private BufferedWriter open(String type) {
             try {
                 return Files.newBufferedWriter(
-                    dir.resolve(type + ".ndjson"), StandardCharsets.UTF_8);
+                    dir.resolve(fileNameOf(type)), StandardCharsets.UTF_8);
             } catch (IOException ex) {
                 throw new UncheckedIOException("Failed to open " + type + ".ndjson", ex);
             }

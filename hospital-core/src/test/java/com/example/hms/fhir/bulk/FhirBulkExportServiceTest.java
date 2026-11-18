@@ -52,7 +52,8 @@ class FhirBulkExportServiceTest {
         properties = new FhirOperationsProperties();
         properties.getBulkExport().setEnabled(true);
         service = new FhirBulkExportService(
-            properties, auditEventLogService, jobRepository, fileRepository, roleValidator);
+            properties, auditEventLogService, jobRepository, fileRepository, roleValidator,
+            new com.example.hms.storage.LocalFileStorage(java.nio.file.Path.of("build", "bulk-export-test-store")));
 
         hospitalId = UUID.randomUUID();
         HospitalContextHolder.setContext(
