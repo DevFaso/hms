@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -133,7 +134,7 @@ class OtlpMetricsExportTest {
         assertThat(push.contentType()).isEqualTo("application/x-protobuf");
 
         ExportMetricsServiceRequest request = ExportMetricsServiceRequest.parseFrom(push.body());
-        Map<String, String> resource = new java.util.HashMap<>();
+        Map<String, String> resource = new HashMap<>();
         for (KeyValue kv : request.getResourceMetrics(0).getResource().getAttributesList()) {
             resource.put(kv.getKey(), kv.getValue().getStringValue());
         }
