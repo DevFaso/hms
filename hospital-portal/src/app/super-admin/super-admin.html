@@ -242,6 +242,20 @@
             }
           </div>
 
+          <div class="activity-toolbar">
+            @if (!activityLoading() && !activityUnavailable()) {
+              <p class="audit-sample" role="status">
+                {{
+                  'SUPER_ADMIN.ACTIVITY.PREVIEW'
+                    | translate: { count: selectedActivityRows().length }
+                }}
+              </p>
+            }
+            <a class="audit-footer" [routerLink]="activityRoutes[selectedActivityTab()]">
+              {{ 'SUPER_ADMIN.ACTIVITY.VIEW_ALL' | translate }}
+              <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+            </a>
+          </div>
           <div
             class="activity-list"
             role="tabpanel"
@@ -264,12 +278,43 @@
             } @else {
               @for (row of selectedActivityRows(); track row.id; let i = $index) {
                 <div class="activity-row" [attr.data-test]="'activity-row-' + i">
-                  <div class="activity-id">
-                    <code>{{ row.code || '—' }}</code>
+                  <div class="activity-subject">
+                    <strong>{{
+                      row.subject || ('SUPER_ADMIN.ACTIVITY.NOT_RECORDED' | translate)
+                    }}</strong>
+                    @if (row.code) {
+                      <code>{{ row.code }}</code>
+                    }
+                    <span class="activity-hospital">
+                      {{
+                        (selectedActivityTab() === 'labTestDefinitions'
+                          ? 'SUPER_ADMIN.ACTIVITY.CATALOG'
+                          : 'SUPER_ADMIN.ACTIVITY.HOSPITAL'
+                        ) | translate
+                      }}{{ 'COMMON.COLON' | translate }}
+                      {{
+                        selectedActivityTab() === 'labTestDefinitions'
+                          ? ('SUPER_ADMIN.ACTIVITY.GLOBAL' | translate)
+                          : row.hospital || ('SUPER_ADMIN.ACTIVITY.NOT_RECORDED' | translate)
+                      }}
+                    </span>
                   </div>
-                  <div class="activity-summary">{{ row.summary || '—' }}</div>
+                  <div class="activity-details">{{ row.details || '—' }}</div>
+                  <div class="activity-status">
+                    <span class="field-label">{{ 'SUPER_ADMIN.ACTIVITY.STATUS' | translate }}</span>
+                    <span>{{
+                      row.statusKey ? (row.statusKey | translate) : row.statusLabel || '—'
+                    }}</span>
+                  </div>
                   <div class="activity-timestamp">
-                    {{ row.timestamp ? (row.timestamp | serverTime | date: 'short') : '—' }}
+                    <span class="field-label">{{ row.timestampLabel | translate }}</span>
+                    <span>{{
+                      row.timestamp
+                        ? (row.timestamp
+                          | serverTime
+                          | date: (row.dateOnly ? 'shortDate' : 'short'))
+                        : '—'
+                    }}</span>
                   </div>
                 </div>
               }
@@ -330,7 +375,7 @@
                 }}
               </p>
             }
-            @for (event of visibleAudit(); track event.id) {
+            @for (event of displayedAudit(); track event.id) {
               <div class="audit-row" [class.audit-failed]="event.status === 'FAILURE'">
                 <div class="audit-icon">
                   <span class="material-symbols-outlined" aria-hidden="true">
@@ -344,9 +389,6 @@
                     @if (event.entityType) {
                       <span class="audit-entity">· {{ entityLabel(event.entityType) }}</span>
                     }
-                    @if (event.resourceName) {
-                      <span class="audit-resource">{{ entityLabel(event.resourceName) }}</span>
-                    }
                   </div>
                   <div class="audit-meta">
                     <span>{{ event.userName || '—' }}</span>
@@ -355,8 +397,29 @@
                     <span>·</span>
                     <span>{{ event.eventTimestamp | serverTime | date: 'short' }}</span>
                   </div>
+                  @if (entityLabel(event.resourceName); as resource) {
+                    <details class="audit-details">
+                      <summary>{{ 'SUPER_ADMIN.ACTIVITY.TARGET_DETAILS' | translate }}</summary>
+                      <code>{{ resource }}</code>
+                    </details>
+                  }
                 </div>
               </div>
+            }
+            @if (visibleAudit().length > 5) {
+              <button
+                type="button"
+                class="routine-toggle"
+                [attr.aria-expanded]="auditExpanded()"
+                (click)="auditExpanded.set(!auditExpanded())"
+              >
+                {{
+                  (auditExpanded()
+                    ? 'SUPER_ADMIN.ACTIVITY.SHOW_LESS'
+                    : 'SUPER_ADMIN.ACTIVITY.SHOW_MORE'
+                  ) | translate: { count: visibleAudit().length }
+                }}
+              </button>
             }
             <a class="audit-footer" routerLink="/super-admin/audit-logs">
               {{ 'SUPER_ADMIN.VIEW_ALL_AUDIT' | translate }}

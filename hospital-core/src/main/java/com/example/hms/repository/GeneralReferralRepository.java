@@ -19,6 +19,9 @@ import java.util.UUID;
 @Repository
 public interface GeneralReferralRepository extends JpaRepository<GeneralReferral, UUID> {
 
+    org.springframework.data.domain.Page<GeneralReferral> findByHospital_Id(
+        UUID hospitalId, org.springframework.data.domain.Pageable pageable);
+
     /**
      * Find referrals by patient
      */

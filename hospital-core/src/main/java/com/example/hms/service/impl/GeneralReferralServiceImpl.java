@@ -512,7 +512,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
     @Override
     public List<GeneralReferralResponseDTO> getRecentForSuperAdmin(Pageable pageable) {
-        return referralRepository.findAll(pageable)
+        UUID hospitalId = com.example.hms.security.tenant.ActingScopeResolver
+            .superAdminPinnedHospitalIdOrNull();
+        return (hospitalId == null ? referralRepository.findAll(pageable)
+            : referralRepository.findByHospital_Id(hospitalId, pageable))
             .map(this::toResponse)
             .getContent();
     }
