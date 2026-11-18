@@ -1783,6 +1783,7 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'transfusions',
         'unsigned-notes',
         'webhooks',
+        'patient-notifications',
         // The release worklist is one laboratory's queue: getPendingRelease
         // refuses a scopeless read outright rather than guessing a hospital,
         // so the page must not render until one is pinned.

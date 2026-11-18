@@ -507,4 +507,25 @@ class PatientPortalLabResultsIT extends BaseIT {
     private String nextId() {
         return String.format("%05d", sequence.incrementAndGet());
     }
+    @Test
+    @DisplayName("dashboard result count follows ordering-or-performing scope without double counting")
+    void dashboardResultCountMatchesHandledHospitalScope() {
+        Hospital performing = hospitalRepository.save(Hospital.builder()
+            .name("Receiving laboratory").code("LAB-" + nextId())
+            .city("Bobo-Dioulasso").country("Burkina Faso").address("2 Lab Street")
+            .phoneNumber("+226555" + nextId()).email("lab" + nextId() + "@hospital.test")
+            .organization(hospital.getOrganization()).build());
+        assertThat(labResultRepository.countHandledByHospital(hospital.getId())).isEqualTo(1);
+        assertThat(labResultRepository.countHandledByHospital(performing.getId())).isZero();
+        assertThat(labResultRepository.countHandledByHospital(java.util.UUID.randomUUID())).isZero();
+        order.setPerformingHospital(performing);
+        labOrderRepository.saveAndFlush(order);
+        assertThat(labResultRepository.countHandledByHospital(hospital.getId())).isEqualTo(1);
+        assertThat(labResultRepository.countHandledByHospital(performing.getId())).isEqualTo(1);
+        order.setPerformingHospital(hospital);
+        labOrderRepository.saveAndFlush(order);
+        assertThat(labResultRepository.countHandledByHospital(hospital.getId())).isEqualTo(1);
+        assertThat(labResultRepository.countHandledByHospital(performing.getId())).isZero();
+    }
+
 }

@@ -58,6 +58,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import java.util.Locale;
 
@@ -266,7 +271,7 @@ class SuperAdminDashboardServiceImplTest {
         when(encounterRepository.countVisitsByHospitalId(chip)).thenReturn(1L);
         when(consultationRepository.countByHospital_Id(chip)).thenReturn(2L);
         when(labOrderRepository.countByHospital_Id(chip)).thenReturn(3L);
-        when(labResultRepository.countByLabOrder_Hospital_Id(chip)).thenReturn(4L);
+        when(labResultRepository.countHandledByHospital(chip)).thenReturn(4L);
         when(labTestDefinitionRepository.count()).thenReturn(55L); // catalog stays system-wide
         when(admissionRepository.countByHospital_Id(chip)).thenReturn(6L);
         when(prescriptionRepository.countByHospital_Id(chip)).thenReturn(7L);
@@ -334,7 +339,7 @@ class SuperAdminDashboardServiceImplTest {
         org.mockito.Mockito.verify(encounterRepository, org.mockito.Mockito.never())
             .countVisitsByHospitalId(any());
         org.mockito.Mockito.verify(labResultRepository, org.mockito.Mockito.never())
-            .countByLabOrder_Hospital_Id(any());
+            .countHandledByHospital(any());
     }
 
     @Test
@@ -629,4 +634,36 @@ class SuperAdminDashboardServiceImplTest {
         assertThat(bundle.getTreatmentPlans()).containsExactly(planDto);
         assertThat(bundle.getReferrals()).containsExactly(refDto);
     }
+    @Test
+    void recentFeeds_applyVerifiedPinBeforeLimiting_withoutRequiringStaffMembership() {
+        var hospitalId = java.util.UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .superAdmin(true).headerOverridden(true).activeHospitalId(hospitalId).build());
+        try {
+            when(admissionRepository.findByHospital_Id(eq(hospitalId), any(Pageable.class)))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+            when(labOrderRepository.findByHospital_Id(eq(hospitalId), any(Pageable.class)))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+            when(prescriptionRepository.findByHospital_Id(eq(hospitalId), any(Pageable.class)))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+            when(treatmentPlanService.listByHospital(eq(hospitalId), isNull(), any(Pageable.class)))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+            when(encounterService.list(isNull(), isNull(), eq(hospitalId), isNull(), isNull(), isNull(), any(Pageable.class), eq(Locale.ENGLISH)))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+            service.getRecentAdmissions(3);
+            service.getRecentLabOrders(3, Locale.ENGLISH);
+            service.getRecentPrescriptions(3, Locale.ENGLISH);
+            service.getRecentTreatmentPlans(3);
+            service.getRecentEncounters(3, Locale.ENGLISH);
+            verify(admissionRepository, never()).findAll(any(Pageable.class));
+            verify(labOrderRepository, never()).findAll(any(Pageable.class));
+            verify(prescriptionRepository, never()).findAll(any(Pageable.class));
+            verify(treatmentPlanService, never()).listAll(any(), any(Pageable.class));
+            verify(admissionRepository).findByHospital_Id(eq(hospitalId), argThat(page -> page.getPageSize() == 3));
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
 }

@@ -36,6 +36,8 @@ import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CashClosingComponent } from './cash-closing/cash-closing.component';
+import { InvoiceRefundsComponent } from './refunds/invoice-refunds.component';
+import { RefundQueueComponent } from './refunds/refund-queue.component';
 import { formatCfa } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -112,6 +114,8 @@ export function lineQuantityMessageKey(qty: number | string | null | undefined):
     PatientPickerComponent,
     DialogA11yDirective,
     CashClosingComponent,
+    InvoiceRefundsComponent,
+    RefundQueueComponent,
     RouterLink,
   ],
   templateUrl: './billing.html',
@@ -131,6 +135,16 @@ export class BillingComponent implements OnInit {
   // Permission-gated action flags
   /** QA D1059: the cashier's daily cash closing, opened from the page header. */
   readonly showCashClosing = signal(false);
+
+  /** Billing-money plan PR 8 (QA D1900): the refunds waiting on a decision or a hand-over. */
+  readonly showRefundQueue = signal(false);
+  /** The roles that decide (D-3) or hand over a refund (InvoiceRefundController); the server checks again. */
+  readonly canSeeRefundQueue = this.roleContext.hasAnyActiveRole([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_ACCOUNTANT',
+    'ROLE_BILLING_SPECIALIST',
+    'ROLE_RECEPTIONIST',
+  ]);
 
   /** QA D1059: the date range of the last search run, which the KPI tiles follow. */
   private appliedRange: { fromDate?: string; toDate?: string } = {};
@@ -799,6 +813,23 @@ export class BillingComponent implements OnInit {
       );
     }
     this.filtered.set(list);
+  }
+
+  /** Billing-money plan PR 8: a row of the refund queue opens its invoice, where the refund steps are taken. */
+  openInvoiceById(invoiceId: string): void {
+    this.billingService.getInvoice(invoiceId).subscribe({
+      next: (inv) => this.viewInvoice(inv),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BILLING.LOAD_FAILED')),
+    });
+  }
+
+  /** Billing-money plan PR 8: a refund step changed what is owed back: re-read the invoice. */
+  refundChanged(invoiceId: string): void {
+    this.billingService.getInvoice(invoiceId).subscribe({
+      next: (updated) => this.applyUpdated(updated),
+      error: () => this.toast.error(this.translate.instant('BILLING.LOAD_FAILED')),
+    });
   }
 
   viewInvoice(inv: BillingInvoiceResponse): void {

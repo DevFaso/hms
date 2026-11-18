@@ -344,7 +344,10 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getRecentForSuperAdmin(Pageable pageable) {
-        return consultationRepository.findAll(pageable)
+        UUID hospitalId = com.example.hms.security.tenant.ActingScopeResolver
+            .superAdminPinnedHospitalIdOrNull();
+        return (hospitalId == null ? consultationRepository.findAll(pageable)
+            : consultationRepository.findByHospital_Id(hospitalId, pageable))
             .map(this::toResponseDTO)
             .getContent();
     }

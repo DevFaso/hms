@@ -53,6 +53,10 @@ test.describe('super-admin control tower', () => {
           totalAdmissions: 16,
           totalPrescriptions: 75,
           totalLabOrders: 26,
+          totalLabResults: 11,
+          totalLabTestDefinitions: 10,
+          totalTreatmentPlans: 1,
+          totalReferrals: 1,
           generatedAt: '2026-11-17T15:42:00Z',
           recentAuditEvents: [
             {
@@ -60,6 +64,7 @@ test.describe('super-admin control tower', () => {
               eventType: 'TOKEN_REFRESH',
               status: 'SUCCESS',
               userName: 'Routine actor',
+              resourceName: 'Unknown Resource',
               eventTimestamp: '2026-11-17T15:40:00Z',
             },
             {
@@ -67,6 +72,7 @@ test.describe('super-admin control tower', () => {
               eventType: 'TOKEN_REFRESH',
               status: 'FAILURE',
               userName: 'Failed actor',
+              resourceName: 'BILLING_INVOICE',
               eventTimestamp: '2026-11-17T15:41:00Z',
             },
           ],
@@ -99,11 +105,46 @@ test.describe('super-admin control tower', () => {
     );
     await page.route('**/api/super-admin/recent-activity**', (route) =>
       route.fulfill({
-        json: {
-          consultations: [
-            { id: 'record', patientName: 'Review patient', createdAt: '2026-11-17T15:00:00Z' },
-          ],
-        },
+        json: Object.fromEntries(
+          [
+            'consultations',
+            'admissions',
+            'prescriptions',
+            'labOrders',
+            'labResults',
+            'labTestDefinitions',
+            'treatmentPlans',
+            'referrals',
+          ].map((key) => [
+            key,
+            [
+              {
+                id: key,
+                patientName: 'Review patient',
+                patientFullName: 'Review patient',
+                name: 'Shared test',
+                hospitalName: 'Hospital B',
+                patientMrn: 'MRN-0042',
+                status: 'ACTIVE',
+                medicationName: 'Medicine',
+                labTestName: 'Test',
+                released: true,
+                [(
+                  {
+                    consultations: 'requestedAt',
+                    admissions: 'admissionDateTime',
+                    prescriptions: 'createdAt',
+                    labOrders: 'orderDatetime',
+                    labResults: 'resultDate',
+                    labTestDefinitions: 'createdAt',
+                    treatmentPlans: 'timelineStartDate',
+                    referrals: 'submittedAt',
+                  } as Record<string, string>
+                )[key]]: key === 'treatmentPlans' ? '2026-11-17' : '2026-11-17T15:00:00Z',
+              },
+            ],
+          ]),
+        ),
       }),
     );
   });
@@ -135,14 +176,40 @@ test.describe('super-admin control tower', () => {
           .locator('.activity-tabs')
           .evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
       ).toBeTruthy();
+      for (const tab of await tabs.all()) {
+        await tab.click();
+        await expect(screen.locator('.activity-row')).toHaveCount(1);
+        await expect(screen.locator('.activity-subject')).toContainText('MRN-0042');
+        await expect(screen.locator('.activity-timestamp .field-label')).not.toBeEmpty();
+        if ((await tab.getAttribute('id')) === 'activity-tab-treatmentPlans') {
+          await expect(screen.locator('.activity-timestamp span:last-child')).not.toContainText(
+            ':',
+          );
+        }
+        await expect(screen.locator('.activity-toolbar a')).toHaveAttribute('href', /^\//);
+      }
       await tabs.first().focus();
       await page.keyboard.press('End');
       await expect(tabs.last()).toBeFocused();
       await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
+      const activityBox = await screen.locator('.clinical-activity').boundingBox();
+      const auditBox = await screen.locator('.audit-panel').boundingBox();
+      expect(auditBox!.y).toBeGreaterThanOrEqual(activityBox!.y + activityBox!.height);
+      for (const selector of ['.activity-list', '.audit-list']) {
+        expect(
+          await screen.locator(selector).evaluate((element) => {
+            const style = getComputedStyle(element);
+            return ['auto', 'scroll'].includes(style.overflowY);
+          }),
+        ).toBe(false);
+      }
       await expect(screen.locator('.audit-list')).toContainText('Failed actor');
       await expect(screen.locator('.audit-list')).not.toContainText('Routine actor');
-      await screen.locator('.routine-toggle').click();
+      await screen.locator('.routine-toggle[aria-pressed]').click();
       await expect(screen.locator('.audit-list')).toContainText('Routine actor');
+      await expect(screen.locator('.audit-details')).toHaveCount(1);
+      await screen.locator('.audit-details summary').click();
+      await expect(screen.locator('.audit-details code')).toHaveText('Facture');
       expect(
         await screen
           .locator('.audit-line')
@@ -177,10 +244,12 @@ test.describe('super-admin control tower', () => {
       'Aucun \u00e9v\u00e9nement de cet \u00e9chantillon r\u00e9cent ne correspond au filtre.',
     );
     await expect(list.locator('.audit-row')).toHaveCount(0);
-    await screen.locator('.routine-toggle').click();
+    await screen.locator('.routine-toggle[aria-pressed]').click();
+    await expect(list.locator('.audit-row')).toHaveCount(5);
+    await list.getByRole('button', { name: /Show all|Afficher les|Mostrar los/ }).click();
     await expect(list.locator('.audit-row')).toHaveCount(10);
     await expect(list.locator('.activity-empty')).toHaveCount(0);
-    await screen.locator('.routine-toggle').click();
+    await screen.locator('.routine-toggle[aria-pressed]').click();
     await expect(list.locator('.audit-row')).toHaveCount(0);
     await expect(list).toContainText(
       'Aucun \u00e9v\u00e9nement de cet \u00e9chantillon r\u00e9cent ne correspond au filtre.',

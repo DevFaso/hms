@@ -271,7 +271,7 @@ summary:focus-visible,
 }
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   margin-bottom: 20px;
   align-items: start;
@@ -311,42 +311,47 @@ summary:focus-visible,
   border-radius: 5px;
   font-size: 10px;
 }
-.activity-list {
-  max-height: 400px;
-  overflow-y: auto;
+.activity-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+}
+.activity-toolbar .audit-footer {
+  padding: 0;
 }
 .activity-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 12px;
-  row-gap: 6px;
-  padding: 14px 0;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) minmax(90px, 0.6fr) minmax(130px, 0.7fr);
+  gap: 16px;
+  align-items: start;
+  padding: 16px 0;
   border-bottom: 1px solid #edf1f5;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
-.activity-id {
-  grid-column: 1;
-  grid-row: 2;
+.activity-subject,
+.activity-status,
+.activity-timestamp {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
 }
-.activity-id code {
-  font-size: 10px;
-  color: #52667b;
+.activity-subject code {
+  font-size: 11px;
   padding: 2px 5px;
   background: #f0f4f7;
   border-radius: 4px;
 }
-.activity-summary {
-  grid-column: 1;
-  grid-row: 1;
-  font-size: 13px;
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-.activity-timestamp {
-  grid-column: 2;
-  grid-row: span 2;
+.activity-hospital,
+.field-label {
   font-size: 11px;
   color: #52667b;
-  align-self: center;
 }
 .activity-empty {
   display: flex;
@@ -378,10 +383,6 @@ summary:focus-visible,
   color: #075d52;
   background: #e7f4ef;
   border-color: #a0cec0;
-}
-.audit-list {
-  max-height: 434px;
-  overflow-y: auto;
 }
 .audit-row {
   display: flex;
@@ -616,8 +617,7 @@ summary:focus-visible,
     grid-template-columns: 1fr;
   }
   .activity-timestamp {
-    grid-column: 1;
-    grid-row: 3;
+    grid-column: auto;
   }
   .platform-strip {
     grid-template-columns: 1fr;
@@ -786,5 +786,30 @@ summary:focus-visible,
 @media (max-width: 600px) {
   .admin-groups {
     grid-template-columns: 1fr;
+  }
+}
+
+.audit-body {
+  flex: 1;
+}
+.audit-meta {
+  font-size: 12px;
+}
+.audit-details {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.audit-details summary {
+  cursor: pointer;
+  color: #076a5c;
+}
+.audit-details code {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-top: 8px;
+}
+@media (min-width: 701px) and (max-width: 1000px) {
+  .activity-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -65,6 +65,18 @@ public class LabResultReleaseNotifier {
     private final com.example.hms.repository.LabOrderRepository labOrderRepository;
 
     /**
+     * V312: the result-available SMS / email, queued in the patient notification
+     * ledger. Setter-injected so the unit tests that build this by constructor
+     * keep compiling; null there.
+     */
+    private com.example.hms.service.notification.PatientNotificationLedger notificationLedger;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNotificationLedger(com.example.hms.service.notification.PatientNotificationLedger notificationLedger) {
+        this.notificationLedger = notificationLedger;
+    }
+
+    /**
      * Tell the patient a result is ready. Call it inside the transaction that
      * released the result; a result that is not released, or a patient with no
      * portal account, is a no-op.
@@ -75,6 +87,14 @@ public class LabResultReleaseNotifier {
         }
         LabOrder order = result.getLabOrder();
         Patient patient = order != null ? order.getPatient() : null;
+        // V312: SMS / email "a result is available", whether or not the patient
+        // has a portal account. One per order (the ledger's key), never the
+        // test or the value; the sweep re-checks the order still stands.
+        if (notificationLedger != null && patient != null && order.getHospital() != null) {
+            notificationLedger.requestAfterCommit(
+                com.example.hms.enums.PatientNotificationEvent.LAB_RESULT_AVAILABLE,
+                order.getHospital().getId(), patient.getId(), order.getId());
+        }
         User portalUser = patient != null ? patient.getUser() : null;
         if (portalUser == null || portalUser.getId() == null
                 || portalUser.getUsername() == null || portalUser.getUsername().isBlank()) {

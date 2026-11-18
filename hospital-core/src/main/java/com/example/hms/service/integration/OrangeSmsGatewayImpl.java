@@ -92,12 +92,12 @@ public class OrangeSmsGatewayImpl implements IkoddiGateway {
     /** A token is replaced this long before Orange says it expires. */
     static final long TOKEN_EXPIRY_MARGIN_SECONDS = 60;
 
-    static final String KEY_REJECTED = "sms.provider.rejected";
-    static final String KEY_UNKNOWN_OUTCOME = "sms.provider.unknownOutcome";
-    static final String KEY_AUTH_FAILED = "sms.provider.authFailed";
-    static final String KEY_UNREACHABLE = "sms.provider.unreachable";
-    static final String KEY_RECIPIENT_NOT_SUPPORTED = "sms.recipient.notSupported";
-    static final String KEY_MESSAGE_REQUIRED = "sms.message.required";
+    static final String KEY_REJECTED = SmsFailureKeys.REJECTED;
+    static final String KEY_UNKNOWN_OUTCOME = SmsFailureKeys.UNKNOWN_OUTCOME;
+    static final String KEY_AUTH_FAILED = SmsFailureKeys.AUTH_FAILED;
+    static final String KEY_UNREACHABLE = SmsFailureKeys.UNREACHABLE;
+    static final String KEY_RECIPIENT_NOT_SUPPORTED = SmsFailureKeys.RECIPIENT_NOT_SUPPORTED;
+    static final String KEY_MESSAGE_REQUIRED = SmsFailureKeys.MESSAGE_REQUIRED;
 
     private static final Pattern SENDER_ADDRESS = Pattern.compile("tel:\\+[1-9]\\d{1,14}");
     private static final Pattern SENDER_NAME = Pattern.compile("[A-Za-z0-9 ]{1,11}");

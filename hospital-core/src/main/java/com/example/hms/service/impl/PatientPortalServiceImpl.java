@@ -125,6 +125,19 @@ import com.example.hms.utility.RoleNames;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
+
+    /**
+     * V312: the booking confirmation SMS, queued in the patient notification
+     * ledger once the booking commits. Setter-injected so unit tests that
+     * build this service by constructor keep compiling; null there.
+     */
+    private com.example.hms.service.notification.PatientNotificationLedger notificationLedger;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNotificationLedger(com.example.hms.service.notification.PatientNotificationLedger notificationLedger) {
+        this.notificationLedger = notificationLedger;
+    }
+
     /** Request properties a refusal names (QA D1352 class, round 30). */
     private static final String FIELD_APPOINTMENT_ID = "appointmentId";
     private static final String FIELD_DATE = "date";
@@ -776,6 +789,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         appointmentRepository.flush();
         // QA D1093: the slot is taken, so nobody else is offered it.
         slotPolicy.takeSlot(slot, saved);
+        // V312: the booking confirmation SMS (sent by the ledger, after commit).
+        if (notificationLedger != null) {
+            notificationLedger.confirmBooking(saved);
+        }
         // QA D985: a recall the patient answers by booking is scheduled.
         if (recallService != null) {
             recallService.scheduleOpenRecallFor(saved, null);

@@ -15,6 +15,9 @@ import java.util.UUID;
 @Repository
 public interface ConsultationRepository extends JpaRepository<Consultation, UUID> {
 
+    org.springframework.data.domain.Page<Consultation> findByHospital_Id(
+        UUID hospitalId, org.springframework.data.domain.Pageable pageable);
+
     /*
      * Common attribute graph used by the read endpoints. Eagerly loads every
      * @ManyToOne association the response mapper dereferences (patient,

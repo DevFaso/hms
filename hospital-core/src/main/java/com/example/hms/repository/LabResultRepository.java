@@ -566,6 +566,15 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      */
     long countByLabOrder_Hospital_Id(UUID hospitalId);
 
+    /** Match the ordering-or-performing hospital scope of findHandledByHospitalForReader. */
+    @Query("""
+        SELECT COUNT(r) FROM LabResult r
+        WHERE (r.labOrder.hospital.id = :hospitalId
+            OR r.labOrder.performingHospital.id = :hospitalId)
+        """)
+    long countHandledByHospital(@Param("hospitalId") UUID hospitalId);
+
+
     boolean existsByLabOrder_Id(UUID labOrderId);
 
     /**

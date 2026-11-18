@@ -491,6 +491,30 @@
       "ACTIVITY_UNAVAILABLE": "Recent clinical activity unavailable. Refresh to retry.",
       "AUDIT_SAMPLE": "Sample: latest {{count}} audit events received. Filters apply to this sample only.",
       "ROUTINE_AUDIT": "Include successful token refreshes ({{count}})"
+    },
+    "ACTIVITY": {
+      "PREVIEW": "Recent records shown: {{count}} (up to 10 per category). Badges show totals.",
+      "VIEW_ALL": "View all records",
+      "NOT_RECORDED": "Not recorded",
+      "CATALOG": "Shared catalog",
+      "HOSPITAL": "Hospital",
+      "GLOBAL": "All hospitals",
+      "STATUS": "Status",
+      "TARGET_DETAILS": "Target details",
+      "SHOW_LESS": "Show fewer events",
+      "SHOW_MORE": "Show all {{count}} matching events",
+      "DATE_encounterDate": "Encounter",
+      "DATE_admissionDateTime": "Admission",
+      "DATE_resultDate": "Result",
+      "DATE_orderDatetime": "Ordered",
+      "DATE_submittedAt": "Submitted",
+      "DATE_timelineStartDate": "Plan start",
+      "DATE_consentTimestamp": "Consent recorded",
+      "DATE_requestedAt": "Requested",
+      "DATE_admissionDate": "Admission",
+      "DATE_orderedAt": "Ordered",
+      "DATE_createdAt": "Created",
+      "DATE_UNKNOWN": "Date unavailable"
     }
   },
   "AUDIT_SEARCH": {
@@ -1829,7 +1853,6 @@
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE_STATED": "Emergency release — serologically incompatible, of unit {{unit}} against request {{request}}, O negative stated not obtainable in time, stock shown {{shown}}",
       "CROSS_HOSPITAL_READ": "Read from another hospital on the treatment relationship: {{subject}}{{extra}}",
       "SUPPORT_SESSION_REFUSED": "Support session refused: {{what}} (sign-in or recovery details)",
-      "SUPPORT_SESSION_CLINICAL_REFUSED": "Support session refused: a clinical act ({{roles}}) during impersonation",
       "IMPERSONATION_STARTED": "Support session started as {{user}}. Reason: {{reason}}",
       "IMPERSONATION_ENDED": "Support session as {{user}} ended",
       "USER_ACTION_REFUSED": "User {{action}} refused: the caller may not administer this account",
@@ -2010,6 +2033,11 @@
       "IMAGING_DUPLICATE_OVERRIDDEN": "Duplicate warning overridden (\"Order anyway\", reason: {{reason}}): imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
       "NATIONAL_IU_ACTION": "Patient unique identifier: {{operation}}",
+      "PRICE_LIST_IMPORTED": "Price list import {{import}} applied: {{items}} new items, {{prices}} new prices, {{unchanged}} unchanged",
+      "REFUND_EVENT": "{{what}}: refund {{refund}} on invoice {{invoice}}",
+      "SUPPORT_SESSION_MONEY_REFUSED": "Support session refused: {{what}} (money)",
+      "PHARMACY_PAYMENT_VOIDED_IDS": "Pharmacy payment {{payment}} voided for cancelled dispense {{dispense}}",
+      "SUPPORT_SESSION_CLINICAL_REFUSED": "Support session refused: a clinical act ({{roles}}) during impersonation",
       "PAYER_CREATED": "Payer {{payer}} created",
       "PAYER_UPDATED": "Payer {{payer}} updated",
       "PAYER_DEACTIVATED": "Payer {{payer}} deactivated, reason recorded",
@@ -2019,8 +2047,7 @@
       "PAYER_RULE_ENDED": "Rule {{rule}} of plan {{plan}} ended, reason recorded",
       "COVERAGE_PLAN_LINKED": "Patient coverage {{insurance}} linked to plan {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
-      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
-      "PRICE_LIST_IMPORTED": "Price list import {{import}} applied: {{items}} new items, {{prices}} new prices, {{unchanged}} unchanged"
+      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2309,6 +2336,13 @@
       "UPDATE": "updated",
       "CLEAR": "cleared",
       "SHOW_FULL": "shown in full"
+    },
+    "REFUND_EVENT": {
+      "REFUND_REQUESTED": "Refund requested",
+      "REFUND_APPROVED": "Refund approved",
+      "REFUND_REJECTED": "Refund rejected",
+      "REFUND_PAID_OUT": "Refund handed to the patient",
+      "REFUND_CANCELLED": "Refund cancelled"
     }
   },
   "BILLING": {
@@ -2495,7 +2529,10 @@
       "SOURCES": {
         "BILLING": "Invoices",
         "PHARMACY": "Pharmacy"
-      }
+      },
+      "REFUNDED": "Refunds handed over (money out)",
+      "NET": "Expected in the till",
+      "REFUND_TAG": "refund"
     },
     "CANCEL_REASON": "Reason for cancelling",
     "CANCEL_REASON_PLACEHOLDER": "Why is this issued invoice cancelled? The reason is kept with it.",
@@ -2612,6 +2649,57 @@
         "TOO_LARGE": "The file is larger than 1 MB. Split the price list into several files.",
         "CONCURRENT_ERROR": "Someone else has just created this code (or link) in the price list: nothing was applied. Check the file again."
       }
+    },
+    "REFUNDS": {
+      "TITLE": "Refund requests",
+      "REFUND": "Refund",
+      "REFUNDED_TOTAL": "Already refunded to the patient: {{amount}}",
+      "LOAD_FAILED": "The refunds could not be loaded.",
+      "EMPTY": "No refund on this invoice.",
+      "REQUESTED_ON": "Requested on",
+      "AMOUNT": "Amount",
+      "METHOD": "Refund method",
+      "REASON": "Reason",
+      "BY": "by {{name}}",
+      "STATUSES": {
+        "REQUESTED": "Requested, to approve",
+        "APPROVED": "Approved, to hand over",
+        "REJECTED": "Rejected",
+        "PAID": "Handed to the patient",
+        "CANCELLED": "Cancelled"
+      },
+      "DECIDED_BY": "Decided by {{name}}",
+      "PAID_ON": "Handed over on {{date}} by {{name}}",
+      "OTHER_APPROVER": "Another manager must approve: you made this request.",
+      "APPROVE": "Approve",
+      "REJECT": "Reject",
+      "HAND_OVER": "Handed to the patient",
+      "CANCEL": "Cancel the request",
+      "RECEIPT": "Refund receipt",
+      "REQUEST_TITLE": "Refund the patient",
+      "REFERENCE": "Transaction reference",
+      "APPROVAL_NOTE": "The request must be approved by another manager (administrator or accountant), then handed to the patient at the till.",
+      "SUBMIT_REQUEST": "Request the refund",
+      "REJECT_TITLE": "Reject the refund of {{amount}}",
+      "CANCEL_TITLE": "Cancel the refund request of {{amount}}",
+      "AMOUNT_REQUIRED": "Enter the amount to refund (more than 0).",
+      "REFERENCE_REQUIRED": "Enter the transaction reference (mobile money or bank transfer).",
+      "REASON_REQUIRED": "Reason required: say why the money is given back to the patient.",
+      "DECISION_REASON_REQUIRED": "Reason required.",
+      "REQUESTED_TOAST": "Refund request recorded: another manager must approve it.",
+      "APPROVED_TOAST": "Refund approved.",
+      "REJECTED_TOAST": "Refund rejected.",
+      "CANCELLED_TOAST": "Refund request cancelled.",
+      "PAID_TOAST": "Refund handed to the patient.",
+      "FAILED": "The refund could not be recorded.",
+      "QUEUE_OPEN": "Refunds to approve",
+      "QUEUE_TITLE": "Refunds to approve or hand over",
+      "QUEUE_EMPTY": "No refund waiting.",
+      "OPEN_INVOICE": "Open the invoice",
+      "INVOICE": "Invoice",
+      "REFERENCE_AT_HANDOVER": "The transaction reference is asked for at hand-over, when the money is sent.",
+      "HAND_OVER_TITLE": "Hand over the refund of {{amount}}",
+      "RECEIPT_NUMBER": "Receipt no. {{number}}"
     },
     "PAYERS": {
       "TITLE": "Payers",
@@ -4868,6 +4956,7 @@
     "ADT_INTAKE": "ADT intake",
     "UNSIGNED_NOTES": "Unsigned notes",
     "PRICE_LIST": "Price list",
+    "PATIENT_NOTIFICATIONS": "Patient notifications",
     "PAYERS": "Payers"
   },
   "NOTIFICATIONS": {
@@ -6275,7 +6364,8 @@
       "LEFT_TO_DECLARE": "Left to declare",
       "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}}: {{pending}} already declared is awaiting confirmation.",
       "CREDITED_TO": "Credited to invoice {{number}}",
-      "FULLY_DECLARED": "Balance declared, awaiting the cashier's confirmation"
+      "FULLY_DECLARED": "Balance declared, awaiting the cashier's confirmation",
+      "REFUNDED": "Refunded: {{amount}} on {{date}}"
     },
     "CARE_TEAM": {
       "TITLE": "My Care Team",
@@ -7206,10 +7296,15 @@
         "INVOICE_LINE_PRICE_RESTORED": "Price-list price restored",
         "INVOICE_LINE_DELETED": "Invoice line deleted",
         "INVOICE_LINE_PRICE_OVERRIDDEN": "Price-list price overridden",
+        "PRICE_LIST_IMPORTED": "Price list imported",
+        "REFUND_REQUESTED": "Refund requested",
+        "REFUND_APPROVED": "Refund approved",
+        "REFUND_REJECTED": "Refund rejected",
+        "REFUND_CANCELLED": "Refund cancelled",
+        "PAYMENT_REVERSED": "Payment reversed",
         "PAYER_CHANGED": "Payer changed",
         "PAYER_PLAN_CHANGED": "Payer plan changed",
-        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan",
-        "PRICE_LIST_IMPORTED": "Price list imported"
+        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7742,9 +7837,10 @@
         "WEBHOOK": "Partner webhook",
         "FETAL_DEATH_EVENT": "Fetal-death event",
         "IMAGING_ORDER": "Imaging order",
+        "PRICE_LIST_IMPORT": "Price list import",
+        "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send",
         "PAYER": "Payer",
-        "PAYER_PLAN": "Payer plan",
-        "PRICE_LIST_IMPORT": "Price list import"
+        "PAYER_PLAN": "Payer plan"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -7912,6 +8008,12 @@
         "DELIVERY_VAGINAL": "Vaginal delivery",
         "DELIVERY_CAESAREAN": "Caesarean section"
       },
+      "PRICE_LIST_IMPORT_ROW_OUTCOME": {
+        "NEW_ITEM": "New item",
+        "NEW_PRICE": "New price",
+        "UNCHANGED": "Unchanged",
+        "REFUSED": "Refused"
+      },
       "PAYER_TYPE": {
         "AMU": "Universal health insurance",
         "MUTUELLE": "Mutual insurer",
@@ -7924,12 +8026,6 @@
         "IN_FORCE": "In force",
         "ENDED": "Ended",
         "CANCELLED": "Withdrawn before it applied"
-      },
-      "PRICE_LIST_IMPORT_ROW_OUTCOME": {
-        "NEW_ITEM": "New item",
-        "NEW_PRICE": "New price",
-        "UNCHANGED": "Unchanged",
-        "REFUSED": "Refused"
       }
     },
     "DOCUMENTS": {
@@ -14199,5 +14295,64 @@
     "REASON_REQUIRED": "Give the reason for saving a duplicate identifier.",
     "WAIT_CHECK": "The identifier is still being checked. Try again in a moment.",
     "EXISTS_HERE_NUMBERED": "Existing record {{index}} of {{count}} with this identifier: open it."
+  },
+  "PATIENT_NOTIFICATIONS": {
+    "TITLE": "Patient notifications",
+    "SUBTITLE": "Appointment and result-available SMS and emails sent to your patients. Failed sends can be retried.",
+    "FILTER_STATUS": "Status",
+    "ALL_STATUSES": "All statuses",
+    "EMPTY": "No sends in this status.",
+    "LOAD_ERROR": "Could not load the patient notification sends.",
+    "RETRY": "Retry",
+    "RETRIED": "The send is back in the queue.",
+    "RETRY_ERROR": "Could not retry this send.",
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "UNKNOWN": "Unknown",
+    "COL_PATIENT": "Patient",
+    "COL_EVENT": "Notice",
+    "COL_CHANNEL": "Channel",
+    "COL_STATUS": "Status",
+    "COL_ATTEMPTS": "Attempts",
+    "COL_REASON": "Reason",
+    "COL_LAST_ATTEMPT": "Last attempt",
+    "COL_ACTIONS": "Actions",
+    "STATUS": {
+      "PENDING": "Queued",
+      "RETRYING": "Retrying",
+      "SENT": "Sent",
+      "FAILED": "Failed",
+      "SKIPPED": "Not sent"
+    },
+    "EVENT": {
+      "APPOINTMENT_CONFIRMATION": "Appointment confirmation",
+      "APPOINTMENT_REMINDER": "Appointment reminder",
+      "LAB_RESULT_AVAILABLE": "Lab result available",
+      "IMAGING_RESULT_AVAILABLE": "Imaging result available",
+      "ULTRASOUND_RESULT_AVAILABLE": "Ultrasound result available"
+    },
+    "CHANNEL": {
+      "SMS": "SMS",
+      "EMAIL": "Email"
+    },
+    "ERROR": {
+      "PROVIDER_REJECTED": "Refused by the SMS provider",
+      "PROVIDER_AUTH_FAILED": "SMS provider refused the platform credentials",
+      "PROVIDER_UNREACHABLE": "SMS provider unreachable",
+      "OUTCOME_UNKNOWN": "No answer from the provider: it may have been delivered, check before retrying",
+      "TRANSPORT_UNAVAILABLE": "No SMS or email service configured",
+      "RECIPIENT_NOT_SUPPORTED": "The number cannot be texted",
+      "INVALID_ADDRESS": "Invalid email address",
+      "MAIL_SEND_FAILED": "The mail server did not accept the email",
+      "SEND_FAILED": "Send failed",
+      "ATTEMPTS_EXHAUSTED": "Every attempt was used",
+      "RECIPIENT_NOT_ALLOWED": "Number not on this environment's test list",
+      "OPTED_OUT": "The patient turned this channel off",
+      "NO_CONTACT": "No phone number or email address",
+      "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
+      "PATIENT_DECEASED": "The patient has died"
+    },
+    "MAYBE_DELIVERED": "The patient may already have received this message.",
+    "RETRY_CONFIRM_TITLE": "Send this message again?",
+    "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice."
   }
 }

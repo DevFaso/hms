@@ -75,6 +75,8 @@ class PatientWriteRegistrationCoverageTest {
     /** Simple class name -> why none of its writes needs the check. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED = Map.ofEntries(
         entry("AuditEventLogServiceImpl", "writes audit rows about a patient, not into a chart"),
+        entry("PatientNotificationLedger", "V312: queues a notice after a booking or release that already checked the"
+            + " patient; the ids never come from a request body"),
         entry("InBasketServiceImpl", "internal staff notifications raised by other services, never from a request body"),
         entry("DischargeSummaryServiceImpl", BOUND_TO_PARENT
             + " (an encounter owned by the acting hospital, D-r5 tenancy sweep)"),

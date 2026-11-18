@@ -11,6 +11,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Duration;
@@ -207,8 +208,28 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
             // Not all accepted when the allowlist held some recipients back.
             return new SmsDispatch(allSent, response);
         } catch (RestClientResponseException ex) {
-            throw requestFailure("SMS send", ex);
+            throw smsSendFailure(ex);
+        } catch (RestClientException ex) {
+            // A timeout or a broken connection: the request may have reached IKODDI and been
+            // accepted and charged. Classified like Orange: the outcome is unknown, never resent.
+            LOG.warn("IKODDI SMS send got no usable answer ({}); acceptance is unknown and it is not resent",
+                ex.getClass().getSimpleName());
+            throw new IllegalStateException(SmsFailureKeys.UNKNOWN_OUTCOME);
         }
+    }
+
+    /**
+     * A send IKODDI answered with an error status, classified exactly like Orange's
+     * ({@link SmsFailureKeys#ofStatus}): 401/403 refused credentials, 5xx an unknown outcome (the
+     * message may have gone out), any other 4xx a refusal. No cause is attached: Spring's message
+     * quotes the response body, which can hold the number.
+     */
+    private IllegalStateException smsSendFailure(RestClientResponseException ex) {
+        if (LOG.isWarnEnabled()) {
+            LOG.warn("IKODDI SMS send failed for organizationId={} sender={} with status {}: {}", organizationId,
+                smsSender, ex.getStatusCode().value(), safeGatewayBody(ex.getResponseBodyAsString()));
+        }
+        return new IllegalStateException(SmsFailureKeys.ofStatus(ex.getStatusCode().value()));
     }
 
     /**

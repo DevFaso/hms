@@ -135,7 +135,6 @@ class ActingScopeCoverageTest {
                 "service/LabResultServiceImpl.java", 1, VERIFIED_SIGNAL + "; " + LAB_PR,
                 "service/PrenatalSchedulingServiceImpl.java", 1, VERIFIED_SIGNAL,
                 "service/StaffServiceImpl.java", 2, VERIFIED_SIGNAL,
-                "service/SuperAdminDashboardServiceImpl.java", 1, VERIFIED_SIGNAL,
                 "service/impl/ConsultationServiceImpl.java", 1,
                 VERIFIED_SIGNAL + "; the consultation service is owned by another PR of this batch",
                 "service/impl/FeatureFlagServiceImpl.java", 1, VERIFIED_SIGNAL,

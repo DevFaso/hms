@@ -94,6 +94,19 @@ import com.example.hms.service.i18n.PatientLocaleResolver;
 @Service
 @RequiredArgsConstructor
 public class EncounterServiceImpl implements EncounterService {
+
+    /**
+     * V312: the booking confirmation SMS, queued in the patient notification
+     * ledger once the booking commits. Setter-injected so unit tests that
+     * build this service by constructor keep compiling; null there.
+     */
+    private com.example.hms.service.notification.PatientNotificationLedger notificationLedger;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNotificationLedger(com.example.hms.service.notification.PatientNotificationLedger notificationLedger) {
+        this.notificationLedger = notificationLedger;
+    }
+
     /** Request properties a refusal names (QA D1352 class, round 30). */
     private static final String FIELD_SIGNED_AT = "signedAt";
 
@@ -2992,6 +3005,11 @@ public class EncounterServiceImpl implements EncounterService {
         // patient portal and the desk no longer offer it.
         if (saved != null && slot.published() != null) {
             slotPolicy.takeSlot(slot.published(), saved);
+        }
+        // V312: a follow-up is booked PENDING, which the ledger does not confirm
+        // (nor remind); it is called anyway so a follow-up booked live one day is.
+        if (notificationLedger != null) {
+            notificationLedger.confirmBooking(saved);
         }
         return saved != null ? saved.getId() : null;
     }

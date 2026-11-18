@@ -153,6 +153,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/admin': 'ADMINISTRATION',
   '/admin-assignments': 'ADMINISTRATION',
   '/webhooks': 'ADMINISTRATION',
+  '/patient-notifications': 'ADMINISTRATION',
   '/admin/integrations/dhis2': 'ADMINISTRATION',
   '/admin-governance': 'ADMINISTRATION',
   '/break-glass-review': 'ADMINISTRATION',

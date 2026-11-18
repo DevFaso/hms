@@ -491,6 +491,30 @@
       "ACTIVITY_UNAVAILABLE": "Activité clinique récente indisponible. Actualisez pour réessayer.",
       "AUDIT_SAMPLE": "Échantillon : {{count}} derniers événements d’audit reçus. Les filtres portent uniquement sur cet échantillon.",
       "ROUTINE_AUDIT": "Inclure les renouvellements de jeton réussis ({{count}})"
+    },
+    "ACTIVITY": {
+      "PREVIEW": "Éléments récents affichés : {{count}} (10 maximum par catégorie). Les badges indiquent les totaux.",
+      "VIEW_ALL": "Voir tous les éléments",
+      "NOT_RECORDED": "Non renseigné",
+      "CATALOG": "Catalogue partagé",
+      "HOSPITAL": "Hôpital",
+      "GLOBAL": "Tous les hôpitaux",
+      "STATUS": "Statut",
+      "TARGET_DETAILS": "Détails de la cible",
+      "SHOW_LESS": "Afficher moins d’événements",
+      "SHOW_MORE": "Afficher les {{count}} événements correspondants",
+      "DATE_encounterDate": "Consultation",
+      "DATE_admissionDateTime": "Date d’admission",
+      "DATE_resultDate": "Résultat",
+      "DATE_orderDatetime": "Demande d’examen",
+      "DATE_submittedAt": "Soumission",
+      "DATE_timelineStartDate": "Début du plan",
+      "DATE_consentTimestamp": "Consentement enregistré",
+      "DATE_requestedAt": "Demande",
+      "DATE_admissionDate": "Date d’admission",
+      "DATE_orderedAt": "Demande d’examen",
+      "DATE_createdAt": "Création",
+      "DATE_UNKNOWN": "Date indisponible"
     }
   },
   "AUDIT_SEARCH": {
@@ -1829,7 +1853,6 @@
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE_STATED": "Délivrance d'urgence — sérologiquement incompatible, de la poche {{unit}} pour la demande {{request}}, O négatif déclaré impossible à obtenir à temps, stock indiqué {{shown}}",
       "CROSS_HOSPITAL_READ": "Consultation d’un autre hôpital au titre de la relation de soins : {{subject}}{{extra}}",
       "SUPPORT_SESSION_REFUSED": "Session de support refusée : {{what}} (données de connexion ou de récupération)",
-      "SUPPORT_SESSION_CLINICAL_REFUSED": "Session de support refusée : un acte clinique ({{roles}}) pendant une prise en main du compte",
       "IMPERSONATION_STARTED": "Session de support ouverte en tant que {{user}}. Motif : {{reason}}",
       "IMPERSONATION_ENDED": "Session de support en tant que {{user}} terminée",
       "USER_ACTION_REFUSED": "Refus de {{action}} de l’utilisateur : l’auteur ne peut pas administrer ce compte",
@@ -2010,6 +2033,11 @@
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerte de doublon outrepassée (« Commander quand même », motif : {{reason}}) : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Doublon possible, sans « Commander quand même » : demande d'imagerie {{order}} passée alors que la demande récente {{earlier}} du même examen existe",
       "NATIONAL_IU_ACTION": "Identifiant unique du patient : {{operation}}",
+      "PRICE_LIST_IMPORTED": "Import de grille {{import}} appliqué : {{items}} nouveaux articles, {{prices}} nouveaux prix, {{unchanged}} inchangés",
+      "REFUND_EVENT": "{{what}} : remboursement {{refund}} sur la facture {{invoice}}",
+      "SUPPORT_SESSION_MONEY_REFUSED": "Session de support refusée : {{what}} (mouvement d’argent)",
+      "PHARMACY_PAYMENT_VOIDED_IDS": "Paiement pharmacie {{payment}} annulé pour la délivrance annulée {{dispense}}",
+      "SUPPORT_SESSION_CLINICAL_REFUSED": "Session de support refusée : un acte clinique ({{roles}}) pendant une prise en main du compte",
       "PAYER_CREATED": "Organisme payeur {{payer}} créé",
       "PAYER_UPDATED": "Organisme payeur {{payer}} modifié",
       "PAYER_DEACTIVATED": "Organisme payeur {{payer}} désactivé, motif enregistré",
@@ -2019,8 +2047,7 @@
       "PAYER_RULE_ENDED": "Règle {{rule}} de la formule {{plan}} terminée, motif enregistré",
       "COVERAGE_PLAN_LINKED": "Couverture du patient {{insurance}} liée à la formule {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Couverture du patient {{insurance}} détachée de sa formule",
-      "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]",
-      "PRICE_LIST_IMPORTED": "Import de grille {{import}} appliqué : {{items}} nouveaux articles, {{prices}} nouveaux prix, {{unchanged}} inchangés"
+      "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2309,6 +2336,13 @@
       "UPDATE": "modifié",
       "CLEAR": "effacé",
       "SHOW_FULL": "affiché en entier"
+    },
+    "REFUND_EVENT": {
+      "REFUND_REQUESTED": "Remboursement demandé",
+      "REFUND_APPROVED": "Remboursement approuvé",
+      "REFUND_REJECTED": "Remboursement refusé",
+      "REFUND_PAID_OUT": "Remboursement remis au patient",
+      "REFUND_CANCELLED": "Remboursement annulé"
     }
   },
   "BILLING": {
@@ -2495,7 +2529,10 @@
       "SOURCES": {
         "BILLING": "Factures",
         "PHARMACY": "Pharmacie"
-      }
+      },
+      "REFUNDED": "Remboursements remis (sorties de caisse)",
+      "NET": "Solde attendu en caisse",
+      "REFUND_TAG": "remboursement"
     },
     "CANCEL_REASON": "Motif de l’annulation",
     "CANCEL_REASON_PLACEHOLDER": "Pourquoi cette facture émise est-elle annulée ? Le motif est conservé avec elle.",
@@ -2612,6 +2649,57 @@
         "TOO_LARGE": "Le fichier dépasse 1 Mo. Découpez la grille en plusieurs fichiers.",
         "CONCURRENT_ERROR": "Un autre utilisateur vient de créer ce code (ou ce lien) dans la grille : rien n’a été appliqué. Relancez la vérification."
       }
+    },
+    "REFUNDS": {
+      "TITLE": "Demandes de remboursement",
+      "REFUND": "Rembourser",
+      "REFUNDED_TOTAL": "Déjà remboursé au patient : {{amount}}",
+      "LOAD_FAILED": "Les remboursements n’ont pas pu être chargés.",
+      "EMPTY": "Aucun remboursement sur cette facture.",
+      "REQUESTED_ON": "Demandé le",
+      "AMOUNT": "Montant",
+      "METHOD": "Mode de remboursement",
+      "REASON": "Motif",
+      "BY": "par {{name}}",
+      "STATUSES": {
+        "REQUESTED": "Demandé, à approuver",
+        "APPROVED": "Approuvé, à remettre",
+        "REJECTED": "Refusé",
+        "PAID": "Remis au patient",
+        "CANCELLED": "Annulé"
+      },
+      "DECIDED_BY": "Décidé par {{name}}",
+      "PAID_ON": "Remis le {{date}} par {{name}}",
+      "OTHER_APPROVER": "Un autre responsable doit approuver : vous avez fait cette demande.",
+      "APPROVE": "Approuver",
+      "REJECT": "Refuser",
+      "HAND_OVER": "Remis au patient",
+      "CANCEL": "Annuler la demande",
+      "RECEIPT": "Reçu de remboursement",
+      "REQUEST_TITLE": "Rembourser le patient",
+      "REFERENCE": "Référence de la transaction",
+      "APPROVAL_NOTE": "La demande doit être approuvée par un autre responsable (administrateur ou comptable), puis remise au patient à la caisse.",
+      "SUBMIT_REQUEST": "Demander le remboursement",
+      "REJECT_TITLE": "Refuser le remboursement de {{amount}}",
+      "CANCEL_TITLE": "Annuler la demande de remboursement de {{amount}}",
+      "AMOUNT_REQUIRED": "Indiquez le montant à rembourser (supérieur à 0).",
+      "REFERENCE_REQUIRED": "Indiquez la référence de la transaction (mobile money ou virement).",
+      "REASON_REQUIRED": "Motif obligatoire : indiquez pourquoi l’argent est rendu au patient.",
+      "DECISION_REASON_REQUIRED": "Motif obligatoire.",
+      "REQUESTED_TOAST": "Demande de remboursement enregistrée : un autre responsable doit l’approuver.",
+      "APPROVED_TOAST": "Remboursement approuvé.",
+      "REJECTED_TOAST": "Remboursement refusé.",
+      "CANCELLED_TOAST": "Demande de remboursement annulée.",
+      "PAID_TOAST": "Remboursement remis au patient.",
+      "FAILED": "Le remboursement n’a pas pu être enregistré.",
+      "QUEUE_OPEN": "Remboursements à approuver",
+      "QUEUE_TITLE": "Remboursements à approuver ou à remettre",
+      "QUEUE_EMPTY": "Aucun remboursement en attente.",
+      "OPEN_INVOICE": "Ouvrir la facture",
+      "INVOICE": "Facture",
+      "REFERENCE_AT_HANDOVER": "La référence de la transaction sera demandée à la remise, quand l’argent est envoyé.",
+      "HAND_OVER_TITLE": "Remettre le remboursement de {{amount}}",
+      "RECEIPT_NUMBER": "Reçu n° {{number}}"
     },
     "PAYERS": {
       "TITLE": "Organismes payeurs",
@@ -4868,6 +4956,7 @@
     "ADT_INTAKE": "Admissions ADT automatiques",
     "UNSIGNED_NOTES": "Notes non signées",
     "PRICE_LIST": "Grille tarifaire",
+    "PATIENT_NOTIFICATIONS": "Notifications aux patients",
     "PAYERS": "Organismes payeurs"
   },
   "NOTIFICATIONS": {
@@ -6275,7 +6364,8 @@
       "LEFT_TO_DECLARE": "Reste à déclarer",
       "AMOUNT_EXCEEDS_PENDING": "Vous pouvez déclarer au plus {{max}} : {{pending}} déjà déclarés sont en attente de confirmation.",
       "CREDITED_TO": "Imputé sur la facture {{number}}",
-      "FULLY_DECLARED": "Solde déclaré, en attente de confirmation par la caisse"
+      "FULLY_DECLARED": "Solde déclaré, en attente de confirmation par la caisse",
+      "REFUNDED": "Remboursé : {{amount}} le {{date}}"
     },
     "CARE_TEAM": {
       "TITLE": "Mon équipe soignante",
@@ -7172,10 +7262,15 @@
         "INVOICE_LINE_PRICE_RESTORED": "Prix de la grille rétabli",
         "INVOICE_LINE_DELETED": "Ligne de facture supprimée",
         "INVOICE_LINE_PRICE_OVERRIDDEN": "Prix de la grille modifié",
+        "PRICE_LIST_IMPORTED": "Grille tarifaire importée",
+        "REFUND_REQUESTED": "Remboursement demandé",
+        "REFUND_APPROVED": "Remboursement approuvé",
+        "REFUND_REJECTED": "Remboursement refusé",
+        "REFUND_CANCELLED": "Remboursement annulé",
+        "PAYMENT_REVERSED": "Paiement contre-passé",
         "PAYER_CHANGED": "Organisme payeur modifié",
         "PAYER_PLAN_CHANGED": "Formule d’organisme payeur modifiée",
-        "PATIENT_COVERAGE_PLAN_LINKED": "Couverture du patient liée à une formule",
-        "PRICE_LIST_IMPORTED": "Grille tarifaire importée"
+        "PATIENT_COVERAGE_PLAN_LINKED": "Couverture du patient liée à une formule"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7708,9 +7803,10 @@
         "WEBHOOK": "Webhook partenaire",
         "FETAL_DEATH_EVENT": "Événement de décès fœtal",
         "IMAGING_ORDER": "Demande d'imagerie",
+        "PRICE_LIST_IMPORT": "Import de grille tarifaire",
+        "PATIENT_NOTIFICATION_DELIVERY": "Envoi de notification au patient",
         "PAYER": "Organisme payeur",
-        "PAYER_PLAN": "Formule d’organisme payeur",
-        "PRICE_LIST_IMPORT": "Import de grille tarifaire"
+        "PAYER_PLAN": "Formule d’organisme payeur"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -7878,6 +7974,12 @@
         "DELIVERY_VAGINAL": "Accouchement par voie basse",
         "DELIVERY_CAESAREAN": "Césarienne"
       },
+      "PRICE_LIST_IMPORT_ROW_OUTCOME": {
+        "NEW_ITEM": "Nouvel article",
+        "NEW_PRICE": "Nouveau prix",
+        "UNCHANGED": "Inchangé",
+        "REFUSED": "Refusé"
+      },
       "PAYER_TYPE": {
         "AMU": "Assurance maladie universelle",
         "MUTUELLE": "Mutuelle",
@@ -7890,12 +7992,6 @@
         "IN_FORCE": "En vigueur",
         "ENDED": "Terminée",
         "CANCELLED": "Retirée avant application"
-      },
-      "PRICE_LIST_IMPORT_ROW_OUTCOME": {
-        "NEW_ITEM": "Nouvel article",
-        "NEW_PRICE": "Nouveau prix",
-        "UNCHANGED": "Inchangé",
-        "REFUSED": "Refusé"
       }
     },
     "DOCUMENTS": {
@@ -14199,5 +14295,64 @@
     "REASON_REQUIRED": "Indiquez le motif d’enregistrement d’un identifiant en double.",
     "WAIT_CHECK": "L’identifiant est en cours de vérification. Réessayez dans un instant.",
     "EXISTS_HERE_NUMBERED": "Dossier existant {{index}} sur {{count}} avec cet identifiant : l’ouvrir."
+  },
+  "PATIENT_NOTIFICATIONS": {
+    "TITLE": "Notifications aux patients",
+    "SUBTITLE": "SMS et e-mails de rendez-vous et de résultats disponibles envoyés à vos patients. Un envoi en échec peut être relancé.",
+    "FILTER_STATUS": "Statut",
+    "ALL_STATUSES": "Tous les statuts",
+    "EMPTY": "Aucun envoi dans ce statut.",
+    "LOAD_ERROR": "Impossible de charger les envois de notifications aux patients.",
+    "RETRY": "Relancer",
+    "RETRIED": "L’envoi est remis dans la file.",
+    "RETRY_ERROR": "Impossible de relancer cet envoi.",
+    "PAGE_OF": "Page {{page}} sur {{total}}",
+    "UNKNOWN": "Inconnu",
+    "COL_PATIENT": "Patient",
+    "COL_EVENT": "Avis",
+    "COL_CHANNEL": "Canal",
+    "COL_STATUS": "Statut",
+    "COL_ATTEMPTS": "Tentatives",
+    "COL_REASON": "Motif",
+    "COL_LAST_ATTEMPT": "Dernière tentative",
+    "COL_ACTIONS": "Actions",
+    "STATUS": {
+      "PENDING": "En file",
+      "RETRYING": "Nouvelle tentative prévue",
+      "SENT": "Envoyé",
+      "FAILED": "En échec",
+      "SKIPPED": "Non envoyé"
+    },
+    "EVENT": {
+      "APPOINTMENT_CONFIRMATION": "Confirmation de rendez-vous",
+      "APPOINTMENT_REMINDER": "Rappel de rendez-vous",
+      "LAB_RESULT_AVAILABLE": "Résultat de laboratoire disponible",
+      "IMAGING_RESULT_AVAILABLE": "Résultat d’imagerie disponible",
+      "ULTRASOUND_RESULT_AVAILABLE": "Résultat d’échographie disponible"
+    },
+    "CHANNEL": {
+      "SMS": "SMS",
+      "EMAIL": "E-mail"
+    },
+    "ERROR": {
+      "PROVIDER_REJECTED": "Refusé par le fournisseur de SMS",
+      "PROVIDER_AUTH_FAILED": "Le fournisseur de SMS a refusé les identifiants de la plateforme",
+      "PROVIDER_UNREACHABLE": "Fournisseur de SMS injoignable",
+      "OUTCOME_UNKNOWN": "Aucune réponse du fournisseur : le message a peut-être été remis, vérifiez avant de relancer",
+      "TRANSPORT_UNAVAILABLE": "Aucun service de SMS ou d’e-mail configuré",
+      "RECIPIENT_NOT_SUPPORTED": "Ce numéro ne peut pas recevoir de SMS",
+      "INVALID_ADDRESS": "Adresse e-mail invalide",
+      "MAIL_SEND_FAILED": "Le serveur de messagerie n’a pas accepté l’e-mail",
+      "SEND_FAILED": "Échec de l’envoi",
+      "ATTEMPTS_EXHAUSTED": "Toutes les tentatives ont été utilisées",
+      "RECIPIENT_NOT_ALLOWED": "Numéro absent de la liste de test de cet environnement",
+      "OPTED_OUT": "Le patient a désactivé ce canal",
+      "NO_CONTACT": "Aucun numéro de téléphone ni adresse e-mail",
+      "SUBJECT_WITHDRAWN": "Rendez-vous annulé ou passé, ou résultat retiré",
+      "PATIENT_DECEASED": "Le patient est décédé"
+    },
+    "MAYBE_DELIVERED": "Le patient a peut-être déjà reçu ce message.",
+    "RETRY_CONFIRM_TITLE": "Renvoyer ce message ?",
+    "RETRY_CONFIRM_MESSAGE": "Le fournisseur n’a pas répondu : le patient a peut-être déjà reçu ce message. Le relancer peut l’envoyer deux fois."
   }
 }

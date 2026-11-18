@@ -37,8 +37,6 @@ import com.example.hms.repository.StaffAvailabilityRepository;
 import com.example.hms.repository.TreatmentPlanRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -173,8 +171,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // hospital the one resolver pinned the request to.
         // Lab test definitions are reference data (catalog), not
         // tenant-scoped, so its count is always system-wide.
-        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-        UUID chipScope = ctx.isSuperAdmin() ? ActingScopeResolver.pinnedHospitalIdOrNull() : null;
+        UUID chipScope = recentHospitalScope();
 
         // QA D791: visits, not the encounters prescriptions anchor themselves on.
         long totalEncounters = (chipScope != null)
@@ -187,7 +184,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
             ? labOrderRepository.countByHospital_Id(chipScope)
             : labOrderRepository.count();
         long totalLabResults = (chipScope != null)
-            ? labResultRepository.countByLabOrder_Hospital_Id(chipScope)
+            ? labResultRepository.countHandledByHospital(chipScope)
             : labResultRepository.count();
         long totalLabTestDefinitions = labTestDefinitionRepository.count();
         long totalAdmissions = (chipScope != null)
@@ -265,7 +262,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         var pageable = PageRequest.of(0, safeLimit,
             Sort.by(Sort.Order.desc("encounterDate"), Sort.Order.desc(CREATED_AT)));
         return encounterService
-            .list(null, null, null, null, null, null, pageable, locale)
+            .list(null, null, recentHospitalScope(), null, null, null, pageable, locale)
             .getContent();
     }
 
@@ -305,7 +302,9 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // null-safety and stable ordering across same-second orders.
         var pageable = PageRequest.of(0, safeLimit,
             Sort.by(Sort.Order.desc("orderDatetime"), Sort.Order.desc(CREATED_AT)));
-        return labOrderRepository.findAll(pageable)
+        UUID hospitalId = recentHospitalScope();
+        return (hospitalId == null ? labOrderRepository.findAll(pageable)
+            : labOrderRepository.findByHospital_Id(hospitalId, pageable))
             .map(labOrderMapper::toLabOrderResponseDTO)
             .getContent();
     }
@@ -343,7 +342,9 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // the newest. `createdAt` breaks ties.
         var pageable = PageRequest.of(0, safeLimit,
             Sort.by(Sort.Order.desc("admissionDateTime"), Sort.Order.desc(CREATED_AT)));
-        return admissionRepository.findAll(pageable)
+        UUID hospitalId = recentHospitalScope();
+        return (hospitalId == null ? admissionRepository.findAll(pageable)
+            : admissionRepository.findByHospital_Id(hospitalId, pageable))
             .map(admissionMapper::toResponseDTO)
             .getContent();
     }
@@ -358,17 +359,11 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // entity (`dispatchedAt`, `acknowledgedAt`, `cosignedAt`) are
         // workflow-stage events that are null for most rows.
         var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, CREATED_AT));
-        // Hit the repository directly rather than going through
-        // PrescriptionService.list — the service enforces
-        // roleValidator.requireActiveHospitalId() and filters to the
-        // active hospital, which produces a count-vs-content mismatch
-        // on the super-admin dashboard (totalPrescriptions counts
-        // system-wide via prescriptionRepository.count() but the
-        // service-filtered list returns 0 when the super-admin has
-        // no hospital pin). The other unscoped getRecent* methods
-        // (getRecentAdmissions, getRecentLabOrders) already use this
-        // direct-repo pattern.
-        return prescriptionRepository.findAll(pageable)
+        // Keep the global oversight path without requiring a staff profile, while
+        // applying a verified hospital pin in SQL before limiting the preview.
+        UUID hospitalId = recentHospitalScope();
+        return (hospitalId == null ? prescriptionRepository.findAll(pageable)
+            : prescriptionRepository.findByHospital_Id(hospitalId, pageable))
             .map(prescriptionMapper::toResponseDTO)
             .getContent();
     }
@@ -382,7 +377,9 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // without a start date yet (drafts) fall back to `createdAt`.
         var pageable = PageRequest.of(0, safeLimit,
             Sort.by(Sort.Order.desc("timelineStartDate"), Sort.Order.desc(CREATED_AT)));
-        return treatmentPlanService.listAll(null, pageable).getContent();
+        UUID hospitalId = recentHospitalScope();
+        return (hospitalId == null ? treatmentPlanService.listAll(null, pageable)
+            : treatmentPlanService.listByHospital(hospitalId, null, pageable)).getContent();
     }
 
     @Override
@@ -441,4 +438,8 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         }
         return Math.min(requested, maxValue);
     }
+    private UUID recentHospitalScope() {
+        return ActingScopeResolver.superAdminPinnedHospitalIdOrNull();
+    }
+
 }

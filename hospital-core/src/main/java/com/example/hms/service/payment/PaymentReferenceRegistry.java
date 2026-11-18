@@ -24,7 +24,10 @@ import java.util.UUID;
  * of the reference (trimmed, lower case, no spaces), and the check reads all
  * three ledgers: invoice and copay payments (every non-cash method, as D345
  * did), and the mobile-money pharmacy dispense payments and walk-in sales (an
- * insurance authorisation at the pharmacy can cover several dispenses). {@code PaymentReferenceUniquenessGuardTest} keeps every
+ * insurance authorisation at the pharmacy can cover several dispenses).
+ * Billing-money plan PR 8: and the invoice refunds (money out), so a refund
+ * never reuses a payment's operator reference, nor a payment a refund's.
+ * {@code PaymentReferenceUniquenessGuardTest} keeps every
  * payment write that stores a reference on this path.
  *
  * <p>Scoped to one hospital on purpose (QA D782): a check across hospitals
@@ -42,13 +45,17 @@ public class PaymentReferenceRegistry {
     private final PaymentTransactionRepository invoicePayments;
     private final PharmacyPaymentRepository pharmacyPayments;
     private final PharmacySaleRepository pharmacySales;
+    /** Billing-money plan PR 8: the refunds paid out by mobile money or transfer carry an operator reference too. */
+    private final com.example.hms.repository.InvoiceRefundRepository invoiceRefunds;
 
     public PaymentReferenceRegistry(PaymentTransactionRepository invoicePayments,
                                     PharmacyPaymentRepository pharmacyPayments,
-                                    PharmacySaleRepository pharmacySales) {
+                                    PharmacySaleRepository pharmacySales,
+                                    com.example.hms.repository.InvoiceRefundRepository invoiceRefunds) {
         this.invoicePayments = invoicePayments;
         this.pharmacyPayments = pharmacyPayments;
         this.pharmacySales = pharmacySales;
+        this.invoiceRefunds = invoiceRefunds;
     }
 
     /** The form references are compared in: trimmed, lower case, without spaces; null when blank. */
@@ -76,7 +83,8 @@ public class PaymentReferenceRegistry {
         }
         if (invoicePayments.existsLiveReference(hospitalId, normal, LIVE_INVOICE_PAYMENTS)
                 || pharmacyPayments.existsLiveReference(hospitalId, normal)
-                || pharmacySales.existsLiveReference(hospitalId, normal)) {
+                || pharmacySales.existsLiveReference(hospitalId, normal)
+                || invoiceRefunds.existsLiveReference(hospitalId, normal)) {
             throw new FieldBusinessException(field, DUPLICATE_KEY);
         }
     }

@@ -18,22 +18,32 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * What a support session acting as a user may not do: change how that user
- * signs in or recovers the account. A password, username, email,
- * authenticator or recovery contact set while impersonating would let support
- * take the account over after the session ends.
+ * What a support session acting as a user may not do.
  *
- * <p>Ruled on the path, not handler by handler, so a self-service endpoint
- * added later under {@link #ACCOUNT_PATHS} is covered without anyone
- * remembering to: every write there is refused under impersonation; reads
- * stay open. The authenticator itself is also refused, with its own audited
- * reason, by {@code MfaService}.
+ * <ul>
+ *   <li><b>Change how that user signs in or recovers the account</b> ({@link #ACCOUNT_PATHS}). A password, username,
+ *   email, authenticator or recovery contact set while impersonating would let support take the account over after
+ *   the session ends. The authenticator itself is also refused, with its own audited reason, by {@code MfaService}.</li>
+ *   <li><b>Move money</b> ({@link #MONEY_PATHS}, billing-money plan PR 8 review). An impersonated session acts as the
+ *   target user, so a support agent impersonating a cashier and then an accountant would request and approve the same
+ *   refund (four-eyes, owner decision D-3, beaten), and a platform super-admin would move money through someone
+ *   else's account. Payments, reversals, refunds, invoice and line prices, the price list: every write there is
+ *   refused. A copay taken at check-in is refused in the service ({@link #refuseMoneyWrite}), since the check-in
+ *   itself is not money.</li>
+ * </ul>
+ *
+ * <p>Ruled on the path, not handler by handler, so an endpoint added later under these paths is covered without
+ * anyone remembering to: every write there is refused under impersonation; reads stay open.
+ * {@code ImpersonationMoneyWriteGuardTest} fails when a billing, refund or payment write endpoint is not covered.
  */
 @Slf4j
 public class ImpersonationLimits implements HandlerInterceptor {
 
     /** Bundle key of the refusal; the message names what the caller is (a support session), nothing else. */
     public static final String ACCOUNT_CHANGE_REFUSED = "auth.impersonation.accountChange";
+
+    /** Bundle key of the money refusal (billing-money plan PR 8 review). */
+    public static final String MONEY_WRITE_REFUSED = "billing.impersonation.moneyWrite";
 
     /**
      * The caller's own sign-in and recovery details, and the password check
@@ -43,11 +53,41 @@ public class ImpersonationLimits implements HandlerInterceptor {
     public static final List<String> ACCOUNT_PATHS =
         List.of("/auth/me/**", "/auth/credentials/**", "/auth/verify-password");
 
+    /**
+     * Every path whose writes move money or set what is owed: invoices and their payments, reversals, adjustments
+     * and refunds; invoice lines (a price override, a line removed); the price list; pharmacy payments and counter
+     * sales; an insurer's settlement of a pharmacy claim; a patient's own payment declaration.
+     */
+    public static final List<String> MONEY_PATHS = List.of(
+        "/billing-invoices/**", "/invoice-items/**", "/billing/price-list/**", "/billing/payers/**",
+        "/pharmacy/payments/**",
+        "/pharmacy-sales/**", "/me/patient/billing/invoices/*/pay", "/pharmacy/claims/*/pay");
+
+    /** Writes under {@link #MONEY_PATHS} that only read: a search sent as a POST for its body. */
+    public static final List<String> MONEY_PATH_READS = List.of("/billing-invoices/search");
+
+    /** What the money rule names in its audit row ("(money)"; the portal reads it). */
+    private static final String MONEY = "money";
+
     /** The audit service, when the context has one (a {@code @WebMvcTest} slice may not). */
     private final Supplier<AuditEventLogService> audit;
+    private final String refusalKey;
+    private final String what;
 
+    /** The sign-in and recovery rule. */
     public ImpersonationLimits(Supplier<AuditEventLogService> audit) {
+        this(audit, ACCOUNT_CHANGE_REFUSED, "sign-in or recovery details");
+    }
+
+    private ImpersonationLimits(Supplier<AuditEventLogService> audit, String refusalKey, String what) {
         this.audit = audit;
+        this.refusalKey = refusalKey;
+        this.what = what;
+    }
+
+    /** The money rule, for {@link #MONEY_PATHS}. */
+    public static ImpersonationLimits forMoney(Supplier<AuditEventLogService> audit) {
+        return new ImpersonationLimits(audit, MONEY_WRITE_REFUSED, MONEY);
     }
 
     @Override
@@ -56,19 +96,31 @@ public class ImpersonationLimits implements HandlerInterceptor {
         boolean read = HttpMethod.GET.matches(method) || HttpMethod.HEAD.matches(method)
             || HttpMethod.OPTIONS.matches(method);
         if (!read && ImpersonationContextHolder.isImpersonating()) {
-            audit(method, request.getAttribute(org.springframework.web.servlet.HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE));
-            throw new ClientSafeAccessDeniedException(MessageUtil.resolve(ACCOUNT_CHANGE_REFUSED));
+            Object pattern = request.getAttribute(org.springframework.web.servlet.HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+            audit(audit, method + " " + (pattern instanceof String p ? p : what), what);
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve(refusalKey));
         }
         return true;
     }
 
     /**
-     * One row naming the target, the attempt and the endpoint's pattern (never
-     * the raw path, which can carry ids); the audit service adds the
-     * impersonator from the request's impersonation context.
+     * The money rule where a path cannot carry it: a service step that moves money inside a request that is not
+     * money as a whole (the copay taken at check-in), and the money services themselves, a second line behind the
+     * paths. Refused, with an audit row, while a support session impersonates the user.
      */
-    private void audit(String method, Object pattern) {
-        AuditEventLogService service = audit.get();
+    public static void refuseMoneyWrite(Supplier<AuditEventLogService> audit, String step) {
+        if (ImpersonationContextHolder.isImpersonating()) {
+            audit(audit, step, MONEY);
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve(MONEY_WRITE_REFUSED));
+        }
+    }
+
+    /**
+     * One row naming the target, the attempt and the endpoint's pattern or step (never the raw path, which can carry
+     * ids); the audit service adds the impersonator from the request's impersonation context.
+     */
+    private static void audit(Supplier<AuditEventLogService> audit, String attempt, String what) {
+        AuditEventLogService service = audit == null ? null : audit.get();
         if (service == null) {
             return;
         }
@@ -80,11 +132,12 @@ public class ImpersonationLimits implements HandlerInterceptor {
                 .userId(acting != null && acting.getPrincipal() instanceof com.example.hms.security.HospitalUserDetails target
                     ? target.getUserId() : null)
                 .userName(acting == null ? null : acting.getName())
-                .eventDescription("Support session refused: " + method + " " + (pattern instanceof String p ? p : "account details")
-                    + " (sign-in or recovery details)")
+                .eventDescription(MONEY.equals(what)
+                    ? "Support session refused: " + attempt + " (money)"
+                    : "Support session refused: " + attempt + " (sign-in or recovery details)")
                 .build());
         } catch (RuntimeException ex) {
-            log.error("[IMPERSONATION] Failed to audit a refused account change", ex);
+            log.error("[IMPERSONATION] Failed to audit a refused {} write", what, ex);
         }
     }
 }

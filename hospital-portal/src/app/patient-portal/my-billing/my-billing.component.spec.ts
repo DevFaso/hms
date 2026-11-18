@@ -372,7 +372,19 @@ describe('MyBillingComponent', () => {
         { id: 'p2', amount: 500, paymentMethod: 'MOBILE_MONEY', status: 'PENDING' },
       ],
       adjustments: [{ id: 'a1', type: 'WAIVER', amount: 500, invoiceItemDescription: 'NFS' }],
+      // Billing-money plan PR 8: the money handed back, as the patient sees it.
+      refunds: [{ id: 'r1', amount: 500, method: 'CASH', paidAt: '2026-11-17T15:30:00' }],
     };
+
+    it('shows a refund handed back with its amount and date (QA D1900)', () => {
+      portal.getMyInvoiceDetail.and.returnValue(of(detail));
+      create([invoice({ pending: 500 })]);
+      (host().querySelector('[data-testid="detail-btn-inv1"]') as HTMLElement).click();
+      fixture.detectChanges();
+      const refunds = host().querySelector('[data-testid="portal-refunds"]');
+      expect(refunds).not.toBeNull();
+      expect(refunds?.textContent).toContain('PORTAL.BILLING.REFUNDED');
+    });
 
     it('shows a declared payment on the card itself', () => {
       create([invoice({ pending: 500 })]);

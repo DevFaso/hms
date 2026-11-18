@@ -491,6 +491,30 @@
       "ACTIVITY_UNAVAILABLE": "Actividad clínica reciente no disponible. Actualice para reintentar.",
       "AUDIT_SAMPLE": "Muestra: los últimos {{count}} eventos de auditoría recibidos. Los filtros solo se aplican a esta muestra.",
       "ROUTINE_AUDIT": "Incluir renovaciones de token correctas ({{count}})"
+    },
+    "ACTIVITY": {
+      "PREVIEW": "Registros recientes mostrados: {{count}} (hasta 10 por categoría). Las insignias indican los totales.",
+      "VIEW_ALL": "Ver todos los registros",
+      "NOT_RECORDED": "Sin registrar",
+      "CATALOG": "Catálogo compartido",
+      "HOSPITAL": "Hospital",
+      "GLOBAL": "Todos los hospitales",
+      "STATUS": "Estado",
+      "TARGET_DETAILS": "Detalles del destino",
+      "SHOW_LESS": "Mostrar menos eventos",
+      "SHOW_MORE": "Mostrar los {{count}} eventos coincidentes",
+      "DATE_encounterDate": "Consulta",
+      "DATE_admissionDateTime": "Ingreso",
+      "DATE_resultDate": "Resultado",
+      "DATE_orderDatetime": "Solicitud",
+      "DATE_submittedAt": "Envío",
+      "DATE_timelineStartDate": "Inicio del plan",
+      "DATE_consentTimestamp": "Consentimiento registrado",
+      "DATE_requestedAt": "Solicitado",
+      "DATE_admissionDate": "Ingreso",
+      "DATE_orderedAt": "Solicitud",
+      "DATE_createdAt": "Creado",
+      "DATE_UNKNOWN": "Fecha no disponible"
     }
   },
   "AUDIT_SEARCH": {
@@ -1829,7 +1853,6 @@
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE_STATED": "Entrega de urgencia — serológicamente incompatible, de la unidad {{unit}} para la solicitud {{request}}, O negativo declarado imposible de obtener a tiempo, existencias indicadas {{shown}}",
       "CROSS_HOSPITAL_READ": "Consulta de otro hospital por la relación asistencial: {{subject}}{{extra}}",
       "SUPPORT_SESSION_REFUSED": "Sesión de soporte rechazada: {{what}} (datos de inicio de sesión o de recuperación)",
-      "SUPPORT_SESSION_CLINICAL_REFUSED": "Sesión de soporte rechazada: un acto clínico ({{roles}}) durante una toma de control de la cuenta",
       "IMPERSONATION_STARTED": "Sesión de soporte iniciada como {{user}}. Motivo: {{reason}}",
       "IMPERSONATION_ENDED": "Sesión de soporte como {{user}} finalizada",
       "USER_ACTION_REFUSED": "Rechazo de {{action}} del usuario: el autor no puede administrar esta cuenta",
@@ -2010,6 +2033,11 @@
       "IMAGING_DUPLICATE_OVERRIDDEN": "Alerta de duplicado anulada («Solicitar de todos modos», motivo: {{reason}}): solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Alerta de duplicado no anulada: solicitud de imagen {{order}} realizada mientras existe la solicitud reciente {{earlier}} del mismo estudio",
       "NATIONAL_IU_ACTION": "Identificador único del paciente: {{operation}}",
+      "PRICE_LIST_IMPORTED": "Importación de lista de precios {{import}} aplicada: {{items}} artículos nuevos, {{prices}} precios nuevos, {{unchanged}} sin cambios",
+      "REFUND_EVENT": "{{what}}: refund {{refund}} on invoice {{invoice}}",
+      "SUPPORT_SESSION_MONEY_REFUSED": "Sesión de soporte rechazada: {{what}} (dinero)",
+      "PHARMACY_PAYMENT_VOIDED_IDS": "Pago de farmacia {{payment}} anulado por la dispensación cancelada {{dispense}}",
+      "SUPPORT_SESSION_CLINICAL_REFUSED": "Sesión de soporte rechazada: un acto clínico ({{roles}}) durante una toma de control de la cuenta",
       "PAYER_CREATED": "Payer {{payer}} created",
       "PAYER_UPDATED": "Payer {{payer}} updated",
       "PAYER_DEACTIVATED": "Payer {{payer}} deactivated, reason recorded",
@@ -2019,8 +2047,7 @@
       "PAYER_RULE_ENDED": "Rule {{rule}} of plan {{plan}} ended, reason recorded",
       "COVERAGE_PLAN_LINKED": "Patient coverage {{insurance}} linked to plan {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
-      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
-      "PRICE_LIST_IMPORTED": "Importación de lista de precios {{import}} aplicada: {{items}} artículos nuevos, {{prices}} precios nuevos, {{unchanged}} sin cambios"
+      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -2309,6 +2336,13 @@
       "UPDATE": "modificado",
       "CLEAR": "borrado",
       "SHOW_FULL": "mostrado completo"
+    },
+    "REFUND_EVENT": {
+      "REFUND_REQUESTED": "Refund requested",
+      "REFUND_APPROVED": "Refund approved",
+      "REFUND_REJECTED": "Refund rejected",
+      "REFUND_PAID_OUT": "Refund handed to the patient",
+      "REFUND_CANCELLED": "Refund cancelled"
     }
   },
   "BILLING": {
@@ -2495,7 +2529,10 @@
       "SOURCES": {
         "BILLING": "Facturas",
         "PHARMACY": "Farmacia"
-      }
+      },
+      "REFUNDED": "Refunds handed over (money out)",
+      "NET": "Expected in the till",
+      "REFUND_TAG": "refund"
     },
     "CANCEL_REASON": "Motivo de la anulación",
     "CANCEL_REASON_PLACEHOLDER": "¿Por qué se anula esta factura emitida? El motivo se conserva con ella.",
@@ -2612,6 +2649,57 @@
         "TOO_LARGE": "The file is larger than 1 MB. Split the price list into several files.",
         "CONCURRENT_ERROR": "Someone else has just created this code (or link) in the price list: nothing was applied. Check the file again."
       }
+    },
+    "REFUNDS": {
+      "TITLE": "Refund requests",
+      "REFUND": "Refund",
+      "REFUNDED_TOTAL": "Already refunded to the patient: {{amount}}",
+      "LOAD_FAILED": "The refunds could not be loaded.",
+      "EMPTY": "No refund on this invoice.",
+      "REQUESTED_ON": "Requested on",
+      "AMOUNT": "Amount",
+      "METHOD": "Refund method",
+      "REASON": "Reason",
+      "BY": "by {{name}}",
+      "STATUSES": {
+        "REQUESTED": "Requested, to approve",
+        "APPROVED": "Approved, to hand over",
+        "REJECTED": "Rejected",
+        "PAID": "Handed to the patient",
+        "CANCELLED": "Cancelled"
+      },
+      "DECIDED_BY": "Decided by {{name}}",
+      "PAID_ON": "Handed over on {{date}} by {{name}}",
+      "OTHER_APPROVER": "Another manager must approve: you made this request.",
+      "APPROVE": "Approve",
+      "REJECT": "Reject",
+      "HAND_OVER": "Handed to the patient",
+      "CANCEL": "Cancel the request",
+      "RECEIPT": "Refund receipt",
+      "REQUEST_TITLE": "Refund the patient",
+      "REFERENCE": "Transaction reference",
+      "APPROVAL_NOTE": "The request must be approved by another manager (administrator or accountant), then handed to the patient at the till.",
+      "SUBMIT_REQUEST": "Request the refund",
+      "REJECT_TITLE": "Reject the refund of {{amount}}",
+      "CANCEL_TITLE": "Cancel the refund request of {{amount}}",
+      "AMOUNT_REQUIRED": "Enter the amount to refund (more than 0).",
+      "REFERENCE_REQUIRED": "Enter the transaction reference (mobile money or bank transfer).",
+      "REASON_REQUIRED": "Reason required: say why the money is given back to the patient.",
+      "DECISION_REASON_REQUIRED": "Reason required.",
+      "REQUESTED_TOAST": "Refund request recorded: another manager must approve it.",
+      "APPROVED_TOAST": "Refund approved.",
+      "REJECTED_TOAST": "Refund rejected.",
+      "CANCELLED_TOAST": "Refund request cancelled.",
+      "PAID_TOAST": "Refund handed to the patient.",
+      "FAILED": "The refund could not be recorded.",
+      "QUEUE_OPEN": "Refunds to approve",
+      "QUEUE_TITLE": "Refunds to approve or hand over",
+      "QUEUE_EMPTY": "No refund waiting.",
+      "OPEN_INVOICE": "Open the invoice",
+      "INVOICE": "Invoice",
+      "REFERENCE_AT_HANDOVER": "La referencia de la transacción se pide en la entrega, cuando se envía el dinero.",
+      "HAND_OVER_TITLE": "Entregar el reembolso de {{amount}}",
+      "RECEIPT_NUMBER": "Recibo n.º {{number}}"
     },
     "PAYERS": {
       "TITLE": "Payers",
@@ -4868,6 +4956,7 @@
     "ADT_INTAKE": "Ingresos ADT automáticos",
     "UNSIGNED_NOTES": "Notas sin firmar",
     "PRICE_LIST": "Lista de precios",
+    "PATIENT_NOTIFICATIONS": "Patient notifications",
     "PAYERS": "Payers"
   },
   "NOTIFICATIONS": {
@@ -6275,7 +6364,8 @@
       "LEFT_TO_DECLARE": "Queda por declarar",
       "AMOUNT_EXCEEDS_PENDING": "Puede declarar como máximo {{max}}: {{pending}} ya declarados están pendientes de confirmación.",
       "CREDITED_TO": "Abonado en la factura {{number}}",
-      "FULLY_DECLARED": "Saldo declarado, pendiente de confirmación por la caja"
+      "FULLY_DECLARED": "Saldo declarado, pendiente de confirmación por la caja",
+      "REFUNDED": "Refunded: {{amount}} on {{date}}"
     },
     "CARE_TEAM": {
       "TITLE": "Mi equipo de atención",
@@ -7206,10 +7296,15 @@
         "INVOICE_LINE_PRICE_RESTORED": "Precio de la lista restablecido",
         "INVOICE_LINE_DELETED": "Línea de factura eliminada",
         "INVOICE_LINE_PRICE_OVERRIDDEN": "Precio de la lista modificado",
+        "PRICE_LIST_IMPORTED": "Lista de precios importada",
+        "REFUND_REQUESTED": "Refund requested",
+        "REFUND_APPROVED": "Refund approved",
+        "REFUND_REJECTED": "Refund rejected",
+        "REFUND_CANCELLED": "Refund cancelled",
+        "PAYMENT_REVERSED": "Payment reversed",
         "PAYER_CHANGED": "Payer changed",
         "PAYER_PLAN_CHANGED": "Payer plan changed",
-        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan",
-        "PRICE_LIST_IMPORTED": "Lista de precios importada"
+        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7742,9 +7837,10 @@
         "WEBHOOK": "Webhook de socio",
         "FETAL_DEATH_EVENT": "Evento de muerte fetal",
         "IMAGING_ORDER": "Solicitud de imagen",
+        "PRICE_LIST_IMPORT": "Importación de lista de precios",
+        "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send",
         "PAYER": "Payer",
-        "PAYER_PLAN": "Payer plan",
-        "PRICE_LIST_IMPORT": "Importación de lista de precios"
+        "PAYER_PLAN": "Payer plan"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -7912,6 +8008,12 @@
         "DELIVERY_VAGINAL": "Parto vaginal",
         "DELIVERY_CAESAREAN": "Cesárea"
       },
+      "PRICE_LIST_IMPORT_ROW_OUTCOME": {
+        "NEW_ITEM": "Artículo nuevo",
+        "NEW_PRICE": "Precio nuevo",
+        "UNCHANGED": "Sin cambios",
+        "REFUSED": "Rechazado"
+      },
       "PAYER_TYPE": {
         "AMU": "Universal health insurance",
         "MUTUELLE": "Mutual insurer",
@@ -7924,12 +8026,6 @@
         "IN_FORCE": "In force",
         "ENDED": "Ended",
         "CANCELLED": "Withdrawn before it applied"
-      },
-      "PRICE_LIST_IMPORT_ROW_OUTCOME": {
-        "NEW_ITEM": "Artículo nuevo",
-        "NEW_PRICE": "Precio nuevo",
-        "UNCHANGED": "Sin cambios",
-        "REFUSED": "Rechazado"
       }
     },
     "DOCUMENTS": {
@@ -14199,5 +14295,64 @@
     "REASON_REQUIRED": "Indique el motivo para guardar un identificador duplicado.",
     "WAIT_CHECK": "El identificador aún se está verificando. Inténtelo de nuevo en un momento.",
     "EXISTS_HERE_NUMBERED": "Registro existente {{index}} de {{count}} con este identificador: abrirlo."
+  },
+  "PATIENT_NOTIFICATIONS": {
+    "TITLE": "Patient notifications",
+    "SUBTITLE": "Appointment and result-available SMS and emails sent to your patients. Failed sends can be retried.",
+    "FILTER_STATUS": "Status",
+    "ALL_STATUSES": "All statuses",
+    "EMPTY": "No sends in this status.",
+    "LOAD_ERROR": "Could not load the patient notification sends.",
+    "RETRY": "Retry",
+    "RETRIED": "The send is back in the queue.",
+    "RETRY_ERROR": "Could not retry this send.",
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "UNKNOWN": "Unknown",
+    "COL_PATIENT": "Patient",
+    "COL_EVENT": "Notice",
+    "COL_CHANNEL": "Channel",
+    "COL_STATUS": "Status",
+    "COL_ATTEMPTS": "Attempts",
+    "COL_REASON": "Reason",
+    "COL_LAST_ATTEMPT": "Last attempt",
+    "COL_ACTIONS": "Actions",
+    "STATUS": {
+      "PENDING": "Queued",
+      "RETRYING": "Retrying",
+      "SENT": "Sent",
+      "FAILED": "Failed",
+      "SKIPPED": "Not sent"
+    },
+    "EVENT": {
+      "APPOINTMENT_CONFIRMATION": "Appointment confirmation",
+      "APPOINTMENT_REMINDER": "Appointment reminder",
+      "LAB_RESULT_AVAILABLE": "Lab result available",
+      "IMAGING_RESULT_AVAILABLE": "Imaging result available",
+      "ULTRASOUND_RESULT_AVAILABLE": "Ultrasound result available"
+    },
+    "CHANNEL": {
+      "SMS": "SMS",
+      "EMAIL": "Email"
+    },
+    "ERROR": {
+      "PROVIDER_REJECTED": "Refused by the SMS provider",
+      "PROVIDER_AUTH_FAILED": "SMS provider refused the platform credentials",
+      "PROVIDER_UNREACHABLE": "SMS provider unreachable",
+      "OUTCOME_UNKNOWN": "No answer from the provider: it may have been delivered, check before retrying",
+      "TRANSPORT_UNAVAILABLE": "No SMS or email service configured",
+      "RECIPIENT_NOT_SUPPORTED": "The number cannot be texted",
+      "INVALID_ADDRESS": "Invalid email address",
+      "MAIL_SEND_FAILED": "The mail server did not accept the email",
+      "SEND_FAILED": "Send failed",
+      "ATTEMPTS_EXHAUSTED": "Every attempt was used",
+      "RECIPIENT_NOT_ALLOWED": "Number not on this environment's test list",
+      "OPTED_OUT": "The patient turned this channel off",
+      "NO_CONTACT": "No phone number or email address",
+      "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
+      "PATIENT_DECEASED": "The patient has died"
+    },
+    "MAYBE_DELIVERED": "The patient may already have received this message.",
+    "RETRY_CONFIRM_TITLE": "Send this message again?",
+    "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice."
   }
 }
