@@ -14,6 +14,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'io.micrometer:micrometer-registry-otlp'
+    // Required for Micrometer OTLP push on Boot 4: OtlpMetricsExportAutoConfiguration is
+    // @ConditionalOnClass(OpenTelemetryProperties), which lives here. Without it no
+    // OtlpMeterRegistry is ever built (see application.properties, OtlpMetricsExportTest).
+    implementation 'org.springframework.boot:spring-boot-opentelemetry'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'

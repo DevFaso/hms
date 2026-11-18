@@ -1,10 +1,14 @@
 package com.example.hms.config.observability;
 
+import io.micrometer.registry.otlp.OtlpMeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,6 +28,13 @@ import org.springframework.stereotype.Component;
  * boot — that converts a missing graph into an outage, and into a deploy that cannot be rolled
  * forward. An ERROR on the startup path, naming the variable and the fix, is the proportionate
  * response: visible to anyone reading the deploy log, harmless to patient care.
+ *
+ * <p>It also checks, once the application is ready, that the flag actually produced an
+ * {@link OtlpMeterRegistry}. On Spring Boot 4 the OTLP auto-configuration silently backs off
+ * when a class from {@code spring-boot-opentelemetry} is missing, and that is exactly how the
+ * Micrometer meters never reached Grafana Cloud on dev or prod while every variable here was
+ * correct. Push failures themselves (a 401, a 404) are logged by Micrometer as a WARN with the
+ * HTTP status on the first failure; the Authorization header is never part of that line.
  */
 @Component
 public class OtlpMetricsExportValidator {
@@ -36,14 +47,33 @@ public class OtlpMetricsExportValidator {
     private final boolean enabled;
     private final String url;
     private final String authorization;
+    private final ObjectProvider<OtlpMeterRegistry> otlpRegistry;
 
     public OtlpMetricsExportValidator(
             @Value("${management.otlp.metrics.export.enabled:false}") boolean enabled,
             @Value("${management.otlp.metrics.export.url:}") String url,
-            @Value("${management.otlp.metrics.export.headers.Authorization:}") String authorization) {
+            @Value("${management.otlp.metrics.export.headers.Authorization:}") String authorization,
+            ObjectProvider<OtlpMeterRegistry> otlpRegistry) {
         this.enabled = enabled;
         this.url = url;
         this.authorization = authorization;
+        this.otlpRegistry = otlpRegistry;
+    }
+
+    /**
+     * Runs after startup rather than in {@link PostConstruct}, so looking the registry up never
+     * forces it to be built early, out of the order the metrics auto-configuration expects.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    void errorWhenEnabledButNoRegistry() {
+        if (enabled && otlpRegistry.getIfAvailable() == null) {
+            log.error("OTEL_METRICS_ENABLED=true but no OtlpMeterRegistry was created, so no "
+                + "Micrometer meter (http_server_requests, hikaricp, business counters) is "
+                + "pushed to Grafana Cloud. The Spring Boot OTLP metrics auto-configuration "
+                + "backed off: check that spring-boot-opentelemetry and "
+                + "micrometer-registry-otlp are on the classpath, and that "
+                + "management.otlp.metrics.export.enabled is not overridden.");
+        }
     }
 
     @PostConstruct
