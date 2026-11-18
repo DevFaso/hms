@@ -384,41 +384,6 @@ summary:focus-visible,
   background: #e7f4ef;
   border-color: #a0cec0;
 }
-.audit-row {
-  display: flex;
-  gap: 10px;
-  padding: 12px 0;
-  border-bottom: 1px solid #edf1f5;
-}
-.audit-icon {
-  color: #0b7563;
-}
-.audit-icon .material-symbols-outlined {
-  font-size: 18px;
-}
-.audit-failed .audit-icon {
-  color: #b42335;
-}
-.audit-body {
-  min-width: 0;
-}
-.audit-line {
-  font-size: 12px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.audit-entity,
-.audit-resource {
-  color: #52667b;
-}
-.audit-meta {
-  font-size: 10px;
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  color: #52667b;
-  margin-top: 5px;
-}
 .audit-footer {
   display: flex;
   align-items: center;
@@ -736,12 +701,6 @@ summary:focus-visible,
   white-space: normal;
   text-align: left;
 }
-.audit-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
-}
 .routine-toggle {
   margin: 0 0 12px;
   padding: 8px 10px;
@@ -789,12 +748,6 @@ summary:focus-visible,
   }
 }
 
-.audit-body {
-  flex: 1;
-}
-.audit-meta {
-  font-size: 12px;
-}
 .audit-details {
   margin-top: 8px;
   font-size: 12px;
@@ -812,4 +765,60 @@ summary:focus-visible,
   .activity-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.audit-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.3fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(80px, 0.5fr)
+    minmax(120px, 0.7fr);
+  gap: 10px 18px;
+  padding: 14px 0;
+  align-items: start;
+  border-bottom: 1px solid #edf1f5;
+  font-size: 13px;
+}
+.audit-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.audit-details {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+.audit-period,
+.audit-routine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.audit-period select {
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: white;
+  color: #334155;
+}
+@media (max-width: 900px) {
+  .audit-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .audit-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+  }
+  .audit-event {
+    grid-column: 1 / -1;
+  }
+}
+
+.audit-failed .audit-outcome {
+  color: #b42335;
+  font-weight: 650;
 }

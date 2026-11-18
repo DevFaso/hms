@@ -102,7 +102,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (entry.bucket.tryConsume(1)) {
             filterChain.doFilter(request, response);
         } else {
-            log.warn("[RATE-LIMIT] 429 for key='{}' path={}", key, request.getRequestURI());
+            // The key kind only: a "user:" key would put the username in the log.
+            log.warn("[RATE-LIMIT] 429 for {} key path={}", key.startsWith("user:") ? "user" : key, request.getRequestURI());
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setHeader("Retry-After", "60");
             response.setContentType("application/json");

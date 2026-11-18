@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 
 import { SuperAdminAuditSearchComponent } from './audit-search';
 import { AuditSearchService } from '../../services/audit-search.service';
@@ -15,6 +16,7 @@ import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
   let auditSearch: jasmine.SpyObj<AuditSearchService>;
+  let query: Record<string, string>;
   let savedSearch: jasmine.SpyObj<AuditSavedSearchService>;
   let residency: jasmine.SpyObj<DataResidencyService>;
 
@@ -25,6 +27,10 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
         { provide: AuditSearchService, useValue: auditSearch },
         { provide: AuditSavedSearchService, useValue: savedSearch },
         { provide: DataResidencyService, useValue: residency },
@@ -36,6 +42,7 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
   }
 
   beforeEach(() => {
+    query = {};
     auditSearch = jasmine.createSpyObj<AuditSearchService>('AuditSearchService', [
       'search',
       'exportCsv',
@@ -62,6 +69,36 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
       'updateRegion',
     ]);
     residency.listAvailableRegions.and.returnValue(of([]));
+  });
+
+  it('opens the dashboard history window without losing the failure, routine, or hospital filter', () => {
+    query = {
+      status: 'FAILURE',
+      excludeRoutineSuccesses: 'true',
+      hospitalId: 'hospital-a',
+      fromDate: '2026-11-17T01:02:37',
+      toDate: '2026-11-18T01:02:38',
+    };
+    const c = setup();
+    expect(auditSearch.search.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({ ...query, excludeRoutineSuccesses: true }),
+    );
+    c.resetFilters();
+    expect(auditSearch.search.calls.mostRecent().args[0].hospitalId).toBeUndefined();
+    expect(auditSearch.search.calls.mostRecent().args[0].excludeRoutineSuccesses).toBeUndefined();
+  });
+
+  it('keeps the current filter results when an older search completes later', () => {
+    const older = new Subject<import('../../services/audit-search.model').AuditSearchPage>();
+    auditSearch.search.and.returnValue(older);
+    const c = setup();
+    auditSearch.search.and.returnValue(
+      of({ content: [], totalElements: 2, pageNumber: 0, pageSize: 25, totalPages: 1 }),
+    );
+    c.status.set('FAILURE');
+    c.applyFilters();
+    older.next({ content: [], totalElements: 99, pageNumber: 0, pageSize: 25, totalPages: 4 });
+    expect(c.page()?.totalElements).toBe(2);
   });
 
   it('applySaved shows the saved UTC bounds as local picker values, so a re-save round-trips (#948 review)', () => {

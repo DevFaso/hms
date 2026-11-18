@@ -322,115 +322,153 @@
           </div>
         </div>
       </section>
-      <section class="dashboard-panel audit-panel">
-        <!-- Recent audit events -->
+      <section class="dashboard-panel audit-panel" [attr.aria-busy]="auditLoading()">
         <h2 class="section-heading">{{ 'SUPER_ADMIN.RECENT_AUDIT' | translate }}</h2>
-        @if (!summaryUnavailable()) {
-          <div
-            class="audit-filters"
-            role="group"
-            [attr.aria-label]="'SUPER_ADMIN.RECENT_AUDIT' | translate"
+        <div
+          class="audit-filters"
+          role="group"
+          [attr.aria-label]="'SUPER_ADMIN.RECENT_AUDIT' | translate"
+        >
+          <button
+            type="button"
+            [attr.aria-pressed]="!auditFailuresOnly()"
+            (click)="setAuditFailures(false)"
           >
-            <button
-              type="button"
-              [attr.aria-pressed]="!auditFailuresOnly()"
-              (click)="auditFailuresOnly.set(false)"
-            >
-              {{ 'SUPER_ADMIN.AUDIT_ALL' | translate }}</button
-            ><button
-              type="button"
-              [attr.aria-pressed]="auditFailuresOnly()"
-              (click)="auditFailuresOnly.set(true)"
-            >
-              {{ 'SUPER_ADMIN.AUDIT_FAILURES' | translate }}
-            </button>
-          </div>
-          <p class="audit-sample">
-            {{ 'SUPER_ADMIN.CONTROL.AUDIT_SAMPLE' | translate: { count: recentAudit().length } }}
-          </p>
-          @if (routineAuditCount() > 0) {
-            <button
-              type="button"
-              class="routine-toggle"
-              [attr.aria-pressed]="showRoutineAudit()"
-              (click)="showRoutineAudit.set(!showRoutineAudit())"
-            >
-              {{ 'SUPER_ADMIN.CONTROL.ROUTINE_AUDIT' | translate: { count: routineAuditCount() } }}
-            </button>
-          }
-          <div
-            class="audit-list"
-            data-test="audit-list"
-            tabindex="0"
-            role="region"
-            [attr.aria-label]="'SUPER_ADMIN.RECENT_AUDIT' | translate"
+            {{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.EVENTS' | translate }}
+          </button>
+          <button
+            type="button"
+            [attr.aria-pressed]="auditFailuresOnly()"
+            (click)="setAuditFailures(true)"
           >
-            @if (visibleAudit().length === 0) {
-              <p class="activity-empty">
-                {{
-                  (auditFailuresOnly() || recentAudit().length > 0
-                    ? 'SUPER_ADMIN.AUDIT_EMPTY'
-                    : 'SUPER_ADMIN.AUDIT_NONE'
-                  ) | translate
-                }}
-              </p>
+            {{ 'SUPER_ADMIN.AUDIT_FAILURES' | translate }}
+          </button>
+          <label class="audit-period">
+            {{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.PERIOD' | translate }}
+            <select [ngModel]="auditDays()" (ngModelChange)="setAuditDays($event)">
+              <option [ngValue]="1">{{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.DAY' | translate }}</option>
+              <option [ngValue]="7">{{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.WEEK' | translate }}</option>
+              <option [ngValue]="30">{{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.MONTH' | translate }}</option>
+            </select>
+          </label>
+          <label class="audit-routine">
+            <input
+              type="checkbox"
+              [ngModel]="showRoutineAudit()"
+              (ngModelChange)="setAuditRoutine($event)"
+            />
+            {{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.INCLUDE_ROUTINE' | translate }}
+          </label>
+        </div>
+        <p class="audit-sample">{{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.HISTORY' | translate }}</p>
+        <div
+          class="audit-list"
+          data-test="audit-list"
+          role="region"
+          [attr.aria-label]="'SUPER_ADMIN.RECENT_AUDIT' | translate"
+        >
+          @if (auditLoading()) {
+            <p role="status">{{ 'COMMON.LOADING' | translate }}</p>
+          } @else if (auditUnavailable()) {
+            <p class="availability-note" role="alert">
+              {{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.UNAVAILABLE' | translate }}
+            </p>
+          } @else {
+            <p class="audit-sample" role="status">
+              {{
+                'SUPER_ADMIN.AUDIT_OVERSIGHT.COUNT'
+                  | translate: { shown: displayedAudit().length, total: auditTotal() }
+              }}
+            </p>
+            @if (displayedAudit().length === 0) {
+              <p class="activity-empty">{{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.EMPTY' | translate }}</p>
             }
             @for (event of displayedAudit(); track event.id) {
               <div class="audit-row" [class.audit-failed]="event.status === 'FAILURE'">
-                <div class="audit-icon">
-                  <span class="material-symbols-outlined" aria-hidden="true">
-                    {{ event.status === 'FAILURE' ? 'cancel' : 'check_circle' }}
-                  </span>
-                </div>
-                <div class="audit-body">
-                  <div class="audit-line">
-                    <strong>{{ event.eventType | enumLabel: 'auditEventType' }}</strong>
-                    <span class="audit-outcome">{{ event.status | enumLabel: 'auditStatus' }}</span>
-                    @if (event.entityType) {
-                      <span class="audit-entity">· {{ entityLabel(event.entityType) }}</span>
-                    }
-                  </div>
-                  <div class="audit-meta">
-                    <span>{{ event.userName || '—' }}</span>
-                    <span>·</span>
-                    <span>{{ event.hospitalName || '—' }}</span>
-                    <span>·</span>
-                    <span>{{ event.eventTimestamp | serverTime | date: 'short' }}</span>
-                  </div>
-                  @if (entityLabel(event.resourceName); as resource) {
-                    <details class="audit-details">
-                      <summary>{{ 'SUPER_ADMIN.ACTIVITY.TARGET_DETAILS' | translate }}</summary>
-                      <code>{{ resource }}</code>
-                    </details>
+                <div class="audit-event">
+                  <span class="field-label">{{
+                    'SUPER_ADMIN.AUDIT_OVERSIGHT.EVENT' | translate
+                  }}</span>
+                  <strong>{{ event.eventType | enumLabel: 'auditEventType' }}</strong>
+                  @if (auditTargetKey(event.resourceName); as labelKey) {
+                    <span>{{ labelKey | translate }}</span>
+                  } @else if (auditTargetLabel(event); as entity) {
+                    <span>{{ entity }}</span>
                   }
                 </div>
+                <div class="audit-actor">
+                  <span class="field-label">{{
+                    'SUPER_ADMIN.AUDIT_OVERSIGHT.ACTOR' | translate
+                  }}</span>
+                  <span>{{
+                    recordedAuditValue(event.userName) ||
+                      recordedAuditValue(event.actorLabel) ||
+                      ('SUPER_ADMIN.ACTIVITY.NOT_RECORDED' | translate)
+                  }}</span>
+                  @if (recordedAuditValue(event.roleName); as role) {
+                    <span>{{ role | roleLabel }}</span>
+                  }
+                  @if (recordedAuditValue(event.impersonatorUsername); as actor) {
+                    <span>{{
+                      'SUPER_ADMIN.AUDIT_OVERSIGHT.IMPERSONATOR' | translate: { actor: actor }
+                    }}</span>
+                  }
+                </div>
+                <div class="audit-scope">
+                  <span class="field-label">{{
+                    'SUPER_ADMIN.AUDIT_OVERSIGHT.SCOPE' | translate
+                  }}</span>
+                  <span>{{
+                    recordedAuditValue(event.hospitalName) || (auditScopeKey(event) | translate)
+                  }}</span>
+                </div>
+                <div class="audit-outcome">
+                  <span class="field-label">{{ 'SUPER_ADMIN.ACTIVITY.STATUS' | translate }}</span>
+                  <span>{{ event.status | enumLabel: 'auditStatus' }}</span>
+                </div>
+                <div class="audit-time">
+                  <span class="field-label">{{
+                    'SUPER_ADMIN.AUDIT_OVERSIGHT.TIME' | translate
+                  }}</span>
+                  <span>{{
+                    event.eventTimestamp
+                      ? (event.eventTimestamp | serverTime | date: 'short')
+                      : ('SUPER_ADMIN.ACTIVITY.NOT_RECORDED' | translate)
+                  }}</span>
+                </div>
+                @if (entityLabel(event.resourceName); as resource) {
+                  <details class="audit-details">
+                    <summary>{{ 'SUPER_ADMIN.ACTIVITY.TARGET_DETAILS' | translate }}</summary>
+                    <code>{{ resource }}</code>
+                  </details>
+                }
               </div>
             }
-            @if (visibleAudit().length > 5) {
+            @if (auditTotal() > 5) {
               <button
                 type="button"
                 class="routine-toggle"
                 [attr.aria-expanded]="auditExpanded()"
-                (click)="auditExpanded.set(!auditExpanded())"
+                (click)="expandAudit()"
               >
                 {{
                   (auditExpanded()
                     ? 'SUPER_ADMIN.ACTIVITY.SHOW_LESS'
-                    : 'SUPER_ADMIN.ACTIVITY.SHOW_MORE'
-                  ) | translate: { count: visibleAudit().length }
+                    : 'SUPER_ADMIN.AUDIT_OVERSIGHT.SHOW_TEN'
+                  ) | translate
                 }}
               </button>
             }
-            <a class="audit-footer" routerLink="/super-admin/audit-logs">
-              {{ 'SUPER_ADMIN.VIEW_ALL_AUDIT' | translate }}
-              <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
-            </a>
-          </div>
-        } @else {
-          <p class="availability-note" role="status">
-            {{ 'SUPER_ADMIN.SUMMARY_UNAVAILABLE' | translate }}
-          </p>
-        }
+          }
+          <a
+            class="audit-footer"
+            routerLink="/super-admin/audit-search"
+            [queryParams]="auditQueryParams()"
+          >
+            {{ 'SUPER_ADMIN.VIEW_ALL_AUDIT' | translate }}
+            <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+          </a>
+        </div>
       </section>
     </div>
   }

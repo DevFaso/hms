@@ -241,7 +241,7 @@ public class GlobalExceptionHandler {
                     localized("error.internal.mayHaveSucceeded",
                         "An internal error occurred. The operation may have succeeded."), request);
         }
-        log.warn("Illegal state (business rule violation): {}", ex.getMessage());
+        log.debug("Illegal state (business rule violation): {}", ex.getMessage());
         return buildErrorResponse(HttpStatus.BAD_REQUEST, passThrough(ex.getMessage()), request);
     }
 
@@ -256,8 +256,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(io.jsonwebtoken.JwtException.class)
     public ResponseEntity<Object> handleJwt(io.jsonwebtoken.JwtException ex, WebRequest request) {
-        if (log.isWarnEnabled()) {
-            log.warn("Token no longer valid at path {}", logPath(request));
+        if (log.isDebugEnabled()) {
+            log.debug("Token no longer valid at path {}", logPath(request));
         }
         return buildErrorResponse(HttpStatus.UNAUTHORIZED, localized("error.session.expired", "Session expired. Please log in again."), request);
     }
@@ -275,7 +275,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<Object> handleUnauthorized(UnauthorizedException ex, WebRequest request) {
-        log.warn("Unauthorized at path {}: {}", logPath(request), ex.getMessage());
+        log.debug("Unauthorized at path {}: {}", logPath(request), ex.getMessage());
         return buildErrorResponse(HttpStatus.UNAUTHORIZED, passThrough(ex.getMessage()), request);
     }
 
@@ -334,8 +334,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, WebRequest request) {
-        if (log.isWarnEnabled()) {
-            log.warn("Unreadable request body at path {}: {}",
+        if (log.isDebugEnabled()) {
+            log.debug("Unreadable request body at path {}: {}",
                 logPath(request), ex.getMostSpecificCause().getClass().getSimpleName());
         }
         // QA D1349 (round 30): the values the read already recorded as
@@ -372,8 +372,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MalformedRequestBodyException.class)
     public ResponseEntity<Object> handleMalformedRequestBody(MalformedRequestBodyException ex, WebRequest request) {
-        if (log.isWarnEnabled()) {
-            log.warn("Malformed request body at path {}: {} value(s)",
+        if (log.isDebugEnabled()) {
+            log.debug("Malformed request body at path {}: {} value(s)",
                 logPath(request), ex.getMalformedPaths().size());
         }
         Map<String, String> fieldErrors = new LinkedHashMap<>();
@@ -824,8 +824,8 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException ex, WebRequest request) {
         // The value and the Java type stay in the log (D53): the caller is
         // told which parameter, in its own language, and nothing else.
-        if (log.isWarnEnabled()) {
-            log.warn("Parameter type mismatch at path {}: parameter {} expected {}",
+        if (log.isDebugEnabled()) {
+            log.debug("Parameter type mismatch at path {}: parameter {} expected {}",
                 logPath(request), ex.getName(),
                 ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "value");
         }
@@ -839,8 +839,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(InvalidQueryParameterException.class)
     public ResponseEntity<Object> handleInvalidQueryParameter(InvalidQueryParameterException ex, WebRequest request) {
-        if (log.isWarnEnabled()) {
-            log.warn("Unknown query parameter value at path {}: parameter {}",
+        if (log.isDebugEnabled()) {
+            log.debug("Unknown query parameter value at path {}: parameter {}",
                 logPath(request), ex.getParameter());
         }
         return invalidParameterResponse(ex.getParameter(), request);
@@ -1087,7 +1087,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Object> handleMaxUploadSize(MaxUploadSizeExceededException ex, WebRequest request) {
-        log.warn("File upload too large: {}", ex.getMessage());
+        log.debug("File upload too large: {}", ex.getMessage());
         return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE,
             localized("error.upload.tooLarge", "File size exceeds the maximum allowed limit of {0}",
                 com.example.hms.service.FileUploadService.MAX_UPLOAD_LABEL), request);

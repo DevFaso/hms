@@ -70,6 +70,7 @@ import { ProviderDetailComponent } from '../super-admin/providers/provider-detai
 import { ProviderFormComponent } from '../super-admin/providers/provider-form/provider-form';
 import { ProviderListComponent } from '../super-admin/providers/provider-list/provider-list';
 import { SubscriptionsComponent } from '../super-admin/subscriptions/subscriptions';
+import { SuperAdminComponent } from '../super-admin/super-admin';
 
 /** Every covered component whose template holds a submit (form-behaviour.spec.ts). */
 export const FORM_BEHAVIOUR_COMPONENTS: readonly {
@@ -377,4 +378,5 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     file: 'super-admin/subscriptions/subscriptions',
     type: SubscriptionsComponent,
   },
+  { name: 'SuperAdminComponent', file: 'super-admin/super-admin', type: SuperAdminComponent },
 ];

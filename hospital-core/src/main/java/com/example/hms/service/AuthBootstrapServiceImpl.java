@@ -122,8 +122,7 @@ public class AuthBootstrapServiceImpl implements AuthBootstrapService {
                 ? user.getLastOidcLoginAt().toInstant()
                 : null;
 
-        log.debug("[BOOTSTRAP] Resolved session for username='{}' roles={} primaryHospital={}",
-                username, roles, primaryHospitalId);
+        log.debug("[BOOTSTRAP] Resolved session roles={} primaryHospital={}", roles, primaryHospitalId);
 
         return SessionBootstrapResponseDTO.builder()
                 .userId(user.getId())

@@ -68,8 +68,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         long start = System.nanoTime();
         String path = request.getRequestURI();
         if (log.isTraceEnabled()) {
-            log.trace("[JWT] Incoming path={} method={} authHeader={} thread={}", path, request.getMethod(),
-                request.getHeader(HEADER_STRING), Thread.currentThread().getName());
+            log.trace("[JWT] Incoming path={} method={} thread={}", path, request.getMethod(),
+                Thread.currentThread().getName());
         }
 
         try {
@@ -129,21 +129,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     // (defense-in-depth against log-aggregator misconfiguration / PII leak);
                     // the path + the ticket-issuance trail let ops correlate when needed.
                     log.warn("[WS-TICKET] Refusing ticket for a disabled/unverified account on path={}", path);
-                    respondUnauthorized(response, null);
+                    respondUnauthorized(response);
                     return true;
                 }
                 var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
                 SecurityContextHolder.getContext().setAuthentication(auth);
-                log.debug("[WS-TICKET] Authenticated user='{}' via ticket on path={}", username, path);
+                log.debug("[WS-TICKET] Authenticated via ticket on path={}", path);
                 filterChain.doFilter(request, response);
                 return true;
             } catch (Exception ex) {
-                log.warn("[WS-TICKET] Failed to load user for ticket, user='{}': {}", username, ex.getMessage());
+                log.warn("[WS-TICKET] Failed to load the ticket's user: {}", ex.getClass().getSimpleName());
             }
         }
         log.warn("[WS-TICKET] Invalid or expired ticket on path={}", path);
-        respondUnauthorized(response, null);
+        respondUnauthorized(response);
         return true;
     }
 
@@ -169,8 +169,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String extractedSubject = safeExtractSubject(jwt);
 
         if (isKnownMissingPrincipal(extractedSubject)) {
-            log.debug("[JWT] Short-circuiting cached missing user '{}' on path={}", extractedSubject, path);
-            respondUnauthorized(response, extractedSubject);
+            log.debug("[JWT] Short-circuiting cached missing user on path={}", path);
+            respondUnauthorized(response);
             return false;
         }
 
@@ -186,7 +186,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String rawHeader = request.getHeader(HEADER_STRING);
             boolean prefixOk = rawHeader != null && rawHeader.startsWith(TOKEN_PREFIX);
             int tokenLen = prefixOk ? rawHeader.length() - TOKEN_PREFIX.length() : 0;
-            log.warn("[JWT] Token provided but invalid for path={} headerPresent={} headerPrefixOk={} tokenLen={}",
+            // DEBUG: an expired token (routine, the portal refreshes) lands here too;
+            // JwtTokenProvider#validateToken already logs the probing-shaped rejections at WARN.
+            log.debug("[JWT] Token provided but invalid for path={} headerPresent={} headerPrefixOk={} tokenLen={}",
                 path, rawHeader != null, prefixOk, tokenLen);
         }
         return true;
@@ -215,7 +217,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // rejection with no line at INFO — is real and recorded in tasklist.md; the fix is a
             // warn-once-per-jti path like isKnownMissingPrincipal's, not a blanket level change.
             log.debug("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
-            respondUnauthorized(response, extractedSubject);
+            respondUnauthorized(response);
             return false;
         }
 
@@ -225,7 +227,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 30 s by GlobalSessionRevocationService so this stays a hot path.
         if (isRevokedByGlobalIat(jwt)) {
             log.warn("[JWT] Token rejected by global session revocation on path={}", path);
-            respondUnauthorized(response, extractedSubject);
+            respondUnauthorized(response);
             return false;
         }
 
@@ -233,7 +235,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             log.trace("[JWT] Token present and valid (len={})", jwt.length());
         }
         if (!applyAuthentication(jwt, request, extractedSubject)) {
-            respondUnauthorized(response, extractedSubject);
+            respondUnauthorized(response);
             return false;
         }
 
@@ -342,8 +344,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // caller with no live SUPER_ADMIN assignment loses it, and the
             // roles it inherited, on this request — not at refresh.
             authentication = SuperAdminAuthorities.reconcile(authentication, context);
-            log.debug("[JWT] Setting authentication for principal={} authorities={}",
-                authentication.getName(), authentication.getAuthorities());
+            log.debug("[JWT] Setting authentication authorities={}", authentication.getAuthorities());
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
             HospitalContextHolder.setContext(context);
@@ -397,7 +398,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             missingPrincipalOrder.remove(subject);
             missingPrincipalTimestamps.remove(subject);
             if (log.isDebugEnabled()) {
-                log.debug("[JWT] Removed '{}' from missing-principal cache after successful authentication", subject);
+                log.debug("[JWT] Removed a subject from the missing-principal cache after successful authentication");
             }
         }
     }
@@ -416,10 +417,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // line carries the subject for deep debugging in dev only.
             log.warn("[JWT] Ignoring token for a missing user (suppressing future warnings).");
             if (log.isTraceEnabled()) {
-                log.trace("[JWT] First missing-user record subject='{}'", subject);
+                log.trace("[JWT] First missing-user record");
             }
         } else if (log.isTraceEnabled()) {
-            log.trace("[JWT] Already warned about missing user '{}', suppressing log", subject);
+            log.trace("[JWT] Already warned about a missing user, suppressing log");
         }
     }
 
@@ -458,7 +459,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         Long timestamp = missingPrincipalTimestamps.get(subject);
         if (timestamp != null && System.currentTimeMillis() - timestamp > MISSING_PRINCIPAL_CACHE_TTL_MS) {
             // Entry expired, remove from cache
-            log.debug("[JWT] Missing principal cache entry expired for '{}'", subject);
+            log.debug("[JWT] Missing principal cache entry expired");
             forgetMissingPrincipal(subject);
             return false;
         }
@@ -466,13 +467,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return true;
     }
 
-    private void respondUnauthorized(HttpServletResponse response, String subject) {
+    private void respondUnauthorized(HttpServletResponse response) {
         if (!response.isCommitted()) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setHeader("WWW-Authenticate", "Bearer realm=\"Hospital\"");
         }
         if (log.isTraceEnabled()) {
-            log.trace("[JWT] Responded 401 for missing user '{}'", subject);
+            log.trace("[JWT] Responded 401 for a missing user");
         }
     }
 

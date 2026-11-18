@@ -61,3 +61,16 @@ test('dashboard result count includes the reader performing-hospital scope', () 
   const query = repository.slice(repository.lastIndexOf('@Query', method), method);
   assert.match(query, /OR r\.labOrder\.performingHospital\.id = :hospitalId/);
 });
+
+// The dashboard and full search must use the same server predicate and preserve the selected window.
+test('audit filters query history before pagination and preserve their deep link', () => {
+  assert.match(ts, /auditSearch\s*\.search\(/);
+  assert.match(ts, /excludeRoutineSuccesses: !this.showRoutineAudit\(\)/);
+  assert.match(html, /\[queryParams\]="auditQueryParams\(\)"/);
+  assert.doesNotMatch(ts, /recentAudit\(\)\.filter/);
+  const service = readFileSync(
+    new URL('service/impl/SuperAdminAuditSearchServiceImpl.java', backend),
+    'utf8',
+  );
+  assert.match(service, /f.excludeRoutineSuccesses\(\)/);
+});

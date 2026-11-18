@@ -103,6 +103,41 @@ test.describe('super-admin control tower', () => {
         },
       }),
     );
+    await page.route('**/api/super-admin/audit-search**', (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      const rows = [
+        {
+          id: 'routine',
+          eventType: 'TOKEN_REFRESH',
+          status: 'SUCCESS',
+          userName: 'Routine actor',
+          resourceName: 'Unknown Resource',
+          eventTimestamp: '2026-11-17T15:40:00Z',
+        },
+        {
+          id: 'failure-outside-summary',
+          eventType: 'DATA_ACCESS',
+          status: 'FAILURE',
+          userName: 'Failed actor',
+          resourceName: 'BILLING_INVOICE',
+          hospitalName: 'Hospital B',
+          eventTimestamp: '2026-11-17T15:41:00Z',
+        },
+      ].filter(
+        (row) =>
+          (params.get('excludeRoutineSuccesses') !== 'true' || row.status !== 'SUCCESS') &&
+          (!params.get('status') || row.status === params.get('status')),
+      );
+      return route.fulfill({
+        json: {
+          content: rows,
+          totalElements: rows.length,
+          pageNumber: 0,
+          pageSize: Number(params.get('size')),
+          totalPages: 1,
+        },
+      });
+    });
     await page.route('**/api/super-admin/recent-activity**', (route) =>
       route.fulfill({
         json: Object.fromEntries(
@@ -205,14 +240,14 @@ test.describe('super-admin control tower', () => {
       }
       await expect(screen.locator('.audit-list')).toContainText('Failed actor');
       await expect(screen.locator('.audit-list')).not.toContainText('Routine actor');
-      await screen.locator('.routine-toggle[aria-pressed]').click();
+      await screen.locator('.audit-routine input').click();
       await expect(screen.locator('.audit-list')).toContainText('Routine actor');
       await expect(screen.locator('.audit-details')).toHaveCount(1);
       await screen.locator('.audit-details summary').click();
       await expect(screen.locator('.audit-details code')).toHaveText('Facture');
       expect(
         await screen
-          .locator('.audit-line')
+          .locator('.audit-row')
           .first()
           .evaluate((element) => getComputedStyle(element).columnGap),
       ).not.toBe('normal');
@@ -223,42 +258,50 @@ test.describe('super-admin control tower', () => {
     });
   }
 
-  test('an all-routine audit sample is filtered, not reported as absent', async ({ page }) => {
-    await page.route('**/api/super-admin/summary**', (route) =>
-      route.fulfill({
+  test('audit history queries carry filters into full search and expand the server page', async ({
+    page,
+  }) => {
+    await page.route('**/api/super-admin/audit-search**', (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      const size = Number(params.get('size'));
+      const content = Array.from({ length: size }, (_, i) => ({
+        id: `history-${i}`,
+        userName: 'History actor',
+        eventType: 'DATA_ACCESS',
+        status: 'FAILURE',
+        eventTimestamp: '2026-11-17T15:40:00Z',
+      }));
+      return route.fulfill({
         json: {
-          recentAuditEvents: Array.from({ length: 10 }, (_, index) => ({
-            id: `routine-${index}`,
-            eventType: 'TOKEN_REFRESH',
-            status: 'SUCCESS',
-            userName: `Routine actor ${index}`,
-            eventTimestamp: '2026-11-17T15:40:00Z',
-          })),
+          content,
+          totalElements: 23,
+          totalPages: Math.ceil(23 / size),
+          pageNumber: 0,
+          pageSize: size,
         },
-      }),
-    );
+      });
+    });
     await page.goto('/super-admin');
     const screen = page.locator('app-super-admin');
     const list = screen.locator('.audit-list');
-    await expect(list).toContainText(
-      'Aucun \u00e9v\u00e9nement de cet \u00e9chantillon r\u00e9cent ne correspond au filtre.',
-    );
-    await expect(list.locator('.audit-row')).toHaveCount(0);
-    await screen.locator('.routine-toggle[aria-pressed]').click();
     await expect(list.locator('.audit-row')).toHaveCount(5);
-    await list.getByRole('button', { name: /Show all|Afficher les|Mostrar los/ }).click();
+    await screen.locator('.audit-filters button').nth(1).click();
+    const link = list.locator('a.audit-footer');
+    await expect(link).toHaveAttribute('href', /status=FAILURE/);
+    await expect(link).toHaveAttribute('href', /excludeRoutineSuccesses=true/);
+    await expect(link).toHaveAttribute('href', /fromDate=/);
+    await list.locator('button[aria-expanded]').click();
     await expect(list.locator('.audit-row')).toHaveCount(10);
-    await expect(list.locator('.activity-empty')).toHaveCount(0);
-    await screen.locator('.routine-toggle[aria-pressed]').click();
-    await expect(list.locator('.audit-row')).toHaveCount(0);
-    await expect(list).toContainText(
-      'Aucun \u00e9v\u00e9nement de cet \u00e9chantillon r\u00e9cent ne correspond au filtre.',
-    );
+    await screen.locator('.audit-period select').selectOption({ label: '7 derniers jours' });
+    await expect(list.locator('.audit-row')).toHaveCount(5);
   });
 
   test('failed sources are visibly unavailable, while administration remains accessible', async ({
     page,
   }) => {
+    await page.route('**/api/super-admin/audit-search**', (route) =>
+      route.fulfill({ status: 503, json: {} }),
+    );
     await page.route('**/api/super-admin/integrations', (route) =>
       route.fulfill({ status: 503, json: {} }),
     );
@@ -272,5 +315,6 @@ test.describe('super-admin control tower', () => {
     await expect(screen.locator('.integration-overview .availability-note')).toBeVisible();
     await expect(screen.locator('.activity-list .availability-note')).toBeVisible();
     await expect(screen.locator('.activity-list .activity-empty')).toHaveCount(0);
+    await expect(screen.locator('.audit-list .availability-note')).toBeVisible();
   });
 });

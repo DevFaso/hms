@@ -5,6 +5,9 @@ import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError, Subject } from 'rxjs';
 
+import { AuditSearchService } from '../services/audit-search.service';
+import { AuditSearchRow } from '../services/audit-search.model';
+import { RoleContextService } from '../core/role-context.service';
 import { ActivityKey, SuperAdminComponent } from './super-admin';
 import {
   DashboardService,
@@ -104,6 +107,8 @@ const auditEvent = (id: string, status: 'SUCCESS' | 'FAILURE' = 'SUCCESS'): Rece
 
 describe('SuperAdminComponent', () => {
   let dashboard: jasmine.SpyObj<DashboardService>;
+  let audits: jasmine.SpyObj<AuditSearchService>;
+  let rows: AuditSearchRow[];
   let platform: jasmine.SpyObj<PlatformService>;
   let health: jasmine.SpyObj<IntegrationHealthService>;
   let fixture: ComponentFixture<SuperAdminComponent>;
@@ -124,6 +129,8 @@ describe('SuperAdminComponent', () => {
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: DashboardService, useValue: dashboard },
+        { provide: AuditSearchService, useValue: audits },
+        { provide: RoleContextService, useValue: { selectedHospitalId: () => null } },
         { provide: PlatformService, useValue: platform },
         { provide: IntegrationHealthService, useValue: health },
       ],
@@ -134,6 +141,11 @@ describe('SuperAdminComponent', () => {
   }
 
   beforeEach(() => {
+    rows = [];
+    audits = jasmine.createSpyObj<AuditSearchService>('AuditSearchService', ['search']);
+    audits.search.and.callFake(() =>
+      of({ content: rows, totalElements: rows.length, pageSize: 5, pageNumber: 0, totalPages: 1 }),
+    );
     dashboard = jasmine.createSpyObj<DashboardService>('DashboardService', [
       'getSummary',
       'getRecentActivity',
@@ -221,26 +233,16 @@ describe('SuperAdminComponent', () => {
     expect(component.healthUnavailable()).toBeTrue();
     expect(fixture.nativeElement.querySelector('[data-test="health-grid"]')).toBeNull();
   });
-  it('hides successful token refresh noise while retaining failures and an opt-in', () => {
-    dashboard.getSummary.and.returnValue(
-      of(
-        fakeSummary({
-          recentAuditEvents: [
-            { ...auditEvent('routine'), eventType: 'TOKEN_REFRESH' },
-            { ...auditEvent('failed', 'FAILURE'), eventType: 'TOKEN_REFRESH' },
-            auditEvent('login'),
-          ],
-        }),
-      ),
-    );
+  it('retains failed refreshes returned by the server and passes both filters without narrowing the sample', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
-    const component = setup();
-    expect(component.visibleAudit().map((event) => event.id)).toEqual(['failed', 'login']);
-    expect(component.routineAuditCount()).toBe(1);
-    component.showRoutineAudit.set(true);
-    expect(component.visibleAudit().length).toBe(3);
-    component.auditFailuresOnly.set(true);
-    expect(component.visibleAudit().map((event) => event.id)).toEqual(['failed']);
+    rows = [{ ...auditEvent('failed', 'FAILURE'), eventType: 'TOKEN_REFRESH' }] as AuditSearchRow[];
+    const c = setup();
+    expect(c.displayedAudit()[0].id).toBe('failed');
+    c.setAuditFailures(true);
+    expect(audits.search.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({ status: 'FAILURE', excludeRoutineSuccesses: true }),
+    );
   });
   it('distinguishes an unavailable clinical feed from an empty feed', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
@@ -263,8 +265,8 @@ describe('SuperAdminComponent', () => {
     );
     expect(cards.length).toBe(4);
     expect(cards.every((card) => card.getAttribute('href') === '/super-admin/platform')).toBeTrue();
-    expect(dom.querySelector('.audit-panel .audit-footer')?.getAttribute('href')).toBe(
-      '/super-admin/audit-logs',
+    expect(dom.querySelector('.audit-panel .audit-footer')?.getAttribute('href')).toContain(
+      '/super-admin/audit-search?',
     );
     expect(cards.map((card) => card.classList.contains('warn'))).toEqual([
       false,
@@ -292,40 +294,30 @@ describe('SuperAdminComponent', () => {
     expect(panel.textContent).not.toContain('COMMON.LOADING');
   });
 
-  it('reports a filtered empty sample when every audit event is a hidden routine refresh', () => {
-    dashboard.getSummary.and.returnValue(
-      of(
-        fakeSummary({
-          recentAuditEvents: [{ ...auditEvent('routine'), eventType: 'TOKEN_REFRESH' }],
-        }),
-      ),
-    );
-    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
-    setup();
-    const list: HTMLElement = fixture.nativeElement.querySelector('.audit-list');
-    expect(list.textContent).toContain('SUPER_ADMIN.AUDIT_EMPTY');
-    expect(list.textContent).not.toContain('SUPER_ADMIN.AUDIT_NONE');
-    const toggle: HTMLButtonElement = fixture.nativeElement.querySelector('.routine-toggle');
-    toggle.click();
-    fixture.detectChanges();
-    expect(list.querySelectorAll('.audit-row').length).toBe(1);
-    expect(list.querySelector('.activity-empty')).toBeNull();
-    toggle.click();
-    fixture.detectChanges();
-    expect(list.querySelectorAll('.audit-row').length).toBe(0);
-    expect(list.textContent).toContain('SUPER_ADMIN.AUDIT_EMPTY');
-  });
-
-  it('distinguishes an empty audit sample from an empty failure filter', () => {
+  it('requests server-side routine-success suppression and includes routine reads only on request', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
     const c = setup();
-    const list: HTMLElement = fixture.nativeElement.querySelector('.audit-list');
-    expect(list.textContent).toContain('SUPER_ADMIN.AUDIT_NONE');
-    c.auditFailuresOnly.set(true);
+    expect(audits.search.calls.mostRecent().args[0].excludeRoutineSuccesses).toBeTrue();
+    c.setAuditRoutine(true);
+    expect(audits.search.calls.mostRecent().args[0].excludeRoutineSuccesses).toBeFalse();
+    c.setAuditRoutine(false);
+    expect(audits.search.calls.mostRecent().args[0].excludeRoutineSuccesses).toBeTrue();
+  });
+
+  it('distinguishes unavailable audit history from a successful empty search', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const c = setup();
+    expect(c.auditUnavailable()).toBeFalse();
+    audits.search.and.returnValue(throwError(() => new Error('offline')));
+    c.loadAudit();
     fixture.detectChanges();
-    expect(list.textContent).toContain('SUPER_ADMIN.AUDIT_EMPTY');
-    expect(list.textContent).not.toContain('SUPER_ADMIN.AUDIT_NONE');
+    expect(c.auditUnavailable()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('.audit-list').textContent).toContain(
+      'SUPER_ADMIN.AUDIT_OVERSIGHT.UNAVAILABLE',
+    );
+    expect(fixture.nativeElement.querySelector('.audit-list .activity-empty')).toBeNull();
   });
 
   it('reads an audit entity token in the reader language (D619)', () => {
@@ -339,6 +331,10 @@ describe('SuperAdminComponent', () => {
         }),
       ),
     );
+    rows = [
+      { ...auditEvent('unknown'), resourceName: 'Unknown Resource' },
+      { ...auditEvent('invoice'), resourceName: 'BILLING_INVOICE' },
+    ] as AuditSearchRow[];
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
     const c = setup();
     const translate = TestBed.inject(TranslateService);
@@ -353,6 +349,9 @@ describe('SuperAdminComponent', () => {
       fixture.nativeElement.querySelectorAll('.audit-details');
     expect(details.length).toBe(1);
     expect(details[0].querySelector('code')?.textContent).toBe('Facture');
+    expect(fixture.nativeElement.querySelector('.audit-event').textContent).not.toContain(
+      'BILLING_INVOICE',
+    );
   });
   it('builds 8 stat tiles from a successful summary', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
@@ -368,16 +367,15 @@ describe('SuperAdminComponent', () => {
     expect(c.platformActions()?.totalIntegrations).toBe(12);
   });
 
-  it('exposes audit events from the summary', () => {
+  it('loads audit history independently of the ten summary events', () => {
     dashboard.getSummary.and.returnValue(
-      of(fakeSummary({ recentAuditEvents: [auditEvent('a1'), auditEvent('a2', 'FAILURE')] })),
+      of(fakeSummary({ recentAuditEvents: [auditEvent('summary-only')] })),
     );
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
-
+    rows = [auditEvent('history-event')] as AuditSearchRow[];
     const c = setup();
-
-    expect(c.recentAudit().length).toBe(2);
-    expect(c.recentAudit()[1].status).toBe('FAILURE');
+    expect(c.displayedAudit().map((row) => row.id)).toEqual(['history-event']);
+    expect(audits.search.calls.mostRecent().args[0].size).toBe(5);
   });
 
   it('shows empty stats and an error flag when both sources fail', () => {
@@ -447,21 +445,21 @@ describe('SuperAdminComponent', () => {
     const auditPanel = dom.querySelector('.audit-panel');
     expect(clinicalPanel?.textContent).toContain('SUPER_ADMIN.SUMMARY_UNAVAILABLE');
     expect(auditPanel?.textContent).toContain('SUPER_ADMIN.RECENT_AUDIT');
-    expect(auditPanel?.textContent).toContain('SUPER_ADMIN.SUMMARY_UNAVAILABLE');
-    expect(auditPanel?.querySelector('.audit-filters')).toBeNull();
+    expect(auditPanel?.textContent).toContain('SUPER_ADMIN.AUDIT_OVERSIGHT.EMPTY');
+    expect(auditPanel?.querySelector('.audit-filters')).not.toBeNull();
     expect(dom.querySelector('.platform-strip')).not.toBeNull();
   });
 
-  it('filters only the loaded recent audit sample', () => {
-    dashboard.getSummary.and.returnValue(
-      of(fakeSummary({ recentAuditEvents: [auditEvent('ok'), auditEvent('failed', 'FAILURE')] })),
-    );
+  it('queries history for failures and carries the same filters into full audit search', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
     const c = setup();
-    c.auditFailuresOnly.set(true);
-    expect(c.visibleAudit().map((event) => event.id)).toEqual(['failed']);
-    expect(c.recentAudit().length).toBe(2);
-    expect(dashboard.getSummary.calls.count()).toBe(1);
+    rows = [auditEvent('failure-beyond-the-summary', 'FAILURE')] as AuditSearchRow[];
+    c.setAuditFailures(true);
+    expect(audits.search.calls.mostRecent().args[0].status).toBe('FAILURE');
+    expect(c.displayedAudit()[0].id).toBe('failure-beyond-the-summary');
+    expect(c.auditQueryParams().status).toBe('FAILURE');
+    expect(c.auditQueryParams().fromDate).toBe(audits.search.calls.mostRecent().args[0].fromDate);
   });
 
   it('exposes the quick-link grid covering core super-admin destinations', () => {
@@ -708,6 +706,8 @@ describe('SuperAdminComponent', () => {
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: DashboardService, useValue: dashboard },
+        { provide: AuditSearchService, useValue: audits },
+        { provide: RoleContextService, useValue: { selectedHospitalId: () => null } },
         { provide: PlatformService, useValue: platform },
         { provide: IntegrationHealthService, useValue: health },
       ],
@@ -839,23 +839,56 @@ describe('SuperAdminComponent', () => {
     });
   });
 
-  it('places audit after clinical activity and expands the matching sample without dropping failures', () => {
-    const events = Array.from({ length: 7 }, (_, i) =>
-      auditEvent(String(i), i === 6 ? 'FAILURE' : 'SUCCESS'),
-    );
-    dashboard.getSummary.and.returnValue(of(fakeSummary({ recentAuditEvents: events })));
+  it('keeps audit below activity and requests a larger page without changing the history filters', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
     const c = setup();
-    const element: HTMLElement = fixture.nativeElement;
-    const panels = element.querySelectorAll('.workspace-grid > section');
+    const panels = fixture.nativeElement.querySelectorAll('.workspace-grid > section');
     expect(panels[1].classList.contains('audit-panel')).toBeTrue();
-    expect(c.displayedAudit().length).toBe(5);
-    c.auditExpanded.set(true);
-    expect(c.displayedAudit().length).toBe(7);
-    c.auditExpanded.set(false);
-    c.auditFailuresOnly.set(true);
-    expect(c.displayedAudit().map((event) => event.id)).toEqual(['6']);
+    const first = audits.search.calls.mostRecent().args[0];
+    c.expandAudit();
+    expect(audits.search.calls.mostRecent().args[0]).toEqual({ ...first, size: 10 });
+    c.setAuditFailures(true);
+    expect(audits.search.calls.mostRecent().args[0].size).toBe(5);
   });
+  it('ignores an older audit response after a filter change', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const older = new Subject<import('../services/audit-search.model').AuditSearchPage>();
+    audits.search.and.returnValue(older);
+    const c = setup();
+    rows = [auditEvent('current')] as AuditSearchRow[];
+    audits.search.and.callFake(() =>
+      of({ content: rows, totalElements: 1, pageSize: 5, pageNumber: 0, totalPages: 1 }),
+    );
+    c.setAuditFailures(true);
+    older.next({ content: [], totalElements: 0, pageSize: 5, pageNumber: 0, totalPages: 0 });
+    expect(c.displayedAudit()[0].id).toBe('current');
+  });
+
+  it('shows recorded scope and localized targets without empty metadata separators', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    rows = [
+      {
+        ...auditEvent('read'),
+        roleName: null,
+        hospitalName: null,
+        resourceName: '/treatment-plans',
+      },
+    ] as AuditSearchRow[];
+    setup();
+    const element: HTMLElement = fixture.nativeElement;
+    expect(element.querySelector('.audit-scope')?.textContent).toContain(
+      'SUPER_ADMIN.AUDIT_OVERSIGHT.SCOPE_UNKNOWN',
+    );
+    expect(element.querySelector('.audit-event')?.textContent).toContain(
+      'SUPER_ADMIN.STAT.TREATMENT_PLANS',
+    );
+    expect(element.querySelector('.audit-row')?.textContent).not.toContain('? ? ?');
+    expect(element.querySelector('details')?.open).toBeFalse();
+  });
+
   it('shows the recorded lab release state without inventing one for an older payload', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
