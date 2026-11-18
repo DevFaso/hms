@@ -20,6 +20,9 @@ import java.util.UUID;
 @Repository
 public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
 
+    org.springframework.data.domain.Page<Admission> findByHospital_Id(
+        UUID hospitalId, org.springframework.data.domain.Pageable pageable);
+
     /** QA D601: any admission, current or past, that ever used this bed. */
     boolean existsByBed_Id(UUID bedId);
 

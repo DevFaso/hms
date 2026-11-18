@@ -71,6 +71,13 @@ interface ActivityRow {
   code: string;
   summary: string;
   timestamp: string | null;
+  timestampLabel: string;
+  dateOnly: boolean;
+  subject: string;
+  hospital: string;
+  details: string;
+  statusLabel: string;
+  statusKey: string;
 }
 
 import { EnumLabelService } from '../core/enum-label.service';
@@ -112,6 +119,10 @@ export class SuperAdminComponent implements OnInit {
   readonly activityLoading = signal(false);
   readonly auditFailuresOnly = signal(false);
   readonly showRoutineAudit = signal(false);
+  readonly auditExpanded = signal(false);
+  readonly displayedAudit = computed(() =>
+    this.auditExpanded() ? this.visibleAudit() : this.visibleAudit().slice(0, 5),
+  );
   readonly activityUnavailable = signal(false);
   readonly healthLoading = signal(true);
   readonly healthUnavailable = signal(false);
@@ -355,6 +366,17 @@ export class SuperAdminComponent implements OnInit {
       countOf: (s) => s.totalReferrals ?? 0,
     },
   ];
+
+  readonly activityRoutes: Record<ActivityKey, string> = {
+    consultations: '/consultations',
+    admissions: '/admissions',
+    prescriptions: '/prescriptions',
+    labOrders: '/lab',
+    labResults: '/lab-results',
+    labTestDefinitions: '/lab-test-config',
+    treatmentPlans: '/treatment-plans',
+    referrals: '/referrals',
+  };
 
   readonly selectedActivityRows = computed<ActivityRow[]>(() => {
     const tab = this.selectedActivityTab();
@@ -719,15 +741,8 @@ export class SuperAdminComponent implements OnInit {
     // QA D1002 class: a lab value in the summary reads in the reader's number format.
     const domains = SuperAdminComponent.ACTIVITY_ENUM_DOMAINS[tab] ?? {};
     const stringFields = ordered
-      .map((field) => {
-        const value =
-          field === 'resultValue' ? formatLabNumber(item[field] as string) : item[field];
-        if (value == null) return '';
-        return field in domains
-          ? this.enumLabels.transform(String(value), domains[field] ?? undefined)
-          : String(value);
-      })
-      .filter((s) => s.length > 0);
+      .map((field) => this.formatActivityField(item, field, domains))
+      .filter((value) => value.length > 0);
     // Activity-row timestamp extractor.
     //
     // Order matches "most clinically meaningful first":
@@ -746,24 +761,56 @@ export class SuperAdminComponent implements OnInit {
     // SuperAdminDashboardServiceImpl.getRecent*; both sides must stay
     // in lock-step or the column shows out-of-order rows with blank
     // timestamps.
-    const timestamp =
-      (item['encounterDate'] as string | undefined) ??
-      (item['admissionDateTime'] as string | undefined) ??
-      (item['resultDate'] as string | undefined) ??
-      (item['orderDatetime'] as string | undefined) ??
-      (item['submittedAt'] as string | undefined) ??
-      (item['timelineStartDate'] as string | undefined) ??
-      (item['consentTimestamp'] as string | undefined) ??
-      (item['requestedAt'] as string | undefined) ??
-      (item['admissionDate'] as string | undefined) ??
-      (item['orderedAt'] as string | undefined) ??
-      (item['createdAt'] as string | undefined) ??
-      null;
+    const timestampField = [
+      'encounterDate',
+      'admissionDateTime',
+      'resultDate',
+      'orderDatetime',
+      'submittedAt',
+      'timelineStartDate',
+      'consentTimestamp',
+      'requestedAt',
+      'admissionDate',
+      'orderedAt',
+      'createdAt',
+    ].find((field) => item[field] != null);
+    const timestamp = timestampField ? (item[timestampField] as string) : null;
+    // Every semantic field list starts with its patient or catalog resource.
+    const subject = String(item[ordered[0]] ?? '').trim();
+    const details = ordered
+      .slice(1)
+      .filter((field) => field !== 'status')
+      .map((field) => this.formatActivityField(item, field, domains))
+      .filter(Boolean)
+      .join(' · ');
     return {
       id,
       code,
+      subject,
+      hospital: String(item['hospitalName'] ?? '').trim(),
+      details,
+      statusLabel: this.formatActivityField(item, 'status', domains),
+      statusKey: this.activityStatusKey(item, tab),
+      timestampLabel: 'SUPER_ADMIN.ACTIVITY.DATE_' + (timestampField ?? 'UNKNOWN'),
+      dateOnly: /^\d{4}-\d{2}-\d{2}$/.test(timestamp ?? ''),
       summary: stringFields.join(' · '),
       timestamp,
     };
+  }
+  private formatActivityField(
+    item: SuperAdminRecentItem,
+    field: string,
+    domains: Readonly<Record<string, string | null>>,
+  ): string {
+    const value = field === 'resultValue' ? formatLabNumber(item[field] as string) : item[field];
+    if (value == null) return '';
+    return field in domains
+      ? this.enumLabels.transform(String(value), domains[field] ?? undefined)
+      : String(value);
+  }
+
+  private activityStatusKey(item: SuperAdminRecentItem, tab: ActivityKey): string {
+    if (tab !== 'labResults' || typeof item['released'] !== 'boolean') return '';
+    return item['released'] ? 'LAB_RESULTS.RELEASED' : 'LAB_RESULTS.PENDING_RELEASE';
   }
 }

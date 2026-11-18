@@ -13,6 +13,9 @@ import java.util.List;
 import java.util.UUID;
 
 public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOrderCustomRepository {
+
+    org.springframework.data.domain.Page<LabOrder> findByHospital_Id(
+        UUID hospitalId, org.springframework.data.domain.Pageable pageable);
     List<LabOrder> findByPatient_Id(UUID patientId);
 
     /**

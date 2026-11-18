@@ -263,7 +263,7 @@ describe('SuperAdminComponent', () => {
     );
     expect(cards.length).toBe(4);
     expect(cards.every((card) => card.getAttribute('href') === '/super-admin/platform')).toBeTrue();
-    expect(dom.querySelector('.audit-footer')?.getAttribute('href')).toBe(
+    expect(dom.querySelector('.audit-panel .audit-footer')?.getAttribute('href')).toBe(
       '/super-admin/audit-logs',
     );
     expect(cards.map((card) => card.classList.contains('warn'))).toEqual([
@@ -329,7 +329,16 @@ describe('SuperAdminComponent', () => {
   });
 
   it('reads an audit entity token in the reader language (D619)', () => {
-    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    dashboard.getSummary.and.returnValue(
+      of(
+        fakeSummary({
+          recentAuditEvents: [
+            { ...auditEvent('unknown'), resourceName: 'Unknown Resource' },
+            { ...auditEvent('invoice'), resourceName: 'BILLING_INVOICE' },
+          ],
+        }),
+      ),
+    );
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
     const c = setup();
     const translate = TestBed.inject(TranslateService);
@@ -339,6 +348,11 @@ describe('SuperAdminComponent', () => {
     translate.use('fr');
     expect(c.entityLabel('BILLING_INVOICE')).toBe('Facture');
     expect(c.entityLabel('Unknown Resource')).toBeNull();
+    fixture.detectChanges();
+    const details: NodeListOf<HTMLElement> =
+      fixture.nativeElement.querySelectorAll('.audit-details');
+    expect(details.length).toBe(1);
+    expect(details[0].querySelector('code')?.textContent).toBe('Facture');
   });
   it('builds 8 stat tiles from a successful summary', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
@@ -609,6 +623,8 @@ describe('SuperAdminComponent', () => {
     field: string;
     bundleKey: keyof SuperAdminRecentActivityBundle;
   }[] = [
+    { tab: 'consultations', field: 'requestedAt', bundleKey: 'consultations' },
+    { tab: 'labTestDefinitions', field: 'createdAt', bundleKey: 'labTestDefinitions' },
     { tab: 'admissions', field: 'admissionDateTime', bundleKey: 'admissions' },
     { tab: 'labResults', field: 'resultDate', bundleKey: 'labResults' },
     { tab: 'labOrders', field: 'orderDatetime', bundleKey: 'labOrders' },
@@ -621,6 +637,7 @@ describe('SuperAdminComponent', () => {
     it(`row timestamp extractor reads "${field}" for ${tab}`, () => {
       dashboard.getSummary.and.returnValue(of(fakeSummary()));
       platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+      const stamp = tab === 'treatmentPlans' ? '2026-05-04' : '2026-05-04T10:00:00Z';
       const row: SuperAdminRecentItem = {
         id: 'aaaa1111-2222-3333-4444-555555555555',
         patientName: 'Ada',
@@ -628,7 +645,7 @@ describe('SuperAdminComponent', () => {
         // (except for the prescriptions row, where `createdAt` IS
         // the clinical-time field by design — see the comment on
         // SuperAdminDashboardServiceImpl.getRecentPrescriptions).
-        [field]: '2026-05-04T10:00:00Z',
+        [field]: stamp,
       };
       dashboard.getRecentActivity.and.returnValue(
         of(bundleWith({ [bundleKey]: [row] } as Partial<SuperAdminRecentActivityBundle>)),
@@ -639,7 +656,14 @@ describe('SuperAdminComponent', () => {
 
       const rows = c.selectedActivityRows();
       expect(rows.length).toBe(1);
-      expect(rows[0].timestamp).toBe('2026-05-04T10:00:00Z');
+      expect(rows[0].timestamp).toBe(stamp);
+      expect(rows[0].dateOnly).toBe(tab === 'treatmentPlans');
+      fixture.detectChanges();
+      if (tab === 'treatmentPlans') {
+        const value = fixture.nativeElement.querySelector('.activity-timestamp span:last-child');
+        expect(value.textContent).not.toContain(':');
+      }
+      expect(rows[0].timestampLabel).toBe('SUPER_ADMIN.ACTIVITY.DATE_' + field);
     });
   }
 
@@ -740,6 +764,7 @@ describe('SuperAdminComponent', () => {
     const summary = c.selectedActivityRows()[0].summary;
 
     expect(summary).toBe('Ada · ROUTINE_SPECIALTY · Routine · Cancelled');
+    expect(c.selectedActivityRows()[0].statusLabel).toBe('Cancelled');
   });
 
   it('QA CX-006: the codes the summaries show are translated in French and Spanish', () => {
@@ -755,5 +780,102 @@ describe('SuperAdminComponent', () => {
         expect(labels[domain][code]).not.toBe(code);
       }
     }
+  });
+  it('renders structured oversight fields and the matching destination in every activity tab', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const c = setup();
+    const recent = Object.fromEntries(
+      c.activityTabs.map((tab) => [
+        tab.key,
+        [
+          {
+            id: tab.key,
+            patientName: 'Patient A',
+            patientFullName: 'Patient A',
+            name: 'Catalog A',
+            patientMrn: 'MRN-0042',
+            hospitalName: 'Hospital B',
+            medicationName: 'Medicine A',
+            specialtyRequested: 'Cardiology',
+            chiefComplaint: 'Review',
+            labTestName: 'Test A',
+            receivingHospitalName: 'Receiving hospital',
+            status: 'ACTIVE',
+            createdAt: '2026-11-17T14:00:00Z',
+          },
+        ],
+      ]),
+    );
+    dashboard.getRecentActivity.and.returnValue(of(bundleWith(recent)));
+    c.loadAll();
+    const destinations = [
+      '/consultations',
+      '/admissions',
+      '/prescriptions',
+      '/lab',
+      '/lab-results',
+      '/lab-test-config',
+      '/treatment-plans',
+      '/referrals',
+    ];
+    c.activityTabs.forEach((tab, index) => {
+      c.selectActivityTab(tab.key);
+      fixture.detectChanges();
+      const row = c.selectedActivityRows()[0];
+      expect(row.subject)
+        .withContext(tab.key)
+        .toBe(tab.key === 'labTestDefinitions' ? 'Catalog A' : 'Patient A');
+      expect(row.hospital).withContext(tab.key).toBe('Hospital B');
+      expect(row.timestampLabel).withContext(tab.key).toBe('SUPER_ADMIN.ACTIVITY.DATE_createdAt');
+      const element: HTMLElement = fixture.nativeElement;
+      expect(element.querySelector('.activity-toolbar a')?.getAttribute('href')).toBe(
+        destinations[index],
+      );
+      expect(element.querySelector('.activity-subject')?.textContent).toContain(row.subject);
+      expect(element.querySelector('.activity-timestamp .field-label')?.textContent).toContain(
+        row.timestampLabel,
+      );
+    });
+  });
+
+  it('places audit after clinical activity and expands the matching sample without dropping failures', () => {
+    const events = Array.from({ length: 7 }, (_, i) =>
+      auditEvent(String(i), i === 6 ? 'FAILURE' : 'SUCCESS'),
+    );
+    dashboard.getSummary.and.returnValue(of(fakeSummary({ recentAuditEvents: events })));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const c = setup();
+    const element: HTMLElement = fixture.nativeElement;
+    const panels = element.querySelectorAll('.workspace-grid > section');
+    expect(panels[1].classList.contains('audit-panel')).toBeTrue();
+    expect(c.displayedAudit().length).toBe(5);
+    c.auditExpanded.set(true);
+    expect(c.displayedAudit().length).toBe(7);
+    c.auditExpanded.set(false);
+    c.auditFailuresOnly.set(true);
+    expect(c.displayedAudit().map((event) => event.id)).toEqual(['6']);
+  });
+  it('shows the recorded lab release state without inventing one for an older payload', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentActivity.and.returnValue(
+      of(
+        bundleWith({
+          labResults: [
+            { id: 'released', released: true },
+            { id: 'pending', released: false },
+            { id: 'unknown' },
+          ],
+        }),
+      ),
+    );
+    const c = setup();
+    c.selectActivityTab('labResults');
+    expect(c.selectedActivityRows().map((row) => row.statusKey)).toEqual([
+      'LAB_RESULTS.RELEASED',
+      'LAB_RESULTS.PENDING_RELEASE',
+      '',
+    ]);
   });
 });
