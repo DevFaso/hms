@@ -51,7 +51,7 @@ class PatientPhotoServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new PatientPhotoServiceImpl(patientRepository, tempDir.toString());
+        service = new PatientPhotoServiceImpl(patientRepository, new com.example.hms.storage.LocalFileStorage(tempDir));
 
         hospitalId = UUID.randomUUID();
         Hospital hospital = new Hospital();
@@ -81,7 +81,7 @@ class PatientPhotoServiceImplTest {
         assertThat(updatedAt).isNotNull();
         assertThat(patient.getPhotoFilePath()).isNotBlank();
         assertThat(patient.getPhotoContentType()).isEqualTo("image/jpeg");
-        assertThat(Files.exists(tempDir.resolve(patient.getPhotoFilePath()))).isTrue();
+        assertThat(Files.exists(tempDir.resolve("patient-photos").resolve(patient.getPhotoFilePath()))).isTrue();
     }
 
     @Test
@@ -92,8 +92,8 @@ class PatientPhotoServiceImplTest {
         service.upload(patientId, hospitalId, jpeg("two.jpg", new byte[] {2}));
 
         assertThat(patient.getPhotoFilePath()).isNotEqualTo(firstFile);
-        assertThat(Files.exists(tempDir.resolve(firstFile))).isFalse();
-        assertThat(Files.exists(tempDir.resolve(patient.getPhotoFilePath()))).isTrue();
+        assertThat(Files.exists(tempDir.resolve("patient-photos").resolve(firstFile))).isFalse();
+        assertThat(Files.exists(tempDir.resolve("patient-photos").resolve(patient.getPhotoFilePath()))).isTrue();
     }
 
     @Test
@@ -122,7 +122,7 @@ class PatientPhotoServiceImplTest {
                 .isTrue();
             // The invariant that actually matters: the record never points at
             // a file that is not there.
-            assertThat(Files.exists(tempDir.resolve(stored)))
+            assertThat(Files.exists(tempDir.resolve("patient-photos").resolve(stored)))
                 .as("upload %s left photoFilePath pointing at a missing file", i)
                 .isTrue();
         }
@@ -233,7 +233,7 @@ class PatientPhotoServiceImplTest {
     @Test
     void loadIs404WhenTheStoredFileVanishedFromDisk() throws Exception {
         service.upload(patientId, hospitalId, jpeg("face.jpg", new byte[] {1}));
-        Files.delete(tempDir.resolve(patient.getPhotoFilePath()));
+        Files.delete(tempDir.resolve("patient-photos").resolve(patient.getPhotoFilePath()));
 
         // The DB row points at a file an operator removed — same outcome as
         // no photo, never a 500.
@@ -252,6 +252,6 @@ class PatientPhotoServiceImplTest {
         assertThat(patient.getPhotoFilePath()).isNull();
         assertThat(patient.getPhotoContentType()).isNull();
         assertThat(patient.getPhotoUpdatedAt()).isNull();
-        assertThat(Files.exists(tempDir.resolve(storedFile))).isFalse();
+        assertThat(Files.exists(tempDir.resolve("patient-photos").resolve(storedFile))).isFalse();
     }
 }

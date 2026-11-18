@@ -704,17 +704,17 @@ class ChatMessageServiceImplTest {
     }
 
     @Test
-    void downloadAttachment_streamsForTheSender() {
+    void downloadAttachment_streamsForTheSender() throws java.io.IOException {
         ChatAttachment attachment = attachmentBetween("alice", "bob");
         when(chatAttachmentRepository.findById(attachment.getId())).thenReturn(Optional.of(attachment));
-        java.nio.file.Path onDisk = java.nio.file.Path.of("x.jpg");
-        when(fileUploadService.resolveStoredFile("/uploads/chat-attachments/x.jpg", "chat-attachments"))
+        com.example.hms.storage.StoredObject onDisk = new com.example.hms.storage.StoredObject(new java.io.ByteArrayInputStream("x.jpg".getBytes()), 5);
+        when(fileUploadService.openStoredFile("/uploads/chat-attachments/x.jpg", "chat-attachments"))
             .thenReturn(onDisk);
 
         ChatMessageService.ChatAttachmentPayload payload =
             chatMessageService.downloadAttachment(attachment.getId(), "alice");
 
-        assertEquals(onDisk, payload.path());
+        assertEquals(onDisk.length(), payload.resource().contentLength());
         assertEquals("image/jpeg", payload.contentType());
         assertEquals("x.jpg", payload.displayName());
     }
@@ -723,8 +723,8 @@ class ChatMessageServiceImplTest {
     void downloadAttachment_streamsForTheRecipient() {
         ChatAttachment attachment = attachmentBetween("alice", "bob");
         when(chatAttachmentRepository.findById(attachment.getId())).thenReturn(Optional.of(attachment));
-        when(fileUploadService.resolveStoredFile("/uploads/chat-attachments/x.jpg", "chat-attachments"))
-            .thenReturn(java.nio.file.Path.of("x.jpg"));
+        when(fileUploadService.openStoredFile("/uploads/chat-attachments/x.jpg", "chat-attachments"))
+            .thenReturn(new com.example.hms.storage.StoredObject(new java.io.ByteArrayInputStream("x.jpg".getBytes()), "x.jpg".length()));
 
         assertNotNull(chatMessageService.downloadAttachment(attachment.getId(), "bob"));
     }
@@ -737,7 +737,7 @@ class ChatMessageServiceImplTest {
 
         assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
             () -> chatMessageService.downloadAttachment(attachment.getId(), "mallory"));
-        verify(fileUploadService, never()).resolveStoredFile(any(), any());
+        verify(fileUploadService, never()).openStoredFile(any(), any());
     }
 
     @Test

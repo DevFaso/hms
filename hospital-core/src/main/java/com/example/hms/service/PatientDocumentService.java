@@ -74,6 +74,6 @@ public interface PatientDocumentService {
     /** Streams the bytes to a staff caller and writes a DATA_ACCESS audit row naming the document. */
     DocumentPayload downloadForPatient(UUID hospitalId, UUID patientId, UUID documentId);
 
-    /** One downloadable document: on-disk path + the headers to serve it with. */
-    record DocumentPayload(java.nio.file.Path path, String contentType, String displayName) { }
+    /** One downloadable document: the stored bytes (opened, streamed once) + the headers to serve it with. */
+    record DocumentPayload(org.springframework.core.io.Resource resource, String contentType, String displayName) { }
 }
