@@ -403,30 +403,6 @@
     }
   },
   "SUPER_ADMIN": {
-    "ACTIVITY": {
-      "PREVIEW": "Recent records shown: {{count}} (up to 10 per category). Badges show totals.",
-      "VIEW_ALL": "View all records",
-      "NOT_RECORDED": "Not recorded",
-      "CATALOG": "Shared catalog",
-      "HOSPITAL": "Hospital",
-      "GLOBAL": "All hospitals",
-      "STATUS": "Status",
-      "TARGET_DETAILS": "Target details",
-      "SHOW_LESS": "Show fewer events",
-      "SHOW_MORE": "Show all {{count}} matching events",
-      "DATE_encounterDate": "Encounter",
-      "DATE_admissionDateTime": "Admission",
-      "DATE_resultDate": "Result",
-      "DATE_orderDatetime": "Ordered",
-      "DATE_submittedAt": "Submitted",
-      "DATE_timelineStartDate": "Plan start",
-      "DATE_consentTimestamp": "Consent recorded",
-      "DATE_requestedAt": "Requested",
-      "DATE_admissionDate": "Admission",
-      "DATE_orderedAt": "Ordered",
-      "DATE_createdAt": "Created",
-      "DATE_UNKNOWN": "Date unavailable"
-    },
     "TITLE": "Super-Admin Control Tower",
     "SUBTITLE": "Cross-tenant operations and platform health at a glance",
     "AS_OF": "As of",
@@ -515,6 +491,30 @@
       "ACTIVITY_UNAVAILABLE": "Recent clinical activity unavailable. Refresh to retry.",
       "AUDIT_SAMPLE": "Sample: latest {{count}} audit events received. Filters apply to this sample only.",
       "ROUTINE_AUDIT": "Include successful token refreshes ({{count}})"
+    },
+    "ACTIVITY": {
+      "PREVIEW": "Recent records shown: {{count}} (up to 10 per category). Badges show totals.",
+      "VIEW_ALL": "View all records",
+      "NOT_RECORDED": "Not recorded",
+      "CATALOG": "Shared catalog",
+      "HOSPITAL": "Hospital",
+      "GLOBAL": "All hospitals",
+      "STATUS": "Status",
+      "TARGET_DETAILS": "Target details",
+      "SHOW_LESS": "Show fewer events",
+      "SHOW_MORE": "Show all {{count}} matching events",
+      "DATE_encounterDate": "Encounter",
+      "DATE_admissionDateTime": "Admission",
+      "DATE_resultDate": "Result",
+      "DATE_orderDatetime": "Ordered",
+      "DATE_submittedAt": "Submitted",
+      "DATE_timelineStartDate": "Plan start",
+      "DATE_consentTimestamp": "Consent recorded",
+      "DATE_requestedAt": "Requested",
+      "DATE_admissionDate": "Admission",
+      "DATE_orderedAt": "Ordered",
+      "DATE_createdAt": "Created",
+      "DATE_UNKNOWN": "Date unavailable"
     }
   },
   "AUDIT_SEARCH": {
@@ -4956,6 +4956,7 @@
     "ADT_INTAKE": "ADT intake",
     "UNSIGNED_NOTES": "Unsigned notes",
     "PRICE_LIST": "Price list",
+    "PATIENT_NOTIFICATIONS": "Patient notifications",
     "PAYERS": "Payers"
   },
   "NOTIFICATIONS": {
@@ -7837,6 +7838,7 @@
         "FETAL_DEATH_EVENT": "Fetal-death event",
         "IMAGING_ORDER": "Imaging order",
         "PRICE_LIST_IMPORT": "Price list import",
+        "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send",
         "PAYER": "Payer",
         "PAYER_PLAN": "Payer plan"
       },
@@ -14293,5 +14295,64 @@
     "REASON_REQUIRED": "Give the reason for saving a duplicate identifier.",
     "WAIT_CHECK": "The identifier is still being checked. Try again in a moment.",
     "EXISTS_HERE_NUMBERED": "Existing record {{index}} of {{count}} with this identifier: open it."
+  },
+  "PATIENT_NOTIFICATIONS": {
+    "TITLE": "Patient notifications",
+    "SUBTITLE": "Appointment and result-available SMS and emails sent to your patients. Failed sends can be retried.",
+    "FILTER_STATUS": "Status",
+    "ALL_STATUSES": "All statuses",
+    "EMPTY": "No sends in this status.",
+    "LOAD_ERROR": "Could not load the patient notification sends.",
+    "RETRY": "Retry",
+    "RETRIED": "The send is back in the queue.",
+    "RETRY_ERROR": "Could not retry this send.",
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "UNKNOWN": "Unknown",
+    "COL_PATIENT": "Patient",
+    "COL_EVENT": "Notice",
+    "COL_CHANNEL": "Channel",
+    "COL_STATUS": "Status",
+    "COL_ATTEMPTS": "Attempts",
+    "COL_REASON": "Reason",
+    "COL_LAST_ATTEMPT": "Last attempt",
+    "COL_ACTIONS": "Actions",
+    "STATUS": {
+      "PENDING": "Queued",
+      "RETRYING": "Retrying",
+      "SENT": "Sent",
+      "FAILED": "Failed",
+      "SKIPPED": "Not sent"
+    },
+    "EVENT": {
+      "APPOINTMENT_CONFIRMATION": "Appointment confirmation",
+      "APPOINTMENT_REMINDER": "Appointment reminder",
+      "LAB_RESULT_AVAILABLE": "Lab result available",
+      "IMAGING_RESULT_AVAILABLE": "Imaging result available",
+      "ULTRASOUND_RESULT_AVAILABLE": "Ultrasound result available"
+    },
+    "CHANNEL": {
+      "SMS": "SMS",
+      "EMAIL": "Email"
+    },
+    "ERROR": {
+      "PROVIDER_REJECTED": "Refused by the SMS provider",
+      "PROVIDER_AUTH_FAILED": "SMS provider refused the platform credentials",
+      "PROVIDER_UNREACHABLE": "SMS provider unreachable",
+      "OUTCOME_UNKNOWN": "No answer from the provider: it may have been delivered, check before retrying",
+      "TRANSPORT_UNAVAILABLE": "No SMS or email service configured",
+      "RECIPIENT_NOT_SUPPORTED": "The number cannot be texted",
+      "INVALID_ADDRESS": "Invalid email address",
+      "MAIL_SEND_FAILED": "The mail server did not accept the email",
+      "SEND_FAILED": "Send failed",
+      "ATTEMPTS_EXHAUSTED": "Every attempt was used",
+      "RECIPIENT_NOT_ALLOWED": "Number not on this environment's test list",
+      "OPTED_OUT": "The patient turned this channel off",
+      "NO_CONTACT": "No phone number or email address",
+      "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
+      "PATIENT_DECEASED": "The patient has died"
+    },
+    "MAYBE_DELIVERED": "The patient may already have received this message.",
+    "RETRY_CONFIRM_TITLE": "Send this message again?",
+    "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice."
   }
 }

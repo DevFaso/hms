@@ -403,30 +403,6 @@
     }
   },
   "SUPER_ADMIN": {
-    "ACTIVITY": {
-      "PREVIEW": "Éléments récents affichés : {{count}} (10 maximum par catégorie). Les badges indiquent les totaux.",
-      "VIEW_ALL": "Voir tous les éléments",
-      "NOT_RECORDED": "Non renseigné",
-      "CATALOG": "Catalogue partagé",
-      "HOSPITAL": "Hôpital",
-      "GLOBAL": "Tous les hôpitaux",
-      "STATUS": "Statut",
-      "TARGET_DETAILS": "Détails de la cible",
-      "SHOW_LESS": "Afficher moins d’événements",
-      "SHOW_MORE": "Afficher les {{count}} événements correspondants",
-      "DATE_encounterDate": "Consultation",
-      "DATE_admissionDateTime": "Date d’admission",
-      "DATE_resultDate": "Résultat",
-      "DATE_orderDatetime": "Demande d’examen",
-      "DATE_submittedAt": "Soumission",
-      "DATE_timelineStartDate": "Début du plan",
-      "DATE_consentTimestamp": "Consentement enregistré",
-      "DATE_requestedAt": "Demande",
-      "DATE_admissionDate": "Date d’admission",
-      "DATE_orderedAt": "Demande d’examen",
-      "DATE_createdAt": "Création",
-      "DATE_UNKNOWN": "Date indisponible"
-    },
     "TITLE": "Tour de contrôle du super-administrateur",
     "SUBTITLE": "Vue d'ensemble multi-tenant et état de la plateforme",
     "AS_OF": "Au",
@@ -515,6 +491,30 @@
       "ACTIVITY_UNAVAILABLE": "Activité clinique récente indisponible. Actualisez pour réessayer.",
       "AUDIT_SAMPLE": "Échantillon : {{count}} derniers événements d’audit reçus. Les filtres portent uniquement sur cet échantillon.",
       "ROUTINE_AUDIT": "Inclure les renouvellements de jeton réussis ({{count}})"
+    },
+    "ACTIVITY": {
+      "PREVIEW": "Éléments récents affichés : {{count}} (10 maximum par catégorie). Les badges indiquent les totaux.",
+      "VIEW_ALL": "Voir tous les éléments",
+      "NOT_RECORDED": "Non renseigné",
+      "CATALOG": "Catalogue partagé",
+      "HOSPITAL": "Hôpital",
+      "GLOBAL": "Tous les hôpitaux",
+      "STATUS": "Statut",
+      "TARGET_DETAILS": "Détails de la cible",
+      "SHOW_LESS": "Afficher moins d’événements",
+      "SHOW_MORE": "Afficher les {{count}} événements correspondants",
+      "DATE_encounterDate": "Consultation",
+      "DATE_admissionDateTime": "Date d’admission",
+      "DATE_resultDate": "Résultat",
+      "DATE_orderDatetime": "Demande d’examen",
+      "DATE_submittedAt": "Soumission",
+      "DATE_timelineStartDate": "Début du plan",
+      "DATE_consentTimestamp": "Consentement enregistré",
+      "DATE_requestedAt": "Demande",
+      "DATE_admissionDate": "Date d’admission",
+      "DATE_orderedAt": "Demande d’examen",
+      "DATE_createdAt": "Création",
+      "DATE_UNKNOWN": "Date indisponible"
     }
   },
   "AUDIT_SEARCH": {
@@ -4956,6 +4956,7 @@
     "ADT_INTAKE": "Admissions ADT automatiques",
     "UNSIGNED_NOTES": "Notes non signées",
     "PRICE_LIST": "Grille tarifaire",
+    "PATIENT_NOTIFICATIONS": "Notifications aux patients",
     "PAYERS": "Organismes payeurs"
   },
   "NOTIFICATIONS": {
@@ -7803,6 +7804,7 @@
         "FETAL_DEATH_EVENT": "Événement de décès fœtal",
         "IMAGING_ORDER": "Demande d'imagerie",
         "PRICE_LIST_IMPORT": "Import de grille tarifaire",
+        "PATIENT_NOTIFICATION_DELIVERY": "Envoi de notification au patient",
         "PAYER": "Organisme payeur",
         "PAYER_PLAN": "Formule d’organisme payeur"
       },
@@ -14293,5 +14295,64 @@
     "REASON_REQUIRED": "Indiquez le motif d’enregistrement d’un identifiant en double.",
     "WAIT_CHECK": "L’identifiant est en cours de vérification. Réessayez dans un instant.",
     "EXISTS_HERE_NUMBERED": "Dossier existant {{index}} sur {{count}} avec cet identifiant : l’ouvrir."
+  },
+  "PATIENT_NOTIFICATIONS": {
+    "TITLE": "Notifications aux patients",
+    "SUBTITLE": "SMS et e-mails de rendez-vous et de résultats disponibles envoyés à vos patients. Un envoi en échec peut être relancé.",
+    "FILTER_STATUS": "Statut",
+    "ALL_STATUSES": "Tous les statuts",
+    "EMPTY": "Aucun envoi dans ce statut.",
+    "LOAD_ERROR": "Impossible de charger les envois de notifications aux patients.",
+    "RETRY": "Relancer",
+    "RETRIED": "L’envoi est remis dans la file.",
+    "RETRY_ERROR": "Impossible de relancer cet envoi.",
+    "PAGE_OF": "Page {{page}} sur {{total}}",
+    "UNKNOWN": "Inconnu",
+    "COL_PATIENT": "Patient",
+    "COL_EVENT": "Avis",
+    "COL_CHANNEL": "Canal",
+    "COL_STATUS": "Statut",
+    "COL_ATTEMPTS": "Tentatives",
+    "COL_REASON": "Motif",
+    "COL_LAST_ATTEMPT": "Dernière tentative",
+    "COL_ACTIONS": "Actions",
+    "STATUS": {
+      "PENDING": "En file",
+      "RETRYING": "Nouvelle tentative prévue",
+      "SENT": "Envoyé",
+      "FAILED": "En échec",
+      "SKIPPED": "Non envoyé"
+    },
+    "EVENT": {
+      "APPOINTMENT_CONFIRMATION": "Confirmation de rendez-vous",
+      "APPOINTMENT_REMINDER": "Rappel de rendez-vous",
+      "LAB_RESULT_AVAILABLE": "Résultat de laboratoire disponible",
+      "IMAGING_RESULT_AVAILABLE": "Résultat d’imagerie disponible",
+      "ULTRASOUND_RESULT_AVAILABLE": "Résultat d’échographie disponible"
+    },
+    "CHANNEL": {
+      "SMS": "SMS",
+      "EMAIL": "E-mail"
+    },
+    "ERROR": {
+      "PROVIDER_REJECTED": "Refusé par le fournisseur de SMS",
+      "PROVIDER_AUTH_FAILED": "Le fournisseur de SMS a refusé les identifiants de la plateforme",
+      "PROVIDER_UNREACHABLE": "Fournisseur de SMS injoignable",
+      "OUTCOME_UNKNOWN": "Aucune réponse du fournisseur : le message a peut-être été remis, vérifiez avant de relancer",
+      "TRANSPORT_UNAVAILABLE": "Aucun service de SMS ou d’e-mail configuré",
+      "RECIPIENT_NOT_SUPPORTED": "Ce numéro ne peut pas recevoir de SMS",
+      "INVALID_ADDRESS": "Adresse e-mail invalide",
+      "MAIL_SEND_FAILED": "Le serveur de messagerie n’a pas accepté l’e-mail",
+      "SEND_FAILED": "Échec de l’envoi",
+      "ATTEMPTS_EXHAUSTED": "Toutes les tentatives ont été utilisées",
+      "RECIPIENT_NOT_ALLOWED": "Numéro absent de la liste de test de cet environnement",
+      "OPTED_OUT": "Le patient a désactivé ce canal",
+      "NO_CONTACT": "Aucun numéro de téléphone ni adresse e-mail",
+      "SUBJECT_WITHDRAWN": "Rendez-vous annulé ou passé, ou résultat retiré",
+      "PATIENT_DECEASED": "Le patient est décédé"
+    },
+    "MAYBE_DELIVERED": "Le patient a peut-être déjà reçu ce message.",
+    "RETRY_CONFIRM_TITLE": "Renvoyer ce message ?",
+    "RETRY_CONFIRM_MESSAGE": "Le fournisseur n’a pas répondu : le patient a peut-être déjà reçu ce message. Le relancer peut l’envoyer deux fois."
   }
 }

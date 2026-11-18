@@ -38,6 +38,8 @@ class PluralArticleNumberGuardTest {
         Map.entry("labor.alert.msg.labor-preterm", "\"a las {0} semanas\": gestational weeks of a birth"),
         Map.entry("labor.alert.msg.labor-weight-implausible", "\"a las {1} semanas\": gestational weeks of a birth"),
         Map.entry("sms.appointment.reminder", "\"a las {1}\": a clock time"),
+        Map.entry("sms.appointment.confirmation", "\"a las {1}\": a clock time"),
+        Map.entry("email.patient.appointmentReminder.body", "\"a las {1}\": a clock time"),
         Map.entry("sms.waitlist.offer", "\"a las {1}\": a clock time"),
         Map.entry("email.appointment.cancelled.body.intro", "\"a las {3}\": a clock time"),
         Map.entry("email.appointment.completed.body.intro", "\"a las {3}\": a clock time"),

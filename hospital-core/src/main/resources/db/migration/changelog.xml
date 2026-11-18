@@ -3673,4 +3673,22 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V312 (go-live scorecard K1/K3) - the patient notification delivery
+         ledger, clinical.patient_notification_deliveries: one row per
+         (event, subject, channel) for appointment confirmations and
+         reminders and result-available notices by SMS and email. UNIQUE
+         idempotency_key stops a scheduler re-run or a second instance from
+         sending twice; status / attempts / next_attempt_at carry the bounded
+         retry; error_code is a fixed code. No body, number or address is
+         stored. Additive: one table, three indexes, IF NOT EXISTS, no DO
+         block.
+         ================================================================= -->
+    <changeSet id="V312-patient-notification-deliveries" author="hms-team" runOnChange="false">
+        <sqlFile path="V312__patient_notification_deliveries.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

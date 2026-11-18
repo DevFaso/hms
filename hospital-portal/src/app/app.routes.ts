@@ -427,6 +427,22 @@ export const routes: Routes = [
         loadComponent: () => import('./webhooks/webhooks').then((m) => m.WebhooksComponent),
       },
 
+      // Patient notification sends (V312, scorecard K3) — mirrors
+      // PatientNotificationDeliveryController; the backend needs one pinned
+      // hospital, so a super-admin in global view picks one first.
+      {
+        path: 'patient-notifications',
+        canActivate: [RoleGuard],
+        data: {
+          requiresHospitalScope: true,
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./patient-notifications/patient-notifications').then(
+            (m) => m.PatientNotificationsComponent,
+          ),
+      },
+
       // Staff
       {
         path: 'staff',

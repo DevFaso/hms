@@ -47,6 +47,35 @@ import com.example.hms.utility.RoleValidator;
 @RequiredArgsConstructor
 @Transactional
 public class UltrasoundServiceImpl implements UltrasoundService {
+
+    /**
+     * V312: the result-available SMS / email once a report is released to the
+     * patient. Setter-injected so the unit tests that build this by constructor
+     * keep compiling; null there.
+     */
+    private com.example.hms.service.notification.PatientNotificationLedger notificationLedger;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNotificationLedger(com.example.hms.service.notification.PatientNotificationLedger notificationLedger) {
+        this.notificationLedger = notificationLedger;
+    }
+
+    /**
+     * V312: a report released to the patient (reviewed AND the patient told,
+     * in either order) queues "a result is available" once; never its content.
+     */
+    private void announceIfReleased(UltrasoundReport report) {
+        if (notificationLedger == null || report == null || !report.isReleasedToPatient()) {
+            return;
+        }
+        UltrasoundOrder order = report.getUltrasoundOrder();
+        if (order == null || order.getPatient() == null || order.getHospital() == null) {
+            return;
+        }
+        notificationLedger.requestAfterCommit(
+            com.example.hms.enums.PatientNotificationEvent.ULTRASOUND_RESULT_AVAILABLE,
+            order.getHospital().getId(), order.getPatient().getId(), report.getId());
+    }
     /** Request properties a refusal names (QA D1352 class, round 30). */
     private static final String FIELD_GESTATIONAL_AGE_AT_ORDER = "gestationalAgeAtOrder";
 
@@ -649,6 +678,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
         UltrasoundReport saved = reportRepository.save(report);
         orderRepository.save(order);
+        announceIfReleased(saved);
 
         return ultrasoundMapper.toReportResponseDTO(saved);
     }
@@ -671,6 +701,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         report.setPatientNotifiedAt(LocalDateTime.now());
 
         UltrasoundReport saved = reportRepository.save(report);
+        announceIfReleased(saved);
         return ultrasoundMapper.toReportResponseDTO(saved);
     }
 

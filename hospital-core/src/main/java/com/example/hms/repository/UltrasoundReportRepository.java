@@ -87,4 +87,12 @@ public interface UltrasoundReportRepository extends JpaRepository<UltrasoundRepo
      */
     @Query("SELECT r FROM UltrasoundReport r WHERE r.anomaliesDetected = true AND r.hospital.id = :hospitalId ORDER BY r.scanDate DESC")
     List<UltrasoundReport> findReportsWithAnomalies(@Param("hospitalId") UUID hospitalId);
+
+    /**
+     * V312: the report by id WITHOUT tenant scoping, for the patient notification sweep, which runs
+     * with no hospital context (the scoped {@code findById} denies everything there). The sweep only
+     * asks whether the report is released; it never returns it to a caller.
+     */
+    @Query("select r from UltrasoundReport r where r.id = :id")
+    Optional<UltrasoundReport> findByIdUnscoped(@Param("id") UUID id);
 }

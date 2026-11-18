@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.NotificationChannel;
 import com.example.hms.enums.NotificationType;
+import com.example.hms.enums.PatientNotificationEvent;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Notification;
@@ -31,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.MessageSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,8 +40,7 @@ class AppointmentReminderServiceTest {
     @Mock private AppointmentRepository appointmentRepository;
     @Mock private NotificationPreferenceRepository preferenceRepository;
     @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
-    @Mock private SmsService smsService;
-    @Mock private MessageSource messageSource;
+    @Mock private com.example.hms.service.notification.PatientNotificationLedger ledger;
     @Mock private ReminderClaimService reminderClaimService;
     @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
 
@@ -54,8 +53,8 @@ class AppointmentReminderServiceTest {
     @BeforeEach
     void setUp() {
         service = new AppointmentReminderService(
-            appointmentRepository, preferenceRepository, notificationService, smsService,
-            messageSource, patientLocaleResolver, reminderClaimService, Clock.systemDefaultZone());
+            appointmentRepository, preferenceRepository, notificationService, ledger,
+            patientLocaleResolver, reminderClaimService, Clock.systemDefaultZone());
         ReflectionTestUtils.setField(service, "leadHours", 24L);
         ReflectionTestUtils.setField(service, "reminderLocale", "fr");
         // These tests are about the sweep, not the language. Pass the caller's
@@ -91,14 +90,13 @@ class AppointmentReminderServiceTest {
         appointment.setStartTime(startsAt.toLocalTime());
         appointment.setStatus(AppointmentStatus.SCHEDULED);
 
-        lenient().when(messageSource.getMessage(eq("sms.appointment.reminder"), any(), any(Locale.class)))
-            .thenReturn("Rappel : rendez-vous à CHU Yalgado.");
         lenient().when(reminderClaimService.claim(any(), any())).thenReturn(true);
         lenient().when(appointmentRepository.save(any(Appointment.class)))
             .thenAnswer(inv -> inv.getArgument(0));
         lenient().when(notificationService.created(anyString(), anyString(), anyString()))
             .thenReturn(new Notification());
-        lenient().when(smsService.deliversRealSms()).thenReturn(true);
+        lenient().when(ledger.enqueue(any(), any(), any(), any()))
+            .thenReturn(List.of(NotificationChannel.SMS));
         lenient().when(preferenceRepository.findByUser_IdAndNotificationType(
             portalUser.getId(), NotificationType.APPOINTMENT_REMINDER))
             .thenReturn(List.of());
@@ -118,7 +116,9 @@ class AppointmentReminderServiceTest {
         assertThat(reminded).isEqualTo(1);
         verify(notificationService).created(
             contains("Rappel"), eq("awa.traore"), eq("APPOINTMENT_REMINDER"));
-        verify(smsService).send(eq("+22670707070"), contains("Rappel"));
+        // V312: the SMS / email reminder is queued in the ledger, which sends it with retry.
+        verify(ledger).enqueue(PatientNotificationEvent.APPOINTMENT_REMINDER, appointment.getHospital().getId(),
+            patient.getId(), appointment.getId());
         verify(reminderClaimService).claim(eq(appointment.getId()), any());
     }
 
@@ -128,9 +128,9 @@ class AppointmentReminderServiceTest {
         // system-wide configured locale, so a patient who had told the desk
         // they read English was texted in French and nothing reported it.
         //
-        // Asserted on the locale handed to MessageSource rather than on the
-        // rendered string, because the string comes from the bundle and this
-        // is about which bundle gets asked.
+        // V312: the SMS text is rendered by the ledger's renderer
+        // (PatientNotificationRendererTest asserts its language); here the
+        // patient's language still decides how the bell writes the date.
         Locale english = Locale.forLanguageTag("en");
         org.mockito.Mockito.reset(patientLocaleResolver);
         when(patientLocaleResolver.resolve(eq(patient), any())).thenReturn(english);
@@ -138,7 +138,10 @@ class AppointmentReminderServiceTest {
 
         service.sendDueReminders();
 
-        verify(messageSource).getMessage(eq("sms.appointment.reminder"), any(), eq(english));
+        verify(patientLocaleResolver).resolve(patient, Locale.forLanguageTag("fr"));
+        verify(notificationService).created(
+            contains(com.example.hms.utility.DisplayDates.date(appointment.getAppointmentDate(), english)),
+            eq("awa.traore"), eq("APPOINTMENT_REMINDER"));
     }
 
     @Test
@@ -149,18 +152,17 @@ class AppointmentReminderServiceTest {
 
         service.sendDueReminders();
 
-        verify(messageSource).getMessage(
-            eq("sms.appointment.reminder"), any(), eq(Locale.forLanguageTag("fr")));
+        verify(patientLocaleResolver).resolve(patient, Locale.forLanguageTag("fr"));
     }
 
     @Test
     void smsStaysOffWhileTransportIsMock() {
-        when(smsService.deliversRealSms()).thenReturn(false);
+        // The ledger queues nothing on a mock transport (PatientNotificationLedgerTest).
+        when(ledger.enqueue(any(), any(), any(), any())).thenReturn(List.of());
         feed(appointment);
 
         int reminded = service.sendDueReminders();
 
-        verify(smsService, never()).send(anyString(), anyString());
         // In-app still fired — the appointment still counts as reminded.
         assertThat(reminded).isEqualTo(1);
     }
@@ -175,11 +177,13 @@ class AppointmentReminderServiceTest {
                 .channel(NotificationChannel.SMS)
                 .enabled(false)
                 .build()));
+        // V312: the SMS preference is honoured by the ledger, whose own test
+        // covers it, and the in-app bell still fires here.
+        when(ledger.enqueue(any(), any(), any(), any())).thenReturn(List.of());
         feed(appointment);
 
         service.sendDueReminders();
 
-        verify(smsService, never()).send(anyString(), anyString());
         verify(notificationService).created(anyString(), anyString(), anyString());
     }
 
@@ -199,7 +203,7 @@ class AppointmentReminderServiceTest {
 
     @Test
     void stampsEvenWhenEveryChannelSkips() {
-        when(smsService.deliversRealSms()).thenReturn(false);
+        when(ledger.enqueue(any(), any(), any(), any())).thenReturn(List.of());
         patient.setUser(null); // no portal account resolvable
 
         feed(appointment);
@@ -218,8 +222,8 @@ class AppointmentReminderServiceTest {
 
         int reminded = service.sendDueReminders();
 
-        assertThat(reminded).isEqualTo(1); // SMS still fired
-        verify(smsService).send(anyString(), anyString());
+        assertThat(reminded).isEqualTo(1); // SMS still queued
+        verify(ledger).enqueue(any(), any(), any(), any());
     }
 
     @Test
@@ -248,6 +252,6 @@ class AppointmentReminderServiceTest {
 
         assertThat(reminded).isZero();
         verify(notificationService, never()).created(anyString(), anyString(), anyString());
-        verify(smsService, never()).send(anyString(), anyString());
+        verify(ledger, never()).enqueue(any(), any(), any(), any());
     }
 }

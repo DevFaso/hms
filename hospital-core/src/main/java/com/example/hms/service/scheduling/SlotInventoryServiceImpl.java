@@ -49,6 +49,19 @@ import java.util.UUID;
 public class SlotInventoryServiceImpl implements SlotInventoryService {
 
     /**
+     * V312: the booking confirmation SMS, queued in the patient notification
+     * ledger once the booking commits. Setter-injected so unit tests that
+     * build this service by constructor keep compiling; null there.
+     */
+    private com.example.hms.service.notification.PatientNotificationLedger notificationLedger;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNotificationLedger(com.example.hms.service.notification.PatientNotificationLedger notificationLedger) {
+        this.notificationLedger = notificationLedger;
+    }
+
+
+    /**
      * How far ahead one call may materialise. A rolling horizon is the intended
      * operating mode; an unbounded range would let one request generate years of
      * rows and lock the table doing it.
@@ -370,6 +383,10 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         clearHold(slot);
         slot.setStatus(SlotStatus.BOOKED);
         slot.setAppointment(appointment);
+        // V312: the booking confirmation SMS (sent by the ledger, after commit).
+        if (notificationLedger != null) {
+            notificationLedger.confirmBooking(appointment);
+        }
         try {
             // Flush inside the try: the version check happens at flush time,
             // and surfacing it here (not at commit, outside this method) is

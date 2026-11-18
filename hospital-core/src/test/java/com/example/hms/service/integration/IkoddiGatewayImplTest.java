@@ -142,8 +142,46 @@ class IkoddiGatewayImplTest {
         List<String> recipients = List.of("+22670000101");
         assertThatThrownBy(() -> gateway.sendSms(recipients, "code 123456", null))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("400")
+            .hasMessage(SmsFailureKeys.REJECTED)
             .hasMessageNotContaining("22670000101");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("a 5xx answer is an unknown outcome: the message may have gone out, it is never resent")
+    void serverErrorIsAnUnknownOutcome() {
+        server.expect(requestTo("https://ikoddi.test/api/v1/groups/org-1/sms"))
+            .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withServerError());
+
+        List<String> recipients = List.of("+22670000101");
+        assertThatThrownBy(() -> gateway.sendSms(recipients, "Bonjour", null))
+            .isInstanceOf(IllegalStateException.class).hasMessage(SmsFailureKeys.UNKNOWN_OUTCOME);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("a timeout is an unknown outcome")
+    void timeoutIsAnUnknownOutcome() {
+        server.expect(requestTo("https://ikoddi.test/api/v1/groups/org-1/sms"))
+            .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+                .withException(new java.net.SocketTimeoutException("Read timed out")));
+
+        List<String> recipients = List.of("+22670000101");
+        assertThatThrownBy(() -> gateway.sendSms(recipients, "Bonjour", null))
+            .isInstanceOf(IllegalStateException.class).hasMessage(SmsFailureKeys.UNKNOWN_OUTCOME);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("a 401 is refused credentials: nothing was accepted")
+    void unauthorizedIsAuthFailed() {
+        server.expect(requestTo("https://ikoddi.test/api/v1/groups/org-1/sms"))
+            .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+                .withStatus(org.springframework.http.HttpStatus.UNAUTHORIZED));
+
+        List<String> recipients = List.of("+22670000101");
+        assertThatThrownBy(() -> gateway.sendSms(recipients, "Bonjour", null))
+            .isInstanceOf(IllegalStateException.class).hasMessage(SmsFailureKeys.AUTH_FAILED);
         server.verify();
     }
 

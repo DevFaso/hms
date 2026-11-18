@@ -1,0 +1,137 @@
+<div class="pn-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon" aria-hidden="true">sms_failed</span>
+      <div>
+        <h1 class="page-title">{{ 'PATIENT_NOTIFICATIONS.TITLE' | translate }}</h1>
+        <p class="page-subtitle">{{ 'PATIENT_NOTIFICATIONS.SUBTITLE' | translate }}</p>
+      </div>
+    </div>
+    <button
+      class="btn-refresh"
+      [attr.aria-label]="'COMMON.REFRESH' | translate"
+      (click)="load()"
+      [disabled]="loading()"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true" [class.spin]="loading()"
+        >refresh</span
+      >
+    </button>
+  </header>
+
+  @if (page()) {
+    <ul class="counters" data-testid="pn-counters">
+      @for (status of statuses; track status) {
+        <li class="counter" [attr.data-status]="status" [attr.data-testid]="'pn-count-' + status">
+          <span class="counter-value">{{ count(status) }}</span>
+          <span class="counter-label">{{ statusKey(status) | translate }}</span>
+        </li>
+      }
+    </ul>
+  }
+
+  <div class="filter-bar">
+    <label for="pn-status-filter">{{ 'PATIENT_NOTIFICATIONS.FILTER_STATUS' | translate }}</label>
+    <select
+      id="pn-status-filter"
+      [ngModel]="statusFilter()"
+      (ngModelChange)="setStatusFilter($event)"
+      data-testid="pn-status-filter"
+    >
+      @for (status of statuses; track status) {
+        <option [value]="status">{{ statusKey(status) | translate }}</option>
+      }
+      <option value="ALL">{{ 'PATIENT_NOTIFICATIONS.ALL_STATUSES' | translate }}</option>
+    </select>
+  </div>
+
+  @if (loading()) {
+    <div class="state-block" role="status">
+      <span class="material-symbols-outlined spin" aria-hidden="true">progress_activity</span>
+      <span class="sr-only">{{ 'COMMON.LOADING' | translate }}</span>
+    </div>
+  } @else if (error()) {
+    <div class="state-block state-error" role="alert">
+      <p>{{ error() }}</p>
+      <button class="btn-primary" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+    </div>
+  } @else if (rows().length === 0) {
+    <div class="state-block" data-testid="pn-empty">
+      <p>{{ 'PATIENT_NOTIFICATIONS.EMPTY' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="pn-table">
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_PATIENT' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_EVENT' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_CHANNEL' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_STATUS' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_ATTEMPTS' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_REASON' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_LAST_ATTEMPT' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr [attr.data-testid]="'pn-row-' + row.id">
+              <td>{{ row.patientName || '—' }}</td>
+              <td>{{ eventKey(row.eventType) | translate }}</td>
+              <td>{{ channelKey(row.channel) | translate }}</td>
+              <td>
+                <span class="status-badge" [attr.data-status]="row.status">
+                  {{ statusKey(row.status) | translate }}
+                </span>
+              </td>
+              <td class="numeric">{{ row.attempts }}</td>
+              <td>
+                @if (errorKey(row.errorCode); as reason) {
+                  {{ reason | translate }}
+                  @if (maybeDelivered(row)) {
+                    <span
+                      class="maybe-delivered"
+                      [attr.data-testid]="'pn-maybe-delivered-' + row.id"
+                    >
+                      {{ 'PATIENT_NOTIFICATIONS.MAYBE_DELIVERED' | translate }}
+                    </span>
+                  }
+                } @else {
+                  —
+                }
+              </td>
+              <td>
+                {{ row.lastAttemptAt ? (row.lastAttemptAt | serverTime | date: 'short') : '—' }}
+              </td>
+              <td class="actions-cell">
+                @if (row.retryable) {
+                  <button
+                    class="btn-retry"
+                    (click)="retry(row)"
+                    [disabled]="retryingId() !== null"
+                    [attr.data-testid]="'pn-retry-' + row.id"
+                  >
+                    {{ 'PATIENT_NOTIFICATIONS.RETRY' | translate }}
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <button class="btn-page" (click)="previousPage()" [disabled]="pageIndex() === 0">
+        {{ 'COMMON.PREVIOUS' | translate }}
+      </button>
+      <span>{{
+        'PATIENT_NOTIFICATIONS.PAGE_OF' | translate: { page: pageIndex() + 1, total: totalPages() }
+      }}</span>
+      <button class="btn-page" (click)="nextPage()" [disabled]="pageIndex() + 1 >= totalPages()">
+        {{ 'COMMON.NEXT' | translate }}
+      </button>
+    </div>
+  }
+</div>

@@ -68,6 +68,19 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AppointmentServiceImpl implements AppointmentService {
 
+    /**
+     * V312: the booking confirmation SMS, queued in the patient notification
+     * ledger once the booking commits. Setter-injected so unit tests that
+     * build this service by constructor keep compiling; null there.
+     */
+    private com.example.hms.service.notification.PatientNotificationLedger notificationLedger;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNotificationLedger(com.example.hms.service.notification.PatientNotificationLedger notificationLedger) {
+        this.notificationLedger = notificationLedger;
+    }
+
+
     /** QA D1488: a status that keeps a visit going, refused for a patient who has died. */
     private static final Set<AppointmentStatus> STATUSES_THAT_KEEP_A_VISIT_LIVE = Set.of(
         AppointmentStatus.CONFIRMED, AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING,
@@ -614,6 +627,10 @@ public class AppointmentServiceImpl implements AppointmentService {
             slotPolicy.takeSlot(patientSlot, saved);
         }
         auditOverbooking(saved, hospital, AuditEventType.APPOINTMENT_CREATED);
+        // V312: the booking confirmation SMS (sent by the ledger, after commit).
+        if (notificationLedger != null) {
+            notificationLedger.confirmBooking(saved);
+        }
         // QA D985: the recall this visit answers is now scheduled.
         if (recallService != null && AppointmentStatus.holdsSlot(saved.getStatus())) {
             recallService.scheduleOpenRecallFor(saved, request.getRecallId());

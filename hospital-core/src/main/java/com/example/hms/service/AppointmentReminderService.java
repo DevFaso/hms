@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.NotificationChannel;
 import com.example.hms.enums.NotificationType;
+import com.example.hms.enums.PatientNotificationEvent;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.NotificationPreference;
@@ -13,8 +14,8 @@ import com.example.hms.repository.NotificationPreferenceRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import com.example.hms.service.i18n.PatientLocaleResolver;
+import com.example.hms.service.notification.PatientNotificationLedger;
 import com.example.hms.utility.DisplayDates;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,34 +32,31 @@ import java.util.Set;
  * <p>
  * The sweep finds appointments starting within the lead window that have no
  * {@code reminderSentAt} stamp and, per appointment: pushes an in-app
- * notification to the patient's portal account and sends an SMS over the
- * IKODDI channel ({@code deliversRealSms()} guard — the mock transport logs
- * bodies and must never carry PHI). Both channels honour the patient's
- * stored {@link NotificationPreference} rows for APPOINTMENT_REMINDER —
- * this is the first dispatch path that actually consults them; absent rows
- * default to enabled. Every processed appointment is stamped exactly once,
- * even when skipped, so the sweep converges and never double-texts
- * (CriticalValueNotificationService semantics).
+ * notification to the patient's portal account and queues the SMS and email
+ * reminders in the patient notification ledger (V312,
+ * {@link PatientNotificationLedger}), whose sweep sends them with a bounded
+ * retry and shows a failure to the hospital's administrators. Before V312 the
+ * SMS went out inline, best effort, and a failure was one log line. Every
+ * channel honours the patient's stored {@link NotificationPreference} rows for
+ * APPOINTMENT_REMINDER; absent rows default to enabled. Every processed
+ * appointment is stamped exactly once, even when skipped, so the sweep
+ * converges, and the ledger's idempotency key would refuse a second reminder
+ * for the same appointment anyway.
  */
 @Slf4j
 @Service
 public class AppointmentReminderService {
 
     /** Statuses that represent a still-upcoming booking worth reminding. */
-    static final Set<AppointmentStatus> REMINDABLE_STATUSES = Set.of(
+    public static final Set<AppointmentStatus> REMINDABLE_STATUSES = Set.of(
         AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULED);
-
-    /** Hard cap — IKODDI gives no per-segment feedback, so keep bodies short. */
-    static final int MAX_SMS_LENGTH = 320;
-
 
     private final AppointmentRepository appointmentRepository;
     private final ReminderClaimService reminderClaimService;
     private final Clock clock;
     private final NotificationPreferenceRepository preferenceRepository;
     private final NotificationService notificationService;
-    private final SmsService smsService;
-    private final MessageSource messageSource;
+    private final PatientNotificationLedger notificationLedger;
     private final PatientLocaleResolver patientLocaleResolver;
 
     /** Hours ahead of the start time in which a reminder becomes due. */
@@ -76,8 +74,7 @@ public class AppointmentReminderService {
         AppointmentRepository appointmentRepository,
         NotificationPreferenceRepository preferenceRepository,
         NotificationService notificationService,
-        SmsService smsService,
-        MessageSource messageSource,
+        PatientNotificationLedger notificationLedger,
         PatientLocaleResolver patientLocaleResolver,
         ReminderClaimService reminderClaimService,
         Clock clock
@@ -88,8 +85,7 @@ public class AppointmentReminderService {
         this.patientLocaleResolver = patientLocaleResolver;
         this.preferenceRepository = preferenceRepository;
         this.notificationService = notificationService;
-        this.smsService = smsService;
-        this.messageSource = messageSource;
+        this.notificationLedger = notificationLedger;
     }
 
     /**
@@ -164,11 +160,6 @@ public class AppointmentReminderService {
             DisplayDates.time(startsAt.toLocalTime(), locale),
             hospitalName
         };
-        String message = messageSource.getMessage("sms.appointment.reminder", reminderArgs, locale);
-        if (message.length() > MAX_SMS_LENGTH) {
-            message = message.substring(0, MAX_SMS_LENGTH);
-        }
-
         boolean dispatched = false;
         User portalUser = patient.getUser();
         if (portalUser != null && portalUser.getUsername() != null
@@ -182,30 +173,15 @@ public class AppointmentReminderService {
                 log.warn("In-app appointment reminder failed for {}: {}", appointment.getId(), ex.getMessage());
             }
         }
-        if (sendSmsBestEffort(appointment, patient, portalUser, message)) {
+        // SMS and email: queued, sent by the ledger's sweep (retry, failure view,
+        // no second send). The ledger checks the transport, the number or
+        // address and the patient's SMS / EMAIL preference itself.
+        if (hospital != null && hospital.getId() != null && !notificationLedger.enqueue(
+                PatientNotificationEvent.APPOINTMENT_REMINDER, hospital.getId(), patient.getId(), appointment.getId())
+            .isEmpty()) {
             dispatched = true;
         }
         return dispatched;
-    }
-
-    private boolean sendSmsBestEffort(Appointment appointment, Patient patient, User portalUser, String message) {
-        if (!smsService.deliversRealSms()) {
-            return false; // mock transport logs bodies — never route PHI there
-        }
-        if (portalUser != null && !channelEnabled(portalUser, NotificationChannel.SMS)) {
-            return false; // patient opted out of SMS reminders
-        }
-        String phone = patient.getPhoneNumberPrimary();
-        if (phone == null || phone.isBlank()) {
-            return false;
-        }
-        try {
-            smsService.send(phone, message);
-            return true;
-        } catch (RuntimeException ex) {
-            log.warn("SMS appointment reminder failed for {}: {}", appointment.getId(), ex.getMessage());
-            return false;
-        }
     }
 
     /**
