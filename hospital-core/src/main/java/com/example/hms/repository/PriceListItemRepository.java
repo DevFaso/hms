@@ -55,6 +55,20 @@ public interface PriceListItemRepository extends JpaRepository<PriceListItem, UU
                                                   @Param("linkKey") String linkKey);
 
     /**
+     * Billing-money plan PR 4 review: every active linked item of the hospital, share-locked (SELECT ... FOR SHARE)
+     * in code order, taken once at the start of a checkout. A checkout then holds its locks in the same order as the
+     * CSV import takes its update locks ({@link #lockByHospitalIdAndCodes}), so the two never deadlock; the
+     * per-charge {@link #findActiveByLinkForCharge} only re-reads rows already locked.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("""
+        SELECT i FROM PriceListItem i
+        WHERE i.hospitalId = :hospitalId AND i.active = true AND i.linkType IS NOT NULL
+        ORDER BY i.code
+        """)
+    List<PriceListItem> lockActiveLinkedForCheckout(@Param("hospitalId") UUID hospitalId);
+
+    /**
      * The item, locked (SELECT ... FOR UPDATE) and only at its own hospital. Every change to an item or its price
      * versions takes this lock first, so two concurrent "add price" calls are serialised: the second reads the
      * versions the first wrote.
@@ -62,4 +76,18 @@ public interface PriceListItemRepository extends JpaRepository<PriceListItem, UU
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT i FROM PriceListItem i WHERE i.id = :id AND i.hospitalId = :hospitalId")
     Optional<PriceListItem> lockByIdAtHospital(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId);
+
+    /**
+     * Billing-money plan PR 4: the items of these codes at this hospital, locked (SELECT ... FOR UPDATE) in code
+     * order, as the CSV import applies a file: the same lock {@link #lockByIdAtHospital} takes, so a screen edit and
+     * an import of the same item are serialised, and two imports take their locks in the same order.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT i FROM PriceListItem i
+        WHERE i.hospitalId = :hospitalId AND i.code IN :codes
+        ORDER BY i.code
+        """)
+    List<PriceListItem> lockByHospitalIdAndCodes(@Param("hospitalId") UUID hospitalId,
+                                                 @Param("codes") java.util.Collection<String> codes);
 }

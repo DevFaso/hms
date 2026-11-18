@@ -75,19 +75,24 @@ public interface InvoiceRefundRepository extends JpaRepository<InvoiceRefund, UU
      * money was sent, and the receipt number assigned now (PR 8 review).
      */
     @Modifying(flushAutomatically = true)
-    @Query("""
+    @Query(MARK_PAID)
+    int markPaid(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId, @Param("payout") Payout payout);
+
+    /** What is recorded when a refund is handed over (Sonar S107: one value, not eight parameters). */
+    record Payout(UUID paidBy, LocalDateTime paidAt, String reference,
+                  com.example.hms.enums.MobileMoneyOperator operator, Integer receiptSeq, String receiptNumber) {
+    }
+
+    String MARK_PAID = """
            UPDATE InvoiceRefund r
-              SET r.status = com.example.hms.enums.InvoiceRefundStatus.PAID, r.paidBy = :paidBy, r.paidAt = :paidAt,
-                  r.reference = :reference, r.mobileMoneyOperator = :operator,
-                  r.receiptSeq = :receiptSeq, r.receiptNumber = :receiptNumber
+              SET r.status = com.example.hms.enums.InvoiceRefundStatus.PAID,
+                  r.paidBy = :#{#payout.paidBy}, r.paidAt = :#{#payout.paidAt},
+                  r.reference = :#{#payout.reference}, r.mobileMoneyOperator = :#{#payout.operator},
+                  r.receiptSeq = :#{#payout.receiptSeq}, r.receiptNumber = :#{#payout.receiptNumber}
             WHERE r.id = :id
               AND r.hospitalId = :hospitalId
               AND r.status = com.example.hms.enums.InvoiceRefundStatus.APPROVED
-           """)
-    int markPaid(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId, @Param("paidBy") UUID paidBy,
-                 @Param("paidAt") LocalDateTime paidAt, @Param("reference") String reference,
-                 @Param("operator") com.example.hms.enums.MobileMoneyOperator operator,
-                 @Param("receiptSeq") Integer receiptSeq, @Param("receiptNumber") String receiptNumber);
+           """;
 
     /** The highest receipt rank given on the invoice so far (0 when none); read under the invoice lock. */
     @Query("SELECT COALESCE(MAX(r.receiptSeq), 0) FROM InvoiceRefund r WHERE r.invoice.id = :invoiceId")

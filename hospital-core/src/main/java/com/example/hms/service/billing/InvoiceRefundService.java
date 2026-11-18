@@ -275,8 +275,9 @@ public class InvoiceRefundService {
         int receiptSeq = refundRepository.maxReceiptSeq(invoice.getId()) + 1;
         String receiptNumber = invoice.getInvoiceNumber() + "-RB" + receiptSeq;
         LocalDateTime at = now();
-        claimed(refundRepository.markPaid(refund.getId(), refund.getHospitalId(), actor.userId(), at,
-            handover.reference(), handover.operator(), receiptSeq, receiptNumber), "billing.refund.notApproved");
+        claimed(refundRepository.markPaid(refund.getId(), refund.getHospitalId(), new InvoiceRefundRepository.Payout(
+            actor.userId(), at, handover.reference(), handover.operator(), receiptSeq, receiptNumber)),
+            "billing.refund.notApproved");
         BigDecimal refunded = invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO;
         invoice.setAmountRefunded(refunded.add(refund.getAmount()));
         invoiceRepository.save(invoice);

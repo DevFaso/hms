@@ -117,7 +117,7 @@ class InvoiceRefundServiceTest {
         when(refunds.save(any(InvoiceRefund.class))).thenAnswer(call -> store(call.getArgument(0)));
         when(refunds.decide(any(), any(), any(), any(), any(), any())).thenAnswer(call ->
             move(call.getArgument(0), call.getArgument(1), InvoiceRefundStatus.REQUESTED, call.getArgument(2)));
-        when(refunds.markPaid(any(), any(), any(), any(), any(), any(), any(), any())).thenAnswer(call ->
+        when(refunds.markPaid(any(), any(), any())).thenAnswer(call ->
             move(call.getArgument(0), call.getArgument(1), InvoiceRefundStatus.APPROVED, InvoiceRefundStatus.PAID));
         // The receipt rank, read under the invoice lock: the highest given so far on the invoice.
         when(refunds.maxReceiptSeq(any())).thenAnswer(call -> ledger.values().stream()
@@ -509,7 +509,7 @@ class InvoiceRefundServiceTest {
     @DisplayName("a refund that lost the race to a concurrent payout moves no money")
     void aLostRaceMovesNoMoney() {
         InvoiceRefundDTO approved = approved("500");
-        when(refunds.markPaid(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(0);
+        when(refunds.markPaid(any(), any(), any())).thenReturn(0);
         actAs(BILLING_A);
         UUID invoiceId = invoice.getId();
         UUID refundId = approved.getId();

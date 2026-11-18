@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
@@ -122,6 +122,50 @@ export interface PriceListPriceRequest {
   replaceScheduled: boolean;
 }
 
+/** Billing-money plan PR 4: what one row of an imported file does (or would do, on a dry run). */
+export type PriceListImportRowOutcome = 'NEW_ITEM' | 'NEW_PRICE' | 'UNCHANGED' | 'REFUSED';
+
+/** What the import call did: a check, an apply, an apply refused as a whole, or a file applied before. */
+export type PriceListImportResult = 'DRY_RUN' | 'APPLIED' | 'REFUSED' | 'ALREADY_IMPORTED';
+
+export interface PriceListImportRefusal {
+  /** The CSV column (code, libelle, categorie, prix, date_effet, liaison_type, liaison_cle); null for the row. */
+  column: string | null;
+  /** In the reader's language, from the server. */
+  message: string;
+}
+
+export interface PriceListImportRow {
+  /** The line in the file, the header being line 1. */
+  line: number;
+  code: string;
+  label: string;
+  outcome: PriceListImportRowOutcome;
+  price?: number | null;
+  effectiveDate?: string | null;
+  previousPrice?: number | null;
+  refusals: PriceListImportRefusal[];
+}
+
+export interface PriceListImportReport {
+  importId?: string | null;
+  fileName: string;
+  sha256: string;
+  result: PriceListImportResult;
+  alreadyImported: boolean;
+  alreadyImportedAt?: string | null;
+  totalRows: number;
+  newItems: number;
+  newPrices: number;
+  unchanged: number;
+  refused: number;
+  rows: PriceListImportRow[];
+}
+
+/** The import's header, in the order the export writes it (the downloadable template). */
+export const PRICE_LIST_CSV_HEADER =
+  'code;libelle;categorie;prix;date_effet;liaison_type;liaison_cle';
+
 @Injectable({ providedIn: 'root' })
 export class PriceListService {
   private readonly http = inject(HttpClient);
@@ -156,5 +200,27 @@ export class PriceListService {
   /** Ends the item with the reason the reader gave (kept with the history). */
   deactivate(id: string, reason: string): Observable<PriceListItem> {
     return this.http.post<PriceListItem>(`${this.base}/${id}/deactivate`, { reason });
+  }
+
+  /**
+   * PR 4: checks (dryRun) or applies a CSV file. An apply that refused a row answers 422 with the same report
+   * as its body, which the caller reads from the error.
+   */
+  importCsv(
+    file: File,
+    dryRun: boolean,
+    replaceScheduled: boolean,
+  ): Observable<PriceListImportReport> {
+    const body = new FormData();
+    body.append('file', file, file.name);
+    const params = new HttpParams()
+      .set('dryRun', String(dryRun))
+      .set('replaceScheduled', String(replaceScheduled));
+    return this.http.post<PriceListImportReport>(`${this.base}/import`, body, { params });
+  }
+
+  /** PR 4: the acting hospital's grid in the import's format; the whole response keeps the server's file name. */
+  exportCsv(): Observable<HttpResponse<Blob>> {
+    return this.http.get(`${this.base}/export.csv`, { responseType: 'blob', observe: 'response' });
   }
 }

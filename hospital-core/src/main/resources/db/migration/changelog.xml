@@ -3624,6 +3624,22 @@
     </changeSet>
 
     <!-- =================================================================
+         V304 (billing-money plan PR 4, scorecard M1) - the price-list CSV
+         import keeps a trace of every file checked or applied
+         (billing.price_list_imports: file name, SHA-256, row counts, status
+         DRY_RUN / APPLIED, who and when); the same file applies once per
+         hospital (partial UNIQUE on the SHA-256 of APPLIED rows), and
+         price_list_prices.import_id now references its import at the same
+         hospital. Plain idempotent DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V304-billing-price-list-imports" author="hms-team" runOnChange="false">
+        <sqlFile path="V304__billing_price_list_imports.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V307 (billing-money plan PR 8, scorecard M3, QA D1900) - refunds as
          money going OUT: billing.invoice_refunds (REQUESTED / APPROVED /
          REJECTED / PAID / CANCELLED, approved by a different person, D-3,

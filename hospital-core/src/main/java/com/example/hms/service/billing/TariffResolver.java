@@ -87,6 +87,16 @@ public class TariffResolver {
             .map(version -> new Tariff(item.getId(), version.getId(), item.getLabel(), version.getUnitPrice()));
     }
 
+    /**
+     * PR 4 review: share-locks every active linked item of the hospital in code order, once per checkout, before
+     * any charge is priced (see {@code PriceListItemRepository#lockActiveLinkedForCheckout}).
+     */
+    public void lockForCheckout(UUID hospitalId) {
+        if (hospitalId != null) {
+            itemRepository.lockActiveLinkedForCheckout(hospitalId);
+        }
+    }
+
     /** The business day of a server timestamp (written in the server's zone), or today when there is none. */
     public LocalDate businessDayOf(LocalDateTime serverTime) {
         if (serverTime == null) {
@@ -106,6 +116,8 @@ public class TariffResolver {
         private final TariffResolver resolver;
         private final UUID hospitalId;
         private final LocalDate day;
+        /** Whether this checkout already holds its share locks (taken on the first lookup, in code order). */
+        private boolean locked;
 
         public Tariffs(TariffResolver resolver, UUID hospitalId, LocalDate day) {
             this.resolver = resolver;
@@ -121,6 +133,10 @@ public class TariffResolver {
         public Optional<Tariff> find(PriceListLinkType type, String rawKey) {
             if (resolver == null) {
                 return Optional.empty();
+            }
+            if (!locked && hospitalId != null) {
+                resolver.lockForCheckout(hospitalId);
+                locked = true;
             }
             return resolver.resolve(hospitalId, type, rawKey, day);
         }

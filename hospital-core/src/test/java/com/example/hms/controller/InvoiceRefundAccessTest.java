@@ -27,6 +27,8 @@ import java.util.UUID;
 
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -146,11 +148,11 @@ class InvoiceRefundAccessTest {
         } finally {
             com.example.hms.security.context.ImpersonationContextHolder.clear();
         }
-        org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).request(org.mockito.ArgumentMatchers.any(),
+        verify(service, never()).request(org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any());
-        org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).approve(org.mockito.ArgumentMatchers.any(),
+        verify(service, never()).approve(org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any());
-        org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).pay(org.mockito.ArgumentMatchers.any(),
+        verify(service, never()).pay(org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 

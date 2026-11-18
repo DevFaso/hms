@@ -8,6 +8,7 @@ import { AppointmentFormComponent } from '../appointments/appointment-form';
 import { AppointmentListComponent } from '../appointments/appointment-list';
 import { BillingComponent } from '../billing/billing';
 import { CashClosingComponent } from '../billing/cash-closing/cash-closing.component';
+import { PriceListImportComponent } from '../billing/price-list/price-list-import.component';
 import { PriceListComponent } from '../billing/price-list/price-list.component';
 import { InvoiceRefundsComponent } from '../billing/refunds/invoice-refunds.component';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
@@ -100,6 +101,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'CashClosingComponent',
     file: 'billing/cash-closing/cash-closing.component',
     type: CashClosingComponent,
+  },
+  {
+    name: 'PriceListImportComponent',
+    file: 'billing/price-list/price-list-import.component',
+    type: PriceListImportComponent,
   },
   {
     name: 'PriceListComponent',
