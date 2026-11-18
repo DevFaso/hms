@@ -67,7 +67,7 @@ public class FileStorageConfig {
             return local;
         }
         if (!TYPE_S3.equals(normalized)) {
-            throw new IllegalStateException("app.storage.type (APP_STORAGE_TYPE) must be 'local' or 's3'");
+            throw new StorageMisconfiguredException("app.storage.type (APP_STORAGE_TYPE) must be 'local' or 's3'");
         }
         s3.requireComplete();
         LocalFileStorage fallback = Files.isDirectory(local.root()) ? local : null;
@@ -90,6 +90,17 @@ public class FileStorageConfig {
             .build();
     }
 
+    /**
+     * A start-up refusal: the storage settings are incomplete or wrong. It stops
+     * the application context, so it never answers a request; its text is for
+     * the operator reading the deploy log and names settings, never values.
+     */
+    static final class StorageMisconfiguredException extends IllegalStateException {
+        StorageMisconfiguredException(String message) {
+            super(message);
+        }
+    }
+
     /** The bucket settings. {@link #toString()} never prints the credentials. */
     record S3Settings(String endpoint, String bucket, String accessKeyId, String secretAccessKey, String region) {
 
@@ -108,17 +119,17 @@ public class FileStorageConfig {
                 missing.add("app.storage.s3.secret-access-key (S3_SECRET_ACCESS_KEY)");
             }
             if (!missing.isEmpty()) {
-                throw new IllegalStateException("app.storage.type=s3 but these settings are missing: "
+                throw new StorageMisconfiguredException("app.storage.type=s3 but these settings are missing: "
                     + String.join(", ", missing));
             }
             URI uri;
             try {
                 uri = URI.create(endpoint.strip());
             } catch (IllegalArgumentException ex) {
-                throw new IllegalStateException("app.storage.s3.endpoint (S3_ENDPOINT) is not a valid URL");
+                throw new StorageMisconfiguredException("app.storage.s3.endpoint (S3_ENDPOINT) is not a valid URL");
             }
             if (!"https".equalsIgnoreCase(uri.getScheme()) && !"http".equalsIgnoreCase(uri.getScheme())) {
-                throw new IllegalStateException("app.storage.s3.endpoint (S3_ENDPOINT) must be an http(s) URL");
+                throw new StorageMisconfiguredException("app.storage.s3.endpoint (S3_ENDPOINT) must be an http(s) URL");
             }
         }
 

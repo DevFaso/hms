@@ -63,7 +63,7 @@ public class LocalFileStorage implements FileStorage {
     Path resolve(String key) {
         Path path = root.resolve(StorageKeys.requireValid(key)).normalize();
         if (!path.startsWith(root) || path.equals(root)) {
-            throw new IllegalArgumentException("Storage key resolves outside the storage root");
+            throw new IllegalArgumentException(StorageKeys.INVALID);
         }
         return path;
     }

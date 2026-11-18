@@ -13,32 +13,39 @@ public final class StorageKeys {
 
     private static final int MAX_KEY_LENGTH = 1024;
 
+    /**
+     * The refusal is a message key ("the file path is not valid", localized by
+     * the global handler should it ever reach a reader); it never repeats the
+     * key, which can carry a patient's file name.
+     */
+    static final String INVALID = "file.path.invalid";
+
     private StorageKeys() {
     }
 
     /**
      * @return {@code key} unchanged when it is a valid relative key
-     * @throws IllegalArgumentException otherwise (the message never repeats the key)
+     * @throws IllegalArgumentException otherwise, with the message key {@value #INVALID}
      */
     public static String requireValid(String key) {
         if (key == null || key.isEmpty()) {
-            throw new IllegalArgumentException("Storage key is empty");
+            throw new IllegalArgumentException(INVALID);
         }
         if (key.length() > MAX_KEY_LENGTH) {
-            throw new IllegalArgumentException("Storage key is too long");
+            throw new IllegalArgumentException(INVALID);
         }
         if (key.startsWith("/")) {
-            throw new IllegalArgumentException("Storage key must be relative");
+            throw new IllegalArgumentException(INVALID);
         }
         for (int i = 0; i < key.length(); i++) {
             char c = key.charAt(i);
             if (c == '\\' || c == ':' || c < 0x20 || c == 0x7F) {
-                throw new IllegalArgumentException("Storage key contains a forbidden character");
+                throw new IllegalArgumentException(INVALID);
             }
         }
         for (String segment : key.split("/", -1)) {
             if (segment.isEmpty() || ".".equals(segment) || "..".equals(segment)) {
-                throw new IllegalArgumentException("Storage key contains an empty, '.' or '..' segment");
+                throw new IllegalArgumentException(INVALID);
             }
         }
         return key;
