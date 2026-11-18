@@ -55,7 +55,9 @@ public class FileStorageConfig {
     ) {
         FileStorage storage = create(type, uploadDir,
             new S3Settings(endpoint, bucket, accessKeyId, secretAccessKey, region));
-        log.info("File storage: {}", storage.describe());
+        if (log.isInfoEnabled()) {
+            log.info("File storage: {}", storage.describe());
+        }
         return storage;
     }
 

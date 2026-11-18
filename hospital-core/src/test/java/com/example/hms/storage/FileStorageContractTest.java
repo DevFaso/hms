@@ -79,13 +79,14 @@ abstract class FileStorageContractTest {
 
     @Test
     void everyOperationRefusesATraversalKey() {
-        byte[] content = bytes("x");
-        assertThatThrownBy(() -> storage().put("../x.txt", new ByteArrayInputStream(content), 1, "text/plain"))
+        FileStorage store = storage();
+        ByteArrayInputStream content = new ByteArrayInputStream(bytes("x"));
+        assertThatThrownBy(() -> store.put("../x.txt", content, 1, "text/plain"))
             .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> storage().get("patient-documents/../../x.txt"))
+        assertThatThrownBy(() -> store.get("patient-documents/../../x.txt"))
             .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> storage().exists("/x.txt")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> storage().delete("a\\..\\x.txt")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> store.exists("/x.txt")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> store.delete("a\\..\\x.txt")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

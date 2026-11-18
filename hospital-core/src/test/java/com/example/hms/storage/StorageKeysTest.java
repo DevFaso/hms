@@ -46,7 +46,8 @@ class StorageKeysTest {
     @org.junit.jupiter.api.Test
     void nullAndOverlongKeysAreRefused() {
         assertThatThrownBy(() -> StorageKeys.requireValid(null)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> StorageKeys.requireValid("a/" + "x".repeat(1100)))
+        String overlong = "a/" + "x".repeat(1100);
+        assertThatThrownBy(() -> StorageKeys.requireValid(overlong))
             .isInstanceOf(IllegalArgumentException.class);
     }
 }

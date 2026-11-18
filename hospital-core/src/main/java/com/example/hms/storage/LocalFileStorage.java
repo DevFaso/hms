@@ -35,13 +35,20 @@ public class LocalFileStorage implements FileStorage {
         Files.copy(content, target, StandardCopyOption.REPLACE_EXISTING);
     }
 
+    /**
+     * The file opened for reading. Ownership of the stream passes to the
+     * returned {@link StoredObject}, which the caller closes.
+     */
     @Override
     public Optional<StoredObject> get(String key) throws IOException {
         Path path = resolve(key);
         if (!Files.isRegularFile(path)) {
             return Optional.empty();
         }
-        return Optional.of(new StoredObject(Files.newInputStream(path), Files.size(path)));
+        long length = Files.size(path);
+        // Sized BEFORE opening: nothing that can throw runs between opening the
+        // stream and handing it to the StoredObject that owns it.
+        return Optional.of(new StoredObject(Files.newInputStream(path), length));
     }
 
     @Override

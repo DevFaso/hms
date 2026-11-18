@@ -63,7 +63,9 @@ public class StorageBackfill {
 
     /** Copy every file under {@code source} whose key {@code target} lacks. Package-visible for tests. */
     static Result run(LocalFileStorage source, FileStorage target) {
-        log.info("Storage backfill started: {} -> {}", source.describe(), target.describe());
+        if (log.isInfoEnabled()) {
+            log.info("Storage backfill started: {} -> {}", source.describe(), target.describe());
+        }
         int copied = 0;
         int skipped = 0;
         int failed = 0;

@@ -34,7 +34,9 @@ class FileStorageConfigTest {
 
     @Test
     void anUnknownTypeIsRefused() {
-        assertThatThrownBy(() -> FileStorageConfig.create("gcs", tempDir.toString(), complete()))
+        String dir = tempDir.toString();
+        FileStorageConfig.S3Settings settings = complete();
+        assertThatThrownBy(() -> FileStorageConfig.create("gcs", dir, settings))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("APP_STORAGE_TYPE");
     }
@@ -44,7 +46,8 @@ class FileStorageConfigTest {
         FileStorageConfig.S3Settings partial = new FileStorageConfig.S3Settings(
             "https://account.r2.cloudflarestorage.com", " ", null, SECRET, "auto");
 
-        assertThatThrownBy(() -> FileStorageConfig.create("s3", tempDir.toString(), partial))
+        String dir = tempDir.toString();
+        assertThatThrownBy(() -> FileStorageConfig.create("s3", dir, partial))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("S3_BUCKET")
             .hasMessageContaining("S3_ACCESS_KEY_ID")
@@ -57,7 +60,8 @@ class FileStorageConfigTest {
         FileStorageConfig.S3Settings bad = new FileStorageConfig.S3Settings(
             "account.r2.cloudflarestorage.com", "b", "k", SECRET, "auto");
 
-        assertThatThrownBy(() -> FileStorageConfig.create("S3", tempDir.toString(), bad))
+        String dir = tempDir.toString();
+        assertThatThrownBy(() -> FileStorageConfig.create("S3", dir, bad))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("S3_ENDPOINT");
     }

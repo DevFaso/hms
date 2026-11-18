@@ -127,6 +127,9 @@ public class FileUploadService {
     private static final String EXT_DOCX = ".docx";
     private static final String MIME_PNG = "image/png";
     private static final String MIME_JPEG = "image/jpeg";
+    private static final String MIME_PDF = "application/pdf";
+    private static final String MIME_WEBP = "image/webp";
+    private static final String EXT_WEBP = ".webp";
     private static final long MAX_REFERRAL_ATTACHMENT_SIZE = MAX_UPLOAD_BYTES;
     private static final Set<String> ALLOWED_ATTACHMENT_EXTENSIONS = Set.of(
         ".pdf", ".jpg", EXT_JPEG, ".png", ".gif", ".bmp", EXT_TIFF, ".txt", ".rtf", ".doc",
@@ -174,17 +177,17 @@ public class FileUploadService {
             return;
         }
 
+        // Extract filename from URL (e.g., "/api/uploads/profile-images/filename.jpg"
+        // -> "filename.jpg")
+        String filename = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
+        String key;
         try {
-            // Extract filename from URL (e.g., "/api/uploads/profile-images/filename.jpg"
-            // -> "filename.jpg")
-            String filename = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
-            String key;
-            try {
-                key = storageKey(PROFILE_IMAGES_PATH, filename);
-            } catch (IllegalArgumentException invalid) {
-                log.warn("Path traversal attempt detected in deleteProfileImage: {}", imageUrl);
-                return;
-            }
+            key = storageKey(PROFILE_IMAGES_PATH, filename);
+        } catch (IllegalArgumentException invalid) {
+            log.warn("Path traversal attempt detected in deleteProfileImage: {}", imageUrl);
+            return;
+        }
+        try {
             storage.delete(key);
             log.info("Profile image deleted: {}", filename);
         } catch (IOException | RuntimeException e) {
@@ -551,12 +554,12 @@ public class FileUploadService {
         }
         String filename = buildAttachmentFilename(sanitizeBaseFilename(baseName), ".pdf", authorId, "certificate");
         storage.put(storageKey(PATIENT_DOCUMENTS_PATH, filename), new ByteArrayInputStream(content),
-            content.length, "application/pdf");
+            content.length, MIME_PDF);
         MessageDigest digest = createSha256Digest();
         String checksum = HexFormat.of().formatHex(digest.digest(content));
         String relativePath = patientDocumentRelativePath(filename);
         return new StoredFileDescriptor(relativePath, buildPublicUrl(relativePath), baseName + ".pdf",
-            "application/pdf", content.length, checksum);
+            MIME_PDF, content.length, checksum);
     }
 
     private void validatePatientDocumentFile(MultipartFile file) {
@@ -578,7 +581,7 @@ public class FileUploadService {
     /** QA D540: the stored type follows the checked extension, not the client's header. */
     static String contentTypeFor(String extension) {
         return switch (extension.toLowerCase(java.util.Locale.ROOT)) {
-            case ".pdf" -> "application/pdf";
+            case ".pdf" -> MIME_PDF;
             case ".png" -> MIME_PNG;
             case ".jpg", EXT_JPEG -> MIME_JPEG;
             case ".gif" -> "image/gif";
@@ -601,7 +604,7 @@ public class FileUploadService {
             case ".jpg", EXT_JPEG -> MIME_JPEG;
             case ".png" -> MIME_PNG;
             case ".gif" -> "image/gif";
-            case ".webp" -> "image/webp";
+            case EXT_WEBP -> MIME_WEBP;
             default -> null;
         };
     }
@@ -626,10 +629,10 @@ public class FileUploadService {
     private static final long MAX_CHAT_AUDIO_SIZE = 5L * 1024 * 1024;  // 5 MB
     private static final String CHAT_ATTACHMENTS_PATH = "chat-attachments";
     private static final Set<String> ALLOWED_CHAT_PHOTO_EXTENSIONS = Set.of(
-        ".jpg", EXT_JPEG, ".png", ".webp"
+        ".jpg", EXT_JPEG, ".png", EXT_WEBP
     );
     private static final Set<String> ALLOWED_CHAT_PHOTO_MIME = Set.of(
-        MIME_JPEG, MIME_PNG, "image/webp"
+        MIME_JPEG, MIME_PNG, MIME_WEBP
     );
     private static final Set<String> ALLOWED_CHAT_AUDIO_EXTENSIONS = Set.of(
         ".webm", ".ogg", ".oga", ".m4a", ".mp4", ".mp3", ".aac"
@@ -769,7 +772,7 @@ public class FileUploadService {
         return switch (extension) {
             case ".jpg", EXT_JPEG -> MIME_JPEG;
             case ".png" -> MIME_PNG;
-            case ".webp" -> "image/webp";
+            case EXT_WEBP -> MIME_WEBP;
             case ".webm" -> "audio/webm";
             case ".ogg", ".oga" -> "audio/ogg";
             case ".m4a", ".mp4" -> "audio/mp4";

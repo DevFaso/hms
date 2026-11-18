@@ -264,14 +264,18 @@ public class FhirBulkExportRunner {
         if (!Files.isDirectory(jobDir)) return;
         try (Stream<Path> files = Files.list(jobDir)) {
             for (Path file : files.toList()) {
-                try {
-                    storage.delete(FhirBulkExportService.outputKey(jobId, file.getFileName().toString()));
-                } catch (IOException | RuntimeException ex) {
-                    log.warn("Could not remove published bulk-export file of job {}: {}", jobId, ex.toString());
-                }
+                unpublishOneQuietly(jobId, file.getFileName().toString());
             }
         } catch (IOException ex) {
             log.warn("Could not list bulk-export scratch dir of job {}: {}", jobId, ex.toString());
+        }
+    }
+
+    private void unpublishOneQuietly(UUID jobId, String fileName) {
+        try {
+            storage.delete(FhirBulkExportService.outputKey(jobId, fileName));
+        } catch (IOException | RuntimeException ex) {
+            log.warn("Could not remove published bulk-export file of job {}: {}", jobId, ex.toString());
         }
     }
 
