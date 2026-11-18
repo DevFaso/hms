@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.utility.CsvCells;
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.RoleBlueprint;
 import com.example.hms.exception.ConflictException;
@@ -318,7 +319,7 @@ public class RoleServiceImpl implements RoleService {
         if (value == null) {
             return "";
         }
-        String escaped = value.replace("\"", "\"\"");
+        String escaped = CsvCells.safe(value).replace("\"", "\"\"");
         if (escaped.contains(",") || escaped.contains("\n") || escaped.contains("\r")) {
             return '"' + escaped + '"';
         }

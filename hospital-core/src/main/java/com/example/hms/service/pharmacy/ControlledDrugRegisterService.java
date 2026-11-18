@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.utility.CsvCells;
 import com.example.hms.enums.StockTransactionType;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Patient;
@@ -532,15 +533,9 @@ public class ControlledDrugRegisterService {
         if (value == null || value.isEmpty()) {
             return "";
         }
-        String v = value;
-        char first = v.charAt(0);
-        boolean number = v.matches("-?\\d+(\\.\\d+)?");
-        // OWASP CSV injection: '=', '+', '@', '-' and also a leading tab or
-        // carriage return, which spreadsheet importers treat as triggers.
-        if (first == '=' || first == '+' || first == '@' || first == '\t' || first == '\r'
-                || (first == '-' && !number)) {
-            v = "'" + v;
-        }
+        // OWASP CSV injection ('=', '+', '@', '-' that is not a plain number, a leading tab or carriage return):
+        // the one shared rule.
+        String v = CsvCells.safe(value);
         if (v.contains(";") || v.contains("\"") || v.contains("\n") || v.contains("\r")) {
             v = "\"" + v.replace("\"", "\"\"") + "\"";
         }

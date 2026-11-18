@@ -124,6 +124,8 @@ public enum AuditEventType {
     PAYER_PLAN_CHANGED,
     /** Billing-money plan PR 6: a patient's coverage linked to a payer plan, or unlinked (ids only). */
     PATIENT_COVERAGE_PLAN_LINKED,
+    /** Billing-money plan PR 4: a price-list CSV file applied (import id and row counts only). */
+    PRICE_LIST_IMPORTED,
     /** Billing-money plan PR 3 (D-2): a tariff price overridden on a draft line, with a reason (ids only). */
     INVOICE_LINE_PRICE_OVERRIDDEN,
     /** Review #1197: an overridden draft line set back to its price-list price (ids only). */

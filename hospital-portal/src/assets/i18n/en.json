@@ -2018,7 +2018,8 @@
       "PAYER_RULE_ENDED": "Rule {{rule}} of plan {{plan}} ended, reason recorded",
       "COVERAGE_PLAN_LINKED": "Patient coverage {{insurance}} linked to plan {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
-      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]"
+      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
+      "PRICE_LIST_IMPORTED": "Price list import {{import}} applied: {{items}} new items, {{prices}} new prices, {{unchanged}} unchanged"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2573,7 +2574,43 @@
       "SAVED": "Item saved.",
       "PRICE_SAVED": "New price saved.",
       "SAVE_FAILED": "Saving failed.",
-      "DEACTIVATE_REASON": "Reason for deactivating"
+      "DEACTIVATE_REASON": "Reason for deactivating",
+      "IMPORT_BUTTON": "Import a price list (CSV)",
+      "EXPORT_BUTTON": "Export the price list (CSV)",
+      "EXPORT_FAILED": "The price list could not be exported.",
+      "IMPORT": {
+        "TITLE": "Import a price list (CSV)",
+        "INTRO": "One row per tariff code, semicolon separated, prices in whole CFA francs (2000 or 2 000), effective date DD/MM/YYYY (blank: today). The import changes prices only: an equal price is unchanged, a different price becomes a new price from its effective date. If a single row is refused, nothing is applied.",
+        "TEMPLATE": "Download the template",
+        "FILE": "CSV file",
+        "NO_FILE": "Choose a CSV file.",
+        "REPLACE_SCHEDULED": "Replace prices planned on the same date",
+        "CHECK": "Check the file",
+        "CHECKING": "Checking…",
+        "APPLY": "Apply the import",
+        "APPLYING": "Importing…",
+        "APPLY_HINT": "Check the file first: the import applies only when no row is refused.",
+        "COUNT_VALID": "Valid rows",
+        "COUNT_NEW_ITEMS": "New",
+        "COUNT_NEW_PRICES": "New prices",
+        "COUNT_UNCHANGED": "Unchanged",
+        "COUNT_REFUSED": "Refused",
+        "ALREADY_IMPORTED": "This file was already imported on {{date}}: applying it again will record nothing.",
+        "ALREADY_APPLIED": "Already imported: nothing new was recorded.",
+        "APPLIED": "Import applied: {{newItems}} new items, {{newPrices}} new prices, {{unchanged}} unchanged.",
+        "APPLY_FAILED": "At least one row is refused: nothing was applied. Fix the file and check it again.",
+        "FAILED": "The file could not be checked.",
+        "ONLY_REFUSED": "Show refused rows only",
+        "LINE": "Line",
+        "COLUMN": "Column",
+        "OUTCOME": "Result",
+        "REASON": "Reason",
+        "PRICE": "Price",
+        "PREVIOUS_PRICE": "Current price",
+        "WHOLE_ROW": "Whole row",
+        "TOO_LARGE": "The file is larger than 1 MB. Split the price list into several files.",
+        "CONCURRENT_ERROR": "Someone else has just created this code (or link) in the price list: nothing was applied. Check the file again."
+      }
     },
     "PAYERS": {
       "TITLE": "Payers",
@@ -7170,7 +7207,8 @@
         "INVOICE_LINE_PRICE_OVERRIDDEN": "Price-list price overridden",
         "PAYER_CHANGED": "Payer changed",
         "PAYER_PLAN_CHANGED": "Payer plan changed",
-        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan"
+        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan",
+        "PRICE_LIST_IMPORTED": "Price list imported"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7704,7 +7742,8 @@
         "FETAL_DEATH_EVENT": "Fetal-death event",
         "IMAGING_ORDER": "Imaging order",
         "PAYER": "Payer",
-        "PAYER_PLAN": "Payer plan"
+        "PAYER_PLAN": "Payer plan",
+        "PRICE_LIST_IMPORT": "Price list import"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -7884,6 +7923,12 @@
         "IN_FORCE": "In force",
         "ENDED": "Ended",
         "CANCELLED": "Withdrawn before it applied"
+      },
+      "PRICE_LIST_IMPORT_ROW_OUTCOME": {
+        "NEW_ITEM": "New item",
+        "NEW_PRICE": "New price",
+        "UNCHANGED": "Unchanged",
+        "REFUSED": "Refused"
       }
     },
     "DOCUMENTS": {

@@ -2018,7 +2018,8 @@
       "PAYER_RULE_ENDED": "Règle {{rule}} de la formule {{plan}} terminée, motif enregistré",
       "COVERAGE_PLAN_LINKED": "Couverture du patient {{insurance}} liée à la formule {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Couverture du patient {{insurance}} détachée de sa formule",
-      "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]"
+      "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]",
+      "PRICE_LIST_IMPORTED": "Import de grille {{import}} appliqué : {{items}} nouveaux articles, {{prices}} nouveaux prix, {{unchanged}} inchangés"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2573,7 +2574,43 @@
       "SAVED": "Article enregistré.",
       "PRICE_SAVED": "Nouveau prix enregistré.",
       "SAVE_FAILED": "L’enregistrement a échoué.",
-      "DEACTIVATE_REASON": "Motif de la désactivation"
+      "DEACTIVATE_REASON": "Motif de la désactivation",
+      "IMPORT_BUTTON": "Importer une grille (CSV)",
+      "EXPORT_BUTTON": "Exporter la grille (CSV)",
+      "EXPORT_FAILED": "La grille n’a pas pu être exportée.",
+      "IMPORT": {
+        "TITLE": "Importer une grille (CSV)",
+        "INTRO": "Une ligne par code tarifaire, séparateur point-virgule, prix en francs CFA entiers (2000 ou 2 000), date d’effet JJ/MM/AAAA (vide : aujourd’hui). L’import ne modifie que les prix : un prix identique est inchangé, un prix différent devient un nouveau prix à sa date d’effet. Si une seule ligne est refusée, rien n’est appliqué.",
+        "TEMPLATE": "Modèle à télécharger",
+        "FILE": "Fichier CSV",
+        "NO_FILE": "Choisissez un fichier CSV.",
+        "REPLACE_SCHEDULED": "Remplacer les prix prévus à la même date",
+        "CHECK": "Vérifier le fichier",
+        "CHECKING": "Vérification…",
+        "APPLY": "Appliquer l’import",
+        "APPLYING": "Import en cours…",
+        "APPLY_HINT": "Vérifiez d’abord le fichier : l’import ne s’applique que si aucune ligne n’est refusée.",
+        "COUNT_VALID": "Lignes valides",
+        "COUNT_NEW_ITEMS": "Nouvelles",
+        "COUNT_NEW_PRICES": "Nouveaux prix",
+        "COUNT_UNCHANGED": "Inchangées",
+        "COUNT_REFUSED": "Refusées",
+        "ALREADY_IMPORTED": "Ce fichier a déjà été importé le {{date}} : l’appliquer à nouveau n’enregistrera rien.",
+        "ALREADY_APPLIED": "Déjà importé : rien de nouveau n’a été enregistré.",
+        "APPLIED": "Import appliqué : {{newItems}} nouveaux articles, {{newPrices}} nouveaux prix, {{unchanged}} inchangés.",
+        "APPLY_FAILED": "Une ligne au moins est refusée : rien n’a été appliqué. Corrigez le fichier et vérifiez-le à nouveau.",
+        "FAILED": "Le fichier n’a pas pu être vérifié.",
+        "ONLY_REFUSED": "Afficher seulement les lignes refusées",
+        "LINE": "Ligne",
+        "COLUMN": "Colonne",
+        "OUTCOME": "Résultat",
+        "REASON": "Motif",
+        "PRICE": "Prix",
+        "PREVIOUS_PRICE": "Prix actuel",
+        "WHOLE_ROW": "Ligne entière",
+        "TOO_LARGE": "Le fichier dépasse 1 Mo. Découpez la grille en plusieurs fichiers.",
+        "CONCURRENT_ERROR": "Un autre utilisateur vient de créer ce code (ou ce lien) dans la grille : rien n’a été appliqué. Relancez la vérification."
+      }
     },
     "PAYERS": {
       "TITLE": "Organismes payeurs",
@@ -7136,7 +7173,8 @@
         "INVOICE_LINE_PRICE_OVERRIDDEN": "Prix de la grille modifié",
         "PAYER_CHANGED": "Organisme payeur modifié",
         "PAYER_PLAN_CHANGED": "Formule d’organisme payeur modifiée",
-        "PATIENT_COVERAGE_PLAN_LINKED": "Couverture du patient liée à une formule"
+        "PATIENT_COVERAGE_PLAN_LINKED": "Couverture du patient liée à une formule",
+        "PRICE_LIST_IMPORTED": "Grille tarifaire importée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7670,7 +7708,8 @@
         "FETAL_DEATH_EVENT": "Événement de décès fœtal",
         "IMAGING_ORDER": "Demande d'imagerie",
         "PAYER": "Organisme payeur",
-        "PAYER_PLAN": "Formule d’organisme payeur"
+        "PAYER_PLAN": "Formule d’organisme payeur",
+        "PRICE_LIST_IMPORT": "Import de grille tarifaire"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -7850,6 +7889,12 @@
         "IN_FORCE": "En vigueur",
         "ENDED": "Terminée",
         "CANCELLED": "Retirée avant application"
+      },
+      "PRICE_LIST_IMPORT_ROW_OUTCOME": {
+        "NEW_ITEM": "Nouvel article",
+        "NEW_PRICE": "Nouveau prix",
+        "UNCHANGED": "Inchangé",
+        "REFUSED": "Refusé"
       }
     },
     "DOCUMENTS": {

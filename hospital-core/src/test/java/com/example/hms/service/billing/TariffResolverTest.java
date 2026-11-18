@@ -20,6 +20,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -129,5 +131,30 @@ class TariffResolverTest {
         assertThat(resolver.today()).isEqualTo(TODAY);
         assertThat(resolver.businessDayOf(java.time.LocalDateTime.of(2026, 11, 14, 12, 0)))
             .isEqualTo(LocalDate.of(2026, 11, 14));
+    }
+
+    @Test
+    @DisplayName("review #1206 (deadlock class): a checkout share-locks the hospital's linked items once, in code "
+        + "order, before it prices any charge")
+    void aCheckoutLocksItsItemsUpFrontInCodeOrder() {
+        TariffResolver.Tariffs tariffs = new TariffResolver.Tariffs(resolver, hospital, TODAY);
+        tariffs.find(PriceListLinkType.SYSTEM, "CONSULTATION_DEFAULT");
+        tariffs.find(PriceListLinkType.SYSTEM, "BED_DAY");
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(items);
+        order.verify(items).lockActiveLinkedForCheckout(hospital);
+        order.verify(items, times(2)).findActiveByLinkForCharge(any(), any(), any());
+        verify(items, times(1)).lockActiveLinkedForCheckout(hospital);
+    }
+
+    @Test
+    @DisplayName("review #1206: the up-front lock query orders by code (the import's order)")
+    void theUpFrontLockOrdersByCode() throws NoSuchMethodException {
+        String query = PriceListItemRepository.class.getMethod("lockActiveLinkedForCheckout", UUID.class)
+            .getAnnotation(org.springframework.data.jpa.repository.Query.class).value();
+        assertThat(query.replaceAll("\\s+", " ")).contains("ORDER BY i.code");
+        String importQuery = PriceListItemRepository.class
+            .getMethod("lockByHospitalIdAndCodes", UUID.class, java.util.Collection.class)
+            .getAnnotation(org.springframework.data.jpa.repository.Query.class).value();
+        assertThat(importQuery.replaceAll("\\s+", " ")).contains("ORDER BY i.code");
     }
 }

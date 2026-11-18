@@ -95,11 +95,14 @@ class PartialUniqueReleaseFlushGuardTest {
         // (closing effective_to releases it; the service flushes the closes before the insert).
         Map.entry("payer_plan_rules", "PayerPlanRule"),
         // Review of #1202: plan terms versioned like prices (one live version per start, one open-ended).
-        Map.entry("payer_plan_terms", "PayerPlanTerms"));
+        Map.entry("payer_plan_terms", "PayerPlanTerms"),
+        // Billing-money plan PR 4 (V304): a file applies once per hospital; a trace row is never edited.
+        Map.entry("price_list_imports", "PriceListImport"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =
-        Set.of("Hospital", "User", "LabResult", "StockLot", "Encounter", "BillingInvoice", "MedicationCatalogItem");
+        Set.of("Hospital", "User", "LabResult", "StockLot", "Encounter", "BillingInvoice", "MedicationCatalogItem",
+            "PriceListImport");
 
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow();
 

@@ -31,6 +31,7 @@ import com.example.hms.repository.TreatmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.utility.CsvCells;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import com.example.hms.utility.TransactionCallbacks;
@@ -246,40 +247,9 @@ public class PriceListService {
             throw new FieldBusinessException(FIELD_CODE, "billing.priceList.codeDuplicate", code);
         }
         requireLinkFree(actor.hospitalId(), body.getLinkType(), linkKey, null);
-        // QA D2070: named now, while the transaction can still read (a lost race aborts it).
-        String linkLabel = links.label(actor.hospitalId(), body.getLinkType(), linkKey);
-
-        PriceListItem item = PriceListItem.builder()
-            .hospitalId(actor.hospitalId())
-            .code(code)
-            .label(label)
-            .category(body.getCategory())
-            .linkType(linkKey == null ? null : body.getLinkType())
-            .linkKey(linkKey)
-            .active(true)
-            .createdBy(actor.userId())
-            .updatedBy(actor.userId())
-            .build();
-        PriceListItem saved;
-        PriceListPrice price;
-        try {
-            saved = itemRepository.saveAndFlush(item);
-            price = priceRepository.saveAndFlush(PriceListPrice.builder()
-                .hospitalId(actor.hospitalId())
-                .item(saved)
-                .unitPrice(wholeFrancs(body.getUnitPrice()))
-                .effectiveFrom(from)
-                .changeReason(reason)
-                .createdBy(actor.userId())
-                .build());
-        } catch (DataIntegrityViolationException race) {
-            // A concurrent create of the same code or link at this hospital won between the checks and the insert.
-            if (isActiveLinkCollision(race)) {
-                throw new FieldBusinessException(PriceListLinks.FIELD_LINK_KEY, "billing.priceList.linkTakenConcurrently",
-                    linkLabel);
-            }
-            throw new FieldBusinessException(FIELD_CODE, "billing.priceList.codeDuplicate", code);
-        }
+        PriceListPrice price = insertItem(actor, new NewItem(code, label, body.getCategory(),
+            linkKey == null ? null : body.getLinkType(), linkKey), body.getUnitPrice(), from, reason, null);
+        PriceListItem saved = price.getItem();
         auditAfterCommit(AuditEventType.PRICE_LIST_ITEM_CREATED, actor,
             "Price list item " + saved.getId() + " created with price version " + price.getId(), saved.getId());
         return detail(saved);
@@ -338,31 +308,8 @@ public class PriceListService {
         LocalDate today = today();
         LocalDate from = PriceVersionRules.startOf(body.getEffectiveFrom(), today);
         List<PriceListPrice> versions = priceRepository.findHistory(item.getId(), actor.hospitalId());
-        // PR 3: a version an invoice line copied is never replaced (read under the item's lock, which a checkout's
-        // share lock on the same item serialises with).
-        PriceVersionRules.Plan plan = PriceVersionRules.plan(versions, today, from, body.isReplaceScheduled(),
-            version -> enteredOn(version, today),
-            version -> invoiceItemRepository.existsByPriceListPriceIdIn(List.of(version.getId())));
-
-        // Close first, then insert: the partial unique indexes (one live version per start, one open-ended
-        // version per item) hold at every statement.
-        for (PriceListPrice replaced : plan.toReplace()) {
-            replaced.setEffectiveTo(replaced.getEffectiveFrom().minusDays(1));
-        }
-        plan.predecessor().ifPresent(previous -> previous.setEffectiveTo(from.minusDays(1)));
-        priceRepository.saveAll(versions);
-        priceRepository.flush();
-        PriceListPrice version = priceRepository.saveAndFlush(PriceListPrice.builder()
-            .hospitalId(actor.hospitalId())
-            .item(item)
-            .unitPrice(wholeFrancs(body.getUnitPrice()))
-            .effectiveFrom(from)
-            .effectiveTo(plan.endsOn())
-            .changeReason(reason)
-            .createdBy(actor.userId())
-            .build());
-        item.setUpdatedBy(actor.userId());
-        itemRepository.save(item);
+        PriceVersionRules.Plan plan = planVersion(versions, today, from, body.isReplaceScheduled());
+        PriceListPrice version = insertVersion(item, actor, versions, plan, body.getUnitPrice(), from, reason, null);
         auditAfterCommit(AuditEventType.PRICE_VERSION_ADDED, actor,
             "Price version " + version.getId() + " added to price list item " + item.getId()
                 + ", effective " + from,
@@ -396,17 +343,149 @@ public class PriceListService {
         return detail(item);
     }
 
+    // ─────────────────── writes shared with the CSV import (PR 4) ───────────────────
+
+    /** A new item as checked by the caller: code upper case, link normalised (both null for no link). */
+    public record NewItem(String code, String label, PriceListCategory category, PriceListLinkType linkType, String linkKey) {
+    }
+
+    /**
+     * Inserts a new item and its first version (the screen's create and the CSV import). The caller has checked
+     * the fields, that the code is free and that the link is free; a concurrent insert of the same code or link is
+     * still refused here, naming it. {@code importId} is the CSV import that writes it, null on the screen.
+     */
+    public PriceListPrice insertItem(Maintainer actor, NewItem fields, BigDecimal unitPrice, LocalDate from, String reason,
+                              UUID importId) {
+        PriceListItem item = newItem(actor, fields);
+        // QA D2070: named now, while the transaction can still read (a lost race aborts it).
+        String linkLabel = links.label(actor.hospitalId(), fields.linkType(), fields.linkKey());
+        try {
+            PriceListItem saved = itemRepository.saveAndFlush(item);
+            return priceRepository.saveAndFlush(firstVersion(actor, saved, unitPrice, from, reason, importId));
+        } catch (DataIntegrityViolationException race) {
+            // A concurrent create of the same code or link at this hospital won between the checks and the insert.
+            if (isActiveLinkCollision(race)) {
+                throw new FieldBusinessException(PriceListLinks.FIELD_LINK_KEY, "billing.priceList.linkTakenConcurrently",
+                    linkLabel);
+            }
+            throw new FieldBusinessException(FIELD_CODE, "billing.priceList.codeDuplicate", fields.code());
+        }
+    }
+
+    /**
+     * What a new version starting {@code from} does to the item's {@code versions} (read under the item's lock when
+     * it is about to be written): refuses a started, invoiced or unconfirmed same-day version, naming the field.
+     */
+    public PriceVersionRules.Plan planVersion(List<PriceListPrice> versions, LocalDate today, LocalDate from,
+                                       boolean replaceScheduled) {
+        // PR 3: a version an invoice line copied is never replaced (read under the item's lock, which a checkout's
+        // share lock on the same item serialises with).
+        return PriceVersionRules.plan(versions, today, from, replaceScheduled,
+            version -> enteredOn(version, today),
+            version -> invoiceItemRepository.existsByPriceListPriceIdIn(List.of(version.getId())));
+    }
+
+    // ─────────────── the CSV import's batched writes (PR 4 review: one flush per batch) ───────────────
+
+    /**
+     * Closes what a planned version closes, on the managed versions, without flushing: the import closes every
+     * version of a file first, flushes once, then stages the new ones ({@link #stageVersion}).
+     */
+    public void closeForNewVersion(PriceVersionRules.Plan plan, LocalDate from) {
+        for (PriceListPrice replaced : plan.toReplace()) {
+            replaced.setEffectiveTo(replaced.getEffectiveFrom().minusDays(1));
+        }
+        plan.predecessor().ifPresent(previous -> previous.setEffectiveTo(from.minusDays(1)));
+    }
+
+    /** A new item and its first version, persisted without a flush (the import flushes once per batch). */
+    public PriceListPrice stageItem(Maintainer actor, NewItem fields, BigDecimal unitPrice, LocalDate from,
+                                    String reason, UUID importId) {
+        PriceListItem item = itemRepository.save(newItem(actor, fields));
+        return priceRepository.save(firstVersion(actor, item, unitPrice, from, reason, importId));
+    }
+
+    /** A planned version of a locked item whose closes are already flushed, persisted without a flush. */
+    @SuppressWarnings("java:S107") // the plan and every value of the version it writes; a holder would only hide them
+    public PriceListPrice stageVersion(PriceListItem item, Maintainer actor, PriceVersionRules.Plan plan,
+                                       BigDecimal unitPrice, LocalDate from, String reason, UUID importId) {
+        item.setUpdatedBy(actor.userId());
+        return priceRepository.save(nextVersion(item, actor, plan, unitPrice, from, reason, importId));
+    }
+
+    private static PriceListItem newItem(Maintainer actor, NewItem fields) {
+        return PriceListItem.builder()
+            .hospitalId(actor.hospitalId())
+            .code(fields.code())
+            .label(fields.label())
+            .category(fields.category())
+            .linkType(fields.linkType())
+            .linkKey(fields.linkKey())
+            .active(true)
+            .createdBy(actor.userId())
+            .updatedBy(actor.userId())
+            .build();
+    }
+
+    private static PriceListPrice firstVersion(Maintainer actor, PriceListItem item, BigDecimal unitPrice,
+                                               LocalDate from, String reason, UUID importId) {
+        return PriceListPrice.builder()
+            .hospitalId(actor.hospitalId())
+            .item(item)
+            .unitPrice(wholeFrancs(unitPrice))
+            .effectiveFrom(from)
+            .changeReason(reason)
+            .createdBy(actor.userId())
+            .importId(importId)
+            .build();
+    }
+
+    @SuppressWarnings("java:S107") // every value of the version it builds
+    private static PriceListPrice nextVersion(PriceListItem item, Maintainer actor, PriceVersionRules.Plan plan,
+                                              BigDecimal unitPrice, LocalDate from, String reason, UUID importId) {
+        return PriceListPrice.builder()
+            .hospitalId(actor.hospitalId())
+            .item(item)
+            .unitPrice(wholeFrancs(unitPrice))
+            .effectiveFrom(from)
+            .effectiveTo(plan.endsOn())
+            .changeReason(reason)
+            .createdBy(actor.userId())
+            .importId(importId)
+            .build();
+    }
+
+    /**
+     * Writes a planned version of a locked item (the screen's "Nouveau prix" and the CSV import): closes what the
+     * plan closes, then inserts the version. {@code importId} is the CSV import that writes it, null on the screen.
+     */
+    @SuppressWarnings("java:S107") // the plan and every value of the version it writes; a holder would only hide them
+    public PriceListPrice insertVersion(PriceListItem item, Maintainer actor, List<PriceListPrice> versions,
+                                 PriceVersionRules.Plan plan, BigDecimal unitPrice, LocalDate from, String reason,
+                                 UUID importId) {
+        // Close first, then insert: the partial unique indexes (one live version per start, one open-ended
+        // version per item) hold at every statement.
+        closeForNewVersion(plan, from);
+        priceRepository.saveAll(versions);
+        priceRepository.flush();
+        PriceListPrice version = priceRepository.saveAndFlush(
+            nextVersion(item, actor, plan, unitPrice, from, reason, importId));
+        item.setUpdatedBy(actor.userId());
+        itemRepository.save(item);
+        return version;
+    }
+
     // ───────────────────────────── access ─────────────────────────────
 
     /** Who may write, at which hospital. */
-    record Maintainer(UUID userId, UUID hospitalId) {
+    public record Maintainer(UUID userId, UUID hospitalId) {
     }
 
     /**
      * The acting hospital (pinned, never global view) when the caller holds HOSPITAL_ADMIN or ACCOUNTANT there.
      * Checked before any lookup.
      */
-    Maintainer requireMaintainer() {
+    public Maintainer requireMaintainer() {
         UUID hospitalId = actingScopeResolver.requirePinned();
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null || !roleValidator.canMaintainPriceList(userId, hospitalId)) {
@@ -419,7 +498,7 @@ public class PriceListService {
      * The hospital whose list the caller reads: the acting one, where the caller holds a reading role; null for
      * the verified super-admin's global view (read-only).
      */
-    UUID requireReader() {
+    public UUID requireReader() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         boolean verifiedSuperAdmin = actingScopeResolver.isVerifiedSuperAdmin();
         if (hospitalId == null) {
@@ -491,6 +570,17 @@ public class PriceListService {
         if (label.length() > LABEL_MAX) {
             throw new FieldBusinessException(FIELD_LABEL, "billing.priceList.labelTooLong", LABEL_MAX);
         }
+        requireNotFormula(label);
+    }
+
+    /**
+     * PR 4 review: the label is exported to a spreadsheet, so it never starts like a formula (= + - @, a tab, a
+     * carriage return): the same rule the CSV import applies to every cell ({@link CsvCells#isFormula}).
+     */
+    static void requireNotFormula(String label) {
+        if (CsvCells.isFormula(label)) {
+            throw new FieldBusinessException(FIELD_LABEL, "billing.priceList.labelFormula");
+        }
     }
 
     private static void requireReasonLength(String reason) {
@@ -520,7 +610,7 @@ public class PriceListService {
                 .equals(today);
     }
 
-    LocalDate today() {
+    public LocalDate today() {
         return LocalDate.now(clock.withZone(businessZone));
     }
 

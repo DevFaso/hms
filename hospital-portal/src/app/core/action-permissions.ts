@@ -313,6 +313,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PriceListController#deactivate',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
   },
+  // Billing-money plan PR 4: the CSV import, for the same two roles.
+  priceListImport: {
+    endpoint: 'PriceListController#importCsv',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
   // Review #1196/#1198 L4: the digital-signatures page gates every panel from
   // here (the report lookup was offered to admins the endpoint refuses). The
   // list, lookup and audit entries are reads, mirrored for the same reason.
