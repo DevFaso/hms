@@ -68,8 +68,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         long start = System.nanoTime();
         String path = request.getRequestURI();
         if (log.isTraceEnabled()) {
-            log.trace("[JWT] Incoming path={} method={} authHeader={} thread={}", path, request.getMethod(),
-                request.getHeader(HEADER_STRING), Thread.currentThread().getName());
+            log.trace("[JWT] Incoming path={} method={} thread={}", path, request.getMethod(),
+                Thread.currentThread().getName());
         }
 
         try {
@@ -135,11 +135,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
                 SecurityContextHolder.getContext().setAuthentication(auth);
-                log.debug("[WS-TICKET] Authenticated user='{}' via ticket on path={}", username, path);
+                log.debug("[WS-TICKET] Authenticated via ticket on path={}", path);
                 filterChain.doFilter(request, response);
                 return true;
             } catch (Exception ex) {
-                log.warn("[WS-TICKET] Failed to load user for ticket, user='{}': {}", username, ex.getMessage());
+                log.warn("[WS-TICKET] Failed to load the ticket's user: {}", ex.getClass().getSimpleName());
             }
         }
         log.warn("[WS-TICKET] Invalid or expired ticket on path={}", path);
@@ -169,7 +169,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String extractedSubject = safeExtractSubject(jwt);
 
         if (isKnownMissingPrincipal(extractedSubject)) {
-            log.debug("[JWT] Short-circuiting cached missing user '{}' on path={}", extractedSubject, path);
+            log.debug("[JWT] Short-circuiting cached missing user on path={}", path);
             respondUnauthorized(response, extractedSubject);
             return false;
         }
@@ -344,8 +344,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // caller with no live SUPER_ADMIN assignment loses it, and the
             // roles it inherited, on this request — not at refresh.
             authentication = SuperAdminAuthorities.reconcile(authentication, context);
-            log.debug("[JWT] Setting authentication for principal={} authorities={}",
-                authentication.getName(), authentication.getAuthorities());
+            log.debug("[JWT] Setting authentication authorities={}", authentication.getAuthorities());
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
             HospitalContextHolder.setContext(context);
@@ -399,7 +398,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             missingPrincipalOrder.remove(subject);
             missingPrincipalTimestamps.remove(subject);
             if (log.isDebugEnabled()) {
-                log.debug("[JWT] Removed '{}' from missing-principal cache after successful authentication", subject);
+                log.debug("[JWT] Removed a subject from the missing-principal cache after successful authentication");
             }
         }
     }
@@ -418,10 +417,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // line carries the subject for deep debugging in dev only.
             log.warn("[JWT] Ignoring token for a missing user (suppressing future warnings).");
             if (log.isTraceEnabled()) {
-                log.trace("[JWT] First missing-user record subject='{}'", subject);
+                log.trace("[JWT] First missing-user record");
             }
         } else if (log.isTraceEnabled()) {
-            log.trace("[JWT] Already warned about missing user '{}', suppressing log", subject);
+            log.trace("[JWT] Already warned about a missing user, suppressing log");
         }
     }
 
@@ -460,7 +459,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         Long timestamp = missingPrincipalTimestamps.get(subject);
         if (timestamp != null && System.currentTimeMillis() - timestamp > MISSING_PRINCIPAL_CACHE_TTL_MS) {
             // Entry expired, remove from cache
-            log.debug("[JWT] Missing principal cache entry expired for '{}'", subject);
+            log.debug("[JWT] Missing principal cache entry expired");
             forgetMissingPrincipal(subject);
             return false;
         }
@@ -474,7 +473,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             response.setHeader("WWW-Authenticate", "Bearer realm=\"Hospital\"");
         }
         if (log.isTraceEnabled()) {
-            log.trace("[JWT] Responded 401 for missing user '{}'", subject);
+            log.trace("[JWT] Responded 401 for a missing user");
         }
     }
 

@@ -60,7 +60,7 @@ public class WsTicketService {
         String ticket = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         long expiresAt = System.currentTimeMillis() + TICKET_TTL_MS;
         tickets.put(ticket, new TicketEntry(username, expiresAt));
-        log.debug("[WS-TICKET] Issued ticket for user='{}' expiresAt={}", username, expiresAt);
+        log.debug("[WS-TICKET] Issued ticket expiresAt={}", expiresAt);
         return ticket;
     }
 
@@ -90,10 +90,10 @@ public class WsTicketService {
             // username. Prod runs these loggers at INFO, so promoting it would put a username
             // into a third-party log store for the first time, on a recurring event — the exact
             // thing the dev log-level change was partly meant to stop.
-            log.debug("[WS-TICKET] Expired ticket for user='{}'", entry.username());
+            log.debug("[WS-TICKET] Expired ticket");
             return null;
         }
-        log.debug("[WS-TICKET] Redeemed ticket for user='{}'", entry.username());
+        log.debug("[WS-TICKET] Redeemed ticket");
         return entry.username();
     }
 

@@ -100,6 +100,6 @@ public final class SmsRecipientAllowlist {
     /** Logs a refused recipient, masked. */
     void logRefused(String provider, String e164) {
         String masked = ActivationDeliveryTracker.maskPhone(e164);
-        LOG.warn("{} SMS not sent to {}: not on SMS_RECIPIENT_ALLOWLIST", provider, masked == null ? "<none>" : masked);
+        LOG.info("{} SMS not sent to {}: not on SMS_RECIPIENT_ALLOWLIST", provider, masked == null ? "<none>" : masked);
     }
 }

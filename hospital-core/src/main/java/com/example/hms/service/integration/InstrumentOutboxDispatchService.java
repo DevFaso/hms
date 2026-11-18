@@ -45,6 +45,10 @@ public class InstrumentOutboxDispatchService {
      */
     private final Clock clock;
 
+    /** The "transport disabled" notice is INFO once per process, DEBUG after that. */
+    private final java.util.concurrent.atomic.AtomicBoolean disabledNoticeLogged =
+        new java.util.concurrent.atomic.AtomicBoolean();
+
     /**
      * Send one batch of queued messages.
      *
@@ -53,10 +57,15 @@ public class InstrumentOutboxDispatchService {
     @Transactional
     public int dispatchPending() {
         if (!properties.isEnabled()) {
-            // Off by default. Saying so once per sweep at DEBUG rather than
-            // silently returning keeps "nothing is being sent" diagnosable.
-            log.debug("MLLP outbound transport is disabled; {} queued message(s) left untouched",
-                outboxRepository.findByStatus(InstrumentOutboxStatus.PENDING).size());
+            // Off by default. Said once at INFO (the first sweep after startup), then at
+            // DEBUG per sweep, so "nothing is being sent" stays diagnosable without a line
+            // every few seconds. The count query only runs when DEBUG is on.
+            if (disabledNoticeLogged.compareAndSet(false, true)) {
+                log.info("MLLP outbound transport is disabled; queued instrument messages are left untouched");
+            } else if (log.isDebugEnabled()) {
+                log.debug("MLLP outbound transport is disabled; {} queued message(s) left untouched",
+                    outboxRepository.findByStatus(InstrumentOutboxStatus.PENDING).size());
+            }
             return 0;
         }
 

@@ -28,7 +28,7 @@ spring:
 
 logging:
   level:
-    '[com.example.hms]': DEBUG
+    '[com.example.hms]': ${LOG_LEVEL_HMS:INFO}
     '[org.hibernate.SQL]': DEBUG
 
 # ===================== Seed Data =====================

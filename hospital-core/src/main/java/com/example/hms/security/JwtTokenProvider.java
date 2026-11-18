@@ -275,7 +275,7 @@ public class JwtTokenProvider {
         List<String> roles = userDetails.getAuthorities().stream()
             .map(GrantedAuthority::getAuthority)
             .toList();
-        log.debug("Adding roles to JWT token for user {}: {}", userDetails.getUsername(), roles);
+        log.debug("Adding roles to JWT token: {}", roles);
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + accessTokenExpirationMs);
         Map<String, Object> claims = buildTenantClaims(userDetails.getUserId(), roles);
@@ -818,7 +818,7 @@ public class JwtTokenProvider {
                 "Session predates the last password change.");
         }
 
-        log.debug("JWT token for user {} contains authorities: {}", username, authorities);
+        log.debug("JWT token contains authorities: {}", authorities);
 
         return new UsernamePasswordAuthenticationToken(userDetails, token, authorities);
     }
