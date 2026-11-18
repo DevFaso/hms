@@ -82,7 +82,7 @@ class ImpersonationLimitsTest {
             e.getEventType() == com.example.hms.enums.AuditEventType.SECURITY_ALERT_TRIGGERED
                 && e.getEventDescription().endsWith("(money)")));
         assertThat(ImpersonationLimits.MONEY_PATHS).contains("/billing-invoices/**", "/invoice-items/**",
-            "/billing/price-list/**", "/pharmacy/payments/**", "/pharmacy-sales/**");
+            "/billing/price-list/**", "/billing/payers/**", "/pharmacy/payments/**", "/pharmacy-sales/**");
     }
 
     @Test

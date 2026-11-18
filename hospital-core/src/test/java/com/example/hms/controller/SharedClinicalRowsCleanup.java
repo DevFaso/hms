@@ -82,6 +82,13 @@ final class SharedClinicalRowsCleanup {
         context.getBean(UserRoleHospitalAssignmentRepository.class).deleteAll();
         context.getBean(UserRepository.class).deleteAll();
         context.getBean(RoleRepository.class).deleteAll();
+        // Billing-money plan PR 6: the payer catalogue pins its hospital (fk_payer_hospital and the plans' and
+        // rules' composite FKs); a coverage row may still name a plan (fk_pi_payer_plan).
+        org.springframework.jdbc.core.JdbcTemplate jdbc = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        jdbc.update("UPDATE clinical.patient_insurances SET payer_plan_id = NULL WHERE payer_plan_id IS NOT NULL");
+        jdbc.update("DELETE FROM billing.payer_plan_rules");
+        jdbc.update("DELETE FROM billing.payer_plans");
+        jdbc.update("DELETE FROM billing.payers");
         context.getBean(HospitalRepository.class).deleteAll();
         context.getBean(OrganizationRepository.class).deleteAll();
     }

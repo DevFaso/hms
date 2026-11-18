@@ -1052,14 +1052,9 @@ public class GlobalExceptionHandler {
             // in the request locale here, and a resolved sentence passes unchanged.
             return buildErrorResponse(HttpStatus.FORBIDDEN, passThrough(ex.getMessage()), req);
         }
-        // QA D2120/D2122: a super-admin refused a write was refused by a clinical gate
-        // (ClinicalActor.holdsOwnRole), since every other gate admits SUPER_ADMIN or a
-        // role it inherits. Say so in the caller's language, not the bare "Access denied".
-        // The code stays ACCESS_DENIED, so clients keyed on it are unchanged.
-        String message = isSuperAdminWrite(req)
-            ? localized("error.access.clinicalRoleRequired",
-                "This is a clinical action: it needs a clinical role you hold at this hospital.")
-            : localized("error.access.denied", "Access denied");
+        // QA D2120/D2122: when the clinical gate (ClinicalActor.holdsOwnRole) is what refused,
+        // say why in the caller's language. The code stays ACCESS_DENIED for every 403.
+        String message = clinicalRefusalMessage(req);
         // The opaque default is localized now (D174), so clients that hid it by
         // comparing the English literal key on this code instead.
         Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, message, req);
@@ -1072,17 +1067,22 @@ public class GlobalExceptionHandler {
         return String.valueOf(request.getDescription(false)).replaceAll("[\r\n\t]", "_");
     }
 
-    private static boolean isSuperAdminWrite(WebRequest req) {
-        if (!(req instanceof org.springframework.web.context.request.ServletWebRequest servlet)) {
-            return false;
+    /**
+     * QA D2120 review: the sentence of a 403. Only when ClinicalActor.holdsOwnRole is what refused
+     * (it leaves its reason on the request) does the caller read why; any other refusal stays opaque.
+     */
+    private String clinicalRefusalMessage(WebRequest req) {
+        String reason = req instanceof org.springframework.web.context.request.RequestAttributes attributes
+            ? com.example.hms.security.ClinicalActor.refusalOf(attributes) : null;
+        if (com.example.hms.security.ClinicalActor.REFUSED_IMPERSONATION.equals(reason)) {
+            return localized("error.access.clinicalImpersonation",
+                "A clinical action is not possible during an account takeover.");
         }
-        String method = servlet.getRequest().getMethod();
-        boolean write = "POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method)
-            || "DELETE".equals(method);
-        org.springframework.security.core.Authentication auth =
-            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        return write && auth != null && auth.getAuthorities() != null && auth.getAuthorities().stream()
-            .anyMatch(a -> com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN.equals(a.getAuthority()));
+        if (com.example.hms.security.ClinicalActor.REFUSED_ROLE.equals(reason)) {
+            return localized("error.access.clinicalRoleRequired",
+                "This is a clinical action: it needs a clinical role you hold at this hospital.");
+        }
+        return localized("error.access.denied", "Access denied");
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

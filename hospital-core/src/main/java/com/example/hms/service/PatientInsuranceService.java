@@ -67,6 +67,12 @@ public interface PatientInsuranceService {
         Locale locale
     );
 
+    /**
+     * Billing-money plan PR 6: links a coverage row of the acting hospital to one of that hospital's payer plans, or
+     * removes the link ({@code payerPlanId} null). Hospital admin, billing specialist and reception only.
+     */
+    PatientInsuranceResponseDTO setPayerPlan(UUID insuranceId, UUID payerPlanId, Locale locale);
+
 
 }
 

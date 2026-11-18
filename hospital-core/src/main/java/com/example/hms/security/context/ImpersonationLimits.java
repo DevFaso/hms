@@ -59,7 +59,8 @@ public class ImpersonationLimits implements HandlerInterceptor {
      * sales; an insurer's settlement of a pharmacy claim; a patient's own payment declaration.
      */
     public static final List<String> MONEY_PATHS = List.of(
-        "/billing-invoices/**", "/invoice-items/**", "/billing/price-list/**", "/pharmacy/payments/**",
+        "/billing-invoices/**", "/invoice-items/**", "/billing/price-list/**", "/billing/payers/**",
+        "/pharmacy/payments/**",
         "/pharmacy-sales/**", "/me/patient/billing/invoices/*/pay", "/pharmacy/claims/*/pay");
 
     /** Writes under {@link #MONEY_PATHS} that only read: a search sent as a POST for its body. */

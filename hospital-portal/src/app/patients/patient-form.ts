@@ -27,7 +27,6 @@ import {
 } from '../shared/delivery-warnings';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
-import { isFrontDeskOnly } from './patient-chart/chart-access';
 import { ReceptionService, DuplicateCandidate } from '../reception/reception.service';
 import { RegistrationService } from '../services/registration.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -123,9 +122,14 @@ export class PatientFormComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly roleContext = inject(RoleContextService);
 
-  /** RCPT-CLIN: the blood type is not the desk's to read, so not its box to fill. */
-  frontDeskOnly(): boolean {
-    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  /**
+   * QA D2120 review: the blood group, allergies and history summary are clinical fields, which
+   * the server keeps unless a doctor, nurse or midwife writes them (PatientServiceImpl
+   * writesClinicalFields); they are offered to those roles only, not to the desk, an admin or a
+   * super-admin alone.
+   */
+  writesClinicalFields(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
   }
   private readonly receptionService = inject(ReceptionService);
   private readonly registrationService = inject(RegistrationService);

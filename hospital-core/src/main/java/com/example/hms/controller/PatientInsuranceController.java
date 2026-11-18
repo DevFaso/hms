@@ -67,7 +67,9 @@ public class PatientInsuranceController {
     // === Existing reads remain unchanged ===
 
     @GetMapping("/{insuranceId}")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR','PATIENT')")
+    // Billing-money plan PR 6 review: the billing specialist links a coverage to a plan, so reads it too (the
+    // service keeps the read to the acting hospital's rows and the patients it may chart).
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR','PATIENT','BILLING_SPECIALIST')")
     public ResponseEntity<PatientInsuranceResponseDTO> getPatientInsuranceById(
         @PathVariable UUID insuranceId,
         Locale locale
@@ -76,7 +78,9 @@ public class PatientInsuranceController {
     }
 
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR','PATIENT')")
+    // Billing-money plan PR 6 review: the billing specialist links a coverage to a plan, so reads it too (the
+    // service keeps the read to the acting hospital's rows and the patients it may chart).
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR','PATIENT','BILLING_SPECIALIST')")
     public ResponseEntity<List<PatientInsuranceResponseDTO>> getInsurancesByPatientId(
         @PathVariable UUID patientId,
         Locale locale
@@ -104,6 +108,22 @@ public class PatientInsuranceController {
         Locale locale
     ) {
         return ResponseEntity.ok(patientInsuranceService.updatePatientInsurance(insuranceId, request, locale));
+    }
+
+    /**
+     * Billing-money plan PR 6 (plan section 3.8): the "Formule" picker on the Coverage tab. The hospital admin, the
+     * billing specialist and reception link a coverage row of their hospital to one of its payer plans, or remove the
+     * link (null). A row or a plan of another hospital answers 404.
+     */
+    @PutMapping("/{insuranceId}/payer-plan")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','BILLING_SPECIALIST','RECEPTIONIST')")
+    public ResponseEntity<PatientInsuranceResponseDTO> setPayerPlan(
+        @PathVariable UUID insuranceId,
+        @RequestBody(required = false) com.example.hms.payload.dto.PatientInsurancePayerPlanRequestDTO request,
+        Locale locale
+    ) {
+        return ResponseEntity.ok(patientInsuranceService.setPayerPlan(insuranceId,
+            request == null ? null : request.getPayerPlanId(), locale));
     }
 
     @DeleteMapping("/{insuranceId}")

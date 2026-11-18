@@ -134,6 +134,14 @@ public class PatientInsurance extends BaseEntity {
     @Column(name = "eligibility_notes", columnDefinition = "TEXT")
     private String eligibilityNotes;
 
+    /**
+     * Billing-money plan PR 6 (V305): the payer plan ("formule") this coverage is billed under; null for free-text
+     * coverage, which gets no payer share (plan A-9). Always a plan of the hospital this row belongs to: set only by
+     * {@code PatientInsuranceServiceImpl.applyPayerPlan}, after {@code PayerCatalogueService.requireLinkablePlan}.
+     */
+    @Column(name = "payer_plan_id")
+    private UUID payerPlanId;
+
     @PrePersist
     @PreUpdate
     private void validateAndNormalize() {

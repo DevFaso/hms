@@ -840,23 +840,36 @@ class GlobalExceptionHandlerTest {
                 .containsEntry("code", "ACCESS_DENIED");
         }
 
-        private ResponseEntity<Object> refuse(String method, String... authorities) {
-            var servlet = new org.springframework.mock.web.MockHttpServletRequest(method, "/api/patients/p/programs");
-            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
-                new org.springframework.security.authentication.TestingAuthenticationToken("u", "n/a", authorities));
+        /**
+         * A 403 as the real flow produces it: the request is bound, the clinical gate runs for this caller
+         * (when {@code gate} is true) and refuses or not, then the handler answers.
+         */
+        private ResponseEntity<Object> refuse(boolean gate, boolean impersonating, String... authorities) {
+            var servlet = new org.springframework.mock.web.MockHttpServletRequest("POST", "/api/patients/p/programs");
+            var web = new org.springframework.web.context.request.ServletWebRequest(servlet);
+            var auth = new org.springframework.security.authentication.TestingAuthenticationToken("u", "n/a", authorities);
+            org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(web);
+            if (impersonating) {
+                com.example.hms.security.context.ImpersonationContextHolder.set(
+                    com.example.hms.security.context.ImpersonationContext.of(java.util.UUID.randomUUID(), "support"));
+            }
             try {
+                if (gate) {
+                    assertThat(com.example.hms.security.ClinicalActor.holdsOwnRole(auth, "DOCTOR", "NURSE"))
+                        .as("the clinical gate refuses this caller").isFalse();
+                }
                 return handler.handleAccessDenied(
-                    new org.springframework.security.access.AccessDeniedException("Access Denied"),
-                    new org.springframework.web.context.request.ServletWebRequest(servlet));
+                    new org.springframework.security.access.AccessDeniedException("Access Denied"), web);
             } finally {
-                org.springframework.security.core.context.SecurityContextHolder.clearContext();
+                org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+                com.example.hms.security.context.ImpersonationContextHolder.clear();
             }
         }
 
         @Test
-        @DisplayName("QA D2120/D2122: a super-admin refused a write is told it needs a clinical role, in French")
+        @DisplayName("QA D2120/D2122: a super-admin the clinical gate refused is told it needs a clinical role, in French")
         void superAdminRefusedAWriteIsToldItIsAClinicalAct() {
-            ResponseEntity<Object> response = refuse("POST", "ROLE_SUPER_ADMIN", "ROLE_DOCTOR");
+            ResponseEntity<Object> response = refuse(true, false, "ROLE_SUPER_ADMIN", "ROLE_DOCTOR");
             assertThat(messageOf(response)).startsWith("Action clinique : elle nécessite un rôle clinique")
                 .doesNotContainPattern("[0-9a-f]{8}-[0-9a-f]{4}");
             assertThat(response.getBody()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
@@ -864,18 +877,27 @@ class GlobalExceptionHandlerTest {
         }
 
         @Test
-        @DisplayName("QA D2120: the clinical-role sentence is for a super-admin's writes only")
+        @DisplayName("QA D2120 review: the clinical sentence only when the clinical gate is what refused")
         void otherRefusalsKeepTheOpaqueDefault() {
-            assertThat(messageOf(refuse("GET", "ROLE_SUPER_ADMIN"))).isEqualTo("Accès refusé");
-            assertThat(messageOf(refuse("POST", "ROLE_RECEPTIONIST"))).isEqualTo("Accès refusé");
+            assertThat(messageOf(refuse(false, false, "ROLE_SUPER_ADMIN"))).as("another gate refused a super-admin")
+                .isEqualTo("Accès refusé");
+            assertThat(messageOf(refuse(true, false, "ROLE_RECEPTIONIST"))).as("the gate refused a receptionist")
+                .isEqualTo("Accès refusé");
         }
 
         @Test
         @DisplayName("QA D2122: the clinical-role sentence exists in English")
         void superAdminRefusedAWriteInEnglish() {
             org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
-            assertThat(messageOf(refuse("PUT", "ROLE_SUPER_ADMIN")))
+            assertThat(messageOf(refuse(true, false, "ROLE_SUPER_ADMIN")))
                 .startsWith("This is a clinical action: it needs a clinical role you hold at this hospital");
+        }
+
+        @Test
+        @DisplayName("QA D2120 review: a clinical act during a support session is refused in words, in French")
+        void impersonationRefusalIsNamed() {
+            assertThat(messageOf(refuse(true, true, "ROLE_DOCTOR")))
+                .isEqualTo("Action clinique impossible pendant une prise en main du compte.");
         }
 
         @Test

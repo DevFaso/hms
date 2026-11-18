@@ -67,6 +67,21 @@ public class PatientInsuranceResponseDTO {
     @Schema(description = "Whether this is the primary insurance", defaultValue = "true")
     private boolean isPrimary;
 
+    @Schema(description = "Billing-money plan PR 6: the payer plan this coverage is billed under; null for free-text coverage")
+    private UUID payerPlanId;
+
+    @Schema(description = "The plan's code (formule), as the hospital typed it")
+    private String payerPlanCode;
+
+    @Schema(description = "The plan's name (formule), as the hospital typed it")
+    private String payerPlanName;
+
+    @Schema(description = "The catalogue payer's code")
+    private String planPayerCode;
+
+    @Schema(description = "The catalogue payer's name, as the hospital typed it")
+    private String planPayerName;
+
     @Schema(description = "Date and time this record was created")
     private LocalDateTime createdAt;
 

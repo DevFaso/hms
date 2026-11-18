@@ -912,6 +912,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        icon: 'health_and_safety',
+        label: 'Payers',
+        translationKey: 'NAV.PAYERS',
+        route: '/billing/organismes',
+        permission: 'View Billing',
+        // Billing-money plan PR 6: mirrors the /billing/organismes RoleGuard.
+        roles: [
+          'ROLE_SUPER_ADMIN',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ACCOUNTANT',
+          'ROLE_BILLING_SPECIALIST',
+          'ROLE_RECEPTIONIST',
+          'ROLE_CLAIMS_REVIEWER',
+        ],
+      },
+      {
         icon: 'science',
         label: 'Laboratory',
         translationKey: 'NAV.LABORATORY',
