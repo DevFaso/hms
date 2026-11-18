@@ -194,7 +194,7 @@
             [(ngModel)]="form.ethnicity"
           />
         </div>
-        @if (!frontDeskOnly()) {
+        @if (writesClinicalFields()) {
           <div class="field-group">
             <label for="demoBloodType">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</label>
             <select

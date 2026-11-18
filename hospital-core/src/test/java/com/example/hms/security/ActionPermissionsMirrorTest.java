@@ -38,7 +38,9 @@ class ActionPermissionsMirrorTest {
         "^(hasAnyAuthority|hasAuthority|hasAnyRole|hasRole"
             // User decision 2026-11-14: a clinical act through a role the caller holds on their own.
             + "|T\\(com\\.example\\.hms\\.security\\.ClinicalActor\\)\\.holdsOwnRole)"
-            + "\\(\\s*(authentication\\s*,\\s*)?'[A-Z_]+'(\\s*,\\s*'[A-Z_]+')*\\s*\\)$");
+            + "\\(\\s*(authentication\\s*,\\s*)?'[A-Z_]+'(\\s*,\\s*'[A-Z_]+')*\\s*\\)"
+            // QA D2120 review: a governance act the super-admin keeps beside the clinical gate.
+            + "( or hasRole\\('SUPER_ADMIN'\\))?$");
 
     record Entry(String action, String controller, String method, Set<String> roles) { }
 

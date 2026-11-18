@@ -211,7 +211,8 @@ public class LabResultController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'HOSPITAL_ADMIN','LAB_MANAGER','LAB_SCIENTIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'HOSPITAL_ADMIN','LAB_MANAGER','LAB_SCIENTIST')"
+        + " or hasRole('SUPER_ADMIN')")
     @Operation(summary = "Delete Lab Result", description = "Deletes a lab result by ID.")
     public ResponseEntity<String> deleteLabResult(
             @PathVariable UUID id,

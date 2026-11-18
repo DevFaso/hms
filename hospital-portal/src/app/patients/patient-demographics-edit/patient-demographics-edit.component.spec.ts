@@ -53,6 +53,22 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
     expect(box()).toBeNull();
   });
 
+  it('QA D2120 review: the blood type is offered to a clinician, never to an admin or a super-admin alone', () => {
+    const fixture = create();
+    const roles = TestBed.inject(RoleContextService);
+    const box = () => (fixture.nativeElement as HTMLElement).querySelector('#demoBloodType');
+    for (const role of ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']) {
+      roles.setRoles([role]);
+      fixture.componentRef.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      expect(box()).withContext(role).toBeNull();
+    }
+    roles.setRoles(['ROLE_MIDWIFE']);
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(box()).not.toBeNull();
+  });
+
   it('opens on the chart as it stands, the legacy address included', () => {
     const c = create().componentInstance;
     expect(c.form.firstName).toBe('Ibrahim');

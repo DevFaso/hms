@@ -40,7 +40,8 @@ export const ACTION_PERMISSIONS = {
   },
   labResultDelete: {
     endpoint: 'LabResultController#deleteLabResult',
-    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_LAB_MANAGER', 'ROLE_LAB_SCIENTIST'],
+    // QA D2120 review (owner): a data fix the super-admin keeps.
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_LAB_MANAGER', 'ROLE_LAB_SCIENTIST', 'ROLE_SUPER_ADMIN'],
   },
   imagingOrderCreate: {
     endpoint: 'ImagingOrderController#createOrder',
@@ -327,7 +328,8 @@ export const ACTION_PERMISSIONS = {
   },
   signatureRevoke: {
     endpoint: 'DigitalSignatureController#revokeSignature',
-    roles: ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN'],
+    // QA D2120 review (owner): a governance act the super-admin keeps.
+    roles: ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
   },
   signatureListAll: {
     endpoint: 'DigitalSignatureController#getAllSignatures',
