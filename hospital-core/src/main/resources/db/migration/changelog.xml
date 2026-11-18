@@ -3639,4 +3639,22 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V305 (billing-money plan PR 6, scorecard M1) - each hospital's payer
+         catalogue: billing.payers (code, name as typed, type), billing.
+         payer_plans (code, name, dates offered), billing.payer_plan_terms
+         (default coverage %, per-invoice and annual ceilings; insert-only
+         dated versions) and billing.payer_plan_rules (category- or item-level
+         rate, exclusion or per-act ceiling; effective-dated, insert-only like
+         prices), plus clinical.patient_insurances.payer_plan_id (nullable FK;
+         existing free-text coverage is untouched). Coverage is not applied
+         to invoices yet (PR 7, V306). Plain idempotent DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V305-billing-payer-catalogue" author="hms-team" runOnChange="false">
+        <sqlFile path="V305__billing_payer_catalogue.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

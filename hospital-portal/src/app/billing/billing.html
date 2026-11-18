@@ -12,6 +12,13 @@
           {{ 'BILLING.PRICE_LIST.TITLE' | translate }}
         </a>
       }
+      <!-- Billing-money plan PR 6: the payer catalogue, for the roles its route admits -->
+      @if (canReadPriceList) {
+        <a class="btn-secondary" routerLink="/billing/organismes" data-testid="payers-link">
+          <span class="material-symbols-outlined" aria-hidden="true">health_and_safety</span>
+          {{ 'BILLING.PAYERS.TITLE' | translate }}
+        </a>
+      }
       <!-- QA D1059: the cashier's daily cash closing -->
       @if (canRecordPayment) {
         <button

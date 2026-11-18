@@ -135,7 +135,11 @@ class R23BackendClassGuardsTest {
         "payload/dto/AdvanceDirectiveRequestDTO.java",
             "service/impl/AdvanceDirectiveServiceImpl.java#getExpirationDate().isBefore(",
         "payload/dto/OnCallScheduleRequestDTO.java",
-            "service/impl/OnCallScheduleServiceImpl.java#getEndTime().isAfter(request.getStartTime())");
+            "service/impl/OnCallScheduleServiceImpl.java#getEndTime().isAfter(request.getStartTime())",
+        // Billing-money plan PR 6: a plan's last day is never before its start (the day before it = withdrawn).
+        "payload/dto/billing/PayerPlanRequestDTO.java", "service/billing/PayerCatalogueService.java#to.isBefore(from",
+        "payload/dto/billing/PayerPlanUpdateRequestDTO.java",
+            "service/billing/PayerCatalogueService.java#to.isBefore(from.minusDays(1))");
 
     /** A date-typed field; its name decides whether it opens or closes a range. */
     private static final Pattern DATE_FIELD = Pattern.compile(

@@ -2534,11 +2534,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 created.setLinkedByUserId(patient.getUser() != null ? patient.getUser().getId() : null);
                 return created;
             });
+        if (insurance.getAssignment() == null && assignment != null) {
+            if (insurance.getId() != null) {
+                // Review of #1202 (the re-tag class): a shared row, visible to every hospital, is never taken away
+                // from the others; this hospital gets its own copy, found again by the lookup above next time.
+                insurance = sharedRowCopy(insurance);
+            }
+            insurance.setAssignment(assignment);
+        }
         if (plan != null) {
             insurance.setGroupNumber(plan);
-        }
-        if (insurance.getAssignment() == null && assignment != null) {
-            insurance.setAssignment(assignment);
         }
         boolean thisHospitals = insurance.getAssignment() != null && insurance.getAssignment().getHospital() != null
             && hospitalId != null && hospitalId.equals(insurance.getAssignment().getHospital().getId());
@@ -2547,6 +2552,23 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             insurance.setPrimary(true);
         }
         patientInsuranceRepository.save(insurance);
+    }
+
+    /** A new, untagged row with a shared row's coverage details (review of #1202). */
+    private static PatientInsurance sharedRowCopy(PatientInsurance shared) {
+        PatientInsurance copy = new PatientInsurance();
+        copy.setPatient(shared.getPatient());
+        copy.setPayerCode(shared.getPayerCode());
+        copy.setProviderName(shared.getProviderName());
+        copy.setPolicyNumber(shared.getPolicyNumber());
+        copy.setGroupNumber(shared.getGroupNumber());
+        copy.setSubscriberName(shared.getSubscriberName());
+        copy.setSubscriberRelationship(shared.getSubscriberRelationship());
+        copy.setEffectiveDate(shared.getEffectiveDate());
+        copy.setExpirationDate(shared.getExpirationDate());
+        copy.setLinkedAs(shared.getLinkedAs());
+        copy.setLinkedByUserId(shared.getLinkedByUserId());
+        return copy;
     }
 
     /** The patient's own role at the hospital (ROLE_PATIENT first), which tags the coverage for its desk. */

@@ -301,6 +301,29 @@ public class RoleValidator {
             RECEPTIONIST_ROLE, CLAIMS_REVIEWER_ROLE);
     }
 
+    /**
+     * Billing-money plan PR 6 (owner decision D-1, 2026-11-15): who maintains a hospital's payer catalogue (payers,
+     * plans and their rules) - a hospital admin or an accountant assignment AT that hospital, as for the price list.
+     * Never the cashier, a clinician or the platform super-admin on their own.
+     */
+    public boolean canMaintainPayers(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
+    }
+
+    /** Billing-money plan PR 6: who reads a hospital's payer catalogue there (the price list's readers). */
+    public boolean canReadPayers(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,
+            RECEPTIONIST_ROLE, CLAIMS_REVIEWER_ROLE);
+    }
+
+    /**
+     * Billing-money plan PR 6 (plan section 3.8): who links a patient's coverage to a payer plan at that hospital -
+     * the hospital admin, the billing specialist (the till) and reception. Not a clinician, not the accountant.
+     */
+    public boolean canLinkPayerPlan(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE, RECEPTIONIST_ROLE);
+    }
+
     public void validateRoleOrThrow(UUID userId, UUID hospitalId, String roleCode) {
         if (!hasAnyCode(userId, hospitalId, roleCode)) {
             // #1096 review: the user does not hold the role (role.notfound is a role that does not

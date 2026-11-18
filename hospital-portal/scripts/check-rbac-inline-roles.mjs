@@ -33,6 +33,7 @@ export const GUARDED_PAGES = [
   'src/app/billing/price-list/price-list.component.ts',
   // Review #1196/#1198 L4: the lookup panel was offered to roles its endpoint refuses.
   'src/app/digital-signatures/digital-signatures.ts',
+  'src/app/billing/payers/payers.component.ts',
 ];
 
 const CHECK = /\b(hasAnyActiveRole|hasAnyActiveRoleExactly|hasAnyRole|hasRole)\s*\(/g;

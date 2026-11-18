@@ -1457,6 +1457,58 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['version', 'item', 'from'],
   },
   {
+    // Billing-money plan PR 6: the payer catalogue (ids only; names, rates and reasons stay on the rows).
+    key: 'AUDIT.DESC.PAYER_CREATED',
+    re: /^Payer (\S+) created$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_UPDATED',
+    re: /^Payer (\S+) updated$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_DEACTIVATED',
+    re: /^Payer (\S+) deactivated$/,
+    params: ['payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_PLAN_CREATED',
+    re: /^Payer plan (\S+) of payer (\S+) created$/,
+    params: ['plan', 'payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_PLAN_UPDATED',
+    re: /^Payer plan (\S+) of payer (\S+) updated$/,
+    params: ['plan', 'payer'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_RULE_ADDED',
+    re: /^Rule (\S+) added to payer plan (\S+), effective (\S+), closed \[([^\]]*)\], replaced \[([^\]]*)\]$/,
+    params: ['rule', 'plan', 'from', 'closed', 'replaced'],
+  },
+  {
+    // Review of #1202: plan terms are dated versions (ids only).
+    key: 'AUDIT.DESC.PAYER_TERMS_ADDED',
+    re: /^Terms (\S+) added to payer plan (\S+), effective (\S+), closed \[([^\]]*)\], replaced \[([^\]]*)\]$/,
+    params: ['terms', 'plan', 'from', 'closed', 'replaced'],
+  },
+  {
+    key: 'AUDIT.DESC.PAYER_RULE_ENDED',
+    re: /^Rule (\S+) of payer plan (\S+) ended$/,
+    params: ['rule', 'plan'],
+  },
+  {
+    key: 'AUDIT.DESC.COVERAGE_PLAN_LINKED',
+    re: /^Patient insurance (\S+) linked to payer plan (\S+)$/,
+    params: ['insurance', 'plan'],
+  },
+  {
+    key: 'AUDIT.DESC.COVERAGE_PLAN_UNLINKED',
+    re: /^Patient insurance (\S+) unlinked from its payer plan$/,
+    params: ['insurance'],
+  },
+  {
     // Billing-money plan PR 4: a price-list CSV file applied (the import id and the counts only).
     key: 'AUDIT.DESC.PRICE_LIST_IMPORTED',
     re: /^Price list import (\S+) applied: (\d+) new items, (\d+) new prices, (\d+) unchanged$/,

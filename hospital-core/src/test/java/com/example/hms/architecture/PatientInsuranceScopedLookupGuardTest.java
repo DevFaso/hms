@@ -109,7 +109,10 @@ class PatientInsuranceScopedLookupGuardTest {
             if ("getInsuranceOrThrow".equals(name) || "getScopedInsuranceOrThrow".equals(name)) {
                 continue; // the bare loader and the scoped one itself
             }
-            if (body.contains(" getInsuranceOrThrow(") && !body.contains("tagForStaffHospital(")) {
+            // Review of #1202: rowAtHospital scopes like the tagger (it calls it) and copies a shared row instead
+            // of re-tagging it.
+            if (body.contains(" getInsuranceOrThrow(") && !body.contains("tagForStaffHospital(")
+                && !body.contains("rowAtHospital(")) {
                 offenders.add(names.get(i));
             }
         }

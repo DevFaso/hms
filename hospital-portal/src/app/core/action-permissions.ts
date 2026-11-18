@@ -343,6 +343,46 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'DigitalSignatureController#getSignatureAuditTrail',
     roles: ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
   },
+  // Billing-money plan PR 6 (owner decision D-1): the payer catalogue is kept
+  // by the hospital admin and the accountant only (never the cashier or the
+  // super-admin).
+  payerCreate: {
+    endpoint: 'PayerController#create',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerUpdate: {
+    endpoint: 'PayerController#update',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerDeactivate: {
+    endpoint: 'PayerController#deactivate',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerPlanCreate: {
+    endpoint: 'PayerController#createPlan',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerPlanUpdate: {
+    endpoint: 'PayerController#updatePlan',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerTermsAdd: {
+    endpoint: 'PayerController#addTerms',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerRuleAdd: {
+    endpoint: 'PayerController#addRule',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  payerRuleEnd: {
+    endpoint: 'PayerController#endRule',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+  },
+  // Plan section 3.8: the "Formule" picker on the Coverage tab.
+  patientInsuranceSetPayerPlan: {
+    endpoint: 'PatientInsuranceController#setPayerPlan',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_BILLING_SPECIALIST', 'ROLE_RECEPTIONIST'],
+  },
 } as const satisfies Record<string, ActionPermission>;
 
 /**

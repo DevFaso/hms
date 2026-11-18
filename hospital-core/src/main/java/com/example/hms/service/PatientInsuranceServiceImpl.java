@@ -18,6 +18,9 @@ import com.example.hms.repository.PatientInsuranceRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.exception.ClientSafeAccessDeniedException;
+import com.example.hms.service.billing.PayerCatalogueService;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.security.access.AccessDeniedException;
@@ -26,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -58,6 +62,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
      */
     private final PatientSubjectReadGuard subjectReadGuard;
     private final ActingScopeResolver actingScopeResolver;
+    /** Billing-money plan PR 6: the payer catalogue, which says whether a plan may be linked at a hospital. */
+    private final PayerCatalogueService payerCatalogueService;
 
     @Override
     @Transactional
@@ -103,11 +109,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         // QA D1651: the acting hospital's coverage plus legacy rows tagged to
         // no hospital; a patient-only caller sees all of their own.
         UUID hospitalId = roleValidator.isPatientOnlyFromAuth() ? null : roleValidator.requireActiveHospitalId();
-        return patientInsuranceRepository.findByPatient_Id(patientId)
+        List<PatientInsurance> visible = patientInsuranceRepository.findByPatient_Id(patientId)
             .stream()
             .filter(insurance -> insurance.isVisibleAt(hospitalId))
-            .map(patientInsuranceMapper::toPatientInsuranceResponseDTO)
             .toList();
+        return patientInsuranceMapper.toPatientInsuranceResponseDTOs(visible);
     }
 
     @Override
@@ -130,10 +136,16 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
         enforceSelfAccessIfPatient(targetPatient, () -> patientNotFound(targetPatient.getId()));
 
+        // Billing-money plan PR 6: a plan named in the edit is linked by the same rule as the "Formule" picker.
+        // Review of #1202: the edit never changes the row's hospital tag; a shared (untagged) row gets its own
+        // copy only through the "Formule" picker.
+        PlanLink planLink = planForEdit(existing, dto.getPayerPlanId(), insuranceId);
+
         // Apply changes (do not touch assignment here)
         patientInsuranceMapper.updateEntityFromDto(existing, dto, targetPatient);
 
         PatientInsurance saved = patientInsuranceRepository.save(existing);
+        auditPlanLink(planLink, saved);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -172,10 +184,15 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId()));
             enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
             rejectHospitalLinkForPatient(req);
-        } else {
+            rejectPlanForPatient(req.getPayerPlanId(), insurance.getPayerPlanId());
+        }
+        PlanLink planLink = null;
+        if (!actAsPatient) {
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
-            tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalId),
+            patientChartAccess.require(patient.getId(), hospitalId);
+            insurance = rowAtHospital(insurance, hospitalId, actorUserId, () -> insuranceNotFound(insuranceId));
+            planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalId, actorUserId,
                 () -> insuranceNotFound(insuranceId));
         }
 
@@ -183,6 +200,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         insurance.setPatient(patient);
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
+        auditPlanLink(planLink, saved);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -292,19 +310,24 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         boolean actAsPatient = isActingAsPatient(ctx);
         UUID actorUserId = resolveActorUserId(ctx);
 
+        PlanLink planLink = null;
         if (actAsPatient) {
             enforcePatientSelfAccess(patient, () -> patientNotFound(req.getPatientId()));
             enforcePatientSelfAccess(insurance.getPatient(), () -> insuranceNotFound(insuranceId));
+            rejectPlanForPatient(req.getPayerPlanId(), insurance.getPayerPlanId());
             insurance.setPatient(patient);
         } else {
-            insurance.setPatient(patient);
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
-            tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalId),
+            patientChartAccess.require(patient.getId(), hospitalId);
+            insurance = rowAtHospital(insurance, hospitalId, actorUserId, () -> insuranceNotFound(insuranceId));
+            insurance.setPatient(patient);
+            planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalId, actorUserId,
                 () -> insuranceNotFound(insuranceId));
         }
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
+        auditPlanLink(planLink, saved);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -334,15 +357,22 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         } else {
             hospitalIdForStaff = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalIdForStaff, actorUserId, ctx, locale);
+            patientChartAccess.require(patientId, hospitalIdForStaff);
         }
 
-        PatientInsurance insurance = findOrCreateInsurance(patientId, payerCode, policyNumber, patient,
+        PatientInsurance found = findOrCreateInsurance(patientId, payerCode, policyNumber, patient,
             hospitalIdForStaff);
-        applyProviderName(insurance, req.getProviderName(), payerCode);
+        if (actAsPatient) {
+            rejectPlanForPatient(req.getPayerPlanId(), found.getPayerPlanId());
+        }
 
+        PlanLink planLink = null;
+        final PatientInsurance insurance = actAsPatient ? found
+            : rowAtHospital(found, hospitalIdForStaff, actorUserId, () -> insuranceNotFound(found.getId()));
+        applyProviderName(insurance, req.getProviderName(), payerCode);
         if (!actAsPatient) {
-            tagForStaffHospital(insurance, resolveStaffAssignment(actorUserId, hospitalIdForStaff),
-                () -> new ResourceNotFoundException("patientinsurance.notfound", insurance.getId()));
+            planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalIdForStaff, actorUserId,
+                () -> insuranceNotFound(insurance.getId()));
         }
 
         applyPrimaryFlag(req, actAsPatient, insurance, patient, hospitalIdForStaff);
@@ -358,7 +388,183 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             saved = patientInsuranceRepository.save(saved);
         }
 
+        auditPlanLink(planLink, saved);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
+    }
+
+    /**
+     * Billing-money plan PR 6 (plan section 3.8): the "Formule" picker. The caller holds HOSPITAL_ADMIN,
+     * BILLING_SPECIALIST or RECEPTIONIST at the acting hospital (checked before any lookup); the coverage row is that
+     * hospital's (another's answers 404, as a missing one); the plan is that hospital's (404 otherwise), of an active
+     * payer, not ended. Null removes the link.
+     */
+    @Override
+    @Transactional
+    public PatientInsuranceResponseDTO setPayerPlan(UUID insuranceId, UUID payerPlanId, Locale locale) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw new BusinessException(HOSPITAL_REQUIRED_KEY);
+        }
+        UUID actorUserId = resolveActorUserId(null);
+        requirePlanLinker(hospitalId, actorUserId);
+        PatientInsurance scoped = getScopedInsuranceOrThrow(insuranceId);
+        if (Objects.equals(scoped.getPayerPlanId(), payerPlanId)) {
+            return patientInsuranceMapper.toPatientInsuranceResponseDTO(scoped);
+        }
+        // Review of #1202: the patient is one this hospital may chart (registered here, or treated here), else
+        // the row answers as a missing one; a shared row is never re-tagged: this hospital gets its own copy.
+        patientChartAccess.require(scoped.getPatient() != null ? scoped.getPatient().getId() : null, hospitalId);
+        PatientInsurance insurance = scoped.getAssignment() != null
+            ? scoped
+            : rowAtHospital(scoped, hospitalId, actorUserId, () -> insuranceNotFound(insuranceId));
+        PlanLink planLink = applyPayerPlan(insurance, payerPlanId, hospitalId, actorUserId,
+            () -> insuranceNotFound(insuranceId));
+        PatientInsurance saved = patientInsuranceRepository.save(insurance);
+        auditPlanLink(planLink, saved);
+        return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
+    }
+
+    /* ==================== payer plan link (billing-money plan PR 6) ==================== */
+
+    /**
+     * Review of #1202: a plan named in the edit, linked by the picker's rules (plan role, a patient this hospital may
+     * chart, a plan of this hospital). The edit never changes the row's hospital tag: a shared row is refused and
+     * sent to the picker, which gives this hospital its own copy. Naming the plan the row already has changes nothing.
+     */
+    private PlanLink planForEdit(PatientInsurance existing, UUID payerPlanId, UUID insuranceId) {
+        if (payerPlanId == null || Objects.equals(payerPlanId, existing.getPayerPlanId())) {
+            return null;
+        }
+        rejectPlanForPatientOnly(payerPlanId);
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw new BusinessException(HOSPITAL_REQUIRED_KEY);
+        }
+        UUID actorUserId = resolveActorUserId(null);
+        requirePlanLinker(hospitalId, actorUserId);
+        patientChartAccess.require(existing.getPatient() != null ? existing.getPatient().getId() : null, hospitalId);
+        if (existing.getAssignment() == null) {
+            throw new FieldBusinessException("payerPlanId", "patientinsurance.payerPlan.sharedRow");
+        }
+        return applyPayerPlan(existing, payerPlanId, hospitalId, actorUserId, () -> insuranceNotFound(insuranceId));
+    }
+
+    /** A change of a row's plan, audited after the row is saved (a new row has no id before). */
+    private record PlanLink(UUID hospitalId, UUID actorUserId) {
+    }
+
+    /** A plan named in a link or an edit request: linked by the picker's rule; null leaves the link as it is. */
+    private PlanLink applyRequestedPlan(PatientInsurance insurance, UUID payerPlanId, UUID hospitalId,
+                                        UUID actorUserId, Supplier<ResourceNotFoundException> notFound) {
+        if (payerPlanId == null || Objects.equals(insurance.getPayerPlanId(), payerPlanId)) {
+            return null;
+        }
+        requirePlanLinker(hospitalId, actorUserId);
+        return applyPayerPlan(insurance, payerPlanId, hospitalId, actorUserId, notFound);
+    }
+
+    /**
+     * The one place a coverage row's plan changes (PayerCatalogueGuardTest). A plan of the row's hospital only, on a
+     * row tagged to that hospital: a shared (untagged) row reaches here only as this hospital's own copy
+     * ({@link #rowAtHospital}), and any other row answers exactly as a missing one. Never changes the tag.
+     */
+    private PlanLink applyPayerPlan(PatientInsurance insurance, UUID payerPlanId, UUID hospitalId, UUID actorUserId,
+                                    Supplier<ResourceNotFoundException> notFound) {
+        if (Objects.equals(insurance.getPayerPlanId(), payerPlanId)) {
+            return null;
+        }
+        if (payerPlanId != null) {
+            payerCatalogueService.requireLinkablePlan(payerPlanId, hospitalId);
+            if (insurance.getAssignment() == null || !insurance.isVisibleAt(hospitalId)) {
+                throw notFound.get();
+            }
+        }
+        insurance.setPayerPlanId(payerPlanId);
+        return new PlanLink(hospitalId, actorUserId);
+    }
+
+    /** Only the hospital admin, the billing specialist and reception link a coverage to a plan (plan section 3.8). */
+    private void requirePlanLinker(UUID hospitalId, UUID actorUserId) {
+        if (actorUserId == null || !roleValidator.canLinkPayerPlan(actorUserId, hospitalId)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve("patientinsurance.payerPlan.forbidden"));
+        }
+    }
+
+    /**
+     * A patient acting as a patient never picks the plan their coverage is billed under; naming the plan it already
+     * has changes nothing and is let through.
+     */
+    private static void rejectPlanForPatient(UUID payerPlanId, UUID current) {
+        if (payerPlanId != null && !payerPlanId.equals(current)) {
+            throw new FieldBusinessException("payerPlanId", "patientinsurance.payerPlan.staffOnly");
+        }
+    }
+
+    private void rejectPlanForPatientOnly(UUID payerPlanId) {
+        if (roleValidator.isPatientOnlyFromAuth()) {
+            rejectPlanForPatient(payerPlanId, null);
+        }
+    }
+
+    /**
+     * Review of #1202 (the re-tag class): the row a staff write at {@code hospitalId} acts on. A new row is tagged to
+     * the hospital; a row already this hospital's is re-stamped with the caller's assignment there; another
+     * hospital's answers as a missing one. A SHARED row (tagged to no hospital, so visible to every hospital) is never
+     * re-tagged, which would take it away from every other hospital: this hospital gets its own copy (decision
+     * 2026-11-12, "B gets its own copy through its own desk"), found again on a later write, and the shared row stays
+     * as it was.
+     */
+    private PatientInsurance rowAtHospital(PatientInsurance insurance, UUID hospitalId, UUID actorUserId,
+                                           Supplier<ResourceNotFoundException> notFound) {
+        UserRoleHospitalAssignment assignment = resolveStaffAssignment(actorUserId, hospitalId);
+        if (insurance.getId() == null || insurance.getAssignment() != null) {
+            tagForStaffHospital(insurance, assignment, notFound);
+            return insurance;
+        }
+        PatientInsurance copy = existingCopyAt(insurance, hospitalId).orElseGet(() -> copyOf(insurance));
+        tagForStaffHospital(copy, assignment, notFound);
+        copy.setLinkedByUserId(actorUserId);
+        copy.setLinkedAs("STAFF");
+        return copy;
+    }
+
+    /** This hospital's copy of a shared row, made by an earlier write (same patient, payer or insurer, policy). */
+    private java.util.Optional<PatientInsurance> existingCopyAt(PatientInsurance shared, UUID hospitalId) {
+        UUID patientId = shared.getPatient() != null ? shared.getPatient().getId() : null;
+        if (patientId == null || shared.getPolicyNumber() == null) {
+            return java.util.Optional.empty();
+        }
+        if (shared.getPayerCode() != null) {
+            return patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignment_Hospital_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, hospitalId, shared.getPayerCode(), shared.getPolicyNumber());
+        }
+        return patientInsuranceRepository
+            .findFirstByPatient_IdAndAssignment_Hospital_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
+                patientId, hospitalId, shared.getProviderName(), shared.getPolicyNumber());
+    }
+
+    /** A new, untagged row with the shared row's coverage details (no plan: the caller sets it). */
+    private static PatientInsurance copyOf(PatientInsurance shared) {
+        return PatientInsurance.builder()
+            .patient(shared.getPatient())
+            .payerCode(shared.getPayerCode())
+            .providerName(shared.getProviderName())
+            .policyNumber(shared.getPolicyNumber())
+            .groupNumber(shared.getGroupNumber())
+            .subscriberName(shared.getSubscriberName())
+            .subscriberRelationship(shared.getSubscriberRelationship())
+            .effectiveDate(shared.getEffectiveDate())
+            .expirationDate(shared.getExpirationDate())
+            .primary(false)
+            .build();
+    }
+
+    private void auditPlanLink(PlanLink planLink, PatientInsurance saved) {
+        if (planLink != null && saved != null) {
+            payerCatalogueService.auditCoverageLink(saved.getId(), saved.getPayerPlanId(), planLink.hospitalId(),
+                planLink.actorUserId());
+        }
     }
 
     /* ==================== shared helpers ==================== */
@@ -427,6 +633,10 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         UUID caller = assignment.getHospital() != null ? assignment.getHospital().getId() : null;
         if (heldBy != null && !heldBy.equals(caller)) {
             throw notFound.get();
+        }
+        // Review of #1202: an existing shared row is never re-tagged (rowAtHospital copies it instead).
+        if (held == null && insurance.getId() != null) {
+            throw new IllegalStateException("patientinsurance.sharedRow.neverRetagged");
         }
         insurance.setAssignment(assignment);
     }

@@ -118,7 +118,6 @@ class PatientWriteRegistrationCoverageTest {
             "edits the registration row itself, owned by the acting hospital"),
         entry("PatientInsuranceServiceImpl#addInsuranceToPatient",
             PATIENT_LEVEL_INSURANCE),
-        entry("PatientInsuranceServiceImpl#updatePatientInsurance", PATIENT_LEVEL_INSURANCE),
         entry("SocialHistoryServiceImpl#updateSocialHistory", UPDATE_OF_OWNED_ROW),
         entry("UltrasoundServiceImpl#updateOrder", UPDATE_OF_OWNED_ROW + " (getOrderInScope)"));
 

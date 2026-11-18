@@ -62,7 +62,15 @@ public class LinkPatientInsuranceRequestDTO {
      * and the link used to answer 500 for every new policy.
      */
     @jakarta.validation.constraints.Size(max = 150)
-    @Schema(description = "Insurer display name; defaults to the payer code for a new policy", example = "CNAMU")
+    @Schema(description = "Insurer display name; defaults to the payer code for a new policy", example = "Mutuelle Test A")
     private String providerName;
+
+    /**
+     * Billing-money plan PR 6: the payer plan to bill this coverage under (a plan of the acting hospital; staff with
+     * the plan-link role only). Null leaves the link as it is; {@code PUT /patient-insurances/{id}/payer-plan}
+     * removes it.
+     */
+    @Schema(description = "Payer plan (formule) of the acting hospital; null leaves the current link")
+    private UUID payerPlanId;
 
 }

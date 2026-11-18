@@ -156,7 +156,11 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("PriceListPriceDTO#changeReason", "why the admin or accountant changed a tariff: no patient"),
         Map.entry("PriceListItemDTO#deactivationReason", "why a tariff item was retired: no patient"),
         Map.entry("PriceListLinkOptionsDTO#imagingModalities", "the imaging modality names, a fixed list: no patient"),
-        Map.entry("PriceListLinkOptionsDTO#treatments", "the hospital's catalogue of services, by name: no patient"));
+        Map.entry("PriceListLinkOptionsDTO#treatments", "the hospital's catalogue of services, by name: no patient"),
+        // Billing-money plan PR 6: the desk reads the payer catalogue to pick a patient's plan (plan section 3.8).
+        Map.entry("PayerDTO#deactivationReason", "why the admin or accountant retired a payer: no patient"),
+        Map.entry("PayerPlanRuleDTO#endReason", "why the admin or accountant ended a coverage rule: no patient"),
+        Map.entry("PayerPlanTermsDTO#changeReason", "why the admin or accountant changed a plan's rate: no patient"));
 
     /**
      * Request type#field the role may send, and why it overwrites no clinician's text: a new
