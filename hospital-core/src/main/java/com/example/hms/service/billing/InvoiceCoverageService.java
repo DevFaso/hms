@@ -331,12 +331,13 @@ public class InvoiceCoverageService {
             invoiceRepository.save(invoice);
         }
         // The audit row's words for the decision (the portal reads each in the reader's language).
-        if (to == PayerShareStatus.CLAIMED) {
-            audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(), "Payer share claimed");
-        } else if (to == PayerShareStatus.PAID) {
-            audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(), "Payer share paid");
-        } else {
-            audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(), "Payer share rejected");
+        switch (to) {
+            case CLAIMED -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(),
+                "Payer share claimed");
+            case PAID -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(),
+                "Payer share paid");
+            default -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(),
+                "Payer share rejected");
         }
         return readShares(invoice);
     }
