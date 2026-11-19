@@ -3,6 +3,7 @@ package com.example.hms.architecture;
 import com.example.hms.controller.DicomProxyController;
 import com.example.hms.controller.ImagingOrderController;
 import com.example.hms.controller.ImagingResultController;
+import com.example.hms.controller.ImagingStudyImageController;
 import com.example.hms.security.ClinicalActor;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
@@ -56,7 +57,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ImagingReadRoleGuardTest {
 
     private static final List<Class<?>> IMAGING_CONTROLLERS =
-        List.of(ImagingOrderController.class, ImagingResultController.class, DicomProxyController.class);
+        List.of(ImagingOrderController.class, ImagingResultController.class, DicomProxyController.class,
+            ImagingStudyImageController.class);
 
     private static final Set<String> ADMIN_ROLES = Set.of("SUPER_ADMIN", "HOSPITAL_ADMIN", "ADMIN");
 

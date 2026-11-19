@@ -3723,6 +3723,19 @@
     </changeSet>
 
     <!-- =================================================================
+         V316 (owner 2026-11-19) - clinical.imaging_study_images: key images
+         (JPEG/PNG/WebP/PDF) on an imaging order or report, stored through
+         the FileStorage port under the private imaging-images/ prefix.
+         Additive: one table, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V316-imaging-study-images" author="hms-team" runOnChange="false">
+        <sqlFile path="V316__imaging_study_images.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
          V317 (imaging, option B) - hospital.hospitals PACS connection:
          pacs_enabled, pacs_dicomweb_base_url, pacs_auth_username and
          pacs_auth_password (AES-GCM ciphertext, never returned by the API).
