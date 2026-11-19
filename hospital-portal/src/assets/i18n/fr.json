@@ -14572,5 +14572,59 @@
       "CARD_ACTION": "Configurer le PACS",
       "BASE_URL_REQUIRED": "Saisissez l'adresse DICOMweb du PACS pour activer la visionneuse."
     }
+  },
+  "CONNECTIVITY": {
+    "OFFLINE_TITLE": "Pas de connexion Internet.",
+    "UNREACHABLE_TITLE": "Le serveur ne répond pas : la connexion semble coupée.",
+    "KEEP_INPUT": "Ce que vous avez saisi reste sur la page. Réessayez quand la connexion revient.",
+    "STILL_DOWN": "Toujours pas de connexion. Réessayez dans un instant.",
+    "RETRY": "Réessayer",
+    "RETRYING": "Nouvelle tentative…",
+    "RESTORED": "Connexion rétablie.",
+    "PAGE_OFFLINE_TITLE": "Cette page n’a pas pu s’ouvrir : pas de connexion",
+    "PAGE_OFFLINE_MESSAGE": "Vous restez sur la page précédente, et ce que vous y avez saisi est conservé. Quand la connexion revient, appuyez sur « Réessayer »."
+  },
+  "PORTAL_RX_DOC": {
+    "OPEN": "Voir et imprimer l’ordonnance",
+    "TITLE": "Ordonnance",
+    "HEADING": "Ordonnance médicale",
+    "HOSPITAL_UNKNOWN": "Établissement de santé",
+    "DATE": "Date de l’ordonnance",
+    "PRESCRIBER": "Prescripteur",
+    "PATIENT": "Nom du patient",
+    "ROUTE": "Voie",
+    "DURATION": "Durée du traitement",
+    "QUANTITY": "Quantité",
+    "REFILLS": "Renouvellements autorisés",
+    "INSTRUCTIONS": "Consignes",
+    "SIGNED": "Signée électroniquement par {{name}} le {{date}}.",
+    "COPY_NOTE": "Copie remise au patient depuis son espace e-Keneya. Présentez-la au pharmacien.",
+    "PRINT": "Imprimer ou enregistrer en PDF"
+  },
+  "PORTAL_REFILL": {
+    "CONFIRM_TITLE": "Demander un renouvellement de {{name}} ?",
+    "CONFIRM_MESSAGE": "Votre demande sera envoyée à votre prescripteur. Vous verrez ici sa réponse, et vous pourrez annuler tant qu’elle est en attente.",
+    "CONFIRM_SEND": "Envoyer la demande",
+    "WAITING_SINCE": "En attente depuis le {{date}}",
+    "NEXT_STEP": "Votre prescripteur doit l’examiner. Vous serez averti de sa réponse.",
+    "CANCEL": "Annuler la demande",
+    "CANCELLING": "Annulation…",
+    "KEEP": "Garder la demande",
+    "CANCEL_CONFIRM_TITLE": "Annuler la demande de renouvellement de {{name}} ?",
+    "CANCEL_CONFIRM_MESSAGE": "Votre prescripteur ne la traitera pas. Vous pourrez en envoyer une nouvelle plus tard.",
+    "CANCELLED": "Demande de renouvellement annulée.",
+    "CANCEL_FAILED": "La demande n’a pas pu être annulée. Réessayez."
+  },
+  "PORTAL_PAY_HOWTO": {
+    "TITLE": "Comment payer",
+    "WHERE": "Réglez {{amount}} à la caisse de l’hôpital, en espèces ou par mobile money (Orange Money, Moov Money).",
+    "REFERENCE": "Donnez au caissier le numéro de facture : c’est votre référence de paiement.",
+    "RECEIPT": "Le caissier enregistre le paiement et vous remet un reçu ; il apparaît ensuite ici.",
+    "NO_ONLINE": "Le paiement en ligne n’est pas disponible dans le portail. Si vous avez déjà payé par mobile money, déclarez-le avec la référence de la transaction pour que la caisse le rapproche.",
+    "INVOICE_REFERENCE": "Référence à donner à la caisse : n° {{number}}",
+    "DECLARE_BUTTON": "Déclarer un paiement",
+    "DECLARE_TITLE": "Déclarer un paiement déjà effectué",
+    "DECLARE_ONLY": "Ce formulaire ne prélève aucun argent : il signale à la caisse un paiement que vous avez déjà fait.",
+    "DECLARE_SUBMIT": "Déclarer"
   }
 }
