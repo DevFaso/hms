@@ -1,3 +1,4 @@
+import { RoleContextService } from '../../core/role-context.service';
 import { formatDate } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -53,6 +54,7 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     await TestBed.configureTestingModule({
       imports: [EmarComponent, TranslateModule.forRoot()],
       providers: [
+        { provide: RoleContextService, useValue: { hasAnyActiveRole: () => true } },
         { provide: NurseTaskService, useValue: nurseSpy },
         { provide: ToastService, useValue: toastSpy },
       ],
@@ -60,6 +62,22 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
 
     fixture = TestBed.createComponent(EmarComponent);
     component = fixture.componentInstance;
+  });
+
+  it('allows administrative review of a dose without offering or sending clinical verification or administration', () => {
+    TestBed.inject(RoleContextService).hasAnyActiveRole = () => false;
+    nurseSpy.administerMedication.and.returnValue(of({} as any));
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    fixture.detectChanges();
+    const c = component as any;
+    c.selectTask(sampleTask);
+    fixture.detectChanges();
+    expect(root().querySelector('[data-testid="emar-verify"]')).toBeNull();
+    expect(root().querySelector('.oversight-note')).toBeTruthy();
+    c.verify();
+    c.sendAdministration(sampleTask.id, { status: 'HELD', note: 'Administrative caller' });
+    expect(nurseSpy.verifyMedication).not.toHaveBeenCalled();
+    expect(nurseSpy.administerMedication).not.toHaveBeenCalled();
   });
 
   function root(): HTMLElement {

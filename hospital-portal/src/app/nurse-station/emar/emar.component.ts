@@ -1,3 +1,4 @@
+import { RoleContextService } from '../../core/role-context.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
@@ -100,6 +101,11 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
   styleUrl: './emar.component.scss',
 })
 export class EmarComponent implements OnInit, OnDestroy {
+  private readonly roleContext = inject(RoleContextService);
+  protected canDocumentCare(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR']);
+  }
+
   protected readonly state = signal<LoadState>('loading');
   protected readonly tasks = signal<NurseMedicationTask[]>([]);
   protected readonly taskSearch = signal('');
@@ -203,6 +209,7 @@ export class EmarComponent implements OnInit, OnDestroy {
   protected readonly needsWitness = computed(() => !!this.activeTask()?.controlledSubstance);
 
   protected readonly canAdminister = computed(() => {
+    if (!this.canDocumentCare()) return false;
     if (this.blockedPendingPharmacist()) return false;
     if (this.needsWitness() && !this.witnessUserId()) return false;
     const v = this.verification();
@@ -353,6 +360,7 @@ export class EmarComponent implements OnInit, OnDestroy {
   }
 
   protected verify(): void {
+    if (!this.canDocumentCare()) return;
     const task = this.activeTask();
     if (!task || !this.canVerify()) return;
     // Capture the task id at call time. If the nurse switches to a different
@@ -477,6 +485,7 @@ export class EmarComponent implements OnInit, OnDestroy {
   }
 
   private sendAdministration(taskId: string, payload: MedicationAdministrationRequest): void {
+    if (!this.canDocumentCare()) return;
     const status = payload.status;
     this.administerInFlight.set(true);
     this.nurseTaskService
