@@ -81,6 +81,10 @@ class ImpersonationMoneyWriteGuardTest {
             "POST /billing-invoices/{invoiceId}/refunds/{refundId}/cancel",
             "POST /billing-invoices/{invoiceId}/payments",
             "POST /billing-invoices/{invoiceId}/payments/{paymentId}/reverse",
+            // Billing-money plan PR 7: a payer's decision on its share moves what the patient owes.
+            "POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/claim",
+            "POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/paid",
+            "POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/reject",
             "PUT /invoice-items/{id}",
             "DELETE /invoice-items/{id}",
             "POST /billing/price-list",

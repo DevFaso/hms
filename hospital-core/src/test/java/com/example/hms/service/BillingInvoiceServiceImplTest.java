@@ -421,7 +421,7 @@ class BillingInvoiceServiceImplTest {
 
         when(invoiceRepository.findByIdWithRefs(invoiceId)).thenReturn(Optional.of(invoice));
         when(invoiceItemRepository.findByBillingInvoiceId(invoiceId)).thenReturn(Collections.emptyList());
-        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any(), any())).thenReturn(new byte[]{1, 2, 3});
+        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any(), any(), any())).thenReturn(new byte[]{1, 2, 3});
 
         LocaleContextHolder.setLocale(Locale.CANADA_FRENCH);
 
@@ -431,7 +431,7 @@ class BillingInvoiceServiceImplTest {
         assertEquals("INV-2024-01", result.invoiceNumber());
 
         ArgumentCaptor<Locale> localeCaptor = ArgumentCaptor.forClass(Locale.class);
-        verify(pdfInvoiceService).generateInvoicePdf(eq(invoice), eq(Collections.emptyList()), any(), any(), localeCaptor.capture());
+        verify(pdfInvoiceService).generateInvoicePdf(eq(invoice), eq(Collections.emptyList()), any(), any(), any(), localeCaptor.capture());
         assertEquals(Locale.CANADA_FRENCH, localeCaptor.getValue());
     }
 
@@ -2330,7 +2330,7 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByIdAndInvoice_Id(first.getId(), invoice.getId())).thenReturn(Optional.of(first));
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
             .thenReturn(List.of(second, first));
-        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(),
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(), any(),
             org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(new byte[] {1});
 
@@ -2338,7 +2338,7 @@ class BillingInvoiceServiceImplTest {
 
         assertEquals("GH-2026-000019-R1", pdf.suggestedFilename());
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(first), eq("GH-2026-000019-R1"),
-            eq(new BigDecimal("30")), any(), eq(false), any());
+            eq(new BigDecimal("30")), any(), any(), eq(false), any());
     }
 
     @Test
@@ -2360,14 +2360,14 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByIdAndInvoice_Id(later.getId(), invoice.getId())).thenReturn(Optional.of(later));
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
             .thenReturn(List.of(reversed, later));
-        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(),
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(), any(),
             org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(new byte[] {1});
 
         billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), later.getId(), Locale.FRENCH);
 
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(later), eq("GH-2026-000020-R2"),
-            eq(new BigDecimal("70")), any(), eq(false), any());
+            eq(new BigDecimal("70")), any(), any(), eq(false), any());
     }
 
     @Test
@@ -2389,14 +2389,14 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByIdAndInvoice_Id(later.getId(), invoice.getId())).thenReturn(Optional.of(later));
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
             .thenReturn(List.of(reversed, later));
-        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(),
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(), any(),
             org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(new byte[] {1});
 
         billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), later.getId(), Locale.FRENCH);
 
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(later), eq("GH-2026-000021-R2"),
-            eq(new BigDecimal("100")), any(), eq(false), any());
+            eq(new BigDecimal("100")), any(), any(), eq(false), any());
     }
 
     @Test
@@ -3304,13 +3304,13 @@ class BillingInvoiceServiceImplTest {
             com.example.hms.model.InvoiceAdjustment.builder().invoice(invoice)
                 .type(com.example.hms.enums.InvoiceAdjustmentType.WAIVER)
                 .amount(new BigDecimal("500")).reason("famille en conflit").build()));
-        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any(), any())).thenReturn(new byte[] {1});
+        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any(), any(), any())).thenReturn(new byte[] {1});
 
         billingInvoiceService.getPortalInvoicePdf(invoice.getId(), patientId, Locale.FRENCH);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<com.example.hms.model.InvoiceAdjustment>> printed = ArgumentCaptor.forClass(List.class);
-        verify(pdfInvoiceService).generateInvoicePdf(any(), any(), any(), printed.capture(), any());
+        verify(pdfInvoiceService).generateInvoicePdf(any(), any(), any(), printed.capture(), any(), any());
         assertEquals(1, printed.getValue().size());
         assertNull(printed.getValue().get(0).getReason());
     }
@@ -3411,7 +3411,7 @@ class BillingInvoiceServiceImplTest {
             () -> billingInvoiceService.getPortalInvoicePdf(invoice.getId(), stranger, Locale.FRENCH));
         assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
             () -> billingInvoiceService.getPortalReceiptPdf(invoice.getId(), UUID.randomUUID(), stranger, Locale.FRENCH));
-        verify(pdfInvoiceService, never()).generateInvoicePdf(any(), any(), any(), any(), any());
+        verify(pdfInvoiceService, never()).generateInvoicePdf(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -3427,7 +3427,7 @@ class BillingInvoiceServiceImplTest {
     void portalPdf_thePatientDownloadsTheirOwnInvoice_D982() {
         UUID patientId = UUID.randomUUID();
         BillingInvoice invoice = portalInvoice(patientId, InvoiceStatus.PAID);
-        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any(), any())).thenReturn(new byte[] {1, 2});
+        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any(), any(), any())).thenReturn(new byte[] {1, 2});
 
         com.example.hms.payload.dto.InvoicePdfResponseDTO pdf =
             billingInvoiceService.getPortalInvoicePdf(invoice.getId(), patientId, Locale.FRENCH);
@@ -3598,16 +3598,16 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByIdAndInvoice_Id(copay.getId(), invoice.getId())).thenReturn(Optional.of(copay));
         when(paymentTransactionRepository.findByIdAndInvoice_Id(rest.getId(), invoice.getId())).thenReturn(Optional.of(rest));
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(copay, rest));
-        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(),
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(), any(),
             org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(new byte[] {1});
 
         billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), copay.getId(), Locale.FRENCH);
         billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), rest.getId(), Locale.FRENCH);
 
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(copay), eq("CHWF6646-2026-000066-R1"),
-            eq(new BigDecimal("2000")), eq(new BigDecimal("6500")), eq(true), any());
+            eq(new BigDecimal("2000")), eq(new BigDecimal("6500")), any(), eq(true), any());
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(rest), eq("CHWF6646-2026-000066-R2"),
-            eq(new BigDecimal("5500")), eq(new BigDecimal("5500")), eq(false), any());
+            eq(new BigDecimal("5500")), eq(new BigDecimal("5500")), any(), eq(false), any());
     }
 
     /** QA D1244: an adjustment in force then and reversed since is taken back off the total then. */
@@ -3833,5 +3833,147 @@ class BillingInvoiceServiceImplTest {
 
         assertEquals(InvoiceStatus.CANCELLED, pair[1].getStatus());
         assertEquals(0, new BigDecimal("2500").compareTo(com.example.hms.utility.InvoiceBalance.refundDueOf(pair[0])));
+    }
+
+    // ── Billing-money plan PR 7: the payer's share applied to the invoice ──────────
+
+    /** BC2 issued: total 8 500, RAMU's share 5 600 applied at issue, so the patient's share is 2 900. */
+    private BillingInvoice insuredBc2(String paid) {
+        BillingInvoice invoice = issued("8500", paid);
+        invoice.setPayerShareTotal(new BigDecimal("5600"));
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+        return invoice;
+    }
+
+    @Test
+    void pr7_aPaymentIsCappedAtThePatientsShare() {
+        BillingInvoice invoice = insuredBc2("0");
+        UUID invoiceId = invoice.getId();
+        com.example.hms.payload.dto.StaffPaymentRequestDTO tooMuch =
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("2901"), "cash", null, null);
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, tooMuch, UUID.randomUUID(), Locale.FRENCH));
+        assertEquals("billing.payment.exceedsBalance", refused.getMessageKey());
+
+        billingInvoiceService.recordStaffPayment(invoiceId,
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("2900"), "cash", null, null),
+            UUID.randomUUID(), Locale.FRENCH);
+        assertEquals(InvoiceStatus.PAID, invoice.getStatus());
+        assertEquals(0, BigDecimal.ZERO.compareTo(com.example.hms.utility.InvoiceBalance.dueOf(invoice)));
+    }
+
+    @Test
+    void pr7_aPatientDeclarationIsCappedAtThePatientsShareToo() {
+        BillingInvoice invoice = insuredBc2("0");
+        UUID invoiceId = invoice.getId();
+        UUID patientId = invoice.getPatient().getId();
+        com.example.hms.payload.dto.portal.PatientPaymentRequestDTO declared =
+            com.example.hms.payload.dto.portal.PatientPaymentRequestDTO.builder()
+                .amount(new BigDecimal("3000")).paymentMethod("CASH").build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordPatientPayment(invoiceId, patientId, patientId, declared, Locale.FRENCH));
+        assertEquals("billing.payment.exceedsBalance", refused.getMessageKey());
+    }
+
+    @Test
+    void pr7_aDiscountLowersThePatientsShare_andOneAboveItIsRefusedNamingIt() {
+        adjustments();
+        BillingInvoice invoice = insuredBc2("0");
+        UUID invoiceId = invoice.getId();
+        com.example.hms.payload.dto.InvoiceAdjustmentRequestDTO tooBig =
+            adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, "3000", "Remise", null);
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.addAdjustment(invoiceId, tooBig, UUID.randomUUID(), Locale.FRENCH));
+        assertEquals("billing.adjustment.moreThanPatientShare", refused.getMessageKey());
+        assertEquals("2900", refused.getArgs()[0].toString().replaceAll("\\D", ""));
+
+        billingInvoiceService.addAdjustment(invoiceId,
+            adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, "500", "Remise", null),
+            UUID.randomUUID(), Locale.FRENCH);
+        assertEquals(0, new BigDecimal("2400").compareTo(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice)));
+        assertEquals(0, new BigDecimal("5600").compareTo(invoice.getPayerShareTotal()));
+    }
+
+    @Test
+    void pr7_issuingAppliesTheCoverageBeforeTheCopayFolds_againstThePatientsShare_once() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        invoice.setTotalAmount(new BigDecimal("8500"));
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setId(UUID.randomUUID());
+        visit.setPatient(invoice.getPatient());
+        invoice.setEncounter(visit);
+        BillingInvoice copay = BillingInvoice.builder().patient(invoice.getPatient()).encounter(visit)
+            .totalAmount(new BigDecimal("2000")).amountPaid(new BigDecimal("2000"))
+            .status(InvoiceStatus.PAID).checkInCopay(true).build();
+        copay.setId(UUID.randomUUID());
+        when(invoiceRepository.findByEncounter_IdAndCheckInCopayTrueAndStatus(visit.getId(), InvoiceStatus.PAID))
+            .thenReturn(List.of(copay));
+        when(invoiceRepository.findById(copay.getId())).thenReturn(Optional.of(copay));
+        when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(copay.getId())).thenReturn(List.of());
+        com.example.hms.service.billing.InvoiceCoverageService coverage =
+            mock(com.example.hms.service.billing.InvoiceCoverageService.class);
+        when(coverage.applyAtIssue(eq(invoice), any())).thenAnswer(call -> {
+            // The copay is still standing when the share is applied: the share comes first.
+            assertEquals(InvoiceStatus.PAID, copay.getStatus());
+            invoice.setPayerShareTotal(new BigDecimal("5600"));
+            return new BigDecimal("5600");
+        });
+        billingInvoiceService.setCoverageService(coverage);
+
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().status(InvoiceStatus.SENT).confirmUnpricedLines(true).build(), Locale.FRENCH);
+
+        verify(coverage).applyAtIssue(eq(invoice), any());
+        assertEquals(InvoiceStatus.CANCELLED, copay.getStatus());
+        assertEquals(0, new BigDecimal("2000").compareTo(invoice.getAmountPaid()));
+        assertEquals(InvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
+        assertEquals(0, new BigDecimal("900").compareTo(com.example.hms.utility.InvoiceBalance.dueOf(invoice)));
+
+        // D936: folded once. A later pass finds nothing standing.
+        billingInvoiceService.creditCheckInCopays(invoice.getId());
+        assertEquals(0, new BigDecimal("2000").compareTo(invoice.getAmountPaid()));
+    }
+
+    @Test
+    void pr7_aCopayAboveThePatientsShareFoldsWhole_theExcessIsTheRefundDue() {
+        BillingInvoice[] pair = issuedVisitOf("8500");
+        pair[0].setPayerShareTotal(new BigDecimal("5600"));
+        pair[1].setTotalAmount(new BigDecimal("3500"));
+        pair[1].setAmountPaid(new BigDecimal("3500"));
+
+        billingInvoiceService.creditCheckInCopays(pair[0].getId());
+
+        assertEquals(InvoiceStatus.CANCELLED, pair[1].getStatus());
+        assertEquals(InvoiceStatus.PAID, pair[0].getStatus());
+        assertEquals(0, new BigDecimal("600").compareTo(com.example.hms.utility.InvoiceBalance.refundDueOf(pair[0])));
+    }
+
+    @Test
+    void pr7_cancellingAnInvoiceCancelsItsPayerShare() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        com.example.hms.service.billing.InvoiceCoverageService coverage =
+            mock(com.example.hms.service.billing.InvoiceCoverageService.class);
+        billingInvoiceService.setCoverageService(coverage);
+
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().status(InvoiceStatus.CANCELLED).cancelReason("Erreur de patient").build(), Locale.FRENCH);
+
+        verify(coverage).cancelWithInvoice(eq(invoice), any());
+        verify(coverage, never()).applyAtIssue(any(), any());
+    }
+
+    @Test
+    void pr7_theMapperSendsTheRealSplit_noHardCodedZeros() {
+        BillingInvoice invoice = insuredBc2("1000");
+        BillingInvoiceResponseDTO dto = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        assertEquals(0, new BigDecimal("5600").compareTo(dto.getInsuranceCoverageAmount()));
+        assertEquals(0, new BigDecimal("2900").compareTo(dto.getPatientResponsibilityAmount()));
+        assertEquals(0, new BigDecimal("1900").compareTo(dto.getBalanceDue()));
     }
 }

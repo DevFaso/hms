@@ -652,10 +652,9 @@ public class ReceptionServiceImpl implements ReceptionService {
         return 0;
     }
 
+    /** Billing-money plan PR 7: what the patient owes, by the one rule (the patient's share, less what is held). */
     private BigDecimal balanceDue(BillingInvoice inv) {
-        BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
-        BigDecimal paid = inv.getAmountPaid() != null ? inv.getAmountPaid() : BigDecimal.ZERO;
-        return total.subtract(paid);
+        return com.example.hms.utility.InvoiceBalance.dueOf(inv);
     }
 
     private List<ReceptionQueueItemDTO> filterByStatus(List<ReceptionQueueItemDTO> items, String status) {

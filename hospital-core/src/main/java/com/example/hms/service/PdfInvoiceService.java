@@ -50,6 +50,9 @@ public class PdfInvoiceService {
     private static final String GRAND_TOTAL = "pdf.invoice.grandTotal";
     private static final String AMOUNT_PAID = "pdf.invoice.amountPaid";
     private static final String BALANCE_DUE = "pdf.invoice.balanceDue";
+    /** Billing-money plan PR 7: "Part assureur" and "Part patient". */
+    private static final String PAYER_SHARE = "pdf.invoice.payerShare";
+    private static final String PATIENT_SHARE = "pdf.invoice.patientShare";
     private static final String HOSPITAL = "pdf.invoice.hospital";
     private static final String PATIENT = "pdf.invoice.patient";
 
@@ -73,6 +76,20 @@ public class PdfInvoiceService {
                                      List<InvoiceItem> items,
                                      List<PaymentTransaction> payments,
                                      List<com.example.hms.model.InvoiceAdjustment> adjustments,
+                                     Locale locale) {
+        return generateInvoicePdf(invoice, items, payments, adjustments, List.of(), locale);
+    }
+
+    /**
+     * Billing-money plan PR 7: with the payers' share. "Part assureur / Part patient" under the total when a payer
+     * covers part of the bill, and each share the payer rejected with its reason ("Refusé par l'assureur : motif"),
+     * which the patient now owes.
+     */
+    public byte[] generateInvoicePdf(BillingInvoice invoice,
+                                     List<InvoiceItem> items,
+                                     List<PaymentTransaction> payments,
+                                     List<com.example.hms.model.InvoiceAdjustment> adjustments,
+                                     List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> payerShares,
                                      Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
@@ -129,6 +146,7 @@ public class PdfInvoiceService {
             w.rule();
             w.down(18);
             w.right(BOLD, 12, t.get(GRAND_TOTAL, money(total)));
+            payerShareBlock(w, t, invoice, payerShares);
             w.down(16);
             w.right(BODY, 11, t.get(AMOUNT_PAID, money(paid)));
             w.down(16);
@@ -165,6 +183,31 @@ public class PdfInvoiceService {
             return w.finish();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to generate invoice PDF", e);
+        }
+    }
+
+    /**
+     * Billing-money plan PR 7: the payers' share and the patient's share under the total, then each share a payer
+     * rejected, with its reason (the payer's motif, shown as typed).
+     */
+    private static void payerShareBlock(Writer w, PdfLabels t, BillingInvoice invoice,
+                                        List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares)
+            throws IOException {
+        BigDecimal payerShare = com.example.hms.utility.InvoiceBalance.payerShareOf(invoice);
+        if (payerShare.signum() > 0) {
+            w.down(16);
+            w.right(BODY, 11, t.get(PAYER_SHARE, money(payerShare)));
+            w.down(16);
+            w.right(BODY, 11, t.get(PATIENT_SHARE, money(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice))));
+        }
+        for (var share : shares == null ? List.<com.example.hms.payload.dto.billing.InvoicePayerShareDTO>of() : shares) {
+            if (!com.example.hms.enums.PayerShareStatus.REJECTED.name().equals(share.status())) {
+                continue;
+            }
+            w.ensureRoom(32);
+            w.down(16);
+            w.paragraph(BODY, 10, MARGIN, t.get("pdf.invoice.payerShareRejected", money(share.amount()),
+                share.rejectionReason() == null ? "" : share.rejectionReason().strip()));
         }
     }
 
@@ -221,6 +264,18 @@ public class PdfInvoiceService {
     public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
                                      BigDecimal paidAsOfPayment, BigDecimal totalOverride, boolean carriedOver,
                                      Locale locale) {
+        return generateReceiptPdf(invoice, payment, receiptNumber, paidAsOfPayment, totalOverride, BigDecimal.ZERO,
+            carriedOver, locale);
+    }
+
+    /**
+     * Billing-money plan PR 7: {@code payerShareThen} is the payers' share standing when this money was received
+     * (QA D228: a receipt is one moment). When a payer covers part of the bill, the receipt prints "Part assureur"
+     * and "Part patient", and the balance is the patient's.
+     */
+    public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
+                                     BigDecimal paidAsOfPayment, BigDecimal totalOverride, BigDecimal payerShareThen,
+                                     boolean carriedOver, Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
@@ -264,12 +319,20 @@ public class PdfInvoiceService {
                     ? payment.getInvoiceTotalAtReceipt() : nz(invoice.getTotalAmount());
             }
             BigDecimal paid = nz(paidAsOfPayment);
+            BigDecimal payerShare = nz(payerShareThen).max(BigDecimal.ZERO);
+            BigDecimal patientShare = total.subtract(payerShare).max(BigDecimal.ZERO);
             w.down(24);
             w.text(BODY, 11, MARGIN, t.get(GRAND_TOTAL, money(total)));
+            if (payerShare.signum() > 0) {
+                w.down(15);
+                w.text(BODY, 11, MARGIN, t.get(PAYER_SHARE, money(payerShare)));
+                w.down(15);
+                w.text(BODY, 11, MARGIN, t.get(PATIENT_SHARE, money(patientShare)));
+            }
             w.down(15);
             w.text(BODY, 11, MARGIN, t.get(AMOUNT_PAID, money(paid)));
             w.down(15);
-            w.text(BODY, 11, MARGIN, t.get(BALANCE_DUE, money(total.subtract(paid).max(BigDecimal.ZERO))));
+            w.text(BODY, 11, MARGIN, t.get(BALANCE_DUE, money(patientShare.subtract(paid).max(BigDecimal.ZERO))));
             return w.finish();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to generate receipt PDF", e);

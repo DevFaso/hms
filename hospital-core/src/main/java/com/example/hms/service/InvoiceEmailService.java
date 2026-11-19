@@ -31,6 +31,14 @@ public class InvoiceEmailService {
     /** QA D974: the adjustments go on the mailed paper too, so lines and total agree. */
     private final com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository;
 
+    /** Billing-money plan PR 7: the payers' shares on the mailed paper. Optional so hand-built tests keep working. */
+    private com.example.hms.service.billing.InvoiceCoverageService coverageService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCoverageService(com.example.hms.service.billing.InvoiceCoverageService coverageService) {
+        this.coverageService = coverageService;
+    }
+
     @Transactional(readOnly = true)
     public void emailInvoice(UUID invoiceId, EmailInvoiceRequest req) {
         // Load invoice with patient & hospital to avoid LazyInitialization issues
@@ -57,7 +65,8 @@ public class InvoiceEmailService {
         Locale locale = req.locale() != null ? Locale.forLanguageTag(req.locale()) : Locale.FRENCH /* French-first: a missing locale must not mail an English invoice */;
 
         byte[] pdf = req.attachPdf()
-            ? pdfInvoiceService.generateInvoicePdf(invoice, items, List.of(), adjustmentsWithoutReasons(invoiceId), locale)
+            ? pdfInvoiceService.generateInvoicePdf(invoice, items, List.of(), adjustmentsWithoutReasons(invoiceId),
+                coverageService != null ? coverageService.sharesOf(invoice) : List.of(), locale)
             : null;
 
         String subject = "Invoice " + nullSafe(invoice.getInvoiceNumber());
@@ -82,7 +91,8 @@ public class InvoiceEmailService {
             nullSafe(inv.getInvoiceNumber()),
             nullSafe(inv.getInvoiceDate()),
             nullSafe(inv.getDueDate()),
-            nullSafe(inv.getTotalAmount()),
+            // Billing-money plan PR 7: what the patient owes (their share, less what is held), not the total.
+            nullSafe(com.example.hms.utility.InvoiceBalance.dueOf(inv)),
             custom != null ? "<p>" + org.springframework.web.util.HtmlUtils.htmlEscape(custom) + "</p>" : "",
             hospitalName
         );
