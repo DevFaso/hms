@@ -145,7 +145,8 @@ export class PatientChannelPreferencesComponent {
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly patientId = input.required<string>();
+  /** The patient whose choices are shown (none: nothing is read). */
+  readonly patientId = input<string>('');
 
   readonly types = NOTICE_TYPES;
   readonly channels = DESK_NOTICE_CHANNELS;
