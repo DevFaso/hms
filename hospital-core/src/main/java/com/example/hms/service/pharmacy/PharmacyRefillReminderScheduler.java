@@ -66,14 +66,13 @@ public class PharmacyRefillReminderScheduler {
         int sent = 0;
         for (Dispense d : recent) {
             try {
-                if (shouldRemindToday(d, today)) {
-                    if (support.notifyRefillReminder(
+                if (shouldRemindToday(d, today)
+                        && support.notifyRefillReminder(
                             d.getPrescription(),
                             d.getPatient(),
                             d.getMedicationName(),
                             leadDays)) {
-                        sent++;
-                    }
+                    sent++;
                 }
             } catch (Exception e) {
                 log.warn("Refill reminder evaluation failed for dispense {}: {}",

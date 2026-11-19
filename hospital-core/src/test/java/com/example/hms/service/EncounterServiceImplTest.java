@@ -157,12 +157,12 @@ class EncounterServiceImplTest {
     void setUpCheckoutDefaults() {
         // QA D1564: the real shared vitals judgement, over the NEWS2 escalation mock.
         org.springframework.test.util.ReflectionTestUtils.setField(service, "vitalSignJudgement", new com.example.hms.service.vitals.VitalSignJudgement(
-            org.mockito.Mockito.mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
-            org.mockito.Mockito.mock(com.example.hms.service.NotificationService.class),
+            mock(com.example.hms.repository.NewbornAssessmentRepository.class), news2EscalationService,
+            mock(com.example.hms.service.NotificationService.class),
             com.example.hms.i18n.TestMessageSources.bundles(),
-            org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class),
+            mock(com.example.hms.repository.DeliveryNewbornRepository.class),
             com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(
-                org.mockito.Mockito.mock(com.example.hms.repository.DeliveryRecordRepository.class))));
+                mock(com.example.hms.repository.DeliveryRecordRepository.class))));
         com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         signInAsDoctor();
         // The services ask the one PatientSubjectReadGuard; it is built here over
@@ -173,12 +173,12 @@ class EncounterServiceImplTest {
         // QA D2201: the visit-summary bell and e-mail go through the real consent gate over the
         // mocked mail service; a patient with no stored preference allows every channel.
         com.example.hms.service.notification.PatientChannelConsent consent =
-            org.mockito.Mockito.mock(com.example.hms.service.notification.PatientChannelConsent.class);
+            mock(com.example.hms.service.notification.PatientChannelConsent.class);
         lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "patientMessageGate",
             new com.example.hms.service.notification.PatientMessageGate(consent,
-                org.mockito.Mockito.mock(com.example.hms.service.notification.PatientNotificationLedger.class),
-                org.mockito.Mockito.mock(SmsService.class), emailService));
+                mock(com.example.hms.service.notification.PatientNotificationLedger.class),
+                mock(SmsService.class), emailService));
         lenient().when(dischargeSummaryRepository.findByEncounter_Id(any(UUID.class))).thenReturn(Optional.empty());
         lenient().when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
     }
