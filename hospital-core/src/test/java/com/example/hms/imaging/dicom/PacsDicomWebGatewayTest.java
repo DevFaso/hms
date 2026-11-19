@@ -162,7 +162,8 @@ class PacsDicomWebGatewayTest {
     @DisplayName("a rendered answer that is not an image is refused, never relayed")
     void nonImageRefused() {
         route("/dicom-web/studies/" + STUDY + "/series/", 200, "text/html", "<script>alert(1)</script>");
-        assertThatThrownBy(() -> gateway.renderedFrame(hospitalPacs("", ""), STUDY, SERIES, SOP_1, 1))
+        PacsConnection noAuthPacs = hospitalPacs("", "");
+        assertThatThrownBy(() -> gateway.renderedFrame(noAuthPacs, STUDY, SERIES, SOP_1, 1))
             .isInstanceOfSatisfying(PacsUnavailableException.class,
                 ex -> assertThat(ex.reason()).isEqualTo(PacsUnavailableException.Reason.REJECTED));
     }
@@ -171,13 +172,15 @@ class PacsDicomWebGatewayTest {
     @DisplayName("401 from the PACS is UNAUTHORIZED, 500 is UNREACHABLE; the exception never carries the body")
     void upstreamFailures() {
         route("/dicom-web/studies/" + STUDY + "/instances", 401, "text/plain", "patient DOE JOHN");
-        assertThatThrownBy(() -> gateway.studyInstances(hospitalPacs("u", "wrong"), STUDY))
+        PacsConnection wrongPassword = hospitalPacs("u", "wrong");
+        assertThatThrownBy(() -> gateway.studyInstances(wrongPassword, STUDY))
             .isInstanceOfSatisfying(PacsUnavailableException.class, ex -> {
                 assertThat(ex.reason()).isEqualTo(PacsUnavailableException.Reason.UNAUTHORIZED);
                 assertThat(ex.getMessage()).doesNotContain("DOE");
             });
         route("/dicom-web/studies?limit=1", 500, "text/plain", "boom");
-        assertThatThrownBy(() -> gateway.ping(hospitalPacs("", "")))
+        PacsConnection noAuth = hospitalPacs("", "");
+        assertThatThrownBy(() -> gateway.ping(noAuth))
             .isInstanceOfSatisfying(PacsUnavailableException.class,
                 ex -> assertThat(ex.reason()).isEqualTo(PacsUnavailableException.Reason.UNREACHABLE));
     }
@@ -187,7 +190,8 @@ class PacsDicomWebGatewayTest {
     void redirectNotFollowed() {
         routes.put("/dicom-web/studies?limit=1", new Object[] {302, "text/plain", new byte[0],
             "http://169.254.169.254/latest/meta-data"});
-        assertThatThrownBy(() -> gateway.ping(hospitalPacs("", "")))
+        PacsConnection pacs = hospitalPacs("", "");
+        assertThatThrownBy(() -> gateway.ping(pacs))
             .isInstanceOf(PacsUnavailableException.class);
         assertThat(seenRequests).hasSize(1);
     }
@@ -195,11 +199,12 @@ class PacsDicomWebGatewayTest {
     @Test
     @DisplayName("a value that is not a DICOM UID never reaches the PACS")
     void uidValidatedBeforeTheCall() {
-        assertThatThrownBy(() -> gateway.studyInstances(hospitalPacs("", ""), "../../tools/reset"))
+        PacsConnection pacs = hospitalPacs("", "");
+        assertThatThrownBy(() -> gateway.studyInstances(pacs, "../../tools/reset"))
             .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> gateway.renderedFrame(hospitalPacs("", ""), STUDY, SERIES, "1.2?x=1", 1))
+        assertThatThrownBy(() -> gateway.renderedFrame(pacs, STUDY, SERIES, "1.2?x=1", 1))
             .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> gateway.renderedFrame(hospitalPacs("", ""), STUDY, SERIES, SOP_1, 0))
+        assertThatThrownBy(() -> gateway.renderedFrame(pacs, STUDY, SERIES, SOP_1, 0))
             .isInstanceOf(BusinessException.class);
         assertThat(seenRequests).isEmpty();
     }
@@ -208,7 +213,8 @@ class PacsDicomWebGatewayTest {
     @DisplayName("with private hosts refused (production), a loopback PACS is never called")
     void privateHostRefusedInProduction() {
         properties.setAllowPrivateHosts(false);
-        assertThatThrownBy(() -> gateway.ping(hospitalPacs("", "")))
+        PacsConnection production = hospitalPacs("", "");
+        assertThatThrownBy(() -> gateway.ping(production))
             .isInstanceOf(PacsUrlPolicy.RejectedException.class);
         assertThat(seenRequests).isEmpty();
     }

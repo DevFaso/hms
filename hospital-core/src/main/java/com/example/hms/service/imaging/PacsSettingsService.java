@@ -5,6 +5,7 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.imaging.dicom.PacsConnection;
 import com.example.hms.imaging.dicom.PacsConnectionResolver;
 import com.example.hms.imaging.dicom.PacsDicomWebGateway;
 import com.example.hms.imaging.dicom.PacsUnavailableException;
@@ -44,6 +45,7 @@ public class PacsSettingsService {
     private static final String MSG_HOSPITAL_NOT_FOUND = "hospital.notfound";
     static final String URL_REQUIRED = "imaging.pacs.url.required";
     static final String VIEWER_TEMPLATE_INVALID = "imaging.pacs.viewerUrl.invalid";
+    private static final String FIELD_BASE_URL = "dicomwebBaseUrl";
 
     private final HospitalRepository hospitalRepository;
     private final PacsConnectionResolver resolver;
@@ -69,12 +71,26 @@ public class PacsSettingsService {
         // An absent switch means off; switching on needs the address.
         boolean enabled = Boolean.TRUE.equals(body.enabled());
         if (enabled && baseUrl == null) {
-            throw new FieldBusinessException("dicomwebBaseUrl", URL_REQUIRED);
+            throw new FieldBusinessException(FIELD_BASE_URL, URL_REQUIRED);
         }
         Hospital hospital = require(hospitalId);
         String template = blankToNull(body.viewerUrlTemplate());
         String username = blankToNull(body.authUsername());
+        requireAcceptable(baseUrl, template);
 
+        List<String> changed = applySettings(hospital, enabled, baseUrl, template, username);
+        changed.addAll(applyPassword(hospital, body));
+        if (changed.isEmpty()) {
+            return toDto(hospital);
+        }
+        Hospital saved = hospitalRepository.save(hospital);
+        auditAfterCommit(hospitalId, actorUserId, changed, enabled);
+        log.info("[pacs] hospital {} PACS settings changed: {}", hospitalId, changed);
+        return toDto(saved == null ? hospital : saved);
+    }
+
+    /** The DICOMweb URL against the SSRF fence; the viewer link to http(s). */
+    private void requireAcceptable(String baseUrl, String template) {
         if (baseUrl != null) {
             try {
                 PacsUrlPolicy.requireCallable(baseUrl, resolver.allowPrivateHosts());
@@ -85,13 +101,17 @@ public class PacsSettingsService {
         if (template != null) {
             requireViewerTemplate(template);
         }
+    }
 
+    /** Writes the plain settings; returns the names of those that changed. */
+    private static List<String> applySettings(Hospital hospital, boolean enabled, String baseUrl, String template,
+                                              String username) {
         List<String> changed = new ArrayList<>();
         if (hospital.isPacsEnabled() != enabled) {
             changed.add("enabled");
         }
         if (!Objects.equals(hospital.getPacsDicomwebBaseUrl(), baseUrl)) {
-            changed.add("dicomwebBaseUrl");
+            changed.add(FIELD_BASE_URL);
         }
         if (!Objects.equals(hospital.getPacsViewerUrlTemplate(), template)) {
             changed.add("viewerUrlTemplate");
@@ -103,19 +123,24 @@ public class PacsSettingsService {
         hospital.setPacsDicomwebBaseUrl(baseUrl);
         hospital.setPacsViewerUrlTemplate(template);
         hospital.setPacsAuthUsername(username);
+        return changed;
+    }
+
+    /** Clears or replaces the write-only password; a blank one keeps the stored one. */
+    private static List<String> applyPassword(Hospital hospital, PacsSettingsUpdateRequestDTO body) {
         if (Boolean.TRUE.equals(body.clearPassword())) {
-            if (hospital.getPacsAuthPassword() != null) {
-                changed.add("authPassword");
-            }
+            boolean had = hospital.getPacsAuthPassword() != null;
             hospital.setPacsAuthPassword(null);
-        } else if (body.authPassword() != null && !body.authPassword().isBlank()) {
-            changed.add("authPassword");
+            return had ? List.of("authPassword") : List.of();
+        }
+        if (body.authPassword() != null && !body.authPassword().isBlank()) {
             hospital.setPacsAuthPassword(body.authPassword());
+            return List.of("authPassword");
         }
-        if (changed.isEmpty()) {
-            return toDto(hospital);
-        }
-        hospital = hospitalRepository.save(hospital);
+        return List.of();
+    }
+
+    private void auditAfterCommit(UUID hospitalId, UUID actorUserId, List<String> changed, boolean enabled) {
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -132,8 +157,6 @@ public class PacsSettingsService {
                 log.warn("[pacs] settings audit failed for hospital {}: {}", hospitalId, ex.getClass().getSimpleName());
             }
         });
-        log.info("[pacs] hospital {} PACS settings changed: {}", hospitalId, changed);
-        return toDto(hospital);
     }
 
     /**
@@ -160,12 +183,12 @@ public class PacsSettingsService {
     /** The refusal in the admin's language; each key literal, so the bundles' guard can follow it. */
     private static BusinessException urlRefusal(PacsUrlPolicy.RejectedException ex) {
         if (PacsUrlPolicy.PRIVATE_HOST.equals(ex.messageKey())) {
-            return new FieldBusinessException("dicomwebBaseUrl", "imaging.pacs.url.privateHost");
+            return new FieldBusinessException(FIELD_BASE_URL, "imaging.pacs.url.privateHost");
         }
         if (PacsUrlPolicy.HTTPS_REQUIRED.equals(ex.messageKey())) {
-            return new FieldBusinessException("dicomwebBaseUrl", "imaging.pacs.url.httpsOnly");
+            return new FieldBusinessException(FIELD_BASE_URL, "imaging.pacs.url.httpsOnly");
         }
-        return new FieldBusinessException("dicomwebBaseUrl", "imaging.pacs.url.invalid");
+        return new FieldBusinessException(FIELD_BASE_URL, "imaging.pacs.url.invalid");
     }
 
     /** The template with sample values must be an http(s) link: the browser opens it, never a script. */
@@ -186,6 +209,7 @@ public class PacsSettingsService {
     private PacsSettingsDTO toDto(Hospital h) {
         PacsConnectionResolver.Resolution resolution = resolver.resolve(h);
         String password = h.getPacsAuthPassword();
+        PacsConnection connection = resolution.ready() ? resolution.connection() : null;
         return new PacsSettingsDTO(
             h.getId(),
             h.isPacsEnabled(),
@@ -194,7 +218,7 @@ public class PacsSettingsService {
             h.getPacsAuthUsername(),
             password != null && !password.isEmpty(),
             resolution.state().name(),
-            resolution.ready() ? resolution.connection().source().name() : null,
+            connection == null ? null : connection.source().name(),
             resolver.platformEnabled(),
             resolver.platformFallbackConfigured(),
             resolver.allowPrivateHosts());

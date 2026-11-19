@@ -58,6 +58,7 @@ public class PacsDicomWebGateway {
     static final int MAX_FRAME_BYTES = 32 * 1024 * 1024;
     static final int MAX_FRAME_NUMBER = 10_000;
 
+    private static final String PARAM_LIMIT = "limit";
     private static final MediaType DICOM_JSON = MediaType.parseMediaType("application/dicom+json");
     private static final String TAG_SERIES_UID = "0020000E";
     private static final String TAG_SOP_UID = "00080018";
@@ -99,7 +100,7 @@ public class PacsDicomWebGateway {
             .path("/studies/" + studyUid + "/instances")
             .queryParam("includefield", TAG_SERIES_UID, TAG_SERIES_NUMBER, TAG_INSTANCE_NUMBER, TAG_FRAMES,
                 TAG_MODALITY)
-            .queryParam("limit", Math.max(1, properties.getMaxInstances()))
+            .queryParam(PARAM_LIMIT, Math.max(1, properties.getMaxInstances()))
             .build(true).toUri();
         JsonNode root = getJson(connection, uri);
         List<DicomInstanceRef> out = new ArrayList<>();
@@ -126,7 +127,7 @@ public class PacsDicomWebGateway {
             .path("/studies")
             .queryParam("AccessionNumber", "{accession}")
             .queryParam("includefield", TAG_STUDY_UID)
-            .queryParam("limit", 5)
+            .queryParam(PARAM_LIMIT, 5)
             // Template variable + encode(): the value is fully encoded, so an
             // accession number cannot add a query parameter of its own (&, =).
             .encode()
@@ -187,7 +188,7 @@ public class PacsDicomWebGateway {
     /** The admin's « test the connection »: one QIDO study query. Throws when it fails. */
     public void ping(PacsConnection connection) {
         URI uri = UriComponentsBuilder.fromUriString(connection.baseUrl())
-            .path("/studies").queryParam("limit", 1).build(true).toUri();
+            .path("/studies").queryParam(PARAM_LIMIT, 1).build(true).toUri();
         getJson(connection, uri);
     }
 

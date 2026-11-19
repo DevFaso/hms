@@ -3,6 +3,8 @@ package com.example.hms.imaging.dicom;
 import com.example.hms.model.Hospital;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+
 /**
  * Which PACS serves a hospital's images.
  *
@@ -48,12 +50,18 @@ public class PacsConnectionResolver {
         return properties.isAllowPrivateHosts();
     }
 
+    /**
+     * The PACS for one hospital. A hospital is required: a report or a
+     * settings row always has one, and a missing one is a programming error,
+     * refused here by name rather than surfacing later as a bare NPE.
+     */
     public Resolution resolve(Hospital hospital) {
+        Objects.requireNonNull(hospital, "hospital");
         if (!properties.isEnabled()) {
             return new Resolution(State.PROXY_DISABLED, null);
         }
-        String own = hospital == null ? null : PacsUrlPolicy.normalise(hospital.getPacsDicomwebBaseUrl());
-        if (hospital != null && hospital.isPacsEnabled() && own != null) {
+        String own = PacsUrlPolicy.normalise(hospital.getPacsDicomwebBaseUrl());
+        if (hospital.isPacsEnabled() && own != null) {
             return new Resolution(State.READY, new PacsConnection(own, blankToEmpty(hospital.getPacsAuthUsername()),
                 blankToEmpty(hospital.getPacsAuthPassword()), PacsConnection.Source.HOSPITAL));
         }

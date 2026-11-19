@@ -75,5 +75,31 @@ class PacsUrlPolicyTest {
         assertThat(DicomUid.isValid("1.2/../3")).isFalse();
         assertThat(DicomUid.isValid("1.2." + "9".repeat(70))).isFalse();
         assertThat(DicomUid.isValid(null)).isFalse();
+        assertThat(DicomUid.isValid(".1.2")).isFalse();
+        assertThat(DicomUid.isValid("1.2.")).isFalse();
+        assertThat(DicomUid.isValid("1".repeat(64))).isTrue();
+    }
+
+    @Test
+    @DisplayName("the DTO pattern and the character check agree, and a huge input is refused without recursion")
+    void patternAgreesWithTheLoop() {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(DicomUid.REGEX);
+        for (String uid : new String[] {"1", "1.2.840.10008", "1..2", ".1", "1.", "1.a", "", "12.34.56"}) {
+            assertThat(pattern.matcher(uid).matches()).as(uid).isEqualTo(DicomUid.isValid(uid));
+        }
+        String huge = "1.".repeat(200_000) + "1";
+        assertThat(pattern.matcher(huge).matches()).isTrue();
+        assertThat(DicomUid.isValid(huge)).as("over 64 characters").isFalse();
+    }
+
+    @Test
+    @DisplayName("the resolver refuses a missing hospital by name instead of failing later")
+    void resolverNeedsAHospital() {
+        DicomProxyProperties properties = new DicomProxyProperties();
+        properties.setEnabled(true);
+        PacsConnectionResolver resolver = new PacsConnectionResolver(properties);
+        assertThatThrownBy(() -> resolver.resolve(null))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessage("hospital");
     }
 }

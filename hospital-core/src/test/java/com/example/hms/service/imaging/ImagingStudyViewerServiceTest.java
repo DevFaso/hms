@@ -63,6 +63,7 @@ class ImagingStudyViewerServiceTest {
     private ImagingStudyViewerService service;
     private Hospital hospital;
     private ImagingReport report;
+    private UUID reportId;
 
     @BeforeEach
     void setUp() {
@@ -84,6 +85,7 @@ class ImagingStudyViewerServiceTest {
         hospital.setPacsAuthPassword("s3cret");
         report = new ImagingReport();
         report.setId(UUID.randomUUID());
+        reportId = report.getId();
         report.setHospital(hospital);
         report.setStudyInstanceUid(STUDY);
         when(reports.findById(report.getId())).thenReturn(Optional.of(report));
@@ -99,9 +101,9 @@ class ImagingStudyViewerServiceTest {
     void otherHospitalIsNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
 
-        assertThatThrownBy(() -> service.manifest(report.getId(), actor))
+        assertThatThrownBy(() -> service.manifest(reportId, actor))
             .isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> service.frame(report.getId(), SERIES, SOP, 1))
+        assertThatThrownBy(() -> service.frame(reportId, SERIES, SOP, 1))
             .isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(gateway, audit);
     }
@@ -135,7 +137,7 @@ class ImagingStudyViewerServiceTest {
         properties.setEnabled(false);
 
         assertThat(service.manifest(report.getId(), actor).status()).isEqualTo("PROXY_DISABLED");
-        assertThatThrownBy(() -> service.frame(report.getId(), SERIES, SOP, 1))
+        assertThatThrownBy(() -> service.frame(reportId, SERIES, SOP, 1))
             .isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(gateway);
     }
@@ -207,8 +209,8 @@ class ImagingStudyViewerServiceTest {
     @Test
     @DisplayName("a path value that is not a DICOM UID is refused before the report is even read")
     void uidRefusedFirst() {
-        assertThatThrownBy(() -> service.frame(report.getId(), "../x", SOP, 1)).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.frame(report.getId(), SERIES, SOP, 0)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.frame(reportId, "../x", SOP, 1)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.frame(reportId, SERIES, SOP, 0)).isInstanceOf(BusinessException.class);
         verifyNoInteractions(reports, gateway);
     }
 
@@ -216,7 +218,7 @@ class ImagingStudyViewerServiceTest {
     @DisplayName("a frame the PACS does not have is a 404")
     void missingFrame() {
         when(gateway.renderedFrame(any(), any(), any(), any(), anyInt())).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.frame(report.getId(), SERIES, SOP, 1))
+        assertThatThrownBy(() -> service.frame(reportId, SERIES, SOP, 1))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 }

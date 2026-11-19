@@ -140,6 +140,16 @@ class PacsSettingsServiceTest {
     }
 
     @Test
+    @DisplayName("a save that answers null still reports the settings just written (Sonar S2259)")
+    void saveAnsweringNull() {
+        when(hospitals.save(any(Hospital.class))).thenReturn(null);
+        PacsSettingsDTO dto = service.set(hospital.getId(), body(true, PUBLIC_URL, null, "orthanc", SECRET, null), null);
+        assertThat(dto.hospitalId()).isEqualTo(hospital.getId());
+        assertThat(dto.passwordSet()).isTrue();
+        assertThat(dto.effectiveSource()).isEqualTo("HOSPITAL");
+    }
+
+    @Test
     @DisplayName("the connection test reports a state, never throws: disabled, OK, unauthorised")
     void connectionTest() {
         properties.setEnabled(false);

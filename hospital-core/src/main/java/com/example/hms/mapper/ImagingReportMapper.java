@@ -40,25 +40,35 @@ public class ImagingReportMapper {
             // A link the browser opens: http(s) only, never javascript: or data:.
             return isWebLink(explicit) ? explicit : null;
         }
-        if (report.getHospital() == null) {
-            return null;
-        }
-        String template = report.getHospital().getPacsViewerUrlTemplate();
+        String template = report.getHospital() == null ? null : report.getHospital().getPacsViewerUrlTemplate();
         if (template == null || template.isBlank()) {
             return null;
         }
-        // Only a well-formed UID goes into the link, and the accession number is
-        // URL-encoded: a value typed on the report cannot add path or query parts.
-        String studyUid = com.example.hms.imaging.dicom.DicomUid.isValid(report.getStudyInstanceUid())
+        return renderViewerTemplate(template, linkStudyUid(report), linkAccession(report));
+    }
+
+    /** Only a well-formed UID goes into a link: a value typed on the report cannot add path or query parts. */
+    private static String linkStudyUid(ImagingReport report) {
+        return com.example.hms.imaging.dicom.DicomUid.isValid(report.getStudyInstanceUid())
             ? report.getStudyInstanceUid() : null;
-        String accession = report.getAccessionNumber() == null || report.getAccessionNumber().isBlank()
-            ? null
-            : java.net.URLEncoder.encode(report.getAccessionNumber().trim(), java.nio.charset.StandardCharsets.UTF_8)
-                .replace("+", "%20");
-        if (template.contains("{studyInstanceUid}") && (studyUid == null || studyUid.isBlank())) {
+    }
+
+    /** The accession number URL-encoded, or null when the report has none. */
+    private static String linkAccession(ImagingReport report) {
+        String accession = report.getAccessionNumber();
+        if (accession == null || accession.isBlank()) {
             return null;
         }
-        if (template.contains("{accessionNumber}") && (accession == null || accession.isBlank())) {
+        return java.net.URLEncoder.encode(accession.trim(), java.nio.charset.StandardCharsets.UTF_8)
+            .replace("+", "%20");
+    }
+
+    /** The template with the report's values, or null when it names one the report lacks or is not http(s). */
+    private static String renderViewerTemplate(String template, String studyUid, String accession) {
+        if (template.contains("{studyInstanceUid}") && studyUid == null) {
+            return null;
+        }
+        if (template.contains("{accessionNumber}") && accession == null) {
             return null;
         }
         String url = template

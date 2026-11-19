@@ -1,21 +1,38 @@
 package com.example.hms.imaging.dicom;
 
-/** A rendered (consumer-format) frame from WADO-RS {@code /rendered}: JPEG or PNG bytes. */
-public final class RenderedFrame {
+import java.util.Arrays;
+import java.util.Objects;
 
-    private final byte[] bytes;
-    private final String contentType;
+/**
+ * A rendered (consumer-format) frame from WADO-RS {@code /rendered}: JPEG or PNG bytes.
+ * The array is copied in and out, and compared by content.
+ */
+public record RenderedFrame(byte[] bytes, String contentType) {
 
-    public RenderedFrame(byte[] bytes, String contentType) {
-        this.bytes = bytes.clone();
-        this.contentType = contentType;
+    public RenderedFrame {
+        bytes = bytes.clone();
     }
 
+    @Override
     public byte[] bytes() {
         return bytes.clone();
     }
 
-    public String contentType() {
-        return contentType;
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof RenderedFrame that
+            && Arrays.equals(bytes, that.bytes)
+            && Objects.equals(contentType, that.contentType);
+    }
+
+    @Override
+    public int hashCode() {
+        return 31 * Arrays.hashCode(bytes) + Objects.hashCode(contentType);
+    }
+
+    /** Never prints the image bytes (patient data). */
+    @Override
+    public String toString() {
+        return "RenderedFrame{contentType=" + contentType + ", bytes=" + bytes.length + "}";
     }
 }
