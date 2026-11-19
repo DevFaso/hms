@@ -195,14 +195,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Extracted from {@link #handleJwtAuthentication} (PR #228 SonarCloud
-     * review — was driving cognitive complexity past the 15 threshold).
-     * Runs the four post-validation gates in order: blacklist, global
-     * revocation (MVP-7), authentication, and tenant lifecycle (MVP-2).
-     * Each gate that rejects writes the unauthorized response and returns
-     * false; on success the filter chain continues.
-     */
-    /**
      * The token itself was revoked (logout, refresh rotation), or the sign-in
      * session it belongs to was ended (QA D2184: logout, lock-screen lockout),
      * which also covers an access token a refresh superseded and the logout
@@ -228,6 +220,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return false;
     }
 
+    /**
+     * Extracted from {@link #handleJwtAuthentication} (PR #228 SonarCloud
+     * review — was driving cognitive complexity past the 15 threshold).
+     * Runs the post-validation gates in order: token and session revocation
+     * ({@link #isRevokedTokenOrSession}), global revocation (MVP-7),
+     * authentication, and tenant lifecycle (MVP-2). Each gate that rejects
+     * writes the unauthorized response and returns false; on success the
+     * filter chain continues.
+     */
     private boolean handleValidatedToken(
         HttpServletRequest request, HttpServletResponse response,
         String path, String jwt, String extractedSubject
