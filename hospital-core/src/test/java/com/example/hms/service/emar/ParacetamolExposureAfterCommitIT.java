@@ -108,6 +108,8 @@ class ParacetamolExposureAfterCommitIT extends BaseIT {
 
     @BeforeEach
     void setUp() {
+        // Its assertions read the English alert: the locale is set here, never inherited from a test run before it.
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         organization = organizations.save(Organization.builder().name("Exposure Network").code("ORG-EXP-" + unique())
             .type(OrganizationType.HOSPITAL_CHAIN).active(true).build());
         hospital = hospitals.save(Hospital.builder().name("Exposure Hospital").code("HEX" + unique())
@@ -138,6 +140,7 @@ class ParacetamolExposureAfterCommitIT extends BaseIT {
 
     @AfterEach
     void tearDown() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
         Mockito.reset(exposureCheck);
         for (Prescription order : orders) {
             mar.deleteAll(mar.findByPrescription_IdOrderByScheduledTimeDesc(order.getId()));

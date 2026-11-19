@@ -136,6 +136,12 @@ class InvoiceCoveragePostgresIT {
     private UUID desk;
     private UUID cashier;
 
+    /** The French locale set for the refusals never leaks into a test run after this one. */
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        LocaleContextHolder.resetLocaleContext();
+    }
+
     @BeforeEach
     void setUp() {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
