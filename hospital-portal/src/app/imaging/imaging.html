@@ -721,6 +721,8 @@
               </table>
             </div>
           }
+          <!-- V316: the study's key images, for the reader of this report (imaging-images block). -->
+          <app-imaging-images [orderId]="rep.imagingOrderId" [canUpload]="false" />
           @if (rep.statusHistory?.length) {
             <div class="detail-notes">
               <span class="field-label">{{ 'IMAGING.STATUS_HISTORY' | translate }}</span>
@@ -927,6 +929,17 @@
           {{ 'IMAGING.FLAG_CRITICAL' | translate }}
         </label>
         {{ ' ' }}<small class="field-hint">{{ 'IMAGING.FLAG_CRITICAL_HINT' | translate }}</small>
+        <!-- V316: key images (imaging-images block): on this report once saved, else on the study. -->
+        @if (reportOrderId(); as imagesOrderId) {
+          @if (!reportEditId()) {
+            <p class="field-hint">{{ 'IMAGING_IMAGES.NEW_REPORT_HINT' | translate }}</p>
+          }
+          <app-imaging-images
+            [orderId]="imagesOrderId"
+            [reportId]="reportEditId()"
+            [canUpload]="true"
+          />
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeReportModal()">
@@ -1205,6 +1218,9 @@
               }
             </div>
           }
+
+          <!-- V316: key images of the study (imaging-images block). -->
+          <app-imaging-images [orderId]="ord.id" [canUpload]="canAddStudyImages(ord)" />
 
           @if (selectedOrderReports().length > 0) {
             <div class="detail-reports" data-testid="imaging-reports">

@@ -944,6 +944,27 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Duplicate warning not overridden: imaging order (\S+) placed while recent order (\S+) of the same study exists$/,
     params: ['order', 'earlier'],
   },
+  // V316: key images on an imaging study (ids only, never a file name or caption).
+  {
+    key: 'AUDIT.DESC.IMAGING_IMAGE_ATTACHED_TO_REPORT',
+    re: /^Imaging image (\S+) attached to imaging order (\S+) \(report (\S+)\)$/,
+    params: ['image', 'order', 'report'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_IMAGE_ATTACHED',
+    re: /^Imaging image (\S+) attached to imaging order (\S+)$/,
+    params: ['image', 'order'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_IMAGE_VIEWED',
+    re: /^Imaging image (\S+) of imaging order (\S+) viewed$/,
+    params: ['image', 'order'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_IMAGE_REMOVED',
+    re: /^Imaging image (\S+) removed from imaging order (\S+)$/,
+    params: ['image', 'order'],
+  },
   {
     key: 'AUDIT.DESC.LAB_CORRECTION',
     re: /^Correction: result (\S+) supersedes released result (\S+)$/,

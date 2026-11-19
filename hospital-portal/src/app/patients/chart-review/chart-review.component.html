@@ -485,6 +485,9 @@
                       {{ r.impression || '—' }}
                     </p>
                   }
+                  @if (canSeeImagingImages && i.imageCount) {
+                    <app-imaging-images [orderId]="i.id" [compact]="true" />
+                  }
                   @if (canOpenImaging && imagingReports(i).length > 0) {
                     <button
                       type="button"

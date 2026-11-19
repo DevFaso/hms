@@ -1,0 +1,251 @@
+<section class="imaging-images" [class.compact]="compact" data-testid="imaging-images">
+  <div class="images-header">
+    <span class="images-title">
+      <span class="material-symbols-outlined" aria-hidden="true">photo_library</span>
+      {{ 'IMAGING_IMAGES.TITLE' | translate }}
+      @if (images().length > 0) {
+        <span class="images-count">({{ images().length }})</span>
+      }
+    </span>
+  </div>
+
+  @if (canUpload) {
+    <div
+      class="drop-zone"
+      data-testid="imaging-images-drop"
+      [class.drag-over]="dragOver()"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave()"
+      (drop)="onDrop($event)"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+      <span class="drop-hint">{{ 'IMAGING_IMAGES.DROP_HINT' | translate }}</span>
+      <div class="drop-controls">
+        <label class="caption-field" [for]="captionId">
+          <span>{{ 'IMAGING_IMAGES.CAPTION' | translate }}</span>
+          <input
+            [id]="captionId"
+            type="text"
+            maxlength="500"
+            [(ngModel)]="caption"
+            [placeholder]="'IMAGING_IMAGES.CAPTION_PLACEHOLDER' | translate"
+          />
+        </label>
+        <label class="btn-secondary pick-button" [for]="inputId">
+          <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>
+          {{ 'IMAGING_IMAGES.CHOOSE_FILES' | translate }}
+        </label>
+        <input
+          class="sr-only"
+          type="file"
+          multiple
+          data-testid="imaging-images-input"
+          [id]="inputId"
+          [accept]="accept"
+          (change)="onPick($event)"
+        />
+      </div>
+      <small class="field-hint">{{ 'IMAGING_IMAGES.TYPES_HINT' | translate }}</small>
+    </div>
+
+    @if (uploads().length > 0) {
+      <ul class="upload-list" aria-live="polite">
+        @for (u of uploads(); track u.key) {
+          <li [class.failed]="!!u.error">
+            <span class="upload-name">{{ u.name }}</span>
+            @if (u.error) {
+              <span class="upload-error" role="alert">{{ u.error }}</span>
+              <button
+                type="button"
+                class="btn-link"
+                (click)="dismissUpload(u.key)"
+                [attr.aria-label]="'COMMON.CLOSE' | translate"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+              </button>
+            } @else {
+              <progress
+                max="100"
+                [value]="u.progress"
+                [attr.aria-label]="'IMAGING_IMAGES.UPLOADING' | translate: { name: u.name }"
+              ></progress>
+              <span class="upload-pct">{{ u.progress }} %</span>
+            }
+          </li>
+        }
+      </ul>
+    }
+  }
+
+  @if (loading() && images().length === 0) {
+    <p class="images-empty">{{ 'COMMON.LOADING' | translate }}</p>
+  } @else if (loadFailed()) {
+    <p class="images-empty" role="alert">{{ 'IMAGING_IMAGES.ERROR_LOAD' | translate }}</p>
+  } @else if (images().length === 0) {
+    <p class="images-empty">{{ 'IMAGING_IMAGES.NONE' | translate }}</p>
+  } @else {
+    <ul class="thumb-strip" data-testid="imaging-images-strip">
+      @for (image of images(); track image.id; let i = $index) {
+        <li class="thumb" [attr.data-testid]="'imaging-image-' + image.id">
+          <button
+            type="button"
+            class="thumb-open"
+            (click)="openViewer(i)"
+            [attr.aria-label]="('IMAGING_IMAGES.OPEN' | translate) + ' — ' + altOf(image, i)"
+          >
+            @if (isImage(image) && thumbs()[image.id]; as src) {
+              <img [src]="src" [alt]="altOf(image, i)" loading="lazy" />
+            } @else {
+              <span class="thumb-placeholder" aria-hidden="true">
+                <span class="material-symbols-outlined">{{
+                  isImage(image) ? 'image' : 'picture_as_pdf'
+                }}</span>
+              </span>
+            }
+          </button>
+          @if (image.caption) {
+            <span class="thumb-caption">{{ image.caption }}</span>
+          }
+          @if (image.locked) {
+            <span class="thumb-lock" [title]="'IMAGING_IMAGES.LOCKED' | translate">
+              <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+              <span class="sr-only">{{ 'IMAGING_IMAGES.LOCKED' | translate }}</span>
+            </span>
+          }
+          @if (image.deletable) {
+            <button
+              type="button"
+              class="thumb-delete"
+              (click)="remove(image)"
+              [attr.aria-label]="('IMAGING_IMAGES.DELETE' | translate) + ' — ' + altOf(image, i)"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+            </button>
+          }
+        </li>
+      }
+    </ul>
+  }
+
+  @if (current(); as image) {
+    <div
+      class="viewer-backdrop"
+      tabindex="-1"
+      (click)="closeViewer()"
+      (keydown.escape)="closeViewer()"
+    ></div>
+    <div
+      class="viewer"
+      appModalDialog
+      tabindex="-1"
+      [attr.aria-labelledby]="viewerTitleId"
+      (escaped)="closeViewer()"
+      (keydown)="onViewerKey($event)"
+      data-testid="imaging-images-viewer"
+    >
+      <div class="viewer-header">
+        <h2 [id]="viewerTitleId">
+          {{
+            'IMAGING_IMAGES.VIEWER_TITLE'
+              | translate: { n: (viewerIndex() ?? 0) + 1, total: images().length }
+          }}
+        </h2>
+        <div class="viewer-tools">
+          @if (isImage(image)) {
+            <button
+              type="button"
+              class="btn-icon"
+              (click)="zoomOut()"
+              [attr.aria-label]="'IMAGING_IMAGES.ZOOM_OUT' | translate"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">zoom_out</span>
+            </button>
+            <span class="zoom-level" aria-live="polite">{{ zoom() * 100 }} %</span>
+            <button
+              type="button"
+              class="btn-icon"
+              (click)="zoomIn()"
+              [attr.aria-label]="'IMAGING_IMAGES.ZOOM_IN' | translate"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">zoom_in</span>
+            </button>
+            <button
+              type="button"
+              class="btn-icon"
+              (click)="resetZoom()"
+              [attr.aria-label]="'IMAGING_IMAGES.ZOOM_RESET' | translate"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">fit_screen</span>
+            </button>
+          }
+          <button
+            type="button"
+            class="btn-icon"
+            (click)="closeViewer()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </div>
+      </div>
+      <div class="viewer-body">
+        @if (images().length > 1) {
+          <button
+            type="button"
+            class="viewer-nav prev"
+            (click)="previous()"
+            [attr.aria-label]="'IMAGING_IMAGES.PREVIOUS' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+          </button>
+        }
+        <div
+          class="viewer-stage"
+          [class.zoomed]="zoom() > 1"
+          (wheel)="onWheel($event)"
+          (pointerdown)="onPointerDown($event)"
+          (pointermove)="onPointerMove($event)"
+          (pointerup)="onPointerUp()"
+          (pointercancel)="onPointerUp()"
+        >
+          @if (viewerLoading()) {
+            <p class="viewer-loading">{{ 'COMMON.LOADING' | translate }}</p>
+          } @else if (viewerImage(); as src) {
+            <img
+              [src]="src"
+              [alt]="altOf(image, viewerIndex() ?? 0)"
+              [style.transform]="transform()"
+              draggable="false"
+            />
+          } @else if (viewerPdf(); as pdf) {
+            <iframe [src]="pdf" [title]="altOf(image, viewerIndex() ?? 0)"></iframe>
+          }
+        </div>
+        @if (images().length > 1) {
+          <button
+            type="button"
+            class="viewer-nav next"
+            (click)="next()"
+            [attr.aria-label]="'IMAGING_IMAGES.NEXT' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+          </button>
+        }
+      </div>
+      <div class="viewer-footer">
+        @if (image.caption) {
+          <p class="viewer-caption">{{ image.caption }}</p>
+        }
+        @if (image.uploadedAt) {
+          <small>{{
+            'IMAGING_IMAGES.ADDED_AT'
+              | translate: { date: (image.uploadedAt | serverTime | dateTime) }
+          }}</small>
+        }
+        @if (isImage(image)) {
+          <small class="viewer-keys">{{ 'IMAGING_IMAGES.KEYS_HINT' | translate }}</small>
+        }
+      </div>
+    </div>
+  }
+</section>
