@@ -9,6 +9,7 @@ import {
   MedicationSummary,
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 import fr from '../../../assets/i18n/fr.json';
 
 describe('MyMedicationsComponent', () => {
@@ -151,6 +152,8 @@ describe('MyMedicationsComponent — refill visibility', () => {
   let fixture: ComponentFixture<MyMedicationsComponent>;
   let requestRefill: jasmine.Spy;
   let toast: { success: jasmine.Spy; error: jasmine.Spy };
+  let confirmAsk: jasmine.Spy;
+  let cancelRefill: jasmine.Spy;
 
   function med(overrides: Partial<MedicationSummary> = {}): MedicationSummary {
     return {
@@ -176,6 +179,12 @@ describe('MyMedicationsComponent — refill visibility', () => {
   async function render(m: MedicationSummary, refills: MedicationRefill[] = []) {
     requestRefill = jasmine.createSpy('requestRefill').and.returnValue(of({ id: 'rf-1' }));
     toast = { success: jasmine.createSpy('success'), error: jasmine.createSpy('error') };
+    confirmAsk = jasmine.createSpy('ask').and.resolveTo(true);
+    cancelRefill = jasmine
+      .createSpy('cancelRefill')
+      .and.callFake((id: string) =>
+        of({ ...refills.find((r) => r.id === id), status: 'CANCELLED' }),
+      );
 
     await TestBed.configureTestingModule({
       imports: [MyMedicationsComponent, TranslateModule.forRoot()],
@@ -187,9 +196,11 @@ describe('MyMedicationsComponent — refill visibility', () => {
             getMyPrescriptions: () => of([]),
             getMyRefills: () => of(refills),
             requestRefill,
+            cancelRefill,
           },
         },
         { provide: ToastService, useValue: toast },
+        { provide: ConfirmService, useValue: { ask: confirmAsk } },
       ],
     }).compileComponents();
 
@@ -249,7 +260,7 @@ describe('MyMedicationsComponent — refill visibility', () => {
 
   it('marks the row as pending immediately after a request, without a refetch', async () => {
     await render(med());
-    component.requestRefill(component.medications()[0]);
+    await component.requestRefill(component.medications()[0]);
 
     expect(requestRefill).toHaveBeenCalledWith({
       prescriptionId: 'rx-1',
@@ -276,11 +287,11 @@ describe('MyMedicationsComponent — refill visibility', () => {
     });
     translate.use('fr');
 
-    component.requestRefill(component.medications()[0]);
+    await component.requestRefill(component.medications()[0]);
     expect(toast.success).toHaveBeenCalledWith('Demande de renouvellement envoyée');
 
     requestRefill.and.returnValue(throwError(() => ({ status: 500 })));
-    component.requestRefill(component.medications()[0]);
+    await component.requestRefill(component.medications()[0]);
     expect(toast.error).toHaveBeenCalledWith('Échec de la demande de renouvellement');
   });
 
@@ -293,9 +304,77 @@ describe('MyMedicationsComponent — refill visibility', () => {
       })),
     );
 
-    component.requestRefill(component.medications()[0]);
+    await component.requestRefill(component.medications()[0]);
 
     expect(toast.error).toHaveBeenCalledWith('You already have a refill request awaiting review');
+  });
+
+  it('QA D2354: a refill is sent only after the patient confirms it', async () => {
+    await render(med());
+    confirmAsk.and.resolveTo(false);
+    (
+      fixture.nativeElement.querySelector('[data-testid="med-refill-btn-rx-1"]') as HTMLElement
+    ).click();
+    await fixture.whenStable();
+    expect(confirmAsk).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        titleKey: 'PORTAL_REFILL.CONFIRM_TITLE',
+        params: { name: 'Metformin 500mg' },
+      }),
+    );
+    expect(requestRefill).not.toHaveBeenCalled();
+
+    confirmAsk.and.resolveTo(true);
+    await component.requestRefill(component.medications()[0]);
+    expect(requestRefill).toHaveBeenCalledTimes(1);
+  });
+
+  it('QA D2354: a pending request says since when, and can be cancelled after a confirmation', async () => {
+    const pending: MedicationRefill = {
+      id: 'rf-9',
+      prescriptionId: 'rx-1',
+      medicationName: 'Metformin 500mg',
+      preferredPharmacy: '',
+      status: 'REQUESTED',
+      requestedAt: '2026-11-14T08:00:00',
+      updatedAt: null,
+      notes: '',
+    };
+    await render(med({ refillRequestStatus: 'REQUESTED', refillRequestOpen: true }), [pending]);
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="med-refill-since-rx-1"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="refill-next-rf-9"]')).not.toBeNull();
+
+    confirmAsk.and.resolveTo(false);
+    (el.querySelector('[data-testid="med-refill-cancel-rx-1"]') as HTMLElement).click();
+    await fixture.whenStable();
+    expect(cancelRefill).not.toHaveBeenCalled();
+
+    confirmAsk.and.resolveTo(true);
+    (el.querySelector('[data-testid="refill-cancel-rf-9"]') as HTMLElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(cancelRefill).toHaveBeenCalledOnceWith('rf-9');
+    expect(component.refills()[0].status).toBe('CANCELLED');
+    expect(component.medications()[0].refillRequestOpen).toBeFalse();
+    expect(el.querySelector('[data-testid="refill-cancel-rf-9"]')).toBeNull();
+    expect(el.querySelector('[data-testid="med-refill-btn-rx-1"]')).not.toBeNull();
+    expect(toast.success).toHaveBeenCalled();
+  });
+
+  it('QA D2354: a decided request offers no cancel', async () => {
+    const decided: MedicationRefill = {
+      id: 'rf-8',
+      prescriptionId: 'rx-1',
+      medicationName: 'Metformin 500mg',
+      preferredPharmacy: '',
+      status: 'APPROVED',
+      requestedAt: '2026-11-14T08:00:00',
+      updatedAt: '2026-11-15T08:00:00',
+      notes: '',
+    };
+    await render(med({ refillRequestStatus: 'APPROVED' }), [decided]);
+    expect(fixture.nativeElement.querySelector('[data-testid="refill-cancel-rf-8"]')).toBeNull();
   });
 
   function useFrench(): void {
@@ -536,5 +615,130 @@ describe('MyMedicationsComponent — ready for collection', () => {
       expect(el.querySelector('[data-testid="medications-load-failed"]')).not.toBeNull();
       expect(el.querySelector('.portal-empty')).toBeNull();
     });
+  });
+});
+
+/**
+ * QA D2353 (r63): no printable prescription, and no quantity or duration: a
+ * patient sent to an outside pharmacy had nothing to show from the phone.
+ */
+describe('MyMedicationsComponent — prescription document (QA D2353)', () => {
+  let fixture: ComponentFixture<MyMedicationsComponent>;
+
+  const rx = (overrides: Record<string, unknown> = {}) => ({
+    id: 'rx-a',
+    medicationName: 'Amoxicilline 500 mg',
+    dosage: '1 gélule',
+    frequency: '3 fois par jour',
+    duration: '7 jours',
+    notes: '',
+    instructions: 'Pendant les repas',
+    route: 'Orale',
+    quantity: 21,
+    quantityUnit: 'gélules',
+    prescribedBy: 'Dr Aminata Ouédraogo',
+    prescribedDate: '2026-11-14T09:00:00',
+    signedAt: '2026-11-14T09:05:00',
+    hospitalName: 'CHU Demo',
+    patientFullName: 'Seydou Traoré',
+    encounterId: 'enc-1',
+    status: 'SIGNED',
+    ...overrides,
+  });
+
+  async function render(prescriptions: unknown[]) {
+    await TestBed.configureTestingModule({
+      imports: [MyMedicationsComponent, TranslateModule.forRoot()],
+      providers: [
+        {
+          provide: PatientPortalService,
+          useValue: {
+            getAllMyMedications: () => of([]),
+            getMyPrescriptions: () => of(prescriptions),
+            getMyRefills: () => of([]),
+          },
+        },
+        { provide: ToastService, useValue: { success: () => {}, error: () => {} } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(MyMedicationsComponent);
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    fixture.detectChanges();
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const el = (): HTMLElement => fixture.nativeElement;
+  const text = (id: string): string =>
+    el().querySelector(`[data-testid="${id}"]`)?.textContent?.trim() ?? '';
+
+  it('shows the duration, quantity and instructions in the prescription details', async () => {
+    await render([rx()]);
+    fixture.componentInstance.toggleRx('rx-a');
+    fixture.detectChanges();
+    expect(text('rx-duration-rx-a')).toBe('7 jours');
+    expect(text('rx-quantity-rx-a')).toContain('21');
+    expect(text('rx-quantity-rx-a')).toContain('gélules');
+    expect(text('rx-instructions-rx-a')).toBe('Pendant les repas');
+  });
+
+  it("opens the visit's prescription as one document, with prescriber, date, medicines and instructions", async () => {
+    await render([
+      rx(),
+      rx({
+        id: 'rx-b',
+        medicationName: 'Paracétamol 500 mg',
+        instructions: '',
+        notes: 'Si fièvre',
+      }),
+      rx({ id: 'rx-c', medicationName: 'Arrêté', status: 'CANCELLED' }),
+      rx({ id: 'rx-d', medicationName: 'Autre visite', encounterId: 'enc-2' }),
+    ]);
+    fixture.componentInstance.toggleRx('rx-a');
+    fixture.detectChanges();
+    (el().querySelector('[data-testid="rx-document-btn-rx-a"]') as HTMLElement).click();
+    fixture.detectChanges();
+
+    const doc = el().querySelector('[data-testid="rx-document"]') as HTMLElement;
+    expect(doc).not.toBeNull();
+    expect(doc.getAttribute('role')).toBe('dialog');
+    expect(text('rx-doc-hospital')).toBe('CHU Demo');
+    expect(text('rx-doc-prescriber')).toBe('Dr Aminata Ouédraogo');
+    expect(text('rx-doc-patient')).toBe('Seydou Traoré');
+    expect(text('rx-doc-date')).toContain('2026');
+    expect(text('rx-doc-signed')).toContain('Dr Aminata Ouédraogo');
+    expect(el().querySelector('[data-testid="rx-doc-item-rx-a"]')).not.toBeNull();
+    expect(el().querySelector('[data-testid="rx-doc-item-rx-b"]')).not.toBeNull();
+    expect(el().querySelector('[data-testid="rx-doc-item-rx-c"]')).toBeNull();
+    expect(el().querySelector('[data-testid="rx-doc-item-rx-d"]')).toBeNull();
+    expect(text('rx-doc-duration-rx-a')).toBe('7 jours');
+    expect(text('rx-doc-instructions-rx-a')).toContain('Pendant les repas');
+    expect(text('rx-doc-instructions-rx-b')).toContain('Si fièvre');
+    expect(doc.textContent).not.toContain('PORTAL_RX_DOC');
+  });
+
+  it('prints the document alone, and closes', async () => {
+    await render([rx()]);
+    fixture.componentInstance.openDocument(fixture.componentInstance.prescriptions()[0]);
+    fixture.detectChanges();
+    const print = spyOn(window, 'print');
+    (el().querySelector('[data-testid="rx-doc-print"]') as HTMLElement).click();
+    expect(print).toHaveBeenCalled();
+    expect(document.body.classList.contains('print-isolated')).toBeTrue();
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.body.classList.contains('print-isolated')).toBeFalse();
+
+    fixture.componentInstance.closeDocument();
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="rx-document"]')).toBeNull();
+  });
+
+  it('offers no document for a stopped prescription', async () => {
+    await render([rx({ status: 'CANCELLED' })]);
+    fixture.componentInstance.toggleRx('rx-a');
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="rx-document-btn-rx-a"]')).toBeNull();
   });
 });

@@ -1,0 +1,147 @@
+<div class="rxdoc-overlay" (click)="close()" (keydown.escape)="close()" tabindex="-1">
+  <div
+    class="rxdoc-dialog"
+    appDialogA11y
+    tabindex="-1"
+    aria-labelledby="rxdoc-title"
+    data-testid="rx-document"
+    (dialogClose)="close()"
+    (click)="$event.stopPropagation()"
+    (keydown.escape)="$event.stopPropagation()"
+  >
+    <div class="rxdoc-toolbar no-print">
+      <h2 id="rxdoc-title">{{ 'PORTAL_RX_DOC.TITLE' | translate }}</h2>
+      <button
+        type="button"
+        class="rxdoc-close"
+        (click)="close()"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <article class="rxdoc-sheet" #sheet>
+      <header class="rxdoc-head">
+        <div>
+          <p class="rxdoc-hospital" data-testid="rx-doc-hospital">
+            {{ head().hospitalName || ('PORTAL_RX_DOC.HOSPITAL_UNKNOWN' | translate) }}
+          </p>
+          <p class="rxdoc-kind">{{ 'PORTAL_RX_DOC.HEADING' | translate }}</p>
+        </div>
+        <dl class="rxdoc-meta">
+          <div>
+            <dt>{{ 'PORTAL_RX_DOC.DATE' | translate }}</dt>
+            <dd data-testid="rx-doc-date">{{ issuedAt() | serverTime | date: 'longDate' }}</dd>
+          </div>
+        </dl>
+      </header>
+
+      <dl class="rxdoc-people">
+        <div>
+          <dt>{{ 'PORTAL_RX_DOC.PRESCRIBER' | translate }}</dt>
+          <dd data-testid="rx-doc-prescriber">
+            {{ head().prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }}
+          </dd>
+        </div>
+        @if (head().patientFullName) {
+          <div>
+            <dt>{{ 'PORTAL_RX_DOC.PATIENT' | translate }}</dt>
+            <dd data-testid="rx-doc-patient">{{ head().patientFullName }}</dd>
+          </div>
+        }
+      </dl>
+
+      <ol class="rxdoc-items">
+        @for (item of items(); track item.id) {
+          <li class="rxdoc-item" [attr.data-testid]="'rx-doc-item-' + item.id">
+            <p class="rxdoc-med">{{ item.medicationName }}</p>
+            <dl class="rxdoc-fields">
+              @if (item.dosage) {
+                <div>
+                  <dt>{{ 'PORTAL.MEDICATIONS.DOSAGE' | translate }}</dt>
+                  <dd>{{ item.dosage }}</dd>
+                </div>
+              }
+              @if (item.route) {
+                <div>
+                  <dt>{{ 'PORTAL_RX_DOC.ROUTE' | translate }}</dt>
+                  <dd>{{ item.route }}</dd>
+                </div>
+              }
+              @if (item.frequency) {
+                <div>
+                  <dt>{{ 'PORTAL.MEDICATIONS.FREQUENCY' | translate }}</dt>
+                  <dd>
+                    {{ item.frequency }}
+                    @if (item.asNeeded) {
+                      ·
+                      {{
+                        (item.prnMinIntervalHours
+                          ? 'PORTAL.MEDICATIONS.AS_NEEDED_INTERVAL'
+                          : 'PORTAL.MEDICATIONS.AS_NEEDED'
+                        ) | translate: { hours: item.prnMinIntervalHours }
+                      }}
+                    }
+                  </dd>
+                </div>
+              }
+              @if (item.duration) {
+                <div>
+                  <dt>{{ 'PORTAL_RX_DOC.DURATION' | translate }}</dt>
+                  <dd [attr.data-testid]="'rx-doc-duration-' + item.id">{{ item.duration }}</dd>
+                </div>
+              }
+              @if (item.quantity !== null && item.quantity !== undefined) {
+                <div>
+                  <dt>{{ 'PORTAL_RX_DOC.QUANTITY' | translate }}</dt>
+                  <dd [attr.data-testid]="'rx-doc-quantity-' + item.id">
+                    {{ item.quantity | number: '1.0-2' }} {{ item.quantityUnit ?? '' }}
+                  </dd>
+                </div>
+              }
+              @if (item.refillsAllowed) {
+                <div>
+                  <dt>{{ 'PORTAL_RX_DOC.REFILLS' | translate }}</dt>
+                  <dd>{{ item.refillsAllowed }}</dd>
+                </div>
+              }
+            </dl>
+            @if (item.instructions || item.notes) {
+              <p class="rxdoc-instructions" [attr.data-testid]="'rx-doc-instructions-' + item.id">
+                <strong>{{ 'PORTAL_RX_DOC.INSTRUCTIONS' | translate }}</strong>
+                {{ item.instructions || item.notes }}
+              </p>
+            }
+          </li>
+        }
+      </ol>
+
+      <footer class="rxdoc-foot">
+        @if (head().signedAt) {
+          <p data-testid="rx-doc-signed">
+            {{
+              'PORTAL_RX_DOC.SIGNED'
+                | translate
+                  : {
+                      name: head().prescribedBy,
+                      date: (head().signedAt | serverTime | date: 'medium'),
+                    }
+            }}
+          </p>
+        }
+        <p>{{ 'PORTAL_RX_DOC.COPY_NOTE' | translate }}</p>
+      </footer>
+    </article>
+
+    <div class="rxdoc-actions no-print">
+      <button type="button" class="rxdoc-secondary" (click)="close()">
+        {{ 'COMMON.CLOSE' | translate }}
+      </button>
+      <button type="button" class="rxdoc-primary" data-testid="rx-doc-print" (click)="print()">
+        <span class="material-symbols-outlined" aria-hidden="true">print</span>
+        {{ 'PORTAL_RX_DOC.PRINT' | translate }}
+      </button>
+    </div>
+  </div>
+</div>

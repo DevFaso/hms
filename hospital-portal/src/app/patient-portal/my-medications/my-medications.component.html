@@ -176,6 +176,29 @@
                       <span class="material-symbols-outlined">hourglass_top</span>
                       {{ 'PORTAL.MEDICATIONS.REFILL_PENDING' | translate }}
                     </span>
+                    @if (openRefillFor(med.id); as open) {
+                      <!-- QA D2354: since when it waits, and a way to withdraw it -->
+                      {{ ' '
+                      }}<span class="pli-meta" [attr.data-testid]="'med-refill-since-' + med.id">{{
+                        'PORTAL_REFILL.WAITING_SINCE'
+                          | translate
+                            : { date: (open.requestedAt | serverTime | date: 'mediumDate') }
+                      }}</span>
+                      <button
+                        type="button"
+                        class="refill-cancel-btn"
+                        [attr.data-testid]="'med-refill-cancel-' + med.id"
+                        [disabled]="cancellingRefill() === open.id"
+                        (click)="cancelRefill(open, $event)"
+                      >
+                        {{
+                          (cancellingRefill() === open.id
+                            ? 'PORTAL_REFILL.CANCELLING'
+                            : 'PORTAL_REFILL.CANCEL'
+                          ) | translate
+                        }}
+                      </button>
+                    }
                   } @else {
                     <button
                       class="refill-btn"
@@ -315,6 +338,31 @@
                       rx.prescribedDate | serverTime | date: 'mediumDate'
                     }}</span>
                   </div>
+                  @if (rx.duration) {
+                    <!-- QA D2353: how long, and how much, as the pharmacist reads it -->
+                    <div class="detail-item">
+                      <span class="dl">{{ 'PORTAL_RX_DOC.DURATION' | translate }}</span>
+                      <span class="dv" [attr.data-testid]="'rx-duration-' + rx.id">{{
+                        rx.duration
+                      }}</span>
+                    </div>
+                  }
+                  @if (rx.quantity !== null && rx.quantity !== undefined) {
+                    <div class="detail-item">
+                      <span class="dl">{{ 'PORTAL_RX_DOC.QUANTITY' | translate }}</span>
+                      <span class="dv" [attr.data-testid]="'rx-quantity-' + rx.id"
+                        >{{ rx.quantity | number: '1.0-2' }} {{ rx.quantityUnit ?? '' }}</span
+                      >
+                    </div>
+                  }
+                  @if (rx.instructions || rx.notes) {
+                    <div class="detail-item">
+                      <span class="dl">{{ 'PORTAL_RX_DOC.INSTRUCTIONS' | translate }}</span>
+                      <span class="dv" [attr.data-testid]="'rx-instructions-' + rx.id">{{
+                        rx.instructions || rx.notes
+                      }}</span>
+                    </div>
+                  }
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
                     {{ ' '
@@ -323,6 +371,20 @@
                     }}</span>
                   </div>
                 </div>
+                @if (isPrintable(rx)) {
+                  <!-- QA D2353: the prescription as a document to show or print -->
+                  <div class="refill-action">
+                    <button
+                      type="button"
+                      class="refill-btn"
+                      [attr.data-testid]="'rx-document-btn-' + rx.id"
+                      (click)="openDocument(rx, $event)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">description</span>
+                      {{ 'PORTAL_RX_DOC.OPEN' | translate }}
+                    </button>
+                  </div>
+                }
                 <!--
                   The refill action used to live here as well, gated on
                   `status === 'ACTIVE' || 'SIGNED'` — which hid it on every
@@ -378,6 +440,27 @@
                     {{ r.updatedAt | serverTime | date: 'mediumDate' }}
                   }
                 </span>
+                @if (isPendingRefill(r)) {
+                  <!-- QA D2354: what happens next, and a way to withdraw the request -->
+                  {{ ' '
+                  }}<span class="pli-meta" [attr.data-testid]="'refill-next-' + r.id">{{
+                    'PORTAL_REFILL.NEXT_STEP' | translate
+                  }}</span>
+                  <button
+                    type="button"
+                    class="refill-cancel-btn"
+                    [attr.data-testid]="'refill-cancel-' + r.id"
+                    [disabled]="cancellingRefill() === r.id"
+                    (click)="cancelRefill(r, $event)"
+                  >
+                    {{
+                      (cancellingRefill() === r.id
+                        ? 'PORTAL_REFILL.CANCELLING'
+                        : 'PORTAL_REFILL.CANCEL'
+                      ) | translate
+                    }}
+                  </button>
+                }
               </div>
               <!--
                 QA D816: the same labels as the medication row's chip. The
@@ -395,5 +478,9 @@
         </div>
       </section>
     }
+  }
+
+  @if (documentItems(); as items) {
+    <app-prescription-document [items]="items" (closed)="closeDocument()" />
   }
 </div>
