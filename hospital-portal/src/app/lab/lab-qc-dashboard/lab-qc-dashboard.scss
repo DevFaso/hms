@@ -428,6 +428,9 @@
 }
 
 .qc-record {
+  /* r63: a long label or an untranslated word wraps instead of widening the box. */
+  overflow-wrap: anywhere;
+  min-width: 0;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 1rem 1.25rem;

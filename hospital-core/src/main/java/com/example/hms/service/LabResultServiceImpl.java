@@ -234,7 +234,7 @@ public class LabResultServiceImpl implements LabResultService {
         // controller annotation — the annotation runs before the order and
         // its test are loaded.
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
-        java.util.List<com.example.hms.model.LabResultComponent> panelValues = null;
+        java.util.List<com.example.hms.model.LabResultComponent> panelValues = java.util.List.of();
         if (!ingested) {
             panelValues = checkInteractiveEntry(request, labOrder);
         } else {
@@ -350,7 +350,7 @@ public class LabResultServiceImpl implements LabResultService {
             result.setAbnormalFlag(LabResultValueRules.flagFor(result.getResultValue(), null, result.getAbnormalFlag()));
             // QA D1095: units come from the test definition; a blank one is the definition's.
             result.setResultUnit(LabResultMapper.unitOrTestUnit(result.getResultUnit(), labOrder.getLabTestDefinition()));
-            if (panelValues != null) {
+            if (!panelValues.isEmpty()) {
                 // r63: a panel's values are its components; the summary line carries no unit or flag of its own.
                 result.setComponents(panelValues);
                 result.setResultUnit(null);
@@ -895,7 +895,7 @@ public class LabResultServiceImpl implements LabResultService {
         // r63: a panel's values are checked per component and summarised; a single value as before.
         java.util.List<com.example.hms.model.LabResultComponent> panelValues =
             LabPanelEntry.componentsFor(request, labOrder.getLabTestDefinition());
-        if (panelValues == null) {
+        if (panelValues.isEmpty()) {
             request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
             LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
             // QA D1095: as on entry, a blank unit is the test definition's.
@@ -909,7 +909,7 @@ public class LabResultServiceImpl implements LabResultService {
             requireAssignmentAtActingHospital(request.getAssignmentId(), activeHospitalId);
 
         java.util.List<com.example.hms.model.LabResultComponent> newComponents =
-            panelValues != null ? panelValues : new java.util.ArrayList<>();
+            new java.util.ArrayList<>(panelValues);
         boolean valueChanged = !Objects.equals(labResult.getResultValue(), request.getResultValue())
             || !Objects.equals(labResult.getResultUnit(), request.getResultUnit())
             || !Objects.equals(labResult.getComponents() == null ? java.util.List.of() : labResult.getComponents(),
@@ -917,7 +917,7 @@ public class LabResultServiceImpl implements LabResultService {
             || labResult.getLabOrder() == null
             || !Objects.equals(labResult.getLabOrder().getId(), labOrder.getId());
 
-        labResult.setAbnormalFlag(panelValues != null ? null : LabResultValueRules.flagFor(
+        labResult.setAbnormalFlag(!panelValues.isEmpty() ? null : LabResultValueRules.flagFor(
             request.getResultValue(), labResult.getResultValue(), labResult.getAbnormalFlag()));
         labResult.setComponents(newComponents);
         labResult.setLabOrder(labOrder);
@@ -1086,7 +1086,7 @@ public class LabResultServiceImpl implements LabResultService {
         request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
         java.util.List<com.example.hms.model.LabResultComponent> panelValues =
             LabPanelEntry.componentsFor(request, labOrder.getLabTestDefinition());
-        if (panelValues == null) {
+        if (panelValues.isEmpty()) {
             request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
             LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
         }
@@ -1096,7 +1096,7 @@ public class LabResultServiceImpl implements LabResultService {
     /** r63: a single value is required once it is no longer a bean constraint (a panel composes its own). */
     private static void requireResultValue(LabResultRequestDTO request,
                                            java.util.List<com.example.hms.model.LabResultComponent> panelValues) {
-        if (panelValues == null && (request.getResultValue() == null || request.getResultValue().isBlank())) {
+        if (panelValues.isEmpty() && (request.getResultValue() == null || request.getResultValue().isBlank())) {
             throw new com.example.hms.exception.FieldBusinessException("resultValue", "lab.result.value.required");
         }
     }

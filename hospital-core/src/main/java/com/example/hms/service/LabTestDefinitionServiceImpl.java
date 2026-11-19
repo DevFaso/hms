@@ -205,7 +205,6 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         return definition.getHospital() != null ? definition.getHospital().getId() : null;
     }
 
-    /** QA D1120: the ranges as independent copies, every field kept, so editing the draft never touches the live ones. */
     /** r63: a new version carries its own copy of the panel's components and their ranges. */
     private static List<com.example.hms.model.LabTestComponent> copyComponents(
             List<com.example.hms.model.LabTestComponent> components) {
@@ -264,6 +263,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         }
     }
 
+    /** QA D1120: the ranges as independent copies, every field kept, so editing the draft never touches the live ones. */
     private static List<com.example.hms.model.LabTestReferenceRange> copyRanges(
             List<com.example.hms.model.LabTestReferenceRange> ranges) {
         List<com.example.hms.model.LabTestReferenceRange> copies = new java.util.ArrayList<>();

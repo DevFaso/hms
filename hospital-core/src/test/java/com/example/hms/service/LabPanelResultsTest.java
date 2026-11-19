@@ -79,19 +79,23 @@ class LabPanelResultsTest {
 
     @Test
     void aPanelWithNoValueAnUnknownCodeOrATwiceEnteredOneIsRefusedOnItsField() {
-        assertThatThrownBy(() -> LabPanelEntry.componentsFor(request(value("HB", " ")), nfs))
+        LabResultRequestDTO sent1 = request(value("HB", " "));
+        assertThatThrownBy(() -> LabPanelEntry.componentsFor(sent1, nfs))
             .isInstanceOfSatisfying(FieldBusinessException.class, ex -> assertThat(ex.getField()).isEqualTo("components"));
-        assertThatThrownBy(() -> LabPanelEntry.componentsFor(request(value("CRP", "3")), nfs))
+        LabResultRequestDTO sent2 = request(value("CRP", "3"));
+        assertThatThrownBy(() -> LabPanelEntry.componentsFor(sent2, nfs))
             .isInstanceOfSatisfying(FieldBusinessException.class,
                 ex -> assertThat(ex.getField()).isEqualTo("components[0].code"));
-        assertThatThrownBy(() -> LabPanelEntry.componentsFor(request(value("HB", "13"), value("hb", "14")), nfs))
+        LabResultRequestDTO sent3 = request(value("HB", "13"), value("hb", "14"));
+        assertThatThrownBy(() -> LabPanelEntry.componentsFor(sent3, nfs))
             .isInstanceOfSatisfying(FieldBusinessException.class,
                 ex -> assertThat(ex.getField()).isEqualTo("components[1].code"));
     }
 
     @Test
     void eachComponentValueIsCheckedAgainstItsOwnRanges() {
-        assertThatThrownBy(() -> LabPanelEntry.componentsFor(request(value("HB", "13"), value("WBC", "abc")), nfs))
+        LabResultRequestDTO sent4 = request(value("HB", "13"), value("WBC", "abc"));
+        assertThatThrownBy(() -> LabPanelEntry.componentsFor(sent4, nfs))
             .isInstanceOfSatisfying(FieldBusinessException.class,
                 ex -> assertThat(ex.getField()).isEqualTo("components[1].value"));
     }
@@ -99,10 +103,11 @@ class LabPanelResultsTest {
     @Test
     void componentsOnASingleValueTestAreRefusedAndASingleValueTestIsUntouched() {
         LabTestDefinition potassium = new LabTestDefinition();
-        assertThatThrownBy(() -> LabPanelEntry.componentsFor(request(value("HB", "13")), potassium))
+        LabResultRequestDTO sent5 = request(value("HB", "13"));
+        assertThatThrownBy(() -> LabPanelEntry.componentsFor(sent5, potassium))
             .isInstanceOfSatisfying(FieldBusinessException.class, ex -> assertThat(ex.getField()).isEqualTo("components"));
         LabResultRequestDTO single = LabResultRequestDTO.builder().resultValue("4.1").build();
-        assertThat(LabPanelEntry.componentsFor(single, potassium)).isNull();
+        assertThat(LabPanelEntry.componentsFor(single, potassium)).isEmpty();
         assertThat(single.getResultValue()).isEqualTo("4.1");
     }
 

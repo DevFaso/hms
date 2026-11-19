@@ -15,7 +15,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -51,7 +50,7 @@ class LabQcReleaseGateTest {
 
     private void latest(LabQcEventLevel level, LabQcEvent event) {
         when(repository.findFirstByHospitalIdAndTestDefinition_IdAndQcLevelOrderByRecordedAtDescCreatedAtDesc(
-            eq(hospitalId), eq(testId), eq(level))).thenReturn(Optional.of(event));
+            hospitalId, testId, level)).thenReturn(Optional.of(event));
     }
 
     @Test
@@ -84,6 +83,13 @@ class LabQcReleaseGateTest {
         // The ordering hospital's own rejected run does not hold another laboratory's work.
         latest(LabQcEventLevel.LOW_CONTROL, run(false));
 
+        assertThat(gate.isBlocked(order)).isFalse();
+    }
+
+    @Test
+    void anOrderWithoutATestIsNotBlocked() {
+        assertThat(gate.isBlocked(null)).isFalse();
+        order.setLabTestDefinition(null);
         assertThat(gate.isBlocked(order)).isFalse();
     }
 }

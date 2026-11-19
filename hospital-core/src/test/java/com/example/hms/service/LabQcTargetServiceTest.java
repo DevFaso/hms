@@ -103,7 +103,8 @@ class LabQcTargetServiceTest {
 
     @Test
     void anSdOfZeroIsRefusedOnItsField() {
-        assertThatThrownBy(() -> service.save(request("4.0", "0")))
+        LabQcTargetRequestDTO zeroSd = request("4.0", "0");
+        assertThatThrownBy(() -> service.save(zeroSd))
             .isInstanceOfSatisfying(FieldBusinessException.class, ex -> assertThat(ex.getField()).isEqualTo("targetSd"));
     }
 
@@ -114,13 +115,45 @@ class LabQcTargetServiceTest {
         potassium.setHospital(other);
         when(definitionRepository.findById(potassium.getId())).thenReturn(Optional.of(potassium));
 
-        assertThatThrownBy(() -> service.save(request("4.0", "0.1"))).isInstanceOf(ResourceNotFoundException.class);
+        LabQcTargetRequestDTO foreignTest = request("4.0", "0.1");
+        assertThatThrownBy(() -> service.save(foreignTest)).isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void everyMissingValueIsNamedInOneRefusal() {
-        assertThatThrownBy(() -> service.save(new LabQcTargetRequestDTO()))
+        LabQcTargetRequestDTO empty = new LabQcTargetRequestDTO();
+        assertThatThrownBy(() -> service.save(empty))
             .isInstanceOfSatisfying(FieldBusinessException.class, ex -> assertThat(ex.getFieldErrors())
                 .containsOnlyKeys("testDefinitionId", "qcLevel", "targetMean", "targetSd"));
+    }
+
+    @Test
+    void listingReadsOnlyTheActingHospitalsTargets() {
+        LabQcTarget mine = LabQcTarget.builder().hospitalId(hospitalId).testDefinition(potassium)
+            .qcLevel(LabQcEventLevel.HIGH_CONTROL).targetMean(BigDecimal.TEN).targetSd(BigDecimal.ONE).build();
+        when(targetRepository.findByHospitalIdAndTestDefinition_Id(hospitalId, potassium.getId()))
+            .thenReturn(java.util.List.of(mine));
+        when(targetRepository.findByHospitalId(hospitalId)).thenReturn(java.util.List.of(mine));
+
+        assertThat(service.list(potassium.getId())).extracting(LabQcTargetResponseDTO::getQcLevel)
+            .containsExactly("HIGH_CONTROL");
+        assertThat(service.list(null)).extracting(LabQcTargetResponseDTO::getTestDefinitionName)
+            .containsExactly("Kaliemie");
+    }
+
+    @Test
+    void aSuperAdminInGlobalViewPicksAHospitalFirst() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.list(null)).isInstanceOf(com.example.hms.exception.BusinessException.class);
+    }
+
+    @Test
+    void anUnknownLevelIsRefusedOnItsField() {
+        LabQcTargetRequestDTO unknown = request("4.0", "0.1");
+        unknown.setQcLevel("MID_CONTROL");
+
+        assertThatThrownBy(() -> service.save(unknown))
+            .isInstanceOfSatisfying(FieldBusinessException.class, ex -> assertThat(ex.getField()).isEqualTo("qcLevel"));
     }
 }

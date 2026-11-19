@@ -356,6 +356,9 @@
 
 /* r63 D2305: the laboratory's call about a critical result, recorded at release */
 .critical-release {
+  /* r63: a long label or an untranslated word wraps instead of widening the box. */
+  overflow-wrap: anywhere;
+  min-width: 0;
   border: 1px solid #fecaca;
   background: #fef2f2;
   border-radius: 8px;

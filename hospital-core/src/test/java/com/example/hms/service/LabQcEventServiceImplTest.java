@@ -497,9 +497,39 @@ class LabQcEventServiceImplTest {
         foreign.setHospital(other);
         when(labTestDefinitionRepository.findById(testDefId)).thenReturn(Optional.of(foreign));
 
-        assertThatThrownBy(() -> service.recordQcEvent(LabQcEventRequestDTO.builder()
+        LabQcEventRequestDTO foreignRun = LabQcEventRequestDTO.builder()
             .hospitalId(hospitalId).testDefinitionId(testDefId).qcLevel("LOW_CONTROL")
-            .measuredValue(BigDecimal.ONE).expectedValue(BigDecimal.ONE).build(), Locale.ENGLISH))
+            .measuredValue(BigDecimal.ONE).expectedValue(BigDecimal.ONE).build();
+        assertThatThrownBy(() -> service.recordQcEvent(foreignRun, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void recordQcEvent_aRunDatedInTheFutureIsRefused() {
+        LabQcEventRequestDTO future = LabQcEventRequestDTO.builder()
+            .hospitalId(hospitalId).qcLevel("LOW_CONTROL")
+            .measuredValue(BigDecimal.ONE).expectedValue(BigDecimal.ONE)
+            .recordedAt(LocalDateTime.now().plusDays(1)).build();
+
+        assertThatThrownBy(() -> service.recordQcEvent(future, Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("recordedAt"));
+    }
+
+    @Test
+    void recordQcEvent_namesTheOperator() {
+        com.example.hms.model.User tech = new com.example.hms.model.User();
+        tech.setFirstName("Paul");
+        tech.setLastName("K");
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tech));
+        when(qcEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordQcEvent(LabQcEventRequestDTO.builder().hospitalId(hospitalId).qcLevel("HIGH_CONTROL")
+            .measuredValue(BigDecimal.ONE).expectedValue(BigDecimal.ONE).accepted(true).build(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabQcEvent> captor = ArgumentCaptor.forClass(LabQcEvent.class);
+        verify(qcEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getRecordedByDisplay()).isEqualTo("Paul K");
     }
 }

@@ -205,7 +205,7 @@ public class LabResultMapper {
         if (isPanelResult(result, context)) {
             String worst = FLAG_NORMAL;
             LabRangeApplicability.Demographics patient = demographicsOf(result);
-            for (com.example.hms.model.LabResultComponent value : result.getComponents()) {
+            for (com.example.hms.model.LabResultComponent value : componentsOf(result)) {
                 String flag = componentSeverity(value, context, patient);
                 if (panelRank(flag) > panelRank(worst)) {
                     worst = flag;
@@ -214,6 +214,11 @@ public class LabResultMapper {
             return worst;
         }
         return effectiveSeverityFlag(result, grading.range(), context.expectedResult());
+    }
+
+    /** The result's component values, never null. */
+    private static List<com.example.hms.model.LabResultComponent> componentsOf(LabResult result) {
+        return result.getComponents() != null ? result.getComponents() : Collections.emptyList();
     }
 
     private static boolean isPanelResult(LabResult result, OrderContext context) {
@@ -265,7 +270,7 @@ public class LabResultMapper {
     /** r63: a panel needs a person's review when a value with limits to grade it got no grade. */
     private static boolean panelGradeUnknown(LabResult result, OrderContext context) {
         LabRangeApplicability.Demographics patient = demographicsOf(result);
-        for (com.example.hms.model.LabResultComponent value : result.getComponents()) {
+        for (com.example.hms.model.LabResultComponent value : componentsOf(result)) {
             LabTestReferenceRange range = componentRange(value, componentDefinition(value.getCode(), context), patient);
             if (hasLimit(range) && value.getValue() != null && !value.getValue().isBlank()
                 && FLAG_UNSPECIFIED.equals(determineSeverityFlag(value.getValue(), range))) {
@@ -281,7 +286,7 @@ public class LabResultMapper {
             return Collections.emptyList();
         }
         LabRangeApplicability.Demographics patient = demographicsOf(result);
-        return result.getComponents().stream()
+        return componentsOf(result).stream()
             .filter(Objects::nonNull)
             .map(value -> {
                 LabTestReferenceRange range = componentRange(value, componentDefinition(value.getCode(), context),

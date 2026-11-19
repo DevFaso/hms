@@ -37,6 +37,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -90,7 +91,7 @@ class OruR01EndToEndIngestionTest {
             auditEventLogService, criticalValueNotificationService,
             new com.example.hms.mapper.LabResultMapper(),
             new com.example.hms.service.LabQcReleaseGate(
-                org.mockito.Mockito.mock(com.example.hms.repository.LabQcEventRepository.class)));
+                mock(com.example.hms.repository.LabQcEventRepository.class)));
         // The order's status is written by a compare-and-set statement, not
         // through the entity; the stub applies it so assertions can read it.
         lenient().when(labOrderRepository.findStatusById(any()))

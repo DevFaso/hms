@@ -74,9 +74,10 @@ public class LabQcEventServiceImpl implements LabQcEventService {
         }
 
         // r63 D2304: the expected value is the director's target mean when one is set.
-        java.math.BigDecimal expectedValue = request.getExpectedValue() != null
-            ? request.getExpectedValue()
-            : (target != null ? target.getTargetMean() : null);
+        java.math.BigDecimal expectedValue = request.getExpectedValue();
+        if (expectedValue == null && target != null) {
+            expectedValue = target.getTargetMean();
+        }
         com.example.hms.exception.RequiredFields.check()
             .requireValue(expectedValue, "expectedValue", "lab.qc.expectedRequired")
             .orThrow();

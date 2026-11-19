@@ -929,6 +929,9 @@
 
 /* r63 (NFS panels): one field per panel component, wrapping on narrow screens */
 .panel-entry {
+  /* r63: a long label or an untranslated word wraps instead of widening the box. */
+  overflow-wrap: anywhere;
+  min-width: 0;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 0.75rem 1rem 1rem;
