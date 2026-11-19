@@ -88,6 +88,9 @@
     "src/app/lab/lab-outbox/lab-outbox.html::d.message.messageType",
     "src/app/lab/lab-outbox/lab-outbox.html::row.messageType",
     "src/app/lab/lab-outbox/lab-outbox.html::sibling.messageType",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.messageType",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.flag",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.resultStatus",
     "src/app/lab/lab-release-worklist/lab-release-worklist.html::row.observationResultStatus",
     "src/app/lab/lab-results/lab-results.html::r.expectedResult",
     "src/app/lab/lab-results/lab-results.html::rr.source",
@@ -281,6 +284,9 @@
     "src/app/billing/payers/payers.component.html::t.changeReason": "Review of #1202: PayerPlanTermsDTO.changeReason is the free text the hospital admin or accountant typed for new plan terms, shown as typed; not a wire token.",
     "src/app/lab/lab-results/lab-results.html::r.qcOverrideReason": "r63 D2304: LabResultResponseDTO.qcOverrideReason is the free text the releaser typed to release despite a rejected QC run, shown as typed; not a wire token.",
     "src/app/patient-portal/prescription-document/prescription-document.component.html::item.route": "QA D2353: PrescriptionResponseDTO.route is rendered through | medicationRoute (the portal's shared route vocabulary, QA D950), which the scan does not read as a label pipe; as on my-medications and the chart pages.",
-    "src/app/patient-portal/prescription-document/prescription-document.component.html::item.frequency": "QA D2353: PrescriptionResponseDTO.frequency is the free text the prescriber typed, as on my-medications (pinned above); not a wire token."
+    "src/app/patient-portal/prescription-document/prescription-document.component.html::item.frequency": "QA D2353: PrescriptionResponseDTO.frequency is the free text the prescriber typed, as on my-medications (pinned above); not a wire token.",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.messageType": "Outbox summary: an HL7 MSH-9 code with no plain-language name (OML^O21 and ORU^R01 are labelled through LAB_OUTBOX.TYPE_*); the raw code is the only honest rendering, as for row.messageType.",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.flag": "Outbox summary: an OBX-8 code outside the labelled set (N, A, L, H, LL, HH via LAB_OUTBOX.FLAG_*), shown raw as the analyser interface code.",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.resultStatus": "Outbox summary: an OBX-11 code outside F/P/C (labelled via LAB_OUTBOX.RESULT_STATUS_*), shown raw as the HL7 table 0085 code."
   }
 }
