@@ -87,6 +87,59 @@ class UploadStorageWriteGuardTest {
             .isSubsetOf(ALLOWED_UPLOAD_DIR_READERS.keySet());
     }
 
+    /** An upload subdirectory FileUploadService writes to: {@code *_PATH = "<prefix>"}. */
+    private static final Pattern UPLOAD_PREFIX = Pattern.compile("_PATH\\s*=\\s*\"([a-z][a-z-]*)\"");
+    /** A {@code /uploads/...} path in code (a matcher, a mapping). */
+    private static final Pattern UPLOADS_PATH = Pattern.compile("\"/uploads/([a-z-]*)");
+
+    /** The one upload prefix served without a login, with its reason. */
+    private static final Map<String, String> PUBLIC_UPLOAD_PREFIXES = Map.of(
+        "profile-images", "avatars render through a bare <img src> on web and both apps; random, unguessable names");
+
+    /** The classes that name a {@code /uploads/...} path, each with its reason. */
+    private static final Map<String, String> UPLOADS_PATH_MAPPERS = Map.of(
+        "controller/ProfileImageController.java", "streams the public profile images from the port",
+        "config/SecurityConfig.java", "the permitAll matcher of those profile images",
+        "service/FileUploadService.java", "builds the stored \"/uploads/<prefix>/<name>\" references; serves nothing");
+
+    /**
+     * V316 (imaging key images) and every upload class before it: what is kept in the port is
+     * private. Each upload subdirectory FileUploadService writes to (patient documents, chat
+     * attachments, imaging images...) is read only through an authenticated, scoped endpoint; no
+     * permitAll matcher and no {@code /uploads/...} mapping names it. Only the profile images are
+     * public.
+     */
+    @Test
+    @DisplayName("no upload subdirectory but the profile images is served without a login")
+    void uploadPrefixesArePrivate() throws IOException {
+        Path root = MAIN.resolve("com/example/hms");
+        String uploads = Files.readString(root.resolve("service/FileUploadService.java"));
+        TreeSet<String> prefixes = new TreeSet<>();
+        java.util.regex.Matcher prefix = UPLOAD_PREFIX.matcher(uploads);
+        while (prefix.find()) {
+            prefixes.add(prefix.group(1));
+        }
+        assertThat(prefixes).as("the upload subdirectories were read")
+            .contains("profile-images", "patient-documents", "chat-attachments", "imaging-images");
+
+        TreeSet<String> mappers = classesMatchingCode(UPLOADS_PATH);
+        assertThat(mappers)
+            .as("A class names a /uploads/... path. Upload bytes stream through an authenticated, "
+                + "scoped endpoint reading FileStorage; a public path is listed with its reason.")
+            .isSubsetOf(UPLOADS_PATH_MAPPERS.keySet());
+
+        String security = codeOnly(Files.readString(root.resolve("config/SecurityConfig.java")));
+        java.util.regex.Matcher exposed = UPLOADS_PATH.matcher(security);
+        TreeSet<String> publicPrefixes = new TreeSet<>();
+        while (exposed.find()) {
+            publicPrefixes.add(exposed.group(1));
+        }
+        assertThat(publicPrefixes)
+            .as("SecurityConfig opens an upload subdirectory (or the whole /uploads/ tree) to anyone")
+            .isSubsetOf(PUBLIC_UPLOAD_PREFIXES.keySet());
+        assertThat(prefixes).as("every other upload subdirectory stays private").containsAll(publicPrefixes);
+    }
+
     private static TreeSet<String> classesMatching(Pattern pattern) throws IOException {
         Path root = MAIN.resolve("com/example/hms");
         List<Path> sources = new ArrayList<>();
@@ -101,6 +154,54 @@ class UploadStorageWriteGuardTest {
             }
         }
         return matches;
+    }
+
+    /** {@link #classesMatching} over {@link #codeOnly}: a string such as "/uploads/x/**" stays code. */
+    private static TreeSet<String> classesMatchingCode(Pattern pattern) throws IOException {
+        Path root = MAIN.resolve("com/example/hms");
+        TreeSet<String> matches = new TreeSet<>();
+        try (Stream<Path> walk = Files.walk(root)) {
+            for (Path source : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
+                if (pattern.matcher(codeOnly(Files.readString(source))).find()) {
+                    matches.add(root.relativize(source).toString().replace('\\', '/'));
+                }
+            }
+        }
+        return matches;
+    }
+
+    /**
+     * The source without its comments, read character by character so a comment marker inside a
+     * string literal ({@code "/uploads/profile-images/**"}) is not taken for one.
+     */
+    static String codeOnly(String source) {
+        StringBuilder code = new StringBuilder(source.length());
+        int i = 0;
+        int n = source.length();
+        while (i < n) {
+            char c = source.charAt(i);
+            char next = i + 1 < n ? source.charAt(i + 1) : 0;
+            if (c == '/' && next == '/') {
+                while (i < n && source.charAt(i) != '\n') {
+                    i++;
+                }
+            } else if (c == '/' && next == '*') {
+                int end = source.indexOf("*/", i + 2);
+                i = end < 0 ? n : end + 2;
+                code.append(' ');
+            } else if (c == '"' || c == '\'') {
+                int start = i++;
+                while (i < n && source.charAt(i) != c) {
+                    i += source.charAt(i) == '\\' ? 2 : 1;
+                }
+                i = Math.min(i + 1, n);
+                code.append(source, start, i);
+            } else {
+                code.append(c);
+                i++;
+            }
+        }
+        return code.toString();
     }
 
     /** Comments may name the APIs (this guard's own references do); only code counts. */

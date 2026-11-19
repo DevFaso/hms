@@ -37,6 +37,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ImagingImagesComponent } from './imaging-images/imaging-images.component';
 import {
   labelledRefusalReason,
   refusalReason,
@@ -199,6 +200,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
     PatientPickerComponent,
     InlineSubFormDirective,
     InlineDiscardAskComponent,
+    ImagingImagesComponent,
   ],
   templateUrl: './imaging.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -1527,6 +1529,18 @@ export class ImagingComponent implements OnInit {
    * QA D1098: a draft read on a cancelled order is neither revised nor signed
    * (the server refuses both); the order is looked up in the loaded list.
    */
+  /**
+   * V316: key images go on the study itself while it has no signed report, by
+   * those who author its reports; after signing, they go on an addendum.
+   */
+  canAddStudyImages(order: ImagingOrderResponse): boolean {
+    return (
+      this.canAuthorReports &&
+      order.status !== 'CANCELLED' &&
+      !this.selectedOrderReports().some((r) => r.signed)
+    );
+  }
+
   reportOrderCancelled(report: ImagingReportResponse): boolean {
     return this.orders().some((o) => o.id === report.imagingOrderId && o.status === 'CANCELLED');
   }

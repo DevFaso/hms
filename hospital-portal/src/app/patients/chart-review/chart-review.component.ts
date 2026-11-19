@@ -34,6 +34,7 @@ import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { Router } from '@angular/router';
 import { RoleContextService } from '../../core/role-context.service';
 import { IMAGING_PAGE_ROLES } from '../../shared/imaging-access';
+import { ImagingImagesComponent } from '../../imaging/imaging-images/imaging-images.component';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -90,6 +91,7 @@ const FIRST_PAGES: Record<ChartReviewTab, number> = {
     LabValuePipe,
     CredentialsLabelPipe,
     RangePagerComponent,
+    ImagingImagesComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './chart-review.component.html',
@@ -175,6 +177,11 @@ export class ChartReviewComponent implements OnChanges, OnDestroy {
   /** QA D1924 (r53): the study's reports open on Imagerie, for the roles it admits. */
   private readonly router = inject(Router, { optional: true });
   private readonly roleContext = inject(RoleContextService);
+  /** V316: the study's key images, for the roles that read imaging (the server applies the report's rules). */
+  protected readonly canSeeImagingImages = this.roleContext.hasAnyActiveRole([
+    ...IMAGING_PAGE_ROLES,
+  ]);
+
   protected readonly canOpenImaging =
     !!this.router && this.roleContext.hasAnyActiveRole([...IMAGING_PAGE_ROLES]);
   private readonly destroyed$ = new Subject<void>();

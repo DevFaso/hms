@@ -107,6 +107,8 @@ class GuardDriftRatchetTest {
         "Referrals are addressed to and worked by the receiving provider";
     private static final String IMAGINGORDERCONTROLLER_REASON =
         "The ordering provider's signature and status transitions";
+    private static final String IMAGINGSTUDYIMAGECONTROLLER_REASON =
+        "V316: a study's key images are added or removed by those who author its report (radiologist, doctor); a nurse reads them";
     private static final String IMAGINGRESULTCONTROLLER_REASON =
         "Report authoring, signing and critical-result acknowledgement by the reading or ordering physician";
     private static final String LABRESULTCONTROLLER_REASON =
@@ -204,6 +206,8 @@ class GuardDriftRatchetTest {
         listed.put("ImagingResultController.signReport", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.updateReport", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.updateReportStatus", IMAGINGRESULTCONTROLLER_REASON);
+        listed.put("ImagingStudyImageController.delete", IMAGINGSTUDYIMAGECONTROLLER_REASON);
+        listed.put("ImagingStudyImageController.upload", IMAGINGSTUDYIMAGECONTROLLER_REASON);
         listed.put("LabResultController.signLabResult", LABRESULTCONTROLLER_REASON);
         listed.put("MaternalHistoryController.calculateRiskScore", MATERNALHISTORYCONTROLLER_REASON);
         listed.put("MaternalHistoryController.getPendingReview", MATERNALHISTORYCONTROLLER_REASON);

@@ -96,6 +96,8 @@ export interface ChartReviewImaging {
   reports?: ChartReviewImagingReport[] | null;
   /** Provisional rule 1 (2026-11-15): the study was done without its pre-authorisation number. */
   authorizationPending?: boolean | null;
+  /** V316: the key images the study carries; absent when none. */
+  imageCount?: number | null;
 }
 
 /** One version of an imaging study's report, as the chart shows it. */
