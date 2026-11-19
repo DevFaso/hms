@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.InstrumentOutboxStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -9,6 +10,7 @@ import com.example.hms.model.InstrumentOutbox;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabSpecimen;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.InstrumentOutboxPageDTO;
 import com.example.hms.payload.dto.InstrumentOutboxResponseDTO;
 import com.example.hms.payload.dto.InstrumentOutboxTransportDTO;
@@ -49,6 +51,7 @@ class InstrumentOutboxServiceImplTest {
     @Mock private Hl7v2MessageBuilder hl7v2MessageBuilder;
     @Mock private RoleValidator roleValidator;
     @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
+    @Mock private AuditEventLogService auditEventLogService;
 
     // Real properties, not a mock: the transport endpoint must report the
     // actual defaults, and a mock would pass with all-zero nonsense.
@@ -298,6 +301,73 @@ class InstrumentOutboxServiceImplTest {
 
         assertThatThrownBy(() -> service.getMessage(row.getId()))
             .isInstanceOf(ResourceNotFoundException.class);
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    // ── access: the payload is a PHI read (owner, 2026-11-19) ───────────────────
+
+    @Test
+    void getMessage_auditsEveryPayloadReadAsADataAccessOnThePatient() {
+        com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID());
+        labOrder.setPatient(patient);
+        InstrumentOutbox row = message(InstrumentOutboxStatus.ACK);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(outboxRepository.findById(row.getId())).thenReturn(Optional.of(row));
+
+        service.getMessage(row.getId());
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.DATA_ACCESS);
+        assertThat(audit.getValue().getEntityType()).isEqualTo(InstrumentOutboxServiceImpl.AUDIT_ENTITY_TYPE);
+        assertThat(audit.getValue().getResourceId()).isEqualTo(row.getId().toString());
+        assertThat(audit.getValue().getPatientId()).isEqualTo(patient.getId());
+        assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
+        // Ids and the message type only: never the payload or the patient's name.
+        assertThat(audit.getValue().getEventDescription())
+            .isEqualTo("Instrument outbox message " + row.getId() + " (OML^O21) viewed")
+            .doesNotContain("MSH");
+    }
+
+    @Test
+    void getMessage_refusesTheUnscopedSuperAdminView() {
+        // requireActiveHospitalId() answers null for an unpinned super-admin;
+        // isHandledBy(null) is true, so without this check that view read
+        // every hospital's patient names.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        UUID id = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.getMessage(id))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Hospital context required");
+        verify(outboxRepository, never()).findById(any());
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void getMessagesByLabOrder_listsSummariesWithoutThePayload() {
+        InstrumentOutbox row = message(InstrumentOutboxStatus.ACK);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(outboxRepository.findByLabOrder_Id(labOrderId)).thenReturn(List.of(row));
+
+        assertThat(service.getMessagesByLabOrder(labOrderId)).singleElement()
+            .satisfies(dto -> assertThat(dto.getPayload()).isNull());
+    }
+
+    @Test
+    void rowsCarryTheObservationStatusSoPreliminaryAndFinalDoNotLookLikeDuplicates() {
+        InstrumentOutbox preliminary = message(InstrumentOutboxStatus.ACK);
+        preliminary.setMessageType("ORU^R01");
+        preliminary.setPayload("MSH|^~\\&|HMS|H|L|L|20261119153000+0000||ORU^R01|1|P|2.5.1\r"
+            + "OBX|1|NM|GLU^Glucose||5.6|mmol/L||N|||P|||20261119153000+0000\r");
+        InstrumentOutbox order = message(InstrumentOutboxStatus.ACK);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(outboxRepository.findByLabOrder_Id(labOrderId)).thenReturn(List.of(preliminary, order));
+
+        assertThat(service.getMessagesByLabOrder(labOrderId))
+            .extracting(InstrumentOutboxResponseDTO::getResultStatus)
+            .containsExactly("P", null);
     }
 
     // ── retry ─────────────────────────────────────────────────────────────────
