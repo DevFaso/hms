@@ -235,7 +235,8 @@ public class PatientRecordPdfService {
             if (!out.isEmpty()) {
                 out.append(SEPARATOR);
             }
-            out.append(t.get("pdf.record.note.addendum",
+            // An addendum saved without its author's attestation says so.
+            out.append(t.get(a.getSignedAt() != null ? "pdf.record.note.addendum" : "pdf.record.note.addendumNotAttested",
                 t.fmt(com.example.hms.service.support.NoteAddenda.when(a)),
                 a.getAuthorName() != null ? a.getAuthorName() : "—",
                 a.getContent()));

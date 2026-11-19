@@ -33,6 +33,16 @@ describe('NoteAddendaComponent (QA D2260)', () => {
     expect(items[1].textContent).toContain('Second');
   });
 
+  it('says « not attested », never « signed by », on an addendum saved without attestation', () => {
+    const host = render([
+      { content: 'Draft', authorName: 'Dr A', documentedAt: '2026-11-19T04:13:00' },
+    ]);
+    const meta = host.querySelector('[data-testid="note-addendum-meta"]')?.textContent ?? '';
+    expect(meta).toContain('NOTE_ADDENDA.NOT_ATTESTED');
+    expect(meta).not.toContain('NOTE_ADDENDA.SIGNED_BY');
+    expect(host.querySelector('time')?.textContent?.trim()).not.toBe('');
+  });
+
   it('renders nothing when there is no addendum or only a blank one', () => {
     expect(render(null).querySelector('[data-testid="note-addenda"]')).toBeNull();
     TestBed.resetTestingModule();

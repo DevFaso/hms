@@ -43,6 +43,13 @@ export type { NoteAddendumView } from './note-addendum-view';
                     <span>, {{ entry.authorCredentials | credentialsLabel }}</span>
                   }
                 }
+                <!-- Saved without its author's attestation: said so, never "signed". -->
+                @if (!entry.signedAt) {
+                  ·
+                  <span class="note-addenda__unattested" data-testid="note-addendum-unattested">{{
+                    'NOTE_ADDENDA.NOT_ATTESTED' | translate
+                  }}</span>
+                }
               </p>
               <p class="note-addenda__content" data-testid="note-addendum-content">
                 {{ entry.content }}
@@ -81,6 +88,10 @@ export type { NoteAddendumView } from './note-addendum-view';
       font-size: 0.75rem;
       color: #475569;
       overflow-wrap: anywhere;
+    }
+    .note-addenda__unattested {
+      font-weight: 600;
+      color: #b45309;
     }
     .note-addenda__content {
       margin: 2px 0 0;

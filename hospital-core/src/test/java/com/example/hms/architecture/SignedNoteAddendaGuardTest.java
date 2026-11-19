@@ -41,7 +41,7 @@ class SignedNoteAddendaGuardTest {
 
     private static final Pattern NOTE_ENTITY = Pattern.compile("\\b(?:EncounterNote|NursingNote)\\b");
     /** The note's own addenda read: {@code NoteAddenda.of(note)}, {@code note.getAddenda()} or a builder's {@code .addenda(}. */
-    private static final Pattern ADDENDA = Pattern.compile("\\bNoteAddenda\\.of\\(|\\bgetAddenda\\(\\)|\\.addenda\\(");
+    private static final Pattern ADDENDA = Pattern.compile("\\bNoteAddenda\\.(?:of|signedOnly)\\(|\\bgetAddenda\\(\\)|\\.addenda\\(");
 
     /** Reader DTOs that show a signed note's content without "Note" in their name: class → addenda field. */
     private static final Map<String, String> NOTE_CARRIERS = Map.of(
@@ -128,6 +128,38 @@ class SignedNoteAddendaGuardTest {
                 + "or list the file in NOT_A_READER with why it shows no note text")
             .isEmpty();
         assertThat(seen).as("NOT_A_READER holds no stale entry").containsExactlyInAnyOrderElementsOf(NOT_A_READER.keySet());
+    }
+
+    /**
+     * QA D2260 review: an addendum saved without its author's attestation has no signedAt, and the
+     * after-visit summary is the patient's copy (the portal reads /encounters/{id}/avs). Every source
+     * that fills a patient copy's addenda ({@code setNoteAddenda(}) takes them from
+     * {@code NoteAddenda.signedOnly(}, never {@code NoteAddenda.of(}.
+     */
+    @Test
+    void aPatientCopyCarriesSignedAddendaOnly() throws IOException {
+        List<String> missing = new ArrayList<>();
+        int copies = 0;
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                if (!code.contains("setNoteAddenda(") || file.toString().contains("payload")) {
+                    continue;
+                }
+                String rel = MAIN.relativize(file).toString().replace('\\', '/');
+                // Clearing it (the desk's shaping) gives the patient nothing; not a fill.
+                if (code.replace("setNoteAddenda(null)", "").contains("setNoteAddenda(")) {
+                    copies++;
+                    if (!code.contains("NoteAddenda.signedOnly(") || code.contains("NoteAddenda.of(")) {
+                        missing.add(rel);
+                    }
+                }
+            }
+        }
+        assertThat(copies).as("the scan found the after-visit summary").isPositive();
+        assertThat(missing)
+            .as("a patient copy carries attested (signed) addenda only: use NoteAddenda.signedOnly(note)")
+            .isEmpty();
     }
 
     private static List<String> dtoClassNames() throws IOException {

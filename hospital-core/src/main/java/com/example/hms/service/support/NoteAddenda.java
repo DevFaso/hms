@@ -38,6 +38,18 @@ public final class NoteAddenda {
             .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
     }
 
+    /**
+     * The addenda a PATIENT COPY may carry: only those their author signed (attested). An addendum saved
+     * without the accuracy attestation has no {@code signedAt}; staff readers show it as "not attested",
+     * the patient never receives it. Every patient-copy reader calls this, never {@link #of(EncounterNote)}
+     * ({@code SignedNoteAddendaGuardTest}).
+     */
+    public static List<NoteAddendumEntryDTO> signedOnly(EncounterNote note) {
+        return of(note).stream()
+            .filter(a -> a.getSignedAt() != null)
+            .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+    }
+
     /** The addenda of a ward nursing note, oldest first; empty when it has none. */
     public static List<NoteAddendumEntryDTO> of(NursingNote note) {
         if (note == null || note.getAddenda() == null || note.getAddenda().isEmpty()) {

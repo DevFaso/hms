@@ -203,6 +203,11 @@ class VisitTimelineRowsTest {
         addendum.setAuthorName("Dr Ouédraogo");
         addendum.setSignedAt(LocalDateTime.now().minusMinutes(10));
         signed.addAddendum(addendum);
+        com.example.hms.model.encounter.EncounterNoteAddendum unattested = new com.example.hms.model.encounter.EncounterNoteAddendum();
+        unattested.setId(UUID.randomUUID());
+        unattested.setContent("Sans attestation");
+        unattested.setDocumentedAt(LocalDateTime.now().minusMinutes(5));
+        signed.addAddendum(unattested);
         com.example.hms.model.NursingNote nursing = new com.example.hms.model.NursingNote();
         nursing.setId(UUID.randomUUID());
         nursing.setHospital(here);
@@ -220,6 +225,12 @@ class VisitTimelineRowsTest {
 
         List<PatientTimelineEntryDTO> visit = rows.collect(patientId, here.getId(), Set.of());
 
+        assertThat(visit).filteredOn(row -> unattested.getId().toString().equals(row.getEntryId()))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row.getSummary()).isEqualTo("Addendum à la note signée (non attesté) — Sans attestation");
+                assertThat(row.getOccurredAt()).isEqualTo(unattested.getDocumentedAt());
+            });
         assertThat(visit).filteredOn(row -> nursingAddendum.getId().toString().equals(row.getEntryId()))
             .singleElement()
             .satisfies(row -> {

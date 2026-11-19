@@ -14596,6 +14596,7 @@
     "TITLE": "Addenda ({{count}})",
     "ADDENDUM": "Addendum",
     "SIGNED_BY": "signed by {{name}}",
-    "BY": "by {{name}}"
+    "BY": "by {{name}}",
+    "NOT_ATTESTED": "Not attested"
   }
 }

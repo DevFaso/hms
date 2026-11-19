@@ -443,6 +443,11 @@ class AfterVisitSummarySectionsTest {
         signed.addAddendum(later);
         signed.addAddendum(earlier);
         signed.addAddendum(blank);
+        // Saved without the accuracy attestation: no signedAt, never on the patient's copy.
+        com.example.hms.model.encounter.EncounterNoteAddendum unattested = new com.example.hms.model.encounter.EncounterNoteAddendum();
+        unattested.setContent("UNATTESTED draft correction");
+        unattested.setDocumentedAt(LocalDateTime.now().minusMinutes(30));
+        signed.addAddendum(unattested);
         encounter.setEncounterNote(signed);
 
         AfterVisitSummaryDTO avs = new AfterVisitSummaryDTO();

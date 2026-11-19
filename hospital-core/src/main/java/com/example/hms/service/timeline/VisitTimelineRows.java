@@ -668,7 +668,9 @@ public class VisitTimelineRows {
         putIfNotNull(metadata, META_CLINICIAN, blankToNull(addendum.getAuthorName()));
         return row(addendum.getId(), category,
             com.example.hms.service.support.NoteAddenda.when(addendum),
-            MessageUtil.resolveOrRaw(summaryKey, truncate(addendum.getContent())),
+            // An addendum saved without its author's attestation says so.
+            MessageUtil.resolveOrRaw(addendum.getSignedAt() != null ? summaryKey : summaryKey + "NotAttested",
+                truncate(addendum.getContent())),
             sensitive,
             metadata);
     }
