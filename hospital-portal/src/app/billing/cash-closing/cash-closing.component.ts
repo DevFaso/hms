@@ -65,124 +65,143 @@ function today(): string {
             {{ 'BILLING.CASH_CLOSING.EMPTY' | translate }}
           </p>
         } @else {
-          <table class="data-table" data-testid="cash-closing-totals">
-            <caption class="sr-only">
-              {{
-                'BILLING.CASH_CLOSING.BY_METHOD' | translate
-              }}
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">{{ 'BILLING.CASH_CLOSING.SOURCE' | translate }}</th>
-                <th scope="col">{{ 'BILLING.PAYMENT_METHOD' | translate }}</th>
-                <th scope="col" class="numeric">{{ 'BILLING.CASH_CLOSING.COUNT' | translate }}</th>
-                <th scope="col" class="numeric">{{ 'BILLING.CASH_CLOSING.AMOUNT' | translate }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (
-                t of c.byMethod;
-                track t.source + t.method + t.operator + (t.direction ?? 'IN')
-              ) {
-                <tr [class.money-out]="isOut(t.direction)">
-                  <td>{{ t.source | keyLabel: 'BILLING.CASH_CLOSING.SOURCES.' }}</td>
-                  <td>
-                    {{ t.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
-                    @if (isMobileMoney(t.method)) {
-                      <!-- Billing plan PR 9: Orange Money and Moov Money are totalled apart. -->
-                      <span class="operator" data-testid="cash-closing-operator">
-                        — {{ operatorLabelKey(t.operator) | translate }}</span
-                      >
-                    }
-                    @if (isOut(t.direction)) {
-                      <span class="out-tag">{{
-                        'BILLING.CASH_CLOSING.REFUND_TAG' | translate
-                      }}</span>
-                    }
-                  </td>
-                  <td class="numeric">{{ t.count }}</td>
-                  <td class="numeric">{{ isOut(t.direction) ? '−' : '' }}{{ t.amount | cfa }}</td>
-                </tr>
-              }
-            </tbody>
-            <tfoot>
-              <tr>
-                <th scope="row" colspan="2">{{ 'BILLING.CASH_CLOSING.TOTAL' | translate }}</th>
-                <td class="numeric">{{ c.receivedCount }}</td>
-                <td class="numeric" data-testid="cash-closing-total">
-                  {{ c.receivedAmount | cfa }}
-                </td>
-              </tr>
-              @if (c.reversedCount > 0) {
+          <div class="table-scroll">
+            <table class="data-table" data-testid="cash-closing-totals">
+              <caption class="sr-only">
+                {{
+                  'BILLING.CASH_CLOSING.BY_METHOD' | translate
+                }}
+              </caption>
+              <thead>
                 <tr>
-                  <th scope="row" colspan="2">{{ 'BILLING.CASH_CLOSING.REVERSED' | translate }}</th>
-                  <td class="numeric">{{ c.reversedCount }}</td>
-                  <td class="numeric">{{ c.reversedAmount | cfa }}</td>
+                  <th scope="col">{{ 'BILLING.CASH_CLOSING.SOURCE' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYMENT_METHOD' | translate }}</th>
+                  <th scope="col" class="numeric">
+                    {{ 'BILLING.CASH_CLOSING.COUNT' | translate }}
+                  </th>
+                  <th scope="col" class="numeric">
+                    {{ 'BILLING.CASH_CLOSING.AMOUNT' | translate }}
+                  </th>
                 </tr>
-              }
-              <!-- Billing-money plan PR 8 (QA D1900): refunds handed back are money out of the till, today -->
-              @if ((c.refundedCount ?? 0) > 0) {
-                <tr class="money-out" data-testid="cash-closing-refunded">
-                  <th scope="row" colspan="2">{{ 'BILLING.CASH_CLOSING.REFUNDED' | translate }}</th>
-                  <td class="numeric">{{ c.refundedCount }}</td>
-                  <td class="numeric">−{{ c.refundedAmount ?? 0 | cfa }}</td>
-                </tr>
+              </thead>
+              <tbody>
+                @for (
+                  t of c.byMethod;
+                  track t.source + t.method + t.operator + (t.direction ?? 'IN')
+                ) {
+                  <tr [class.money-out]="isOut(t.direction)">
+                    <td>{{ t.source | keyLabel: 'BILLING.CASH_CLOSING.SOURCES.' }}</td>
+                    <td>
+                      {{ t.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
+                      @if (isMobileMoney(t.method)) {
+                        <!-- Billing plan PR 9: Orange Money and Moov Money are totalled apart. -->
+                        <span class="operator" data-testid="cash-closing-operator">
+                          — {{ operatorLabelKey(t.operator) | translate }}</span
+                        >
+                      }
+                      @if (isOut(t.direction)) {
+                        <span class="out-tag">{{
+                          'BILLING.CASH_CLOSING.REFUND_TAG' | translate
+                        }}</span>
+                      }
+                    </td>
+                    <td class="numeric">{{ t.count }}</td>
+                    <td class="numeric">{{ isOut(t.direction) ? '−' : '' }}{{ t.amount | cfa }}</td>
+                  </tr>
+                }
+              </tbody>
+              <tfoot>
                 <tr>
-                  <th scope="row" colspan="2">{{ 'BILLING.CASH_CLOSING.NET' | translate }}</th>
-                  <td></td>
-                  <td class="numeric" data-testid="cash-closing-net">
-                    {{ c.netAmount ?? 0 | cfa }}
+                  <th scope="row" colspan="2">{{ 'BILLING.CASH_CLOSING.TOTAL' | translate }}</th>
+                  <td class="numeric">{{ c.receivedCount }}</td>
+                  <td class="numeric" data-testid="cash-closing-total">
+                    {{ c.receivedAmount | cfa }}
                   </td>
                 </tr>
-              }
-            </tfoot>
-          </table>
-          <table class="data-table" data-testid="cash-closing-entries">
-            <caption class="sr-only">
-              {{
-                'BILLING.CASH_CLOSING.ENTRIES' | translate
-              }}
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">{{ 'BILLING.CASH_CLOSING.TIME' | translate }}</th>
-                <th scope="col">{{ 'BILLING.CASH_CLOSING.DOCUMENT' | translate }}</th>
-                <th scope="col">{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</th>
-                <th scope="col">{{ 'BILLING.PAYMENT_METHOD' | translate }}</th>
-                <th scope="col">{{ 'BILLING.CASH_CLOSING.REFERENCE' | translate }}</th>
-                <th scope="col" class="numeric">{{ 'BILLING.CASH_CLOSING.AMOUNT' | translate }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (e of c.entries; track e.id) {
-                <tr [class.reversed]="isReversed(e.status)" [class.money-out]="isOut(e.direction)">
-                  <td>{{ e.receivedAt | serverTime | date: 'shortTime' }}</td>
-                  <td>{{ e.document || '—' }}</td>
-                  <td>{{ e.patientName || '—' }}</td>
-                  <td>
-                    {{ e.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
-                    @if (isMobileMoney(e.method)) {
-                      <span class="operator">— {{ operatorLabelKey(e.operator) | translate }}</span>
-                    }
-                  </td>
-                  <td>{{ e.reference || '—' }}</td>
-                  <td class="numeric">
-                    {{ isOut(e.direction) ? '−' : '' }}{{ e.amount | cfa }}
-                    @if (isOut(e.direction)) {
-                      <span class="out-tag">{{
-                        'BILLING.CASH_CLOSING.REFUND_TAG' | translate
-                      }}</span>
-                    }
-                    @if (isReversed(e.status)) {
-                      <span class="reversed-tag">{{
-                        'BILLING.CASH_CLOSING.REVERSED_TAG' | translate
-                      }}</span>
-                    }
-                  </td>
+                @if (c.reversedCount > 0) {
+                  <tr>
+                    <th scope="row" colspan="2">
+                      {{ 'BILLING.CASH_CLOSING.REVERSED' | translate }}
+                    </th>
+                    <td class="numeric">{{ c.reversedCount }}</td>
+                    <td class="numeric">{{ c.reversedAmount | cfa }}</td>
+                  </tr>
+                }
+                <!-- Billing-money plan PR 8 (QA D1900): refunds handed back are money out of the till, today -->
+                @if ((c.refundedCount ?? 0) > 0) {
+                  <tr class="money-out" data-testid="cash-closing-refunded">
+                    <th scope="row" colspan="2">
+                      {{ 'BILLING.CASH_CLOSING.REFUNDED' | translate }}
+                    </th>
+                    <td class="numeric">{{ c.refundedCount }}</td>
+                    <td class="numeric">−{{ c.refundedAmount ?? 0 | cfa }}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row" colspan="2">{{ 'BILLING.CASH_CLOSING.NET' | translate }}</th>
+                    <td></td>
+                    <td class="numeric" data-testid="cash-closing-net">
+                      {{ c.netAmount ?? 0 | cfa }}
+                    </td>
+                  </tr>
+                }
+              </tfoot>
+            </table>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table" data-testid="cash-closing-entries">
+              <caption class="sr-only">
+                {{
+                  'BILLING.CASH_CLOSING.ENTRIES' | translate
+                }}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">{{ 'BILLING.CASH_CLOSING.TIME' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.CASH_CLOSING.DOCUMENT' | translate }}</th>
+                  <th scope="col">{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYMENT_METHOD' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.CASH_CLOSING.REFERENCE' | translate }}</th>
+                  <th scope="col" class="numeric">
+                    {{ 'BILLING.CASH_CLOSING.AMOUNT' | translate }}
+                  </th>
                 </tr>
-              }
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                @for (e of c.entries; track e.id) {
+                  <tr
+                    [class.reversed]="isReversed(e.status)"
+                    [class.money-out]="isOut(e.direction)"
+                  >
+                    <td>{{ e.receivedAt | serverTime | date: 'shortTime' }}</td>
+                    <td>{{ e.document || '—' }}</td>
+                    <td>{{ e.patientName || '—' }}</td>
+                    <td>
+                      {{ e.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
+                      @if (isMobileMoney(e.method)) {
+                        <span class="operator"
+                          >— {{ operatorLabelKey(e.operator) | translate }}</span
+                        >
+                      }
+                    </td>
+                    <td>{{ e.reference || '—' }}</td>
+                    <td class="numeric">
+                      {{ isOut(e.direction) ? '−' : '' }}{{ e.amount | cfa }}
+                      @if (isOut(e.direction)) {
+                        <span class="out-tag">{{
+                          'BILLING.CASH_CLOSING.REFUND_TAG' | translate
+                        }}</span>
+                      }
+                      @if (isReversed(e.status)) {
+                        <span class="reversed-tag">{{
+                          'BILLING.CASH_CLOSING.REVERSED_TAG' | translate
+                        }}</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
       }
     </section>
@@ -230,6 +249,10 @@ function today(): string {
       }
       .data-table {
         width: 100%;
+        /* QA D2432 (r64): not the shared 600 px phone minimum: the totals
+           (« Total encaissé », « Solde attendu en caisse ») fit a phone, and
+           the longer entries list scrolls in its own box with a cue. */
+        min-width: 0;
         margin-top: 0.75rem;
       }
       .sr-only {

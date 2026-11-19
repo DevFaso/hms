@@ -22,11 +22,24 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { saveResponse } from '../../shared/download-file';
 import { refusalReason } from '../../shared/refusal-reason';
 import { ShownRows } from '../shown-rows';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { PrescriptionDocumentComponent } from '../prescription-document/prescription-document.component';
+import {
+  isPrintablePrescription,
+  prescriptionDocumentItems,
+} from '../prescription-document/prescription-document';
 
 @Component({
   selector: 'app-my-medications',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    EnumLabelPipe,
+    TranslateModule,
+    PrescriptionDocumentComponent,
+  ],
   templateUrl: './my-medications.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-medications.component.scss', '../patient-portal-pages.scss'],
@@ -35,6 +48,7 @@ export class MyMedicationsComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   medications = signal<MedicationSummary[]>([]);
   /** QA D1399: the medicines could not be read: said so, never "no medicines". */
   medicationsFailed = signal(false);
@@ -67,6 +81,73 @@ export class MyMedicationsComponent implements OnInit {
   expandedMedId = signal<string | null>(null);
   expandedRxId = signal<string | null>(null);
   requestingRefill = signal<string | null>(null);
+  /** QA D2354: the refill request being withdrawn. */
+  cancellingRefill = signal<string | null>(null);
+  /** QA D2353: the medicines of the prescription document open, if any. */
+  documentItems = signal<PortalPrescription[] | null>(null);
+
+  isPrintable(rx: PortalPrescription): boolean {
+    return isPrintablePrescription(rx);
+  }
+
+  openDocument(rx: PortalPrescription, event?: Event): void {
+    event?.stopPropagation();
+    this.documentItems.set(prescriptionDocumentItems(rx, this.prescriptions()));
+  }
+
+  closeDocument(): void {
+    this.documentItems.set(null);
+  }
+
+  /** QA D2354: a request the prescriber has not decided yet can still be withdrawn. */
+  isPendingRefill(refill: MedicationRefill): boolean {
+    return refill.status === 'REQUESTED' || refill.status === 'PAUSED';
+  }
+
+  /** The open request for a medicine's prescription, newest first. */
+  openRefillFor(prescriptionId: string): MedicationRefill | null {
+    return (
+      this.refills().find((r) => r.prescriptionId === prescriptionId && this.isPendingRefill(r)) ??
+      null
+    );
+  }
+
+  /** QA D2354: withdraw a pending request, after a confirmation. */
+  async cancelRefill(refill: MedicationRefill, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    const confirmed = await this.confirm.ask({
+      titleKey: 'PORTAL_REFILL.CANCEL_CONFIRM_TITLE',
+      messageKey: 'PORTAL_REFILL.CANCEL_CONFIRM_MESSAGE',
+      params: { name: refill.medicationName },
+      confirmKey: 'PORTAL_REFILL.CANCEL',
+      dismissKey: 'PORTAL_REFILL.KEEP',
+    });
+    if (!confirmed) return;
+    this.cancellingRefill.set(refill.id);
+    this.portal.cancelRefill(refill.id).subscribe({
+      next: (cancelled) => {
+        const status = cancelled?.status ?? 'CANCELLED';
+        this.refills.update((list) =>
+          list.map((r) => (r.id === refill.id ? { ...r, ...cancelled, status } : r)),
+        );
+        this.medications.update((list) =>
+          list.map((m) =>
+            m.id === refill.prescriptionId
+              ? { ...m, refillRequestStatus: status, refillRequestOpen: false }
+              : m,
+          ),
+        );
+        this.toast.success(this.translate.instant('PORTAL_REFILL.CANCELLED'));
+        this.cancellingRefill.set(null);
+      },
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL_REFILL.CANCEL_FAILED'),
+        );
+        this.cancellingRefill.set(null);
+      },
+    });
+  }
 
   /**
    * QA D966: a prescription printed for me offers its copy; the page said
@@ -127,7 +208,16 @@ export class MyMedicationsComponent implements OnInit {
     this.expandedRxId.set(this.expandedRxId() === id ? null : id);
   }
 
-  requestRefill(med: MedicationSummary): void {
+  /** QA D2354: a refill is sent only once the patient has confirmed it. */
+  async requestRefill(med: MedicationSummary): Promise<void> {
+    if (this.requestingRefill()) return;
+    const confirmed = await this.confirm.ask({
+      titleKey: 'PORTAL_REFILL.CONFIRM_TITLE',
+      messageKey: 'PORTAL_REFILL.CONFIRM_MESSAGE',
+      params: { name: med.medicationName },
+      confirmKey: 'PORTAL_REFILL.CONFIRM_SEND',
+    });
+    if (!confirmed) return;
     this.requestingRefill.set(med.id);
     this.portal
       .requestRefill({

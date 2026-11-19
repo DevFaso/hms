@@ -10,22 +10,35 @@ import { SessionScopeService } from './core/session-scope.service';
 import { AnalyticsService } from './core/services/analytics.service';
 import { environment } from '../environments/environment';
 import { DEFAULT_LANG, storedLang } from './shared/i18n/app-locale';
+import { ConnectivityBannerComponent } from './shared/connectivity/connectivity-banner.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, TranslateModule],
+  imports: [RouterOutlet, TranslateModule, ConnectivityBannerComponent],
   template: `
     @if (chunkRecovery.failedUrl()) {
       <section class="chunk-recovery" role="alert" aria-labelledby="chunk-recovery-title">
-        <h1 id="chunk-recovery-title">{{ 'CHUNK_RECOVERY.TITLE' | translate }}</h1>
-        <p>{{ 'CHUNK_RECOVERY.MESSAGE' | translate }}</p>
-        <button type="button" (click)="chunkRecovery.reload()">
-          {{ 'CHUNK_RECOVERY.RELOAD' | translate }}
-        </button>
+        @if (chunkRecovery.offline()) {
+          <!-- QA D2352: the connection is down; the page below (and what was typed) stays. -->
+          <h1 id="chunk-recovery-title" data-testid="chunk-recovery-offline">
+            {{ 'CONNECTIVITY.PAGE_OFFLINE_TITLE' | translate }}
+          </h1>
+          <p>{{ 'CONNECTIVITY.PAGE_OFFLINE_MESSAGE' | translate }}</p>
+          <button type="button" (click)="chunkRecovery.reload()">
+            {{ 'CONNECTIVITY.RETRY' | translate }}
+          </button>
+        } @else {
+          <h1 id="chunk-recovery-title">{{ 'CHUNK_RECOVERY.TITLE' | translate }}</h1>
+          <p>{{ 'CHUNK_RECOVERY.MESSAGE' | translate }}</p>
+          <button type="button" (click)="chunkRecovery.reload()">
+            {{ 'CHUNK_RECOVERY.RELOAD' | translate }}
+          </button>
+        }
       </section>
     }
     <router-outlet />
+    <app-connectivity-banner />
   `,
   changeDetection: ChangeDetectionStrategy.Eager,
   styles: [

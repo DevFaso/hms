@@ -190,10 +190,16 @@ interface PrefRow {
         .channel-col {
           width: auto;
         }
+        /* QA D2345 (r64): hyphenate at syllables (« APPLI-CATION »), never
+           letter by letter, and a long type name (« Renouvellement ») hyphenates
+           too, so PUSH is on screen. */
         .pref-table thead th {
           font-size: 0.7rem;
           letter-spacing: 0;
-          overflow-wrap: anywhere;
+          hyphens: auto;
+        }
+        .type-label {
+          hyphens: auto;
         }
       }
       .type-label {

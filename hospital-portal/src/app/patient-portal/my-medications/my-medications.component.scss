@@ -168,3 +168,22 @@
     font-size: 16px;
   }
 }
+
+/* QA D2354: withdraw a pending refill request. */
+.refill-cancel-btn {
+  min-height: 40px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b42318;
+  background: #fff;
+  border: 1px solid #f3b8b2;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+}

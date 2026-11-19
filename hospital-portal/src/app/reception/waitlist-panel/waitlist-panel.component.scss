@@ -70,6 +70,8 @@
 }
 
 .mrn-tag {
+  /* QA D2462 (r64): a long MRN breaks rather than widening the Patient column. */
+  overflow-wrap: anywhere;
   margin-left: 6px;
   font-size: 0.72rem;
   color: var(--text-secondary, #64748b);
@@ -83,12 +85,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+
+  /* QA D2462 (r64): below 1280 px the reason wraps in full instead of taking
+     a fixed 180 px, so Motif and Statut stay on screen at a 1024 laptop. */
+  @media (max-width: 1279px) {
+    max-width: none;
+    white-space: normal;
+  }
 }
 
+/* QA D2462 (r64): a table cell, not a flex box (a flex <td> ignores the
+   table's sizing), and its buttons wrap so Motif and Statut keep their room. */
 .actions-cell {
-  display: flex;
-  gap: 6px;
-  white-space: nowrap;
+  white-space: normal;
+
+  > * {
+    margin: 2px 6px 2px 0;
+  }
 }
 
 /* Priority chips */
