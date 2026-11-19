@@ -788,6 +788,16 @@ export interface PortalPrescription {
   readyForCollectionAt?: string;
   /** G15: the pharmacy where it is waiting. */
   readyForCollectionPharmacyName?: string;
+  /** QA D2353: what the printable prescription carries (all from the issued prescription). */
+  route?: string | null;
+  instructions?: string | null;
+  quantity?: number | null;
+  quantityUnit?: string | null;
+  refillsAllowed?: number | null;
+  hospitalName?: string | null;
+  patientFullName?: string | null;
+  signedAt?: string | null;
+  encounterId?: string | null;
 }
 
 /** Raw shape returned by backend PrescriptionResponseDTO. */
@@ -806,6 +816,15 @@ interface PrescriptionApiResponse {
   createdAt: string;
   readyForCollectionAt?: string;
   readyForCollectionPharmacyName?: string;
+  route?: string | null;
+  instructions?: string | null;
+  quantity?: number | null;
+  quantityUnit?: string | null;
+  refillsAllowed?: number | null;
+  hospitalName?: string | null;
+  patientFullName?: string | null;
+  signedAt?: string | null;
+  encounterId?: string | null;
 }
 
 export interface AfterVisitSummary {
@@ -1378,6 +1397,15 @@ export class PatientPortalService {
           prnMinIntervalHours: p.prnMinIntervalHours ?? null,
           readyForCollectionAt: p.readyForCollectionAt ?? undefined,
           readyForCollectionPharmacyName: p.readyForCollectionPharmacyName ?? undefined,
+          route: p.route ?? null,
+          instructions: p.instructions ?? null,
+          quantity: p.quantity ?? null,
+          quantityUnit: p.quantityUnit ?? null,
+          refillsAllowed: p.refillsAllowed ?? null,
+          hospitalName: p.hospitalName ?? null,
+          patientFullName: p.patientFullName ?? null,
+          signedAt: p.signedAt ?? null,
+          encounterId: p.encounterId ?? null,
         })),
       ),
       catchError(() => of([])),

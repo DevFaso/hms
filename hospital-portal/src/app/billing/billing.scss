@@ -300,6 +300,11 @@
 
 .panel-body {
   padding: 1.5rem;
+
+  /* QA D2462 (r64): the payments table's Statut fits the drawer at 1024. */
+  @media (max-width: 1279px) {
+    padding: 1rem;
+  }
 }
 
 /* QA D2230: a drawer table that is still wider than the drawer (a phone)
@@ -562,6 +567,27 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+  }
+}
+
+/* QA D2462 / D2321 (r64): at a 1024 laptop the ten invoice columns share
+   ~714 px; a date and an amount may take two lines so Payé, Solde and Statut
+   stay on screen instead of under the sticky actions column (amounts keep
+   their no-break spaces). */
+@media (max-width: 1279px) {
+  .data-table .date-cell {
+    white-space: normal;
+  }
+  /* A payment reference (« OM-R53RF-782086 ») breaks rather than pushing the
+     drawer's Statut column out of its card. */
+  .lines-table .ref-cell {
+    overflow-wrap: anywhere;
+    min-width: 8ch;
+  }
+  /* « CHWF2396-2026-000046 » on two lines rather than one wide column. */
+  .data-table .invoice-num {
+    overflow-wrap: anywhere;
+    min-width: 8ch;
   }
 }
 

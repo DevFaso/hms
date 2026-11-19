@@ -197,6 +197,14 @@ export class BillingComponent implements OnInit {
 
   invoices = signal<BillingInvoiceResponse[]>([]);
   filtered = signal<BillingInvoiceResponse[]>([]);
+  /**
+   * QA D2321 (r64): the « Hôpital » column only when the list spans more than
+   * one hospital. Repeating one name on every row took the width that Payé,
+   * Solde and Statut need at a 1024 laptop; the drawer still names it.
+   */
+  readonly showHospitalColumn = computed(
+    () => new Set(this.filtered().map((inv) => inv.hospitalName ?? '')).size > 1,
+  );
   searchTerm = '';
   loading = signal(true);
   /**

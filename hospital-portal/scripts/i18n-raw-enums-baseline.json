@@ -147,6 +147,8 @@
     "src/app/patient-portal/my-medical-history/my-medical-history.component.html::socialHistory()?.tobaccoType",
     "src/app/patient-portal/my-medications/my-medications.component.html::med.frequency",
     "src/app/patient-portal/my-medications/my-medications.component.html::rx.frequency",
+    "src/app/patient-portal/prescription-document/prescription-document.component.html::item.frequency",
+    "src/app/patient-portal/prescription-document/prescription-document.component.html::item.route",
     "src/app/patient-portal/my-pharmacy-invoices/my-pharmacy-invoices.component.html::c.claimStatus",
     "src/app/patient-portal/my-pharmacy-invoices/my-pharmacy-invoices.component.html::c.rejectionReason",
     "src/app/patient-portal/my-pharmacy-invoices/my-pharmacy-invoices.component.html::p.paymentMethod",
@@ -275,6 +277,8 @@
     "src/app/billing/price-list/price-list.component.html::p.changeReason": "Billing-money plan PR 2: PriceListPriceDTO.changeReason is the free text the hospital admin or accountant typed for a price change (owner-approved pin, 2026-11-16), shown as typed; not a wire token.",
     "src/app/billing/payers/payers.component.html::payer.deactivationReason": "Billing-money plan PR 6: PayerDTO.deactivationReason is the free text the hospital admin or accountant typed when retiring a payer, shown as typed; not a wire token.",
     "src/app/billing/payers/payers.component.html::rule.endReason": "Billing-money plan PR 6: PayerPlanRuleDTO.endReason is the free text the hospital admin or accountant typed when ending a coverage rule, shown as typed; not a wire token.",
-    "src/app/billing/payers/payers.component.html::t.changeReason": "Review of #1202: PayerPlanTermsDTO.changeReason is the free text the hospital admin or accountant typed for new plan terms, shown as typed; not a wire token."
+    "src/app/billing/payers/payers.component.html::t.changeReason": "Review of #1202: PayerPlanTermsDTO.changeReason is the free text the hospital admin or accountant typed for new plan terms, shown as typed; not a wire token.",
+    "src/app/patient-portal/prescription-document/prescription-document.component.html::item.route": "QA D2353: PrescriptionResponseDTO.route is rendered through | medicationRoute (the portal's shared route vocabulary, QA D950), which the scan does not read as a label pipe; as on my-medications and the chart pages.",
+    "src/app/patient-portal/prescription-document/prescription-document.component.html::item.frequency": "QA D2353: PrescriptionResponseDTO.frequency is the free text the prescriber typed, as on my-medications (pinned above); not a wire token."
   }
 }

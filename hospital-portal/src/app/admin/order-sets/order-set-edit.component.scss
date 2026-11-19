@@ -96,6 +96,12 @@
   gap: 0.75rem;
   align-items: end;
 
+  /* QA r64 (squeezed-text guard): on a phone the three cells stack; three
+     columns squeezed the name field to 0 px, one letter per line. */
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   label {
     display: flex;
     flex-direction: column;

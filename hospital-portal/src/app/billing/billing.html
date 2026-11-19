@@ -220,7 +220,9 @@
           <tr>
             <th scope="col">{{ 'BILLING.INVOICE_NUM' | translate }}</th>
             <th scope="col">{{ 'APPOINTMENTS.PATIENT' | translate }}</th>
-            <th scope="col">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
+            @if (showHospitalColumn()) {
+              <th scope="col">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
+            }
             <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
             <th scope="col">{{ 'BILLING.DUE_DATE' | translate }}</th>
             <th scope="col">{{ 'COMMON.TOTAL' | translate }}</th>
@@ -238,7 +240,9 @@
                 <div class="cell-primary">{{ inv.patientFullName || '—' }}</div>
                 <div class="cell-secondary">{{ inv.patientEmail || '' }}</div>
               </td>
-              <td>{{ inv.hospitalName || '—' }}</td>
+              @if (showHospitalColumn()) {
+                <td>{{ inv.hospitalName || '—' }}</td>
+              }
               <td class="date-cell">
                 {{ inv.invoiceDate ? (inv.invoiceDate | serverTime | date: 'mediumDate') : '—' }}
               </td>
@@ -952,7 +956,7 @@
                           </div>
                         }
                       </td>
-                      <td>{{ p.referenceNumber || '—' }}</td>
+                      <td class="ref-cell">{{ p.referenceNumber || '—' }}</td>
                       <td class="amount">{{ formatCurrency(p.amount) }}</td>
                       <td>
                         {{ p.status | keyLabel: 'BILLING.PAYMENT_STATUSES.' }}

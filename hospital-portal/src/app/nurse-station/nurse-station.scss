@@ -977,6 +977,9 @@
 
 .task-board-header {
   display: flex;
+  /* QA D2285 (r64): the title and its toggles wrap on a phone, not overflow. */
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;

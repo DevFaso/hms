@@ -175,7 +175,25 @@
     font-size: 0.875rem;
     color: #334155;
     border-bottom: 1px solid #f1f5f9;
+  }
+
+  /* QA D2300 / D2462 (r64): only the date and the order code stay on one line.
+     Every cell nowrap made the table 1,476 px at 1366, so Statut and the
+     values sat under the sticky actions column. */
+  td.date-cell,
+  td.order-code {
     white-space: nowrap;
+  }
+
+  @media (max-width: 1279px) {
+    td.date-cell {
+      white-space: normal;
+    }
+    td.order-code {
+      white-space: normal;
+      overflow-wrap: anywhere;
+      min-width: 8ch;
+    }
   }
 }
 
@@ -856,7 +874,6 @@
 
 @include diagnostics.workspace;
 
-// Keep row actions on one line; the table scrolls horizontally rather than growing tall.
 .diagnostics-workspace > .data-table {
   table {
     height: auto;
@@ -867,9 +884,11 @@
   th {
     padding: 12px 14px;
   }
+  /* QA D2300 / D2462 (r64): the actions now stick to the right edge, so one
+     long line of six buttons (216 px) only hid Statut and the values under it.
+     They wrap onto a second line instead, and the whole row fits at 1366. */
   .action-group {
-    flex-wrap: nowrap;
-    width: max-content;
+    flex-wrap: wrap;
   }
   .action-link {
     flex: 0 0 32px;
