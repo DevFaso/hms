@@ -26,13 +26,18 @@ import java.util.UUID;
 public class LegacyAllergyTextBackfillWorker {
 
     public enum Outcome {
-        /** Structured rows were created from the free text. */
+        /** Structured rows were created from the free text (at least one). */
         IMPORTED,
-        /** The patient already carries rows from a free-text import; nothing to do. */
+        /**
+         * QA D2220: the text names only allergens the chart already has
+         * (active, deactivated or entered in error); no row was created.
+         */
+        NOTHING_NEW,
+        /** Already processed (ledger), or carries rows from a free-text import; nothing to do. */
         ALREADY_DONE,
         /** The text is blank or only states that there are no allergies; left as is. */
         NOTHING_TO_IMPORT,
-        /** The patient has no hospital to attach the rows to (the column is NOT NULL). */
+        /** The patient has no hospital to attach the rows to (the column is NOT NULL); retried next start. */
         NO_HOSPITAL,
         /** No patient with that id. */
         MISSING
@@ -43,6 +48,7 @@ public class LegacyAllergyTextBackfillWorker {
     private final HospitalRepository hospitalRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final LegacyAllergyTextImporter importer;
+    private final LegacyAllergyImportLedger ledger;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Outcome backfillOne(UUID patientId) {
@@ -50,28 +56,42 @@ public class LegacyAllergyTextBackfillWorker {
         if (patient == null) {
             return Outcome.MISSING;
         }
+        // QA D2220: done-ness is recorded, never inferred. A patient the
+        // ledger knows is never processed again, whatever the column holds
+        // now: the column is a derived summary after the first pass, and a
+        // later deactivation must not be undone by the next start.
+        if (ledger.isDone(patientId)) {
+            return Outcome.ALREADY_DONE;
+        }
         String text = patient.getAllergies();
         if (text == null || text.isBlank()) {
-            return Outcome.NOTHING_TO_IMPORT;
+            return mark(patientId, Outcome.NOTHING_TO_IMPORT, 0);
         }
-        // Idempotency: a patient whose text has already been turned into rows
-        // (by this backfill, or by the registration importer at create time,
-        // after which the column holds the derived summary) is skipped.
+        // A patient whose text was already turned into rows before the ledger
+        // existed (by this backfill, or by the registration importer at create
+        // time) is recorded and skipped.
         if (allergyRepository.existsByPatient_IdAndSourceSystem(patientId, LegacyAllergyTextImporter.SOURCE_LEGACY)
             || allergyRepository.existsByPatient_IdAndSourceSystem(patientId, LegacyAllergyTextImporter.SOURCE_REGISTRATION)) {
-            return Outcome.ALREADY_DONE;
+            return mark(patientId, Outcome.ALREADY_DONE, 0);
         }
         if (LegacyAllergyText.tokens(text).isEmpty()) {
             // «Aucune allergie connue» stays as the clerk wrote it: it is a
             // statement, not an allergen, and there is no row to make of it.
-            return Outcome.NOTHING_TO_IMPORT;
+            return mark(patientId, Outcome.NOTHING_TO_IMPORT, 0);
         }
         Hospital hospital = resolveHospital(patient);
         if (hospital == null) {
+            // Not marked: the patient may gain a hospital, and is retried then.
             return Outcome.NO_HOSPITAL;
         }
-        importer.importFreeText(patient, hospital, null, text, LegacyAllergyTextImporter.SOURCE_LEGACY);
-        return Outcome.IMPORTED;
+        int created = importer.importFreeText(patient, hospital, null, text, LegacyAllergyTextImporter.SOURCE_LEGACY);
+        return mark(patientId, created > 0 ? Outcome.IMPORTED : Outcome.NOTHING_NEW, created);
+    }
+
+    /** Record the outcome in the ledger, in this patient's transaction, and return it. */
+    private Outcome mark(UUID patientId, Outcome outcome, int created) {
+        ledger.markDone(patientId, outcome, created);
+        return outcome;
     }
 
     /** The patient's first hospital, else the first hospital they are registered at. */

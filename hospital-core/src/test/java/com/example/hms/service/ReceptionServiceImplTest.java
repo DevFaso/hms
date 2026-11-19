@@ -1376,7 +1376,7 @@ class ReceptionServiceImplTest {
             verify(entry).setOfferExpiresAt(any(LocalDateTime.class));
             verify(outreachNotifier).notifyPatient(eq(patient),
                     org.mockito.ArgumentMatchers.argThat(text -> "sms.waitlist.offer".equals(text.key())),
-                    any(Locale.class));
+                    any(Locale.class), any());
             assertThat(result).isNotNull();
         }
 

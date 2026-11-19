@@ -195,18 +195,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Extracted from {@link #handleJwtAuthentication} (PR #228 SonarCloud
-     * review — was driving cognitive complexity past the 15 threshold).
-     * Runs the four post-validation gates in order: blacklist, global
-     * revocation (MVP-7), authentication, and tenant lifecycle (MVP-2).
-     * Each gate that rejects writes the unauthorized response and returns
-     * false; on success the filter chain continues.
+     * The token itself was revoked (logout, refresh rotation), or the sign-in
+     * session it belongs to was ended (QA D2184: logout, lock-screen lockout),
+     * which also covers an access token a refresh superseded and the logout
+     * never saw. Both are lookups in the same store.
      */
-    private boolean handleValidatedToken(
-        HttpServletRequest request, HttpServletResponse response,
-        String path, String jwt, String extractedSubject
-    ) {
-        // Reject tokens that have been explicitly revoked (logout / refresh rotation)
+    private boolean isRevokedTokenOrSession(String jwt, String path) {
         String jti = tokenProvider.getJtiFromToken(jwt);
         if (jti != null && tokenBlacklistService.isBlacklisted(jti)) {
             // DEBUG, not WARN. "Fires only on a rejection" is not the same as "fires rarely":
@@ -217,6 +211,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // rejection with no line at INFO — is real and recorded in tasklist.md; the fix is a
             // warn-once-per-jti path like isKnownMissingPrincipal's, not a blanket level change.
             log.debug("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
+            return true;
+        }
+        if (tokenBlacklistService.isSessionRevoked(tokenProvider.getSessionId(jwt))) {
+            log.debug("[JWT] Token's session was revoked, rejecting on path={}", path);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Extracted from {@link #handleJwtAuthentication} (PR #228 SonarCloud
+     * review — was driving cognitive complexity past the 15 threshold).
+     * Runs the post-validation gates in order: token and session revocation
+     * ({@link #isRevokedTokenOrSession}), global revocation (MVP-7),
+     * authentication, and tenant lifecycle (MVP-2). Each gate that rejects
+     * writes the unauthorized response and returns false; on success the
+     * filter chain continues.
+     */
+    private boolean handleValidatedToken(
+        HttpServletRequest request, HttpServletResponse response,
+        String path, String jwt, String extractedSubject
+    ) {
+        if (isRevokedTokenOrSession(jwt, path)) {
             respondUnauthorized(response);
             return false;
         }

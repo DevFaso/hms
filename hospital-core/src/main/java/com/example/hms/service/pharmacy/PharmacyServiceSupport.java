@@ -7,13 +7,14 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.model.Patient;
+import com.example.hms.model.Prescription;
+import com.example.hms.enums.PatientNotificationEvent;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.AuditEventLogService;
-import com.example.hms.service.SmsService;
+import com.example.hms.service.notification.PatientMessageGate;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.i18n.PatientLocaleResolver;
-import com.example.hms.utility.TransactionCallbacks;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +52,8 @@ class PharmacyServiceSupport {
     private final RoleValidator roleValidator;
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
-    private final SmsService smsService;
+    /** QA D2202: every patient SMS here goes through the patient's channel choice. */
+    private final PatientMessageGate messageGate;
     private final MessageSource messageSource;
     private final PatientLocaleResolver patientLocaleResolver;
 
@@ -98,11 +100,17 @@ class PharmacyServiceSupport {
      * SMS service is unavailable, the patient has no primary phone number,
      * or the medication name is blank.
      *
+     * <p>Every pharmacy SMS goes through {@link PatientMessageGate} (QA D2202):
+     * a patient who turned SMS off for the prescription-refill notices
+     * (MEDICATION_REFILL, the only medication preference) gets none of them, and
+     * the hospital's administrators see a SKIPPED / OPTED_OUT row instead.
+     *
      * <p>Key {@code sms.pharmacy.dispensed}: {0} first name, {1} medication,
      * {2} pharmacy name.
      */
-    void notifyDispensed(Patient patient, Pharmacy pharmacy, String medicationName) {
-        sendAfterCommit("dispensed", "sms.pharmacy.dispensed", patient, pharmacy, medicationName);
+    void notifyDispensed(Prescription prescription, Patient patient, Pharmacy pharmacy, String medicationName) {
+        sendAfterCommit(PatientNotificationEvent.PHARMACY_DISPENSED, "sms.pharmacy.dispensed",
+                prescription, patient, pharmacy, medicationName);
     }
 
     /**
@@ -110,9 +118,10 @@ class PharmacyServiceSupport {
      * {@code sms.pharmacy.readyForCollection}, same arguments as
      * {@link #notifyDispensed}.
      */
-    void notifyReadyForCollection(Patient patient, Pharmacy pharmacy, String medicationName) {
-        sendAfterCommit("ready for collection", "sms.pharmacy.readyForCollection",
-                patient, pharmacy, medicationName);
+    void notifyReadyForCollection(Prescription prescription, Patient patient, Pharmacy pharmacy,
+                                  String medicationName) {
+        sendAfterCommit(PatientNotificationEvent.PHARMACY_READY, "sms.pharmacy.readyForCollection",
+                prescription, patient, pharmacy, medicationName);
     }
 
     /**
@@ -120,34 +129,31 @@ class PharmacyServiceSupport {
      * or the prescriber withdrew or changed the order). Key
      * {@code sms.pharmacy.readyCancelled}, same arguments.
      */
-    void notifyReadyCancelled(Patient patient, Pharmacy pharmacy, String medicationName) {
-        sendAfterCommit("no longer ready", "sms.pharmacy.readyCancelled", patient, pharmacy, medicationName);
+    void notifyReadyCancelled(Prescription prescription, Patient patient, Pharmacy pharmacy, String medicationName) {
+        sendAfterCommit(PatientNotificationEvent.PHARMACY_READY_CANCELLED, "sms.pharmacy.readyCancelled",
+                prescription, patient, pharmacy, medicationName);
     }
 
     /**
      * G15: the one reminder for a fill still waiting after the reminder
      * window. Key {@code sms.pharmacy.readyReminder}, same arguments.
      */
-    void notifyReadyReminder(Patient patient, Pharmacy pharmacy, String medicationName) {
-        sendAfterCommit("ready reminder", "sms.pharmacy.readyReminder", patient, pharmacy, medicationName);
+    void notifyReadyReminder(Prescription prescription, Patient patient, Pharmacy pharmacy, String medicationName) {
+        sendAfterCommit(PatientNotificationEvent.PHARMACY_READY_REMINDER, "sms.pharmacy.readyReminder",
+                prescription, patient, pharmacy, medicationName);
     }
 
     /**
      * Render now, send after commit (G15 rule 11).
      *
-     * <p>The locale lookup and the render run here, inside the caller's
-     * transaction and inside the try, so a failure in either is swallowed
-     * and cannot roll the pharmacy action back. Only plain strings (the
-     * phone, the body, the patient id for the log) cross into the callback:
-     * by then the persistence context is closed. With no transaction on the
-     * thread the send runs at once ({@link TransactionCallbacks}).
+     * <p>The locale lookup, the render and the consent check run here, inside
+     * the caller's transaction and inside the try, so a failure in any of them
+     * is swallowed and cannot roll the pharmacy action back. Only plain strings
+     * cross into the after-commit send ({@link PatientMessageGate#smsAfterCommit}).
      */
-    private void sendAfterCommit(String what, String key, Patient patient, Pharmacy pharmacy,
-                                 String medicationName) {
-        if (smsService == null || patient == null) {
-            return;
-        }
-        if (medicationName == null || medicationName.isBlank()) {
+    private void sendAfterCommit(PatientNotificationEvent event, String key, Prescription prescription,
+                                 Patient patient, Pharmacy pharmacy, String medicationName) {
+        if (patient == null || medicationName == null || medicationName.isBlank()) {
             return;
         }
         String phone = patient.getPhoneNumberPrimary();
@@ -156,34 +162,27 @@ class PharmacyServiceSupport {
         }
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
         String pharmacyName = (pharmacy != null && pharmacy.getName() != null) ? pharmacy.getName() : "";
-        UUID patientId = patient.getId();
-        String body;
         try {
-            body = render(key, patientLocale(patient), firstName, medicationName, pharmacyName);
+            String body = render(key, patientLocale(patient), firstName, medicationName, pharmacyName);
+            messageGate.smsAfterCommit(patient, notice(event, prescription, pharmacy), body);
         } catch (Exception e) {
-            logFailure(what, patientId, e);
-            return;
+            logFailure(event, patient, e);
         }
-        TransactionCallbacks.afterCommit(() -> {
-            try {
-                smsService.send(phone, body);
-            } catch (Exception e) {
-                logFailure(what, patientId, e);
-            }
-        });
     }
 
     /**
      * Send the out-of-stock SMS to the patient, explaining where their
-     * medication will be filled. Failures are swallowed.
+     * medication will be filled, once the routing commits. Failures are
+     * swallowed.
      *
      * @param routingKey  one of the {@code OUT_OF_STOCK_*} keys — the
      *                    routing-specific sentence appended to the body,
      *                    resolved in the patient's own language
      * @param routingArgs arguments for that sentence (partner name, restock date)
      */
-    void notifyOutOfStock(Patient patient, String medicationName, String routingKey, Object... routingArgs) {
-        if (smsService == null || patient == null) {
+    void notifyOutOfStock(Prescription prescription, Patient patient, String medicationName, String routingKey,
+                          Object... routingArgs) {
+        if (patient == null) {
             return;
         }
         String phone = patient.getPhoneNumberPrimary();
@@ -195,37 +194,60 @@ class PharmacyServiceSupport {
         try {
             Locale locale = patientLocale(patient);
             String suffix = routingKey != null ? render(routingKey, locale, routingArgs) : "";
-            smsService.send(phone, render("sms.pharmacy.outOfStock", locale, firstName, medication, suffix));
+            messageGate.smsAfterCommit(patient,
+                    notice(PatientNotificationEvent.PHARMACY_OUT_OF_STOCK, prescription, null),
+                    render("sms.pharmacy.outOfStock", locale, firstName, medication, suffix));
         } catch (Exception e) {
-            logFailure("out-of-stock", patient, e);
+            logFailure(PatientNotificationEvent.PHARMACY_OUT_OF_STOCK, patient, e);
         }
     }
 
     /**
      * T-39: Send the refill reminder SMS to the patient, indicating how many
-     * days of treatment remain. No-op when SMS service / patient / phone is
-     * missing. Failures are swallowed.
+     * days of treatment remain. No-op when there is no real SMS transport, no
+     * patient or phone, or the patient turned these SMS off. Failures are
+     * swallowed.
      *
      * <p>Key {@code sms.pharmacy.refillReminder}: {0} first name, {1} days
      * left, {2} medication.
+     *
+     * @return true when the reminder was admitted for sending
      */
-    void notifyRefillReminder(Patient patient, String medicationName, int daysLeft) {
-        if (smsService == null || patient == null) {
-            return;
+    boolean notifyRefillReminder(Prescription prescription, Patient patient, String medicationName, int daysLeft) {
+        if (patient == null) {
+            return false;
         }
         String phone = patient.getPhoneNumberPrimary();
         if (phone == null || phone.isBlank()) {
-            return;
+            return false;
         }
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
         String medication = medicationName != null ? medicationName : "";
         try {
             // The day count goes through as text so MessageFormat never groups it.
-            smsService.send(phone, render("sms.pharmacy.refillReminder", patientLocale(patient),
-                    firstName, String.valueOf(daysLeft), medication));
+            return messageGate.smsAfterCommit(patient,
+                    notice(PatientNotificationEvent.PHARMACY_REFILL_REMINDER, prescription, null),
+                    render("sms.pharmacy.refillReminder", patientLocale(patient),
+                            firstName, String.valueOf(daysLeft), medication));
         } catch (Exception e) {
-            logFailure("refill reminder", patient, e);
+            logFailure(PatientNotificationEvent.PHARMACY_REFILL_REMINDER, patient, e);
+            return false;
         }
+    }
+
+    /**
+     * The notice of a pharmacy SMS: the prescription it is about, at the
+     * hospital that wrote it (the pharmacy's hospital when it has none).
+     */
+    private static PatientMessageGate.Notice notice(PatientNotificationEvent event, Prescription prescription,
+                                                    Pharmacy pharmacy) {
+        UUID hospitalId = null;
+        if (prescription != null && prescription.getHospital() != null) {
+            hospitalId = prescription.getHospital().getId();
+        } else if (pharmacy != null && pharmacy.getHospital() != null) {
+            hospitalId = pharmacy.getHospital().getId();
+        }
+        return new PatientMessageGate.Notice(event, hospitalId, prescription != null ? prescription.getId() : null);
     }
 
     private Locale patientLocale(Patient patient) {
@@ -237,20 +259,13 @@ class PharmacyServiceSupport {
     }
 
     /**
-     * Everything an SMS needs — the locale lookup, the bundle render and the
-     * gateway call — happens inside each method's try, and lands here.
-     *
-     * <p>The locale resolver runs a query and {@code getMessage} throws on a
-     * missing key: with either outside the guard, a bundle typo or a database
-     * hiccup would roll back a dispense that has already been handed over,
-     * which is the rollback-only trap in reverse. Nothing about telling a
-     * patient their medication is ready may undo the fact that it is.
+     * Everything an SMS needs (the locale lookup, the bundle render, the
+     * consent check) happens inside each method's try, and lands here: a
+     * bundle typo or a database hiccup must never roll back a dispense that
+     * has already been handed over. The patient id and the exception class
+     * only: a transport message can quote the number.
      */
-    private void logFailure(String what, Patient patient, Exception e) {
-        logFailure(what, patient.getId(), e);
-    }
-
-    private void logFailure(String what, UUID patientId, Exception e) {
-        log.warn("Failed to send {} SMS to patient {}: {}", what, patientId, e.getMessage());
+    private void logFailure(PatientNotificationEvent event, Patient patient, Exception e) {
+        log.warn("Failed to send {} SMS to patient {}: {}", event, patient.getId(), e.getClass().getSimpleName());
     }
 }

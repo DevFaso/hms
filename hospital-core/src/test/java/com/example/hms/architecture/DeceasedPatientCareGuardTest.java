@@ -149,6 +149,7 @@ class DeceasedPatientCareGuardTest {
         GeneralReferral#acknowledgeReferral,completeReferral,rejectReferral,cancelReferral,expireOverdueReferrals | closes or follows a referral made before the death; submitting one is refused
         HighRiskPregnancyCarePlan#updatePlan,addCareTeamNote,markMilestoneComplete | late documentation
         ImagingOrder#updateOrder,updateStatus,captureSignature | closes or documents an order made before the death
+        ImagingStudyImage#upload,delete | V316: key images of a study already done document it, as its report does
         ImagingOrder#recordAuthorization | administrative: the insurer's pre-authorisation number of a study already done (provisional rule 1)
         Isolation#discontinuePrecaution | lifting a precaution
         LabOrder#updateLabOrder,deleteLabOrder,transitionLabOrderStatus,voidLabOrder | closes or corrects an order made before the death; results of its samples stay open
@@ -202,7 +203,7 @@ class DeceasedPatientCareGuardTest {
     /** Controller -> why none of its writes is new care. */
     private static final Map<String, String> WHOLE_CONTROLLER = Map.ofEntries(
         Map.entry("BillingInvoice", BILLING), Map.entry("Eligibility", BILLING), Map.entry("InvoiceEmail", BILLING),
-        Map.entry("InvoiceItem", BILLING), Map.entry("InvoiceRefund", BILLING), Map.entry("PriceList", BILLING), Map.entry("Payer", BILLING), Map.entry("PatientGuarantor", BILLING), Map.entry("PatientInsurance", BILLING),
+        Map.entry("InvoiceItem", BILLING), Map.entry("InvoiceRefund", BILLING), Map.entry("InvoicePayerShare", BILLING), Map.entry("PriceList", BILLING), Map.entry("Payer", BILLING), Map.entry("PatientGuarantor", BILLING), Map.entry("PatientInsurance", BILLING),
         Map.entry("PharmacyClaim", BILLING), Map.entry("PharmacyPayment", BILLING),
         Map.entry("DischargeApproval", "discharge and stay close-out"),
         Map.entry("DischargeSummary", "discharge and stay close-out"),
@@ -221,7 +222,8 @@ class DeceasedPatientCareGuardTest {
         Map.entry("Credentialing", NOT_CARE), Map.entry("Department", NOT_CARE), Map.entry("Dhis2Admin", NOT_CARE),
         Map.entry("Dhis2Export", NOT_CARE), Map.entry("Downtime", NOT_CARE), Map.entry("DrugInteractionAdmin", NOT_CARE),
         Map.entry("EmpiProbabilistic", NOT_CARE), Map.entry("FeatureFlag", NOT_CARE), Map.entry("FrontendAudit", NOT_CARE),
-        Map.entry("Hospital", NOT_CARE), Map.entry("HospitalRecordAccessPosture", NOT_CARE), Map.entry("InBasket", NOT_CARE),
+        Map.entry("Hospital", NOT_CARE), Map.entry("HospitalRecordAccessPosture", NOT_CARE),
+        Map.entry("HospitalPacsSettings", NOT_CARE), Map.entry("InBasket", NOT_CARE),
         Map.entry("Inventory", NOT_CARE), Map.entry("LabInstrument", NOT_CARE), Map.entry("LabInventory", NOT_CARE),
         Map.entry("LabQcEvent", NOT_CARE), Map.entry("LabReflexRule", NOT_CARE), Map.entry("LabTestDefinition", NOT_CARE),
         Map.entry("LabTestValidationStudy", NOT_CARE), Map.entry("Me", NOT_CARE), Map.entry("MedicationCatalog", NOT_CARE),

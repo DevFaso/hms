@@ -73,6 +73,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 import static com.example.hms.config.SecurityConstants.ROLE_SURGEON;
 import static com.example.hms.config.SecurityConstants.ROLE_BILLING_SPECIALIST;
 import static com.example.hms.config.SecurityConstants.ROLE_ACCOUNTANT;
+import static com.example.hms.config.SecurityConstants.ROLE_CLAIMS_REVIEWER;
 import static com.example.hms.config.SecurityConstants.ROLE_ADMIN;
 
 @Configuration
@@ -145,6 +146,9 @@ public class SecurityConfig {
      * admin to the hospital they are acting in.
      */
     static final String API_HOSPITAL_POSTURE = "/hospitals/*/record-access-posture";
+
+    /** V317: a hospital's PACS connection; same admins as the posture, controller narrows further. */
+    static final String API_HOSPITAL_PACS_SETTINGS = "/hospitals/*/pacs-settings";
 
     /**
      * The HAPI FHIR servlet ({@code FhirConfig}, mounted at {@code /fhir/*}).
@@ -801,6 +805,13 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_QUALITY_MANAGER)
                 .requestMatchers(HttpMethod.PUT, API_HOSPITAL_POSTURE)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                // V317 PACS connection: ahead of the /hospitals matchers, as the posture.
+                .requestMatchers(HttpMethod.GET, API_HOSPITAL_PACS_SETTINGS)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PUT, API_HOSPITAL_PACS_SETTINGS)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.POST, API_HOSPITAL_PACS_SETTINGS + "/test")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.GET, API_HOSPITALS, API_HOSPITALS + "/", API_HOSPITALS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
@@ -904,6 +915,14 @@ public class SecurityConfig {
                 // the body is validated (a nurse saw 400 field errors first).
                 .requestMatchers(HttpMethod.POST, "/pharmacy/payments")
                 .hasAnyAuthority(ROLE_PHARMACIST, ROLE_BILLING_SPECIALIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
+                // Billing-money plan PR 7: an invoice's payer shares, read and decided by the claims reviewer too
+                // (plan 3.8, bordereau row); mirrors InvoicePayerShareController. Before the broader patterns.
+                .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES + "/*/payer-shares")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST,
+                    ROLE_CLAIMS_REVIEWER)
+                .requestMatchers(HttpMethod.POST, API_BILLING_INVOICES + "/*/payer-shares/*/*")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST, ROLE_CLAIMS_REVIEWER)
 
                 .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST, ROLE_DOCTOR)

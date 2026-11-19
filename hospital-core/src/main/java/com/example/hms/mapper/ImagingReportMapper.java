@@ -37,26 +37,49 @@ public class ImagingReportMapper {
     private String resolvePacsViewerUrl(ImagingReport report) {
         String explicit = report.getPacsViewerUrl();
         if (explicit != null && !explicit.isBlank()) {
-            return explicit;
+            // A link the browser opens: http(s) only, never javascript: or data:.
+            return isWebLink(explicit) ? explicit : null;
         }
-        if (report.getHospital() == null) {
-            return null;
-        }
-        String template = report.getHospital().getPacsViewerUrlTemplate();
+        String template = report.getHospital() == null ? null : report.getHospital().getPacsViewerUrlTemplate();
         if (template == null || template.isBlank()) {
             return null;
         }
-        String studyUid = report.getStudyInstanceUid();
+        return renderViewerTemplate(template, linkStudyUid(report), linkAccession(report));
+    }
+
+    /** Only a well-formed UID goes into a link: a value typed on the report cannot add path or query parts. */
+    private static String linkStudyUid(ImagingReport report) {
+        return com.example.hms.imaging.dicom.DicomUid.isValid(report.getStudyInstanceUid())
+            ? report.getStudyInstanceUid() : null;
+    }
+
+    /** The accession number URL-encoded, or null when the report has none. */
+    private static String linkAccession(ImagingReport report) {
         String accession = report.getAccessionNumber();
-        if (template.contains("{studyInstanceUid}") && (studyUid == null || studyUid.isBlank())) {
+        if (accession == null || accession.isBlank()) {
             return null;
         }
-        if (template.contains("{accessionNumber}") && (accession == null || accession.isBlank())) {
+        return java.net.URLEncoder.encode(accession.trim(), java.nio.charset.StandardCharsets.UTF_8)
+            .replace("+", "%20");
+    }
+
+    /** The template with the report's values, or null when it names one the report lacks or is not http(s). */
+    private static String renderViewerTemplate(String template, String studyUid, String accession) {
+        if (template.contains("{studyInstanceUid}") && studyUid == null) {
             return null;
         }
-        return template
+        if (template.contains("{accessionNumber}") && accession == null) {
+            return null;
+        }
+        String url = template
                 .replace("{studyInstanceUid}", studyUid != null ? studyUid : "")
                 .replace("{accessionNumber}", accession != null ? accession : "");
+        return isWebLink(url) ? url : null;
+    }
+
+    private static boolean isWebLink(String url) {
+        String lower = url.trim().toLowerCase(java.util.Locale.ROOT);
+        return lower.startsWith("https://") || lower.startsWith("http://");
     }
 
     /** QA D1923: the report's patient is its order's. */

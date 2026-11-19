@@ -11,6 +11,15 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.SmsService;
+import com.example.hms.service.EmailService;
+import com.example.hms.enums.NotificationChannel;
+import com.example.hms.enums.NotificationType;
+import com.example.hms.enums.PatientNotificationEvent;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Prescription;
+import com.example.hms.service.notification.PatientChannelConsent;
+import com.example.hms.service.notification.PatientMessageGate;
+import com.example.hms.service.notification.PatientNotificationLedger;
 import com.example.hms.service.i18n.PatientLocaleResolver;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,25 +64,49 @@ class PharmacyServiceSupportTest {
     @Mock private UserRepository userRepository;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private SmsService smsService;
+    @Mock private SmsService mockTransport;
+    @Mock private EmailService emailService;
+    @Mock private PatientChannelConsent consent;
+    @Mock private PatientNotificationLedger ledger;
     @Mock private PatientLocaleResolver patientLocaleResolver;
 
     private final MessageSource messageSource = TestMessageSources.bundles();
+
+    private static final UUID HOSPITAL_ID = UUID.randomUUID();
+    private final Prescription rx = prescription();
+
+    private static Prescription prescription() {
+        Hospital hospital = new Hospital();
+        hospital.setId(HOSPITAL_ID);
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+        p.setHospital(hospital);
+        return p;
+    }
 
     private PharmacyServiceSupport support;
 
     @BeforeEach
     void setUp() {
         support = new PharmacyServiceSupport(roleValidator, userRepository, auditEventLogService,
-                smsService, messageSource, patientLocaleResolver);
+                gate(smsService), messageSource, patientLocaleResolver);
+        // A real SMS transport, and a patient who has not turned anything off.
+        lenient().when(smsService.deliversRealSms()).thenReturn(true);
+        lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
         // The fallback the caller passes is the product default; a patient
         // with no stated language gets exactly that.
         lenient().when(patientLocaleResolver.resolve(any(), any()))
                 .thenAnswer(inv -> inv.getArgument(1));
     }
 
+    /** The logging mock transport: it must never be handed patient text. */
     private PharmacyServiceSupport withoutSms() {
         return new PharmacyServiceSupport(roleValidator, userRepository, auditEventLogService,
-                null, messageSource, patientLocaleResolver);
+                gate(mockTransport), messageSource, patientLocaleResolver);
+    }
+
+    private PatientMessageGate gate(SmsService sms) {
+        return new PatientMessageGate(consent, ledger, sms, emailService);
     }
 
     private Patient patient() {
@@ -95,7 +129,7 @@ class PharmacyServiceSupportTest {
     @Test
     @DisplayName("G15: the dispensed receipt names the patient, the medication and the pharmacy, in French by default")
     void sendsFrenchDispensedReceipt() {
-        support.notifyDispensed(patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
+        support.notifyDispensed(rx, patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
 
         verify(smsService).send("+22670000000",
                 "Bonjour Awa, votre ordonnance (Amoxicilline) a été délivrée à Pharmacie Centrale. Merci.");
@@ -104,7 +138,7 @@ class PharmacyServiceSupportTest {
     @Test
     @DisplayName("G15: the receipt no longer claims the order is waiting to be collected")
     void receiptDoesNotSayReadyForPickup() {
-        support.notifyDispensed(patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
+        support.notifyDispensed(rx, patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
 
         verify(smsService, never()).send(anyString(), contains("prête"));
     }
@@ -115,7 +149,7 @@ class PharmacyServiceSupportTest {
         Patient p = patient();
         when(patientLocaleResolver.resolve(eq(p), any())).thenReturn(Locale.ENGLISH);
 
-        support.notifyDispensed(p, pharmacy("Pharmacie Centrale"), "Amoxicilline");
+        support.notifyDispensed(rx, p, pharmacy("Pharmacie Centrale"), "Amoxicilline");
 
         verify(smsService).send("+22670000000",
                 "Hello Awa, your prescription (Amoxicilline) has been dispensed at Pharmacie Centrale. Thank you.");
@@ -124,7 +158,7 @@ class PharmacyServiceSupportTest {
     @Test
     @DisplayName("no-op when patient is null")
     void noopWhenPatientNull() {
-        support.notifyDispensed(null, pharmacy("X"), "Med");
+        support.notifyDispensed(rx, null, pharmacy("X"), "Med");
         verifyNoInteractions(smsService);
     }
 
@@ -133,7 +167,7 @@ class PharmacyServiceSupportTest {
     void noopWhenNoPhone() {
         Patient p = patient();
         p.setPhoneNumberPrimary(null);
-        support.notifyDispensed(p, pharmacy("X"), "Med");
+        support.notifyDispensed(rx, p, pharmacy("X"), "Med");
         verifyNoInteractions(smsService);
     }
 
@@ -142,7 +176,7 @@ class PharmacyServiceSupportTest {
     void noopWhenPhoneBlank() {
         Patient p = patient();
         p.setPhoneNumberPrimary("   ");
-        support.notifyDispensed(p, pharmacy("X"), "Med");
+        support.notifyDispensed(rx, p, pharmacy("X"), "Med");
         verifyNoInteractions(smsService);
     }
 
@@ -152,7 +186,7 @@ class PharmacyServiceSupportTest {
         doThrow(new RuntimeException("provider down"))
                 .when(smsService).send(anyString(), anyString());
 
-        support.notifyDispensed(patient(), pharmacy("X"), "Med");
+        support.notifyDispensed(rx, patient(), pharmacy("X"), "Med");
 
         verify(smsService).send(anyString(), anyString());
     }
@@ -160,15 +194,15 @@ class PharmacyServiceSupportTest {
     @Test
     @DisplayName("no-op when medication name is null or blank")
     void handlesNulls() {
-        support.notifyDispensed(patient(), null, null);
-        support.notifyDispensed(patient(), pharmacy("X"), "   ");
+        support.notifyDispensed(rx, patient(), null, null);
+        support.notifyDispensed(rx, patient(), pharmacy("X"), "   ");
         verifyNoInteractions(smsService);
     }
 
     @Test
-    @DisplayName("does not send when smsService bean is absent")
+    @DisplayName("does not send over the logging mock transport")
     void noopWhenSmsServiceNull() {
-        withoutSms().notifyDispensed(patient(), pharmacy("X"), "Med");
+        withoutSms().notifyDispensed(rx, patient(), pharmacy("X"), "Med");
         verify(smsService, never()).send(any(), any());
     }
 
@@ -177,7 +211,7 @@ class PharmacyServiceSupportTest {
     void dispensedEmptyFirstName() {
         Patient p = patient();
         p.setFirstName(null);
-        support.notifyDispensed(p, pharmacy("X"), "Med");
+        support.notifyDispensed(rx, p, pharmacy("X"), "Med");
         verify(smsService).send(anyString(), contains("(Med)"));
     }
 
@@ -187,7 +221,7 @@ class PharmacyServiceSupportTest {
         Pharmacy ph = new Pharmacy();
         ph.setId(UUID.randomUUID());
         ph.setName(null);
-        support.notifyDispensed(patient(), ph, "Med");
+        support.notifyDispensed(rx, patient(), ph, "Med");
         verify(smsService).send(anyString(), anyString());
     }
 
@@ -198,10 +232,10 @@ class PharmacyServiceSupportTest {
                 .thenThrow(new IllegalStateException("could not extract ResultSet"));
 
         Patient p = patient();
-        assertThatCode(() -> support.notifyDispensed(p, pharmacy("X"), "Med")).doesNotThrowAnyException();
-        assertThatCode(() -> support.notifyOutOfStock(p, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT))
+        assertThatCode(() -> support.notifyDispensed(rx, p, pharmacy("X"), "Med")).doesNotThrowAnyException();
+        assertThatCode(() -> support.notifyOutOfStock(rx, p, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT))
                 .doesNotThrowAnyException();
-        assertThatCode(() -> support.notifyRefillReminder(p, "Med", 3)).doesNotThrowAnyException();
+        assertThatCode(() -> support.notifyRefillReminder(rx, p, "Med", 3)).doesNotThrowAnyException();
 
         verify(smsService, never()).send(any(), any());
     }
@@ -210,12 +244,44 @@ class PharmacyServiceSupportTest {
     @DisplayName("a missing bundle key cannot roll back the dispense either")
     void missingBundleKeyIsSwallowed() {
         PharmacyServiceSupport broken = new PharmacyServiceSupport(roleValidator, userRepository,
-                auditEventLogService, smsService,
+                auditEventLogService, gate(smsService),
                 new org.springframework.context.support.StaticMessageSource(), patientLocaleResolver);
 
-        assertThatCode(() -> broken.notifyDispensed(patient(), pharmacy("X"), "Med"))
+        assertThatCode(() -> broken.notifyDispensed(rx, patient(), pharmacy("X"), "Med"))
                 .doesNotThrowAnyException();
         verify(smsService, never()).send(any(), any());
+    }
+
+    // ---------- QA D2202: the patient's SMS choice ----------
+
+    @Test
+    @DisplayName("D2202: a patient who turned SMS off for prescription notices gets no pharmacy SMS, and staff see why")
+    void optedOutPatientGetsNoPharmacySms() {
+        Patient p = patient();
+        when(consent.allows(any(), eq(NotificationType.MEDICATION_REFILL), eq(NotificationChannel.SMS)))
+                .thenReturn(false);
+
+        support.notifyDispensed(rx, p, pharmacy("X"), "Med");
+        support.notifyReadyForCollection(rx, p, pharmacy("X"), "Med");
+        support.notifyReadyCancelled(rx, p, pharmacy("X"), "Med");
+        support.notifyReadyReminder(rx, p, pharmacy("X"), "Med");
+        support.notifyOutOfStock(rx, p, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
+        assertThat(support.notifyRefillReminder(rx, p, "Med", 3)).isFalse();
+
+        verify(smsService, never()).send(any(), any());
+        for (PatientNotificationEvent event : List.of(PatientNotificationEvent.PHARMACY_DISPENSED,
+                PatientNotificationEvent.PHARMACY_READY, PatientNotificationEvent.PHARMACY_READY_CANCELLED,
+                PatientNotificationEvent.PHARMACY_READY_REMINDER, PatientNotificationEvent.PHARMACY_OUT_OF_STOCK,
+                PatientNotificationEvent.PHARMACY_REFILL_REMINDER)) {
+            verify(ledger).recordOptOut(event, HOSPITAL_ID, p.getId(), rx.getId(), NotificationChannel.SMS);
+        }
+    }
+
+    @Test
+    @DisplayName("D2202: the refill reminder reports it was admitted, so the job counts only real sends")
+    void refillReminderReportsAdmission() {
+        assertThat(support.notifyRefillReminder(rx, patient(), "Med", 3)).isTrue();
+        assertThat(withoutSms().notifyRefillReminder(rx, patient(), "Med", 3)).isFalse();
     }
 
     // ---------- ready for collection (G15) ----------
@@ -223,7 +289,7 @@ class PharmacyServiceSupportTest {
     @Test
     @DisplayName("G15: ready for collection, in French by default")
     void readyForCollectionInFrench() {
-        support.notifyReadyForCollection(patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
+        support.notifyReadyForCollection(rx, patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
 
         verify(smsService).send("+22670000000",
                 "Bonjour Awa, votre ordonnance (Amoxicilline) est prête à être retirée à Pharmacie Centrale. Merci.");
@@ -238,8 +304,8 @@ class PharmacyServiceSupportTest {
         when(patientLocaleResolver.resolve(eq(en), any())).thenReturn(Locale.ENGLISH);
         when(patientLocaleResolver.resolve(eq(es), any())).thenReturn(Locale.forLanguageTag("es"));
 
-        support.notifyReadyForCollection(en, pharmacy("Central"), "Amoxicillin");
-        support.notifyReadyForCollection(es, pharmacy("Central"), "Amoxicilina");
+        support.notifyReadyForCollection(rx, en, pharmacy("Central"), "Amoxicillin");
+        support.notifyReadyForCollection(rx, es, pharmacy("Central"), "Amoxicilina");
 
         verify(smsService).send("+22670000000",
                 "Hello Awa, your prescription (Amoxicillin) is ready for collection at Central. Thank you.");
@@ -250,8 +316,8 @@ class PharmacyServiceSupportTest {
     @Test
     @DisplayName("G15: no longer ready and the reminder render their own keys")
     void cancelledAndReminderTexts() {
-        support.notifyReadyCancelled(patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
-        support.notifyReadyReminder(patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
+        support.notifyReadyCancelled(rx, patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
+        support.notifyReadyReminder(rx, patient(), pharmacy("Pharmacie Centrale"), "Amoxicilline");
 
         verify(smsService).send("+22670000000",
                 "Bonjour Awa, votre ordonnance (Amoxicilline) n'est plus prête à être retirée à Pharmacie Centrale. "
@@ -266,7 +332,7 @@ class PharmacyServiceSupportTest {
         Patient p = patient();
         p.setFirstName(null);
 
-        support.notifyReadyForCollection(p, pharmacy("X"), "Med");
+        support.notifyReadyForCollection(rx, p, pharmacy("X"), "Med");
 
         verify(smsService).send("+22670000000",
                 "Bonjour , votre ordonnance (Med) est prête à être retirée à X. Merci.");
@@ -277,9 +343,9 @@ class PharmacyServiceSupportTest {
     void sendsOnlyAfterCommit() {
         org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
         try {
-            support.notifyReadyForCollection(patient(), pharmacy("X"), "Med");
-            support.notifyDispensed(patient(), pharmacy("X"), "Med");
-            verifyNoInteractions(smsService);
+            support.notifyReadyForCollection(rx, patient(), pharmacy("X"), "Med");
+            support.notifyDispensed(rx, patient(), pharmacy("X"), "Med");
+            verify(smsService, never()).send(any(), any());
 
             var syncs = org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations();
             assertThat(syncs).hasSize(2);
@@ -295,7 +361,7 @@ class PharmacyServiceSupportTest {
     void afterCommitFailureIsSwallowed() {
         doThrow(new RuntimeException("provider down")).when(smsService).send(anyString(), anyString());
 
-        assertThatCode(() -> support.notifyReadyCancelled(patient(), pharmacy("X"), "Med"))
+        assertThatCode(() -> support.notifyReadyCancelled(rx, patient(), pharmacy("X"), "Med"))
                 .doesNotThrowAnyException();
     }
 
@@ -304,7 +370,7 @@ class PharmacyServiceSupportTest {
     void readyRenderFailureIsSwallowed() {
         when(patientLocaleResolver.resolve(any(), any())).thenThrow(new IllegalStateException("db"));
 
-        assertThatCode(() -> support.notifyReadyReminder(patient(), pharmacy("X"), "Med"))
+        assertThatCode(() -> support.notifyReadyReminder(rx, patient(), pharmacy("X"), "Med"))
                 .doesNotThrowAnyException();
         verify(smsService, never()).send(any(), any());
     }
@@ -314,7 +380,7 @@ class PharmacyServiceSupportTest {
     @Test
     @DisplayName("T-40: out-of-stock SMS keeps the French wording and appends the partner sentence")
     void outOfStockSmsIncludesRoutingMessage() {
-        support.notifyOutOfStock(patient(), "Paracétamol",
+        support.notifyOutOfStock(rx, patient(), "Paracétamol",
                 PharmacyServiceSupport.OUT_OF_STOCK_PARTNER, "Pharmacie X");
 
         verify(smsService).send("+22670000000",
@@ -328,9 +394,9 @@ class PharmacyServiceSupportTest {
         Patient p = patient();
         when(patientLocaleResolver.resolve(eq(p), any())).thenReturn(Locale.ENGLISH);
 
-        support.notifyOutOfStock(p, "Paracetamol", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
-        support.notifyOutOfStock(p, "Paracetamol", PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER);
-        support.notifyOutOfStock(p, "Paracetamol",
+        support.notifyOutOfStock(rx, p, "Paracetamol", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
+        support.notifyOutOfStock(rx, p, "Paracetamol", PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER);
+        support.notifyOutOfStock(rx, p, "Paracetamol",
                 PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER_DATED, "2026-10-01");
 
         verify(smsService).send(anyString(),
@@ -349,7 +415,7 @@ class PharmacyServiceSupportTest {
     void outOfStockNoopWhenNoPhone() {
         Patient p = patient();
         p.setPhoneNumberPrimary(null);
-        support.notifyOutOfStock(p, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
+        support.notifyOutOfStock(rx, p, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
         verifyNoInteractions(smsService);
     }
 
@@ -359,7 +425,7 @@ class PharmacyServiceSupportTest {
         doThrow(new RuntimeException("provider down"))
                 .when(smsService).send(anyString(), anyString());
 
-        support.notifyOutOfStock(patient(), "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
+        support.notifyOutOfStock(rx, patient(), "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
 
         verify(smsService).send(anyString(), anyString());
     }
@@ -367,14 +433,14 @@ class PharmacyServiceSupportTest {
     @Test
     @DisplayName("notifyOutOfStock: no-op when patient is null")
     void outOfStockNullPatient() {
-        support.notifyOutOfStock(null, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
+        support.notifyOutOfStock(rx, null, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
         verifyNoInteractions(smsService);
     }
 
     @Test
-    @DisplayName("notifyOutOfStock: no-op when smsService is null")
+    @DisplayName("notifyOutOfStock: no-op over the logging mock transport")
     void outOfStockNullSmsService() {
-        withoutSms().notifyOutOfStock(patient(), "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
+        withoutSms().notifyOutOfStock(rx, patient(), "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
         verify(smsService, never()).send(any(), any());
     }
 
@@ -383,7 +449,7 @@ class PharmacyServiceSupportTest {
     void outOfStockBlankPhone() {
         Patient p = patient();
         p.setPhoneNumberPrimary("  ");
-        support.notifyOutOfStock(p, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
+        support.notifyOutOfStock(rx, p, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
         verifyNoInteractions(smsService);
     }
 
@@ -392,7 +458,7 @@ class PharmacyServiceSupportTest {
     void outOfStockHandlesAllNulls() {
         Patient p = patient();
         p.setFirstName(null);
-        support.notifyOutOfStock(p, null, null);
+        support.notifyOutOfStock(rx, p, null, null);
         verify(smsService).send(anyString(),
                 eq("Bonjour , le médicament () n'est pas disponible à la pharmacie de l'hôpital."));
     }
@@ -402,7 +468,7 @@ class PharmacyServiceSupportTest {
     @Test
     @DisplayName("T-39: refill reminder SMS keeps the French wording")
     void refillReminderIncludesDetails() {
-        support.notifyRefillReminder(patient(), "Amoxicilline", 3);
+        support.notifyRefillReminder(rx, patient(), "Amoxicilline", 3);
 
         verify(smsService).send("+22670000000",
                 "Bonjour Awa, il vous reste environ 3 jours de traitement (Amoxicilline). "
@@ -415,7 +481,7 @@ class PharmacyServiceSupportTest {
         Patient p = patient();
         when(patientLocaleResolver.resolve(eq(p), any())).thenReturn(Locale.ENGLISH);
 
-        support.notifyRefillReminder(p, "Amoxicillin", 3);
+        support.notifyRefillReminder(rx, p, "Amoxicillin", 3);
 
         verify(smsService).send(anyString(),
                 eq("Hello Awa, you have about 3 days of treatment left (Amoxicillin). "
@@ -427,7 +493,7 @@ class PharmacyServiceSupportTest {
     void refillReminderNoopWhenNoPhone() {
         Patient p = patient();
         p.setPhoneNumberPrimary(null);
-        support.notifyRefillReminder(p, "Med", 3);
+        support.notifyRefillReminder(rx, p, "Med", 3);
         verifyNoInteractions(smsService);
     }
 
@@ -437,7 +503,7 @@ class PharmacyServiceSupportTest {
         doThrow(new RuntimeException("provider down"))
                 .when(smsService).send(anyString(), anyString());
 
-        support.notifyRefillReminder(patient(), "Med", 3);
+        support.notifyRefillReminder(rx, patient(), "Med", 3);
 
         verify(smsService).send(anyString(), anyString());
     }
@@ -445,14 +511,14 @@ class PharmacyServiceSupportTest {
     @Test
     @DisplayName("notifyRefillReminder: no-op when patient is null")
     void refillReminderNullPatient() {
-        support.notifyRefillReminder(null, "Med", 3);
+        support.notifyRefillReminder(rx, null, "Med", 3);
         verifyNoInteractions(smsService);
     }
 
     @Test
-    @DisplayName("notifyRefillReminder: no-op when smsService is null")
+    @DisplayName("notifyRefillReminder: no-op over the logging mock transport")
     void refillReminderNullSmsService() {
-        withoutSms().notifyRefillReminder(patient(), "Med", 3);
+        withoutSms().notifyRefillReminder(rx, patient(), "Med", 3);
         verify(smsService, never()).send(any(), any());
     }
 
@@ -461,7 +527,7 @@ class PharmacyServiceSupportTest {
     void refillReminderBlankPhone() {
         Patient p = patient();
         p.setPhoneNumberPrimary("  ");
-        support.notifyRefillReminder(p, "Med", 3);
+        support.notifyRefillReminder(rx, p, "Med", 3);
         verifyNoInteractions(smsService);
     }
 
@@ -470,7 +536,7 @@ class PharmacyServiceSupportTest {
     void refillReminderHandlesNulls() {
         Patient p = patient();
         p.setFirstName(null);
-        support.notifyRefillReminder(p, null, 7);
+        support.notifyRefillReminder(rx, p, null, 7);
         verify(smsService).send(anyString(), contains("7 jours"));
     }
 

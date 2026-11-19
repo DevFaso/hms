@@ -69,6 +69,8 @@ const reached = new Map<string, Reach>();
 const NOT_MOUNTED: Readonly<Record<string, string>> = {
   'appointments/appointment-form':
     'writes RoleContextService.activeHospitalId, a getter on the shared stub; its forms are driven by appointment-form.spec.ts',
+  'billing/payer-shares/invoice-payer-shares.component':
+    'a child panel that needs its required `invoice` input from the billing detail (billing-money plan PR 7); its rejection reason is driven by invoice-payer-shares.component.spec.ts',
   'billing/refunds/invoice-refunds.component':
     'a child panel that needs its required `invoice` input from the billing detail; its request and reason dialogs are driven by invoice-refunds.component.spec.ts',
   'patients/patient-demographics-edit/patient-demographics-edit.component':

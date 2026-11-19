@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { storedLang, switchLanguage } from '../shared/i18n/app-locale';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { RoleContextService } from '../core/role-context.service';
 
 interface SettingsCard {
   icon: string;
@@ -40,6 +41,7 @@ export class SettingsComponent {
   private readonly translate = inject(TranslateService);
   private readonly confirmService = inject(ConfirmService);
   private readonly router = inject(Router);
+  private readonly roles = inject(RoleContextService);
 
   readonly languages = SUPPORTED_LANGS;
   currentLang = signal<string>(storedLang());
@@ -83,6 +85,18 @@ export class SettingsComponent {
       route: '/privacy-policy',
       actionKey: 'SETTINGS_HUB.OPEN_PRIVACY',
     },
+    // V317: the hospital's PACS connection, for the admins who manage it.
+    ...(this.roles.hasRole('ROLE_HOSPITAL_ADMIN') || this.roles.hasRole('ROLE_SUPER_ADMIN')
+      ? [
+          {
+            icon: 'radiology',
+            titleKey: 'IMAGING_PACS.SETTINGS.CARD_TITLE',
+            descKey: 'IMAGING_PACS.SETTINGS.CARD_DESC',
+            route: '/imaging-pacs-settings',
+            actionKey: 'IMAGING_PACS.SETTINGS.CARD_ACTION',
+          },
+        ]
+      : []),
   ]);
 
   async switchLang(lang: string): Promise<void> {

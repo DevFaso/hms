@@ -333,6 +333,16 @@ public class RoleValidator {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
     }
 
+    /**
+     * Billing-money plan PR 7 (plan section 3.8, "Payer share bordereau" row): who marks a payer's share of an
+     * invoice claimed, paid or rejected at {@code hospitalId}: a hospital admin, an accountant, a billing specialist
+     * or a claims reviewer assignment there.
+     */
+    public boolean canDecidePayerShare(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,
+            CLAIMS_REVIEWER_ROLE);
+    }
+
     /** Billing-money plan PR 6: who reads a hospital's payer catalogue there (the price list's readers). */
     public boolean canReadPayers(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,

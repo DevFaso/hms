@@ -1,5 +1,7 @@
 # DICOM proxy — foundation pass
 
+> **Superseded for viewing:** the in-app viewer, per-hospital PACS settings and the Orthanc set-up are in [pacs-orthanc.md](pacs-orthanc.md) (V317).
+
 **Status:** foundation pass shipped on `feat/v2.0-foundation-batch` (roadmap row 42).
 **Scope today:** flag + service-skeleton + audit-emission contract. The actual upstream HTTP client (Orthanc or dcm4chee DICOMweb) lands in the row-42 follow-on.
 

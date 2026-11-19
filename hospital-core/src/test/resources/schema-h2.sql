@@ -25,6 +25,16 @@ CREATE TABLE IF NOT EXISTS platform.shedlock (
     locked_by   VARCHAR(255) NOT NULL
 );
 
+-- Legacy allergy import ledger (V315, QA D2220): written by JDBC only, so no
+-- entity maps it and create-drop never builds it. No FK here: this script runs
+-- before Hibernate creates clinical.patients.
+CREATE TABLE IF NOT EXISTS clinical.patient_allergy_legacy_imports (
+    patient_id   UUID        NOT NULL PRIMARY KEY,
+    outcome      VARCHAR(32) NOT NULL,
+    rows_created INTEGER     NOT NULL DEFAULT 0,
+    processed_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Clinical prescriptions domain (ensures Hibernate FK creation succeeds during tests)
 CREATE TABLE IF NOT EXISTS clinical.prescriptions (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

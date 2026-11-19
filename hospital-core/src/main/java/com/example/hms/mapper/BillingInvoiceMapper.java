@@ -61,11 +61,6 @@ public class BillingInvoiceMapper {
                 .map(this::toPatientInsuranceSummaryDTO)
                 .toList();
             dto.setPatientInsurances(insuranceSummaries);
-
-            BigDecimal totalCoverage = insuranceSummaries.stream()
-                .map(summary -> summary.getCoverageAmount() != null ? summary.getCoverageAmount() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-            dto.setInsuranceCoverageAmount(totalCoverage);
         }
     }
 
@@ -113,10 +108,10 @@ public class BillingInvoiceMapper {
         // Billing-money plan PR 8: what was already handed back, shown with the refund history.
         dto.setAmountRefunded(invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO);
 
-        // Calculate patient responsibility
-        BigDecimal patientResponsibility = balanceDue.subtract(
-            dto.getInsuranceCoverageAmount() != null ? dto.getInsuranceCoverageAmount() : BigDecimal.ZERO);
-        dto.setPatientResponsibilityAmount(patientResponsibility.max(BigDecimal.ZERO));
+        // Billing-money plan PR 7: the real split of the bill, from the payer shares applied when it was issued
+        // (they were hard-coded zeros): what the payers owe, and the patient's share before payments.
+        dto.setInsuranceCoverageAmount(com.example.hms.utility.InvoiceBalance.payerShareOf(invoice));
+        dto.setPatientResponsibilityAmount(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice));
 
         dto.setStatus(invoice.getStatus() != null ? invoice.getStatus().name() : null);
         // QA D1901: server-written notes and reasons in the reader's language
@@ -143,10 +138,8 @@ public class BillingInvoiceMapper {
             .subscriberRelationship(insurance.getSubscriberRelationship())
             .effectiveDate(insurance.getEffectiveDate())
             .expirationDate(insurance.getExpirationDate())
-            .coverageAmount(BigDecimal.ZERO)
-            .coPayAmount(BigDecimal.ZERO)
-            .coInsurancePercentage(BigDecimal.ZERO)
-            .deductibleRemaining(BigDecimal.ZERO)
+            // Billing-money plan PR 7: no hard-coded zero coverage figures any more; what a coverage pays on this
+            // invoice is its payer share (insuranceCoverageAmount, payerShares).
             .build();
     }
 

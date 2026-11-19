@@ -416,6 +416,9 @@ public class FileUploadService {
             case EXT_DOCX -> startsWith(head, new byte[] {'P', 'K', 0x03, 0x04});
             case ".rtf" -> startsWith(head, "{\\rtf".getBytes(StandardCharsets.US_ASCII));
             case ".txt" -> !looksLikeMarkup(head);
+            // RIFF container, then "WEBP" at offset 8.
+            case EXT_WEBP -> startsWith(head, "RIFF".getBytes(StandardCharsets.US_ASCII))
+                && head.length >= 12 && head[8] == 'W' && head[9] == 'E' && head[10] == 'B' && head[11] == 'P';
             default -> false;
         };
     }
@@ -822,5 +825,58 @@ public class FileUploadService {
         if (contentType == null || !ALLOWED_CHAT_AUDIO_MIME.contains(contentType.toLowerCase())) {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.audio.contentTypeUnsupported"));
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // V316 (owner 2026-11-19): key images on an imaging study. JPEG, PNG,
+    // WebP or a machine-exported PDF, content-sniffed, the same 10 MB limit
+    // as every other upload. Stored under a SERVER-BUILT name (a random
+    // UUID and the checked extension): the uploader's file name can carry
+    // the patient's name and never reaches the key. The prefix has no
+    // static mapping; the bytes stream only through the authenticated
+    // imaging image endpoint.
+    // ---------------------------------------------------------------------
+    public static final String IMAGING_IMAGES_PATH = "imaging-images";
+    private static final Set<String> ALLOWED_IMAGING_IMAGE_EXTENSIONS = Set.of(
+        ".jpg", EXT_JPEG, ".png", EXT_WEBP, ".pdf");
+
+    /**
+     * Validate and store one imaging key image.
+     *
+     * @return the descriptor; its {@code storageKey} is the
+     *         {@code "/uploads/imaging-images/<uuid>.<ext>"} reference that
+     *         {@link #openStoredFile} and {@link #deleteStoredFile} read back
+     */
+    public StoredFileDescriptor uploadImagingImage(MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
+        }
+        if (file.getSize() > MAX_UPLOAD_BYTES) {
+            throw new IllegalArgumentException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.image.tooLarge", MAX_UPLOAD_LABEL));
+        }
+        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase(java.util.Locale.ROOT);
+        if (!ALLOWED_IMAGING_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.image.unsupported"));
+        }
+        requireContentMatchesExtension(file, extension);
+        String contentType = imagingImageContentTypeFor(extension);
+        String filename = UUID.randomUUID() + (EXT_JPEG.equals(extension) ? ".jpg" : extension);
+        String checksum = storeUpload(IMAGING_IMAGES_PATH, filename, file, contentType);
+        return new StoredFileDescriptor(relativeUploadPath(IMAGING_IMAGES_PATH, filename), null,
+            null, contentType, file.getSize(), checksum);
+    }
+
+    /** The type an imaging key image is stored and served with, from its checked extension. */
+    static String imagingImageContentTypeFor(String extension) {
+        return switch (extension.toLowerCase(java.util.Locale.ROOT)) {
+            case ".jpg", EXT_JPEG -> MIME_JPEG;
+            case ".png" -> MIME_PNG;
+            case EXT_WEBP -> MIME_WEBP;
+            case ".pdf" -> MIME_PDF;
+            default -> throw new IllegalArgumentException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.image.unsupported"));
+        };
     }
 }

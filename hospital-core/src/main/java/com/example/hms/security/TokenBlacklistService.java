@@ -51,4 +51,29 @@ public interface TokenBlacklistService {
      * meanwhile (a logout), that revocation stands.
      */
     void release(String jti);
+
+    /**
+     * The store key of a revoked sign-in session: never a jti (jtis are bare
+     * UUIDs), so a session and a token cannot collide.
+     */
+    String SESSION_KEY_PREFIX = "sid:";
+
+    /**
+     * QA D2184: revokes the whole sign-in session {@code sessionId}
+     * ({@link JwtTokenProvider#SESSION_ID_CLAIM}): every access and refresh
+     * token of it, including ones a refresh superseded and the logout never
+     * saw, is refused from now on. Kept until {@code expirationMs}, by which
+     * time no token of the session can still be alive. A blank id is ignored.
+     */
+    default void revokeSession(String sessionId, long expirationMs) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+        blacklist(SESSION_KEY_PREFIX + sessionId, expirationMs);
+    }
+
+    /** Whether the sign-in session {@code sessionId} was revoked ({@link #revokeSession}); {@code false} for a blank id. */
+    default boolean isSessionRevoked(String sessionId) {
+        return sessionId != null && !sessionId.isBlank() && isBlacklisted(SESSION_KEY_PREFIX + sessionId);
+    }
 }

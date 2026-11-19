@@ -201,7 +201,8 @@ public class PatientRecordPdfService {
         pages.heading(t.get("pdf.record.section.imaging"));
         pages.rows(chart.getImaging(), i -> join(SEPARATOR, t.fmt(i.getOrderedAt()),
             join(" ", label(t, i.getModality()), i.getStudyType(), i.getBodyRegion(), lateralityLabel(t, i.getLaterality())),
-            label(t, i.getStatus()), imagingConclusions(i, t)));
+            label(t, i.getStatus()), imagingConclusions(i, t),
+            i.getImageCount() != null && i.getImageCount() > 0 ? t.get("pdf.record.imaging.images", i.getImageCount()) : null));
 
         pages.heading(t.get("pdf.record.section.procedures"));
         pages.rows(chart.getProcedures(), pr -> join(SEPARATOR, t.fmt(pr.getOrderedAt()), pr.getProcedureName(),

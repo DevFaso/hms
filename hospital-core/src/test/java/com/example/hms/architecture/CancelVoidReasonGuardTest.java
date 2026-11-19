@@ -97,6 +97,9 @@ class CancelVoidReasonGuardTest {
             "NOT A VOID: approves a refund asked for with its reason; another person decides (D-3)");
         HANDLERS.put("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
             "NOT A VOID: hands over a refund already asked for with a reason and approved by another person");
+        // Billing-money plan PR 7: a payer's rejection of its share names the payer's reason.
+        HANDLERS.put("POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/reject",
+            "PayerShareRejectRequestDTO.reason -> service/billing/InvoiceCoverageServiceTest#rejectingNeedsTheReasonAndNeverACardNumber");
         HANDLERS.put("DELETE /billing-invoices/{id}",
             "NOT A VOID: only a DRAFT is deleted (billing.invoice.deleteOnlyDraft, QA D613); an issued invoice is cancelled with a reason");
         HANDLERS.put("DELETE /invoice-items/{id}",
@@ -528,6 +531,9 @@ class CancelVoidReasonGuardTest {
             "NOT A CLINICAL RECORD: tenant configuration");
         DELETE_PROOFS.put("DELETE /hospitals/{id}/organization",
             "NOT A CLINICAL RECORD: tenant configuration");
+        // V316: a key image is withdrawn while its study is unread; signing locks it.
+        DELETE_PROOFS.put("DELETE /imaging/images/{imageId}",
+            "OWN RECORD: the uploader (or a radiologist) withdraws a key image before its report is signed; once signed it is locked (ImagingStudyImageServiceTest#aSignedReportsImagesAreLocked) and every removal is audited");
         DELETE_PROOFS.put("DELETE /invoice-items/{id}",
             "NOT A CLINICAL RECORD: a line of an invoice not yet issued (lines lock once issued); money, not the chart");
         DELETE_PROOFS.put("DELETE /lab-orders/{id}",

@@ -8,6 +8,7 @@ import { AppointmentFormComponent } from '../appointments/appointment-form';
 import { AppointmentListComponent } from '../appointments/appointment-list';
 import { BillingComponent } from '../billing/billing';
 import { CashClosingComponent } from '../billing/cash-closing/cash-closing.component';
+import { InvoicePayerSharesComponent } from '../billing/payer-shares/invoice-payer-shares.component';
 import { PayersComponent } from '../billing/payers/payers.component';
 import { PriceListImportComponent } from '../billing/price-list/price-list-import.component';
 import { PriceListComponent } from '../billing/price-list/price-list.component';
@@ -103,6 +104,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'CashClosingComponent',
     file: 'billing/cash-closing/cash-closing.component',
     type: CashClosingComponent,
+  },
+  {
+    name: 'InvoicePayerSharesComponent',
+    file: 'billing/payer-shares/invoice-payer-shares.component',
+    type: InvoicePayerSharesComponent,
   },
   { name: 'PayersComponent', file: 'billing/payers/payers.component', type: PayersComponent },
   {

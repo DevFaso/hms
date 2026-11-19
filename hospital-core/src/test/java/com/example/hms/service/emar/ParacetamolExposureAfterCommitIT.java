@@ -38,6 +38,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -47,6 +48,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
@@ -108,6 +110,8 @@ class ParacetamolExposureAfterCommitIT extends BaseIT {
 
     @BeforeEach
     void setUp() {
+        // Its assertions read the English alert: the locale is set here, never inherited from a test run before it.
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         organization = organizations.save(Organization.builder().name("Exposure Network").code("ORG-EXP-" + unique())
             .type(OrganizationType.HOSPITAL_CHAIN).active(true).build());
         hospital = hospitals.save(Hospital.builder().name("Exposure Hospital").code("HEX" + unique())
@@ -138,6 +142,7 @@ class ParacetamolExposureAfterCommitIT extends BaseIT {
 
     @AfterEach
     void tearDown() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
         Mockito.reset(exposureCheck);
         for (Prescription order : orders) {
             mar.deleteAll(mar.findByPrescription_IdOrderByScheduledTimeDesc(order.getId()));
@@ -168,11 +173,33 @@ class ParacetamolExposureAfterCommitIT extends BaseIT {
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus("GIVEN");
         request.setOverrideReason("Scanner en panne");
-        return nurseTasks.recordMedicationAdministration(order.getId(), nurseUser.getId(), hospital.getId(), request);
+        // These transaction assertions intentionally inspect the English card copy. A previous
+        // test (or a concurrency worker's JVM default) must not choose this fixture's reader.
+        var previousLocale = LocaleContextHolder.getLocaleContext();
+        try {
+            LocaleContextHolder.setLocale(Locale.ENGLISH);
+            return nurseTasks.recordMedicationAdministration(order.getId(), nurseUser.getId(), hospital.getId(), request);
+        } finally {
+            LocaleContextHolder.setLocaleContext(previousLocale);
+        }
     }
 
     private List<MedicationAdministrationRecord> doses(Prescription order) {
         return mar.findByPrescription_IdOrderByScheduledTimeDesc(order.getId());
+    }
+
+    @Test
+    void theEnglishFixtureRestoresAFrenchCallersLocale() {
+        var previousLocale = LocaleContextHolder.getLocaleContext();
+        try {
+            LocaleContextHolder.setLocale(Locale.FRENCH);
+            NurseMedicationTaskResponseDTO answer = give(signedParacetamol());
+            assertThat(answer.getCdsAdvisories()).extracting(CdsCard::summary)
+                .anySatisfy(summary -> assertThat(summary).contains("500 mg of paracetamol recorded as given"));
+            assertThat(LocaleContextHolder.getLocale()).isEqualTo(Locale.FRENCH);
+        } finally {
+            LocaleContextHolder.setLocaleContext(previousLocale);
+        }
     }
 
     @Test

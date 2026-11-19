@@ -3691,4 +3691,63 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V315 (QA D2220) - clinical.patient_allergy_legacy_imports: one row
+         per patient the legacy free-text allergy backfill has processed, so
+         it runs at most once per patient instead of re-running (and possibly
+         re-creating a deactivated allergy) on every start. Additive: one
+         table, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V315-patient-allergy-legacy-import-ledger" author="hms-team" runOnChange="false">
+        <sqlFile path="V315__patient_allergy_legacy_import_ledger.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V306 (billing-money plan PR 7, scorecard M1) - payer coverage applied
+         to the invoice: billing.invoice_payer_shares (one share per invoice
+         and coverage: amount in whole francs, coverage_year, status OPEN /
+         CLAIMED / PAID / REJECTED / CANCELLED with the decision and the
+         payer's rejection reason; one live share per invoice and coverage),
+         billing.billing_invoices.payer_share_total and
+         billing.invoice_items.payer_share_amount (NOT NULL DEFAULT 0, whole).
+         Plain idempotent DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V306-billing-invoice-payer-shares" author="hms-team" runOnChange="false">
+        <sqlFile path="V306__billing_invoice_payer_shares.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V316 (owner 2026-11-19) - clinical.imaging_study_images: key images
+         (JPEG/PNG/WebP/PDF) on an imaging order or report, stored through
+         the FileStorage port under the private imaging-images/ prefix.
+         Additive: one table, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V316-imaging-study-images" author="hms-team" runOnChange="false">
+        <sqlFile path="V316__imaging_study_images.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V317 (imaging, option B) - hospital.hospitals PACS connection:
+         pacs_enabled, pacs_dicomweb_base_url, pacs_auth_username and
+         pacs_auth_password (AES-GCM ciphertext, never returned by the API).
+         Lets a hospital point the in-app viewer at its own Orthanc /
+         dcm4chee DICOMweb endpoint. Additive: four columns, IF NOT EXISTS,
+         no DO block.
+         ================================================================= -->
+    <changeSet id="V317-hospital-pacs-dicomweb-settings" author="hms-team" runOnChange="false">
+        <sqlFile path="V317__hospital_pacs_dicomweb_settings.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -692,6 +692,27 @@
               <p>{{ rep.impression }}</p>
             </div>
           }
+          <!-- V317: the report's images, streamed through e-Keneya from the PACS. -->
+          @if (canViewImages) {
+            <div class="detail-notes" data-testid="imaging-report-images">
+              <span class="field-label">{{ 'IMAGING_PACS.IMAGES' | translate }}</span>
+              @if (rep.pacsViewerUrl) {
+                <button
+                  type="button"
+                  class="btn-link"
+                  (click)="openPacsViewer(rep.pacsViewerUrl!)"
+                  [attr.data-testid]="'imaging-report-pacs-link-' + rep.id"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+                  {{ 'IMAGING.VIEW_IN_PACS' | translate }}
+                </button>
+              }
+              <app-imaging-study-viewer
+                [reportId]="rep.id"
+                [studyLinked]="!!rep.studyInstanceUid || !!rep.accessionNumber"
+              />
+            </div>
+          }
           @if (rep.recommendations) {
             <div class="detail-notes">
               <span class="field-label">{{ 'IMAGING.RECOMMENDATIONS' | translate }}</span>
@@ -721,6 +742,8 @@
               </table>
             </div>
           }
+          <!-- V316: the study's key images, for the reader of this report (imaging-images block). -->
+          <app-imaging-images [orderId]="rep.imagingOrderId" [canUpload]="false" />
           @if (rep.statusHistory?.length) {
             <div class="detail-notes">
               <span class="field-label">{{ 'IMAGING.STATUS_HISTORY' | translate }}</span>
@@ -875,6 +898,20 @@
             <label for="rep-accession">{{ 'IMAGING.ACCESSION' | translate }}</label>
             <input id="rep-accession" type="text" [(ngModel)]="reportForm.accessionNumber" />
           </div>
+          <!-- V317: the DICOM study this report reads, for the in-app viewer. -->
+          <div class="field">
+            <label for="rep-study-uid">{{ 'IMAGING_PACS.STUDY_UID' | translate }}</label>
+            <input
+              id="rep-study-uid"
+              type="text"
+              inputmode="decimal"
+              maxlength="64"
+              pattern="[0-9]+(\.[0-9]+)*"
+              data-testid="imaging-report-study-uid"
+              [placeholder]="'IMAGING_PACS.STUDY_UID_PLACEHOLDER' | translate"
+              [(ngModel)]="reportForm.studyInstanceUid"
+            />
+          </div>
         </div>
         <div class="field">
           <label for="rep-technique">{{ 'IMAGING.TECHNIQUE' | translate }}</label>
@@ -927,6 +964,17 @@
           {{ 'IMAGING.FLAG_CRITICAL' | translate }}
         </label>
         {{ ' ' }}<small class="field-hint">{{ 'IMAGING.FLAG_CRITICAL_HINT' | translate }}</small>
+        <!-- V316: key images (imaging-images block): on this report once saved, else on the study. -->
+        @if (reportOrderId(); as imagesOrderId) {
+          @if (!reportEditId()) {
+            <p class="field-hint">{{ 'IMAGING_IMAGES.NEW_REPORT_HINT' | translate }}</p>
+          }
+          <app-imaging-images
+            [orderId]="imagesOrderId"
+            [reportId]="reportEditId()"
+            [canUpload]="true"
+          />
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeReportModal()">
@@ -1206,6 +1254,9 @@
             </div>
           }
 
+          <!-- V316: key images of the study (imaging-images block). -->
+          <app-imaging-images [orderId]="ord.id" [canUpload]="canAddStudyImages(ord)" />
+
           @if (selectedOrderReports().length > 0) {
             <div class="detail-reports" data-testid="imaging-reports">
               <h3>{{ 'IMAGING.REPORTS' | translate }}</h3>
@@ -1230,6 +1281,13 @@
                       </button>
                     }
                   </div>
+                  <!-- V317: the report's images, streamed through e-Keneya from the PACS. -->
+                  @if (canViewImages) {
+                    <app-imaging-study-viewer
+                      [reportId]="rep.id"
+                      [studyLinked]="!!rep.studyInstanceUid || !!rep.accessionNumber"
+                    />
+                  }
                   <!-- r44: the report drawer's order and labels: Findings, then Conclusion. -->
                   @if (rep.findings) {
                     <div class="detail-notes report-findings">

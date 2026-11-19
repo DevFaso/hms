@@ -99,6 +99,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'ImagingResultController#createReport',
     roles: ['ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
   },
+  /** V317: the in-app image viewer (pixels are clinical content, user decision 2026-11-14). */
+  imagingViewer: {
+    endpoint: 'DicomProxyController#viewer',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RADIOLOGIST'],
+  },
   imagingReportStatus: {
     endpoint: 'ImagingResultController#updateReportStatus',
     roles: ['ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],

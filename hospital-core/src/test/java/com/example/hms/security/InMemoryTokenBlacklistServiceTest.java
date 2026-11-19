@@ -102,4 +102,19 @@ class InMemoryTokenBlacklistServiceTest {
         service.release("jti-b");
         org.assertj.core.api.Assertions.assertThat(service.isBlacklisted("jti-b")).isTrue();
     }
+
+    /** QA D2184: a revoked session is its own entry, never a jti's, and a blank id is a no-op. */
+    @Test
+    void revokedSessionIsSeparateFromJtis() {
+        long exp = System.currentTimeMillis() + 60_000L;
+        service.revokeSession("session-a", exp);
+        assertThat(service.isSessionRevoked("session-a")).isTrue();
+        assertThat(service.isSessionRevoked("session-b")).isFalse();
+        assertThat(service.isBlacklisted("session-a")).isFalse();
+        service.blacklist("jti-c", exp);
+        assertThat(service.isSessionRevoked("jti-c")).isFalse();
+        service.revokeSession(" ", exp);
+        assertThat(service.isSessionRevoked(" ")).isFalse();
+        assertThat(service.isSessionRevoked(null)).isFalse();
+    }
 }

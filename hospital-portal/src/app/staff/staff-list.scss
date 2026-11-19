@@ -24,11 +24,14 @@
 
 .staff-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  /* min(100%, …): one full-width card on a phone (QA D2321, r63: the edit and
+     deactivate buttons sat past the right edge at 390px). */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 1rem;
 }
 
 .staff-card {
+  min-width: 0;
   display: flex;
   align-items: flex-start;
   gap: 1rem;
@@ -313,7 +316,7 @@
 // ---------- Responsive ----------
 @media (max-width: 768px) {
   .staff-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   }
   .modal {
     max-width: 100%;
@@ -351,4 +354,12 @@
   .staff-email {
     font-size: 0.6875rem;
   }
+}
+
+/* A long e-mail or hospital name wraps inside the card rather than widening it. */
+.staff-card > * {
+  min-width: 0;
+}
+.staff-card .staff-email {
+  overflow-wrap: anywhere;
 }

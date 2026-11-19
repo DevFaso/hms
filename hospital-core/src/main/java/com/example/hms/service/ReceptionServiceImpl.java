@@ -652,10 +652,9 @@ public class ReceptionServiceImpl implements ReceptionService {
         return 0;
     }
 
+    /** Billing-money plan PR 7: what the patient owes, by the one rule (the patient's share, less what is held). */
     private BigDecimal balanceDue(BillingInvoice inv) {
-        BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
-        BigDecimal paid = inv.getAmountPaid() != null ? inv.getAmountPaid() : BigDecimal.ZERO;
-        return total.subtract(paid);
+        return com.example.hms.utility.InvoiceBalance.dueOf(inv);
     }
 
     private List<ReceptionQueueItemDTO> filterByStatus(List<ReceptionQueueItemDTO> items, String status) {
@@ -989,7 +988,10 @@ public class ReceptionServiceImpl implements ReceptionService {
                     DisplayDates.time(slot.getStartAt().toLocalTime(), locale),
                     hospitalName,
                     DisplayDates.dateTime(expiry, locale));
-            outreachNotifier.notifyPatient(entry.getPatient(), text, locale);
+            outreachNotifier.notifyPatient(entry.getPatient(), text, locale,
+                    new com.example.hms.service.notification.PatientMessageGate.Notice(
+                            com.example.hms.enums.PatientNotificationEvent.WAITLIST_OFFER,
+                            entry.getHospital() != null ? entry.getHospital().getId() : null, entry.getId()));
         } catch (RuntimeException ex) {
             // Outreach is best-effort: the desk can always phone the patient.
             log.warn("Waitlist offer notification failed for entry {}: {}",

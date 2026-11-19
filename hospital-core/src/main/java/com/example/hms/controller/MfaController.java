@@ -388,8 +388,10 @@ public class MfaController {
         // second-factor proof the provider MFA gate reads (AC-13), and the
         // refresh token passes it on to the access tokens it later mints.
         Instant verifiedAt = Instant.now();
-        String accessToken = jwtTokenProvider.generateAccessToken(descriptor, verifiedAt);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor, verifiedAt);
+        // QA D2184: the pair opens a sign-in session that logout revokes whole.
+        String sessionId = JwtTokenProvider.newSessionId();
+        String accessToken = jwtTokenProvider.generateAccessToken(descriptor, verifiedAt, sessionId);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor, verifiedAt, sessionId);
 
         userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
         // The sign-in is complete only now: clear the password-failure count

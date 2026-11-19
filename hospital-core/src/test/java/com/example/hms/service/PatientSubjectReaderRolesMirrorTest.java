@@ -4,6 +4,7 @@ import com.example.hms.controller.AppointmentController;
 import com.example.hms.controller.ConsultationController;
 import com.example.hms.controller.ImagingOrderController;
 import com.example.hms.controller.ImagingResultController;
+import com.example.hms.controller.ImagingStudyImageController;
 import com.example.hms.controller.ProcedureOrderController;
 import com.example.hms.controller.UltrasoundController;
 import org.junit.jupiter.api.DisplayName;
@@ -52,6 +53,11 @@ class PatientSubjectReaderRolesMirrorTest {
             Arguments.of(ImagingResultController.class, "getReport", "/{reportId}",
                 PatientSubjectReaderRoles.IMAGING_REPORT_READS),
             Arguments.of(ImagingResultController.class, "getLatestReportForOrder", "/order/{orderId}",
+                PatientSubjectReaderRoles.IMAGING_REPORT_READS),
+            // V316: an imaging study's key images are read as its report is.
+            Arguments.of(ImagingStudyImageController.class, "list", "/orders/{orderId}/images",
+                PatientSubjectReaderRoles.IMAGING_REPORT_READS),
+            Arguments.of(ImagingStudyImageController.class, "content", "/images/{imageId}/content",
                 PatientSubjectReaderRoles.IMAGING_REPORT_READS),
             Arguments.of(ProcedureOrderController.class, "getProcedureOrder", "/{orderId}",
                 PatientSubjectReaderRoles.PROCEDURE_ORDER_READS),

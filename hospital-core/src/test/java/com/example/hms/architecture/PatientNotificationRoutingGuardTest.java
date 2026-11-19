@@ -62,11 +62,10 @@ class PatientNotificationRoutingGuardTest {
         "UserRoleHospitalAssignmentServiceImpl.java",
         "UsernameReminderServiceImpl.java",
         "PrescriptionSmsDispatchServiceImpl.java",
-        "PharmacyServiceSupport.java",
         "ProScreeningEscalationService.java",
-        // Waitlist offers and recall notices: patient outreach still sent inline (standing debt,
-        // tracked in the V312 PR body); removing it from here is the fix.
-        "PatientOutreachNotifier.java");
+        // QA D2202: the pharmacy, waitlist and recall SMS are sent inline through the one consent
+        // gate (PatientMessageGateGuardTest), which records an opt-out for staff to see.
+        "PatientMessageGate.java");
 
     @Test
     @DisplayName("every service that books an appointment queues its confirmation")

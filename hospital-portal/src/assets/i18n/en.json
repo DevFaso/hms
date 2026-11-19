@@ -1809,6 +1809,8 @@
       "ACCOUNT_SETUP_REFUSED_LOCKED": "Account setup refused: the account is locked",
       "ACCESS_TOKEN_REVOKED_LOCKOUT": "Access token revoked at the lock-screen lockout",
       "REFRESH_TOKEN_REVOKED_LOCKOUT": "Refresh token revoked at the lock-screen lockout",
+      "SESSION_REVOKED": "Sign-in session ended at sign-out (every token of it revoked)",
+      "SESSION_REVOKED_LOCKOUT": "Sign-in session ended at the lock-screen lockout (every token of it revoked)",
       "TOKEN_PAIR_ROTATED": "Session tokens renewed (previous refresh jti={{jti}})",
       "REFRESH_REFUSED_IDLE": "Session renewal refused: idle for too long",
       "REFRESH_REFUSED_SECOND_FACTOR": "Session renewal refused: the sign-in provider’s second factor is missing or expired",
@@ -2054,6 +2056,10 @@
       "STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED": "Stillbirth certificate conflict reconciled",
       "IMAGING_DUPLICATE_OVERRIDDEN": "Duplicate warning overridden (\"Order anyway\", reason: {{reason}}): imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
       "IMAGING_DUPLICATE_NOT_OVERRIDDEN": "Duplicate warning not overridden: imaging order {{order}} placed while recent order {{earlier}} of the same study exists",
+      "IMAGING_IMAGE_ATTACHED_TO_REPORT": "Image {{image}} attached to imaging order {{order}} (report {{report}})",
+      "IMAGING_IMAGE_ATTACHED": "Image {{image}} attached to imaging order {{order}}",
+      "IMAGING_IMAGE_VIEWED": "Image {{image}} of imaging order {{order}} viewed",
+      "IMAGING_IMAGE_REMOVED": "Image {{image}} removed from imaging order {{order}}",
       "NATIONAL_IU_ACTION": "Patient unique identifier: {{operation}}",
       "PRICE_LIST_IMPORTED": "Price list import {{import}} applied: {{items}} new items, {{prices}} new prices, {{unchanged}} unchanged",
       "REFUND_EVENT": "{{what}}: refund {{refund}} on invoice {{invoice}}",
@@ -2069,7 +2075,10 @@
       "PAYER_RULE_ENDED": "Rule {{rule}} of plan {{plan}} ended, reason recorded",
       "COVERAGE_PLAN_LINKED": "Patient coverage {{insurance}} linked to plan {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
-      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]"
+      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
+      "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}",
+      "PACS_SETTINGS_CHANGED": "PACS connection settings changed",
+      "IMAGING_STUDY_VIEWED": "Imaging study opened in the viewer ({{count}} images)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2365,6 +2374,15 @@
       "REFUND_REJECTED": "Refund rejected",
       "REFUND_PAID_OUT": "Refund handed to the patient",
       "REFUND_CANCELLED": "Refund cancelled"
+    },
+    "PAYER_SHARE_EVENT": {
+      "PAYER_SHARE_APPLIED": "Insurer share applied",
+      "PAYER_SHARE_APPLIED_AFTER_A_CREDIT_NOTE": "Insurer share applied after a credit note",
+      "PAYER_SHARE_REPLACED_AFTER_A_CREDIT_NOTE": "Insurer share replaced after a credit note",
+      "PAYER_SHARE_CANCELLED_WITH_ITS_INVOICE": "Insurer share cancelled with its invoice",
+      "PAYER_SHARE_CLAIMED": "Insurer share claimed",
+      "PAYER_SHARE_PAID": "Insurer share paid by the insurer",
+      "PAYER_SHARE_REJECTED": "Insurer share rejected by the insurer"
     }
   },
   "BILLING": {
@@ -2798,6 +2816,30 @@
       "TERMS_SAVED": "New rate and ceilings saved.",
       "NEXT_TERMS": "Planned from {{date}}: {{rate}} %",
       "REPLACE_TERMS": "Replace the planned rate and ceilings"
+    },
+    "PAYER_SHARES": {
+      "TITLE": "Insurer coverage",
+      "PAYER_SHARE": "Insurer's share",
+      "PATIENT_SHARE": "Patient's share",
+      "STATUSES": {
+        "OPEN": "To claim",
+        "CLAIMED": "Claimed",
+        "PAID": "Paid by the insurer",
+        "REJECTED": "Rejected by the insurer",
+        "CANCELLED": "Cancelled"
+      },
+      "REJECTED_LINE": "Rejected by the insurer: {{reason}}",
+      "CLAIM": "Mark claimed",
+      "MARK_PAID": "Mark paid",
+      "REJECT": "Reject",
+      "REJECT_REASON": "The insurer's reason for rejecting",
+      "REJECT_CONFIRM": "Record the rejection ({{amount}} back to the patient)",
+      "REASON_REQUIRED": "Enter the insurer's reason for rejecting its share.",
+      "NO_CARD_NOTICE": "Never enter a card number, CVV or PIN here.",
+      "NO_CARD_NUMBER": "This looks like a card number: e-Keneya never records card details.",
+      "DECIDED_TOAST": "The insurer's decision is recorded.",
+      "FAILED": "The insurer's decision could not be recorded.",
+      "LOAD_FAILED": "The insurer's shares could not be loaded."
     }
   },
   "CHAT": {
@@ -3963,6 +4005,38 @@
     "WEBSITE": "Website",
     "ZIP_CODE": "Zip Code"
   },
+  "IMAGING_IMAGES": {
+    "TITLE": "Key images",
+    "NONE": "No image attached to this study.",
+    "DROP_HINT": "Drop images or a PDF here, or choose files.",
+    "CHOOSE_FILES": "Choose files",
+    "CAPTION": "Caption (optional)",
+    "CAPTION_PLACEHOLDER": "e.g. Frontal view, right upper lobe",
+    "TYPES_HINT": "JPEG, PNG, WebP or PDF, 10 MB at most per file.",
+    "UPLOADING": "Uploading {{name}}",
+    "ERROR_TYPE": "This file type is not accepted: JPEG, PNG, WebP or PDF only.",
+    "ERROR_EMPTY": "This file is empty.",
+    "ERROR_SIZE": "This file is larger than {{max}}.",
+    "ERROR_UPLOAD": "The file could not be uploaded.",
+    "ERROR_LOAD": "The study images could not be loaded.",
+    "ERROR_VIEW": "The image could not be opened.",
+    "ERROR_DELETE": "The image could not be removed.",
+    "OPEN": "Open image",
+    "IMAGE_N": "Image {{n}} of {{total}}",
+    "LOCKED": "Locked: the report is signed",
+    "DELETE": "Remove image",
+    "DELETE_CONFIRM": "Remove this image from the study?",
+    "DELETED": "Image removed.",
+    "VIEWER_TITLE": "Image {{n}} of {{total}}",
+    "ZOOM_IN": "Zoom in",
+    "ZOOM_OUT": "Zoom out",
+    "ZOOM_RESET": "Fit to screen",
+    "PREVIOUS": "Previous image",
+    "NEXT": "Next image",
+    "ADDED_AT": "Added {{date}}",
+    "KEYS_HINT": "Keyboard: ← → previous/next (pan when zoomed), ↑ ↓ pan, + − zoom, 0 reset, Esc close.",
+    "NEW_REPORT_HINT": "Images added now go on the study. Save the report first to attach them to it."
+  },
   "IMAGING": {
     "RESULTS_PARTIAL_FAILURE": "The reports of these hospitals could not be loaded, so the list is incomplete: {{hospitals}}.",
     "ADMIN_READ_ONLY": "Read-only: imaging requests and released reports. Ordering, reporting and signing are done by the clinical team.",
@@ -5021,6 +5095,21 @@
     "VIEW_ALL": "View all"
   },
   "NURSE": {
+    "OVERSIGHT": {
+      "DEPARTMENT": "Department",
+      "READ_ONLY": "Super-admin oversight · Selected hospital. Clinical documentation requires an active clinical role.",
+      "HOSPITAL_PATIENTS": "All patients in this hospital",
+      "SEARCH": "Search loaded patients by name, record number, bed or clinician",
+      "CLINICIAN": "Clinician",
+      "CARDS": "Cards",
+      "TABLE": "Table",
+      "NO_MATCHES": "No patients match these filters",
+      "BOARD_HELP": "Showing {{shown}} of {{total}} loaded patients in the selected hospital. Filters apply to these workboard rows only.",
+      "ACUITY_HELP": "L1–L5 describes recorded patient acuity. Pending-care indicators describe tasks, not a change in acuity.",
+      "PENDING_CARE": "Pending care",
+      "MEDICATION_COUNT": "{{count}} medication orders",
+      "METRICS_HELP": "Scheduled doses due, overdue doses and as-needed orders are counted separately. Patient-card medication counts describe orders rather than dose times."
+    },
     "AWAITING_TRIAGE": "Awaiting triage",
     "ACTION": "Action",
     "ACTION_PLACEHOLDER": "Enter action...",
@@ -6387,7 +6476,10 @@
       "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}}: {{pending}} already declared is awaiting confirmation.",
       "CREDITED_TO": "Credited to invoice {{number}}",
       "FULLY_DECLARED": "Balance declared, awaiting the cashier's confirmation",
-      "REFUNDED": "Refunded: {{amount}} on {{date}}"
+      "REFUNDED": "Refunded: {{amount}} on {{date}}",
+      "PAYER_SHARE": "Insurer's share",
+      "PATIENT_SHARE": "Your share",
+      "PAYER_SHARE_REJECTED": "Rejected by your insurer ({{amount}}): {{reason}}. You now owe this amount."
     },
     "CARE_TEAM": {
       "TITLE": "My Care Team",
@@ -7172,6 +7264,8 @@
         "HOSPITAL_SUSPENDED": "Hospital Suspended",
         "IMAGING_ORDER_CREATED": "Imaging Order Created",
         "IMAGING_RESULT_UPDATED": "Imaging Result Updated",
+        "IMAGING_IMAGE_UPLOADED": "Imaging image attached",
+        "IMAGING_IMAGE_DELETED": "Imaging image removed",
         "IMPERSONATION_ENDED": "Impersonation Ended",
         "IMPERSONATION_STARTED": "Impersonation Started",
         "INTEGRATION_CONFIGURED": "Integration Configured",
@@ -7326,7 +7420,10 @@
         "PAYMENT_REVERSED": "Payment reversed",
         "PAYER_CHANGED": "Payer changed",
         "PAYER_PLAN_CHANGED": "Payer plan changed",
-        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan"
+        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan",
+        "PAYER_SHARE_APPLIED": "Insurer share applied to an invoice",
+        "PAYER_SHARE_DECIDED": "Insurer's decision on its share recorded",
+        "PAYER_SHARE_CANCELLED": "Insurer share cancelled"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7755,6 +7852,7 @@
         "PANEL_ASSIGNMENT": "Panel assignment",
         "NURSING_NOTE": "Nursing note",
         "LAB_TEST_DEFINITION": "Lab test definition",
+        "IMAGING_STUDY_IMAGE": "Imaging image",
         "INVENTORY": "Inventory",
         "IMAGING_STUDY": "Imaging study",
         "IDENTITY_LINKED": "Linked identity",
@@ -7862,7 +7960,8 @@
         "PRICE_LIST_IMPORT": "Price list import",
         "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send",
         "PAYER": "Payer",
-        "PAYER_PLAN": "Payer plan"
+        "PAYER_PLAN": "Payer plan",
+        "HOSPITAL_PACS_SETTINGS": "PACS connection"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -14320,7 +14419,7 @@
   },
   "PATIENT_NOTIFICATIONS": {
     "TITLE": "Patient notifications",
-    "SUBTITLE": "Appointment and result-available SMS and emails sent to your patients. Failed sends can be retried.",
+    "SUBTITLE": "SMS and e-mails sent to your patients: appointments, results, pharmacy and invoices. A failed send can be retried. « Not sent » with the reason “The patient turned this channel off” is a patient’s choice.",
     "FILTER_STATUS": "Status",
     "ALL_STATUSES": "All statuses",
     "EMPTY": "No sends in this status.",
@@ -14350,7 +14449,21 @@
       "APPOINTMENT_REMINDER": "Appointment reminder",
       "LAB_RESULT_AVAILABLE": "Lab result available",
       "IMAGING_RESULT_AVAILABLE": "Imaging result available",
-      "ULTRASOUND_RESULT_AVAILABLE": "Ultrasound result available"
+      "ULTRASOUND_RESULT_AVAILABLE": "Ultrasound result available",
+      "APPOINTMENT_RESCHEDULED": "Appointment moved",
+      "APPOINTMENT_CANCELLED": "Appointment cancelled",
+      "APPOINTMENT_COMPLETED": "Visit completed",
+      "APPOINTMENT_NO_SHOW": "Missed appointment",
+      "WAITLIST_OFFER": "Waitlist slot offer",
+      "RECALL_DUE": "Follow-up visit due",
+      "VISIT_SUMMARY": "Visit summary available",
+      "PHARMACY_DISPENSED": "Medication dispensed",
+      "PHARMACY_READY": "Medication ready for collection",
+      "PHARMACY_READY_CANCELLED": "Medication no longer ready",
+      "PHARMACY_READY_REMINDER": "Medication still waiting",
+      "PHARMACY_OUT_OF_STOCK": "Medication out of stock",
+      "PHARMACY_REFILL_REMINDER": "Refill reminder",
+      "INVOICE": "Invoice"
     },
     "CHANNEL": {
       "SMS": "SMS",
@@ -14376,5 +14489,88 @@
     "MAYBE_DELIVERED": "The patient may already have received this message.",
     "RETRY_CONFIRM_TITLE": "Send this message again?",
     "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice."
+  },
+  "IMAGING_PACS": {
+    "STUDY_LINKED": "Study linked",
+    "SHOW_IMAGES": "Show images",
+    "HIDE_IMAGES": "Hide images",
+    "LOADING": "Loading…",
+    "IMAGES": "Images",
+    "IMAGES_AVAILABLE": "Images available ({{count}})",
+    "LINKED_BY_ACCESSION": "Study found in the PACS by its accession number.",
+    "TRUNCATED": "This study has more images than the viewer lists; open it in the PACS to see them all.",
+    "VIEWPORT_LABEL": "Image viewer: arrow keys change image, page keys change frame",
+    "IMAGE_ALT": "Image {{position}} of {{count}}",
+    "IMAGE_LOADING": "Loading image…",
+    "IMAGE_FAILED": "This image could not be loaded from the PACS.",
+    "PREVIOUS_IMAGE": "Previous image",
+    "NEXT_IMAGE": "Next image",
+    "IMAGE_POSITION": "Image {{position}} / {{count}}",
+    "PREVIOUS_FRAME": "Previous frame",
+    "NEXT_FRAME": "Next frame",
+    "FRAME_POSITION": "Frame {{frame}} / {{count}}",
+    "BRIGHTNESS": "Brightness",
+    "CONTRAST": "Contrast",
+    "INVERT": "Invert",
+    "ZOOM_IN": "Zoom in",
+    "ZOOM_OUT": "Zoom out",
+    "RESET_VIEW": "Reset view",
+    "KEYBOARD_HINT": "Keyboard: arrows change image, page keys change frame. Images for viewing, not a diagnostic workstation.",
+    "RETRY": "Try again",
+    "STUDY_UID": "Study Instance UID (DICOM)",
+    "STUDY_UID_PLACEHOLDER": "e.g. 1.2.840.113619.2.55.3",
+    "STATUS": {
+      "AVAILABLE": "Images available.",
+      "PROXY_DISABLED": "Image viewing is not switched on for e-Keneya yet. Ask the platform administrator.",
+      "PACS_NOT_CONFIGURED": "This hospital has no PACS connected. A hospital administrator can connect one in Settings, PACS connection.",
+      "NO_STUDY_LINKED": "No study is linked to this report. Enter its Study Instance UID (or accession number) when editing the report.",
+      "STUDY_NOT_FOUND": "The PACS has no images for this study yet.",
+      "ACCESSION_AMBIGUOUS": "Several PACS studies share this accession number. Enter the Study Instance UID on the report.",
+      "PACS_UNREACHABLE": "The PACS did not answer. Try again in a moment, or tell the hospital administrator.",
+      "ERROR": "The images could not be loaded."
+    },
+    "SETTINGS": {
+      "TITLE": "PACS connection",
+      "SUBTITLE": "Connect the hospital's PACS (Orthanc, dcm4chee) so that clinicians see imaging studies in e-Keneya. Images are streamed through e-Keneya; the browser never contacts the PACS.",
+      "HOSPITAL": "Hospital",
+      "CHOOSE_HOSPITAL": "Choose a hospital",
+      "LOAD_FAILED": "The PACS settings could not be loaded.",
+      "STATE": {
+        "READY": "Image viewing is ready for this hospital.",
+        "PROXY_DISABLED": "Image viewing is switched off for the whole platform.",
+        "NOT_CONFIGURED": "No PACS is connected for this hospital."
+      },
+      "SOURCE": {
+        "HOSPITAL": "Images come from this hospital's own PACS.",
+        "PLATFORM": "Images come from the platform's shared PACS."
+      },
+      "PLATFORM_OFF_HINT": "You can save these settings now; images appear once the platform administrator switches image viewing on.",
+      "ENABLED": "Use this hospital's PACS for the image viewer",
+      "BASE_URL": "PACS DICOMweb address",
+      "BASE_URL_HINT": "The DICOMweb root of the PACS, in https, e.g. https://pacs.example.org/dicom-web (Orthanc: /dicom-web).",
+      "USERNAME": "PACS user name",
+      "PASSWORD": "PACS password",
+      "PASSWORD_KEEP": "Saved: leave blank to keep it",
+      "PASSWORD_NONE": "None saved",
+      "CLEAR_PASSWORD": "Remove the saved password",
+      "VIEWER_TEMPLATE": "External viewer link (optional)",
+      "VIEWER_TEMPLATE_HINT": "Opens the study in the PACS's own viewer. Placeholders: {studyInstanceUid}, {accessionNumber}.",
+      "TEST": "Test the connection",
+      "SAVED": "PACS settings saved.",
+      "SAVE_FAILED": "The PACS settings could not be saved.",
+      "TEST_RESULT": {
+        "OK": "Connection OK: the PACS answered.",
+        "PROXY_DISABLED": "Image viewing is switched off for the whole platform: nothing was tried.",
+        "NOT_CONFIGURED": "No PACS is connected: save an address and switch it on first.",
+        "UNREACHABLE": "The PACS could not be reached (address, network or PACS down).",
+        "UNAUTHORIZED": "The PACS refused the user name or password.",
+        "REJECTED": "The PACS answered, but not as a DICOMweb server. Check the address (it usually ends in /dicom-web).",
+        "URL_REFUSED": "This address is refused: e-Keneya calls only public https addresses."
+      },
+      "CARD_TITLE": "PACS connection",
+      "CARD_DESC": "Connect the hospital's PACS so clinicians see imaging studies in e-Keneya.",
+      "CARD_ACTION": "Configure the PACS",
+      "BASE_URL_REQUIRED": "Enter the PACS DICOMweb address to switch the viewer on."
+    }
   }
 }
