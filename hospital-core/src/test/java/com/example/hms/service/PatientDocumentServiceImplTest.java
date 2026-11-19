@@ -363,7 +363,7 @@ class PatientDocumentServiceImplTest {
 
         @Test
         @DisplayName("streams the patient's own document with its stored headers")
-        void streamsOwnDocument() {
+        void streamsOwnDocument() throws java.io.IOException {
             when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
             PatientUploadedDocument doc = PatientUploadedDocument.builder()
                     .patient(patient)
@@ -373,13 +373,13 @@ class PatientDocumentServiceImplTest {
                     .build();
             when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
                     .thenReturn(Optional.of(doc));
-            java.nio.file.Path onDisk = java.nio.file.Path.of("x.pdf");
-            when(fileUploadService.resolveStoredFile("/uploads/patient-documents/x.pdf", "patient-documents"))
+            com.example.hms.storage.StoredObject onDisk = new com.example.hms.storage.StoredObject(new java.io.ByteArrayInputStream("x.pdf".getBytes()), 5);
+            when(fileUploadService.openStoredFile("/uploads/patient-documents/x.pdf", "patient-documents"))
                     .thenReturn(onDisk);
 
             PatientDocumentService.DocumentPayload payload = service.downloadDocument(auth, docId);
 
-            assertThat(payload.path()).isEqualTo(onDisk);
+            assertThat(payload.resource().contentLength()).isEqualTo(onDisk.length());
             assertThat(payload.contentType()).isEqualTo("application/pdf");
             assertThat(payload.displayName()).isEqualTo("lab-report.pdf");
         }
@@ -451,8 +451,8 @@ class PatientDocumentServiceImplTest {
             when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
                     .thenReturn(Optional.of(card));
             when(documentMapper.toDto(card)).thenReturn(new PatientDocumentResponseDTO());
-            when(fileUploadService.resolveStoredFile("/uploads/patient-documents/y.pdf", "patient-documents"))
-                    .thenReturn(java.nio.file.Path.of("y.pdf"));
+            when(fileUploadService.openStoredFile("/uploads/patient-documents/y.pdf", "patient-documents"))
+                    .thenReturn(new com.example.hms.storage.StoredObject(new java.io.ByteArrayInputStream("y.pdf".getBytes()), "y.pdf".length()));
 
             assertThat(service.listForPatient(hospitalId, patientId, null, pageable).getContent()).hasSize(1);
             assertThat(service.getForPatient(hospitalId, patientId, docId)).isNotNull();
@@ -477,7 +477,7 @@ class PatientDocumentServiceImplTest {
             assertThatThrownBy(() -> service.downloadForPatient(hospitalId, patientId, docId))
                     .isInstanceOf(ResourceNotFoundException.class);
             verify(documentRepository, never()).findForStaff(any(), any(), any());
-            verify(fileUploadService, never()).resolveStoredFile(any(), any());
+            verify(fileUploadService, never()).openStoredFile(any(), any());
             verify(auditEventLogService, never()).logEvent(any());
         }
 
@@ -665,7 +665,7 @@ class PatientDocumentServiceImplTest {
 
         @Test
         @DisplayName("download streams the stored file and writes a DATA_ACCESS row naming the document, not the file name")
-        void downloadStreamsAndAuditsActingRole() {
+        void downloadStreamsAndAuditsActingRole() throws java.io.IOException {
             registered();
             var authorities = com.example.hms.security.RoleExpansion.expand(List.of("ROLE_SUPER_ADMIN")).stream()
                     .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList();
@@ -681,13 +681,13 @@ class PatientDocumentServiceImplTest {
             doc.setId(docId);
             when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
                     .thenReturn(Optional.of(doc));
-            java.nio.file.Path onDisk = java.nio.file.Path.of("y.pdf");
-            when(fileUploadService.resolveStoredFile("/uploads/patient-documents/y.pdf", "patient-documents"))
+            com.example.hms.storage.StoredObject onDisk = new com.example.hms.storage.StoredObject(new java.io.ByteArrayInputStream("y.pdf".getBytes()), 5);
+            when(fileUploadService.openStoredFile("/uploads/patient-documents/y.pdf", "patient-documents"))
                     .thenReturn(onDisk);
 
             PatientDocumentService.DocumentPayload payload = service.downloadForPatient(hospitalId, patientId, docId);
 
-            assertThat(payload.path()).isEqualTo(onDisk);
+            assertThat(payload.resource().contentLength()).isEqualTo(onDisk.length());
             assertThat(payload.contentType()).isEqualTo("application/pdf");
             assertThat(payload.displayName()).isEqualTo("hiv-results.pdf");
 
@@ -722,8 +722,8 @@ class PatientDocumentServiceImplTest {
             doc.setId(docId);
             when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
                     .thenReturn(Optional.of(doc));
-            when(fileUploadService.resolveStoredFile("/uploads/patient-documents/z.pdf", "patient-documents"))
-                    .thenReturn(java.nio.file.Path.of("z.pdf"));
+            when(fileUploadService.openStoredFile("/uploads/patient-documents/z.pdf", "patient-documents"))
+                    .thenReturn(new com.example.hms.storage.StoredObject(new java.io.ByteArrayInputStream("z.pdf".getBytes()), "z.pdf".length()));
 
             service.downloadForPatient(hospitalId, patientId, docId);
 

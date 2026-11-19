@@ -14360,7 +14360,7 @@
   },
   "PATIENT_NOTIFICATIONS": {
     "TITLE": "Notifications aux patients",
-    "SUBTITLE": "SMS et e-mails de rendez-vous et de résultats disponibles envoyés à vos patients. Un envoi en échec peut être relancé.",
+    "SUBTITLE": "SMS et e-mails envoyés à vos patients : rendez-vous, résultats, pharmacie et factures. Un envoi en échec peut être relancé. « Non envoyé » avec le motif « Le patient a désactivé ce canal » est un choix du patient.",
     "FILTER_STATUS": "Statut",
     "ALL_STATUSES": "Tous les statuts",
     "EMPTY": "Aucun envoi dans ce statut.",
@@ -14390,7 +14390,21 @@
       "APPOINTMENT_REMINDER": "Rappel de rendez-vous",
       "LAB_RESULT_AVAILABLE": "Résultat de laboratoire disponible",
       "IMAGING_RESULT_AVAILABLE": "Résultat d’imagerie disponible",
-      "ULTRASOUND_RESULT_AVAILABLE": "Résultat d’échographie disponible"
+      "ULTRASOUND_RESULT_AVAILABLE": "Résultat d’échographie disponible",
+      "APPOINTMENT_RESCHEDULED": "Rendez-vous déplacé",
+      "APPOINTMENT_CANCELLED": "Rendez-vous annulé",
+      "APPOINTMENT_COMPLETED": "Consultation terminée",
+      "APPOINTMENT_NO_SHOW": "Rendez-vous manqué",
+      "WAITLIST_OFFER": "Créneau proposé (liste d’attente)",
+      "RECALL_DUE": "Visite de suivi à prévoir",
+      "VISIT_SUMMARY": "Résumé de visite disponible",
+      "PHARMACY_DISPENSED": "Médicament délivré",
+      "PHARMACY_READY": "Médicament prêt à être retiré",
+      "PHARMACY_READY_CANCELLED": "Médicament plus prêt",
+      "PHARMACY_READY_REMINDER": "Médicament toujours en attente",
+      "PHARMACY_OUT_OF_STOCK": "Médicament en rupture de stock",
+      "PHARMACY_REFILL_REMINDER": "Rappel de renouvellement",
+      "INVOICE": "Facture"
     },
     "CHANNEL": {
       "SMS": "SMS",

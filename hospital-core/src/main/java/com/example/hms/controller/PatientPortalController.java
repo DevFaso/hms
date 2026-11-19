@@ -864,7 +864,7 @@ public class PatientPortalController {
                 .contentType(MediaType.parseMediaType(payload.contentType()))
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + payload.displayName().replace("\"", "'") + "\"")
-                .body(new org.springframework.core.io.FileSystemResource(payload.path()));
+                .body(payload.resource());
     }
 
     // ── Notifications (Phase 3) ───────────────────────────────────────────

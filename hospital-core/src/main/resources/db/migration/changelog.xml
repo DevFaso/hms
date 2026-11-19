@@ -3692,6 +3692,20 @@
     </changeSet>
 
     <!-- =================================================================
+         V315 (QA D2220) - clinical.patient_allergy_legacy_imports: one row
+         per patient the legacy free-text allergy backfill has processed, so
+         it runs at most once per patient instead of re-running (and possibly
+         re-creating a deactivated allergy) on every start. Additive: one
+         table, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V315-patient-allergy-legacy-import-ledger" author="hms-team" runOnChange="false">
+        <sqlFile path="V315__patient_allergy_legacy_import_ledger.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
          V306 (billing-money plan PR 7, scorecard M1) - payer coverage applied
          to the invoice: billing.invoice_payer_shares (one share per invoice
          and coverage: amount in whole francs, coverage_year, status OPEN /

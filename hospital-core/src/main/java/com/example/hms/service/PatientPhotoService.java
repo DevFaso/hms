@@ -8,13 +8,11 @@ import java.util.UUID;
 /**
  * Patient photo storage (P3 #21).
  *
- * <p>Photos are PHI, so they are DELIBERATELY kept out of the
- * {@code ${app.upload.dir}} tree: everything under that directory is served
- * statically by WebConfig behind a permitAll {@code GET /uploads/**} rule —
- * profile images and patient documents are already downloadable without
- * authentication if the URL is known. Patient photos live in their own
- * directory and the binary is only reachable through the authenticated
- * streaming endpoint.
+ * <p>Photos are PHI: the binary is only reachable through the
+ * authenticated streaming endpoint. They are kept in the file store under
+ * {@code patient-photos/}; the one stored class served without a token is
+ * profile images ({@code ProfileImageController}), so nothing else in the
+ * store has a public path.
  */
 public interface PatientPhotoService {
 

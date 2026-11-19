@@ -9,7 +9,15 @@ import com.example.hms.payload.dto.EmailInvoiceRequest;
 import com.example.hms.repository.BillingInvoiceRepository;
 import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.enums.PatientNotificationEvent;
+import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.service.i18n.PatientLocaleResolver;
+import com.example.hms.service.notification.PatientMessageGate;
+import com.example.hms.utility.DisplayDates;
+import com.example.hms.utility.InvoiceBalance;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.MessageSource;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +34,10 @@ public class InvoiceEmailService {
     private final BillingInvoiceRepository billingInvoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
     private final PdfInvoiceService pdfInvoiceService;
-    private final EmailService emailService;
+    /** QA D2201 class: the invoice e-mail honours the patient's BILLING e-mail choice. */
+    private final PatientMessageGate patientMessageGate;
+    private final PatientLocaleResolver patientLocaleResolver;
+    private final MessageSource messageSource;
     private final RoleValidator roleValidator;
     /** QA D974: the adjustments go on the mailed paper too, so lines and total agree. */
     private final com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository;
@@ -62,7 +73,10 @@ public class InvoiceEmailService {
 
         List<InvoiceItem> items = invoiceItemRepository.findByBillingInvoiceId(invoiceId);
 
-        Locale locale = req.locale() != null ? Locale.forLanguageTag(req.locale()) : Locale.FRENCH /* French-first: a missing locale must not mail an English invoice */;
+        // QA D2200: the mail is read by the patient, so it is written in the patient's stated
+        // language (French when none), never in the clerk's screen language: the subject, the
+        // body and the attached PDF alike.
+        Locale locale = patientLocaleResolver.resolve(invoice.getPatient(), NotificationLocales.PATIENT_FALLBACK);
 
         // Billing-money plan PR 7: the payers' shares on the mailed paper too.
         List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares =
@@ -72,33 +86,50 @@ public class InvoiceEmailService {
                 shares, locale)
             : null;
 
-        String subject = "Invoice " + nullSafe(invoice.getInvoiceNumber());
-        String body = buildEmailBody(invoice, req.message());
+        String subject = messageSource.getMessage("email.invoice.subject",
+            new Object[] {nullSafe(invoice.getInvoiceNumber()), hospitalName(invoice, locale)}, locale);
+        String body = buildEmailBody(invoice, req.message(), locale);
 
-        emailService.sendWithAttachment(
-            req.to(), req.cc(), req.bcc(),
-            subject, body,
-            pdf, "invoice-" + invoice.getInvoiceNumber() + ".pdf", "application/pdf"
-        );
+        // QA D2201 class: the patient's BILLING e-mail choice applies when the patient is among
+        // the recipients; a refused mail is not sent to anyone, and staff see why.
+        boolean sent = patientMessageGate.emailWithAttachment(invoice.getPatient(),
+            new PatientMessageGate.Notice(PatientNotificationEvent.INVOICE,
+                invoice.getHospital() != null ? invoice.getHospital().getId() : null, invoice.getId()),
+            new PatientMessageGate.OutgoingMail(req.to(), req.cc(), req.bcc(), subject, body),
+            pdf, "invoice-" + invoice.getInvoiceNumber() + ".pdf", "application/pdf");
+        if (!sent) {
+            throw new BusinessException("billing.invoice.emailOptedOut");
+        }
     }
 
-    private static String buildEmailBody(BillingInvoice inv, String custom) {
-        String hospitalName = inv.getHospital() != null ? nullSafe(inv.getHospital().getName()) : "Your Hospital";
-        return """
-            <h2>Invoice %s</h2>
-            <p>Date: %s &nbsp; | &nbsp; Due: %s</p>
-            <p>Total due: <strong>%s</strong></p>
-            %s
-            <p>Thank you,<br>%s</p>
-            """.formatted(
-            nullSafe(inv.getInvoiceNumber()),
-            nullSafe(inv.getInvoiceDate()),
-            nullSafe(inv.getDueDate()),
-            // Billing-money plan PR 7: what the patient owes (their share, less what is held), not the total.
-            nullSafe(com.example.hms.utility.InvoiceBalance.dueOf(inv)),
-            custom != null ? "<p>" + org.springframework.web.util.HtmlUtils.htmlEscape(custom) + "</p>" : "",
-            hospitalName
-        );
+    /**
+     * QA D2200: the patient's language, the dates as the patient writes them, whole francs
+     * with « F CFA » (the same figures as the attached PDF). Every interpolated value is escaped.
+     */
+    private String buildEmailBody(BillingInvoice inv, String custom, Locale locale) {
+        String number = HtmlUtils.htmlEscape(nullSafe(inv.getInvoiceNumber()));
+        String hospitalName = HtmlUtils.htmlEscape(hospitalName(inv, locale));
+        String heading = messageSource.getMessage("email.invoice.heading", new Object[] {number}, locale);
+        String dates = messageSource.getMessage("email.invoice.dates", new Object[] {
+            DisplayDates.date(inv.getInvoiceDate(), locale), DisplayDates.date(inv.getDueDate(), locale)}, locale);
+        String total = messageSource.getMessage("email.invoice.total",
+            new Object[] {PdfInvoiceService.money(inv.getTotalAmount())}, locale);
+        String balance = messageSource.getMessage("email.invoice.balance",
+            new Object[] {"<strong>" + PdfInvoiceService.money(InvoiceBalance.dueOf(inv)) + "</strong>"}, locale);
+        String thanks = messageSource.getMessage("email.invoice.thanks", null, locale);
+        return "<!DOCTYPE html><html lang=\"" + locale.getLanguage() + "\"><body>"
+            + "<h2>" + heading + "</h2>"
+            + "<p>" + dates + "</p>"
+            + "<p>" + total + "<br>" + balance + "</p>"
+            + (custom != null && !custom.isBlank() ? "<p>" + HtmlUtils.htmlEscape(custom) + "</p>" : "")
+            + "<p>" + thanks + "<br>" + hospitalName + "</p>"
+            + "</body></html>";
+    }
+
+    private String hospitalName(BillingInvoice inv, Locale locale) {
+        String name = inv.getHospital() != null ? inv.getHospital().getName() : null;
+        return name != null && !name.isBlank() ? name
+            : messageSource.getMessage("email.invoice.hospitalFallback", null, locale);
     }
 
     private static String nullSafe(Object o) { return o == null ? "" : String.valueOf(o); }

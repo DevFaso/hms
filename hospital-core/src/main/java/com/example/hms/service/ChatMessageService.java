@@ -36,7 +36,8 @@ public interface ChatMessageService {
      */
     ChatAttachmentPayload downloadAttachment(java.util.UUID attachmentId, String requesterUsername);
 
-    /** One downloadable attachment: on-disk path + the headers to serve it with. */
-    record ChatAttachmentPayload(java.nio.file.Path path, String contentType, String displayName) { }
+    /** One downloadable attachment: the stored bytes (opened, streamed once) + the headers to serve it with. */
+    record ChatAttachmentPayload(org.springframework.core.io.Resource resource, String contentType,
+                                 String displayName) { }
 
 }

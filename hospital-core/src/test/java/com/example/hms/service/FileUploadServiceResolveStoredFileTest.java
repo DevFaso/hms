@@ -4,12 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.storage.StoredObject;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * The single resolution gate every authenticated download endpoint goes
@@ -27,53 +28,59 @@ class FileUploadServiceResolveStoredFileTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        service = new FileUploadService();
-        ReflectionTestUtils.setField(service, "uploadDir", tempDir.toString());
+        service = new FileUploadService(new com.example.hms.storage.LocalFileStorage(tempDir));
         Files.createDirectories(tempDir.resolve("patient-documents"));
         Files.writeString(tempDir.resolve("patient-documents").resolve("doc.pdf"), "pdf-bytes");
     }
 
     @Test
-    void resolvesARelativeStorageKey() {
-        Path path = service.resolveStoredFile("/uploads/patient-documents/doc.pdf", "patient-documents");
-
-        assertThat(path).exists();
-        assertThat(path.getFileName().toString()).isEqualTo("doc.pdf");
+    void resolvesARelativeStorageKey() throws Exception {
+        try (StoredObject stored = service.openStoredFile("/uploads/patient-documents/doc.pdf", "patient-documents")) {
+            assertThat(new String(stored.content().readAllBytes(), StandardCharsets.UTF_8)).isEqualTo("pdf-bytes");
+            assertThat(stored.length()).isEqualTo(9);
+        }
     }
 
     @Test
-    void resolvesALegacyAbsoluteUrl() {
-        Path path = service.resolveStoredFile(
-            "https://hms.example.com/api/uploads/patient-documents/doc.pdf", "patient-documents");
+    void resolvesALegacyAbsoluteUrl() throws Exception {
+        try (StoredObject stored = service.openStoredFile(
+            "https://hms.example.com/api/uploads/patient-documents/doc.pdf", "patient-documents")) {
+            assertThat(stored.length()).isEqualTo(9);
+        }
+    }
 
-        assertThat(path).exists();
+    @Test
+    void deleteRemovesTheStoredFileAndIsQuietWhenItIsGone() throws Exception {
+        service.deleteStoredFile("/uploads/patient-documents/doc.pdf", "patient-documents");
+        assertThat(tempDir.resolve("patient-documents").resolve("doc.pdf")).doesNotExist();
+        service.deleteStoredFile("/uploads/patient-documents/doc.pdf", "patient-documents");
     }
 
     @Test
     void aKeyFromAnotherSubdirectoryIsRefused() {
         // A chat storage key must never resolve through the document gate.
-        assertThatThrownBy(() -> service.resolveStoredFile(
+        assertThatThrownBy(() -> service.openStoredFile(
                 "/uploads/chat-attachments/doc.pdf", "patient-documents"))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void traversalHasNothingToGrab() {
-        assertThatThrownBy(() -> service.resolveStoredFile(
+        assertThatThrownBy(() -> service.openStoredFile(
                 "/uploads/patient-documents/../secrets.txt", "patient-documents"))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void aVanishedFileIsNotFound() {
-        assertThatThrownBy(() -> service.resolveStoredFile(
+        assertThatThrownBy(() -> service.openStoredFile(
                 "/uploads/patient-documents/gone.pdf", "patient-documents"))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void nullKeysAreNotFound() {
-        assertThatThrownBy(() -> service.resolveStoredFile(null, "patient-documents"))
+        assertThatThrownBy(() -> service.openStoredFile(null, "patient-documents"))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 }

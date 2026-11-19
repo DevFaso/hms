@@ -42,6 +42,9 @@ class FhirBulkExportServiceTest {
     @Mock private FhirBulkExportFileRepository fileRepository;
     @Mock private RoleValidator roleValidator;
 
+    @org.junit.jupiter.api.io.TempDir
+    java.nio.file.Path storeDir;
+
     private FhirOperationsProperties properties;
     private FhirBulkExportService service;
 
@@ -52,7 +55,8 @@ class FhirBulkExportServiceTest {
         properties = new FhirOperationsProperties();
         properties.getBulkExport().setEnabled(true);
         service = new FhirBulkExportService(
-            properties, auditEventLogService, jobRepository, fileRepository, roleValidator);
+            properties, auditEventLogService, jobRepository, fileRepository, roleValidator,
+            new com.example.hms.storage.LocalFileStorage(storeDir));
 
         hospitalId = UUID.randomUUID();
         HospitalContextHolder.setContext(
@@ -170,5 +174,37 @@ class FhirBulkExportServiceTest {
 
         assertThat(service.cancelExport(job.getId())).isFalse();
         verify(jobRepository, never()).save(any());
+    }
+
+    @Test
+    void openOutputFileReadsThePublishedFileOfTheRecordedRow() throws Exception {
+        FhirBulkExportJob job = FhirBulkExportJob.builder().hospitalId(hospitalId).build();
+        job.setId(UUID.randomUUID());
+        when(fileRepository.findByJob_IdAndFileName(job.getId(), "Patient.ndjson")).thenReturn(Optional.of(
+            com.example.hms.model.platform.FhirBulkExportFile.builder().job(job).resourceType("Patient")
+                .fileName("Patient.ndjson").resourceCount(1).build()));
+        java.nio.file.Path published = storeDir.resolve("fhir-bulk-exports").resolve(job.getId().toString());
+        java.nio.file.Files.createDirectories(published);
+        java.nio.file.Files.writeString(published.resolve("Patient.ndjson"), "{}");
+
+        try (com.example.hms.storage.StoredObject stored = service.openOutputFile(job, "Patient.ndjson")) {
+            assertThat(new String(stored.content().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8))
+                .isEqualTo("{}");
+        }
+    }
+
+    @Test
+    void openOutputFileIsNotFoundWithoutARowOrWithoutTheObject() {
+        FhirBulkExportJob job = FhirBulkExportJob.builder().hospitalId(hospitalId).build();
+        job.setId(UUID.randomUUID());
+        when(fileRepository.findByJob_IdAndFileName(job.getId(), "Patient.ndjson")).thenReturn(Optional.of(
+            com.example.hms.model.platform.FhirBulkExportFile.builder().job(job).resourceType("Patient")
+                .fileName("Patient.ndjson").resourceCount(1).build()));
+        when(fileRepository.findByJob_IdAndFileName(job.getId(), "../x.ndjson")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.openOutputFile(job, "Patient.ndjson"))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.openOutputFile(job, "../x.ndjson"))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 }

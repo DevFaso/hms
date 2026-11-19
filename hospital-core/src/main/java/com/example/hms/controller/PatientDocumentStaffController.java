@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -123,6 +122,6 @@ public class PatientDocumentStaffController {
                 .filename(payload.displayName(), StandardCharsets.UTF_8)
                 .build()
                 .toString())
-            .body(new FileSystemResource(payload.path()));
+            .body(payload.resource());
     }
 }

@@ -90,6 +90,9 @@ public class RecallReminderService {
         Locale locale = patientLocaleResolver.resolve(
             recall.getPatient(), Locale.forLanguageTag(outreachLocale));
         return outreachNotifier.notifyPatient(recall.getPatient(),
-            NotificationText.of("sms.recall.due", hospitalName), locale);
+            NotificationText.of("sms.recall.due", hospitalName), locale,
+            new com.example.hms.service.notification.PatientMessageGate.Notice(
+                com.example.hms.enums.PatientNotificationEvent.RECALL_DUE,
+                hospital != null ? hospital.getId() : null, recall.getId()));
     }
 }

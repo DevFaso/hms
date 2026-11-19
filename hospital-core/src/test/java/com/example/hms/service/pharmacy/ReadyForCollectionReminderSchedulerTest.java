@@ -25,6 +25,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -140,7 +141,7 @@ class ReadyForCollectionReminderSchedulerTest {
             when(dispenseRepository.findById(d.getId())).thenReturn(Optional.of(d));
 
             assertThat(claim.claimAndNotify(d.getId(), NOW)).isTrue();
-            verify(support).notifyReadyReminder(patient, pharmacy, "Amoxicillin");
+            verify(support).notifyReadyReminder(any(), eq(patient), eq(pharmacy), eq("Amoxicillin"));
         }
 
         @Test
@@ -150,7 +151,7 @@ class ReadyForCollectionReminderSchedulerTest {
             when(dispenseRepository.claimReadyReminder(id, NOW)).thenReturn(0);
 
             assertThat(claim.claimAndNotify(id, NOW)).isFalse();
-            verify(support, never()).notifyReadyReminder(any(), any(), any());
+            verify(support, never()).notifyReadyReminder(any(), any(), any(), any());
             verify(dispenseRepository, never()).findById(any());
         }
     }

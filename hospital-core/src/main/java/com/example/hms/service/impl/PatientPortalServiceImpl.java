@@ -214,7 +214,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final StaffAvailabilityService staffAvailabilityService;
     private final com.example.hms.repository.UserRepository userRepository;
     private final com.example.hms.service.NotificationService notificationService;
+    /** Staff mail only (the refill request to the care team); patient mail goes through the gate. */
     private final EmailService emailService;
+    /** QA D2201: the patient's own cancel / reschedule e-mail honours their channel choice. */
+    private final com.example.hms.service.notification.PatientMessageGate patientMessageGate;
     private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
     /** QA D1060 / D1063: the slot rules set the visit length and refuse a slot held for an offer. */
     private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
@@ -2270,53 +2273,46 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     // ── Email notification helpers ───────────────────────────────────────
 
     private void sendCancellationEmail(Appointment appointment) {
-        try {
-            Patient patient = appointment.getPatient();
-            Staff staff = appointment.getStaff();
-            Hospital hospital = appointment.getHospital();
-            String patientName = patient.getFullName();
-            String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
-            String appointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
-
-            Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
-            // QA D1710 class: the day in the patient's own way of writing it, never the ISO text.
-            String appointmentDate = com.example.hms.utility.DisplayDates.date(appointment.getAppointmentDate(), mailLocale);
-            emailService.sendAppointmentCancelledEmail(
-                    patient.getEmail(), patientName, hospital.getName(), staffName,
-                    appointmentDate, appointmentTime,
-                    hospital.getEmail(), hospital.getPhoneNumber(), mailLocale);
-
-            log.info("Cancellation email queued for {} for appointment {}", com.example.hms.utility.ActivationDeliveryTracker.maskEmail(patient.getEmail()),
-                appointment.getId());
-        } catch (Exception e) {
-            log.warn("Failed to send cancellation email for appointment {}: {}", appointment.getId(), e.getMessage());
-        }
+        emailPatientAboutAppointment(appointment,
+            com.example.hms.enums.PatientNotificationEvent.APPOINTMENT_CANCELLED, "Cancellation");
     }
 
     private void sendRescheduleEmail(Appointment appointment) {
+        emailPatientAboutAppointment(appointment,
+            com.example.hms.enums.PatientNotificationEvent.APPOINTMENT_RESCHEDULED, "Reschedule");
+    }
+
+    /**
+     * QA D2201: through {@link com.example.hms.service.notification.PatientMessageGate}, so a
+     * patient who turned appointment e-mails off gets none (and staff see why). Never throws.
+     */
+    private void emailPatientAboutAppointment(Appointment appointment,
+                                              com.example.hms.enums.PatientNotificationEvent event, String what) {
         try {
             Patient patient = appointment.getPatient();
             Staff staff = appointment.getStaff();
             Hospital hospital = appointment.getHospital();
-            String patientName = patient.getFullName();
-            String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
-            String newAppointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
-            String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId();
-            String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId();
-
             Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
-            String newAppointmentDate = com.example.hms.utility.DisplayDates.date(appointment.getAppointmentDate(),
+            // QA D1710 class: the day in the patient's own way of writing it, never the ISO text.
+            var mail = new com.example.hms.service.notification.PatientMessageGate.AppointmentMail(
+                patient.getFullName(), hospital.getName(),
+                staff.getUser().getFirstName() + " " + staff.getUser().getLastName(),
+                com.example.hms.utility.DisplayDates.date(appointment.getAppointmentDate(), mailLocale),
+                appointment.getStartTime() + " - " + appointment.getEndTime(),
+                hospital.getEmail(), hospital.getPhoneNumber(),
+                frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId(),
+                frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId(),
                 mailLocale);
-            emailService.sendAppointmentRescheduledEmail(
-                    patient.getEmail(), patientName, hospital.getName(), staffName,
-                    newAppointmentDate, newAppointmentTime,
-                    hospital.getEmail(), hospital.getPhoneNumber(),
-                    rescheduleLink, cancelLink, mailLocale);
-
-            log.info("Reschedule email queued for {} for appointment {}", com.example.hms.utility.ActivationDeliveryTracker.maskEmail(patient.getEmail()),
-                appointment.getId());
+            boolean queued = patientMessageGate.appointmentEmail(patient,
+                new com.example.hms.service.notification.PatientMessageGate.Notice(event, hospital.getId(),
+                    appointment.getId()),
+                mail);
+            if (queued) {
+                log.info("{} email queued for {} for appointment {}", what,
+                    com.example.hms.utility.ActivationDeliveryTracker.maskEmail(patient.getEmail()), appointment.getId());
+            }
         } catch (Exception e) {
-            log.warn("Failed to send reschedule email for appointment {}: {}", appointment.getId(), e.getMessage());
+            log.warn("Failed to send {} email for appointment {}: {}", what, appointment.getId(), e.getMessage());
         }
     }
 

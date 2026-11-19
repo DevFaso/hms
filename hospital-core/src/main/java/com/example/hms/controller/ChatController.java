@@ -131,7 +131,7 @@ public class ChatController {
             .contentType(org.springframework.http.MediaType.parseMediaType(payload.contentType()))
             .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
                 "attachment; filename=\"" + payload.displayName().replace("\"", "'") + "\"")
-            .body(new org.springframework.core.io.FileSystemResource(payload.path()));
+            .body(payload.resource());
     }
 
     // --- REST: Unread badge count for the signed-in user ---

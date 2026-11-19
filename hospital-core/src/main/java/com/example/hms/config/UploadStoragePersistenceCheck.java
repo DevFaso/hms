@@ -24,8 +24,9 @@ import java.util.List;
  * {@code /data/uploads}: the application wrote to the container's own disk,
  * which is replaced at every deploy, and nothing said so.
  *
- * <p>At startup, every directory that keeps uploaded files (the upload root
- * and the patient-photo directory) is checked, and a WARN names the problem
+ * <p>At startup, with local file storage ({@code app.storage.type=local}),
+ * every directory that keeps uploaded files (the upload root and the
+ * patient-photo directory) is checked, and a WARN names the problem
  * when it is detectably not persistent:
  * <ul>
  *   <li>Railway reports a volume ({@code RAILWAY_VOLUME_MOUNT_PATH}) and the
@@ -57,8 +58,15 @@ public class UploadStoragePersistenceCheck {
 
     @EventListener(ApplicationReadyEvent.class)
     public void warnWhenStorageIsNotPersistent() {
+        // With object storage (app.storage.type=s3) the files are in the
+        // bucket and the upload directory is at most the cut-over fallback:
+        // a missing volume is the goal, not a fault.
+        if ("s3".equalsIgnoreCase(env.getProperty("app.storage.type", "local").strip())) {
+            return;
+        }
         String uploadDir = env.getProperty("app.upload.dir", "uploads");
-        String photoDir = env.getProperty("app.patient-photo.dir", uploadDir + "/patient-photos");
+        // Patient photos are kept under <upload dir>/patient-photos (FileStorage).
+        String photoDir = uploadDir + "/patient-photos";
         // The root-filesystem rule only means something in a container: on a
         // developer's machine or a CI host the root filesystem is persistent.
         List<String> mountPoints = runsInAContainer() ? readMountPoints() : List.of();
