@@ -331,10 +331,14 @@ public class InvoiceCoverageService {
             invoiceRepository.save(invoice);
         }
         // The audit row's words for the decision (the portal reads each in the reader's language).
-        String what = to == PayerShareStatus.CLAIMED ? "Payer share claimed"
-            : to == PayerShareStatus.PAID ? "Payer share paid" : "Payer share rejected";
-        audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(), what);
-        return sharesOf(invoice);
+        if (to == PayerShareStatus.CLAIMED) {
+            audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(), "Payer share claimed");
+        } else if (to == PayerShareStatus.PAID) {
+            audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(), "Payer share paid");
+        } else {
+            audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(), "Payer share rejected");
+        }
+        return readShares(invoice);
     }
 
     /* ---------------------------------------------------------- reads */
@@ -342,6 +346,11 @@ public class InvoiceCoverageService {
     /** The invoice's shares, oldest first, with the payer and plan names (staff read; scope checked by the caller). */
     @Transactional(readOnly = true)
     public List<InvoicePayerShareDTO> sharesOf(BillingInvoice invoice) {
+        return readShares(invoice);
+    }
+
+    /** The body of {@link #sharesOf}, called from this class's own transactions (Sonar S6809). */
+    private List<InvoicePayerShareDTO> readShares(BillingInvoice invoice) {
         if (invoice == null || invoice.getId() == null || invoice.getHospital() == null) {
             return List.of();
         }
@@ -374,7 +383,7 @@ public class InvoiceCoverageService {
             .filter(found -> activeHospitalId == null
                 || (found.getHospital() != null && activeHospitalId.equals(found.getHospital().getId())))
             .orElseThrow(() -> new ResourceNotFoundException(INVOICE_NOT_FOUND, invoiceId));
-        return sharesOf(invoice);
+        return readShares(invoice);
     }
 
     /**
@@ -401,8 +410,8 @@ public class InvoiceCoverageService {
     /* -------------------------------------------------------- internals */
 
     /** The service date: the invoice date (the checkout day for a visit; D-4). */
-    private static LocalDate serviceDay(BillingInvoice invoice) {
-        return invoice.getInvoiceDate() != null ? invoice.getInvoiceDate() : LocalDate.now();
+    private LocalDate serviceDay(BillingInvoice invoice) {
+        return invoice.getInvoiceDate() != null ? invoice.getInvoiceDate() : LocalDate.now(clock);
     }
 
     /** The invoice's lines in a fixed order (created, then id), so a cap is taken from them the same way each time. */

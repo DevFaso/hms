@@ -1098,19 +1098,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         boolean cancelling = nextStatus == InvoiceStatus.CANCELLED && invoice.getStatus() != InvoiceStatus.CANCELLED;
         if (cancelling) {
             recordCancellation(invoice, dto.getCancelReason(), wasDraft);
-            // PR 7: an open payer share is cancelled with its invoice (it frees the annual ceiling).
-            if (coverageService != null) {
-                coverageService.cancelWithInvoice(invoice, roleValidator.getCurrentUserId());
-            }
         }
-        boolean issuing = wasDraft && nextStatus == InvoiceStatus.SENT;
         invoice.setStatus(nextStatus);
-        if (issuing && coverageService != null) {
-            // PR 7: the payer's share is computed when the invoice is issued, before the check-in copay folds
-            // (against the patient's share, below). A share covering the whole bill leaves nothing for the patient.
-            coverageService.applyAtIssue(invoice, roleValidator.getCurrentUserId());
-            invoice.setStatus(com.example.hms.utility.InvoiceBalance.settledStatusOf(invoice));
-        }
+        applyCoverageOnStatusMove(invoice, cancelling, wasDraft && nextStatus == InvoiceStatus.SENT);
         // D656: an issued invoice keeps its notes (checked unchanged above).
         // QA D1901: the form echoes the notes in the reader's language; an
         // echo keeps the server's code, anything else is the person's text.
@@ -1128,6 +1118,23 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D210: issuing the visit invoice takes over the check-in copay.
         creditCheckInCopays(saved);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /**
+     * Billing-money plan PR 7: an open payer share is cancelled with its invoice (it frees the annual ceiling); the
+     * payer's share is computed when the invoice is issued, before the check-in copay folds against the patient's
+     * share. A share covering the whole bill leaves nothing for the patient to pay.
+     */
+    private void applyCoverageOnStatusMove(BillingInvoice invoice, boolean cancelling, boolean issuing) {
+        if (coverageService == null) {
+            return;
+        }
+        if (cancelling) {
+            coverageService.cancelWithInvoice(invoice, roleValidator.getCurrentUserId());
+        } else if (issuing) {
+            coverageService.applyAtIssue(invoice, roleValidator.getCurrentUserId());
+            invoice.setStatus(com.example.hms.utility.InvoiceBalance.settledStatusOf(invoice));
+        }
     }
 
     /** Tenant isolation: an invoice of another hospital than the acting one is answered as not found. */

@@ -273,6 +273,8 @@ public class PdfInvoiceService {
      * (QA D228: a receipt is one moment). When a payer covers part of the bill, the receipt prints "Part assureur"
      * and "Part patient", and the balance is the patient's.
      */
+    // Each argument is one figure of the receipt's own moment (QA D228/D1244); InvoiceBalanceGuardTest requires all.
+    @SuppressWarnings("java:S107")
     public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
                                      BigDecimal paidAsOfPayment, BigDecimal totalOverride, BigDecimal payerShareThen,
                                      boolean carriedOver, Locale locale) {

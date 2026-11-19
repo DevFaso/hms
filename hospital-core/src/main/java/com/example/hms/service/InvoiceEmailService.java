@@ -64,9 +64,12 @@ public class InvoiceEmailService {
 
         Locale locale = req.locale() != null ? Locale.forLanguageTag(req.locale()) : Locale.FRENCH /* French-first: a missing locale must not mail an English invoice */;
 
+        // Billing-money plan PR 7: the payers' shares on the mailed paper too.
+        List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares =
+            coverageService != null ? coverageService.sharesOf(invoice) : List.of();
         byte[] pdf = req.attachPdf()
             ? pdfInvoiceService.generateInvoicePdf(invoice, items, List.of(), adjustmentsWithoutReasons(invoiceId),
-                coverageService != null ? coverageService.sharesOf(invoice) : List.of(), locale)
+                shares, locale)
             : null;
 
         String subject = "Invoice " + nullSafe(invoice.getInvoiceNumber());
