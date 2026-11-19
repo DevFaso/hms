@@ -24,6 +24,14 @@ import {
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import {
+  flagKey,
+  hl7Readable,
+  hl7SegmentLines,
+  messageTypeKey,
+  parseHl7Summary,
+  resultStatusKey,
+} from './hl7-summary';
 
 /**
  * Instrument outbox monitor (P2 #17).
@@ -61,6 +69,35 @@ export class LabOutboxComponent implements OnInit {
 
   detail = signal<{ message: OutboxMessage; siblings: OutboxMessage[] } | null>(null);
   detailLoading = signal(false);
+
+  /** Display-only reading of the open message; null = show the raw text only. */
+  detailSummary = computed(() => {
+    const d = this.detail();
+    return d ? parseHl7Summary(d.message.payload) : null;
+  });
+  /** One line per HL7 segment (CR, LF or CRLF), never the stored payload rewritten. */
+  detailLines = computed(() => hl7SegmentLines(this.detail()?.message.payload));
+  /**
+   * Why the open message is still waiting: the transport is off, or the last
+   * delivery error. Null once it has been acknowledged.
+   */
+  waitingReason = computed((): { key: string; params?: Record<string, string> } | null => {
+    const d = this.detail();
+    if (!d || d.message.status === 'ACK' || d.message.status === 'SENT') {
+      return null;
+    }
+    if (this.transport()?.enabled === false) {
+      return { key: 'LAB_OUTBOX.WAITING_TRANSPORT_OFF' };
+    }
+    if (d.message.lastError) {
+      return { key: 'LAB_OUTBOX.WAITING_LAST_ERROR', params: { error: d.message.lastError } };
+    }
+    return d.message.status === 'PENDING' ? { key: 'LAB_OUTBOX.WAITING_NEXT_ATTEMPT' } : null;
+  });
+
+  readonly messageTypeKey = messageTypeKey;
+  readonly resultStatusKey = resultStatusKey;
+  readonly flagKey = flagKey;
 
   rows = computed(() => this.page()?.content ?? []);
   totalPages = computed(() => {
@@ -145,6 +182,21 @@ export class LabOutboxComponent implements OnInit {
         this.detailLoading.set(false);
       },
     });
+  }
+
+  /** Copies the message with one segment per line (LF), ready to paste into a ticket. */
+  copyPayload(): void {
+    const payload = this.detail()?.message.payload;
+    if (!payload) {
+      return;
+    }
+    const done = () => this.toast.success(this.translate.instant('LAB_OUTBOX.COPIED'));
+    const failed = () => this.toast.error(this.translate.instant('LAB_OUTBOX.COPY_ERROR'));
+    try {
+      navigator.clipboard.writeText(hl7Readable(payload)).then(done, failed);
+    } catch {
+      failed();
+    }
   }
 
   closeDetail(): void {

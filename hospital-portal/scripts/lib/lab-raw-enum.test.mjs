@@ -33,6 +33,12 @@ const LAB_FREE_TEXT = {
   'src/app/lab/lab-outbox/lab-outbox.html::row.messageType': 'an HL7 message type, shown as sent',
   'src/app/lab/lab-outbox/lab-outbox.html::sibling.messageType':
     'an HL7 message type, shown as sent',
+  'src/app/lab/lab-outbox/lab-outbox.html::s.messageType':
+    'an HL7 MSH-9 type the summary does not name (OML^O21 / ORU^R01 are labelled), shown as sent',
+  'src/app/lab/lab-outbox/lab-outbox.html::s.flag':
+    'an HL7 OBX-8 code outside the labelled N/A/L/H/LL/HH, shown as sent',
+  'src/app/lab/lab-outbox/lab-outbox.html::s.resultStatus':
+    'an HL7 table-0085 code outside the labelled F/P/C, shown as sent',
   'src/app/lab/lab-release-worklist/lab-release-worklist.html::row.observationResultStatus':
     'an HL7 table-0085 code the screen does not name, shown as sent',
   'src/app/lab/lab-results/lab-results.html::r.qcOverrideReason':

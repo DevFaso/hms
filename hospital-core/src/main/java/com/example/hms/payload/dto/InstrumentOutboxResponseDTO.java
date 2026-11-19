@@ -18,6 +18,12 @@ public class InstrumentOutboxResponseDTO {
     /** Full HL7 payload. Elided on list rows — PHI-bearing and up to TEXT-sized. */
     private String payload;
     private String status;
+    /**
+     * OBX-11 of the message's observation: F (final), P (preliminary), C
+     * (correction); null for an order message (OML^O21). Parsed from the
+     * payload server-side so list rows can show it without the payload.
+     */
+    private String resultStatus;
     private LocalDateTime createdAt;
     private LocalDateTime sentAt;
 

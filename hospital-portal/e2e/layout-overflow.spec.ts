@@ -1153,3 +1153,87 @@ test.describe('layout overflow: r64 dialogs and money screens', () => {
     expect(found, formatOffenders(found)).toEqual([]);
   });
 });
+
+/* ── Lab instrument outbox: the message dialog (owner, 2026-11-19) ───────── */
+
+const OUTBOX_ID = '00000000-0000-0000-0000-0000000c3001';
+const OUTBOX_ROW = {
+  id: OUTBOX_ID,
+  labOrderId: RECORD_ID,
+  messageType: 'ORU^R01',
+  resultStatus: 'P',
+  status: 'ERROR',
+  createdAt: '2026-11-19T10:30:00',
+  attempts: 5,
+  lastError:
+    'java.net.ConnectException: Connection refused (Connection refused) to analyser 10.0.0.12:2576',
+  lastAttemptAt: '2026-11-19T10:45:00',
+};
+const OUTBOX_PAYLOAD = [
+  'MSH|^~\\&|HMS|HOSPITAL|LAB_ANALYZER|LAB|20261119103000+0000||ORU^R01^ORU_R01|HMS-4F2A9C1B7D3E|P|2.5.1',
+  `PID|1||${TEST_ID}||Démo-Ouédraogo Kaboré-Sawadogo^Évelyne^Marie-Noëlle`,
+  `OBR|1|${RECORD_ID}||NFS^Numération formule sanguine complète avec plaquettes|||20261119102000+0000`,
+  'OBX|1|ST|NFS^Numération formule sanguine complète avec plaquettes||Leucocytes 12,4 ; hématies 4,1 ; plaquettes 250|10\\S\\9/L||H|||P|||20261119102000+0000',
+].join('\r');
+
+test.describe('layout overflow: lab outbox message dialog', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('the message dialog fits: summary, segment lines, copy button', async ({
+    page,
+  }, testInfo) => {
+    await page.route('**/api/lab-instrument-outbox**', (r) => {
+      const url = r.request().url();
+      if (url.includes('/transport')) {
+        return r.fulfill({
+          json: {
+            success: true,
+            data: {
+              enabled: true,
+              host: '10.0.0.12',
+              port: 2576,
+              maxAttempts: 5,
+              retryAfterSeconds: 60,
+              batchSize: 50,
+            },
+          },
+        });
+      }
+      if (url.includes('/orders/')) {
+        return r.fulfill({
+          json: {
+            success: true,
+            data: [OUTBOX_ROW, { ...OUTBOX_ROW, id: 'sib-1', resultStatus: 'F', status: 'ACK' }],
+          },
+        });
+      }
+      if (url.includes(OUTBOX_ID)) {
+        return r.fulfill({
+          json: { success: true, data: { ...OUTBOX_ROW, payload: OUTBOX_PAYLOAD } },
+        });
+      }
+      return r.fulfill({
+        json: {
+          success: true,
+          data: {
+            content: [OUTBOX_ROW],
+            page: 0,
+            size: 25,
+            totalElements: 1,
+            pendingCount: 0,
+            errorCount: 1,
+            ackCount: 0,
+          },
+        },
+      });
+    });
+    await open(page, testInfo.project.use.baseURL as string, roleFor('/lab-outbox'), '/lab-outbox');
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.locator(`[data-testid="outbox-view-${OUTBOX_ID}"]`).click();
+    await expect(page.locator('[data-testid="outbox-detail-summary"]')).toBeVisible();
+    await expect(page.locator('[data-testid="outbox-detail-payload"] .segment')).toHaveCount(4);
+    const found = await auditAtWidths(page, '/lab-outbox message dialog');
+    await shoot(page, 'lab-outbox-dialog', LAYOUT_WIDTHS);
+    expect(found, formatOffenders(found)).toEqual([]);
+  });
+});

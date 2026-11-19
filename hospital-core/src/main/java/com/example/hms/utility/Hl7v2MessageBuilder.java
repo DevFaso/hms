@@ -26,7 +26,6 @@ import java.util.UUID;
 @Component
 public class Hl7v2MessageBuilder {
 
-    private static final DateTimeFormatter HL7_DT  = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final String SENDING_APP = "HMS";
     private static final String SENDING_FAC = "HOSPITAL";
     private static final String RECEIVING_APP = "LAB_ANALYZER";
@@ -60,7 +59,7 @@ public class Hl7v2MessageBuilder {
      */
     public String buildOml021(LabSpecimen specimen) {
         LabOrder order = specimen.getLabOrder();
-        String now = LocalDateTime.now().format(HL7_DT);
+        String now = Hl7Timestamps.nowUtc();
         String msgId = "HMS-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
 
         String patientName = pid5(order.getPatient());
@@ -70,7 +69,7 @@ public class Hl7v2MessageBuilder {
         String testName = order.getLabTestDefinition() != null
             ? encodeEscapes(order.getLabTestDefinition().getName()) : "";
         String priority = encodeEscapes(order.getPriority() != null ? order.getPriority() : "ROUTINE");
-        String collectedAt = specimen.getCollectedAt() != null ? specimen.getCollectedAt().format(HL7_DT) : now;
+        String collectedAt = specimen.getCollectedAt() != null ? Hl7Timestamps.formatUtc(specimen.getCollectedAt()) : now;
         String accession = encodeEscapes(specimen.getAccessionNumber());
 
         return msh("OML^O21^OML_O21", msgId, now) +
@@ -106,7 +105,7 @@ public class Hl7v2MessageBuilder {
      */
     public String buildOruR01(LabResult result) {
         LabOrder order = result.getLabOrder();
-        String now = LocalDateTime.now().format(HL7_DT);
+        String now = Hl7Timestamps.nowUtc();
         String msgId = "HMS-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
 
         // Every stored text is escaped on its own (a CE field's parts one by
@@ -118,7 +117,7 @@ public class Hl7v2MessageBuilder {
             ? encodeEscapes(order.getLabTestDefinition().getTestCode()) : "";
         String testName = order.getLabTestDefinition() != null
             ? encodeEscapes(order.getLabTestDefinition().getName()) : "";
-        String resultDate = result.getResultDate() != null ? result.getResultDate().format(HL7_DT) : now;
+        String resultDate = result.getResultDate() != null ? Hl7Timestamps.formatUtc(result.getResultDate()) : now;
         String abnormalFlag = toHl7AbnormalFlag(result.getAbnormalFlag());
         String resultStatus;
         if (!result.isReleased()) {
@@ -214,6 +213,27 @@ public class Hl7v2MessageBuilder {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    /**
+     * OBX-11 of a stored outbound message's first observation ({@code F},
+     * {@code P}, {@code C}), for the outbox monitor: a preliminary and a final
+     * message for the same order otherwise look like a duplicate. Returns
+     * {@code null} for a message with no OBX (an OML^O21) or a malformed one;
+     * accepts CR, LF or CRLF segment terminators.
+     */
+    public static String observationStatusOf(String hl7Message) {
+        if (hl7Message == null || hl7Message.isBlank()) {
+            return null;
+        }
+        for (String seg : hl7Message.split("\r\n|\r|\n")) {
+            if (seg.startsWith("OBX|")) {
+                String[] f = seg.split("\\|", -1);
+                String status = f.length > 11 ? f[11].trim() : "";
+                return status.isEmpty() ? null : status;
+            }
+        }
+        return null;
     }
 
     /**
@@ -459,14 +479,9 @@ public class Hl7v2MessageBuilder {
         }
     }
 
+    /** With or without an offset; an offset is converted to UTC (see {@link Hl7Timestamps}). */
     private LocalDateTime parseHl7DateTimeOrNull(String raw) {
-        if (raw == null || raw.length() < 8) return null;
-        try {
-            String normalized = raw.length() >= 14 ? raw.substring(0, 14) : raw.substring(0, 8) + "000000";
-            return LocalDateTime.parse(normalized, HL7_DT);
-        } catch (Exception e) {
-            return null;
-        }
+        return Hl7Timestamps.parse(raw);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -477,8 +492,13 @@ public class Hl7v2MessageBuilder {
             msgType + "|" + msgId + "|P|2.5.1" + SEG_TERM;
     }
 
+    /**
+     * PID-3 patient identifier, PID-5 patient name. Until 2026-11-19 the name
+     * went out one field late, in PID-6 (mother's maiden name): our own ADT
+     * parser, and any receiver, reads PID-5 and found no name at all.
+     */
     private String pid(String patientId, String patientName) {
-        return "PID|1||" + patientId + "|||" + patientName + SEG_TERM;
+        return "PID|1||" + patientId + "||" + patientName + SEG_TERM;
     }
 
     /**
@@ -646,14 +666,10 @@ public class Hl7v2MessageBuilder {
         return "";
     }
 
+    /** With or without an offset; an absent or unreadable value falls back to now (UTC wall time). */
     private LocalDateTime parseHl7DateTime(String raw) {
-        if (raw == null || raw.length() < 8) return LocalDateTime.now();
-        try {
-            String normalized = raw.length() >= 14 ? raw.substring(0, 14) : raw.substring(0, 8) + "000000";
-            return LocalDateTime.parse(normalized, HL7_DT);
-        } catch (Exception e) {
-            return LocalDateTime.now();
-        }
+        LocalDateTime parsed = Hl7Timestamps.parse(raw);
+        return parsed != null ? parsed : LocalDateTime.now(java.time.ZoneOffset.UTC);
     }
 
     /**

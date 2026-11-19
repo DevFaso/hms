@@ -2088,7 +2088,8 @@
       "IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY": "Image {{image}} of imaging order {{order}} viewed on the patient portal by a proxy",
       "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} of imaging order {{order}} viewed on the patient portal",
       "IMAGING_IMAGE_WITHDRAWN": "Image {{image}} withdrawn from imaging order {{order}}",
-      "IMAGING_IMAGE_CAPTION_CORRECTED": "Caption of image {{image}} corrected on imaging order {{order}}"
+      "IMAGING_IMAGE_CAPTION_CORRECTED": "Caption of image {{image}} corrected on imaging order {{order}}",
+      "INSTRUMENT_OUTBOX_VIEWED": "Instrument outbox message {{message}} ({{type}}) viewed"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -4842,7 +4843,34 @@
     "DETAIL_TITLE": "Outbox message",
     "PAYLOAD": "HL7 payload",
     "SIBLINGS": "Other messages for this order",
-    "PAGE_OF": "Page {{page}} of {{total}}"
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "SUMMARY": "Summary",
+    "SUMMARY_TYPE": "Message",
+    "TYPE_OML": "Order sent to the analyser",
+    "TYPE_ORU": "Result",
+    "SUMMARY_PATIENT": "Patient",
+    "SUMMARY_TEST": "Test",
+    "SUMMARY_VALUE": "Result value",
+    "SUMMARY_FLAG": "Flag",
+    "SUMMARY_RESULT_STATUS": "Result status",
+    "SUMMARY_QUEUED": "Queued",
+    "SUMMARY_WAITING": "Why it is waiting",
+    "WAITING_TRANSPORT_OFF": "Outbound transport is disabled on the server.",
+    "WAITING_LAST_ERROR": "Last error: {{error}}",
+    "WAITING_NEXT_ATTEMPT": "Waiting for the next send attempt.",
+    "UNPARSEABLE": "This message could not be read; the raw text is shown below.",
+    "RESULT_STATUS_F": "Final",
+    "RESULT_STATUS_P": "Preliminary",
+    "RESULT_STATUS_C": "Correction",
+    "FLAG_N": "Normal",
+    "FLAG_A": "Abnormal",
+    "FLAG_L": "Low",
+    "FLAG_H": "High",
+    "FLAG_LL": "Critically low",
+    "FLAG_HH": "Critically high",
+    "COPY": "Copy the message",
+    "COPIED": "Message copied.",
+    "COPY_ERROR": "The message could not be copied."
   },
   "LAB_INVENTORY": {
     "TITLE": "Lab Inventory",
@@ -8025,7 +8053,8 @@
         "PAYER": "Payer",
         "PAYER_PLAN": "Payer plan",
         "HOSPITAL_PACS_SETTINGS": "PACS connection",
-        "LAB_QC_TARGET": "Lab QC target"
+        "LAB_QC_TARGET": "Lab QC target",
+        "INSTRUMENT_OUTBOX_MESSAGE": "Instrument outbox message"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",

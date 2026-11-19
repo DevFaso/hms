@@ -2088,7 +2088,8 @@
       "IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient par un mandataire",
       "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient",
       "IMAGING_IMAGE_WITHDRAWN": "Image {{image}} retirée de la demande d’imagerie {{order}}",
-      "IMAGING_IMAGE_CAPTION_CORRECTED": "Légende de l’image {{image}} corrigée sur la demande d’imagerie {{order}}"
+      "IMAGING_IMAGE_CAPTION_CORRECTED": "Légende de l’image {{image}} corrigée sur la demande d’imagerie {{order}}",
+      "INSTRUMENT_OUTBOX_VIEWED": "Message {{message}} de la boîte d’envoi des instruments ({{type}}) consulté"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -4842,7 +4843,34 @@
     "DETAIL_TITLE": "Message de la boîte d’envoi",
     "PAYLOAD": "Contenu HL7",
     "SIBLINGS": "Autres messages de cette demande",
-    "PAGE_OF": "Page {{page}} sur {{total}}"
+    "PAGE_OF": "Page {{page}} sur {{total}}",
+    "SUMMARY": "Résumé",
+    "SUMMARY_TYPE": "Message",
+    "TYPE_OML": "Demande envoyée à l’analyseur",
+    "TYPE_ORU": "Résultat",
+    "SUMMARY_PATIENT": "Patient",
+    "SUMMARY_TEST": "Examen",
+    "SUMMARY_VALUE": "Valeur du résultat",
+    "SUMMARY_FLAG": "Indicateur",
+    "SUMMARY_RESULT_STATUS": "Statut du résultat",
+    "SUMMARY_QUEUED": "Mis en file",
+    "SUMMARY_WAITING": "Pourquoi il attend",
+    "WAITING_TRANSPORT_OFF": "Le transport sortant est désactivé sur le serveur.",
+    "WAITING_LAST_ERROR": "Dernière erreur : {{error}}",
+    "WAITING_NEXT_ATTEMPT": "En attente de la prochaine tentative d’envoi.",
+    "UNPARSEABLE": "Ce message n’a pas pu être lu ; le texte brut est affiché ci-dessous.",
+    "RESULT_STATUS_F": "Final",
+    "RESULT_STATUS_P": "Préliminaire",
+    "RESULT_STATUS_C": "Correction",
+    "FLAG_N": "Normal",
+    "FLAG_A": "Anormal",
+    "FLAG_L": "Bas",
+    "FLAG_H": "Élevé",
+    "FLAG_LL": "Critique bas",
+    "FLAG_HH": "Critique haut",
+    "COPY": "Copier le message",
+    "COPIED": "Message copié.",
+    "COPY_ERROR": "Le message n’a pas pu être copié."
   },
   "LAB_INVENTORY": {
     "TITLE": "Inventaire de laboratoire",
@@ -7991,7 +8019,8 @@
         "PAYER": "Organisme payeur",
         "PAYER_PLAN": "Formule d’organisme payeur",
         "HOSPITAL_PACS_SETTINGS": "Connexion PACS",
-        "LAB_QC_TARGET": "Cible CQ du laboratoire"
+        "LAB_QC_TARGET": "Cible CQ du laboratoire",
+        "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",

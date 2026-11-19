@@ -190,6 +190,128 @@ describe('LabOutboxComponent', () => {
     expect(component.detail()?.siblings.map((s) => s.id)).toEqual(['m-2']);
   });
 
+  describe('a readable message (owner: segments ran together, no summary, P/F looked like duplicates)', () => {
+    // As the builder stores it: CR terminators, escaped caret in the unit.
+    const ORU =
+      'MSH|^~\\&|HMS|HOSPITAL|LAB_ANALYZER|LAB|20261119153000+0000||ORU^R01^ORU_R01|HMS-ABC|P|2.5.1\r' +
+      'PID|1||p-1||Ouedraogo^Awa^Marie\r' +
+      'OBR|1|o-1||GLU^Glucose|||20261119152000+0000\r' +
+      'OBX|1|NM|GLU^Glycémie||7.8|mmol/L||H|||P|||20261119152000+0000\r';
+
+    function openWith(
+      payload: string,
+      overrides: Partial<OutboxMessage> = {},
+      siblings: OutboxMessage[] = [],
+    ) {
+      const row = message({ id: 'm-1', ...overrides });
+      setup(['ROLE_LAB_TECHNICIAN'], pageOf([row]));
+      outboxService.getMessage.and.returnValue(of({ ...row, payload }));
+      outboxService.getMessagesForOrder.and.returnValue(of([row, ...siblings]));
+      component.openDetail(row);
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    const text = (root: HTMLElement, id: string) =>
+      root.querySelector<HTMLElement>(`[data-testid="${id}"]`)?.textContent?.trim() ?? null;
+
+    it('puts every segment on its own line whatever the terminator, and never rewrites the payload', () => {
+      const payload =
+        'MSH|^~\\&|HMS|H|A|L|20261119153000+0000||ORU^R01|X|P|2.5.1\rPID|1\nOBR|1\r\nOBX|1\r';
+      const root = openWith(payload);
+
+      const lines = Array.from(
+        root.querySelectorAll('[data-testid="outbox-detail-payload"] .segment'),
+      ).map((el) => el.textContent);
+      expect(lines).toEqual([
+        'MSH|^~\\&|HMS|H|A|L|20261119153000+0000||ORU^R01|X|P|2.5.1',
+        'PID|1',
+        'OBR|1',
+        'OBX|1',
+      ]);
+      expect(component.detail()?.message.payload).toBe(payload);
+    });
+
+    it('scrolls a long segment sideways instead of breaking it mid-word', () => {
+      const root = openWith(ORU);
+      const box = root.querySelector<HTMLElement>('[data-testid="outbox-detail-payload"]')!;
+      const segment = box.querySelector<HTMLElement>('.segment')!;
+      expect(getComputedStyle(box).overflowX).toBe('auto');
+      expect(getComputedStyle(segment).whiteSpace).toBe('pre');
+    });
+
+    it('summarises type, patient, test, value + unit + flag, result status, queue time and why it waits', () => {
+      const root = openWith(ORU);
+
+      expect(text(root, 'outbox-summary-type')).toContain('LAB_OUTBOX.TYPE_ORU');
+      expect(text(root, 'outbox-summary-patient')).toBe('Awa Marie OUEDRAOGO');
+      expect(text(root, 'outbox-summary-test')).toBe('Glycémie');
+      expect(text(root, 'outbox-summary-value')).toBe('7.8 mmol/L');
+      expect(text(root, 'outbox-summary-flag')).toContain('LAB_OUTBOX.FLAG_H');
+      expect(text(root, 'outbox-summary-result-status')).toBe('LAB_OUTBOX.RESULT_STATUS_P');
+      expect(text(root, 'outbox-summary-queued')).toBeTruthy();
+      // The suite's default transport is OFF: that is why it waits.
+      expect(text(root, 'outbox-summary-waiting')).toBe('LAB_OUTBOX.WAITING_TRANSPORT_OFF');
+    });
+
+    it('names the last error when the transport is on', () => {
+      const row = message({ id: 'm-1', status: 'ERROR', lastError: 'Connection refused' });
+      setup(['ROLE_LAB_TECHNICIAN'], pageOf([row]), { ...transportOff, enabled: true });
+      outboxService.getMessage.and.returnValue(of({ ...row, payload: ORU }));
+      outboxService.getMessagesForOrder.and.returnValue(of([]));
+      component.openDetail(row);
+      fixture.detectChanges();
+
+      expect(component.waitingReason()).toEqual({
+        key: 'LAB_OUTBOX.WAITING_LAST_ERROR',
+        params: { error: 'Connection refused' },
+      });
+    });
+
+    it('names an order message in words', () => {
+      const root = openWith(
+        'MSH|^~\\&|HMS|H|A|L|20261119153000+0000||OML^O21^OML_O21|X|P|2.5.1\rPID|1||p||Sawadogo^Ali\rOBR|1|ACC||NFS^Numération|||20261119150000+0000\r',
+        { messageType: 'OML^O21' },
+      );
+      expect(text(root, 'outbox-summary-type')).toContain('LAB_OUTBOX.TYPE_OML');
+      expect(text(root, 'outbox-summary-test')).toBe('Numération');
+      expect(root.querySelector('[data-testid="outbox-summary-result-status"]')).toBeNull();
+    });
+
+    it('shows only the raw text for a malformed payload', () => {
+      const root = openWith('not an HL7 message\rsecond line');
+      expect(root.querySelector('[data-testid="outbox-detail-summary"]')).toBeNull();
+      expect(root.querySelector('[data-testid="outbox-detail-unparseable"]')).not.toBeNull();
+      expect(text(root, 'outbox-detail-payload')).toContain('not an HL7 message');
+    });
+
+    it('« Copier le message » copies one segment per line', async () => {
+      const root = openWith(ORU);
+      const write = spyOn(navigator.clipboard, 'writeText').and.returnValue(Promise.resolve());
+      root.querySelector<HTMLButtonElement>('[data-testid="outbox-detail-copy"]')!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(write).toHaveBeenCalledWith(ORU.split('\r').filter(Boolean).join('\n'));
+      expect(toast.success).toHaveBeenCalledWith('LAB_OUTBOX.COPIED');
+    });
+
+    it('badges a preliminary and a final message apart, on the row and among the siblings', () => {
+      const pre = message({ id: 'm-p', resultStatus: 'P' });
+      const fin = message({ id: 'm-f', resultStatus: 'F', status: 'ACK' });
+      setup(['ROLE_LAB_TECHNICIAN'], pageOf([pre, fin]));
+      const root = fixture.nativeElement as HTMLElement;
+      expect(text(root, 'outbox-result-status-m-p')).toBe('LAB_OUTBOX.RESULT_STATUS_P');
+      expect(text(root, 'outbox-result-status-m-f')).toBe('LAB_OUTBOX.RESULT_STATUS_F');
+
+      outboxService.getMessage.and.returnValue(of({ ...pre, payload: ORU }));
+      outboxService.getMessagesForOrder.and.returnValue(of([pre, fin]));
+      component.openDetail(pre);
+      fixture.detectChanges();
+      expect(text(root, 'outbox-sibling-result-status-m-f')).toBe('LAB_OUTBOX.RESULT_STATUS_F');
+    });
+  });
+
   describe('the message dialog keeps the keyboard contract (QA D1154 / D1004 / D1125)', () => {
     afterEach(() => (fixture.nativeElement as HTMLElement).remove());
 

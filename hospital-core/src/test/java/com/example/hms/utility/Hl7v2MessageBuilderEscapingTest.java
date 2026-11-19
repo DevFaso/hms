@@ -97,7 +97,8 @@ class Hl7v2MessageBuilderEscapingTest {
 
         String pid = segment(builder.buildOruR01(result), "PID");
 
-        assertThat(pid.split("\\|", -1)[6]).isEqualTo("O\\S\\Brien^Ann\\F\\Marie");
+        // PID-5 (patient name), not PID-6 (mother's maiden name), where it used to land.
+        assertThat(pid.split("\\|", -1)[5]).isEqualTo("O\\S\\Brien^Ann\\F\\Marie");
     }
 
     @Test

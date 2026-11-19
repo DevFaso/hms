@@ -1842,4 +1842,10 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['what', 'previous'],
     localise: { previous: 'enum' },
   },
+  // Outbox detail read (the payload carries patient name and identifiers): ids and message type only.
+  {
+    key: 'AUDIT.DESC.INSTRUMENT_OUTBOX_VIEWED',
+    re: /^Instrument outbox message (\S+) \((\S+)\) viewed$/,
+    params: ['message', 'type'],
+  },
 ];
