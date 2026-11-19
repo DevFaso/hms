@@ -278,8 +278,13 @@ class EnrolledMfaSignInAndSessionRevocationIT extends BaseIT {
         return mockMvc.perform(request.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)).andReturn();
     }
 
+    /**
+     * Spring Security's test CSRF token, not a hand-made cookie/header pair:
+     * the cookie pair passed locally and failed in a CI shard (403
+     * CSRF_TOKEN_INVALID), so the test does not depend on the repository's state.
+     */
     private static MockHttpServletRequestBuilder csrf(MockHttpServletRequestBuilder request) {
-        return request.cookie(new Cookie("XSRF-TOKEN", CSRF)).header("X-XSRF-TOKEN", CSRF);
+        return request.with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf());
     }
 
     private static int status(MvcResult result) {
