@@ -313,7 +313,8 @@ public class EncounterServiceImpl implements EncounterService {
     private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
     private final DischargeSummaryRepository dischargeSummaryRepository;
     private final NotificationService notificationService;
-    private final EmailService emailService;
+    /** QA D2201: the visit-summary bell and e-mail honour the patient's DISCHARGE_SUMMARY choice. */
+    private final com.example.hms.service.notification.PatientMessageGate patientMessageGate;
     private final tools.jackson.databind.ObjectMapper objectMapper;
     private final com.example.hms.repository.PatientVitalSignRepository patientVitalSignRepository;
     private final com.example.hms.mapper.PatientVitalSignMapper patientVitalSignMapper;
@@ -3294,8 +3295,11 @@ public class EncounterServiceImpl implements EncounterService {
             ? encounter.getHospital().getName()
             : NotificationLocalizer.key("encounter.visitSummary.hospitalFallback");
         try {
-            notificationService.createNotification("encounter.visitSummary.notification",
-                new Object[]{hospitalName}, recipientUsername, DISCHARGE_NOTIFICATION_TYPE);
+            // QA D2201: the bell too follows the patient's in-app choice for visit summaries.
+            if (patientMessageGate.allowsInApp(patient, com.example.hms.enums.NotificationType.DISCHARGE_SUMMARY)) {
+                notificationService.createNotification("encounter.visitSummary.notification",
+                    new Object[]{hospitalName}, recipientUsername, DISCHARGE_NOTIFICATION_TYPE);
+            }
         } catch (Exception ignored) {
             // Do not fail checkout if in-app notification delivery is unavailable.
         }
@@ -3314,7 +3318,12 @@ public class EncounterServiceImpl implements EncounterService {
         String body = visitSummaryEmailBody(encounter, patient, patientLocale);
 
         try {
-            emailService.sendHtml(List.of(patientEmail), List.of(), List.of(), subject, body);
+            // QA D2201: not sent, and traced for staff, when the patient turned these e-mails off.
+            patientMessageGate.htmlEmail(patient,
+                new com.example.hms.service.notification.PatientMessageGate.Notice(
+                    com.example.hms.enums.PatientNotificationEvent.VISIT_SUMMARY,
+                    encounter.getHospital() != null ? encounter.getHospital().getId() : null, encounter.getId()),
+                patientEmail, subject, body);
         } catch (Exception ignored) {
             // AVS persistence must not be rolled back due to email transport failures.
         }

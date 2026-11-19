@@ -113,6 +113,10 @@ public class PatientNotificationRenderer {
         if (row == null || !row.getStatus().isOpen()) {
             return null;
         }
+        if (!row.getEventType().isQueued()) {
+            // A direct event's only row is the trace of an opt-out; there is nothing to render.
+            return skip(row, PatientNotificationErrorCode.OPTED_OUT);
+        }
         Patient patient = patientRepository.findByIdUnscoped(row.getPatientId()).orElse(null);
         PatientNotificationErrorCode refusal = recipientRefusal(row, patient);
         if (refusal != null) {

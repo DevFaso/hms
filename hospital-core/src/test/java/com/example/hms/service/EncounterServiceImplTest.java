@@ -170,6 +170,15 @@ class EncounterServiceImplTest {
         // exactly as before, by those two.
         org.springframework.test.util.ReflectionTestUtils.setField(service, "subjectReadGuard",
             new PatientSubjectReadGuard(authUtils, patientRepository));
+        // QA D2201: the visit-summary bell and e-mail go through the real consent gate over the
+        // mocked mail service; a patient with no stored preference allows every channel.
+        com.example.hms.service.notification.PatientChannelConsent consent =
+            org.mockito.Mockito.mock(com.example.hms.service.notification.PatientChannelConsent.class);
+        lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "patientMessageGate",
+            new com.example.hms.service.notification.PatientMessageGate(consent,
+                org.mockito.Mockito.mock(com.example.hms.service.notification.PatientNotificationLedger.class),
+                org.mockito.Mockito.mock(SmsService.class), emailService));
         lenient().when(dischargeSummaryRepository.findByEncounter_Id(any(UUID.class))).thenReturn(Optional.empty());
         lenient().when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
     }

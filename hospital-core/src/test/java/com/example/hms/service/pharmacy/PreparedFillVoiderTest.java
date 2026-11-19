@@ -152,7 +152,7 @@ class PreparedFillVoiderTest {
         verify(support).logAudit(eq(AuditEventType.DISPENSE_READY_CANCELLED),
                 argThat(d -> d.contains(reason.name()) && !d.contains("Amoxicillin")),
                 eq(prepared.getId().toString()), eq("DISPENSE"));
-        verify(support).notifyReadyCancelled(patient, pharmacy, "Amoxicillin");
+        verify(support).notifyReadyCancelled(any(), eq(patient), eq(pharmacy), eq("Amoxicillin"));
         // QA D404: a preparation paid at the till is voided with it, every reason.
         verify(paymentVoider).voidForCancelledDispense(eq(prepared), argThat(r -> r.contains(reason.name())));
     }
@@ -170,7 +170,7 @@ class PreparedFillVoiderTest {
         verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
         verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         verifyNoInteractions(stockTransactionRepository);
-        verify(support, never()).notifyReadyCancelled(any(), any(), any());
+        verify(support, never()).notifyReadyCancelled(any(), any(), any(), any());
         verify(support, never()).logAudit(any(), any(), any(), any());
     }
 
@@ -186,7 +186,7 @@ class PreparedFillVoiderTest {
         verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
         verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         verifyNoInteractions(stockTransactionRepository);
-        verify(support).notifyReadyCancelled(patient, pharmacy, "Amoxicillin");
+        verify(support).notifyReadyCancelled(any(), eq(patient), eq(pharmacy), eq("Amoxicillin"));
     }
 
     @Test
@@ -199,7 +199,7 @@ class PreparedFillVoiderTest {
         voider.voidPreparedFill(prescription, ReadyCancelReason.PRESCRIPTION_WITHDRAWN);
 
         assertThat(prepared.getCancelReason()).isEqualTo(ReadyCancelReason.PRESCRIPTION_WITHDRAWN);
-        verify(support).notifyReadyCancelled(patient, pharmacy, "Amoxicillin");
+        verify(support).notifyReadyCancelled(any(), eq(patient), eq(pharmacy), eq("Amoxicillin"));
     }
 
     @Test
