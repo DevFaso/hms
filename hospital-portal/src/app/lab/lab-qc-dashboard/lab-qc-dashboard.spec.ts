@@ -10,6 +10,7 @@ import {
   LabQcEvent,
 } from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
+import { RoleContextService } from '../../core/role-context.service';
 import { of, throwError } from 'rxjs';
 
 describe('LabQcDashboardComponent', () => {
@@ -63,11 +64,20 @@ describe('LabQcDashboardComponent', () => {
     error: jasmine.createSpy('error'),
   };
 
+  /** r63 D2304: the reader's active roles, changed per test. */
+  let activeRoles: string[] = ['ROLE_LAB_DIRECTOR'];
+  const mockRoleContext = {
+    hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
+    hasAnyActiveRoleExactly: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
+    effectiveHospitalIdForRequest: () => 'h-1',
+  };
+
   beforeEach(async () => {
     mockLabService.getQcSummary.and.returnValue(of(qcSummaryData));
     mockLabService.getValidationSummary.and.returnValue(of(validationData));
     mockLabService.getQcEventsByDefinition.and.returnValue(of([]));
     mockToastService.error.calls.reset();
+    activeRoles = ['ROLE_LAB_DIRECTOR'];
 
     await TestBed.configureTestingModule({
       imports: [LabQcDashboardComponent, TranslateModule.forRoot()],
@@ -76,6 +86,7 @@ describe('LabQcDashboardComponent', () => {
         provideHttpClientTesting(),
         { provide: LabService, useValue: mockLabService },
         { provide: ToastService, useValue: mockToastService },
+        { provide: RoleContextService, useValue: mockRoleContext },
       ],
     }).compileComponents();
 
@@ -202,5 +213,114 @@ describe('LabQcDashboardComponent', () => {
     );
     component.toggleChart('def-1');
     expect(mockToastService.error).toHaveBeenCalledWith('LAB_QC.TOAST.CHART_LOAD_FAILED');
+  });
+  // ── r63 D2304: recording QC runs and the director's targets ──
+
+  describe('QC entry (r63 D2304)', () => {
+    const target = {
+      id: 't-1',
+      testDefinitionId: 'def-1',
+      testDefinitionName: 'Kaliemie',
+      qcLevel: 'LOW_CONTROL' as const,
+      targetMean: 5,
+      targetSd: 0.2,
+      lotNumber: 'L-1',
+      approvedByDisplay: 'Dir',
+      approvedAt: '2026-11-19T08:00:00',
+    };
+    let lab: {
+      listTestDefinitions: jasmine.Spy;
+      getQcTargets: jasmine.Spy;
+      recordQcEvent: jasmine.Spy;
+      saveQcTarget: jasmine.Spy;
+    };
+
+    beforeEach(() => {
+      lab = mockLabService as unknown as typeof lab;
+      lab.listTestDefinitions = jasmine
+        .createSpy('listTestDefinitions')
+        .and.returnValue(of([{ id: 'def-1', testName: 'Kaliemie', testCode: 'K', isActive: true }]));
+      lab.getQcTargets = jasmine.createSpy('getQcTargets').and.returnValue(of([target]));
+      lab.recordQcEvent = jasmine.createSpy('recordQcEvent').and.returnValue(of({}));
+      lab.saveQcTarget = jasmine.createSpy('saveQcTarget').and.returnValue(of(target));
+    });
+
+    it('lets the technician in: no validation-study read, the run form, no target editing', () => {
+      activeRoles = ['ROLE_LAB_TECHNICIAN'];
+      mockLabService.getValidationSummary.calls.reset();
+      const techFixture = TestBed.createComponent(LabQcDashboardComponent);
+      techFixture.detectChanges();
+      const tech = techFixture.componentInstance;
+      expect(mockLabService.getValidationSummary).not.toHaveBeenCalled();
+      expect(tech.canRecord()).toBeTrue();
+      expect(tech.canSetTargets()).toBeFalse();
+      expect(
+        techFixture.nativeElement.querySelector('[data-testid="qc-record-open"]'),
+      ).not.toBeNull();
+    });
+
+    it('records a rejected run with its lot, using the target mean as the expected value', () => {
+      component.openRecordForm('def-1');
+      component.qcMeasured.set('5,7');
+      component.qcLot.set(' LOT-9 ');
+      component.qcAccepted.set(false);
+      expect(component.recordIncomplete()).toBeFalse();
+      component.recordRun();
+      expect(lab.recordQcEvent).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          hospitalId: 'h-1',
+          testDefinitionId: 'def-1',
+          qcLevel: 'LOW_CONTROL',
+          measuredValue: 5.7,
+          lotNumber: 'LOT-9',
+          accepted: false,
+        }),
+      );
+      expect(lab.recordQcEvent.calls.mostRecent().args[0].expectedValue).toBeUndefined();
+    });
+
+    it('needs an expected value and a decision when no target is set', () => {
+      lab.getQcTargets.and.returnValue(of([]));
+      component.openRecordForm('def-1');
+      component.qcMeasured.set('5');
+      expect(component.recordIncomplete()).toBeTrue();
+      component.qcExpected.set('5');
+      expect(component.recordIncomplete()).toBeTrue();
+      component.qcAccepted.set(true);
+      expect(component.recordIncomplete()).toBeFalse();
+      expect(component.liveFlag()).toBeNull();
+    });
+
+    it('shows the value against the target in SDs, only when a target is set', () => {
+      component.openRecordForm('def-1');
+      component.qcMeasured.set('5.5');
+      expect(component.liveFlag()).toBe('OUTSIDE_2SD');
+      component.qcMeasured.set('5.7');
+      expect(component.liveFlag()).toBe('OUTSIDE_3SD');
+      component.qcMeasured.set('5.1');
+      expect(component.liveFlag()).toBe('WITHIN_2SD');
+    });
+
+    it('lets the lab director set and approve a target', () => {
+      component.openRecordForm('def-1');
+      expect(component.canSetTargets()).toBeTrue();
+      component.targetMean.set('4.8');
+      component.targetSd.set('0.25');
+      component.saveTarget();
+      expect(lab.saveQcTarget).toHaveBeenCalledWith(
+        jasmine.objectContaining({ testDefinitionId: 'def-1', targetMean: 4.8, targetSd: 0.25 }),
+      );
+    });
+
+    it('fits a phone screen (390 px) without a sideways scroll', () => {
+      component.openRecordForm('def-1');
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      host.style.display = 'block';
+      host.style.width = '390px';
+      const form = host.querySelector<HTMLElement>('[data-testid="qc-record-form"]')!;
+      expect(form).not.toBeNull();
+      expect(form.scrollWidth).toBeLessThanOrEqual(form.clientWidth + 1);
+    });
   });
 });

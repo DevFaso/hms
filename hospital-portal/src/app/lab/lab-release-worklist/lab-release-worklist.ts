@@ -23,6 +23,9 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { labSeverityFlag, labReleaseNeedsReview } from '../shared/lab-severity';
 import { LabValuePipe } from '../shared/lab-value.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { LabPanelValuesComponent } from '../shared/lab-panel-values.component';
+import { nowLocalDatetime, toServerDateTime } from '../../shared/date-utils';
+import { refusalReason } from '../../shared/refusal-reason';
 
 /**
  * Release worklist (B14).
@@ -52,6 +55,7 @@ import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
   selector: 'app-lab-release-worklist',
   standalone: true,
   imports: [
+    LabPanelValuesComponent,
     LabCorrectionBadgeComponent,
     ModalDialogDirective,
     ServerTimePipe,
@@ -106,7 +110,26 @@ export class LabReleaseWorklistComponent implements OnInit {
   /** What the last successful release was, so the screen says what happened. */
   justReleased = signal<{ patient: string; test: string } | null>(null);
 
-  rows = computed(() => this.page()?.content ?? []);
+  /** r63 D2305: who was told about a critical result, when, and what they read back. */
+  criticalTo = signal('');
+  criticalAt = signal(nowLocalDatetime());
+  criticalReadBack = signal('');
+  /**
+   * r63 D2304: the API refused the release because the test's latest QC run
+   * was rejected; holds the server's explanation, and the dialog then asks
+   * for the override reason.
+   */
+  qcOverrideNotice = signal<string | null>(null);
+  qcOverrideReason = signal('');
+
+  /**
+   * r63 D2305: critical rows first (QA said the queue read oldest-first with
+   * a critical K buried in it), then the server's order, within the page.
+   */
+  rows = computed(() => {
+    const content = this.page()?.content ?? [];
+    return [...content].sort((a, b) => Number(this.isCritical(b)) - Number(this.isCritical(a)));
+  });
   totalAwaiting = computed(() => this.page()?.totalElements ?? 0);
   totalPages = computed(() => {
     const p = this.page();
@@ -228,7 +251,29 @@ export class LabReleaseWorklistComponent implements OnInit {
     // The previous release's banner goes with the previous release. Left up,
     // a green "X released" would sit beside the red refusal of the next one.
     this.justReleased.set(null);
+    this.criticalTo.set('');
+    this.criticalAt.set(nowLocalDatetime());
+    this.criticalReadBack.set('');
+    this.qcOverrideNotice.set(null);
+    this.qcOverrideReason.set('');
     this.releaseTarget.set(r);
+  }
+
+  /** r63 D2305: releasing this critical result needs who, when and the read-back. */
+  criticalCommunicationMissing(r: LabResultResponse): boolean {
+    return (
+      this.isCritical(r) &&
+      (!this.criticalTo().trim() || !this.criticalAt() || !this.criticalReadBack().trim())
+    );
+  }
+
+  /** r63 D2304: the QC override was asked for and no reason has been given yet. */
+  qcOverrideMissing(): boolean {
+    return this.qcOverrideNotice() !== null && !this.qcOverrideReason().trim();
+  }
+
+  inputValue(event: Event): string {
+    return (event.target as HTMLInputElement | HTMLTextAreaElement | null)?.value ?? '';
   }
 
   cancelRelease(): void {
@@ -238,6 +283,7 @@ export class LabReleaseWorklistComponent implements OnInit {
     this.releaseTarget.set(null);
     this.releaseError.set(null);
     this.selfReleaseRequiredId.set(null);
+    this.qcOverrideNotice.set(null);
   }
 
   /**
@@ -256,7 +302,12 @@ export class LabReleaseWorklistComponent implements OnInit {
 
   confirmRelease(): void {
     const target = this.releaseTarget();
-    if (!target || this.releasingId()) {
+    if (
+      !target ||
+      this.releasingId() ||
+      this.criticalCommunicationMissing(target) ||
+      this.qcOverrideMissing()
+    ) {
       return;
     }
     // The in-flight guard is set BEFORE the call is dispatched; a guard read
@@ -266,11 +317,26 @@ export class LabReleaseWorklistComponent implements OnInit {
     const selfRelease = this.isSelfRelease(target);
     // QA D1092: the dialog shows the "not graded" warning for such a result,
     // so confirming it is the reviewed release the API asks for.
-    this.labService.releaseResult(target.id, selfRelease, labReleaseNeedsReview(target)).subscribe({
+    const release = {
+      ...(this.isCritical(target)
+        ? {
+            criticalCommunicatedTo: this.criticalTo().trim(),
+            criticalCommunicatedAt: toServerDateTime(this.criticalAt()),
+            criticalReadBack: this.criticalReadBack().trim(),
+          }
+        : {}),
+      ...(this.qcOverrideNotice() !== null
+        ? { qcOverrideReason: this.qcOverrideReason().trim() }
+        : {}),
+    };
+    this.labService
+      .releaseResult(target.id, selfRelease, labReleaseNeedsReview(target), release)
+      .subscribe({
       next: () => {
         this.releasingId.set(null);
         this.releaseTarget.set(null);
         this.selfReleaseRequiredId.set(null);
+        this.qcOverrideNotice.set(null);
         this.justReleased.set({ patient: target.patientFullName, test: target.labTestName });
         this.toast.success(this.translate.instant('LAB_RELEASE.RELEASED'));
         // Re-read rather than splice the row out locally: the row leaves the
@@ -288,6 +354,15 @@ export class LabReleaseWorklistComponent implements OnInit {
         // how a fully-translated screen stops being one. The detail is
         // logged, where a developer can read it and a biologist need not.
         console.error('Release refused for lab result', err);
+        // r63 D2304: the test's latest QC run is rejected. Keep the dialog open,
+        // say why (the server's sentence names the test), and ask for the reason.
+        const body = (err as { status?: number; error?: { field?: string } } | null) ?? null;
+        if (body?.status === 400 && body.error?.field === 'qcOverrideReason') {
+          this.qcOverrideNotice.set(
+            refusalReason(err) ?? this.translate.instant('LAB_RELEASE.QC_BLOCKED'),
+          );
+          return;
+        }
         if (!selfRelease && (err as { status?: number } | null)?.status === 409) {
           // The reader entered this result: keep the dialog open and ask
           // again, this time as an explicit self-release.
@@ -383,8 +458,13 @@ export class LabReleaseWorklistComponent implements OnInit {
     }
   }
 
-  /** A critical result on this queue is the one a reader must release first. */
+  /**
+   * A critical result on this queue is the one a reader must release first.
+   * r63 D2305: graded CRITICAL by the server. The page goes out on release
+   * (QA D709), so an unreleased row never had criticalNotifiedAt and the
+   * queue marked nothing critical; the stamp still counts for an older row.
+   */
   isCritical(r: LabResultResponse): boolean {
-    return !!r.criticalNotifiedAt;
+    return labSeverityFlag(r) === 'CRITICAL' || !!r.criticalNotifiedAt;
   }
 }

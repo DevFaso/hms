@@ -4560,7 +4560,26 @@
     "VERSION_LABEL": "v{{version}}",
     "NEW_VERSION": "Nouvelle version (soumise à l'approbation)",
     "VERSION_CREATED": "Nouvelle version brouillon créée. Elle remplacera la version active une fois approuvée et activée.",
-    "VERSION_ERROR": "La nouvelle version n'a pas pu être créée."
+    "VERSION_ERROR": "La nouvelle version n'a pas pu être créée.",
+    "COMPONENTS": {
+      "TITLE": "Composants du bilan",
+      "HINT": "Pour un bilan comme la NFS, ajoutez chaque composant avec son unité et ses intervalles. Laissez vide pour une analyse à valeur unique.",
+      "CODE": "Code",
+      "NAME": "Nom",
+      "UNIT": "Unité",
+      "REMOVE": "Retirer ce composant",
+      "GENDER": "Sexe",
+      "GENDER_ALL": "Tous",
+      "GENDER_MALE": "Homme",
+      "GENDER_FEMALE": "Femme",
+      "MIN": "Min",
+      "MAX": "Max",
+      "CRITICAL_LOW": "Critique bas",
+      "CRITICAL_HIGH": "Critique haut",
+      "REMOVE_RANGE": "Retirer cet intervalle",
+      "ADD_RANGE": "Ajouter un intervalle",
+      "ADD": "Ajouter un composant"
+    }
   },
   "LAB_RESULTS": {
     "QUOTED_READ_BACK_VALUE": "« {{value}} »",
@@ -4672,7 +4691,20 @@
     "OTHER_RANGES": "Autres plages ({{count}})",
     "CRITICAL_LIMITS": "Valeurs critiques",
     "NO_INTERVAL": "Aucun intervalle",
-    "OPEN_REQUEST": "Ouvrir la demande {{code}}"
+    "OPEN_REQUEST": "Ouvrir la demande {{code}}",
+    "PANEL_LEGEND": "Valeurs du bilan",
+    "PANEL_HINT": "Saisissez chaque composant dans son unité. Laissez vide un composant non mesuré.",
+    "CRITICAL_AT_ENTRY": {
+      "CRITICAL_LOW": "En dessous de la limite critique basse de cette analyse.",
+      "CRITICAL_HIGH": "Au-dessus de la limite critique haute de cette analyse.",
+      "BANNER": "Une valeur dépasse les limites critiques. Vérifiez-la, puis enregistrez : la validation demandera qui a été prévenu."
+    },
+    "SAVED_CRITICAL": "Ce résultat est critique. Validez-le sans attendre et notez qui a été prévenu.",
+    "CRITICAL_COMMUNICATED": "Résultat critique communiqué",
+    "CRITICAL_COMMUNICATED_VALUE": "À {{to}}, valeur relue : {{readBack}}",
+    "QC_OVERRIDE": "Validé malgré un CQ rejeté",
+    "RELEASE_CRITICAL_FROM_WORKLIST": "Un résultat critique se valide depuis la file de validation, où vous notez qui a été prévenu.",
+    "RELEASE_FROM_WORKLIST": "Validez-le depuis la file de validation."
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -4718,7 +4750,16 @@
     "SELF_RELEASE_CONFIRM": "Le valider moi-même",
     "CONFIRM_CORRECTION": "Ce résultat est une correction : le valider remplace une valeur déjà validée et communiquée au clinicien et au patient.",
     "GRADE_UNKNOWN_NOTE": "Non évalué : {{value}} est une limite qui peut être dans l’intervalle de référence ou en dehors, aucune alerte critique ne peut donc être levée. En la validant, vous confirmez l’avoir vérifiée ; le prescripteur sera invité à la revoir.",
-    "UNGRADED_NOTE": "Non évalué : aucun intervalle de référence n'est dans l'unité de cette valeur ({{unit}}) ni convertible, aucune alerte critique ne peut donc être levée. En la validant, vous confirmez l'avoir vérifiée ; le prescripteur sera invité à la revoir."
+    "UNGRADED_NOTE": "Non évalué : aucun intervalle de référence n'est dans l'unité de cette valeur ({{unit}}) ni convertible, aucune alerte critique ne peut donc être levée. En la validant, vous confirmez l'avoir vérifiée ; le prescripteur sera invité à la revoir.",
+    "CRITICAL_TITLE": "Résultat critique",
+    "CRITICAL_HINT": "Appelez le clinicien maintenant et notez l’appel : qui vous avez prévenu, quand, et la valeur qu’il vous a relue.",
+    "CRITICAL_TO": "Personne prévenue",
+    "CRITICAL_TO_PLACEHOLDER": "Nom et fonction (ex. Dr Ouedraogo, de garde)",
+    "CRITICAL_AT": "Quand",
+    "CRITICAL_READ_BACK": "Valeur relue",
+    "CRITICAL_READ_BACK_PLACEHOLDER": "Telle qu’elle a été répétée",
+    "QC_OVERRIDE_REASON": "Motif de la validation malgré le CQ rejeté",
+    "QC_BLOCKED": "Le dernier contrôle qualité de cette analyse a été rejeté. Enregistrez un contrôle conforme, ou indiquez pourquoi vous validez malgré tout."
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instruments de laboratoire",
@@ -10965,6 +11006,60 @@
     "TOAST": {
       "LOAD_FAILED": "Échec du chargement des données du tableau de bord CQ.",
       "CHART_LOAD_FAILED": "Échec du chargement des événements CQ pour le graphique."
+    },
+    "RECORD": {
+      "OPEN": "Enregistrer un contrôle",
+      "TITLE": "Enregistrer un contrôle qualité",
+      "HINT": "Passez les contrôles avant les échantillons des patients. Un contrôle rejeté bloque la validation des résultats de l’analyse jusqu’à un contrôle conforme, ou une validation motivée.",
+      "TEST": "Analyse",
+      "TEST_PLACEHOLDER": "Choisissez une analyse",
+      "LEVEL": "Niveau de contrôle",
+      "ANALYZER": "Automate",
+      "LOT": "Lot du contrôle",
+      "MEASURED": "Valeur mesurée",
+      "EXPECTED": "Valeur attendue",
+      "EXPECTED_FROM_TARGET": "Moyenne cible utilisée",
+      "DECISION": "Décision",
+      "ACCEPT": "Accepter le contrôle",
+      "REJECT": "Rejeter le contrôle",
+      "REJECT_NOTE": "Les résultats de cette analyse ne seront pas validés avant un contrôle conforme, ou une validation motivée.",
+      "NOTES": "Notes (action corrective)",
+      "SUBMIT": "Enregistrer le contrôle",
+      "SAVED_ACCEPTED": "Contrôle enregistré et accepté.",
+      "SAVED_REJECTED": "Contrôle enregistré comme rejeté. Les résultats de cette analyse sont bloqués.",
+      "SAVE_FAILED": "Impossible d’enregistrer le contrôle.",
+      "TESTS_LOAD_FAILED": "Impossible de charger la liste des analyses."
+    },
+    "TARGET": {
+      "CURRENT": "Cible : moyenne {{mean}}, ÉT {{sd}} (lot {{lot}})",
+      "NONE": "Aucune cible pour ce niveau : le contrôle est enregistré sans indicateur d’écart-type.",
+      "EDIT_TITLE": "Cible de ce niveau (biologiste responsable)",
+      "MEAN": "Moyenne cible",
+      "SD": "Écart-type cible",
+      "APPROVED_BY": "Approuvée par {{name}} le {{date}}",
+      "SAVE": "Enregistrer et approuver la cible",
+      "SAVED": "Cible CQ enregistrée.",
+      "SAVE_FAILED": "Impossible d’enregistrer la cible CQ."
+    },
+    "SD_FLAG": {
+      "WITHIN_2SD": "Dans ±2 ÉT ({{z}} ÉT)",
+      "OUTSIDE_2SD": "Hors ±2 ÉT ({{z}} ÉT) : avertissement",
+      "OUTSIDE_3SD": "Hors ±3 ÉT ({{z}} ÉT)"
+    },
+    "SD_FLAG_SHORT": {
+      "WITHIN_2SD": "Dans ±2 ÉT",
+      "OUTSIDE_2SD": "Hors ±2 ÉT",
+      "OUTSIDE_3SD": "Hors ±3 ÉT"
+    },
+    "RUNS": {
+      "TITLE": "Derniers contrôles",
+      "DATE": "Date",
+      "VALUE": "Valeur",
+      "OPERATOR": "Opérateur",
+      "FLAG": "Indicateur ÉT",
+      "DECISION": "Décision",
+      "ACCEPTED": "Accepté",
+      "REJECTED": "Rejeté"
     }
   },
   "LAB_APPROVAL": {
@@ -14572,5 +14667,12 @@
       "CARD_ACTION": "Configurer le PACS",
       "BASE_URL_REQUIRED": "Saisissez l'adresse DICOMweb du PACS pour activer la visionneuse."
     }
+  },
+  "LAB_PANEL": {
+    "TITLE": "Valeurs du bilan",
+    "COL_COMPONENT": "Composant",
+    "COL_VALUE": "Valeur",
+    "COL_RANGE": "Intervalle de référence",
+    "COL_FLAG": "Indicateur"
   }
 }

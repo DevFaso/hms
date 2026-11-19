@@ -574,6 +574,107 @@
               'LAB_TEST_CONFIG.EXPECTED_RESULT_HINT' | translate
             }}</small>
           </div>
+          <!-- r63 (NFS panels): a panel test lists its components, each with its unit and ranges -->
+          <fieldset class="form-group form-group-full panel-components" data-testid="def-components">
+            <legend>{{ 'LAB_TEST_CONFIG.COMPONENTS.TITLE' | translate }}</legend>
+            <small class="field-hint">{{ 'LAB_TEST_CONFIG.COMPONENTS.HINT' | translate }}</small>
+            @for (c of defForm.components ?? []; track $index; let i = $index) {
+              <div class="component-card">
+                <div class="component-head">
+                  <label class="component-field">
+                    <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.CODE' | translate }} *</span>
+                    <input
+                      type="text"
+                      maxlength="30"
+                      [(ngModel)]="c.code"
+                      [readonly]="clinicalFieldsLocked()"
+                    />
+                  </label>
+                  <label class="component-field">
+                    <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.NAME' | translate }} *</span>
+                    <input
+                      type="text"
+                      maxlength="120"
+                      [(ngModel)]="c.name"
+                      [readonly]="clinicalFieldsLocked()"
+                    />
+                  </label>
+                  <label class="component-field">
+                    <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.UNIT' | translate }}</span>
+                    <input
+                      type="text"
+                      maxlength="50"
+                      [(ngModel)]="c.unit"
+                      [readonly]="clinicalFieldsLocked()"
+                    />
+                  </label>
+                  @if (!clinicalFieldsLocked()) {
+                    <button
+                      type="button"
+                      class="btn-icon-danger"
+                      (click)="removeComponent(i)"
+                      [attr.aria-label]="'LAB_TEST_CONFIG.COMPONENTS.REMOVE' | translate"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                  }
+                </div>
+                @for (r of c.referenceRanges; track $index; let j = $index) {
+                  <div class="component-range">
+                    <label class="component-field">
+                      <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER' | translate }}</span>
+                      <select [(ngModel)]="r.gender" [disabled]="clinicalFieldsLocked()">
+                        <option value="ALL">{{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER_ALL' | translate }}</option>
+                        <option value="MALE">{{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER_MALE' | translate }}</option>
+                        <option value="FEMALE">{{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER_FEMALE' | translate }}</option>
+                      </select>
+                    </label>
+                    <label class="component-field">
+                      <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.MIN' | translate }}</span>
+                      <input type="number" step="any" [(ngModel)]="r.minValue" [readonly]="clinicalFieldsLocked()" />
+                    </label>
+                    <label class="component-field">
+                      <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.MAX' | translate }}</span>
+                      <input type="number" step="any" [(ngModel)]="r.maxValue" [readonly]="clinicalFieldsLocked()" />
+                    </label>
+                    <label class="component-field">
+                      <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.CRITICAL_LOW' | translate }}</span>
+                      <input type="number" step="any" [(ngModel)]="r.criticalLow" [readonly]="clinicalFieldsLocked()" />
+                    </label>
+                    <label class="component-field">
+                      <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.CRITICAL_HIGH' | translate }}</span>
+                      <input type="number" step="any" [(ngModel)]="r.criticalHigh" [readonly]="clinicalFieldsLocked()" />
+                    </label>
+                    @if (!clinicalFieldsLocked()) {
+                      <button
+                        type="button"
+                        class="btn-icon-danger"
+                        (click)="removeComponentRange(i, j)"
+                        [attr.aria-label]="'LAB_TEST_CONFIG.COMPONENTS.REMOVE_RANGE' | translate"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                      </button>
+                    }
+                  </div>
+                }
+                @if (!clinicalFieldsLocked()) {
+                  <button type="button" class="btn-link" (click)="addComponentRange(i)">
+                    {{ 'LAB_TEST_CONFIG.COMPONENTS.ADD_RANGE' | translate }}
+                  </button>
+                }
+              </div>
+            }
+            @if (!clinicalFieldsLocked()) {
+              <button
+                type="button"
+                class="btn-secondary"
+                data-testid="def-add-component"
+                (click)="addComponent()"
+              >
+                {{ 'LAB_TEST_CONFIG.COMPONENTS.ADD' | translate }}
+              </button>
+            }
+          </fieldset>
           <div class="form-group form-check-group">
             <label>
               <input type="checkbox" [(ngModel)]="defForm.isActive" />

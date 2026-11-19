@@ -353,3 +353,59 @@
 }
 
 @include diagnostics.workspace;
+
+/* r63 D2305: the laboratory's call about a critical result, recorded at release */
+.critical-release {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.critical-release-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-weight: 700;
+  color: #991b1b;
+}
+
+.critical-release-hint {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: #7f1d1d;
+}
+
+.critical-release-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 0.5rem;
+}
+
+.release-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+
+  input,
+  textarea {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font: inherit;
+    font-weight: 400;
+  }
+}
+
+/* r63 D2304: the override reason asked for when the test's QC is rejected */
+.qc-override {
+  margin: 0.5rem 0;
+}
