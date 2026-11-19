@@ -80,6 +80,18 @@ dependencies {
     implementation 'org.apache.commons:commons-csv:1.14.1'
     implementation 'org.apache.commons:commons-lang3:3.21.0'
 
+    // Object storage (Cloudflare R2 through the S3 API): uploaded files live in a
+    // bucket so the service needs no Railway volume (a volume makes Railway stop
+    // the old deploy before starting the new one). The URLConnection HTTP client,
+    // not the default Apache 4 / Netty ones: no commons-logging (excluded below)
+    // and no second async stack for a synchronous client.
+    implementation platform('software.amazon.awssdk:bom:2.57.7')
+    implementation('software.amazon.awssdk:s3') {
+        exclude group: 'software.amazon.awssdk', module: 'apache-client'
+        exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
+    }
+    implementation 'software.amazon.awssdk:url-connection-client'
+
     // Database
     runtimeOnly 'org.postgresql:postgresql'
     runtimeOnly 'com.h2database:h2'

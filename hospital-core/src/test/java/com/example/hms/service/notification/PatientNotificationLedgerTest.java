@@ -133,6 +133,55 @@ class PatientNotificationLedgerTest {
     }
 
     @Test
+    @DisplayName("D2206: a channel the patient turned off leaves a SKIPPED / OPTED_OUT row staff can see")
+    void anOptOutLeavesATrace() {
+        when(consent.allows(patient.getUser().getId(), NotificationType.LAB_RESULT, NotificationChannel.SMS))
+            .thenReturn(false);
+
+        ledger.enqueue(PatientNotificationEvent.LAB_RESULT_AVAILABLE, hospitalId, patient.getId(), subjectId);
+
+        ArgumentCaptor<PatientNotificationDelivery> saved = ArgumentCaptor.forClass(PatientNotificationDelivery.class);
+        verify(repository, times(2)).saveAndFlush(saved.capture());
+        PatientNotificationDelivery sms = saved.getAllValues().get(0);
+        assertThat(sms.getChannel()).isEqualTo(NotificationChannel.SMS);
+        assertThat(sms.getStatus()).isEqualTo(com.example.hms.enums.NotificationDeliveryStatus.SKIPPED);
+        assertThat(sms.getErrorCode()).isEqualTo("OPTED_OUT");
+        assertThat(sms.getStatus().isOpen()).as("never picked up by the sweep").isFalse();
+        PatientNotificationDelivery email = saved.getAllValues().get(1);
+        assertThat(email.getStatus()).isEqualTo(com.example.hms.enums.NotificationDeliveryStatus.PENDING);
+        assertThat(email.getErrorCode()).isNull();
+    }
+
+    @Test
+    @DisplayName("D2206: the gate's opt-out trace is one SKIPPED row; a direct event is never queued")
+    void recordOptOutAndDirectEvents() {
+        ledger.recordOptOut(PatientNotificationEvent.PHARMACY_DISPENSED, hospitalId, patient.getId(), subjectId,
+            NotificationChannel.SMS);
+
+        ArgumentCaptor<PatientNotificationDelivery> saved = ArgumentCaptor.forClass(PatientNotificationDelivery.class);
+        verify(repository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getIdempotencyKey()).isEqualTo("PHARMACY_DISPENSED:" + subjectId + ":SMS");
+        assertThat(saved.getValue().getStatus()).isEqualTo(com.example.hms.enums.NotificationDeliveryStatus.SKIPPED);
+        assertThat(saved.getValue().getErrorCode()).isEqualTo("OPTED_OUT");
+
+        assertThat(ledger.enqueue(PatientNotificationEvent.PHARMACY_DISPENSED, hospitalId, patient.getId(),
+            subjectId)).isEmpty();
+        verify(repository, times(1)).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("D2206: a trace with no hospital or subject is not written, and never throws")
+    void recordOptOutIsBestEffort() {
+        ledger.recordOptOut(PatientNotificationEvent.INVOICE, null, patient.getId(), subjectId,
+            NotificationChannel.EMAIL);
+        verify(repository, never()).saveAndFlush(any());
+
+        when(repository.saveAndFlush(any())).thenThrow(new IllegalStateException("db down"));
+        org.assertj.core.api.Assertions.assertThatCode(() -> ledger.recordOptOut(PatientNotificationEvent.INVOICE,
+            hospitalId, patient.getId(), subjectId, NotificationChannel.EMAIL)).doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("no number and no address: nothing queued")
     void noContactNoRow() {
         patient.setPhoneNumberPrimary(" ");

@@ -78,6 +78,7 @@ class FhirBulkExportRunnerTest {
     Path tempDir;
 
     private FhirBulkExportRunner runner;
+    private com.example.hms.storage.FileStorage storage;
     private FhirBulkExportJob job;
     private UUID jobId;
     private UUID hospitalId;
@@ -87,6 +88,7 @@ class FhirBulkExportRunnerTest {
     void setUp() {
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
 
+        storage = new com.example.hms.storage.LocalFileStorage(tempDir.resolve("store"));
         runner = newRunner(patientMapper);
 
         hospitalId = UUID.randomUUID();
@@ -124,14 +126,24 @@ class FhirBulkExportRunnerTest {
     private FhirBulkExportRunner newRunner(PatientFhirMapper mapper) {
         FhirOperationsProperties properties = new FhirOperationsProperties();
         properties.getBulkExport().setEnabled(true);
-        properties.getBulkExport().setStorageDir(tempDir.toString());
+        properties.getBulkExport().setStorageDir(scratchDir().toString());
         return new FhirBulkExportRunner(
             service, jobRepository, fileRepository, registrationRepository,
             encounterRepository, vitalSignRepository, labResultRepository,
             patientProblemRepository, prescriptionRepository,
             mapper, encounterMapper, observationMapper,
             conditionMapper, medicationRequestMapper,
-            FhirContext.forR4(), transactionManager, properties);
+            FhirContext.forR4(), transactionManager, properties, storage);
+    }
+
+    /** Where the runner stages NDJSON while a job runs. */
+    private Path scratchDir() {
+        return tempDir.resolve("scratch");
+    }
+
+    /** Where a finished job's files are published (the file store's job prefix). */
+    private Path published() {
+        return tempDir.resolve("store").resolve("fhir-bulk-exports").resolve(jobId.toString());
     }
 
     private void stubEmptyClinicalData() {
@@ -161,7 +173,7 @@ class FhirBulkExportRunnerTest {
         assertThat(job.getCompletedAt()).isNotNull();
         assertThat(job.getProcessedPatients()).isEqualTo(1);
 
-        Path patientFile = tempDir.resolve(jobId.toString()).resolve("Patient.ndjson");
+        Path patientFile = published().resolve("Patient.ndjson");
         assertThat(patientFile).exists();
         List<String> lines = Files.readAllLines(patientFile);
         assertThat(lines).hasSize(1);
@@ -175,6 +187,28 @@ class FhirBulkExportRunnerTest {
     }
 
     @Test
+    void aFinishedJobLeavesNoScratchCopy() {
+        runner.processJob(jobId);
+
+        assertThat(job.getStatus()).isEqualTo(FhirBulkExportJob.Status.COMPLETED);
+        // Only the store keeps the output: a deploy that replaces the
+        // container's disk loses nothing of a finished export.
+        assertThat(scratchDir().resolve(jobId.toString())).doesNotExist();
+        assertThat(published().resolve("Patient.ndjson")).exists();
+    }
+
+    @Test
+    void aFailureAfterPublishingRemovesThePublishedFiles() {
+        when(fileRepository.save(any())).thenThrow(new RuntimeException("db down"));
+
+        runner.processJob(jobId);
+
+        assertThat(job.getStatus()).isEqualTo(FhirBulkExportJob.Status.FAILED);
+        assertThat(published().resolve("Patient.ndjson")).doesNotExist();
+        assertThat(scratchDir().resolve(jobId.toString())).doesNotExist();
+    }
+
+    @Test
     void thePatientLineCarriesOnlyTheJobHospitalsMrn() throws Exception {
         UUID otherHospitalId = UUID.randomUUID();
         registerAt(patient, hospitalId, "MRN-JOB");
@@ -184,8 +218,7 @@ class FhirBulkExportRunnerTest {
         newRunner(realMapper).processJob(jobId);
 
         assertThat(job.getStatus()).isEqualTo(FhirBulkExportJob.Status.COMPLETED);
-        List<String> lines = Files.readAllLines(
-            tempDir.resolve(jobId.toString()).resolve("Patient.ndjson"));
+        List<String> lines = Files.readAllLines(published().resolve("Patient.ndjson"));
         assertThat(lines).hasSize(1);
         org.hl7.fhir.r4.model.Patient out = FhirContext.forR4().newJsonParser()
             .parseResource(org.hl7.fhir.r4.model.Patient.class, lines.get(0));
@@ -219,7 +252,8 @@ class FhirBulkExportRunnerTest {
 
         // Only the Patient had data; the other four types must not exist
         // as zero-byte files nor as manifest rows.
-        Path jobDir = tempDir.resolve(jobId.toString());
+        Path jobDir = published();
+        assertThat(jobDir.resolve("Patient.ndjson")).exists();
         assertThat(jobDir.resolve("Encounter.ndjson")).doesNotExist();
         assertThat(jobDir.resolve("Observation.ndjson")).doesNotExist();
         verify(fileRepository, never()).save(
@@ -259,7 +293,7 @@ class FhirBulkExportRunnerTest {
 
         runner.processJob(jobId);
 
-        assertThat(tempDir.resolve(jobId.toString()).resolve("Patient.ndjson")).doesNotExist();
+        assertThat(published().resolve("Patient.ndjson")).doesNotExist();
         verify(patientMapper, never()).toFhir(any(Patient.class));
         verify(patientMapper, never()).toFhir(any(Patient.class), any());
     }
@@ -272,7 +306,7 @@ class FhirBulkExportRunnerTest {
         runner.processJob(jobId);
 
         assertThat(job.getStatus()).isEqualTo(FhirBulkExportJob.Status.COMPLETED);
-        assertThat(tempDir.resolve(jobId.toString()).resolve("Patient.ndjson")).doesNotExist();
+        assertThat(published().resolve("Patient.ndjson")).doesNotExist();
     }
 
     @Test
@@ -293,7 +327,8 @@ class FhirBulkExportRunnerTest {
 
         assertThat(job.getStatus()).isEqualTo(FhirBulkExportJob.Status.FAILED);
         assertThat(job.getErrorMessage()).contains("db down");
-        assertThat(tempDir.resolve(jobId.toString())).doesNotExist();
+        assertThat(scratchDir().resolve(jobId.toString())).doesNotExist();
+        assertThat(published()).doesNotExist();
     }
 
     @Test
@@ -310,7 +345,8 @@ class FhirBulkExportRunnerTest {
         runner.processJob(jobId);
 
         assertThat(job.getStatus()).isEqualTo(FhirBulkExportJob.Status.CANCELLED);
-        assertThat(tempDir.resolve(jobId.toString())).doesNotExist();
+        assertThat(scratchDir().resolve(jobId.toString())).doesNotExist();
+        assertThat(published()).doesNotExist();
         verify(fileRepository, never()).save(any());
     }
 

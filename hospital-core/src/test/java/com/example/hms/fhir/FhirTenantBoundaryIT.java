@@ -125,6 +125,7 @@ class FhirTenantBoundaryIT {
     @Autowired private FhirWriteProperties writeProperties;
     @Autowired private FhirOperationsProperties operationsProperties;
     @Autowired private com.example.hms.fhir.bulk.FhirBulkExportRunner bulkExportRunner;
+    @Autowired private com.example.hms.storage.FileStorage fileStorage;
     @Autowired private com.example.hms.repository.FhirBulkExportJobRepository bulkExportJobRepository;
     @Autowired private com.example.hms.repository.FhirBulkExportFileRepository bulkExportFileRepository;
     @Autowired private com.example.hms.repository.AuditEventLogRepository auditEventLogRepository;
@@ -411,13 +412,20 @@ class FhirTenantBoundaryIT {
 
             assertThat(bulkExportJobRepository.findById(jobId).orElseThrow().getStatus())
                 .isEqualTo(com.example.hms.model.platform.FhirBulkExportJob.Status.COMPLETED);
-            List<String> lines = java.nio.file.Files.readAllLines(jobDir.resolve("Patient.ndjson"));
+            // The finished file is read where the runner published it: the file store.
+            String key = com.example.hms.fhir.bulk.FhirBulkExportService.outputKey(jobId, "Patient.ndjson");
+            List<String> lines;
+            try (com.example.hms.storage.StoredObject stored = fileStorage.get(key).orElseThrow()) {
+                lines = new String(stored.content().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                    .lines().toList();
+            }
             assertThat(lines).hasSize(1);
             assertOnlyTheMrnAtA(lines.get(0), "bulk export");
         } finally {
             bulkExportFileRepository.deleteAll(bulkExportFileRepository.findByJob_IdOrderByResourceTypeAsc(jobId));
             bulkExportJobRepository.deleteById(jobId);
             org.springframework.util.FileSystemUtils.deleteRecursively(jobDir);
+            fileStorage.delete(com.example.hms.fhir.bulk.FhirBulkExportService.outputKey(jobId, "Patient.ndjson"));
         }
     }
 

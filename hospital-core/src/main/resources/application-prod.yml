@@ -109,6 +109,8 @@ app:
   # so every file landed on the container's own disk and was lost at the next
   # deploy. UploadStoragePersistenceCheck logs a WARN at startup when the
   # directory is not under RAILWAY_VOLUME_MOUNT_PATH or not on a mount at all.
-  # Patient photos default to <upload dir>/patient-photos (same volume).
+  # Patient photos are kept under <upload dir>/patient-photos.
+  # With APP_STORAGE_TYPE=s3 the files live in the bucket and this directory is
+  # only the cut-over fallback (docs/runbooks/object-storage.md).
   upload:
     dir: ${APP_UPLOAD_DIR:uploads}

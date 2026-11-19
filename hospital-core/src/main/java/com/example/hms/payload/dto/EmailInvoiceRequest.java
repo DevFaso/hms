@@ -12,6 +12,10 @@ public record EmailInvoiceRequest(
     java.util.List<@jakarta.validation.constraints.Email(message = "{validation.email.invalid}") String> bcc,
     @jakarta.validation.constraints.Size(max = EmailInvoiceRequest.MAX_MESSAGE_LENGTH)
     String message,
+    /**
+     * Ignored since QA D2200: the mail and its PDF are written in the patient's stated
+     * language (French when none), never the clerk's. Kept so existing clients still validate.
+     */
     @jakarta.validation.constraints.Size(max = 35)
     String locale,
     Boolean attachPdf

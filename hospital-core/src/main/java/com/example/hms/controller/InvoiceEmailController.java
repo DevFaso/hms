@@ -53,10 +53,12 @@ public class InvoiceEmailController {
             ));
         }
 
+        // QA D2200: no English note and no English language forced on the patient; the
+        // service writes the mail in the patient's own language (French when none).
         var req = new EmailInvoiceRequest(
             List.of(email), List.of(), List.of(),
-            "Invoice attached. Thank you.",
-            "en",
+            null,
+            null,
             true
         );
 

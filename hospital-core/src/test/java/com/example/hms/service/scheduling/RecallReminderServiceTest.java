@@ -76,7 +76,7 @@ class RecallReminderServiceTest {
 
     @Test
     void notifiesAndStampsTheRecall() {
-        when(outreachNotifier.notifyPatient(eq(patient), any(), any())).thenReturn(true);
+        when(outreachNotifier.notifyPatient(eq(patient), any(), any(), any())).thenReturn(true);
 
         int notified = service.sendDueRecallNotices();
 
@@ -89,7 +89,7 @@ class RecallReminderServiceTest {
     void noticeWindowAndStampComeFromTheInjectedClock() {
         when(recallRepository.findAwaitingNotification(NOW.toLocalDate().plusDays(14)))
             .thenReturn(List.of(recall));
-        when(outreachNotifier.notifyPatient(eq(patient), any(), any())).thenReturn(true);
+        when(outreachNotifier.notifyPatient(eq(patient), any(), any(), any())).thenReturn(true);
 
         assertThat(service.sendDueRecallNotices()).isEqualTo(1);
 
@@ -100,7 +100,7 @@ class RecallReminderServiceTest {
     @Test
     void stampsEvenWhenNoChannelDispatched() {
         // Otherwise the sweep re-evaluates the same row forever.
-        when(outreachNotifier.notifyPatient(eq(patient), any(), any())).thenReturn(false);
+        when(outreachNotifier.notifyPatient(eq(patient), any(), any(), any())).thenReturn(false);
 
         int notified = service.sendDueRecallNotices();
 
@@ -115,7 +115,7 @@ class RecallReminderServiceTest {
         broken.setId(UUID.randomUUID());
         when(recallRepository.findAwaitingNotification(any()))
             .thenReturn(List.of(broken, recall));
-        when(outreachNotifier.notifyPatient(any(), any(), any()))
+        when(outreachNotifier.notifyPatient(any(), any(), any(), any()))
             .thenAnswer(inv -> inv.getArgument(0) == patient);
 
         int notified = service.sendDueRecallNotices();

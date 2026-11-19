@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 
 import com.example.hms.enums.AppointmentStatus;
+import com.example.hms.enums.PatientNotificationEvent;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.platform.WebhookEventType;
 import com.example.hms.exception.BusinessException;
@@ -115,7 +116,8 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         return getAppointmentsByPatientScoped(patient.getId(), currentUser);
     }
-    private final EmailService emailService;
+    /** QA D2201: every appointment e-mail goes through the patient's channel choice. */
+    private final com.example.hms.service.notification.PatientMessageGate patientMessageGate;
     private boolean isSuperAdmin(User user) {
         return hasRole(user, ROLE_SUPER_ADMIN_CODE);
     }
@@ -643,31 +645,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         webhookPublisher.publish(hospital.getId(), WebhookEventType.APPOINTMENT_BOOKED,
             WEBHOOK_RESOURCE_APPOINTMENT, saved.getId());
 
-        // Build reschedule/cancel links
-        String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + saved.getId();
-        String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + saved.getId();
-        // Send confirmation email to patient. Phone-first patients have no email,
-        // and a notification failure must never roll back the booking itself.
-        if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
-            try {
-                Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
-                emailService.sendAppointmentConfirmationEmail(
-                    patient.getEmail(),
-                    patient.getFullName(),
-                    hospital.getName(),
-                    staff.getUser().getFirstName() + " " + staff.getUser().getLastName(),
-                    com.example.hms.utility.DisplayDates.date(saved.getAppointmentDate(), mailLocale),
-                    saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
-                    hospital.getEmail(),
-                    hospital.getPhoneNumber(),
-                    rescheduleLink,
-                    cancelLink,
-                    mailLocale
-                );
-            } catch (RuntimeException ex) {
-                log.warn("Failed to send appointment confirmation email for {}: {}", saved.getId(), ex.getMessage());
-            }
-        }
+        // Send confirmation email to patient (QA D2201: unless they turned appointment e-mails off).
+        // Phone-first patients have no email, and a notification failure must never roll back the
+        // booking itself.
+        emailPatientAboutAppointment(saved, PatientNotificationEvent.APPOINTMENT_CONFIRMATION);
 
         return bookingSummary(saved);
     }
@@ -1183,25 +1164,43 @@ public class AppointmentServiceImpl implements AppointmentService {
         boolean startChanged = !saved.getStartTime().equals(oldStart);
         boolean endChanged   = !saved.getEndTime().equals(oldEnd);
         if (dateChanged || startChanged || endChanged) {
-            try {
-                Patient pt = saved.getPatient();
-                Staff st   = saved.getStaff();
-                Hospital h = saved.getHospital();
-                Locale mailLocale = patientLocaleResolver.resolve(pt, EmailService.DEFAULT_RECIPIENT_LOCALE);
-                emailService.sendAppointmentRescheduledEmail(
-                    pt.getEmail(),
-                    pt.getFullName(),
-                    h.getName(),
-                    st.getUser().getFirstName() + " " + st.getUser().getLastName(),
-                    com.example.hms.utility.DisplayDates.date(saved.getAppointmentDate(), mailLocale),
-                    saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
-                    h.getEmail(), h.getPhoneNumber(),
-                    frontendBaseUrl + appointmentLinks.getReschedulePath() + saved.getId(),
-                    frontendBaseUrl + appointmentLinks.getCancelPath() + saved.getId(),
-                    mailLocale);
-            } catch (Exception e) {
-                log.warn("Failed to send reschedule email for appointment {}: {}", saved.getId(), e.getMessage());
-            }
+            emailPatientAboutAppointment(saved, PatientNotificationEvent.APPOINTMENT_RESCHEDULED);
+        }
+    }
+
+    /**
+     * The appointment e-mail of {@code event} to the patient, through {@link
+     * com.example.hms.service.notification.PatientMessageGate} (QA D2201): not sent, and traced,
+     * when the patient turned appointment e-mails off. Never throws: a mail failure must not roll
+     * back the booking or status change that asked for it.
+     */
+    private void emailPatientAboutAppointment(Appointment appointment, PatientNotificationEvent event) {
+        Patient patient = appointment.getPatient();
+        if (patient == null || patient.getEmail() == null || patient.getEmail().isBlank()) {
+            return;
+        }
+        try {
+            Staff staff = appointment.getStaff();
+            Hospital hospital = appointment.getHospital();
+            Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
+            // QA D1710 class: the day in the patient's own way of writing it, never the ISO text.
+            var mail = new com.example.hms.service.notification.PatientMessageGate.AppointmentMail(
+                patient.getFullName(),
+                hospital.getName(),
+                staff.getUser().getFirstName() + " " + staff.getUser().getLastName(),
+                DisplayDates.date(appointment.getAppointmentDate(), mailLocale),
+                appointment.getStartTime().toString() + " - " + appointment.getEndTime().toString(),
+                hospital.getEmail(),
+                hospital.getPhoneNumber(),
+                frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId(),
+                frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId(),
+                mailLocale);
+            patientMessageGate.appointmentEmail(patient,
+                new com.example.hms.service.notification.PatientMessageGate.Notice(event, hospital.getId(),
+                    appointment.getId()),
+                mail);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to send appointment {} email for {}: {}", event, appointment.getId(), ex.getMessage());
         }
     }
 
@@ -1297,51 +1296,19 @@ public class AppointmentServiceImpl implements AppointmentService {
                 WebhookEventType.APPOINTMENT_RESCHEDULED, WEBHOOK_RESOURCE_APPOINTMENT, appointment.getId());
         }
 
-        // Email notification triggers
-        Patient patient = appointment.getPatient();
-        Staff staff = appointment.getStaff();
-        Hospital hospital = appointment.getHospital();
-        String patientName = patient.getFullName();
-        String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
-        String appointmentTime = appointment.getStartTime().toString() + " - " + appointment.getEndTime().toString();
-        String hospitalEmail = hospital.getEmail();
-        String hospitalPhone = hospital.getPhoneNumber();
-        String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId();
-        String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId();
-
-        // Phone-first patients have no email, and a notification failure must
-        // never roll back the status change itself.
-        if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
-            try {
-                Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
-                // QA D1710 class: the day in the patient's own way of writing it, never the ISO text.
-                String appointmentDate = com.example.hms.utility.DisplayDates.date(appointment.getAppointmentDate(),
-                    mailLocale);
-                switch (newStatus) {
-                    case CONFIRMED -> emailService.sendAppointmentConfirmationEmail(
-                        patient.getEmail(), patientName, hospital.getName(), staffName,
-                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink,
-                        mailLocale);
-                    case RESCHEDULED -> emailService.sendAppointmentRescheduledEmail(
-                        patient.getEmail(), patientName, hospital.getName(), staffName,
-                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink,
-                        mailLocale);
-                    case CANCELLED -> emailService.sendAppointmentCancelledEmail(
-                        patient.getEmail(), patientName, hospital.getName(), staffName,
-                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, mailLocale);
-                    case COMPLETED -> emailService.sendAppointmentCompletedEmail(
-                        patient.getEmail(), patientName, hospital.getName(), staffName,
-                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, mailLocale);
-                    case NO_SHOW -> emailService.sendAppointmentNoShowEmail(
-                        patient.getEmail(), patientName, hospital.getName(), staffName,
-                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, mailLocale);
-                    default -> {
-                        // No notification for remaining statuses (PENDING, IN_PROGRESS, FAILED)
-                    }
-                }
-            } catch (RuntimeException ex) {
-                log.warn("Failed to send appointment status email for {}: {}", appointment.getId(), ex.getMessage());
-            }
+        // Email notification triggers (QA D2201: through the patient's channel choice). Phone-first
+        // patients have no email, and a notification failure must never roll back the status change.
+        PatientNotificationEvent statusMail = switch (newStatus) {
+            case CONFIRMED -> PatientNotificationEvent.APPOINTMENT_CONFIRMATION;
+            case RESCHEDULED -> PatientNotificationEvent.APPOINTMENT_RESCHEDULED;
+            case CANCELLED -> PatientNotificationEvent.APPOINTMENT_CANCELLED;
+            case COMPLETED -> PatientNotificationEvent.APPOINTMENT_COMPLETED;
+            case NO_SHOW -> PatientNotificationEvent.APPOINTMENT_NO_SHOW;
+            // No notification for remaining statuses (PENDING, IN_PROGRESS, FAILED)
+            default -> null;
+        };
+        if (statusMail != null) {
+            emailPatientAboutAppointment(appointment, statusMail);
         }
 
         return appointmentMapper.toAppointmentResponseDTO(appointment);

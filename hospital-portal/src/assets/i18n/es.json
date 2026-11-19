@@ -5023,6 +5023,21 @@
     "VIEW_ALL": "Ver todo"
   },
   "NURSE": {
+    "OVERSIGHT": {
+      "DEPARTMENT": "Servicio",
+      "READ_ONLY": "Supervisión de superadministrador · Hospital seleccionado. La documentación de cuidados requiere un rol clínico activo.",
+      "HOSPITAL_PATIENTS": "Todos los pacientes de este hospital",
+      "SEARCH": "Buscar pacientes cargados por nombre, expediente, cama o profesional",
+      "CLINICIAN": "Profesional",
+      "CARDS": "Tarjetas",
+      "TABLE": "Tabla",
+      "NO_MATCHES": "Ningún paciente coincide con los filtros",
+      "BOARD_HELP": "{{shown}} pacientes mostrados de {{total}} cargados en el hospital seleccionado. Los filtros solo se aplican a estas filas.",
+      "ACUITY_HELP": "L1–L5 describe la gravedad registrada del paciente. Los indicadores de cuidados pendientes describen tareas, no un cambio de gravedad.",
+      "PENDING_CARE": "Cuidados pendientes",
+      "MEDICATION_COUNT": "{{count}} órdenes de medicación",
+      "METRICS_HELP": "Las dosis programadas pendientes, las dosis atrasadas y las órdenes según necesidad se cuentan por separado. Las tarjetas de pacientes cuentan órdenes, no horarios de dosis."
+    },
     "AWAITING_TRIAGE": "En espera de triaje",
     "ACTION": "Acción",
     "ACTION_PLACEHOLDER": "Ingrese la acción...",
@@ -14322,7 +14337,7 @@
   },
   "PATIENT_NOTIFICATIONS": {
     "TITLE": "Patient notifications",
-    "SUBTITLE": "Appointment and result-available SMS and emails sent to your patients. Failed sends can be retried.",
+    "SUBTITLE": "SMS and e-mails sent to your patients: appointments, results, pharmacy and invoices. A failed send can be retried. « Not sent » with the reason “The patient turned this channel off” is a patient’s choice.",
     "FILTER_STATUS": "Status",
     "ALL_STATUSES": "All statuses",
     "EMPTY": "No sends in this status.",
@@ -14352,7 +14367,21 @@
       "APPOINTMENT_REMINDER": "Appointment reminder",
       "LAB_RESULT_AVAILABLE": "Lab result available",
       "IMAGING_RESULT_AVAILABLE": "Imaging result available",
-      "ULTRASOUND_RESULT_AVAILABLE": "Ultrasound result available"
+      "ULTRASOUND_RESULT_AVAILABLE": "Ultrasound result available",
+      "APPOINTMENT_RESCHEDULED": "Appointment moved",
+      "APPOINTMENT_CANCELLED": "Appointment cancelled",
+      "APPOINTMENT_COMPLETED": "Visit completed",
+      "APPOINTMENT_NO_SHOW": "Missed appointment",
+      "WAITLIST_OFFER": "Waitlist slot offer",
+      "RECALL_DUE": "Follow-up visit due",
+      "VISIT_SUMMARY": "Visit summary available",
+      "PHARMACY_DISPENSED": "Medication dispensed",
+      "PHARMACY_READY": "Medication ready for collection",
+      "PHARMACY_READY_CANCELLED": "Medication no longer ready",
+      "PHARMACY_READY_REMINDER": "Medication still waiting",
+      "PHARMACY_OUT_OF_STOCK": "Medication out of stock",
+      "PHARMACY_REFILL_REMINDER": "Refill reminder",
+      "INVOICE": "Invoice"
     },
     "CHANNEL": {
       "SMS": "SMS",

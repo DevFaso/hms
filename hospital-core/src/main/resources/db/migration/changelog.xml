@@ -3691,4 +3691,18 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V315 (QA D2220) - clinical.patient_allergy_legacy_imports: one row
+         per patient the legacy free-text allergy backfill has processed, so
+         it runs at most once per patient instead of re-running (and possibly
+         re-creating a deactivated allergy) on every start. Additive: one
+         table, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V315-patient-allergy-legacy-import-ledger" author="hms-team" runOnChange="false">
+        <sqlFile path="V315__patient_allergy_legacy_import_ledger.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

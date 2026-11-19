@@ -3,6 +3,9 @@ package com.example.hms.service;
 import com.example.hms.enums.ChatAttachmentKind;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.service.support.UrlPathNormalizer;
+import com.example.hms.storage.FileStorage;
+import com.example.hms.storage.StorageKeys;
+import com.example.hms.storage.StoredObject;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,21 +15,26 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * Service for handling file uploads, particularly profile images
+ * Validates and stores uploaded files (profile images, referral/chart/chat
+ * attachments, patient documents) through {@link FileStorage}: a local
+ * directory or an S3-compatible bucket, chosen by {@code app.storage.type}.
+ * The keys are the paths the files always had under the upload root
+ * ({@code "<subdirectory>/<name>"}), so the references stored on existing
+ * rows keep resolving whichever store is used.
  */
 @Slf4j
 @Service
@@ -34,11 +42,14 @@ public class FileUploadService {
     private static final String MSG_FILE_PATH_INVALID = "file.path.invalid";
     private static final String MSG_FILE_EMPTY = "file.empty";
     private static final String MSG_ATTACHMENT_KEY_INVALID = "file.attachment.keyInvalid";
-    private static final String PROFILE_IMAGES_PATH = "profile-images";
+    public static final String PROFILE_IMAGES_PATH = "profile-images";
+    private static final String MSG_FILE_NO_LONGER_AVAILABLE = "file.noLongerAvailable";
 
+    private final FileStorage storage;
 
-    @Value("${app.upload.dir:uploads}")
-    private String uploadDir;
+    public FileUploadService(FileStorage storage) {
+        this.storage = storage;
+    }
 
     /**
      * Browser-facing URL prefix for <em>patient document</em> uploads only.
@@ -116,6 +127,9 @@ public class FileUploadService {
     private static final String EXT_DOCX = ".docx";
     private static final String MIME_PNG = "image/png";
     private static final String MIME_JPEG = "image/jpeg";
+    private static final String MIME_PDF = "application/pdf";
+    private static final String MIME_WEBP = "image/webp";
+    private static final String EXT_WEBP = ".webp";
     private static final long MAX_REFERRAL_ATTACHMENT_SIZE = MAX_UPLOAD_BYTES;
     private static final Set<String> ALLOWED_ATTACHMENT_EXTENSIONS = Set.of(
         ".pdf", ".jpg", EXT_JPEG, ".png", ".gif", ".bmp", EXT_TIFF, ".txt", ".rtf", ".doc",
@@ -133,26 +147,21 @@ public class FileUploadService {
     public String uploadProfileImage(MultipartFile file, UUID userId) throws IOException {
         validateImageFile(file);
 
-        // Create uploads directory if it doesn't exist
-        Path uploadPath = Paths.get(uploadDir, PROFILE_IMAGES_PATH);
-        Files.createDirectories(uploadPath);
-
         String originalFilename = file.getOriginalFilename();
         String extension = getFileExtension(originalFilename);
         // Random suffix: profile images are the one class still served
-        // statically (avatars render via <img src> on web + both mobile
+        // without a token (avatars render via <img src> on web + both mobile
         // apps, which cannot carry a bearer token), so the filename must
         // not be derivable from the public userId + a timestamp guess.
         String filename = userId + "_profile_" + System.currentTimeMillis()
             + "_" + UUID.randomUUID() + extension;
 
-        Path filePath = uploadPath.resolve(filename).normalize();
-        if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
+        try (InputStream in = file.getInputStream()) {
+            storage.put(storageKey(PROFILE_IMAGES_PATH, filename), in, file.getSize(),
+                imageContentTypeFor(extension));
         }
-        Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
-        log.info("Profile image uploaded successfully: {}", filePath);
+        log.info("Profile image uploaded successfully for user {}", userId);
 
         String relativePath = "/uploads/profile-images/" + filename;
         return buildPublicUrl(relativePath);
@@ -168,21 +177,19 @@ public class FileUploadService {
             return;
         }
 
+        // Extract filename from URL (e.g., "/api/uploads/profile-images/filename.jpg"
+        // -> "filename.jpg")
+        String filename = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
+        String key;
         try {
-            // Extract filename from URL (e.g., "/api/uploads/profile-images/filename.jpg"
-            // -> "filename.jpg")
-            String filename = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
-            Path filePath = Paths.get(uploadDir, PROFILE_IMAGES_PATH, filename).normalize();
-            Path expectedParent = Paths.get(uploadDir, PROFILE_IMAGES_PATH).normalize();
-            if (!filePath.startsWith(expectedParent)) {
-                log.warn("Path traversal attempt detected in deleteProfileImage: {}", imageUrl);
-                return;
-            }
-
-            if (Files.exists(filePath)) {
-                Files.delete(filePath);
-                log.info("Profile image deleted successfully: {}", filePath);
-            }
+            key = storageKey(PROFILE_IMAGES_PATH, filename);
+        } catch (IllegalArgumentException invalid) {
+            log.warn("Path traversal attempt detected in deleteProfileImage: {}", imageUrl);
+            return;
+        }
+        try {
+            storage.delete(key);
+            log.info("Profile image deleted: {}", filename);
         } catch (IOException | RuntimeException e) {
             log.warn("Failed to delete profile image: {}", imageUrl, e);
         }
@@ -191,18 +198,11 @@ public class FileUploadService {
     public StoredFileDescriptor uploadReferralAttachment(MultipartFile file, UUID uploaderId) throws IOException {
         validateAttachmentFile(file);
 
-        Path uploadPath = Paths.get(uploadDir, "referral-attachments");
-        Files.createDirectories(uploadPath);
-
         String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
         String extension = getFileExtension(file.getOriginalFilename());
         String filename = buildAttachmentFilename(sanitizedBaseName, extension, uploaderId, "attachment");
 
-        Path filePath = uploadPath.resolve(filename).normalize();
-        if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
-        }
-        Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+        storeUpload("referral-attachments", filename, file, contentTypeFor(extension));
 
         String relativePath = "/uploads/referral-attachments/" + filename;
         return new StoredFileDescriptor(
@@ -218,25 +218,14 @@ public class FileUploadService {
     public StoredFileDescriptor uploadChartAttachment(MultipartFile file, UUID uploaderId) throws IOException {
         validateAttachmentFile(file);
 
-        Path uploadPath = Paths.get(uploadDir, "chart-attachments");
-        Files.createDirectories(uploadPath);
-
         String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
         String extension = getFileExtension(file.getOriginalFilename());
         String filename = buildAttachmentFilename(sanitizedBaseName, extension, uploaderId, "chart_attachment");
 
-        Path filePath = uploadPath.resolve(filename).normalize();
-        if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
-        }
-        MessageDigest digest = createSha256Digest();
-        try (DigestInputStream digestStream = new DigestInputStream(file.getInputStream(), digest)) {
-            Files.copy(digestStream, filePath, StandardCopyOption.REPLACE_EXISTING);
-        }
+        String checksum = storeUpload("chart-attachments", filename, file, contentTypeFor(extension));
 
         String relativePath = "/uploads/chart-attachments/" + filename;
-        long sizeBytes = Files.size(filePath);
-        String checksum = HexFormat.of().formatHex(digest.digest());
+        long sizeBytes = file.getSize();
 
         return new StoredFileDescriptor(
             relativePath,
@@ -249,37 +238,82 @@ public class FileUploadService {
     }
 
     /**
-     * Resolve a stored upload for AUTHENTICATED streaming (P3 follow-up:
+     * Open a stored upload for AUTHENTICATED streaming (P3 follow-up:
      * closing the permitAll /uploads/** exposure). The storage key comes
-     * from a DB row — never raw client input — and may be either the
+     * from a DB row, never raw client input, and may be either the
      * relative form ("/uploads/{subdir}/{name}") or a legacy absolute
-     * public URL; both resolve. The returned path is guaranteed to sit
-     * inside the named subdirectory, so traversal has nothing to grab.
+     * public URL; both resolve. The object read is always inside the named
+     * subdirectory ({@link StorageKeys}), so traversal has nothing to grab.
+     * The caller closes the returned object.
      *
      * @throws ResourceNotFoundException when the key is not under the
-     *         required subdirectory or the file no longer exists on disk
+     *         required subdirectory or the file is no longer stored
      */
-    public Path resolveStoredFile(String storageKey, String requiredSubdirectory) {
+    public StoredObject openStoredFile(String storageKey, String requiredSubdirectory) {
+        String key = keyOfStoredReference(storageKey, requiredSubdirectory);
+        Optional<StoredObject> stored;
+        try {
+            stored = storage.get(key);
+        } catch (IOException ex) {
+            log.warn("Stored file under '{}' could not be read: {}", requiredSubdirectory, ex.getMessage());
+            throw new ResourceNotFoundException(MSG_FILE_NO_LONGER_AVAILABLE);
+        }
+        if (stored.isEmpty()) {
+            // QA D1184 (round 22): the row says a file was stored and the store
+            // has none. The reader gets the localized 404; the log says which
+            // store and subdirectory, never the name.
+            log.warn("Stored file missing under '{}' in {}", requiredSubdirectory, storage.describe());
+            throw new ResourceNotFoundException(MSG_FILE_NO_LONGER_AVAILABLE);
+        }
+        return stored.get();
+    }
+
+    /**
+     * Remove a stored upload named by a DB reference (same forms as
+     * {@link #openStoredFile}); nothing happens when it is already gone.
+     */
+    public void deleteStoredFile(String storageKey, String requiredSubdirectory) throws IOException {
+        storage.delete(keyOfStoredReference(storageKey, requiredSubdirectory));
+    }
+
+    /** The storage key of a stored reference ("/uploads/{subdir}/{name}" or a URL ending so). */
+    private static String keyOfStoredReference(String storageKey, String requiredSubdirectory) {
         String marker = "/uploads/" + requiredSubdirectory + "/";
         int idx = storageKey == null ? -1 : storageKey.indexOf(marker);
         if (idx < 0) {
             throw new ResourceNotFoundException("file.notStoredUnder", requiredSubdirectory);
         }
         String filename = storageKey.substring(idx + marker.length());
-        Path base = Paths.get(uploadDir, requiredSubdirectory).toAbsolutePath().normalize();
-        Path path = base.resolve(filename).normalize();
-        if (!path.startsWith(base)) {
-            throw new ResourceNotFoundException("file.noLongerAvailable");
+        try {
+            return storageKey(requiredSubdirectory, filename);
+        } catch (IllegalArgumentException invalid) {
+            throw new ResourceNotFoundException(MSG_FILE_NO_LONGER_AVAILABLE);
         }
-        if (!Files.exists(path)) {
-            // QA D1184 (round 22): the row says a file was stored and the disk
-            // has none - a storage directory that did not survive a deploy
-            // (UploadStoragePersistenceCheck warns at startup). The reader gets
-            // the localized 404; the log says which directory, never the name.
-            log.warn("Stored file missing under '{}' (directory present: {})", base, Files.isDirectory(base));
-            throw new ResourceNotFoundException("file.noLongerAvailable");
+    }
+
+    /** {@code subdir + "/" + filename}, checked by {@link StorageKeys}. */
+    private static String storageKey(String subdirectory, String filename) {
+        return StorageKeys.requireValid(subdirectory + "/" + filename);
+    }
+
+    /**
+     * Stream an upload into the store under {@code subdir/filename}, hashing
+     * it on the way through; returns the SHA-256 (hex).
+     */
+    private String storeUpload(String subdirectory, String filename, MultipartFile file, String contentType)
+            throws IOException {
+        String key;
+        try {
+            key = storageKey(subdirectory, filename);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
-        return path;
+        MessageDigest digest = createSha256Digest();
+        try (InputStream in = file.getInputStream();
+             DigestInputStream digestStream = new DigestInputStream(in, digest)) {
+            storage.put(key, digestStream, file.getSize(), contentType);
+        }
+        return HexFormat.of().formatHex(digest.digest());
     }
 
     private String buildAttachmentFilename(String sanitizedBaseName, String extension, UUID uploaderId, String fallbackBaseName) {
@@ -484,31 +518,19 @@ public class FileUploadService {
      * @param file     the uploaded file (multipart)
      * @param userId   the ID of the uploading user (patient or proxy)
      * @return {@link StoredFileDescriptor} with storage key, public URL, and checksum
-     * @throws IOException if the file cannot be written to disk
+     * @throws IOException if the file cannot be stored
      */
     public StoredFileDescriptor uploadPatientDocument(MultipartFile file, UUID userId) throws IOException {
         validatePatientDocumentFile(file);
-
-        Path uploadPath = Paths.get(uploadDir, PATIENT_DOCUMENTS_PATH);
-        Files.createDirectories(uploadPath);
 
         String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
         String extension = getFileExtension(file.getOriginalFilename());
         String filename = buildAttachmentFilename(sanitizedBaseName, extension, userId, "patient_doc");
 
-        Path filePath = uploadPath.resolve(filename).normalize();
-        if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
-        }
-
-        MessageDigest digest = createSha256Digest();
-        try (DigestInputStream digestStream = new DigestInputStream(file.getInputStream(), digest)) {
-            Files.copy(digestStream, filePath, StandardCopyOption.REPLACE_EXISTING);
-        }
+        String checksum = storeUpload(PATIENT_DOCUMENTS_PATH, filename, file, contentTypeFor(extension));
 
         String relativePath = patientDocumentRelativePath(filename);
-        long sizeBytes = Files.size(filePath);
-        String checksum = HexFormat.of().formatHex(digest.digest());
+        long sizeBytes = file.getSize();
 
         return new StoredFileDescriptor(
                 relativePath,
@@ -530,19 +552,14 @@ public class FileUploadService {
         if (content == null || content.length == 0) {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
         }
-        Path uploadPath = Paths.get(uploadDir, PATIENT_DOCUMENTS_PATH);
-        Files.createDirectories(uploadPath);
         String filename = buildAttachmentFilename(sanitizeBaseFilename(baseName), ".pdf", authorId, "certificate");
-        Path filePath = uploadPath.resolve(filename).normalize();
-        if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
-        }
-        Files.write(filePath, content);
+        storage.put(storageKey(PATIENT_DOCUMENTS_PATH, filename), new ByteArrayInputStream(content),
+            content.length, MIME_PDF);
         MessageDigest digest = createSha256Digest();
         String checksum = HexFormat.of().formatHex(digest.digest(content));
         String relativePath = patientDocumentRelativePath(filename);
         return new StoredFileDescriptor(relativePath, buildPublicUrl(relativePath), baseName + ".pdf",
-            "application/pdf", content.length, checksum);
+            MIME_PDF, content.length, checksum);
     }
 
     private void validatePatientDocumentFile(MultipartFile file) {
@@ -564,7 +581,7 @@ public class FileUploadService {
     /** QA D540: the stored type follows the checked extension, not the client's header. */
     static String contentTypeFor(String extension) {
         return switch (extension.toLowerCase(java.util.Locale.ROOT)) {
-            case ".pdf" -> "application/pdf";
+            case ".pdf" -> MIME_PDF;
             case ".png" -> MIME_PNG;
             case ".jpg", EXT_JPEG -> MIME_JPEG;
             case ".gif" -> "image/gif";
@@ -575,6 +592,20 @@ public class FileUploadService {
             case ".doc" -> "application/msword";
             case EXT_DOCX -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
             default -> "application/octet-stream";
+        };
+    }
+
+    /**
+     * The type a profile image is stored and served with, from its checked
+     * extension ({@code .jpg .jpeg .png .gif .webp}); {@code null} for anything else.
+     */
+    public static String imageContentTypeFor(String extension) {
+        return switch (extension.toLowerCase(java.util.Locale.ROOT)) {
+            case ".jpg", EXT_JPEG -> MIME_JPEG;
+            case ".png" -> MIME_PNG;
+            case ".gif" -> "image/gif";
+            case EXT_WEBP -> MIME_WEBP;
+            default -> null;
         };
     }
 
@@ -598,10 +629,10 @@ public class FileUploadService {
     private static final long MAX_CHAT_AUDIO_SIZE = 5L * 1024 * 1024;  // 5 MB
     private static final String CHAT_ATTACHMENTS_PATH = "chat-attachments";
     private static final Set<String> ALLOWED_CHAT_PHOTO_EXTENSIONS = Set.of(
-        ".jpg", EXT_JPEG, ".png", ".webp"
+        ".jpg", EXT_JPEG, ".png", EXT_WEBP
     );
     private static final Set<String> ALLOWED_CHAT_PHOTO_MIME = Set.of(
-        MIME_JPEG, MIME_PNG, "image/webp"
+        MIME_JPEG, MIME_PNG, MIME_WEBP
     );
     private static final Set<String> ALLOWED_CHAT_AUDIO_EXTENSIONS = Set.of(
         ".webm", ".ogg", ".oga", ".m4a", ".mp4", ".mp3", ".aac"
@@ -622,26 +653,15 @@ public class FileUploadService {
                                                       UUID uploaderId) throws IOException {
         validateChatAttachment(file, kind);
 
-        Path uploadPath = Paths.get(uploadDir, CHAT_ATTACHMENTS_PATH);
-        Files.createDirectories(uploadPath);
-
         String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
         String extension = getFileExtension(file.getOriginalFilename());
         String filename = buildAttachmentFilename(sanitizedBaseName, extension, uploaderId,
             kind == ChatAttachmentKind.AUDIO ? "voice_memo" : "photo");
 
-        Path filePath = uploadPath.resolve(filename).normalize();
-        if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
-        }
-        MessageDigest digest = createSha256Digest();
-        try (DigestInputStream digestStream = new DigestInputStream(file.getInputStream(), digest)) {
-            Files.copy(digestStream, filePath, StandardCopyOption.REPLACE_EXISTING);
-        }
+        String checksum = storeUpload(CHAT_ATTACHMENTS_PATH, filename, file, file.getContentType());
 
         String relativePath = relativeUploadPath(CHAT_ATTACHMENTS_PATH, filename);
-        long sizeBytes = Files.size(filePath);
-        String checksum = HexFormat.of().formatHex(digest.digest());
+        long sizeBytes = file.getSize();
 
         return new StoredFileDescriptor(
             relativePath,
@@ -668,11 +688,11 @@ public class FileUploadService {
      * Re-derive a server-trusted descriptor from a previously uploaded chat-attachment storage
      * key. The caller (chat send path) only supplies the storage key + declared kind +
      * (for AUDIO) the client-measured duration; everything else (size, sha256, content type,
-     * display name, public url) is recomputed from disk so a tampered or omitted client
+     * display name, public url) is recomputed from the stored bytes so a tampered or omitted client
      * descriptor cannot poison the persisted row.
      *
      * @throws IllegalArgumentException if the key is malformed, the file is missing, or kind
-     *     mismatches the on-disk content type
+     *     mismatches the stored file's type
      */
     public StoredFileDescriptor resolveChatAttachment(String storageKey, ChatAttachmentKind declaredKind) throws IOException {
         if (storageKey == null || storageKey.isBlank()) {
@@ -688,13 +708,11 @@ public class FileUploadService {
         if (filename.isBlank() || filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_ATTACHMENT_KEY_INVALID));
         }
-        Path uploadPath = Paths.get(uploadDir, CHAT_ATTACHMENTS_PATH).toAbsolutePath().normalize();
-        Path filePath = uploadPath.resolve(filename).normalize();
-        if (!filePath.startsWith(uploadPath)) {
+        String key;
+        try {
+            key = storageKey(CHAT_ATTACHMENTS_PATH, filename);
+        } catch (IllegalArgumentException invalid) {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_ATTACHMENT_KEY_INVALID));
-        }
-        if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.notFound"));
         }
 
         String extension = getFileExtension(filename).toLowerCase();
@@ -706,7 +724,20 @@ public class FileUploadService {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.kindMismatch"));
         }
 
-        long sizeBytes = Files.size(filePath);
+        Optional<StoredObject> stored = storage.get(key);
+        if (stored.isEmpty()) {
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.notFound"));
+        }
+        MessageDigest digest = createSha256Digest();
+        long sizeBytes = 0;
+        try (StoredObject object = stored.get();
+             DigestInputStream digestStream = new DigestInputStream(object.content(), digest)) {
+            byte[] buf = new byte[8192];
+            int read;
+            while ((read = digestStream.read(buf)) != -1) {
+                sizeBytes += read;
+            }
+        }
         if (sizeBytes <= 0) {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.empty"));
         }
@@ -718,7 +749,7 @@ public class FileUploadService {
         }
 
         String contentType = resolveChatContentTypeFromExtension(extension);
-        String sha256 = computeSha256(filePath);
+        String sha256 = HexFormat.of().formatHex(digest.digest());
         String relativePath = CHAT_ATTACHMENT_KEY_PREFIX + filename;
 
         return new StoredFileDescriptor(
@@ -741,7 +772,7 @@ public class FileUploadService {
         return switch (extension) {
             case ".jpg", EXT_JPEG -> MIME_JPEG;
             case ".png" -> MIME_PNG;
-            case ".webp" -> "image/webp";
+            case EXT_WEBP -> MIME_WEBP;
             case ".webm" -> "audio/webm";
             case ".ogg", ".oga" -> "audio/ogg";
             case ".m4a", ".mp4" -> "audio/mp4";
@@ -749,18 +780,6 @@ public class FileUploadService {
             case ".aac" -> "audio/aac";
             default -> "application/octet-stream";
         };
-    }
-
-    private String computeSha256(Path filePath) throws IOException {
-        MessageDigest digest = createSha256Digest();
-        try (java.io.InputStream in = Files.newInputStream(filePath);
-             DigestInputStream digestStream = new DigestInputStream(in, digest)) {
-            byte[] buf = new byte[8192];
-            while (digestStream.read(buf) != -1) {
-                // drain to digest
-            }
-        }
-        return HexFormat.of().formatHex(digest.digest());
     }
 
     private void validateChatAttachment(MultipartFile file, ChatAttachmentKind kind) {

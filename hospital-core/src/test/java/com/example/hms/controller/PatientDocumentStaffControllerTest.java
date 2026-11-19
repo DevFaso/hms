@@ -124,7 +124,8 @@ class PatientDocumentStaffControllerTest {
         // Patient-chosen name with a quote, a space and an accent: must neither
         // break the header nor leak unencoded.
         when(documentService.downloadForPatient(hospitalId, patientId, documentId))
-            .thenReturn(new PatientDocumentService.DocumentPayload(tmp, "application/pdf", "résumé \"q\".pdf"));
+            .thenReturn(new PatientDocumentService.DocumentPayload(
+                new org.springframework.core.io.FileSystemResource(tmp), "application/pdf", "résumé \"q\".pdf"));
 
         mockMvc.perform(get("/patients/{patientId}/documents/{documentId}/download", patientId, documentId))
             .andExpect(status().isOk())

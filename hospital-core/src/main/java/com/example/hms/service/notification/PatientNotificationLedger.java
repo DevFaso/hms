@@ -1,6 +1,7 @@
 package com.example.hms.service.notification;
 
 import com.example.hms.enums.NotificationChannel;
+import com.example.hms.enums.NotificationDeliveryStatus;
 import com.example.hms.enums.PatientNotificationEvent;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Patient;
@@ -33,7 +34,8 @@ import java.util.UUID;
  * ({@code deliversRealSms()}: the logging mock must never be handed patient text) and the patient
  * has a number; email, for the events that send one, when a mail transport exists and the patient
  * has an address. Each only when the patient has not turned that channel off for this kind of
- * notice ({@link PatientChannelConsent}). Consent and contact are checked again at send time.
+ * notice ({@link PatientChannelConsent}); a channel turned off gets a SKIPPED / OPTED_OUT row instead,
+ * so the refusal is visible to staff (QA D2206). Consent and contact are checked again at send time.
  *
  * <p><b>Never twice.</b> One row per {@code event:subject:channel}, enforced by a unique index:
  * the same release reached by two paths, a scheduler re-run or a second instance finds the row
@@ -99,21 +101,26 @@ public class PatientNotificationLedger {
     }
 
     /**
-     * Queue now, each channel in its own transaction.
+     * Queue now, each channel in its own transaction. A channel the patient turned off for this
+     * kind of notice is not queued: it gets a SKIPPED row with reason OPTED_OUT instead (QA D2206),
+     * so the hospital's administrators can see the patient was not told, and why.
      *
-     * @return the channels a row was created for (empty when none, or when they already existed)
+     * @return the channels a row was queued for (empty when none, or when they already existed)
      */
     public List<NotificationChannel> enqueue(PatientNotificationEvent event, UUID hospitalId, UUID patientId,
                                              UUID subjectId) {
-        if (event == null || hospitalId == null || patientId == null || subjectId == null) {
+        if (event == null || hospitalId == null || patientId == null || subjectId == null || !event.isQueued()) {
             return List.of();
         }
         try {
-            List<NotificationChannel> eligible = ownTransaction.execute(status -> eligibleChannels(event, patientId));
+            List<ChannelDecision> decisions = ownTransaction.execute(status -> eligibleChannels(event, patientId));
             List<NotificationChannel> queued = new ArrayList<>();
-            for (NotificationChannel channel : eligible == null ? List.<NotificationChannel>of() : eligible) {
-                if (insertOnce(event, hospitalId, patientId, subjectId, channel)) {
-                    queued.add(channel);
+            for (ChannelDecision decision : decisions == null ? List.<ChannelDecision>of() : decisions) {
+                if (decision.optedOut()) {
+                    insertOnce(event, hospitalId, patientId, subjectId, decision.channel(),
+                        PatientNotificationErrorCode.OPTED_OUT);
+                } else if (insertOnce(event, hospitalId, patientId, subjectId, decision.channel(), null)) {
+                    queued.add(decision.channel());
                 }
             }
             return queued;
@@ -124,27 +131,57 @@ public class PatientNotificationLedger {
         }
     }
 
-    private List<NotificationChannel> eligibleChannels(PatientNotificationEvent event, UUID patientId) {
+    /**
+     * The trace of a send the patient's opt-out blocked (QA D2206): a SKIPPED row, reason
+     * OPTED_OUT, never a message, number or address. Written at once in a transaction of its own,
+     * so it survives a caller that then refuses the request (the invoice e-mail). Once per
+     * {@code event:subject:channel}, like every row. Never throws.
+     */
+    public void recordOptOut(PatientNotificationEvent event, UUID hospitalId, UUID patientId, UUID subjectId,
+                             NotificationChannel channel) {
+        if (event == null || hospitalId == null || patientId == null || subjectId == null || channel == null) {
+            return;
+        }
+        try {
+            insertOnce(event, hospitalId, patientId, subjectId, channel, PatientNotificationErrorCode.OPTED_OUT);
+        } catch (RuntimeException ex) {
+            log.warn("Opt-out trace of {} for subject {} not written: {}", event, subjectId,
+                ex.getClass().getSimpleName());
+        }
+    }
+
+    /** One channel the patient can be reached on, and whether they turned it off for this notice. */
+    private record ChannelDecision(NotificationChannel channel, boolean optedOut) {
+    }
+
+    /**
+     * The channels this deployment can send on and the patient has a contact for, each with the
+     * patient's choice. A channel with no transport or no contact is not a refusal: no row.
+     */
+    private List<ChannelDecision> eligibleChannels(PatientNotificationEvent event, UUID patientId) {
         Patient patient = patientRepository.findByIdUnscoped(patientId).orElse(null);
         if (patient == null) {
             return List.of();
         }
         UUID userId = patient.getUser() != null ? patient.getUser().getId() : null;
-        List<NotificationChannel> channels = new ArrayList<>(2);
-        if (smsService.deliversRealSms() && StringUtils.hasText(patient.getPhoneNumberPrimary())
-            && consent.allows(userId, event.preferenceType(), NotificationChannel.SMS)) {
-            channels.add(NotificationChannel.SMS);
+        List<ChannelDecision> channels = new ArrayList<>(2);
+        if (smsService.deliversRealSms() && StringUtils.hasText(patient.getPhoneNumberPrimary())) {
+            channels.add(new ChannelDecision(NotificationChannel.SMS,
+                !consent.allows(userId, event.preferenceType(), NotificationChannel.SMS)));
         }
-        if (event.sendsEmail() && emailService.deliversRealEmail() && StringUtils.hasText(patient.getEmail())
-            && consent.allows(userId, event.preferenceType(), NotificationChannel.EMAIL)) {
-            channels.add(NotificationChannel.EMAIL);
+        if (event.sendsEmail() && emailService.deliversRealEmail() && StringUtils.hasText(patient.getEmail())) {
+            channels.add(new ChannelDecision(NotificationChannel.EMAIL,
+                !consent.allows(userId, event.preferenceType(), NotificationChannel.EMAIL)));
         }
         return channels;
     }
 
-    /** @return true when this call created the row. */
+    /**
+     * @param skipped null to queue the row; a reason to write it SKIPPED (terminal) instead
+     * @return true when this call created the row.
+     */
     private boolean insertOnce(PatientNotificationEvent event, UUID hospitalId, UUID patientId, UUID subjectId,
-                               NotificationChannel channel) {
+                               NotificationChannel channel, PatientNotificationErrorCode skipped) {
         String key = PatientNotificationDelivery.keyOf(event, subjectId, channel);
         try {
             Boolean created = ownTransaction.execute(status -> {
@@ -158,6 +195,8 @@ public class PatientNotificationLedger {
                     .subjectId(subjectId)
                     .channel(channel)
                     .idempotencyKey(key)
+                    .status(skipped == null ? NotificationDeliveryStatus.PENDING : NotificationDeliveryStatus.SKIPPED)
+                    .errorCode(skipped == null ? null : skipped.name())
                     .nextAttemptAt(LocalDateTime.now(clock))
                     .build());
                 return true;
