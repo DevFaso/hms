@@ -9,7 +9,8 @@ import {
 } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, Subject, throwError } from 'rxjs';
+import { defer, of, Subject, throwError } from 'rxjs';
+import { PAYMENT_RETRY_DELAY_MS } from '../shared/payment-request-key';
 
 import { BillingComponent, lineQuantityMessageKey } from './billing';
 import { markServerFieldErrors, scopeOf } from '../shared/forms/server-field-errors';
@@ -91,7 +92,7 @@ describe('BillingComponent', () => {
     );
     billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice()])));
     billingSpy.getInvoiceItems.and.returnValue(of([]));
-    toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
+    toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warning']);
     const permissionSpy = jasmine.createSpyObj('PermissionService', ['hasAnyPermission']);
     permissionSpy.hasAnyPermission.and.returnValue(true);
     const roleCtx = {
@@ -328,6 +329,7 @@ describe('BillingComponent', () => {
       amount: 1000,
       method: 'CASH',
       reference: undefined,
+      clientRequestId: jasmine.any(String),
     });
     expect(component.invoices()[0].status).toBe('PAID');
     expect(component.showPaymentModal()).toBeFalse();
@@ -348,7 +350,51 @@ describe('BillingComponent', () => {
       method: 'MOBILE_MONEY',
       reference: 'MM-778',
       mobileMoneyOperator: 'ORANGE_MONEY',
+      clientRequestId: jasmine.any(String),
     });
+  });
+
+  it('PR 11 (QA D2430): a lost answer is not « Échec »: the same key is sent again, then the cashier is told to check', fakeAsync(() => {
+    fixture.detectChanges();
+    let sends = 0;
+    billingSpy.recordPayment.and.returnValue(
+      defer(() => {
+        sends++;
+        return throwError(() => new HttpErrorResponse({ status: 0, statusText: 'Unknown Error' }));
+      }),
+    );
+    component.openPayment(component.invoices()[0]);
+    component.recordPayment();
+    tick(PAYMENT_RETRY_DELAY_MS);
+
+    // One automatic resend of the same request (same body, same key), then a warning, never the failure toast.
+    expect(sends).toBe(2);
+    expect(toastSpy.error).not.toHaveBeenCalled();
+    expect(toastSpy.warning).toHaveBeenCalledWith('PAYMENT_OUTCOME.UNKNOWN');
+    expect(component.showPaymentModal()).toBeTrue();
+    const firstKey = billingSpy.recordPayment.calls.mostRecent().args[1].clientRequestId;
+    expect(firstKey).toEqual(jasmine.any(String));
+
+    // The cashier presses again in the same dialog: the same key, so the server answers the first.
+    billingSpy.recordPayment.and.returnValue(of(mockInvoice({ status: 'PAID' })));
+    component.recordPayment();
+    expect(billingSpy.recordPayment.calls.mostRecent().args[1].clientRequestId).toBe(firstKey);
+
+    // A new opening of the dialog is a new payment: a new key.
+    component.openPayment(component.invoices()[0]);
+    component.recordPayment();
+    expect(billingSpy.recordPayment.calls.mostRecent().args[1].clientRequestId).not.toBe(firstKey);
+  }));
+
+  it('PR 11: a refusal is still a failure, shown as the server said it', () => {
+    fixture.detectChanges();
+    billingSpy.recordPayment.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 400, error: { message: 'Refusé' } })),
+    );
+    component.openPayment(component.invoices()[0]);
+    component.recordPayment();
+    expect(toastSpy.error).toHaveBeenCalledWith('Refusé');
+    expect(toastSpy.warning).not.toHaveBeenCalled();
   });
 
   it('billing plan PR 9: the operator picker shows for Mobile Money only, with the manual-entry notice', () => {
@@ -402,6 +448,7 @@ describe('BillingComponent', () => {
       amount: 500,
       method: 'CASH',
       reference: undefined,
+      clientRequestId: jasmine.any(String),
     });
   });
 

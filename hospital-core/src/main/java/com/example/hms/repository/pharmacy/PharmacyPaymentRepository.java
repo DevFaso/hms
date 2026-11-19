@@ -81,4 +81,7 @@ public interface PharmacyPaymentRepository extends JpaRepository<PharmacyPayment
            """)
     boolean existsLiveReference(@org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
                                 @org.springframework.data.repository.query.Param("reference") String reference);
+
+    /** Billing plan PR 11 (QA D2430): the dispense payment a client request key already recorded at this hospital. */
+    java.util.Optional<PharmacyPayment> findByHospital_IdAndClientRequestId(UUID hospitalId, UUID clientRequestId);
 }

@@ -1,6 +1,12 @@
 import { allRows, PageSlice } from '../../shared/all-pages';
 import { refusalReason } from '../../shared/refusal-reason';
 import {
+  newPaymentRequestKey,
+  paymentOutcomeUnknown,
+  PAYMENT_OUTCOME_UNKNOWN_KEY,
+  retryPaymentWithSameKey,
+} from '../../shared/payment-request-key';
+import {
   Component,
   Input,
   Output,
@@ -89,6 +95,8 @@ export class PaymentPendingPanelComponent {
     () => this.openInvoices().find((inv) => inv.id === this.selectedInvoiceId())?.currency ?? null,
   );
   paying = signal(false);
+  /** Billing plan PR 11 (QA D2430): one key per opening of the collect dialog, sent with every press. */
+  payKey: string | undefined;
   loadingInvoices = signal(false);
   /**
    * QA D1321 (round 29): what the patient declared on the selected invoice and
@@ -98,6 +106,7 @@ export class PaymentPendingPanelComponent {
   pending = signal(0);
 
   openPayDialog(item: ReceptionQueueItem): void {
+    this.payKey = newPaymentRequestKey();
     this.payingItem.set(item);
     this.payAmount.set(null);
     this.payMethod.set('CASH');
@@ -234,6 +243,7 @@ export class PaymentPendingPanelComponent {
     refuseFields(this.host.nativeElement, [], PAY_FIELDS);
 
     this.paying.set(true);
+    const key = this.payKey;
     this.receptionService
       .recordPayment(
         invoiceId,
@@ -241,7 +251,9 @@ export class PaymentPendingPanelComponent {
         method,
         reference || undefined,
         this.payIsMobileMoney() ? (this.payOperator() ?? undefined) : undefined,
+        key,
       )
+      .pipe(retryPaymentWithSameKey(key))
       .subscribe({
         next: () => {
           this.paying.set(false);
@@ -252,8 +264,14 @@ export class PaymentPendingPanelComponent {
         },
         error: (err) => {
           this.paying.set(false);
-          const msg = refusalReason(err) ?? this.translate.instant('RECEPTION.PAYMENT_FAILED');
-          this.toast.error(msg);
+          if (paymentOutcomeUnknown(err)) {
+            // QA D2430: no answer is not a failure. The dialog keeps its key: pressing again is safe.
+            this.toast.warning(this.translate.instant(PAYMENT_OUTCOME_UNKNOWN_KEY));
+          } else {
+            this.toast.error(
+              refusalReason(err) ?? this.translate.instant('RECEPTION.PAYMENT_FAILED'),
+            );
+          }
         },
       });
   }

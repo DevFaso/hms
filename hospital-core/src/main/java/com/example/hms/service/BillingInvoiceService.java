@@ -121,7 +121,14 @@ public interface BillingInvoiceService {
      */
     com.example.hms.model.PaymentTransaction recordCheckInCopay(com.example.hms.model.Encounter encounter,
         java.math.BigDecimal amount, com.example.hms.enums.PaymentMethod method, String reference,
-        com.example.hms.enums.MobileMoneyOperator operator, UUID recordedBy);
+        com.example.hms.enums.MobileMoneyOperator operator, UUID recordedBy, UUID clientRequestId);
+
+    /**
+     * Billing plan PR 11 (QA D2430): the payment row a client request key already recorded at
+     * {@code hospitalId}, so a retried check-in can answer with the copay it took.
+     */
+    java.util.Optional<com.example.hms.model.PaymentTransaction> findPaymentByClientRequest(UUID hospitalId,
+        UUID clientRequestId);
     /** QA D209: KPI totals over every invoice in the caller's scope. */
     com.example.hms.payload.dto.BillingSummaryDTO summarize(Locale locale);
 

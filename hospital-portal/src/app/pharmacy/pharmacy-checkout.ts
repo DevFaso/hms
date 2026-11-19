@@ -2,6 +2,12 @@ import { map } from 'rxjs';
 import { allRows } from '../shared/all-pages';
 import { refusalReason } from '../shared/refusal-reason';
 import {
+  newPaymentRequestKey,
+  paymentOutcomeUnknown,
+  PAYMENT_OUTCOME_UNKNOWN_KEY,
+  retryPaymentWithSameKey,
+} from '../shared/payment-request-key';
+import {
   Component,
   ElementRef,
   OnInit,
@@ -88,6 +94,12 @@ export class PharmacyCheckoutComponent implements OnInit {
   notes = '';
 
   loading = signal(false);
+  /**
+   * Billing plan PR 11 (QA D2430): one key per dispense loaded for checkout, sent with every press, so a
+   * payment whose answer was lost is answered again, not recorded twice. Kept while the same dispense stays.
+   */
+  paymentKey: string | undefined;
+  private keyedDispenseId: string | null = null;
   /** QA D416: the cashier picks a fill from the pharmacy's list. */
   pharmacies = signal<PharmacyResponse[]>([]);
   selectedPharmacyId = signal('');
@@ -186,6 +198,10 @@ export class PharmacyCheckoutComponent implements OnInit {
     this.svc.getDispense(this.dispenseId).subscribe({
       next: (res) => {
         const loaded = res?.data ?? null;
+        if ((loaded?.id ?? null) !== this.keyedDispenseId) {
+          this.keyedDispenseId = loaded?.id ?? null;
+          this.paymentKey = loaded ? newPaymentRequestKey() : undefined;
+        }
         this.dispense.set(loaded);
         // QA D264: the amount is the dispense's charge, never a typed figure.
         this.amount = loaded?.chargeAmount ?? null;
@@ -272,20 +288,31 @@ export class PharmacyCheckoutComponent implements OnInit {
         : {}),
       receivedBy: userId,
       notes: this.notes || undefined,
+      ...(this.paymentKey ? { clientRequestId: this.paymentKey } : {}),
     };
 
     this.loading.set(true);
-    this.svc.createPayment(req).subscribe({
-      next: (res) => {
-        this.receipt.set(res?.data ?? null);
-        this.toast.success(this.translate.instant('PHARMACY.PAYMENT_RECORDED'));
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.PAYMENT_FAILED'));
-        this.loading.set(false);
-      },
-    });
+    this.svc
+      .createPayment(req)
+      .pipe(retryPaymentWithSameKey(this.paymentKey))
+      .subscribe({
+        next: (res) => {
+          this.receipt.set(res?.data ?? null);
+          this.toast.success(this.translate.instant('PHARMACY.PAYMENT_RECORDED'));
+          this.loading.set(false);
+        },
+        error: (err) => {
+          if (paymentOutcomeUnknown(err)) {
+            // QA D2430: no answer is not a failure; pressing again with the same key records nothing twice.
+            this.toast.warning(this.translate.instant(PAYMENT_OUTCOME_UNKNOWN_KEY));
+          } else {
+            this.toast.error(
+              refusalReason(err) ?? this.translate.instant('PHARMACY.PAYMENT_FAILED'),
+            );
+          }
+          this.loading.set(false);
+        },
+      });
   }
 
   printReceipt(): void {

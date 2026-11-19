@@ -20,6 +20,7 @@ describe('PaymentPendingPanelComponent', () => {
       _method?: string,
       _reference?: string,
       _operator?: string,
+      _clientRequestId?: string,
     ) => of({}),
   };
 
@@ -198,7 +199,14 @@ describe('PaymentPendingPanelComponent', () => {
     expect(spy).not.toHaveBeenCalled();
     component.payOperator.set('ORANGE_MONEY');
     component.submitPayment();
-    expect(spy).toHaveBeenCalledWith('inv-1', 1500, 'MOBILE_MONEY', 'OM-778812', 'ORANGE_MONEY');
+    expect(spy).toHaveBeenCalledWith(
+      'inv-1',
+      1500,
+      'MOBILE_MONEY',
+      'OM-778812',
+      'ORANGE_MONEY',
+      undefined,
+    );
   });
 
   it('QA D948: shows francs CFA without decimals', () => {
