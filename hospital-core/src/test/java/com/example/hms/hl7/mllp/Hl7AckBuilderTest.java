@@ -19,7 +19,7 @@ class Hl7AckBuilderTest {
             LocalDateTime.of(2026, 4, 28, 7, 30, 0), "ACK-1");
 
         assertThat(ack)
-            .startsWith("MSH|^~\\&|HMS|HOSP1|MINDRAY|LAB1|20260428073000||ACK|ACK-1|P|2.5.1\r")
+            .startsWith("MSH|^~\\&|HMS|HOSP1|MINDRAY|LAB1|20260428073000+0000||ACK|ACK-1|P|2.5.1\r")
             .endsWith("MSA|AA|MSG-42\r");
     }
 
