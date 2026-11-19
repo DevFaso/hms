@@ -3,7 +3,6 @@ package com.example.hms.service.notification;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.NotificationChannel;
 import com.example.hms.enums.NotificationType;
-import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.NotificationPreference;
 import com.example.hms.model.Patient;
@@ -119,15 +118,17 @@ class PatientChannelPreferenceServiceTest {
     }
 
     @Test
-    void aSwitchNoSenderReadsIsRefused() {
-        for (NotificationPreferenceUpdateDTO bad : List.of(
-                update(NotificationType.GENERAL, NotificationChannel.SMS, false),
-                update(NotificationType.BILLING, NotificationChannel.PUSH, false),
-                update(NotificationType.BILLING, NotificationChannel.IN_APP, false))) {
-            assertThatThrownBy(() -> service.update(patient.getId(), hospitalId, List.of(bad), actorId))
-                .isInstanceOf(FieldBusinessException.class);
-        }
-        verify(preferenceRepository, never()).saveAll(anyList());
+    void aSwitchNoSenderReadsIsNeverWritten() {
+        service.update(patient.getId(), hospitalId, List.of(
+            update(NotificationType.GENERAL, NotificationChannel.SMS, false),
+            update(NotificationType.BILLING, NotificationChannel.PUSH, false),
+            update(NotificationType.BILLING, NotificationChannel.IN_APP, false)), actorId);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<NotificationPreference>> saved = ArgumentCaptor.forClass(List.class);
+        verify(preferenceRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).isEmpty();
+        verifyNoInteractions(auditEventLogService);
     }
 
     @Test

@@ -8752,7 +8752,7 @@
     "MFA_METHOD_SMS": "Code par SMS",
     "MFA_METHOD_EMAIL": "Code par e-mail",
     "MFA_METHOD_OTHER": "Autre méthode",
-    "MFA_ACTIVE": "Active",
+    "MFA_ACTIVE": "En service",
     "MFA_SETUP_UNFINISHED": "Configuration non terminée",
     "MFA_STATE_ACTIVE": "Activée",
     "MFA_STATE_PENDING": "Configuration non terminée",
@@ -14476,7 +14476,7 @@
     "COL_STATUS": "Statut",
     "COL_ATTEMPTS": "Tentatives",
     "COL_REASON": "Motif",
-    "COL_LAST_ATTEMPT": "Date",
+    "COL_LAST_ATTEMPT": "Date et heure",
     "COL_ACTIONS": "Actions",
     "STATUS": {
       "PENDING": "En file",

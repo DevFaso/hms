@@ -27,7 +27,7 @@ describe('PatientChannelPreferencesComponent', () => {
     );
 
   function setUp(desk: boolean): void {
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
     TestBed.configureTestingModule({
       imports: [PatientChannelPreferencesComponent, TranslateModule.forRoot()],
       providers: [

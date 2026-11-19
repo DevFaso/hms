@@ -14476,7 +14476,7 @@
     "COL_STATUS": "Status",
     "COL_ATTEMPTS": "Attempts",
     "COL_REASON": "Reason",
-    "COL_LAST_ATTEMPT": "Fecha",
+    "COL_LAST_ATTEMPT": "Fecha y hora",
     "COL_ACTIONS": "Actions",
     "STATUS": {
       "PENDING": "Queued",

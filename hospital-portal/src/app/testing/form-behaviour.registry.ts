@@ -27,6 +27,7 @@ import { MySharingComponent } from '../patient-portal/my-sharing/my-sharing.comp
 import { AdvanceDirectivesTabComponent } from '../patients/advance-directives/advance-directives-tab.component';
 import { BpaPanelComponent } from '../patients/bpa-panel/bpa-panel.component';
 import { BreakGlassBannerComponent } from '../patients/break-glass-banner/break-glass-banner.component';
+import { PatientChannelPreferencesComponent } from '../patients/channel-preferences/patient-channel-preferences.component';
 import { CoverageTabComponent } from '../patients/coverage-tab/coverage-tab.component';
 import { DocumentsTabComponent } from '../patients/documents-tab/documents-tab.component';
 import { FluidBalanceTabComponent } from '../patients/fluid-balance/fluid-balance-tab.component';
@@ -195,6 +196,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'BreakGlassBannerComponent',
     file: 'patients/break-glass-banner/break-glass-banner.component',
     type: BreakGlassBannerComponent,
+  },
+  {
+    name: 'PatientChannelPreferencesComponent',
+    file: 'patients/channel-preferences/patient-channel-preferences.component',
+    type: PatientChannelPreferencesComponent,
   },
   {
     name: 'CoverageTabComponent',

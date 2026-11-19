@@ -60,8 +60,11 @@ public class MfaController {
     private static final String PICK_NOT_HONOURED = "auth.mfa.pickNotHonoured";
 
     private final MfaService mfaService;
-    /** QA r64: the user's own removal of their authenticator. */
-    private final com.example.hms.service.MfaResetService mfaResetService;
+    /**
+     * QA r64: the user's own removal of their authenticator. A provider, like the gates below: a
+     * {@code @WebMvcTest} slice of this controller need not build the service.
+     */
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.service.MfaResetService> mfaResetService;
     private final org.springframework.context.MessageSource messageSource;
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
@@ -280,7 +283,7 @@ public class MfaController {
         User user = authenticated.get();
         Optional<ResponseEntity<Object>> readOnly = readOnlyRefusal(user, authentication);
         if (readOnly.isPresent()) return readOnly.get();
-        mfaResetService.removeOwn(user, authentication, stepUpCode);
+        mfaResetService.getObject().removeOwn(user, authentication, stepUpCode);
         return ResponseEntity.ok(new MessageResponse(message("mfa.remove.done")));
     }
 

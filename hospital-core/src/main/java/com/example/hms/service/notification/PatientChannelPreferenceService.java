@@ -5,7 +5,6 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.NotificationChannel;
 import com.example.hms.enums.NotificationType;
 import com.example.hms.enums.PatientNotificationEvent;
-import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.NotificationPreference;
 import com.example.hms.model.Patient;
@@ -72,20 +71,20 @@ public class PatientChannelPreferenceService {
     }
 
     /**
-     * Records the desk's choices. Only desk kinds and channels are accepted (a field error names the list
-     * otherwise); the other rows of the account (the bell, anything else) are kept as they are.
+     * Records the desk's choices. Only desk kinds and channels are written; any other entry is ignored and the
+     * other rows of the account (the bell, anything else) are kept as they are.
      */
     @Transactional
     public List<NotificationPreferenceDTO> update(UUID patientId, UUID hospitalId,
                                                   List<NotificationPreferenceUpdateDTO> updates, UUID actorId) {
         User account = accountAt(patientId, hospitalId);
-        List<NotificationPreferenceUpdateDTO> wanted = updates == null ? List.of() : updates;
-        for (NotificationPreferenceUpdateDTO update : wanted) {
-            if (update == null || !DESK_TYPES.contains(update.getNotificationType())
-                    || !DESK_CHANNELS.contains(update.getChannel())) {
-                throw new FieldBusinessException("preferences", "patient.channelPreferences.unsupported");
-            }
-        }
+        // Only the desk's kinds and channels are recorded here; anything else (the bell, a kind no
+        // sender reads) is left as it is, never written: the response shows what is recorded.
+        List<NotificationPreferenceUpdateDTO> wanted = updates == null ? List.of() : updates.stream()
+            .filter(Objects::nonNull)
+            .filter(update -> DESK_TYPES.contains(update.getNotificationType())
+                && DESK_CHANNELS.contains(update.getChannel()))
+            .toList();
         Map<NotificationType, Map<NotificationChannel, NotificationPreference>> rows = stored(account.getId());
         List<NotificationPreference> toSave = new ArrayList<>();
         Set<String> changes = new LinkedHashSet<>();

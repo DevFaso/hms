@@ -34,6 +34,7 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
 const PATIENT_ROLE_CODES = new Set(['ROLE_PATIENT', 'PATIENT']);
 
@@ -710,9 +711,10 @@ export class UserListComponent implements OnInit, OnDestroy {
       error: (err: HttpErrorResponse) => {
         this.mfaResetting.set(false);
         this.mfaResetError.set(
-          isStepUpRefusal(err)
-            ? (err.error?.message ?? this.translate.instant(stepUpRefusalKey(err)))
-            : (err?.error?.message ?? this.translate.instant('USERS.MFA_RESET.FAILED')),
+          refusalReason(err) ??
+            this.translate.instant(
+              isStepUpRefusal(err) ? stepUpRefusalKey(err) : 'USERS.MFA_RESET.FAILED',
+            ),
         );
       },
     });

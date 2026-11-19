@@ -98,7 +98,7 @@ export interface ChannelChoice {
               type="button"
               class="btn-primary"
               data-testid="channel-prefs-save"
-              [disabled]="saving() || !dirty()"
+              [disabled]="saving()"
               (click)="save()"
             >
               {{ (saving() ? 'COMMON.SAVING' : 'PATIENT_CHANNELS.SAVE') | translate }}
