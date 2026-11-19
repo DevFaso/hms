@@ -59,14 +59,14 @@ class DicomWebHttpClientTest {
     @Test
     @DisplayName("qidoListInstances parses SOPInstanceUID values from a well-formed QIDO-RS response")
     void qidoHappyPath() {
-        server.expect(requestTo(BASE_URL + "/studies/STUDY-1/instances"))
+        server.expect(requestTo(BASE_URL + "/studies/1.2.840.1/instances"))
             .andExpect(method(HttpMethod.GET))
             .andRespond(withSuccess(
                 "[{\"00080018\":{\"vr\":\"UI\",\"Value\":[\"1.2.3.4.A\"]}}," +
                 "{\"00080018\":{\"vr\":\"UI\",\"Value\":[\"1.2.3.4.B\"]}}]",
                 MediaType.parseMediaType("application/dicom+json")));
 
-        List<String> result = client.qidoListInstances("STUDY-1");
+        List<String> result = client.qidoListInstances("1.2.840.1");
 
         assertThat(result).containsExactly("1.2.3.4.A", "1.2.3.4.B");
     }
@@ -74,27 +74,27 @@ class DicomWebHttpClientTest {
     @Test
     @DisplayName("qidoListInstances returns empty when the upstream answers 404")
     void qido404IsEmpty() {
-        server.expect(requestTo(BASE_URL + "/studies/STUDY-2/instances"))
+        server.expect(requestTo(BASE_URL + "/studies/1.2.840.2/instances"))
             .andExpect(method(HttpMethod.GET))
             .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
-        assertThat(client.qidoListInstances("STUDY-2")).isEmpty();
+        assertThat(client.qidoListInstances("1.2.840.2")).isEmpty();
     }
 
     @Test
     @DisplayName("qidoListInstances returns empty (not throwing) when the upstream answers 5xx")
     void qido5xxIsEmpty() {
-        server.expect(requestTo(BASE_URL + "/studies/STUDY-3/instances"))
+        server.expect(requestTo(BASE_URL + "/studies/1.2.840.3/instances"))
             .andExpect(method(HttpMethod.GET))
             .andRespond(withStatus(HttpStatus.BAD_GATEWAY));
 
-        assertThat(client.qidoListInstances("STUDY-3")).isEmpty();
+        assertThat(client.qidoListInstances("1.2.840.3")).isEmpty();
     }
 
     @Test
     @DisplayName("qidoListInstances skips malformed entries (missing tag / Value) instead of throwing")
     void qidoSkipsMalformedEntries() {
-        server.expect(requestTo(BASE_URL + "/studies/STUDY-4/instances"))
+        server.expect(requestTo(BASE_URL + "/studies/1.2.840.4/instances"))
             .andExpect(method(HttpMethod.GET))
             .andRespond(withSuccess(
                 "[" +
@@ -107,7 +107,7 @@ class DicomWebHttpClientTest {
                 MediaType.parseMediaType("application/dicom+json")));
 
         // Only the first entry contributes a UID; the rest are skipped.
-        assertThat(client.qidoListInstances("STUDY-4")).containsExactly("1.2.3.4.GOOD");
+        assertThat(client.qidoListInstances("1.2.840.4")).containsExactly("1.2.3.4.GOOD");
     }
 
     @Test
@@ -117,7 +117,7 @@ class DicomWebHttpClientTest {
         // No server expectation set — calling the upstream would
         // trip MockRestServiceServer's "unexpected request".
 
-        assertThat(client.qidoListInstances("STUDY-X")).isEmpty();
+        assertThat(client.qidoListInstances("1.2.840.90")).isEmpty();
         server.verify();
     }
 
@@ -125,7 +125,7 @@ class DicomWebHttpClientTest {
     @DisplayName("qidoListInstances short-circuits to empty when base-url is blank")
     void qidoBlankBaseUrlSkipsCall() {
         properties.setBaseUrl("   ");
-        assertThat(client.qidoListInstances("STUDY-Y")).isEmpty();
+        assertThat(client.qidoListInstances("1.2.840.91")).isEmpty();
         server.verify();
     }
 
@@ -142,11 +142,11 @@ class DicomWebHttpClientTest {
     @DisplayName("qidoListInstances trims a trailing slash in base-url before concat")
     void qidoTrimsTrailingSlashInBaseUrl() {
         properties.setBaseUrl(BASE_URL + "/");
-        server.expect(requestTo(BASE_URL + "/studies/STUDY-7/instances"))
+        server.expect(requestTo(BASE_URL + "/studies/1.2.840.7/instances"))
             .andExpect(method(HttpMethod.GET))
             .andRespond(withSuccess("[]", MediaType.parseMediaType("application/dicom+json")));
 
-        assertThat(client.qidoListInstances("STUDY-7")).isEmpty();
+        assertThat(client.qidoListInstances("1.2.840.7")).isEmpty();
         server.verify();
     }
 
@@ -154,11 +154,11 @@ class DicomWebHttpClientTest {
     @DisplayName("wadoFetchInstance returns the byte payload from a 200 application/dicom response")
     void wadoHappyPath() {
         byte[] payload = "dicom-bytes".getBytes(StandardCharsets.UTF_8);
-        server.expect(requestTo(BASE_URL + "/studies/STUDY-5/instances/INSTANCE-A"))
+        server.expect(requestTo(BASE_URL + "/studies/1.2.840.5/instances/1.2.840.5.1"))
             .andExpect(method(HttpMethod.GET))
             .andRespond(withSuccess(payload, MediaType.parseMediaType("application/dicom")));
 
-        byte[] result = client.wadoFetchInstance("STUDY-5", "INSTANCE-A");
+        byte[] result = client.wadoFetchInstance("1.2.840.5", "1.2.840.5.1");
 
         assertThat(result).isEqualTo(payload);
     }
@@ -166,30 +166,30 @@ class DicomWebHttpClientTest {
     @Test
     @DisplayName("wadoFetchInstance returns empty byte[] when upstream answers 404")
     void wado404ReturnsEmpty() {
-        server.expect(requestTo(BASE_URL + "/studies/STUDY-6/instances/INSTANCE-B"))
+        server.expect(requestTo(BASE_URL + "/studies/1.2.840.6/instances/1.2.840.6.1"))
             .andExpect(method(HttpMethod.GET))
             .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
-        assertThat(client.wadoFetchInstance("STUDY-6", "INSTANCE-B")).isEmpty();
+        assertThat(client.wadoFetchInstance("1.2.840.6", "1.2.840.6.1")).isEmpty();
     }
 
     @Test
     @DisplayName("wadoFetchInstance returns empty byte[] when upstream answers 4xx (other than 404)")
     void wadoOther4xxReturnsEmpty() {
-        server.expect(requestTo(BASE_URL + "/studies/STUDY-6a/instances/INSTANCE-C"))
+        server.expect(requestTo(BASE_URL + "/studies/1.2.840.61/instances/1.2.840.61.1"))
             .andExpect(method(HttpMethod.GET))
             .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
-        assertThat(client.wadoFetchInstance("STUDY-6a", "INSTANCE-C")).isEmpty();
+        assertThat(client.wadoFetchInstance("1.2.840.61", "1.2.840.61.1")).isEmpty();
     }
 
     @Test
     @DisplayName("wadoFetchInstance short-circuits to empty when blank inputs")
     void wadoBlankInputsSkipCall() {
         assertThat(client.wadoFetchInstance("", "INSTANCE-Z")).isEmpty();
-        assertThat(client.wadoFetchInstance("STUDY-Q", "")).isEmpty();
+        assertThat(client.wadoFetchInstance("1.2.840.92", "")).isEmpty();
         assertThat(client.wadoFetchInstance(null, "INSTANCE-W")).isEmpty();
-        assertThat(client.wadoFetchInstance("STUDY-R", null)).isEmpty();
+        assertThat(client.wadoFetchInstance("1.2.840.93", null)).isEmpty();
         server.verify();
     }
 

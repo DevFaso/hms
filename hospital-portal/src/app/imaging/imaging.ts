@@ -54,6 +54,7 @@ import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { localDateString, serverLocalDate } from '../shared/date-utils';
 import { ActivatedRoute } from '@angular/router';
+import { ImagingStudyViewerComponent } from './study-viewer/imaging-study-viewer.component';
 import { catchError, forkJoin, map, of, Subscription } from 'rxjs';
 
 /** The cancellation reason's field (QA D1098), marked when it is refused. */
@@ -90,6 +91,8 @@ interface ReportForm {
   modality: ImagingModality;
   bodyRegion: string;
   accessionNumber: string;
+  /** V317: the DICOM study this report reads, for the in-app viewer. */
+  studyInstanceUid: string;
   technique: string;
   comparisonStudies: string;
   findings: string;
@@ -201,6 +204,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
     InlineSubFormDirective,
     InlineDiscardAskComponent,
     ImagingImagesComponent,
+    ImagingStudyViewerComponent,
   ],
   templateUrl: './imaging.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -387,6 +391,8 @@ export class ImagingComponent implements OnInit {
   );
   /** Mirrors CREATE_RADIOLOGY_REPORTS / SIGN_IMAGING_REPORTS on the controller. */
   readonly canAuthorReports = this.roleContext.hasAnyActiveRole(actionRoles('imagingReportCreate'));
+  /** V317: the in-app viewer of a report's images, as DicomProxyController#viewer admits. */
+  readonly canViewImages = this.roleContext.hasAnyActiveRole(actionRoles('imagingViewer'));
   readonly canUpdateReportStatus = this.roleContext.hasAnyActiveRole(
     actionRoles('imagingReportStatus'),
   );
@@ -1101,7 +1107,8 @@ export class ImagingComponent implements OnInit {
   }
 
   openPacsViewer(url: string): void {
-    if (!url) return;
+    // V317: a link the browser opens is http(s) only, never javascript: or data:.
+    if (!url || !/^https?:\/\//i.test(url.trim())) return;
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
@@ -1323,6 +1330,7 @@ export class ImagingComponent implements OnInit {
       modality: order.modality,
       bodyRegion: order.bodyRegion ?? '',
       accessionNumber: '',
+      studyInstanceUid: '',
       technique: '',
       comparisonStudies: '',
       findings: '',
@@ -1353,6 +1361,7 @@ export class ImagingComponent implements OnInit {
       modality: report.modality,
       bodyRegion: report.bodyRegion ?? '',
       accessionNumber: report.accessionNumber ?? '',
+      studyInstanceUid: report.studyInstanceUid ?? '',
       technique: report.technique ?? '',
       comparisonStudies: report.comparisonStudies ?? '',
       findings: report.findings ?? '',
@@ -1388,6 +1397,7 @@ export class ImagingComponent implements OnInit {
       ...this.reportForm,
       bodyRegion: this.reportForm.bodyRegion.trim() || undefined,
       accessionNumber: this.reportForm.accessionNumber.trim() || undefined,
+      studyInstanceUid: this.reportForm.studyInstanceUid.trim() || undefined,
       technique: this.reportForm.technique.trim() || undefined,
       comparisonStudies: this.reportForm.comparisonStudies.trim() || undefined,
       findings: this.reportForm.findings.trim() || undefined,
@@ -1513,6 +1523,7 @@ export class ImagingComponent implements OnInit {
       modality: 'XRAY',
       bodyRegion: '',
       accessionNumber: '',
+      studyInstanceUid: '',
       technique: '',
       comparisonStudies: '',
       findings: '',

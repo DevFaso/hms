@@ -2076,7 +2076,9 @@
       "COVERAGE_PLAN_LINKED": "Patient coverage {{insurance}} linked to plan {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
       "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
-      "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}"
+      "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}",
+      "PACS_SETTINGS_CHANGED": "PACS connection settings changed",
+      "IMAGING_STUDY_VIEWED": "Imaging study opened in the viewer ({{count}} images)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -7958,7 +7960,8 @@
         "PRICE_LIST_IMPORT": "Price list import",
         "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send",
         "PAYER": "Payer",
-        "PAYER_PLAN": "Payer plan"
+        "PAYER_PLAN": "Payer plan",
+        "HOSPITAL_PACS_SETTINGS": "PACS connection"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -14486,5 +14489,88 @@
     "MAYBE_DELIVERED": "The patient may already have received this message.",
     "RETRY_CONFIRM_TITLE": "Send this message again?",
     "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice."
+  },
+  "IMAGING_PACS": {
+    "STUDY_LINKED": "Study linked",
+    "SHOW_IMAGES": "Show images",
+    "HIDE_IMAGES": "Hide images",
+    "LOADING": "Loading…",
+    "IMAGES": "Images",
+    "IMAGES_AVAILABLE": "Images available ({{count}})",
+    "LINKED_BY_ACCESSION": "Study found in the PACS by its accession number.",
+    "TRUNCATED": "This study has more images than the viewer lists; open it in the PACS to see them all.",
+    "VIEWPORT_LABEL": "Image viewer: arrow keys change image, page keys change frame",
+    "IMAGE_ALT": "Image {{position}} of {{count}}",
+    "IMAGE_LOADING": "Loading image…",
+    "IMAGE_FAILED": "This image could not be loaded from the PACS.",
+    "PREVIOUS_IMAGE": "Previous image",
+    "NEXT_IMAGE": "Next image",
+    "IMAGE_POSITION": "Image {{position}} / {{count}}",
+    "PREVIOUS_FRAME": "Previous frame",
+    "NEXT_FRAME": "Next frame",
+    "FRAME_POSITION": "Frame {{frame}} / {{count}}",
+    "BRIGHTNESS": "Brightness",
+    "CONTRAST": "Contrast",
+    "INVERT": "Invert",
+    "ZOOM_IN": "Zoom in",
+    "ZOOM_OUT": "Zoom out",
+    "RESET_VIEW": "Reset view",
+    "KEYBOARD_HINT": "Keyboard: arrows change image, page keys change frame. Images for viewing, not a diagnostic workstation.",
+    "RETRY": "Try again",
+    "STUDY_UID": "Study Instance UID (DICOM)",
+    "STUDY_UID_PLACEHOLDER": "e.g. 1.2.840.113619.2.55.3",
+    "STATUS": {
+      "AVAILABLE": "Images available.",
+      "PROXY_DISABLED": "Image viewing is not switched on for e-Keneya yet. Ask the platform administrator.",
+      "PACS_NOT_CONFIGURED": "This hospital has no PACS connected. A hospital administrator can connect one in Settings, PACS connection.",
+      "NO_STUDY_LINKED": "No study is linked to this report. Enter its Study Instance UID (or accession number) when editing the report.",
+      "STUDY_NOT_FOUND": "The PACS has no images for this study yet.",
+      "ACCESSION_AMBIGUOUS": "Several PACS studies share this accession number. Enter the Study Instance UID on the report.",
+      "PACS_UNREACHABLE": "The PACS did not answer. Try again in a moment, or tell the hospital administrator.",
+      "ERROR": "The images could not be loaded."
+    },
+    "SETTINGS": {
+      "TITLE": "PACS connection",
+      "SUBTITLE": "Connect the hospital's PACS (Orthanc, dcm4chee) so that clinicians see imaging studies in e-Keneya. Images are streamed through e-Keneya; the browser never contacts the PACS.",
+      "HOSPITAL": "Hospital",
+      "CHOOSE_HOSPITAL": "Choose a hospital",
+      "LOAD_FAILED": "The PACS settings could not be loaded.",
+      "STATE": {
+        "READY": "Image viewing is ready for this hospital.",
+        "PROXY_DISABLED": "Image viewing is switched off for the whole platform.",
+        "NOT_CONFIGURED": "No PACS is connected for this hospital."
+      },
+      "SOURCE": {
+        "HOSPITAL": "Images come from this hospital's own PACS.",
+        "PLATFORM": "Images come from the platform's shared PACS."
+      },
+      "PLATFORM_OFF_HINT": "You can save these settings now; images appear once the platform administrator switches image viewing on.",
+      "ENABLED": "Use this hospital's PACS for the image viewer",
+      "BASE_URL": "PACS DICOMweb address",
+      "BASE_URL_HINT": "The DICOMweb root of the PACS, in https, e.g. https://pacs.example.org/dicom-web (Orthanc: /dicom-web).",
+      "USERNAME": "PACS user name",
+      "PASSWORD": "PACS password",
+      "PASSWORD_KEEP": "Saved: leave blank to keep it",
+      "PASSWORD_NONE": "None saved",
+      "CLEAR_PASSWORD": "Remove the saved password",
+      "VIEWER_TEMPLATE": "External viewer link (optional)",
+      "VIEWER_TEMPLATE_HINT": "Opens the study in the PACS's own viewer. Placeholders: {studyInstanceUid}, {accessionNumber}.",
+      "TEST": "Test the connection",
+      "SAVED": "PACS settings saved.",
+      "SAVE_FAILED": "The PACS settings could not be saved.",
+      "TEST_RESULT": {
+        "OK": "Connection OK: the PACS answered.",
+        "PROXY_DISABLED": "Image viewing is switched off for the whole platform: nothing was tried.",
+        "NOT_CONFIGURED": "No PACS is connected: save an address and switch it on first.",
+        "UNREACHABLE": "The PACS could not be reached (address, network or PACS down).",
+        "UNAUTHORIZED": "The PACS refused the user name or password.",
+        "REJECTED": "The PACS answered, but not as a DICOMweb server. Check the address (it usually ends in /dicom-web).",
+        "URL_REFUSED": "This address is refused: e-Keneya calls only public https addresses."
+      },
+      "CARD_TITLE": "PACS connection",
+      "CARD_DESC": "Connect the hospital's PACS so clinicians see imaging studies in e-Keneya.",
+      "CARD_ACTION": "Configure the PACS",
+      "BASE_URL_REQUIRED": "Enter the PACS DICOMweb address to switch the viewer on."
+    }
   }
 }

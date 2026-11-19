@@ -694,6 +694,15 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { type: 'enum', status: 'enum' },
   },
   {
+    key: 'AUDIT.DESC.PACS_SETTINGS_CHANGED',
+    re: /^PACS settings changed$/,
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_STUDY_VIEWED',
+    re: /^Imaging study opened in the viewer \((\d+) instances\)$/,
+    params: ['count'],
+  },
+  {
     key: 'AUDIT.DESC.RECORD_ACCESS_POSTURE',
     re: /^Record-access posture changed from (\S+) to (\S+)$/,
     params: ['from', 'to'],

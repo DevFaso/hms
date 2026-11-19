@@ -2076,7 +2076,9 @@
       "COVERAGE_PLAN_LINKED": "Patient coverage {{insurance}} linked to plan {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
       "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
-      "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}"
+      "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}",
+      "PACS_SETTINGS_CHANGED": "Configuración de conexión PACS modificada",
+      "IMAGING_STUDY_VIEWED": "Estudio de imagen abierto en el visor ({{count}} imágenes)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -7958,7 +7960,8 @@
         "PRICE_LIST_IMPORT": "Importación de lista de precios",
         "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send",
         "PAYER": "Payer",
-        "PAYER_PLAN": "Payer plan"
+        "PAYER_PLAN": "Payer plan",
+        "HOSPITAL_PACS_SETTINGS": "Conexión PACS"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -14486,5 +14489,88 @@
     "MAYBE_DELIVERED": "The patient may already have received this message.",
     "RETRY_CONFIRM_TITLE": "Send this message again?",
     "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice."
+  },
+  "IMAGING_PACS": {
+    "STUDY_LINKED": "Estudio vinculado",
+    "SHOW_IMAGES": "Ver imágenes",
+    "HIDE_IMAGES": "Ocultar imágenes",
+    "LOADING": "Cargando…",
+    "IMAGES": "Imágenes",
+    "IMAGES_AVAILABLE": "Imágenes disponibles ({{count}})",
+    "LINKED_BY_ACCESSION": "Estudio encontrado en el PACS por su número de acceso.",
+    "TRUNCATED": "Este estudio tiene más imágenes de las que lista el visor; ábralo en el PACS para verlas todas.",
+    "VIEWPORT_LABEL": "Visor de imágenes: las flechas cambian de imagen, las teclas de página cambian de fotograma",
+    "IMAGE_ALT": "Imagen {{position}} de {{count}}",
+    "IMAGE_LOADING": "Cargando imagen…",
+    "IMAGE_FAILED": "No se pudo cargar esta imagen desde el PACS.",
+    "PREVIOUS_IMAGE": "Imagen anterior",
+    "NEXT_IMAGE": "Imagen siguiente",
+    "IMAGE_POSITION": "Imagen {{position}} / {{count}}",
+    "PREVIOUS_FRAME": "Fotograma anterior",
+    "NEXT_FRAME": "Fotograma siguiente",
+    "FRAME_POSITION": "Fotograma {{frame}} / {{count}}",
+    "BRIGHTNESS": "Brillo",
+    "CONTRAST": "Contraste",
+    "INVERT": "Invertir",
+    "ZOOM_IN": "Ampliar",
+    "ZOOM_OUT": "Reducir",
+    "RESET_VIEW": "Restablecer la vista",
+    "KEYBOARD_HINT": "Teclado: las flechas cambian de imagen, las teclas de página cambian de fotograma. Imágenes de consulta, no una estación de diagnóstico.",
+    "RETRY": "Reintentar",
+    "STUDY_UID": "UID del estudio (DICOM)",
+    "STUDY_UID_PLACEHOLDER": "p. ej. 1.2.840.113619.2.55.3",
+    "STATUS": {
+      "AVAILABLE": "Imágenes disponibles.",
+      "PROXY_DISABLED": "La visualización de imágenes aún no está activada en e-Keneya. Consulte al administrador de la plataforma.",
+      "PACS_NOT_CONFIGURED": "Este hospital no tiene un PACS conectado. Un administrador del hospital puede conectarlo en la configuración (conexión PACS).",
+      "NO_STUDY_LINKED": "No hay ningún estudio vinculado a este informe. Introduzca su UID de estudio (o número de acceso) al editar el informe.",
+      "STUDY_NOT_FOUND": "El PACS aún no tiene imágenes para este estudio.",
+      "ACCESSION_AMBIGUOUS": "Varios estudios del PACS comparten este número de acceso. Introduzca el UID del estudio en el informe.",
+      "PACS_UNREACHABLE": "El PACS no respondió. Inténtelo de nuevo en un momento o avise al administrador del hospital.",
+      "ERROR": "No se pudieron cargar las imágenes."
+    },
+    "SETTINGS": {
+      "TITLE": "Conexión PACS",
+      "SUBTITLE": "Conecte el PACS del hospital para que los clínicos vean los estudios de imagen en e-Keneya. Las imágenes pasan por e-Keneya; el navegador nunca contacta con el PACS.",
+      "HOSPITAL": "Hospital",
+      "CHOOSE_HOSPITAL": "Elija un hospital",
+      "LOAD_FAILED": "No se pudo cargar la configuración PACS.",
+      "STATE": {
+        "READY": "La visualización de imágenes está lista para este hospital.",
+        "PROXY_DISABLED": "La visualización de imágenes está desactivada para toda la plataforma.",
+        "NOT_CONFIGURED": "No hay ningún PACS conectado para este hospital."
+      },
+      "SOURCE": {
+        "HOSPITAL": "Las imágenes vienen del PACS propio de este hospital.",
+        "PLATFORM": "Las imágenes vienen del PACS compartido de la plataforma."
+      },
+      "PLATFORM_OFF_HINT": "Puede guardar esta configuración ya; las imágenes aparecerán cuando el administrador de la plataforma active la visualización.",
+      "ENABLED": "Usar el PACS de este hospital para el visor",
+      "BASE_URL": "Dirección DICOMweb del PACS",
+      "BASE_URL_HINT": "La raíz DICOMweb del PACS, en https, p. ej. https://pacs.ejemplo.org/dicom-web (suele terminar en /dicom-web).",
+      "USERNAME": "Usuario del PACS",
+      "PASSWORD": "Contraseña del PACS",
+      "PASSWORD_KEEP": "Guardada: deje en blanco para conservarla",
+      "PASSWORD_NONE": "Ninguna guardada",
+      "CLEAR_PASSWORD": "Eliminar la contraseña guardada",
+      "VIEWER_TEMPLATE": "Enlace al visor externo (opcional)",
+      "VIEWER_TEMPLATE_HINT": "Abre el estudio en el visor del PACS. Variables: {studyInstanceUid}, {accessionNumber}.",
+      "TEST": "Probar la conexión",
+      "SAVED": "Configuración PACS guardada.",
+      "SAVE_FAILED": "No se pudo guardar la configuración PACS.",
+      "TEST_RESULT": {
+        "OK": "Conexión correcta: el PACS respondió.",
+        "PROXY_DISABLED": "La visualización de imágenes está desactivada para toda la plataforma: no se intentó nada.",
+        "NOT_CONFIGURED": "No hay PACS conectado: guarde una dirección y actívela primero.",
+        "UNREACHABLE": "No se pudo contactar con el PACS (dirección, red o PACS detenido).",
+        "UNAUTHORIZED": "El PACS rechazó el usuario o la contraseña.",
+        "REJECTED": "El PACS respondió, pero no como un servidor DICOMweb. Revise la dirección (suele terminar en /dicom-web).",
+        "URL_REFUSED": "Esta dirección se rechaza: e-Keneya solo llama a direcciones https públicas."
+      },
+      "CARD_TITLE": "Conexión PACS",
+      "CARD_DESC": "Conecte el PACS del hospital para que los clínicos vean los estudios de imagen en e-Keneya.",
+      "CARD_ACTION": "Configurar el PACS",
+      "BASE_URL_REQUIRED": "Introduzca la dirección DICOMweb del PACS para activar el visor."
+    }
   }
 }
