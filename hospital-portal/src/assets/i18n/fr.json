@@ -4564,7 +4564,7 @@
     "COMPONENTS": {
       "TITLE": "Composants du bilan",
       "HINT": "Pour un bilan comme la NFS, ajoutez chaque composant avec son unité et ses intervalles. Laissez vide pour une analyse à valeur unique.",
-      "CODE": "Code",
+      "CODE": "Code du composant",
       "NAME": "Nom",
       "UNIT": "Unité",
       "REMOVE": "Retirer ce composant",
@@ -4572,8 +4572,8 @@
       "GENDER_ALL": "Tous",
       "GENDER_MALE": "Homme",
       "GENDER_FEMALE": "Femme",
-      "MIN": "Min",
-      "MAX": "Max",
+      "MIN": "Minimum",
+      "MAX": "Maximum",
       "CRITICAL_LOW": "Critique bas",
       "CRITICAL_HIGH": "Critique haut",
       "REMOVE_RANGE": "Retirer cet intervalle",
@@ -11054,7 +11054,7 @@
     },
     "RUNS": {
       "TITLE": "Derniers contrôles",
-      "DATE": "Date",
+      "DATE": "Date du contrôle",
       "VALUE": "Valeur",
       "OPERATOR": "Opérateur",
       "FLAG": "Indicateur ÉT",
