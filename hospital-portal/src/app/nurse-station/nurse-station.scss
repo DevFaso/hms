@@ -746,8 +746,10 @@
   }
 }
 
+/* QA D2281 (r63): « Dossier » was cut on every card at 768/390. */
 .workboard-card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.25rem;
 }
@@ -1474,11 +1476,12 @@
   background: #e7f4ef;
   border-radius: 10px;
 }
+/* QA D2285 (r63): a nowrap strip hid « Tableau des tâches » and « Boîte de
+   réception » past its edge, with no cue, even at 1366. Tabs wrap. */
 .section-tabs {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 7px;
-  overflow-x: auto;
   padding: 0 22px 18px;
   margin: 0;
   border-bottom: 1px solid #e5edf2;
