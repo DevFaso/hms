@@ -178,6 +178,8 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
     /**
      * QA D209: the billing KPIs over every invoice in scope, not one page.
      * Returns one row: {total, paid, outstanding, overdue, revenue, balance}.
+     * Billing-money plan PR 7: the balance is what patients owe; the payers'
+     * shares are claimed from them (the bordereau, PR 12), not owed here.
      */
     @Query("""
            SELECT COUNT(bi),
@@ -191,7 +193,8 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
                            THEN COALESCE(bi.amountPaid, 0) ELSE 0 END),
                   SUM(CASE WHEN bi.status IN (com.example.hms.enums.InvoiceStatus.SENT,
                                               com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)
-                           THEN COALESCE(bi.totalAmount, 0) - COALESCE(bi.amountPaid, 0) ELSE 0 END)
+                           THEN COALESCE(bi.totalAmount, 0) - COALESCE(bi.payerShareTotal, 0)
+                                - COALESCE(bi.amountPaid, 0) ELSE 0 END)
              FROM BillingInvoice bi
             WHERE (:hospitalId IS NULL OR bi.hospital.id = :hospitalId)
            """)
@@ -215,7 +218,8 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
                            THEN COALESCE(bi.amountPaid, 0) ELSE 0 END),
                   SUM(CASE WHEN bi.status IN (com.example.hms.enums.InvoiceStatus.SENT,
                                               com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)
-                           THEN COALESCE(bi.totalAmount, 0) - COALESCE(bi.amountPaid, 0) ELSE 0 END)
+                           THEN COALESCE(bi.totalAmount, 0) - COALESCE(bi.payerShareTotal, 0)
+                                - COALESCE(bi.amountPaid, 0) ELSE 0 END)
              FROM BillingInvoice bi
             WHERE (:hospitalId IS NULL OR bi.hospital.id = :hospitalId)
               AND bi.invoiceDate >= :fromDate AND bi.invoiceDate <= :toDate

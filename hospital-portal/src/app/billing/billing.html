@@ -989,6 +989,8 @@
               </table>
             }
           </div>
+          <!-- Billing-money plan PR 7: the payer's share and the patient's share, with the payer's decisions -->
+          <app-invoice-payer-shares [invoice]="inv" (changed)="refundChanged(inv.id)" />
           <!-- Billing-money plan PR 8 (QA D1900): money handed back, approved by another person -->
           <app-invoice-refunds [invoice]="inv" (changed)="refundChanged(inv.id)" />
         </div>

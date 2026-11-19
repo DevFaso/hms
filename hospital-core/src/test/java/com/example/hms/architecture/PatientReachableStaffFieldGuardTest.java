@@ -168,6 +168,9 @@ class PatientReachableStaffFieldGuardTest {
         Map.entry("HighRiskPregnancyCarePlanResponseDTO$MedicationLogDTO", Rule.patients("the patient's own log")),
         Map.entry("HighRiskPregnancyCarePlanResponseDTO$SupportResourceDTO", Rule.patients("resources for the patient")),
         Map.entry("BillingInvoiceResponseDTO", Rule.patients(BILLING_OPEN)),
+        Map.entry("InvoicePayerShareDTO", Rule.patients(
+            "billing-money plan PR 7: the insurer's own reason for refusing its share, told to the patient, who now owes"
+                + " the amount (plan AC: \"Refusé par l'assureur : motif\")")),
         Map.entry("InvoiceAdjustmentResponseDTO", Rule.patients(BILLING_OPEN)),
         Map.entry("PaymentTransactionResponseDTO", Rule.patients(BILLING_OPEN)),
         Map.entry("PharmacyClaimResponseDTO", Rule.patients(BILLING_OPEN)),

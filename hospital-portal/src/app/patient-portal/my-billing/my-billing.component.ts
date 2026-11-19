@@ -16,6 +16,7 @@ import {
   PatientPortalService,
   PortalInvoice,
   PortalInvoiceDetail,
+  PortalPayerShare,
   PortalInvoicePayment,
   PatientPaymentRequest,
 } from '../../services/patient-portal.service';
@@ -77,6 +78,11 @@ export class MyBillingComponent implements OnInit {
    */
   openDetailId = signal<string | null>(null);
   detail = signal<PortalInvoiceDetail | null>(null);
+
+  /** Billing-money plan PR 7: the shares my insurer refused (now mine to pay), with the insurer's reason. */
+  rejectedShares(detail: PortalInvoiceDetail): PortalPayerShare[] {
+    return (detail.invoice.payerShares ?? []).filter((share) => share.status === 'REJECTED');
+  }
   detailLoading = signal(false);
   detailError = signal(false);
   /** QA D1212: the server's reason the detail could not be read (a 4xx), when it gave one. */

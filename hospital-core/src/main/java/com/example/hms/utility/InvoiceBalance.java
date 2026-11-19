@@ -10,7 +10,8 @@ import java.math.BigDecimal;
  * invoice PDF the staff and the portal download, the e-mailed copy). A
  * cancelled invoice is owed by nobody, whatever was billed on it: the PDF of
  * a cancelled invoice still said "Reste à payer : 1 500 F CFA" because it
- * computed the balance on its own. Never below zero.
+ * computed the balance on its own. Never below zero. Billing-money plan PR 7:
+ * what the patient owes is their share ({@link #patientShareOf}), not the total.
  *
  * <p>{@code InvoiceBalanceGuardTest} fails the build when a rendering class
  * subtracts the amount paid from the total by hand.
@@ -24,8 +25,49 @@ public final class InvoiceBalance {
         if (invoice == null || invoice.getStatus() == InvoiceStatus.CANCELLED) {
             return BigDecimal.ZERO;
         }
+        return patientShareOf(invoice).subtract(keptOf(invoice)).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Billing-money plan PR 7: what the payers owe on the invoice (its live shares; a share the payer rejected is no
+     * longer counted, so it moves back to the patient).
+     */
+    public static BigDecimal payerShareOf(BillingInvoice invoice) {
+        if (invoice == null || invoice.getPayerShareTotal() == null) {
+            return BigDecimal.ZERO;
+        }
+        return invoice.getPayerShareTotal().max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Billing-money plan PR 7: the patient's share of the bill, before anything paid: the total (after discounts,
+     * waivers and credit notes, owner default D-6: they lower the patient's share) less the payers' share. Never
+     * below zero. Every rule that compares the money held with the bill (payable, settled, refund due, a copay that
+     * fits) compares it with this, never with the total ({@code PatientShareBalanceGuardTest}).
+     */
+    public static BigDecimal patientShareOf(BillingInvoice invoice) {
+        if (invoice == null) {
+            return BigDecimal.ZERO;
+        }
         BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
-        return total.subtract(keptOf(invoice)).max(BigDecimal.ZERO);
+        return total.subtract(payerShareOf(invoice)).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * Billing-money plan PR 7: the status that follows the money on an issued invoice: PAID once the hospital holds
+     * the patient's share, PARTIALLY_PAID while it holds part of it, SENT while it holds nothing. A draft and a
+     * cancelled invoice keep their status.
+     */
+    public static InvoiceStatus settledStatusOf(BillingInvoice invoice) {
+        InvoiceStatus current = invoice.getStatus();
+        if (current == InvoiceStatus.DRAFT || current == InvoiceStatus.CANCELLED) {
+            return current;
+        }
+        BigDecimal kept = keptOf(invoice);
+        if (kept.compareTo(patientShareOf(invoice)) >= 0) {
+            return InvoiceStatus.PAID;
+        }
+        return kept.signum() > 0 ? InvoiceStatus.PARTIALLY_PAID : InvoiceStatus.SENT;
     }
 
     /**
@@ -53,8 +95,8 @@ public final class InvoiceBalance {
         if (invoice == null || invoice.getStatus() == InvoiceStatus.CANCELLED) {
             return BigDecimal.ZERO;
         }
-        BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
-        return keptOf(invoice).subtract(total).max(BigDecimal.ZERO);
+        // PR 7: above the patient's share, not the total: the payers' share is never the patient's to pay.
+        return keptOf(invoice).subtract(patientShareOf(invoice)).max(BigDecimal.ZERO);
     }
 
     /**

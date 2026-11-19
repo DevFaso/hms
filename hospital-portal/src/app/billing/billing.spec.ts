@@ -77,11 +77,13 @@ describe('BillingComponent', () => {
       'listAdjustments',
       'reverseAdjustment',
       'listRefunds',
+      'listPayerShares',
       'getRefundQueue',
     ]);
     billingSpy.listAdjustments.and.returnValue(of([]));
     // Billing-money plan PR 8: the refunds panel on the detail, and the approvers' queue.
     billingSpy.listRefunds.and.returnValue(of([]));
+    billingSpy.listPayerShares.and.returnValue(of([]));
     billingSpy.getRefundQueue.and.returnValue(of([]));
     billingSpy.listPayments.and.returnValue(of([]));
     billingSpy.getSummary.and.returnValue(

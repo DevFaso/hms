@@ -118,6 +118,8 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("PaymentTransactionResponseDTO#notes", "cashier notes"),
         // Billing-money plan PR 8: why money is handed back, written by the till (the copay desk among them).
         Map.entry("InvoiceRefundDTO#reason", "why a refund is asked for: money, written at the till"),
+        Map.entry("InvoicePayerShareDTO#rejectionReason",
+            "billing-money plan PR 7: why the insurer refused its share, so the desk can tell the patient what they owe"),
         Map.entry("InvoiceRefundDTO#decisionReason", "why a refund was rejected: money"),
         Map.entry("InvoiceRefundDTO#cancelReason", "why a refund request was withdrawn: money"),
         Map.entry("InvoiceAdjustmentResponseDTO#reason", "why a discount was given"),

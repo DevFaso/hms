@@ -122,6 +122,15 @@ public class InvoiceItem extends BaseEntity {
     private String overrideReason;
 
     /**
+     * Billing-money plan PR 7 (V306): the payer's part of this line under the invoice's live share ("Part
+     * assureur"); 0 when the line is not covered. Set only by {@code InvoiceCoverageService}.
+     */
+    @Builder.Default
+    @NotNull @DecimalMin("0.00") @Digits(integer = 10, fraction = 2)
+    @Column(name = "payer_share_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal payerShareAmount = BigDecimal.ZERO;
+
+    /**
      * QA D72: this ran on update only, so a NEW line reached the insert with
      * no total and bean validation refused it ("totalPrice must not be null").
      */
@@ -130,6 +139,9 @@ public class InvoiceItem extends BaseEntity {
     public void validateAndCalculate() {
         if (priceSource == null) {
             priceSource = InvoiceLinePriceSource.MANUAL;
+        }
+        if (payerShareAmount == null) {
+            payerShareAmount = BigDecimal.ZERO;
         }
         // If linked to a service and unitPrice is not set, default from service
         if (relatedService != null && unitPrice == null) {

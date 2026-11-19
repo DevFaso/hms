@@ -37,6 +37,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CashClosingComponent } from './cash-closing/cash-closing.component';
 import { InvoiceRefundsComponent } from './refunds/invoice-refunds.component';
+import { InvoicePayerSharesComponent } from './payer-shares/invoice-payer-shares.component';
 import { RefundQueueComponent } from './refunds/refund-queue.component';
 import { formatCfa } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -115,6 +116,7 @@ export function lineQuantityMessageKey(qty: number | string | null | undefined):
     DialogA11yDirective,
     CashClosingComponent,
     InvoiceRefundsComponent,
+    InvoicePayerSharesComponent,
     RefundQueueComponent,
     RouterLink,
   ],

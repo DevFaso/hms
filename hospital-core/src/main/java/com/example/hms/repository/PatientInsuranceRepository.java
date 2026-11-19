@@ -26,6 +26,16 @@ public interface PatientInsuranceRepository extends JpaRepository<PatientInsuran
     Optional<PatientInsurance> findFirstByPatient_IdAndAssignmentIsNullAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
         UUID patientId, String providerName, String policyNumber);
     Optional<PatientInsurance> findByIdAndAssignment_Hospital_Id(UUID id, UUID hospitalId);
+
+    /**
+     * Billing-money plan PR 7: the coverage row, locked (SELECT ... FOR UPDATE on that row only). The payer's share of
+     * an invoice is computed under this lock, so two invoices issued at once cannot both use what is left of the
+     * coverage's annual ceiling. The caller found the row through a hospital-scoped read first
+     * ({@link #findByPatient_IdAndAssignment_Hospital_Id}); it never reaches another hospital's coverage.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM PatientInsurance i WHERE i.id = :id")
+    Optional<PatientInsurance> lockById(@org.springframework.data.repository.query.Param("id") UUID id);
     boolean existsByPatient_IdAndPolicyNumberIgnoreCaseAndAssignment_Hospital_Id(UUID patientId, String policyNumber,
                                                                                  UUID hospitalId);
     Optional<PatientInsurance> findByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(UUID patientId,
