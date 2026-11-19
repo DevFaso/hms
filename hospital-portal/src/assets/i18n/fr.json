@@ -5055,6 +5055,21 @@
     "VIEW_ALL": "Voir tout"
   },
   "NURSE": {
+    "OVERSIGHT": {
+      "DEPARTMENT": "Service",
+      "READ_ONLY": "Supervision super-admin · Hôpital sélectionné. La documentation des soins exige un rôle clinique actif.",
+      "HOSPITAL_PATIENTS": "Tous les patients de cet hôpital",
+      "SEARCH": "Rechercher dans les patients chargés : nom, dossier, lit ou soignant",
+      "CLINICIAN": "Soignant",
+      "CARDS": "Cartes",
+      "TABLE": "Tableau",
+      "NO_MATCHES": "Aucun patient ne correspond aux filtres",
+      "BOARD_HELP": "{{shown}} patients affichés sur {{total}} chargés dans l’hôpital sélectionné. Les filtres portent uniquement sur ces lignes.",
+      "ACUITY_HELP": "L1–L5 décrit le niveau de gravité enregistré du patient. Les indicateurs de soins à réaliser décrivent des tâches, pas un changement de gravité.",
+      "PENDING_CARE": "Soins à réaliser",
+      "MEDICATION_COUNT": "{{count}} prescriptions de médicaments",
+      "METRICS_HELP": "Les doses prévues à donner, les doses en retard et les prescriptions si besoin sont comptées séparément. Les cartes patients comptent des prescriptions, pas des horaires de doses."
+    },
     "AWAITING_TRIAGE": "En attente de triage",
     "ACTION": "Action",
     "ACTION_PLACEHOLDER": "Saisir l'action...",

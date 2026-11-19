@@ -7,11 +7,13 @@
     "Pinning one is a claim that a person looked and decided it is free text a",
     "human typed, or that its domain is not yet traced — not a way to make the",
     "build green.",
+    "Nursing workboard department/clinician options are Department.name and Staff.fullName free text, traced through NurseTaskServiceImpl.toWorkboardCard; neither is an enum.",
     "Tracker department options are Department.name free text, traced through PatientTrackerMapper.departmentName; not an enum.",
     "Result evolution unit options are LabResult.resultUnit / LabResultTrendPointDTO.resultUnit: free-text measurement-unit String fields, not enum codes. Preserve the exact recorded unit for series separation.",
     "Visit summary sections (2026-11-12): allergy reaction, prescription frequency and the family-history relationship are free text a clinician typed, as on the chart pages pinned above."
   ],
   "pinned": [
+    "src/app/nurse-station/nurse-station.html::<option>name",
     "src/app/lab/shared/result-evolution.component.ts::<option>u",
     "src/app/encounters/encounters.html::<option>department",
     "src/app/admin-governance/credentials-tab.html::mfa.channel",

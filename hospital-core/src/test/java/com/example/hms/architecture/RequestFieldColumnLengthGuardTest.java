@@ -10,6 +10,7 @@ import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -219,14 +220,14 @@ class RequestFieldColumnLengthGuardTest {
 
     @Test
     void everyRequestTextFieldFitsItsColumn() throws Exception {
-        Map<String, List<Class<?>>> entities = classesUnder("model");
+        Map<String, Class<?>> entities = classesUnder("model");
         List<String> sites = new ArrayList<>();
         int pairs = 0;
-        for (Class<?> dto : classesUnder("payload/dto").values().stream().flatMap(List::stream).toList()) {
+        for (Class<?> dto : classesUnder("payload/dto").values()) {
             String name = dto.getSimpleName();
             String entityName = name.endsWith("RequestDTO") ? name.substring(0, name.length() - "RequestDTO".length())
                 : name.endsWith("Request") ? name.substring(0, name.length() - "Request".length()) : null;
-            Class<?> entity = entityName == null ? null : entityFor(dto, entities.get(entityName));
+            Class<?> entity = entityName == null ? null : entityFor(dto, entityName, entities.values());
             if (entity == null || !entity.isAnnotationPresent(jakarta.persistence.Entity.class)) {
                 continue;
             }
@@ -256,6 +257,56 @@ class RequestFieldColumnLengthGuardTest {
         assertThat(GuardAllowlist.stale(counts, ALLOWED)).as("the site was fixed: delete its line").isEmpty();
     }
 
+    @Test
+    void namesakesResolveToTheDtosModelPackageRegardlessOfScanOrder() {
+        Class<?> current = com.example.hms.model.education.EducationResource.class;
+        Class<?> legacy = com.example.hms.model.EducationResource.class;
+        Class<?> dto = com.example.hms.payload.dto.education.EducationResourceRequestDTO.class;
+        for (List<Class<?>> order : List.of(List.of(legacy, current), List.of(current, legacy))) {
+            assertThat(entityFor(dto, "EducationResource", order)).isEqualTo(current);
+        }
+    }
+
+    @Test
+    void theScanRetainsBothDtoAndEntityNamesakes() throws Exception {
+        assertThat(classesUnder("model").values()).contains(
+            com.example.hms.model.education.EducationResource.class,
+            com.example.hms.model.EducationResource.class,
+            com.example.hms.model.referral.ReferralAttachment.class,
+            com.example.hms.model.ReferralAttachment.class);
+        assertThat(classesUnder("payload/dto").values()).contains(
+            com.example.hms.payload.dto.medication.MedicationCatalogItemRequestDTO.class,
+            com.example.hms.payload.dto.pharmacy.MedicationCatalogItemRequestDTO.class);
+    }
+
+    @Test
+    void anUnmappedAmbiguousNameFailsInsteadOfSilentlyLosingCoverage() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> entityFor(
+            EducationResourceRequest.class, "EducationResource", List.of(
+                com.example.hms.model.education.EducationResource.class,
+                com.example.hms.model.EducationResource.class)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Ambiguous entity for");
+    }
+
+    private static class EducationResourceRequest { }
+
+    private static Class<?> entityFor(Class<?> dto, String entityName, java.util.Collection<Class<?>> entities) {
+        List<Class<?>> candidates = entities.stream()
+            .filter(c -> c.getSimpleName().equals(entityName))
+            .filter(c -> c.isAnnotationPresent(jakarta.persistence.Entity.class))
+            .toList();
+        if (candidates.isEmpty()) return null;
+        String modelName = dto.getPackageName().replace("com.example.hms.payload.dto", "com.example.hms.model")
+            + "." + entityName;
+        for (Class<?> candidate : candidates) {
+            if (candidate.getName().equals(modelName)) return candidate;
+        }
+        if (candidates.size() == 1) return candidates.get(0);
+        throw new IllegalStateException("Ambiguous entity for " + dto.getName() + ": "
+            + candidates.stream().map(Class::getName).sorted().toList());
+    }
+
     private static Field fieldOf(Class<?> type, String name) {
         for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
             try {
@@ -267,41 +318,20 @@ class RequestFieldColumnLengthGuardTest {
         return null;
     }
 
-    /**
-     * Billing-money plan PR 7 (CI on #1218): two entities may share a simple name (the legacy
-     * {@code model.EducationResource} and {@code model.education.EducationResource}). The pairing took whichever the
-     * directory walk listed first, so adding unrelated files changed the verdict. The DTO's own entity is the one in
-     * the model package named like the DTO's sub-package; failing that, the only one, or the root model's.
-     */
-    private static Class<?> entityFor(Class<?> dto, List<Class<?>> candidates) {
-        if (candidates == null || candidates.isEmpty()) {
-            return null;
-        }
-        String dtoRoot = "com.example.hms.payload.dto";
-        String pkg = dto.getPackageName();
-        String sub = pkg.startsWith(dtoRoot + ".") ? pkg.substring(dtoRoot.length() + 1) : "";
-        String wanted = sub.isEmpty() ? "com.example.hms.model" : "com.example.hms.model." + sub;
-        return candidates.stream().filter(c -> c.getPackageName().equals(wanted)).findFirst()
-            .orElseGet(() -> candidates.stream().filter(c -> c.getPackageName().equals("com.example.hms.model"))
-                .findFirst().orElse(candidates.get(0)));
-    }
-
-    /** Every class under {@code dir} by simple name, each list in a fixed (package) order. */
-    private static Map<String, List<Class<?>>> classesUnder(String dir) throws IOException {
-        Map<String, List<Class<?>>> out = new java.util.TreeMap<>();
+    private static Map<String, Class<?>> classesUnder(String dir) throws IOException {
+        Map<String, Class<?>> out = new HashMap<>();
         try (Stream<Path> files = Files.walk(MAIN.resolve(dir))) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String rel = MAIN.relativize(file).toString().replace('\\', '/');
                 String fqcn = "com.example.hms." + rel.substring(0, rel.length() - ".java".length()).replace('/', '.');
                 try {
                     Class<?> c = Class.forName(fqcn, false, RequestFieldColumnLengthGuardTest.class.getClassLoader());
-                    out.computeIfAbsent(c.getSimpleName(), k -> new ArrayList<>()).add(c);
+                    out.put(c.getName(), c);
                 } catch (ClassNotFoundException | NoClassDefFoundError ignored) {
                     // a package-info or a file whose class name differs
                 }
             }
         }
-        out.values().forEach(list -> list.sort(java.util.Comparator.comparing(Class::getName)));
         return out;
     }
 
