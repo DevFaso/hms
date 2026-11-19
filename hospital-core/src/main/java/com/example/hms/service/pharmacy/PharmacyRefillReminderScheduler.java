@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -48,6 +49,10 @@ public class PharmacyRefillReminderScheduler {
 
     @SchedulerLock(name = "PharmacyRefillReminderScheduler.sendDailyRefillReminders", lockAtMostFor = "PT30M", lockAtLeastFor = "PT5S")
     @Scheduled(cron = "${pharmacy.refill-reminder.cron:0 0 9 * * *}")
+    // QA D2202: the dispense's patient, prescription and portal account are lazy and
+    // open-in-view is off, so the consent check (and the phone read) need a session.
+    // The SMS go out after this commits (PatientMessageGate.smsAfterCommit).
+    @Transactional(readOnly = true)
     public void sendDailyRefillReminders() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime from = now.minusDays(lookbackDays);
@@ -61,11 +66,12 @@ public class PharmacyRefillReminderScheduler {
         int sent = 0;
         for (Dispense d : recent) {
             try {
-                if (shouldRemindToday(d, today)) {
-                    support.notifyRefillReminder(
+                if (shouldRemindToday(d, today)
+                        && support.notifyRefillReminder(
+                            d.getPrescription(),
                             d.getPatient(),
                             d.getMedicationName(),
-                            leadDays);
+                            leadDays)) {
                     sent++;
                 }
             } catch (Exception e) {

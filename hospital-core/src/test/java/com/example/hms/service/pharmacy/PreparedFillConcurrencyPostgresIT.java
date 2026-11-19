@@ -300,7 +300,7 @@ class PreparedFillConcurrencyPostgresIT {
         assertThat(statusesOfDispenses()).containsExactly("COMPLETED");
         verify(support, times(1)).logAudit(eq(AuditEventType.DISPENSE_HANDED_OVER), anyString(), anyString(), anyString());
         verify(prescriberNotifier, times(1)).notifyPrescriber(any(), eq(PrescriptionStatus.DISPENSED));
-        verify(support, times(1)).notifyDispensed(any(), any(), any());
+        verify(support, times(1)).notifyDispensed(any(), any(), any(), any());
     }
 
     @Test
@@ -343,7 +343,7 @@ class PreparedFillConcurrencyPostgresIT {
             .hasMessage("This fill is no longer waiting for collection.");
         assertThat(statusesOfDispenses()).containsExactly("COMPLETED");
         assertThat(lotRemaining()).isEqualByComparingTo("40");
-        verify(support, times(0)).notifyReadyCancelled(any(), any(), any());
+        verify(support, times(0)).notifyReadyCancelled(any(), any(), any(), any());
     }
 
     @Test
@@ -361,7 +361,7 @@ class PreparedFillConcurrencyPostgresIT {
         assertThat(cancelReasons()).containsExactly(ReadyCancelReason.NOT_COLLECTED.name());
         assertThat(lotRemaining()).isEqualByComparingTo("50");
         assertThat(prescriptionStatus()).isEqualTo("SIGNED");
-        verify(support, times(1)).notifyReadyCancelled(any(), any(), any());
+        verify(support, times(1)).notifyReadyCancelled(any(), any(), any(), any());
     }
 
     @Test

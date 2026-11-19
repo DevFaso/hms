@@ -91,7 +91,7 @@ public class PreparedFillVoider {
         support.logAudit(AuditEventType.DISPENSE_READY_CANCELLED,
                 "Prepared fill cancelled, prescription " + prescriptionId + ", reason " + reason.name(),
                 current.getId().toString(), "DISPENSE");
-        support.notifyReadyCancelled(current.getPatient(), current.getPharmacy(), current.getMedicationName());
+        support.notifyReadyCancelled(current.getPrescription(), current.getPatient(), current.getPharmacy(), current.getMedicationName());
         log.info("Prepared fill {} cancelled ({})", current.getId(), reason);
         return current;
     }

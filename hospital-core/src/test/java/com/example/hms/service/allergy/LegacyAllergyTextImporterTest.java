@@ -80,8 +80,7 @@ class LegacyAllergyTextImporterTest {
     @DisplayName("an allergen already recorded as an active row is not duplicated")
     void skipsAllergensAlreadyRecorded() {
         PatientAllergy existing = PatientAllergy.builder().allergenDisplay("PENICILLINE").active(true).build();
-        PatientAllergy inactive = PatientAllergy.builder().allergenDisplay("Latex").active(false).build();
-        when(allergyRepository.findByPatient_Id(patient.getId())).thenReturn(List.of(existing, inactive));
+        when(allergyRepository.findByPatient_Id(patient.getId())).thenReturn(List.of(existing));
 
         int created = importer.importFreeText(patient, hospital, null, "Penicilline; latex", LegacyAllergyTextImporter.SOURCE_LEGACY);
 
@@ -90,6 +89,24 @@ class LegacyAllergyTextImporterTest {
         verify(allergyRepository).save(captor.capture());
         assertThat(captor.getValue().getAllergenDisplay()).isEqualTo("latex");
         verify(summarySync).refresh(patient);
+    }
+
+    @Test
+    @DisplayName("D2220: an allergy a clinician deactivated or marked entered in error is never re-created from the text")
+    void neverResurrectsADeactivatedOrEnteredInErrorAllergy() {
+        PatientAllergy deactivated = PatientAllergy.builder().allergenDisplay("Latex").active(false).build();
+        PatientAllergy enteredInError = PatientAllergy.builder().allergenDisplay("Pénicilline")
+            .verificationStatus(AllergyVerificationStatus.ENTERED_IN_ERROR).active(false).build();
+        PatientAllergy errorStillFlaggedActive = PatientAllergy.builder().allergenDisplay("Arachide")
+            .verificationStatus(AllergyVerificationStatus.ENTERED_IN_ERROR).active(true).build();
+        when(allergyRepository.findByPatient_Id(patient.getId()))
+            .thenReturn(List.of(deactivated, enteredInError, errorStillFlaggedActive));
+
+        int created = importer.importFreeText(patient, hospital, null, "LATEX, penicilline, arachide",
+            LegacyAllergyTextImporter.SOURCE_LEGACY);
+
+        assertThat(created).isZero();
+        verify(allergyRepository, never()).save(any());
     }
 
     @Test

@@ -47,8 +47,6 @@ class SmsRealTransportGuardTest {
     private static final Map<String, String> KNOWN = Map.of(
         "service/impl/PrescriptionSmsDispatchServiceImpl.java",
         "D2000-followup: records a SENT transmission and tells the prescriber the pharmacy was reached over the mock",
-        "service/pharmacy/PharmacyServiceSupport.java",
-        "D2000-followup: patient pharmacy notices go to the mock; the reminder schedulers count them as sent",
         "service/pharmacy/partner/SmsPartnerNotificationChannel.java",
         "D2000-followup: partner pharmacy notices go to the mock without a not-sent trace");
 

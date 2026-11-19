@@ -461,7 +461,7 @@ public class DispenseServiceImpl implements DispenseService {
         // T-38 / G15: the dispensed receipt SMS — only when the Rx is now
         // fully DISPENSED, and only once the fill has committed.
         if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
-            support.notifyDispensed(patient, pharmacy, dto.getMedicationName());
+            support.notifyDispensed(prescription, patient, pharmacy, dto.getMedicationName());
         }
 
         logAudit(AuditEventType.DISPENSE_CREATED,
@@ -530,7 +530,7 @@ public class DispenseServiceImpl implements DispenseService {
                     saved.getId().toString());
         }
 
-        support.notifyReadyForCollection(fill.patient(), fill.pharmacy(), dto.getMedicationName());
+        support.notifyReadyForCollection(fill.prescription(), fill.patient(), fill.pharmacy(), dto.getMedicationName());
         return dispenseMapper.toResponseDTO(saved);
     }
 
@@ -611,7 +611,8 @@ public class DispenseServiceImpl implements DispenseService {
         updatePrescriptionStatusFromHistory(prescription, true);
         if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
             closeOutBackOrder(prescription);
-            support.notifyDispensed(dispense.getPatient(), dispense.getPharmacy(), dispense.getMedicationName());
+            support.notifyDispensed(prescription, dispense.getPatient(), dispense.getPharmacy(),
+                    dispense.getMedicationName());
         }
 
         logAudit(AuditEventType.DISPENSE_HANDED_OVER,
