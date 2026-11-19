@@ -528,6 +528,9 @@ class CancelVoidReasonGuardTest {
             "NOT A CLINICAL RECORD: tenant configuration");
         DELETE_PROOFS.put("DELETE /hospitals/{id}/organization",
             "NOT A CLINICAL RECORD: tenant configuration");
+        // V316: a key image is withdrawn while its study is unread; signing locks it.
+        DELETE_PROOFS.put("DELETE /imaging/images/{imageId}",
+            "OWN RECORD: the uploader (or a radiologist) withdraws a key image before its report is signed; once signed it is locked (ImagingStudyImageServiceTest#aSignedReportsImagesAreLocked) and every removal is audited");
         DELETE_PROOFS.put("DELETE /invoice-items/{id}",
             "NOT A CLINICAL RECORD: a line of an invoice not yet issued (lines lock once issued); money, not the chart");
         DELETE_PROOFS.put("DELETE /lab-orders/{id}",
