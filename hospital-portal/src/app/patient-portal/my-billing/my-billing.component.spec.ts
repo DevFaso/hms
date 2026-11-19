@@ -386,6 +386,46 @@ describe('MyBillingComponent', () => {
       expect(refunds?.textContent).toContain('PORTAL.BILLING.REFUNDED');
     });
 
+    it('PR 7: the card shows the insurer share and mine; the detail shows a rejected share with its reason', () => {
+      const insured = invoice({
+        amount: 8500,
+        balance: 2900,
+        payerShare: 5600,
+        patientShare: 2900,
+      });
+      portal.getMyInvoiceDetail.and.returnValue(
+        of({
+          ...detail,
+          invoice: {
+            ...insured,
+            payerShares: [
+              {
+                id: 's1',
+                payerName: 'RAMU',
+                amount: 5600,
+                status: 'REJECTED',
+                rejectionReason: 'Bénéficiaire non à jour de cotisation',
+              },
+              { id: 's2', payerName: 'RAMU', amount: 4000, status: 'OPEN' },
+            ],
+          },
+        }),
+      );
+      create([insured]);
+      expect(host().querySelector('[data-testid="payer-share-inv1"]')?.textContent).toContain(
+        'PORTAL.BILLING.PAYER_SHARE',
+      );
+      (host().querySelector('[data-testid="detail-btn-inv1"]') as HTMLElement).click();
+      fixture.detectChanges();
+      expect(host().querySelector('[data-testid="rejected-share-s1"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid="rejected-share-s2"]')).toBeNull();
+    });
+
+    it('PR 7: no insurer line on a card no insurer covers', () => {
+      create([invoice()]);
+      expect(host().querySelector('[data-testid="payer-share-inv1"]')).toBeNull();
+    });
+
     it('shows a declared payment on the card itself', () => {
       create([invoice({ pending: 500 })]);
       expect(host().querySelector('[data-testid="pending-inv1"]')).not.toBeNull();

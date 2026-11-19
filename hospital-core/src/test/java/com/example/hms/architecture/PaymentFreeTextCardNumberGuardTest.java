@@ -66,7 +66,9 @@ class PaymentFreeTextCardNumberGuardTest {
             .contains("StaffPaymentRequestDTO", "PatientPaymentRequestDTO", "CheckInRequestDTO",
                 "PharmacyPaymentRequestDTO", "PharmacySaleRequestDTO", "PaymentReasonRequestDTO",
                 // Billing-money plan PR 8: the refund request and the reason a refund is rejected or withdrawn.
-                "InvoiceRefundRequestDTO", "InvoiceRefundReasonRequestDTO");
+                "InvoiceRefundRequestDTO", "InvoiceRefundReasonRequestDTO",
+                // Billing-money plan PR 7: the payer's reason for rejecting its share of an invoice.
+                "PayerShareRejectRequestDTO");
 
         Set<String> checked = new TreeSet<>();
         List<String> missing = new ArrayList<>();
@@ -92,7 +94,7 @@ class PaymentFreeTextCardNumberGuardTest {
                 "PharmacyPaymentRequestDTO.notes", "PharmacySaleRequestDTO.referenceNumber",
                 "PharmacySaleRequestDTO.notes", "PaymentReasonRequestDTO.reason",
                 "InvoiceRefundRequestDTO.reference", "InvoiceRefundRequestDTO.reason",
-                "InvoiceRefundReasonRequestDTO.reason");
+                "InvoiceRefundReasonRequestDTO.reason", "PayerShareRejectRequestDTO.reason");
         assertThat(missing)
             .as("a payment or refund free-text field that would store a card number (D-15): add @NoCardNumber,"
                 + " or list it in NOT_PAYMENT_TEXT with the reason it is not payment text")
@@ -139,7 +141,8 @@ class PaymentFreeTextCardNumberGuardTest {
 
     private static boolean isPaymentRequest(Class<?> dto) {
         String name = dto.getSimpleName();
-        if (name.contains("Payment") || name.contains("Refund")) {
+        // Billing-money plan PR 7: the payer's reason for rejecting its share is money free text too.
+        if (name.contains("Payment") || name.contains("Refund") || name.contains("PayerShare")) {
             return true;
         }
         for (Field field : dto.getDeclaredFields()) {

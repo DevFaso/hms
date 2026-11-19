@@ -336,8 +336,8 @@ class MfaControllerTest {
         currentTotp("654321");
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
         // The tokens minted after a verified code carry the second factor (AC-13).
-        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
-        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("refresh-jwt");
         when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
 
         mockMvc.perform(post("/auth/mfa/verify")
@@ -360,8 +360,8 @@ class MfaControllerTest {
         currentTotp("654321");
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID))
                 .thenReturn(List.of(assignment("PROVIDER_ADMIN"), assignment("LAB_SCIENTIST")));
-        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
-        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("refresh-jwt");
 
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -369,7 +369,7 @@ class MfaControllerTest {
                 .andExpect(status().isOk());
 
         var minted = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
-        verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull());
+        verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull(), any());
         org.assertj.core.api.Assertions.assertThat(minted.getValue().roles()).containsExactly("ROLE_LAB_SCIENTIST");
     }
 
@@ -382,8 +382,8 @@ class MfaControllerTest {
         // Stored: super-admin only. The login offered HOSPITAL_ADMIN through RoleExpansion.
         holds("ROLE_SUPER_ADMIN");
         currentTotp("654321");
-        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
-        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("refresh-jwt");
 
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -391,7 +391,7 @@ class MfaControllerTest {
                 .andExpect(status().isOk());
 
         var minted = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
-        verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull());
+        verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull(), any());
         org.assertj.core.api.Assertions.assertThat(minted.getValue().roles()).containsExactly("ROLE_HOSPITAL_ADMIN");
     }
 
@@ -408,7 +408,7 @@ class MfaControllerTest {
                         .content("{\"mfaToken\":\"mfa-tok-gone\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized());
         verify(jwtTokenProvider, never())
-                .generateAccessToken(any(TokenUserDescriptor.class), any());
+                .generateAccessToken(any(TokenUserDescriptor.class), any(), any());
         // Refused before anything was reserved or spent: the code stays usable after a fresh sign-in.
         verify(mfaService, never()).reserveCodeAttempt(any());
         verify(tokenBlacklistService, never()).claim(any(), org.mockito.ArgumentMatchers.anyLong());
@@ -474,8 +474,8 @@ class MfaControllerTest {
         when(mfaService.spendBackupCode(backupId)).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
         // The tokens minted after a verified code carry the second factor (AC-13).
-        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull())).thenReturn("access-jwt");
-        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull())).thenReturn("refresh-jwt");
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("refresh-jwt");
         when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
 
         mockMvc.perform(post("/auth/mfa/verify")
@@ -568,7 +568,7 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized());
-        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class), any(), any());
     }
 
     @Test
@@ -606,7 +606,7 @@ class MfaControllerTest {
                 .andExpect(status().isUnauthorized())
                 // The challenge is spent: "invalid code" would invite a retry that cannot work.
                 .andExpect(jsonPath("$.message").value("That code was just used. Sign in again."));
-        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class), any(), any());
     }
 
     // ── Round 4: replay and the per-user budget ──
@@ -624,7 +624,7 @@ class MfaControllerTest {
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("That code was just used. Sign in again."));
-        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class), any(), any());
     }
 
     @Test

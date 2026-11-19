@@ -147,6 +147,14 @@
   }
 }
 
+/* Pages that name their table WRAPPER .data-table (a div, not the table):
+   the wrapper scrolls sideways itself, so a wide table never widens the page
+   (QA D2231 class: /transfusions at 390px). */
+div.data-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .name-cell {
   display: flex;
   align-items: center;
@@ -555,15 +563,22 @@
 
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* QA D2231 class: minmax(0, …) lets a field shrink below its input's
+     intrinsic width instead of pushing the form past the screen. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 
   &.form-row-3 {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  /* One column on a phone, the three-field rows too: `.form-row.form-row-3`
+     outranked the bare `.form-row` here, so they kept three 205px columns. */
   @media (max-width: 640px) {
-    grid-template-columns: 1fr;
+    &,
+    &.form-row-3 {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 }
 
@@ -705,9 +720,14 @@
     overflow-x: auto;
   }
 
-  .data-table {
+  /* A TABLE's minimum: several pages name their scroll WRAPPER .data-table
+     (billing, imaging, transfusions, …); a 600px wrapper made the whole page
+     scroll sideways on a phone (QA D2231 class). */
+  table.data-table {
     min-width: 600px;
+  }
 
+  .data-table {
     th,
     td {
       padding: 0.625rem 0.75rem;
@@ -737,6 +757,13 @@
   .btn-secondary {
     width: 100%;
     justify-content: center;
+  }
+
+  /* Not a row's buttons: three full-width buttons made one actions cell
+     ~500px wide on a phone (QA D2241, r63: /registrations). */
+  td .btn-primary,
+  td .btn-secondary {
+    width: auto;
   }
 
   .empty-state {

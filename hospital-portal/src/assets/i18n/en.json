@@ -1809,6 +1809,8 @@
       "ACCOUNT_SETUP_REFUSED_LOCKED": "Account setup refused: the account is locked",
       "ACCESS_TOKEN_REVOKED_LOCKOUT": "Access token revoked at the lock-screen lockout",
       "REFRESH_TOKEN_REVOKED_LOCKOUT": "Refresh token revoked at the lock-screen lockout",
+      "SESSION_REVOKED": "Sign-in session ended at sign-out (every token of it revoked)",
+      "SESSION_REVOKED_LOCKOUT": "Sign-in session ended at the lock-screen lockout (every token of it revoked)",
       "TOKEN_PAIR_ROTATED": "Session tokens renewed (previous refresh jti={{jti}})",
       "REFRESH_REFUSED_IDLE": "Session renewal refused: idle for too long",
       "REFRESH_REFUSED_SECOND_FACTOR": "Session renewal refused: the sign-in provider’s second factor is missing or expired",
@@ -2073,7 +2075,8 @@
       "PAYER_RULE_ENDED": "Rule {{rule}} of plan {{plan}} ended, reason recorded",
       "COVERAGE_PLAN_LINKED": "Patient coverage {{insurance}} linked to plan {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Patient coverage {{insurance}} unlinked from its plan",
-      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]"
+      "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
+      "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2369,6 +2372,15 @@
       "REFUND_REJECTED": "Refund rejected",
       "REFUND_PAID_OUT": "Refund handed to the patient",
       "REFUND_CANCELLED": "Refund cancelled"
+    },
+    "PAYER_SHARE_EVENT": {
+      "PAYER_SHARE_APPLIED": "Insurer share applied",
+      "PAYER_SHARE_APPLIED_AFTER_A_CREDIT_NOTE": "Insurer share applied after a credit note",
+      "PAYER_SHARE_REPLACED_AFTER_A_CREDIT_NOTE": "Insurer share replaced after a credit note",
+      "PAYER_SHARE_CANCELLED_WITH_ITS_INVOICE": "Insurer share cancelled with its invoice",
+      "PAYER_SHARE_CLAIMED": "Insurer share claimed",
+      "PAYER_SHARE_PAID": "Insurer share paid by the insurer",
+      "PAYER_SHARE_REJECTED": "Insurer share rejected by the insurer"
     }
   },
   "BILLING": {
@@ -2802,6 +2814,30 @@
       "TERMS_SAVED": "New rate and ceilings saved.",
       "NEXT_TERMS": "Planned from {{date}}: {{rate}} %",
       "REPLACE_TERMS": "Replace the planned rate and ceilings"
+    },
+    "PAYER_SHARES": {
+      "TITLE": "Insurer coverage",
+      "PAYER_SHARE": "Insurer's share",
+      "PATIENT_SHARE": "Patient's share",
+      "STATUSES": {
+        "OPEN": "To claim",
+        "CLAIMED": "Claimed",
+        "PAID": "Paid by the insurer",
+        "REJECTED": "Rejected by the insurer",
+        "CANCELLED": "Cancelled"
+      },
+      "REJECTED_LINE": "Rejected by the insurer: {{reason}}",
+      "CLAIM": "Mark claimed",
+      "MARK_PAID": "Mark paid",
+      "REJECT": "Reject",
+      "REJECT_REASON": "The insurer's reason for rejecting",
+      "REJECT_CONFIRM": "Record the rejection ({{amount}} back to the patient)",
+      "REASON_REQUIRED": "Enter the insurer's reason for rejecting its share.",
+      "NO_CARD_NOTICE": "Never enter a card number, CVV or PIN here.",
+      "NO_CARD_NUMBER": "This looks like a card number: e-Keneya never records card details.",
+      "DECIDED_TOAST": "The insurer's decision is recorded.",
+      "FAILED": "The insurer's decision could not be recorded.",
+      "LOAD_FAILED": "The insurer's shares could not be loaded."
     }
   },
   "CHAT": {
@@ -6438,7 +6474,10 @@
       "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}}: {{pending}} already declared is awaiting confirmation.",
       "CREDITED_TO": "Credited to invoice {{number}}",
       "FULLY_DECLARED": "Balance declared, awaiting the cashier's confirmation",
-      "REFUNDED": "Refunded: {{amount}} on {{date}}"
+      "REFUNDED": "Refunded: {{amount}} on {{date}}",
+      "PAYER_SHARE": "Insurer's share",
+      "PATIENT_SHARE": "Your share",
+      "PAYER_SHARE_REJECTED": "Rejected by your insurer ({{amount}}): {{reason}}. You now owe this amount."
     },
     "CARE_TEAM": {
       "TITLE": "My Care Team",
@@ -7379,7 +7418,10 @@
         "PAYMENT_REVERSED": "Payment reversed",
         "PAYER_CHANGED": "Payer changed",
         "PAYER_PLAN_CHANGED": "Payer plan changed",
-        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan"
+        "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan",
+        "PAYER_SHARE_APPLIED": "Insurer share applied to an invoice",
+        "PAYER_SHARE_DECIDED": "Insurer's decision on its share recorded",
+        "PAYER_SHARE_CANCELLED": "Insurer share cancelled"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",

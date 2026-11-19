@@ -181,6 +181,28 @@ class JwtAuthenticationFilterTest {
         assertThat(response.getStatus()).isEqualTo(SC_UNAUTHORIZED);
     }
 
+    /** QA D2184: a token whose sign-in session was ended is refused, though its own jti never was. */
+    @Test
+    void shouldRejectATokenOfARevokedSession() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI(API_PATIENTS);
+        request.addHeader(AUTH_HEADER, BEARER_PREFIX + GHOST_TOKEN);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        when(tokenProvider.validateToken(GHOST_TOKEN)).thenReturn(true);
+        when(tokenProvider.getUsernameFromJWT(GHOST_TOKEN)).thenReturn("user1");
+        when(tokenProvider.getJtiFromToken(GHOST_TOKEN)).thenReturn("superseded-jti");
+        when(tokenProvider.getSessionId(GHOST_TOKEN)).thenReturn("ended-session");
+        when(tokenBlacklistService.isSessionRevoked("ended-session")).thenReturn(true);
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain, never()).doFilter(any(), any());
+        verify(tokenProvider, never()).getAuthenticationFromJwt(any());
+        assertThat(response.getStatus()).isEqualTo(SC_UNAUTHORIZED);
+    }
+
     @Test
     void shouldRejectATokenIssuedBeforeTheLastForceLogoutAll_byTheSharedRule() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();

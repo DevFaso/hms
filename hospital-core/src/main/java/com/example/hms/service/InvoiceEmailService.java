@@ -42,6 +42,14 @@ public class InvoiceEmailService {
     /** QA D974: the adjustments go on the mailed paper too, so lines and total agree. */
     private final com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository;
 
+    /** Billing-money plan PR 7: the payers' shares on the mailed paper. Optional so hand-built tests keep working. */
+    private com.example.hms.service.billing.InvoiceCoverageService coverageService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCoverageService(com.example.hms.service.billing.InvoiceCoverageService coverageService) {
+        this.coverageService = coverageService;
+    }
+
     @Transactional(readOnly = true)
     public void emailInvoice(UUID invoiceId, EmailInvoiceRequest req) {
         // Load invoice with patient & hospital to avoid LazyInitialization issues
@@ -70,8 +78,12 @@ public class InvoiceEmailService {
         // body and the attached PDF alike.
         Locale locale = patientLocaleResolver.resolve(invoice.getPatient(), NotificationLocales.PATIENT_FALLBACK);
 
+        // Billing-money plan PR 7: the payers' shares on the mailed paper too.
+        List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares =
+            coverageService != null ? coverageService.sharesOf(invoice) : List.of();
         byte[] pdf = req.attachPdf()
-            ? pdfInvoiceService.generateInvoicePdf(invoice, items, List.of(), adjustmentsWithoutReasons(invoiceId), locale)
+            ? pdfInvoiceService.generateInvoicePdf(invoice, items, List.of(), adjustmentsWithoutReasons(invoiceId),
+                shares, locale)
             : null;
 
         String subject = messageSource.getMessage("email.invoice.subject",

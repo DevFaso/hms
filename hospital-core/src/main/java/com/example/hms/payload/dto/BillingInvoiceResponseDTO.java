@@ -58,7 +58,7 @@ public class BillingInvoiceResponseDTO {
     private String dueDate;
     private BigDecimal totalAmount;
     private BigDecimal amountPaid;
-    private BigDecimal balanceDue; // Calculated: totalAmount - amountPaid
+    private BigDecimal balanceDue; // InvoiceBalance.dueOf: the patient's share less what the hospital holds
     /** QA D1466: the amount paid above the total, owed back to the patient (a copay above the visit total). */
     private BigDecimal refundDue;
     /** Billing-money plan PR 8 (QA D1900): what refunds already handed back to the patient. */
@@ -66,8 +66,15 @@ public class BillingInvoiceResponseDTO {
 
     // Insurance Information
     private List<PatientInsuranceSummaryDTO> patientInsurances;
+    /** Billing-money plan PR 7: what the payers owe on the invoice ("Part assureur"); 0 when no payer covers it. */
     private BigDecimal insuranceCoverageAmount;
+    /** Billing-money plan PR 7: the patient's share of the bill before payments ("Part patient"). */
     private BigDecimal patientResponsibilityAmount;
+    /**
+     * Billing-money plan PR 7: the payers' shares, oldest first, with their status and, for a rejected one, the
+     * payer's reason. Filled on the invoice detail (staff and patient); null on lists.
+     */
+    private List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> payerShares;
 
     // Timestamps
     private String createdAt;

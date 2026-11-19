@@ -245,6 +245,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.REFRESH_TOKEN_REVOKED_LOCKOUT',
     re: /^Refresh token revoked on lock-screen lockout \(jti=[^)]*\)$/,
   },
+  // QA D2184: logout and the lock-screen lockout end the whole sign-in session.
+  // The sid is matched but never shown.
+  {
+    key: 'AUDIT.DESC.SESSION_REVOKED',
+    re: /^Session revoked on logout \(sid=[^)]*\)$/,
+  },
+  {
+    key: 'AUDIT.DESC.SESSION_REVOKED_LOCKOUT',
+    re: /^Session revoked on lock-screen lockout \(sid=[^)]*\)$/,
+  },
   {
     key: 'AUDIT.DESC.TOKEN_PAIR_ROTATED',
     re: /^Token pair rotated \(old refresh jti=([^)]*)\)$/,
@@ -1474,6 +1484,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^(Refund requested|Refund approved|Refund rejected|Refund paid out|Refund cancelled): refund (\S+) on invoice (\S+)$/,
     params: ['what', 'refund', 'invoice'],
     localise: { what: 'phrase:REFUND_EVENT' },
+  },
+  {
+    // Billing-money plan PR 7: a payer's share of an invoice applied, replaced, cancelled or decided (ids only).
+    key: 'AUDIT.DESC.PAYER_SHARE_EVENT',
+    re: /^(Payer share applied|Payer share applied after a credit note|Payer share replaced after a credit note|Payer share cancelled with its invoice|Payer share claimed|Payer share paid|Payer share rejected): share (\S+) on invoice (\S+)$/,
+    params: ['what', 'share', 'invoice'],
+    localise: { what: 'phrase:PAYER_SHARE_EVENT' },
   },
   {
     // Billing-money plan PR 2: the price list (ids only; the label, price and reason stay on the rows).

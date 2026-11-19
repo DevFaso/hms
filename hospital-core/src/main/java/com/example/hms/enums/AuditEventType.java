@@ -139,6 +139,12 @@ public enum AuditEventType {
     PAYER_PLAN_CHANGED,
     /** Billing-money plan PR 6: a patient's coverage linked to a payer plan, or unlinked (ids only). */
     PATIENT_COVERAGE_PLAN_LINKED,
+    /** Billing-money plan PR 7: a payer's share applied to an invoice at issue or after a credit note (ids only). */
+    PAYER_SHARE_APPLIED,
+    /** Billing-money plan PR 7: a payer share marked claimed, paid or rejected (ids only, never the reason). */
+    PAYER_SHARE_DECIDED,
+    /** Billing-money plan PR 7: a payer share cancelled with its invoice, or replaced after a credit note (ids only). */
+    PAYER_SHARE_CANCELLED,
     /** Billing-money plan PR 4: a price-list CSV file applied (import id and row counts only). */
     PRICE_LIST_IMPORTED,
     /** Billing-money plan PR 3 (D-2): a tariff price overridden on a draft line, with a reason (ids only). */

@@ -1809,6 +1809,8 @@
       "ACCOUNT_SETUP_REFUSED_LOCKED": "Configuration du compte refusée : le compte est verrouillé",
       "ACCESS_TOKEN_REVOKED_LOCKOUT": "Jeton d'accès révoqué au verrouillage depuis l'écran verrouillé",
       "REFRESH_TOKEN_REVOKED_LOCKOUT": "Jeton de rafraîchissement révoqué au verrouillage depuis l'écran verrouillé",
+      "SESSION_REVOKED": "Session de connexion terminée à la déconnexion (tous ses jetons révoqués)",
+      "SESSION_REVOKED_LOCKOUT": "Session de connexion terminée au verrouillage depuis l'écran verrouillé (tous ses jetons révoqués)",
       "TOKEN_PAIR_ROTATED": "Jetons de session renouvelés (ancien jti de renouvellement={{jti}})",
       "REFRESH_REFUSED_IDLE": "Renouvellement de session refusé : inactivité trop longue",
       "REFRESH_REFUSED_SECOND_FACTOR": "Renouvellement de session refusé : le second facteur du fournisseur d’identité est absent ou expiré",
@@ -2073,7 +2075,8 @@
       "PAYER_RULE_ENDED": "Règle {{rule}} de la formule {{plan}} terminée, motif enregistré",
       "COVERAGE_PLAN_LINKED": "Couverture du patient {{insurance}} liée à la formule {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Couverture du patient {{insurance}} détachée de sa formule",
-      "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]"
+      "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]",
+      "PAYER_SHARE_EVENT": "{{what}} : part {{share}} sur la facture {{invoice}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2369,6 +2372,15 @@
       "REFUND_REJECTED": "Remboursement refusé",
       "REFUND_PAID_OUT": "Remboursement remis au patient",
       "REFUND_CANCELLED": "Remboursement annulé"
+    },
+    "PAYER_SHARE_EVENT": {
+      "PAYER_SHARE_APPLIED": "Part assureur appliquée",
+      "PAYER_SHARE_APPLIED_AFTER_A_CREDIT_NOTE": "Part assureur appliquée après un avoir",
+      "PAYER_SHARE_REPLACED_AFTER_A_CREDIT_NOTE": "Part assureur remplacée après un avoir",
+      "PAYER_SHARE_CANCELLED_WITH_ITS_INVOICE": "Part assureur annulée avec sa facture",
+      "PAYER_SHARE_CLAIMED": "Part assureur réclamée",
+      "PAYER_SHARE_PAID": "Part assureur payée par l’assureur",
+      "PAYER_SHARE_REJECTED": "Part assureur refusée par l’assureur"
     }
   },
   "BILLING": {
@@ -2802,6 +2814,30 @@
       "TERMS_SAVED": "Nouveaux taux et plafonds enregistrés.",
       "NEXT_TERMS": "Prévu à partir du {{date}} : {{rate}} %",
       "REPLACE_TERMS": "Remplacer les taux et plafonds prévus"
+    },
+    "PAYER_SHARES": {
+      "TITLE": "Prise en charge",
+      "PAYER_SHARE": "Part assureur",
+      "PATIENT_SHARE": "Part patient",
+      "STATUSES": {
+        "OPEN": "À réclamer",
+        "CLAIMED": "Réclamée",
+        "PAID": "Payée par l’assureur",
+        "REJECTED": "Refusée par l’assureur",
+        "CANCELLED": "Annulée"
+      },
+      "REJECTED_LINE": "Refusé par l’assureur : {{reason}}",
+      "CLAIM": "Marquer réclamée",
+      "MARK_PAID": "Marquer payée",
+      "REJECT": "Refuser",
+      "REJECT_REASON": "Motif du refus de l’assureur",
+      "REJECT_CONFIRM": "Enregistrer le refus ({{amount}} à la charge du patient)",
+      "REASON_REQUIRED": "Saisissez le motif du refus de l’assureur.",
+      "NO_CARD_NOTICE": "Ne saisissez jamais de numéro de carte, de cryptogramme ni de code PIN ici.",
+      "NO_CARD_NUMBER": "Ceci ressemble à un numéro de carte : e-Keneya n’enregistre jamais de données de carte.",
+      "DECIDED_TOAST": "La décision de l’assureur est enregistrée.",
+      "FAILED": "La décision de l’assureur n’a pas pu être enregistrée.",
+      "LOAD_FAILED": "Les parts assureur n’ont pas pu être chargées."
     }
   },
   "CHAT": {
@@ -6438,7 +6474,10 @@
       "AMOUNT_EXCEEDS_PENDING": "Vous pouvez déclarer au plus {{max}} : {{pending}} déjà déclarés sont en attente de confirmation.",
       "CREDITED_TO": "Imputé sur la facture {{number}}",
       "FULLY_DECLARED": "Solde déclaré, en attente de confirmation par la caisse",
-      "REFUNDED": "Remboursé : {{amount}} le {{date}}"
+      "REFUNDED": "Remboursé : {{amount}} le {{date}}",
+      "PAYER_SHARE": "Part assureur",
+      "PATIENT_SHARE": "Votre part",
+      "PAYER_SHARE_REJECTED": "Refusé par l’assureur ({{amount}}) : {{reason}}. Ce montant est désormais à votre charge."
     },
     "CARE_TEAM": {
       "TITLE": "Mon équipe soignante",
@@ -7345,7 +7384,10 @@
         "PAYMENT_REVERSED": "Paiement contre-passé",
         "PAYER_CHANGED": "Organisme payeur modifié",
         "PAYER_PLAN_CHANGED": "Formule d’organisme payeur modifiée",
-        "PATIENT_COVERAGE_PLAN_LINKED": "Couverture du patient liée à une formule"
+        "PATIENT_COVERAGE_PLAN_LINKED": "Couverture du patient liée à une formule",
+        "PAYER_SHARE_APPLIED": "Part assureur appliquée à une facture",
+        "PAYER_SHARE_DECIDED": "Décision de l’assureur sur sa part enregistrée",
+        "PAYER_SHARE_CANCELLED": "Part assureur annulée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",

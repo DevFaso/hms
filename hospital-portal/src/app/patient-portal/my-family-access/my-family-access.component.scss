@@ -13,7 +13,8 @@
 }
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* QA D2346 (r63): one column on a phone; minmax(0, …) lets a field shrink. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -27,6 +28,8 @@
 }
 .form-grid input,
 .form-grid select {
+  width: 100%;
+  min-width: 0;
   padding: 10px 12px;
   font-size: 14px;
   border: 1px solid #cbd5e1;

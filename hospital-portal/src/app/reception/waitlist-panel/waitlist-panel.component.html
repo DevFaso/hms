@@ -27,107 +27,110 @@
   } @else if (entries().length === 0) {
     <div class="empty-state">{{ 'RECEPTION.NO_WAITLIST_ENTRIES' | translate }}</div>
   } @else {
-    <table class="waitlist-table">
-      <thead>
-        <tr>
-          <th>{{ 'PATIENTS.PATIENT' | translate }}</th>
-          <th>{{ 'STAFF.DEPARTMENT' | translate }}</th>
-          <th>{{ 'RECEPTION.PROVIDER' | translate }}</th>
-          <th>{{ 'RECEPTION.PRIORITY' | translate }}</th>
-          <th>{{ 'RECEPTION.REQUESTED_DATES' | translate }}</th>
-          <th>{{ 'RECEPTION.REASON' | translate }}</th>
-          <th>{{ 'COMMON.STATUS' | translate }}</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (entry of entries(); track entry.id) {
-          <tr [attr.data-entry-id]="entry.id">
-            <td>
-              <button class="patient-link" (click)="patientClicked.emit(entry.patientId)">
-                {{ entry.patientName }}
-              </button>
-              @if (entry.mrn) {
-                <span class="mrn-tag">{{ entry.mrn }}</span>
-              }
-            </td>
-            <td>{{ entry.departmentName }}</td>
-            <td>{{ entry.preferredProviderName | dash }}</td>
-            <td>
-              <span [ngClass]="priorityClass(entry.priority)">{{
-                entry.priority | keyLabel: 'RECEPTION.'
-              }}</span>
-            </td>
-            <td>
-              <!-- QA D1119: the reader's date format, as the recall list beside it.
-                   QA D1323 (round 29): an open end is said in words, never "→ ?". -->
-              @if (entry.requestedDateFrom && entry.requestedDateTo) {
-                {{ entry.requestedDateFrom | date: 'mediumDate' }} →
-                {{ entry.requestedDateTo | date: 'mediumDate' }}
-              } @else if (entry.requestedDateFrom) {
-                {{
-                  'RECEPTION.WINDOW_FROM'
-                    | translate: { date: (entry.requestedDateFrom | date: 'mediumDate') }
-                }}
-              } @else if (entry.requestedDateTo) {
-                {{
-                  'RECEPTION.WINDOW_UNTIL'
-                    | translate: { date: (entry.requestedDateTo | date: 'mediumDate') }
-                }}
-              } @else {
-                —
-              }
-            </td>
-            <td class="reason-cell">{{ entry.reason | dash }}</td>
-            <td>
-              <span [ngClass]="statusClass(entry.status)">{{
-                entry.status | keyLabel: 'RECEPTION.'
-              }}</span>
-              @if (entry.status === 'OFFERED' && entry.offeredSlotStartAt) {
-                <div class="offer-info">
-                  <span class="material-symbols-outlined">event_available</span>
-                  {{ entry.offeredSlotStartAt | date: 'short' }}
-                </div>
-                @if (entry.offerExpiresAt) {
-                  <div class="offer-expiry" [class.expired]="offerExpired(entry)">
-                    {{ 'RECEPTION.OFFER_EXPIRES' | translate }}
-                    {{ entry.offerExpiresAt | serverTime | date: 'short' }}
-                  </div>
-                }
-              }
-            </td>
-            <td class="actions-cell">
-              @if (entry.status === 'WAITING') {
-                <button class="btn-sm btn-primary" (click)="openOfferModal(entry)">
-                  {{ 'RECEPTION.OFFER_SLOT' | translate }}
-                </button>
-                <button class="btn-sm btn-ghost" (click)="askCloseEntry(entry)">
-                  {{ 'COMMON.CLOSE' | translate }}
-                </button>
-              } @else if (entry.status === 'OFFERED') {
-                <button
-                  class="btn-sm btn-primary"
-                  [disabled]="actingOnEntryId() === entry.id"
-                  (click)="acceptOffer(entry)"
-                >
-                  {{ 'RECEPTION.ACCEPT_OFFER' | translate }}
-                </button>
-                <button
-                  class="btn-sm btn-secondary"
-                  [disabled]="actingOnEntryId() === entry.id"
-                  (click)="declineOffer(entry)"
-                >
-                  {{ 'RECEPTION.DECLINE_OFFER' | translate }}
-                </button>
-                <button class="btn-sm btn-ghost" (click)="askCloseEntry(entry)">
-                  {{ 'COMMON.CLOSE' | translate }}
-                </button>
-              }
-            </td>
+    <!-- QA D2242: the table scrolls in its own box, never the whole cockpit page. -->
+    <div class="table-scroll">
+      <table class="waitlist-table">
+        <thead>
+          <tr>
+            <th>{{ 'PATIENTS.PATIENT' | translate }}</th>
+            <th>{{ 'STAFF.DEPARTMENT' | translate }}</th>
+            <th>{{ 'RECEPTION.PROVIDER' | translate }}</th>
+            <th>{{ 'RECEPTION.PRIORITY' | translate }}</th>
+            <th>{{ 'RECEPTION.REQUESTED_DATES' | translate }}</th>
+            <th>{{ 'RECEPTION.REASON' | translate }}</th>
+            <th>{{ 'COMMON.STATUS' | translate }}</th>
+            <th></th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (entry of entries(); track entry.id) {
+            <tr [attr.data-entry-id]="entry.id">
+              <td>
+                <button class="patient-link" (click)="patientClicked.emit(entry.patientId)">
+                  {{ entry.patientName }}
+                </button>
+                @if (entry.mrn) {
+                  <span class="mrn-tag">{{ entry.mrn }}</span>
+                }
+              </td>
+              <td>{{ entry.departmentName }}</td>
+              <td>{{ entry.preferredProviderName | dash }}</td>
+              <td>
+                <span [ngClass]="priorityClass(entry.priority)">{{
+                  entry.priority | keyLabel: 'RECEPTION.'
+                }}</span>
+              </td>
+              <td>
+                <!-- QA D1119: the reader's date format, as the recall list beside it.
+                   QA D1323 (round 29): an open end is said in words, never "→ ?". -->
+                @if (entry.requestedDateFrom && entry.requestedDateTo) {
+                  {{ entry.requestedDateFrom | date: 'mediumDate' }} →
+                  {{ entry.requestedDateTo | date: 'mediumDate' }}
+                } @else if (entry.requestedDateFrom) {
+                  {{
+                    'RECEPTION.WINDOW_FROM'
+                      | translate: { date: (entry.requestedDateFrom | date: 'mediumDate') }
+                  }}
+                } @else if (entry.requestedDateTo) {
+                  {{
+                    'RECEPTION.WINDOW_UNTIL'
+                      | translate: { date: (entry.requestedDateTo | date: 'mediumDate') }
+                  }}
+                } @else {
+                  —
+                }
+              </td>
+              <td class="reason-cell">{{ entry.reason | dash }}</td>
+              <td>
+                <span [ngClass]="statusClass(entry.status)">{{
+                  entry.status | keyLabel: 'RECEPTION.'
+                }}</span>
+                @if (entry.status === 'OFFERED' && entry.offeredSlotStartAt) {
+                  <div class="offer-info">
+                    <span class="material-symbols-outlined">event_available</span>
+                    {{ entry.offeredSlotStartAt | date: 'short' }}
+                  </div>
+                  @if (entry.offerExpiresAt) {
+                    <div class="offer-expiry" [class.expired]="offerExpired(entry)">
+                      {{ 'RECEPTION.OFFER_EXPIRES' | translate }}
+                      {{ entry.offerExpiresAt | serverTime | date: 'short' }}
+                    </div>
+                  }
+                }
+              </td>
+              <td class="actions-cell">
+                @if (entry.status === 'WAITING') {
+                  <button class="btn-sm btn-primary" (click)="openOfferModal(entry)">
+                    {{ 'RECEPTION.OFFER_SLOT' | translate }}
+                  </button>
+                  <button class="btn-sm btn-ghost" (click)="askCloseEntry(entry)">
+                    {{ 'COMMON.CLOSE' | translate }}
+                  </button>
+                } @else if (entry.status === 'OFFERED') {
+                  <button
+                    class="btn-sm btn-primary"
+                    [disabled]="actingOnEntryId() === entry.id"
+                    (click)="acceptOffer(entry)"
+                  >
+                    {{ 'RECEPTION.ACCEPT_OFFER' | translate }}
+                  </button>
+                  <button
+                    class="btn-sm btn-secondary"
+                    [disabled]="actingOnEntryId() === entry.id"
+                    (click)="declineOffer(entry)"
+                  >
+                    {{ 'RECEPTION.DECLINE_OFFER' | translate }}
+                  </button>
+                  <button class="btn-sm btn-ghost" (click)="askCloseEntry(entry)">
+                    {{ 'COMMON.CLOSE' | translate }}
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   }
 </div>
 
