@@ -56,4 +56,14 @@ describe('global overflow class (D2230 / D2231)', () => {
     expect(getComputedStyle(wrap).overflowX).toBe('auto');
     expect(wrap.getBoundingClientRect().width).toBeLessThanOrEqual(200);
   });
+
+  it('keeps a row actions cell (and its header) stuck to the right edge (D2321)', () => {
+    box.innerHTML = `<table><thead><tr><th>Nom</th><th>Actions</th></tr></thead>
+      <tbody><tr><td>x</td><td><div class="action-group"><button>edit</button></div></td></tr></tbody></table>`;
+    const cell = box.querySelector<HTMLElement>('tbody td:last-child')!;
+    const head = box.querySelector<HTMLElement>('thead th:last-child')!;
+    expect(getComputedStyle(cell).position).toBe('sticky');
+    expect(getComputedStyle(cell).right).toBe('0px');
+    expect(getComputedStyle(head).position).toBe('sticky');
+  });
 });

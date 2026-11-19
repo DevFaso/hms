@@ -388,3 +388,45 @@ fieldset {
 :where(td, th) > :where(span.field-hint, span.cell-secondary, span.cell-sub) {
   display: block;
 }
+
+/* (:has() cannot nest, so the header rule names the cell's child directly.) */
+/* 1. QA D2321 (r63): a row's actions (pay, e-mail, edit, delete) stay on
+   screen. The actions cell — a cell holding an action group, or a last cell
+   holding buttons — sticks to the right edge of the table's scroll box, so a
+   wide table scrolls its data columns underneath it instead of hiding it past
+   a scrollbar at the bottom of the rows. */
+:where(
+  td:has(> :where(.action-group, .row-actions, .table-actions)),
+  td:last-child:has(> :where(button, a, .btn-sm))
+) {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--surface, #fff);
+  box-shadow: -6px 0 6px -6px rgba(15, 23, 42, 0.18);
+}
+:where(
+  table:has(
+      > tbody
+        > tr
+        > td:last-child
+        > :where(.action-group, .row-actions, .table-actions, button, a, .btn-sm)
+    )
+    > thead
+    > tr
+    > th:last-child
+) {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--surface, #fff);
+}
+
+/* QA D2252 (r63): a textarea's browser default is a monospace font; and
+   D2268 / D2286: a field never grows wider than the form or dialog it sits in. */
+textarea {
+  font-family: inherit;
+}
+:where(input, select, textarea) {
+  max-width: 100%;
+}
