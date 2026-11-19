@@ -82,6 +82,13 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private final PrescriptionRepository prescriptionRepository;
     private final ImagingOrderRepository imagingOrderRepository;
     private final ImagingReportRepository imagingReportRepository;
+    /** V316: optional so the unit tests' hand-built service keeps its constructor. */
+    private com.example.hms.repository.ImagingStudyImageRepository imagingStudyImageRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setImagingStudyImageRepository(com.example.hms.repository.ImagingStudyImageRepository repository) {
+        this.imagingStudyImageRepository = repository;
+    }
     private final ProcedureOrderRepository procedureOrderRepository;
     private final HospitalRepository hospitalRepository;
     private final RecordAccessPolicy recordAccessPolicy;
@@ -456,8 +463,10 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         }
         Map<UUID, ImagingReport> latestByOrderId = batchLoadLatestReports(orders);
         Map<UUID, List<ImagingReport>> historyByOrderId = batchLoadReportHistory(latestByOrderId);
+        Map<UUID, Integer> imageCounts = imageCountsOf(orders);
         return orders.stream()
-            .map(o -> toImagingDto(o, latestByOrderId.get(o.getId()), historyByOrderId.get(o.getId())))
+            .map(o -> toImagingDto(o, latestByOrderId.get(o.getId()), historyByOrderId.get(o.getId()),
+                imageCounts.get(o.getId())))
             .sorted(Comparator.comparing(ImagingEntryDTO::getOrderedAt, Comparator.nullsLast(Comparator.reverseOrder()))
                 .thenComparing(ImagingEntryDTO::getId, Comparator.nullsLast(Comparator.naturalOrder())))
             .toList();
@@ -819,7 +828,20 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .build();
     }
 
-    private ImagingEntryDTO toImagingDto(ImagingOrder o, ImagingReport latest, List<ImagingReport> history) {
+    /** V316: the key images per study, in one query; absent for a study with none. */
+    private Map<UUID, Integer> imageCountsOf(List<ImagingOrder> orders) {
+        if (imagingStudyImageRepository == null) {
+            return Map.of();
+        }
+        Map<UUID, Integer> counts = new HashMap<>();
+        for (Object[] row : imagingStudyImageRepository.countByOrderIds(orders.stream().map(ImagingOrder::getId).toList())) {
+            counts.put((UUID) row[0], ((Number) row[1]).intValue());
+        }
+        return counts;
+    }
+
+    private ImagingEntryDTO toImagingDto(ImagingOrder o, ImagingReport latest, List<ImagingReport> history,
+                                         Integer imageCount) {
         // QA D1926 (r53): the appointment's time, when one was typed, is kept.
         java.time.LocalTime time = wallTime(o.getScheduledTime());
         LocalDateTime scheduledFor = o.getScheduledDate() != null
@@ -844,6 +866,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .reportImpression(conclusion != null ? conclusion.getImpression() : null)
             .reports(shown.isEmpty() ? null : shown.stream().map(r -> toImagingReportEntry(r, shown)).toList())
             .authorizationPending(o.getAuthorizationPendingSince() != null)
+            .imageCount(imageCount)
             .build();
     }
 

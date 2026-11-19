@@ -239,6 +239,9 @@ public class ChartReviewDTO {
         private List<ImagingReportEntryDTO> reports;
         /** Provisional rule 1 (V297): the study was done without its required pre-authorisation number. */
         private Boolean authorizationPending;
+        /** V316: how many key images the study carries (null when none); the images themselves
+         *  are read from the imaging image endpoint, under the report's reading rules. */
+        private Integer imageCount;
     }
 
     @Getter
