@@ -1384,8 +1384,42 @@ export class PrescriptionsComponent implements OnInit {
     this.roleContext.hasAnyActiveRole(actionRoles('prescriptionAllergyReview')),
   );
 
+  /**
+   * QA D2264 (r63): the review was offered on every issued order, so a dose
+   * exception (`allergyOverride` false, no allergy at all) showed « Revoir le
+   * conflit allergique » and a button that only closed the drawer. Offered
+   * now when the order passed an allergy alert, or when the server reports a
+   * conflict it meets now (an allergy recorded after signing).
+   */
   canReviewAllergy(p: PrescriptionResponse): boolean {
-    return this.canReviewAllergyRole() && !this.isForeign(p) && isIssuedStatus(p.status);
+    return (
+      this.canReviewAllergyRole() &&
+      !this.isForeign(p) &&
+      isIssuedStatus(p.status) &&
+      (p.allergyOverride === true || this.allergyConflictFound()[p.id] === true)
+    );
+  }
+
+  /** QA D2264: prescription id → the server found an allergy conflict on it now. */
+  readonly allergyConflictFound = signal<Record<string, boolean>>({});
+
+  private checkAllergyConflict(p: PrescriptionResponse): void {
+    if (
+      !this.canReviewAllergyRole() ||
+      this.isForeign(p) ||
+      !isIssuedStatus(p.status) ||
+      p.allergyOverride === true ||
+      p.id in this.allergyConflictFound()
+    ) {
+      return;
+    }
+    this.prescriptionService.getAllergyConflict(p.id).subscribe({
+      next: (c) =>
+        this.allergyConflictFound.update((found) => ({ ...found, [p.id]: c?.conflict === true })),
+      error: () => {
+        /* no button: the order holds no conflict we can show */
+      },
+    });
   }
 
   onAllergyReviewed(): void {
@@ -2407,6 +2441,7 @@ export class PrescriptionsComponent implements OnInit {
   viewDetail(p: PrescriptionResponse): void {
     this.selectedPrescription.set(p);
     this.loadPharmacyHistory(p);
+    this.checkAllergyConflict(p);
   }
 
   closeDetail(): void {

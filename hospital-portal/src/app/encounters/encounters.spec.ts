@@ -651,6 +651,46 @@ describe('EncountersComponent', () => {
     expect(encounterSpy.getNoteHistory).toHaveBeenCalledWith('e1');
   });
 
+  it('QA D2260: a saved addendum shows under the signed note at once, and the note renders it', () => {
+    const signedNote = {
+      id: 'n-signed',
+      encounterId: 'e1',
+      content: '',
+      authorName: 'Dr A',
+      createdAt: '2026-11-19T04:00:00',
+      signedAt: '2026-11-19T04:13:00',
+      assessment: 'Pneumonie',
+    } as EncounterNoteResponse;
+    encounterSpy.addAddendum.and.returnValue(
+      of({
+        id: 'a1',
+        content: 'CRP à 85 mg/L, confirme l’infection.',
+        authorName: 'Dr A',
+        signedAt: '2026-11-19T04:20:00',
+        createdAt: '2026-11-19T04:20:00',
+      } as EncounterNoteAddendumResponse),
+    );
+    component.selectedEncounter.set(mockEncounter());
+    component.noteState.set(signedNote);
+    component.addendumContent = 'CRP à 85 mg/L, confirme l’infection.';
+    component.addAddendum();
+    expect(component.noteState()?.addenda?.map((a) => a.content)).toEqual([
+      'CRP à 85 mg/L, confirme l’infection.',
+    ]);
+  });
+
+  it('QA D2265: a visit created today is dated now, not at a fake midnight', () => {
+    component.ngOnInit();
+    encounterSpy.create.and.returnValue(of(mockEncounter()));
+    component.openCreate();
+    const now = new Date();
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    component.form.encounterDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    component.submitForm();
+    const sent = new Date(`${encounterSpy.create.calls.mostRecent().args[0].encounterDate}Z`);
+    expect(Math.abs(sent.getTime() - now.getTime())).toBeLessThan(2 * 60 * 1000);
+  });
+
   it('saveStructuredNote saves against the selected encounter', () => {
     encounterSpy.addNote.and.returnValue(of({ id: 'n2' } as EncounterNoteResponse));
     component.selectedEncounter.set(mockEncounter());

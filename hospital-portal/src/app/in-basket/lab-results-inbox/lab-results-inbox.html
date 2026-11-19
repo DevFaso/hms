@@ -103,6 +103,19 @@
         </button>
       </p>
     }
+    @if (confirmation(); as done) {
+      <p class="confirm-banner" role="status" data-testid="result-confirmation">
+        {{ done }}
+        <button
+          type="button"
+          class="btn-link"
+          (click)="confirmation.set(null)"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          ×
+        </button>
+      </p>
+    }
     <div class="table-wrap">
       <table class="result-table">
         <caption class="sr-only">
@@ -118,6 +131,7 @@
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
             <th scope="col">{{ 'inBasket.labColResultedAt' | translate }}</th>
             <th scope="col">{{ 'inBasket.labColContext' | translate }}</th>
+            <th scope="col">{{ 'inBasket.resultActions.column' | translate }}</th>
           </tr>
         </thead>
         <!--
@@ -130,7 +144,7 @@
           @if (group.items.length > 0) {
             <tbody class="severity-group">
               <tr class="group-row">
-                <th scope="rowgroup" colspan="6">
+                <th scope="rowgroup" colspan="7">
                   <span [class]="group.badgeClass">{{ group.labelKey | translate }}</span>
                   <span class="group-count">{{ group.items.length }}</span>
                 </th>
@@ -155,10 +169,107 @@
                   </td>
                   <td>
                     <span [class]="flagClass(r)">{{ flagKey(r) | translate }}</span>
+                    <!-- QA D2263: where the row stands, so a value read back no longer reads as pending. -->
+                    @if (r.readBackAt) {
+                      <span class="row-state row-state--done" data-testid="result-state">
+                        {{
+                          'inBasket.resultActions.readBackAt'
+                            | translate: { at: formatDate(r.readBackAt) }
+                        }}
+                      </span>
+                    } @else if (r.readBackRequired) {
+                      <span class="row-state row-state--todo" data-testid="result-state">
+                        {{ 'inBasket.resultActions.readBackRequired' | translate }}
+                      </span>
+                    } @else if (r.acknowledged) {
+                      <span class="row-state row-state--done" data-testid="result-state">
+                        {{ 'inBasket.resultActions.acknowledgedState' | translate }}
+                      </span>
+                    }
                   </td>
                   <td>{{ formatDate(r.resultedAt) }}</td>
                   <td>{{ r.orderingContext || '—' }}</td>
+                  <td>
+                    <div class="row-actions" data-testid="result-actions">
+                      <a
+                        class="btn-link"
+                        data-testid="result-open"
+                        [routerLink]="['/lab-results']"
+                        [queryParams]="{ resultId: r.id }"
+                        >{{ 'inBasket.resultActions.open' | translate }}</a
+                      >
+                      @if (r.readBackRequired && !r.readBackAt) {
+                        <button
+                          type="button"
+                          class="btn-secondary btn-sm"
+                          data-testid="result-read-back"
+                          [disabled]="busyId() !== null"
+                          (click)="openReadBack(r)"
+                        >
+                          {{ 'inBasket.resultActions.readBack' | translate }}
+                        </button>
+                      } @else if (!r.acknowledged) {
+                        <button
+                          type="button"
+                          class="btn-secondary btn-sm"
+                          data-testid="result-acknowledge"
+                          [disabled]="busyId() !== null"
+                          (click)="acknowledge(r)"
+                        >
+                          {{ 'inBasket.resultActions.acknowledge' | translate }}
+                        </button>
+                      }
+                      <a
+                        class="btn-link"
+                        data-testid="result-follow-up"
+                        [routerLink]="['/lab']"
+                        [queryParams]="{ new: 1, patientId: r.patientId }"
+                        >{{ 'inBasket.resultActions.followUp' | translate }}</a
+                      >
+                    </div>
+                  </td>
                 </tr>
+                @if (readBackFor() === r.id) {
+                  <tr class="read-back-row" data-testid="result-read-back-form">
+                    <td colspan="7">
+                      <form class="read-back-form" (ngSubmit)="submitReadBack(r)">
+                        <label [for]="'read-back-' + r.id"
+                          >{{
+                            'inBasket.resultActions.readBackLabel'
+                              | translate: { test: r.testName, patient: r.patientName }
+                          }}
+                          *</label
+                        >
+                        <input
+                          [id]="'read-back-' + r.id"
+                          name="readBackValue"
+                          type="text"
+                          autocomplete="off"
+                          data-testid="result-read-back-value"
+                          [(ngModel)]="readBackValue"
+                          required
+                        />
+                        <button
+                          type="submit"
+                          class="btn-primary btn-sm"
+                          data-testid="result-read-back-confirm"
+                          [appSubmitGuard]="!readBackValue.trim()"
+                          [submitGuardFields]="['read-back-' + r.id]"
+                          [disabled]="busyId() !== null"
+                        >
+                          {{ 'inBasket.resultActions.readBackConfirm' | translate }}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-secondary btn-sm"
+                          (click)="closeReadBack()"
+                        >
+                          {{ 'COMMON.CANCEL' | translate }}
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                }
               }
             </tbody>
           }

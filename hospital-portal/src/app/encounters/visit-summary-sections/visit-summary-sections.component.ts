@@ -1,3 +1,4 @@
+import { NoteAddendaComponent } from '../../shared/note-addenda/note-addenda.component';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
@@ -26,6 +27,7 @@ type ContentSections = Pick<
   | 'currentMedications'
   | 'clinicalAssessment'
   | 'clinicalPlan'
+  | 'noteAddenda'
   | 'medicalHistory'
   | 'surgicalHistory'
   | 'familyHistory'
@@ -42,6 +44,7 @@ export function hasContentSections(s: Partial<ContentSections> | null | undefine
     s.currentMedications?.length ||
     s.clinicalAssessment ||
     s.clinicalPlan ||
+    s.noteAddenda?.length ||
     s.medicalHistory?.length ||
     s.surgicalHistory?.length ||
     s.familyHistory?.length ||
@@ -170,6 +173,7 @@ function escapeRegExp(value: string): string {
   selector: 'app-visit-summary-sections',
   standalone: true,
   imports: [
+    NoteAddendaComponent,
     CommonModule,
     TranslateModule,
     EnumLabelPipe,

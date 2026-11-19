@@ -4719,7 +4719,8 @@
     "CRITICAL_COMMUNICATED_VALUE": "To {{to}}, read back: {{readBack}}",
     "QC_OVERRIDE": "Released despite rejected QC",
     "RELEASE_CRITICAL_FROM_WORKLIST": "A critical result is released from the release worklist, where you record who was told.",
-    "RELEASE_FROM_WORKLIST": "Release it from the release worklist."
+    "RELEASE_FROM_WORKLIST": "Release it from the release worklist.",
+    "READ_BACK_CONFIRMED_DETAIL": "Read-back confirmed: {{test}} « {{value}} » — {{patient}}"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -9276,7 +9277,9 @@
       "UROLOGY": "Urology",
       "VASCULAR_SURGERY": "Vascular Surgery",
       "WOUND_CARE": "Wound Care"
-    }
+    },
+    "DRAFT_HINT": "The referral is saved as a draft. The receiving hospital gets it only once you send it with « Submit Referral » in the list.",
+    "CREATED_DRAFT": "Referral saved as a draft: not sent yet. Send it from the list."
   },
   "RESET": {
     "BACK_TO_LOGIN": "Back to Login",
@@ -10231,7 +10234,23 @@
     "emptyCategory": "No items in this category",
     "emptyCategoryHint": "Choose another category or view all inbox items.",
     "showAll": "View all items",
-    "summaryLoadFailed": "Unable to update unread counts. Refresh your inbox to try again."
+    "summaryLoadFailed": "Unable to update unread counts. Refresh your inbox to try again.",
+    "resultActions": {
+      "column": "Actions",
+      "open": "Open result",
+      "acknowledge": "Acknowledge",
+      "acknowledged": "Acknowledged: {{test}} — {{patient}}",
+      "acknowledgedState": "Acknowledged",
+      "acknowledgeFailed": "The result could not be acknowledged.",
+      "readBack": "Read back",
+      "readBackLabel": "Repeat the critical value of {{test}} for {{patient}} as you were told it",
+      "readBackConfirm": "Confirm read-back",
+      "readBackConfirmed": "Read-back confirmed: {{test}} — {{patient}}",
+      "readBackFailed": "The read-back could not be recorded.",
+      "readBackRequired": "Read-back required",
+      "readBackAt": "Read back {{at}}",
+      "followUp": "Order follow-up"
+    }
   },
   "common": {
     "loading": "Loading…"
@@ -14853,5 +14872,12 @@
       "WITHDRAWN_LIST": "Withdrawn images ({{count}})",
       "WITHDRAW_REASON": "Reason"
     }
+  },
+  "NOTE_ADDENDA": {
+    "TITLE": "Addenda ({{count}})",
+    "ADDENDUM": "Addendum",
+    "SIGNED_BY": "signed by {{name}}",
+    "BY": "by {{name}}",
+    "NOT_ATTESTED": "Not attested"
   }
 }

@@ -4719,7 +4719,8 @@
     "CRITICAL_COMMUNICATED_VALUE": "À {{to}}, valeur relue : {{readBack}}",
     "QC_OVERRIDE": "Validé malgré un CQ rejeté",
     "RELEASE_CRITICAL_FROM_WORKLIST": "Un résultat critique se valide depuis la file de validation, où vous notez qui a été prévenu.",
-    "RELEASE_FROM_WORKLIST": "Validez-le depuis la file de validation."
+    "RELEASE_FROM_WORKLIST": "Validez-le depuis la file de validation.",
+    "READ_BACK_CONFIRMED_DETAIL": "Relecture confirmée : {{test}} « {{value}} » — {{patient}}"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -9276,7 +9277,9 @@
       "UROLOGY": "Urologie",
       "VASCULAR_SURGERY": "Chirurgie vasculaire",
       "WOUND_CARE": "Soins des plaies"
-    }
+    },
+    "DRAFT_HINT": "L’orientation est enregistrée comme brouillon. L’établissement de destination ne la reçoit qu’après « Envoyer l’orientation » dans la liste.",
+    "CREATED_DRAFT": "Orientation enregistrée en brouillon : pas encore envoyée. Envoyez-la depuis la liste."
   },
   "RESET": {
     "BACK_TO_LOGIN": "Retour à la connexion",
@@ -10231,7 +10234,23 @@
     "emptyCategory": "Aucun élément dans cette catégorie",
     "emptyCategoryHint": "Choisissez une autre catégorie ou affichez tous les éléments.",
     "showAll": "Tout afficher",
-    "summaryLoadFailed": "Impossible de mettre à jour les compteurs non lus. Actualisez votre boîte de réception pour réessayer."
+    "summaryLoadFailed": "Impossible de mettre à jour les compteurs non lus. Actualisez votre boîte de réception pour réessayer.",
+    "resultActions": {
+      "column": "Actions",
+      "open": "Ouvrir le résultat",
+      "acknowledge": "Prendre connaissance",
+      "acknowledged": "Pris connaissance : {{test}} — {{patient}}",
+      "acknowledgedState": "Pris connaissance",
+      "acknowledgeFailed": "La prise de connaissance n’a pas pu être enregistrée.",
+      "readBack": "Relecture",
+      "readBackLabel": "Répétez la valeur critique de {{test}} pour {{patient}} telle qu’on vous l’a communiquée",
+      "readBackConfirm": "Confirmer la relecture",
+      "readBackConfirmed": "Relecture confirmée : {{test}} — {{patient}}",
+      "readBackFailed": "La relecture n’a pas pu être enregistrée.",
+      "readBackRequired": "Relecture requise",
+      "readBackAt": "Relu le {{at}}",
+      "followUp": "Demander un suivi"
+    }
   },
   "common": {
     "loading": "Chargement…"
@@ -14853,5 +14872,12 @@
       "WITHDRAWN_LIST": "Images retirées ({{count}})",
       "WITHDRAW_REASON": "Motif"
     }
+  },
+  "NOTE_ADDENDA": {
+    "TITLE": "Addenda ({{count}})",
+    "ADDENDUM": "Addendum",
+    "SIGNED_BY": "signé par {{name}}",
+    "BY": "par {{name}}",
+    "NOT_ATTESTED": "Non attesté"
   }
 }

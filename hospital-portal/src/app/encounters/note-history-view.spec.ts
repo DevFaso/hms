@@ -39,6 +39,41 @@ describe('toNoteHistoryView (QA D43)', () => {
   });
 });
 
+describe('toNoteHistoryView: an addendum row (QA D2260)', () => {
+  it('carries the addendum it records, the newest of the snapshot, and its author', () => {
+    const view = toNoteHistoryView({
+      id: 'h4',
+      changedAt: '2026-11-19T04:20:00',
+      changeType: 'NOTE_ADDENDUM',
+      contentSnapshot: JSON.stringify({
+        assessment: 'Pneumonie',
+        addendaEntries: [
+          { content: 'Old', authorName: 'Dr B', documentedAt: '2026-11-18T10:00:00' },
+          {
+            content: 'CRP à 85 mg/L',
+            authorName: 'Dr A',
+            documentedAt: '2026-11-19T04:20:00',
+            signedAt: '2026-11-19T04:20:00',
+          },
+        ],
+      }),
+      metadataSnapshot: JSON.stringify({ authorName: 'Dr Note' }),
+    });
+    expect(view.addenda.map((a) => a.content)).toEqual(['CRP à 85 mg/L']);
+    expect(view.authorName).toBe('Dr A');
+  });
+
+  it('has no addendum on any other row', () => {
+    const view = toNoteHistoryView({
+      id: 'h5',
+      changedAt: '2026-11-19T04:00:00',
+      changeType: 'NOTE_SIGNED',
+      contentSnapshot: JSON.stringify({ addendaEntries: [{ content: 'x' }] }),
+    });
+    expect(view.addenda).toEqual([]);
+  });
+});
+
 describe('noteEntrySections (#965 review)', () => {
   it('lists the filled sections of an entry in form order, with their labels', () => {
     const sections = noteEntrySections({

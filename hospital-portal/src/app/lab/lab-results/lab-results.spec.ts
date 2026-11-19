@@ -307,6 +307,33 @@ describe('LabResultsComponent', () => {
     expect(component.pagedResults()[0].id).toBe('result-10');
   });
 
+  it('QA D2266: a confirmed read-back stays said on screen until dismissed', () => {
+    fixture.detectChanges();
+    flushInit();
+    const row = mockResult({
+      id: 'critical-x',
+      severityFlag: 'CRITICAL',
+    }) as unknown as LabResultResponse;
+    component.openReadBack(row);
+    component.readBackValue.set(row.resultValue);
+    component.submitReadBack();
+    httpMock
+      .expectOne('/lab-results/critical-x/critical-read-back')
+      .flush({ ...row, acknowledged: true });
+    fixture.detectChanges();
+    const banner = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="read-back-confirmation"]',
+    );
+    expect(banner?.textContent).toContain('LAB_RESULTS.READ_BACK_CONFIRMED_DETAIL');
+    component.readBackConfirmation.set(null);
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="read-back-confirmation"]',
+      ),
+    ).toBeNull();
+  });
+
   it('keeps the clamped critical page after read-back and a later growing refresh', () => {
     fixture.detectChanges();
     flushInit();

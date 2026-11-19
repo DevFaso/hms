@@ -807,6 +807,11 @@
           </div>
         </div>
       </div>
+      <!-- QA D2269 (r63): creating saves a draft; the receiving hospital gets nothing until it is sent. -->
+      <p class="draft-hint" data-testid="referral-draft-hint">
+        <span class="material-symbols-outlined" aria-hidden="true">info</span>
+        {{ 'REFERRALS.DRAFT_HINT' | translate }}
+      </p>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}

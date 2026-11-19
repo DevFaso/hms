@@ -1,3 +1,4 @@
+import { NoteAddendaComponent } from '../../shared/note-addenda/note-addenda.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -31,7 +32,14 @@ export interface NursingNotePart {
 @Component({
   selector: 'app-nursing-notes-panel',
   standalone: true,
-  imports: [CommonModule, TranslateModule, ServerTimePipe, EnumLabelPipe, CredentialsLabelPipe],
+  imports: [
+    NoteAddendaComponent,
+    CommonModule,
+    TranslateModule,
+    ServerTimePipe,
+    EnumLabelPipe,
+    CredentialsLabelPipe,
+  ],
   templateUrl: './nursing-notes-panel.component.html',
   styleUrl: './nursing-notes-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.Eager,

@@ -551,3 +551,17 @@
   color: var(--text-secondary, #555);
 }
 @include specialist.workspace;
+
+/* QA D2269 (r63): the create dialog says it saves a draft. */
+.draft-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 12px 0 0;
+  font-size: 0.8125rem;
+  color: #475569;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}

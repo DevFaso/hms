@@ -1,3 +1,4 @@
+import { NoteAddendumView } from '../shared/note-addenda/note-addendum-view';
 import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
@@ -83,6 +84,8 @@ export interface EncounterNoteResponse {
   implementation?: string | null;
   evaluation?: string | null;
   patientInstructions?: string | null;
+  /** QA D2260: the addenda filed under this entry (EncounterNoteResponseDTO.addenda). */
+  addenda?: EncounterNoteAddendumResponse[] | null;
 }
 
 /**
@@ -305,6 +308,8 @@ export interface AfterVisitSummary {
   currentMedications?: AvsCurrentMedication[] | null;
   clinicalAssessment?: string | null;
   clinicalPlan?: string | null;
+  /** QA D2260: the addenda of the signed note, oldest first, each dated and signed. */
+  noteAddenda?: NoteAddendumView[] | null;
   medicalHistory?: { condition: string; status?: string | null }[] | null;
   surgicalHistory?: { procedure: string; date?: string | null }[] | null;
   familyHistory?: { relationship?: string | null; condition: string }[] | null;

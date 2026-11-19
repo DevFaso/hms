@@ -1,3 +1,4 @@
+import { NoteAddendumView } from '../shared/note-addenda/note-addendum-view';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -27,6 +28,8 @@ export interface NursingNote {
   documentedAt?: string | null;
   signedAt?: string | null;
   signedByName?: string | null;
+  /** QA D2260: the addenda filed under the note (NursingNoteResponseDTO.addenda). */
+  addenda?: NoteAddendumView[] | null;
 }
 
 /**

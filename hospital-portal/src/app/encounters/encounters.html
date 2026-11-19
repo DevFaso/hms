@@ -481,6 +481,8 @@
                         <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
                       </p>
                     }
+                    <!-- QA D2260: an addendum row shows the addendum it records. -->
+                    <app-note-addenda [addenda]="n.addenda" />
                   </div>
                 }
               </div>
@@ -574,6 +576,8 @@
                       <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
                     </p>
                   }
+                  <!-- QA D2260: the corrections filed under this entry. -->
+                  <app-note-addenda [addenda]="view.entry.addenda" />
                   @if (!view.entry.signedAt && isNoteAuthor(view.entry)) {
                     <button
                       class="btn-secondary"
@@ -678,6 +682,8 @@
                   </p>
                 }
               }
+              <!-- QA D2260: the corrections filed under the signed note, dated and signed. -->
+              <app-note-addenda [addenda]="note.addenda" />
               @if (note.requiresCosign) {
                 @if (note.cosignedAt) {
                   <p class="note-meta" data-testid="note-cosigned-line">

@@ -165,7 +165,9 @@ class PatientFacingUnfinishedContentGuardTest {
         Map.entry("service/TreatingClinician.java", new Rule("", "an authorship check; presents nothing")),
         Map.entry("service/MedicalCertificateServiceImpl.java", new Rule("TreatingClinician.isCaller(",
             "an authorship check only; the certificate prints no note text")),
-        Map.entry("service/UnsignedNoteFollowUp.java", new Rule("", "reminds the author to sign: staff")));
+        Map.entry("service/UnsignedNoteFollowUp.java", new Rule("", "reminds the author to sign: staff")),
+        Map.entry("service/DoctorWorklistServiceImpl.java", new Rule("awaitsSignature",
+            "QA D2261: counts the doctor's own notes awaiting signature for the dashboard tile: staff")));
 
     @Test
     @DisplayName("every patient-facing read method is listed and still withholds unfinished content")

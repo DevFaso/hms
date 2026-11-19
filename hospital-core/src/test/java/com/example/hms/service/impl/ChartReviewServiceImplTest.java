@@ -438,6 +438,35 @@ class ChartReviewServiceImplTest {
         });
     }
 
+    /** QA D2260 (r63): the Notes tab carries each addendum under its note, oldest first. */
+    @Test
+    void aNoteCarriesItsAddendaOldestFirst() {
+        LocalDateTime now = LocalDateTime.now();
+        Encounter enc = encounter(EncounterStatus.COMPLETED, now);
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(
+            any(UUID.class), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(enc)));
+        EncounterNote note = note(enc, now);
+        com.example.hms.model.encounter.EncounterNoteAddendum second = new com.example.hms.model.encounter.EncounterNoteAddendum();
+        second.setContent("second");
+        second.setAuthorName("Dr B");
+        second.setSignedAt(now.minusMinutes(5));
+        com.example.hms.model.encounter.EncounterNoteAddendum first = new com.example.hms.model.encounter.EncounterNoteAddendum();
+        first.setContent("first");
+        first.setAuthorName("Dr A");
+        first.setSignedAt(now.minusMinutes(30));
+        note.addAddendum(second);
+        note.addAddendum(first);
+        when(noteRepo.findByEncounter_IdIn(any())).thenReturn(List.of(note));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getNotes()).singleElement().satisfies(n ->
+            assertThat(n.getAddenda()).extracting("content", "authorName")
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("first", "Dr A"),
+                    org.assertj.core.groups.Tuple.tuple("second", "Dr B")));
+    }
+
     @Test
     void directionalResultKeepsTheFamilyOnTabAndTimelineAndCarriesTheDirection() {
         LabResult r = labResult(LocalDateTime.now(), AbnormalFlag.ABNORMAL_LOW, "Sodium", "2951-2");

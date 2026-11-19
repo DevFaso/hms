@@ -8,12 +8,16 @@ import { Subject, of, throwError } from 'rxjs';
 import { LabResultsInboxComponent } from './lab-results-inbox';
 import { RoleContextService } from '../../core/role-context.service';
 import { DashboardService, DoctorResultQueueItem } from '../../services/dashboard.service';
+import { LabService, LabResultResponse } from '../../services/lab.service';
+import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
+import { HttpErrorResponse } from '@angular/common/http';
 
 describe('LabResultsInboxComponent', () => {
   let fixture: ComponentFixture<LabResultsInboxComponent>;
   let component: LabResultsInboxComponent;
   let dashboardService: jasmine.SpyObj<DashboardService>;
   let roleContext: RoleContextService;
+  let labService: jasmine.SpyObj<LabService>;
 
   function item(overrides: Partial<DoctorResultQueueItem> = {}): DoctorResultQueueItem {
     return {
@@ -49,6 +53,10 @@ describe('LabResultsInboxComponent', () => {
     dashboardService.getResultReviewQueue.and.returnValue(
       queue === 'error' ? throwError(() => new Error('403')) : of(queue),
     );
+    labService = jasmine.createSpyObj<LabService>('LabService', [
+      'acknowledgeResult',
+      'readBackCriticalValue',
+    ]);
 
     TestBed.configureTestingModule({
       imports: [LabResultsInboxComponent, TranslateModule.forRoot()],
@@ -57,6 +65,7 @@ describe('LabResultsInboxComponent', () => {
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: DashboardService, useValue: dashboardService },
+        { provide: LabService, useValue: labService },
       ],
     });
 
@@ -439,5 +448,80 @@ describe('LabResultsInboxComponent', () => {
 
     expect(dashboardService.getResultReviewQueue).not.toHaveBeenCalled();
     expect(component.loadError()).toBeFalse();
+  });
+  describe('QA D2263: each result row can be acted on', () => {
+    const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+    const q = <T extends Element = HTMLElement>(sel: string): T | null =>
+      host().querySelector<T>(sel);
+
+    it('opens the result and offers a follow-up order for the patient', () => {
+      setup([item()]);
+      expect(q<HTMLAnchorElement>('[data-testid="result-open"]')?.getAttribute('href')).toBe(
+        '/lab-results?resultId=r-1',
+      );
+      expect(q<HTMLAnchorElement>('[data-testid="result-follow-up"]')?.getAttribute('href')).toBe(
+        '/lab?new=1&patientId=p-1',
+      );
+    });
+
+    it('acknowledges a result and says so on the row and above the table', () => {
+      setup([item()]);
+      labService.acknowledgeResult.and.returnValue(of(undefined));
+      q<HTMLButtonElement>('[data-testid="result-acknowledge"]')!.click();
+      fixture.detectChanges();
+      expect(labService.acknowledgeResult).toHaveBeenCalledOnceWith('r-1');
+      expect(q('[data-testid="result-acknowledge"]')).toBeNull();
+      expect(q('[data-testid="result-state"]')?.textContent).toContain(
+        'inBasket.resultActions.acknowledgedState',
+      );
+      expect(q('[data-testid="result-confirmation"]')).not.toBeNull();
+    });
+
+    it('a critical value refused for want of a read-back opens the read-back form', () => {
+      setup([item({ abnormalFlag: 'CRITICAL' })]);
+      labService.acknowledgeResult.and.returnValue(
+        throwError(() => new HttpErrorResponse({ status: 400 })),
+      );
+      q<HTMLButtonElement>('[data-testid="result-acknowledge"]')!.click();
+      fixture.detectChanges();
+      expect(q('[data-testid="result-read-back-form"]')).not.toBeNull();
+      expect(q('[data-testid="result-state"]')?.textContent).toContain(
+        'inBasket.resultActions.readBackRequired',
+      );
+    });
+
+    it('refuses an empty read-back and marks the field', () => {
+      setup([item({ abnormalFlag: 'CRITICAL', readBackRequired: true })]);
+      q<HTMLButtonElement>('[data-testid="result-read-back"]')!.click();
+      fixture.detectChanges();
+      expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="result-read-back-confirm"]',
+        sent: labService.readBackCriticalValue,
+      });
+    });
+
+    it('records a read-back, keeps the row and marks it read back', async () => {
+      setup([item({ abnormalFlag: 'CRITICAL', readBackRequired: true })]);
+      labService.readBackCriticalValue.and.returnValue(
+        of({ criticalReadBackAt: '2026-11-19T04:20:00' } as LabResultResponse),
+      );
+      q<HTMLButtonElement>('[data-testid="result-read-back"]')!.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const input = q<HTMLInputElement>('[data-testid="result-read-back-value"]')!;
+      input.value = '7,1';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      q<HTMLButtonElement>('[data-testid="result-read-back-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(labService.readBackCriticalValue).toHaveBeenCalledOnceWith('r-1', '7,1');
+      expect(q('[data-testid="result-read-back-form"]')).toBeNull();
+      expect(component.results()[0].readBackRequired).toBeFalse();
+      expect(component.results()[0].readBackAt).toBe('2026-11-19T04:20:00');
+      expect(q('[data-testid="result-state"]')?.textContent).toContain(
+        'inBasket.resultActions.readBackAt',
+      );
+      expect(q('[data-testid="result-confirmation"]')).not.toBeNull();
+    });
   });
 });

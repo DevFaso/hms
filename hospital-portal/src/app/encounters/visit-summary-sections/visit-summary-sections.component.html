@@ -261,6 +261,13 @@
     </section>
   }
 
+  <!-- QA D2260: the addenda to the signed note whose assessment and plan are shown above. -->
+  @if (summary().noteAddenda?.length) {
+    <section class="vss-section" data-testid="avs-addenda">
+      <app-note-addenda [addenda]="summary().noteAddenda" />
+    </section>
+  }
+
   @if (summary().prescriptionSummary || summary().currentMedications?.length) {
     <section class="vss-section" data-testid="avs-medications">
       <h3>

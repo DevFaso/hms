@@ -68,4 +68,30 @@ public interface EncounterNoteRepository extends JpaRepository<EncounterNote, UU
         """)
     List<EncounterNote> findUnsignedAtHospitalCreatedBefore(
         @Param("hospitalId") UUID hospitalId, @Param("before") LocalDateTime before);
+
+    /**
+     * QA D2261 (r63): the notes this author has not signed, at one hospital. The caller keeps those
+     * {@link EncounterNote#awaitsSignature()} (a blank shell is no note to sign).
+     */
+    @Query("""
+        SELECT n FROM EncounterNote n
+        WHERE n.author.id = :authorUserId
+          AND n.hospital.id = :hospitalId
+          AND n.signedAt IS NULL
+          AND n.signatureValue IS NULL
+        """)
+    List<EncounterNote> findUnsignedByAuthorAtHospital(
+        @Param("authorUserId") UUID authorUserId, @Param("hospitalId") UUID hospitalId);
+
+    /**
+     * QA D2261: the same with no single hospital resolved: the caller's own notes, nobody else's.
+     * Two finders, not an {@code :hospitalId IS NULL} test, which PostgreSQL cannot type for a null UUID.
+     */
+    @Query("""
+        SELECT n FROM EncounterNote n
+        WHERE n.author.id = :authorUserId
+          AND n.signedAt IS NULL
+          AND n.signatureValue IS NULL
+        """)
+    List<EncounterNote> findUnsignedByAuthor(@Param("authorUserId") UUID authorUserId);
 }

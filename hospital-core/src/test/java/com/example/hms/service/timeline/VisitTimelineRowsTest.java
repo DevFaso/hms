@@ -191,6 +191,63 @@ class VisitTimelineRowsTest {
             .noneMatch(PatientTimelineEntryDTO::isSensitive);
     }
 
+    /** QA D2260 (r63): each addendum to the signed note is a dated row of its own, signed by its author. */
+    @Test
+    void anAddendumToTheSignedNoteIsItsOwnRow() {
+        aFullConsultation();
+        EncounterNote signed = notes.findByEncounter_IdIn(List.of(
+            encounters.findByPatient_IdAndHospital_Id(patientId, here.getId()).get(0).getId())).get(0);
+        com.example.hms.model.encounter.EncounterNoteAddendum addendum = new com.example.hms.model.encounter.EncounterNoteAddendum();
+        addendum.setId(UUID.randomUUID());
+        addendum.setContent("CRP à 85 mg/L, confirme l'infection.");
+        addendum.setAuthorName("Dr Ouédraogo");
+        addendum.setSignedAt(LocalDateTime.now().minusMinutes(10));
+        signed.addAddendum(addendum);
+        com.example.hms.model.encounter.EncounterNoteAddendum unattested = new com.example.hms.model.encounter.EncounterNoteAddendum();
+        unattested.setId(UUID.randomUUID());
+        unattested.setContent("Sans attestation");
+        unattested.setDocumentedAt(LocalDateTime.now().minusMinutes(5));
+        signed.addAddendum(unattested);
+        com.example.hms.model.NursingNote nursing = new com.example.hms.model.NursingNote();
+        nursing.setId(UUID.randomUUID());
+        nursing.setHospital(here);
+        nursing.setTemplate(com.example.hms.model.NursingNoteTemplate.DAR);
+        nursing.setDataAssessment("Patient calme");
+        nursing.setDocumentedAt(LocalDateTime.now().minusHours(2));
+        com.example.hms.model.NursingNoteAddendum nursingAddendum = new com.example.hms.model.NursingNoteAddendum();
+        nursingAddendum.setId(UUID.randomUUID());
+        nursingAddendum.setContent("Douleur 2/10 après antalgique");
+        nursingAddendum.setAuthorName("Inf. Kaboré");
+        nursingAddendum.setSignedAt(LocalDateTime.now().minusMinutes(20));
+        nursing.addAddendum(nursingAddendum);
+        when(nursingNotes.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(here.getId())))
+            .thenReturn(List.of(nursing));
+
+        List<PatientTimelineEntryDTO> visit = rows.collect(patientId, here.getId(), Set.of());
+
+        assertThat(visit).filteredOn(row -> unattested.getId().toString().equals(row.getEntryId()))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row.getSummary()).isEqualTo("Addendum à la note signée (non attesté) — Sans attestation");
+                assertThat(row.getOccurredAt()).isEqualTo(unattested.getDocumentedAt());
+            });
+        assertThat(visit).filteredOn(row -> nursingAddendum.getId().toString().equals(row.getEntryId()))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row.getCategory()).isEqualTo("NURSING_NOTE");
+                assertThat(row.getSummary()).isEqualTo("Addendum à la note infirmière — Douleur 2/10 après antalgique");
+            });
+
+        assertThat(visit).filteredOn(row -> addendum.getId().toString().equals(row.getEntryId()))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row.getCategory()).isEqualTo("NOTE");
+                assertThat(row.getSummary()).isEqualTo("Addendum à la note signée — CRP à 85 mg/L, confirme l'infection.");
+                assertThat(row.getOccurredAt()).isEqualTo(addendum.getSignedAt());
+                assertThat(row.getMetadata()).containsEntry("clinician", "Dr Ouédraogo");
+            });
+    }
+
     @Test
     void aNoteAndAnOrderOfASensitiveVisitAreSensitiveRows() {
         aFullConsultation();

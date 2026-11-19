@@ -1045,6 +1045,8 @@ export class LabResultsComponent implements OnInit {
   readBackTarget = signal<LabResultResponse | null>(null);
   readBackValue = signal('');
   readBackSubmitting = signal(false);
+  /** QA D2266: the last confirmed read-back, kept on screen until dismissed. */
+  readonly readBackConfirmation = signal<string | null>(null);
 
   /**
    * A critical result asks for a read-back rather than a bare acknowledge: the
@@ -1087,6 +1089,13 @@ export class LabResultsComponent implements OnInit {
     this.labService.readBackCriticalValue(target.id, value).subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('LAB_RESULTS.READ_BACK_CONFIRMED'));
+        this.readBackConfirmation.set(
+          this.translate.instant('LAB_RESULTS.READ_BACK_CONFIRMED_DETAIL', {
+            test: target.labTestName ?? '',
+            value,
+            patient: target.patientFullName ?? '',
+          }),
+        );
         const patch = (list: LabResultResponse[]): LabResultResponse[] =>
           list.map((row) => (row.id === target.id ? { ...row, ...updated } : row));
         this.results.update(patch);

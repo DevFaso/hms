@@ -117,6 +117,22 @@ describe('VisitSummarySectionsComponent', () => {
     expect(hasContentSections(full)).toBeTrue();
   });
 
+  it('QA D2260: shows the addenda of the signed note, dated and signed, on the staff and the patient copy', () => {
+    const root = render({
+      clinicalPlan: 'Amoxicilline',
+      noteAddenda: [
+        {
+          content: 'CRP à 85 mg/L, confirme l’infection.',
+          authorName: 'Dr A',
+          signedAt: '2026-11-19T04:20:00',
+        },
+      ],
+    });
+    const section = root.querySelector('[data-testid="avs-addenda"]');
+    expect(section?.textContent).toContain('CRP à 85 mg/L, confirme l’infection.');
+    expect(hasContentSections({ noteAddenda: [{ content: 'x' }] })).toBeTrue();
+  });
+
   it('marks corrected results with the shared patient-facing badge', () => {
     const fixture = TestBed.createComponent(VisitSummarySectionsComponent);
     fixture.componentRef.setInput('summary', {

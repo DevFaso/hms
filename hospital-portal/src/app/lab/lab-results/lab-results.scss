@@ -946,6 +946,26 @@
   max-width: 100vw;
 }
 
+/* QA D2266 (r63): the confirmed read-back stays on screen until dismissed. */
+.read-back-confirmation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+
+  > span:nth-child(2) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
 /* r63 (NFS panels): one field per panel component, wrapping on narrow screens */
 .panel-entry {
   /* r63: a long label or an untranslated word wraps instead of widening the box. */
