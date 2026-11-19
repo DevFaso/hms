@@ -56,38 +56,40 @@ interface PrefRow {
       } @else {
         <p class="settings-desc">{{ 'NOTIFICATIONS.SETTINGS_DESC' | translate }}</p>
 
-        <table class="pref-table">
-          <thead>
-            <tr>
-              <th>{{ 'NOTIFICATIONS.NOTIFICATION_TYPE' | translate }}</th>
-              @for (ch of channels; track ch) {
-                <th class="channel-col">{{ channelLabelKey(ch) | translate }}</th>
-              }
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of rows(); track row.notificationType) {
+        <div class="table-scroll">
+          <table class="pref-table">
+            <thead>
               <tr>
-                <td class="type-label">{{ row.labelKey | translate }}</td>
+                <th>{{ 'NOTIFICATIONS.NOTIFICATION_TYPE' | translate }}</th>
                 @for (ch of channels; track ch) {
-                  <td class="channel-col">
-                    <label class="toggle">
-                      <input
-                        type="checkbox"
-                        [attr.aria-label]="
-                          (row.labelKey | translate) + ' — ' + (channelLabelKey(ch) | translate)
-                        "
-                        [(ngModel)]="row.channels[ch]"
-                        (ngModelChange)="dirty.set(true)"
-                      />
-                      <span class="slider"></span>
-                    </label>
-                  </td>
+                  <th class="channel-col">{{ channelLabelKey(ch) | translate }}</th>
                 }
               </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (row of rows(); track row.notificationType) {
+                <tr>
+                  <td class="type-label">{{ row.labelKey | translate }}</td>
+                  @for (ch of channels; track ch) {
+                    <td class="channel-col">
+                      <label class="toggle">
+                        <input
+                          type="checkbox"
+                          [attr.aria-label]="
+                            (row.labelKey | translate) + ' — ' + (channelLabelKey(ch) | translate)
+                          "
+                          [(ngModel)]="row.channels[ch]"
+                          (ngModelChange)="dirty.set(true)"
+                        />
+                        <span class="slider"></span>
+                      </label>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
 
         <div class="settings-actions">
           <button

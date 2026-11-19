@@ -121,6 +121,7 @@ interface WindowState {
       }
       .cost-panel__filters {
         display: flex;
+        flex-wrap: wrap;
         gap: 1rem;
         align-items: end;
         margin: 1rem 0 1.5rem;
