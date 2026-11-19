@@ -2,9 +2,10 @@ package com.example.hms.fhir.bulk;
 
 import com.example.hms.model.platform.FhirBulkExportFile;
 import com.example.hms.model.platform.FhirBulkExportJob;
+import com.example.hms.storage.StoredObject;
+import com.example.hms.storage.StoredObjectResource;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -137,11 +137,11 @@ public class FhirBulkExportStatusController {
             || resolved.get().getStatus() != FhirBulkExportJob.Status.COMPLETED) {
             return ResponseEntity.notFound().build();
         }
-        Path path = service.resolveOutputFile(resolved.get(), fileName);
+        StoredObject stored = service.openOutputFile(resolved.get(), fileName);
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType(NDJSON))
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
-            .body(new FileSystemResource(path));
+            .body(new StoredObjectResource(stored));
     }
 
     /* ── response builders ─────────────────────────────────────────── */

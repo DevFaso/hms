@@ -15,6 +15,9 @@ import com.example.hms.repository.FhirBulkExportFileRepository;
 import com.example.hms.repository.FhirBulkExportJobRepository;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.storage.FileStorage;
+import com.example.hms.storage.StorageKeys;
+import com.example.hms.storage.StoredObject;
 import com.example.hms.utility.RoleValidator;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.slf4j.Logger;
@@ -24,9 +27,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -39,7 +40,7 @@ import java.util.UUID;
  * by P3 #24). The foundation pass shipped an in-memory job map with no
  * runner; this pass replaces it with the persistent
  * {@code platform.fhir_bulk_export_jobs} table swept by
- * {@link FhirBulkExportRunner}, which streams NDJSON to local disk and
+ * {@link FhirBulkExportRunner}, which streams NDJSON to the file store and
  * flips the job COMPLETED so the status endpoint can finally serve the
  * spec's {@code 200 OK + manifest} branch.
  *
@@ -86,22 +87,30 @@ public class FhirBulkExportService {
     private final FhirBulkExportJobRepository jobRepository;
     private final FhirBulkExportFileRepository fileRepository;
     private final RoleValidator roleValidator;
-    private final Path storageRoot;
+    private final FileStorage storage;
+
+    /** Where finished output is kept in the file store: {@code fhir-bulk-exports/<jobId>/<file>}. */
+    static final String OUTPUT_PREFIX = "fhir-bulk-exports/";
 
     public FhirBulkExportService(
         FhirOperationsProperties operationsProperties,
         AuditEventLogService auditEventLogService,
         FhirBulkExportJobRepository jobRepository,
         FhirBulkExportFileRepository fileRepository,
-        RoleValidator roleValidator
+        RoleValidator roleValidator,
+        FileStorage storage
     ) {
         this.operationsProperties = operationsProperties;
         this.auditEventLogService = auditEventLogService;
         this.jobRepository = jobRepository;
         this.fileRepository = fileRepository;
         this.roleValidator = roleValidator;
-        this.storageRoot = Paths.get(
-            operationsProperties.getBulkExport().getStorageDir()).toAbsolutePath().normalize();
+        this.storage = storage;
+    }
+
+    /** The storage key of one output file: {@code fhir-bulk-exports/<jobId>/<fileName>}. */
+    public static String outputKey(UUID jobId, String fileName) {
+        return StorageKeys.requireValid(OUTPUT_PREFIX + jobId + "/" + fileName);
     }
 
     public boolean isEnabled() {
@@ -206,22 +215,23 @@ public class FhirBulkExportService {
     }
 
     /**
-     * Resolve one output file for download. The on-disk name comes from
-     * the DB row matched by (job, fileName) — never from raw client
-     * input — and the resolved path must stay inside the job's own
-     * directory, so traversal has nothing to grab onto.
+     * Open one output file for download (the caller closes it). The stored
+     * name comes from the DB row matched by (job, fileName), never from raw
+     * client input, and the key stays under the job's own prefix
+     * ({@link StorageKeys}), so traversal has nothing to grab onto.
      */
     @Transactional(readOnly = true)
-    public Path resolveOutputFile(FhirBulkExportJob job, String fileName) {
+    public StoredObject openOutputFile(FhirBulkExportJob job, String fileName) {
         FhirBulkExportFile file = fileRepository
             .findByJob_IdAndFileName(job.getId(), fileName)
             .orElseThrow(() -> new ResourceNotFoundException("fhir.bulkExport.file.notFound", fileName, job.getId()));
-        Path jobDir = storageRoot.resolve(job.getId().toString()).normalize();
-        Path path = jobDir.resolve(file.getFileName()).normalize();
-        if (!path.startsWith(jobDir) || !Files.exists(path)) {
+        try {
+            return storage.get(outputKey(job.getId(), file.getFileName()))
+                .orElseThrow(() -> new ResourceNotFoundException("fhir.bulkExport.file.gone", fileName, job.getId()));
+        } catch (IOException | IllegalArgumentException ex) {
+            log.warn("FHIR bulk-export file of job {} could not be read: {}", job.getId(), ex.getMessage());
             throw new ResourceNotFoundException("fhir.bulkExport.file.gone", fileName, job.getId());
         }
-        return path;
     }
 
     /** Shared kickoff/status role gate — a bulk export is a mass PHI extract. */

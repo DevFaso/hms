@@ -160,7 +160,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         return documentMapper.toDto(saved);
     }
 
-    /** The PDF is written before the row; a transaction that rolls back must not leave PHI on disk. */
+    /** The PDF is written before the row; a transaction that rolls back must not leave PHI stored. */
     private void removeFileIfRolledBack(String storageKey) {
         if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
             return;
@@ -173,8 +173,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
                         return;
                     }
                     try {
-                        java.nio.file.Files.deleteIfExists(
-                            fileUploadService.resolveStoredFile(storageKey, "patient-documents"));
+                        fileUploadService.deleteStoredFile(storageKey, "patient-documents");
                     } catch (IOException | RuntimeException e) {
                         log.warn("Rolled-back certificate file could not be removed: {}", e.getClass().getSimpleName());
                     }

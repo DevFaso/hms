@@ -25,8 +25,7 @@ class FileUploadServiceContentSniffTest {
 
     @BeforeEach
     void setUp() {
-        service = new FileUploadService();
-        ReflectionTestUtils.setField(service, "uploadDir", tempDir.toString());
+        service = new FileUploadService(new com.example.hms.storage.LocalFileStorage(tempDir));
         ReflectionTestUtils.setField(service, "patientDocumentUrlPrefix", "/uploads");
         ReflectionTestUtils.setField(service, "backendBaseUrl", "http://localhost:8080");
     }

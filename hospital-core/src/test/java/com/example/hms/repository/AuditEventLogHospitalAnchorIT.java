@@ -254,7 +254,10 @@ class AuditEventLogHospitalAnchorIT {
     }
     @Test
     void oversightFilterFindsOlderFailuresBeforePagingAndUsesTheSameCountAndExport() {
-        LocalDateTime start = LocalDateTime.of(2026, 11, 17, 8, 0);
+        // event_timestamp is @CreationTimestamp: Hibernate stamps the save time and
+        // ignores the builder value, so the window must contain "now". A fixed date
+        // here made this test fail from 2026-11-18 08:00 UTC onwards.
+        LocalDateTime start = LocalDateTime.now().minusHours(1);
         for (int i = 0; i < 12; i++) {
             em.persist(AuditEventLog.builder().actorType(ActorType.SYSTEM).actorLabel("Oversight test")
                 .eventType(AuditEventType.DATA_ACCESS).status(AuditStatus.SUCCESS)

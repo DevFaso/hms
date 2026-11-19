@@ -596,12 +596,13 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         if (!participant) {
             throw new ResourceNotFoundException("chat.attachment.notFound", attachmentId);
         }
-        java.nio.file.Path path =
-            fileUploadService.resolveStoredFile(attachment.getStorageKey(), "chat-attachments");
         String contentType = attachment.getContentType() != null
             ? attachment.getContentType() : "application/octet-stream";
         String displayName = attachment.getDisplayName() != null
             ? attachment.getDisplayName() : "attachment";
-        return new ChatAttachmentPayload(path, contentType, displayName);
+        // Opened last: nothing after it can throw and leave the stream open.
+        return new ChatAttachmentPayload(new com.example.hms.storage.StoredObjectResource(
+            fileUploadService.openStoredFile(attachment.getStorageKey(), "chat-attachments")),
+            contentType, displayName);
     }
 }
