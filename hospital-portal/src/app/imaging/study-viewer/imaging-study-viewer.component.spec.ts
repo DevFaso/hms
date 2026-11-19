@@ -29,7 +29,12 @@ describe('ImagingStudyViewerComponent', () => {
   });
 
   beforeEach(async () => {
-    pacs = jasmine.createSpyObj<ImagingPacsService>('ImagingPacsService', ['viewer', 'frame']);
+    pacs = jasmine.createSpyObj<ImagingPacsService>('ImagingPacsService', [
+      'viewer',
+      'frame',
+      'viewerReady',
+    ]);
+    pacs.viewerReady.and.returnValue(of({ ready: true }));
     pacs.frame.and.returnValue(
       of(new Blob([new Uint8Array([0xff, 0xd8])], { type: 'image/jpeg' })),
     );
@@ -121,5 +126,17 @@ describe('ImagingStudyViewerComponent', () => {
     el('imaging-viewer-open')!.click();
     fixture.detectChanges();
     expect(el('imaging-viewer-image-error')).not.toBeNull();
+  });
+
+  it('QA D2467: shows nothing at all when the hospital has no PACS connected', () => {
+    pacs.viewerReady.and.returnValue(of({ ready: false }));
+    fixture = TestBed.createComponent(ImagingStudyViewerComponent);
+    fixture.componentRef.setInput('reportId', 'r2');
+    fixture.detectChanges();
+
+    expect(pacs.viewerReady).toHaveBeenCalledWith('r2');
+    expect(fixture.nativeElement.querySelector('[data-testid="imaging-viewer-open"]')).toBeNull();
+    expect(fixture.nativeElement.textContent.trim()).toBe('');
+    expect(pacs.viewer).not.toHaveBeenCalled();
   });
 });

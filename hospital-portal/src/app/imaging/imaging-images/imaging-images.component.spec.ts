@@ -30,8 +30,17 @@ describe('ImagingImagesComponent (V316)', () => {
   let confirm: jasmine.SpyObj<ConfirmService>;
 
   beforeEach(async () => {
-    service = jasmine.createSpyObj('ImagingImagesService', ['list', 'upload', 'content', 'delete']);
+    service = jasmine.createSpyObj('ImagingImagesService', [
+      'list',
+      'upload',
+      'content',
+      'delete',
+      'withdraw',
+      'updateCaption',
+      'withdrawn',
+    ]);
     service.list.and.returnValue(of([]));
+    service.withdrawn.and.returnValue(of([]));
     service.content.and.returnValue(of(new Blob([new Uint8Array([1])], { type: 'image/png' })));
     confirm = jasmine.createSpyObj('ConfirmService', ['ask']);
 
@@ -97,12 +106,14 @@ describe('ImagingImagesComponent (V316)', () => {
     const events = new Subject<HttpEvent<ImagingStudyImage>>();
     service.upload.and.returnValue(events);
     const file = new File(['png'], 'thorax.png', { type: 'image/png' });
-    component.caption = 'Vue de face';
 
     component.onDrop({
       preventDefault: () => undefined,
       dataTransfer: { files: [file] },
     } as unknown as DragEvent);
+    expect(service.upload).withContext('staged until « Envoyer »').not.toHaveBeenCalled();
+    component.setStagedCaption(component.staged()[0].key, 'Vue de face');
+    component.sendStaged();
 
     expect(service.upload).toHaveBeenCalledWith('o1', file, 'r1', 'Vue de face');
     events.next({ type: HttpEventType.UploadProgress, loaded: 5, total: 10 });
@@ -166,5 +177,97 @@ describe('ImagingImagesComponent (V316)', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.viewer-stage iframe')).not.toBeNull();
+  });
+
+  it('QA D2466: each file of a batch is sent with its own caption', () => {
+    init([], true);
+    service.upload.and.returnValue(new Subject<HttpEvent<ImagingStudyImage>>());
+    const a = new File(['a'], 'face.png', { type: 'image/png' });
+    const b = new File(['b'], 'profil.png', { type: 'image/png' });
+    component.onDrop({
+      preventDefault: () => undefined,
+      dataTransfer: { files: [a, b] },
+    } as unknown as DragEvent);
+    const [first, second] = component.staged();
+    component.setStagedCaption(first.key, 'Face');
+    component.setStagedCaption(second.key, 'Profil');
+    component.sendStaged();
+
+    expect(service.upload.calls.allArgs()).toEqual([
+      ['o1', a, null, 'Face'],
+      ['o1', b, null, 'Profil'],
+    ]);
+    expect(component.staged()).toEqual([]);
+  });
+
+  it('QA D2465: an oversize file is refused on screen at once, with the limit in the reader units', () => {
+    init([], true);
+    const big = new File([new Uint8Array(1)], 'big.png', { type: 'image/png' });
+    Object.defineProperty(big, 'size', { value: 11 * 1024 * 1024 });
+    component.onDrop({
+      preventDefault: () => undefined,
+      dataTransfer: { files: [big] },
+    } as unknown as DragEvent);
+    expect(component.staged()).toEqual([]);
+    expect(component.uploads()[0].error).toBeTruthy();
+    expect(service.upload).not.toHaveBeenCalled();
+  });
+
+  it('QA D2466: the caption is corrected from the viewer', () => {
+    init([image('a', { caption: 'Coupe longitudinal', captionEditable: true })]);
+    service.updateCaption.and.returnValue(
+      of(image('a', { caption: 'Coupe longitudinale', captionEditable: true })),
+    );
+    component.openViewer(0);
+    fixture.detectChanges();
+    expect(component.captionDraft()).toBe('Coupe longitudinal');
+    component.captionDraft.set('Coupe longitudinale ');
+    component.saveCaption(component.images()[0]);
+
+    expect(service.updateCaption).toHaveBeenCalledWith('a', 'Coupe longitudinale');
+    expect(component.images()[0].caption).toBe('Coupe longitudinale');
+  });
+
+  it('QA D2464: a withdrawable image asks for a reason, then is withdrawn and reloaded', () => {
+    init([image('a', { locked: true, deletable: false, withdrawable: true })]);
+    service.withdraw.and.returnValue(of(undefined));
+    (
+      fixture.nativeElement.querySelector('[data-testid="imaging-image-withdraw-a"]') as HTMLElement
+    ).click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="reason-dialog"]')).not.toBeNull();
+
+    component.confirmWithdraw('Mauvais patient');
+
+    expect(service.withdraw).toHaveBeenCalledWith('a', 'Mauvais patient');
+    expect(component.withdrawing()).toBeNull();
+    expect(service.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('QA D2464: a locked image the caller may not withdraw offers no withdrawal', () => {
+    init([image('a', { locked: true, deletable: false, withdrawable: false })]);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="imaging-image-withdraw-a"]'),
+    ).toBeNull();
+  });
+
+  it('QA D2464: the withdrawn images stay in the record with their reason', () => {
+    service.withdrawn.and.returnValue(
+      of([
+        {
+          id: 'w',
+          imagingOrderId: 'o1',
+          withdrawnAt: '2026-11-19T10:00:00',
+          withdrawalReason: 'Mauvais patient',
+        },
+      ]),
+    );
+    init([image('a')]);
+
+    const section = fixture.nativeElement.querySelector(
+      '[data-testid="imaging-images-withdrawn"]',
+    ) as HTMLElement;
+    expect(section.textContent).toContain('Mauvais patient');
+    expect(fixture.nativeElement.querySelectorAll('.thumb').length).toBe(1);
   });
 });

@@ -72,6 +72,16 @@ public class DicomProxyController {
             .body(viewerService.manifest(reportId, actor));
     }
 
+    /** QA D2467 (r64): is a PACS connected for this report's hospital? No PACS is called. */
+    @GetMapping("/reports/{reportId}/viewer-ready")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, "
+        + "'DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
+    public ResponseEntity<java.util.Map<String, Boolean>> viewerReady(@PathVariable UUID reportId) {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .body(java.util.Map.of("ready", viewerService.viewerReady(reportId)));
+    }
+
     /** One rendered frame (JPEG or PNG), streamed through e-Keneya, never cached by the browser. */
     @GetMapping("/reports/{reportId}/series/{seriesUid}/instances/{instanceUid}/frames/{frame}/rendered")
     @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, "

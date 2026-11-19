@@ -325,6 +325,10 @@ public enum AuditEventType {
     MFA_RESET,
     /** QA D2203: a patient's SMS / e-mail choices recorded by the desk. */
     PATIENT_CHANNEL_PREFERENCES_UPDATED,
+    /** QA D2464 (r64, V313): a key image withdrawn after signing, with a reason; the file is kept. */
+    IMAGING_IMAGE_WITHDRAWN,
+    /** QA D2466 (r64): a key image's caption corrected after upload. */
+    IMAGING_IMAGE_CAPTION_UPDATED,
 
     OTHER
 }

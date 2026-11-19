@@ -471,6 +471,21 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<ImagingReportResponseDTO> getReportsAwaitingMySignature() {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        UUID userId = roleValidator.getCurrentUserId();
+        // A super-admin in global view has no hospital, and no read waits on them there.
+        if (hospitalId == null || userId == null) {
+            return List.of();
+        }
+        return imagingReportRepository.findAwaitingSignatureBy(hospitalId, userId,
+                java.util.EnumSet.of(ImagingReportStatus.CANCELLED, ImagingReportStatus.ERROR)).stream()
+            .map(imagingReportMapper::toResponseDTO)
+            .toList();
+    }
+
     // ── Administrative readers (user decision 2026-11-14) ───────────────
 
     /**

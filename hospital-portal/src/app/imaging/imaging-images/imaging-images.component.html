@@ -21,16 +21,6 @@
       <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
       {{ ' ' }}<span class="drop-hint">{{ 'IMAGING_IMAGES.DROP_HINT' | translate }}</span>
       <div class="drop-controls">
-        <label class="caption-field" [for]="captionId">
-          <span>{{ 'IMAGING_IMAGES.CAPTION' | translate }}</span>
-          <input
-            [id]="captionId"
-            type="text"
-            maxlength="500"
-            [(ngModel)]="caption"
-            [placeholder]="'IMAGING_IMAGES.CAPTION_PLACEHOLDER' | translate"
-          />
-        </label>
         <label class="btn-secondary pick-button" [for]="inputId">
           <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>
           {{ 'IMAGING_IMAGES.CHOOSE_FILES' | translate }}
@@ -47,6 +37,46 @@
       </div>
       <small class="field-hint">{{ 'IMAGING_IMAGES.TYPES_HINT' | translate }}</small>
     </div>
+
+    <!-- QA D2466 (r64): each picked file carries its own caption until « Envoyer ». -->
+    @if (staged().length > 0) {
+      <ul class="staged-list" data-testid="imaging-images-staged">
+        @for (f of staged(); track f.key; let n = $index) {
+          <li>
+            <span class="upload-name">{{ f.file.name }}</span>
+            <label class="caption-field" [for]="captionId + '-' + f.key">
+              <span>{{ 'IMAGING_IMAGES.CAPTION' | translate }}</span>
+              <input
+                [id]="captionId + '-' + f.key"
+                type="text"
+                maxlength="500"
+                [attr.data-testid]="'imaging-images-staged-caption-' + n"
+                [ngModel]="f.caption"
+                (ngModelChange)="setStagedCaption(f.key, $event)"
+                [placeholder]="'IMAGING_IMAGES.CAPTION_PLACEHOLDER' | translate"
+              />
+            </label>
+            <button
+              type="button"
+              class="btn-link"
+              (click)="unstage(f.key)"
+              [attr.aria-label]="('COMMON.REMOVE' | translate) + ' — ' + f.file.name"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+          </li>
+        }
+      </ul>
+      <button
+        type="button"
+        class="btn-primary staged-send"
+        data-testid="imaging-images-send"
+        (click)="sendStaged()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">upload</span>
+        {{ 'IMAGING_COMPLETION.IMAGES.SEND' | translate: { count: staged().length } }}
+      </button>
+    }
 
     @if (uploads().length > 0) {
       <ul class="upload-list" aria-live="polite">
@@ -111,6 +141,20 @@
               <span class="material-symbols-outlined" aria-hidden="true">lock</span>
               <span class="sr-only">{{ 'IMAGING_IMAGES.LOCKED' | translate }}</span>
             </span>
+          }
+          @if (image.withdrawable) {
+            <button
+              type="button"
+              class="thumb-delete"
+              [attr.data-testid]="'imaging-image-withdraw-' + image.id"
+              (click)="askWithdraw(image)"
+              [attr.aria-label]="
+                ('IMAGING_COMPLETION.IMAGES.WITHDRAW' | translate) + ' — ' + altOf(image, i)
+              "
+              [title]="'IMAGING_COMPLETION.IMAGES.WITHDRAW' | translate"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">hide_image</span>
+            </button>
           }
           @if (image.deletable) {
             <button
@@ -233,7 +277,29 @@
         }
       </div>
       <div class="viewer-footer">
-        @if (image.caption) {
+        @if (image.captionEditable) {
+          <!-- QA D2466 (r64): the caption is corrected here; every correction is audited. -->
+          <div class="caption-edit">
+            <label [for]="captionId + '-edit'">{{ 'IMAGING_IMAGES.CAPTION' | translate }}</label>
+            <input
+              [id]="captionId + '-edit'"
+              type="text"
+              maxlength="500"
+              data-testid="imaging-images-caption-edit"
+              [ngModel]="captionDraft()"
+              (ngModelChange)="captionDraft.set($event)"
+            />
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="imaging-images-caption-save"
+              [disabled]="captionSaving()"
+              (click)="saveCaption(image)"
+            >
+              {{ 'IMAGING_COMPLETION.IMAGES.SAVE_CAPTION' | translate }}
+            </button>
+          </div>
+        } @else if (image.caption) {
           <p class="viewer-caption">{{ image.caption }}</p>
         }
         @if (image.uploadedAt) {
@@ -247,5 +313,49 @@
         }
       </div>
     </div>
+  }
+
+  <!-- QA D2464 (r64): withdrawn images stay in the record, with when and why. -->
+  @if (withdrawnImages().length > 0) {
+    <details class="withdrawn-images" data-testid="imaging-images-withdrawn">
+      <summary>
+        {{
+          'IMAGING_COMPLETION.IMAGES.WITHDRAWN_LIST'
+            | translate: { count: withdrawnImages().length }
+        }}
+      </summary>
+      <ul>
+        @for (w of withdrawnImages(); track w.id) {
+          <li>
+            @if (w.withdrawnAt) {
+              <small>{{ w.withdrawnAt | serverTime | dateTime }}</small>
+            }
+            @if (w.caption) {
+              {{ ' ' }}<span class="withdrawn-caption">{{ w.caption }}</span>
+            }
+            <p class="withdrawn-reason">
+              {{ 'IMAGING_COMPLETION.IMAGES.WITHDRAW_REASON' | translate
+              }}{{ 'COMMON.COLON' | translate }} {{ w.withdrawalReason }}
+            </p>
+          </li>
+        }
+      </ul>
+    </details>
+  }
+
+  @if (withdrawing(); as target) {
+    <app-reason-dialog
+      titleKey="IMAGING_COMPLETION.IMAGES.WITHDRAW_TITLE"
+      messageKey="IMAGING_COMPLETION.IMAGES.WITHDRAW_MESSAGE"
+      confirmKey="IMAGING_COMPLETION.IMAGES.WITHDRAW"
+      dismissKey="COMMON.BACK"
+      [busy]="withdrawBusy()"
+      (confirmed)="confirmWithdraw($event)"
+      (cancelled)="withdrawing.set(null)"
+    >
+      @if (target.caption) {
+        <p class="withdraw-target">{{ target.caption }}</p>
+      }
+    </app-reason-dialog>
   }
 </section>

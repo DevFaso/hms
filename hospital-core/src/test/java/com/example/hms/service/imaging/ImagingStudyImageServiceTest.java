@@ -398,4 +398,99 @@ class ImagingStudyImageServiceTest {
             verify(fileUploadService, never()).deleteStoredFile(anyString(), anyString());
         }
     }
+
+    @Nested
+    @DisplayName("QA D2464 / D2466 (r64): withdrawal after signing, caption correction")
+    class WithdrawalAndCaption {
+
+        private ImagingReport signedBy(UUID signerUserId) {
+            ImagingReport signed = report(true, ImagingReportStatus.FINAL);
+            com.example.hms.model.User user = new com.example.hms.model.User();
+            user.setId(signerUserId);
+            com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+            staff.setUser(user);
+            signed.setSignedBy(staff);
+            return signed;
+        }
+
+        @Test
+        void aRadiologistWithdrawsALockedImageWithAReasonAndEveryReaderStopsSeeingIt() throws IOException {
+            as("ROLE_RADIOLOGIST");
+            ImagingStudyImage wrong = image(signedBy(UUID.randomUUID()), UUID.randomUUID());
+            ImagingStudyImage kept = image(null, callerId);
+
+            service.withdraw(wrong.getId(), "  Mauvais patient  ");
+
+            assertThat(wrong.isWithdrawn()).isTrue();
+            assertThat(wrong.getWithdrawalReason()).isEqualTo("Mauvais patient");
+            assertThat(wrong.getWithdrawnByUserId()).isEqualTo(callerId);
+            verify(fileUploadService, never()).deleteStoredFile(anyString(), anyString());
+            assertThat(service.list(order.getId())).extracting(ImagingStudyImageDTO::id).containsExactly(kept.getId());
+            assertThatThrownBy(() -> service.readContent(wrong.getId())).isInstanceOf(ResourceNotFoundException.class);
+            as("ROLE_HOSPITAL_ADMIN");
+            assertThat(service.list(order.getId())).extracting(ImagingStudyImageDTO::id).containsExactly(kept.getId());
+            AuditEventRequestDTO audit = audits().stream()
+                .filter(a -> a.getEventType() == AuditEventType.IMAGING_IMAGE_WITHDRAWN).findFirst().orElseThrow();
+            assertThat(audit.getEventDescription()).doesNotContain("Mauvais");
+        }
+
+        @Test
+        void theSignerOfTheReportWithdrawsAndAnotherDoctorDoesNot() {
+            ImagingStudyImage mine = image(signedBy(callerId), UUID.randomUUID());
+            ImagingStudyImage theirs = image(signedBy(UUID.randomUUID()), callerId);
+
+            service.withdraw(mine.getId(), "Image floue, refaite");
+            assertThat(mine.isWithdrawn()).isTrue();
+            assertThatThrownBy(() -> service.withdraw(theirs.getId(), "raison"))
+                .isInstanceOf(ClientSafeAccessDeniedException.class);
+            assertThat(theirs.isWithdrawn()).isFalse();
+        }
+
+        @Test
+        void aReasonIsRequiredAndAnUnlockedImageIsRemovedInstead() {
+            as("ROLE_RADIOLOGIST");
+            ImagingStudyImage locked = image(signedBy(callerId), callerId);
+            ImagingStudyImage unlocked = image(report(false, ImagingReportStatus.PRELIMINARY), callerId);
+
+            assertThatThrownBy(() -> service.withdraw(locked.getId(), "   "))
+                .isInstanceOf(BusinessException.class).extracting("messageKey")
+                .isEqualTo("imaging.image.withdrawReasonRequired");
+            assertThatThrownBy(() -> service.withdraw(unlocked.getId(), "raison"))
+                .isInstanceOf(BusinessException.class).extracting("messageKey")
+                .isEqualTo("imaging.image.withdrawNotLocked");
+            assertThat(locked.isWithdrawn()).isFalse();
+        }
+
+        @Test
+        void anotherHospitalsImageIsMissing() {
+            as("ROLE_RADIOLOGIST");
+            ImagingStudyImage image = image(signedBy(callerId), callerId);
+            anotherHospital();
+
+            assertThatThrownBy(() -> service.withdraw(image.getId(), "raison"))
+                .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.updateCaption(image.getId(), "x"))
+                .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        void theUploaderCorrectsTheCaptionEvenAfterSigningAndItIsAudited() {
+            ImagingStudyImage image = image(signedBy(UUID.randomUUID()), callerId);
+
+            ImagingStudyImageDTO dto = service.updateCaption(image.getId(), " Coupe longitudinale du rein droit ");
+
+            assertThat(dto.caption()).isEqualTo("Coupe longitudinale du rein droit");
+            assertThat(image.getCaptionUpdatedByUserId()).isEqualTo(callerId);
+            assertThat(audits()).extracting(AuditEventRequestDTO::getEventType)
+                .contains(AuditEventType.IMAGING_IMAGE_CAPTION_UPDATED);
+        }
+
+        @Test
+        void anotherDoctorDoesNotCorrectAColleaguesCaption() {
+            ImagingStudyImage image = image(null, UUID.randomUUID());
+
+            assertThatThrownBy(() -> service.updateCaption(image.getId(), "x"))
+                .isInstanceOf(ClientSafeAccessDeniedException.class);
+        }
+    }
 }

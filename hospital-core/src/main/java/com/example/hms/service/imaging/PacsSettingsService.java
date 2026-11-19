@@ -45,6 +45,11 @@ public class PacsSettingsService {
     private static final String MSG_HOSPITAL_NOT_FOUND = "hospital.notfound";
     static final String URL_REQUIRED = "imaging.pacs.url.required";
     static final String VIEWER_TEMPLATE_INVALID = "imaging.pacs.viewerUrl.invalid";
+    /** QA D2460: « Tester la connexion » on an address whose host does not resolve. */
+    static final String HOST_NOT_FOUND_RESULT = "HOST_NOT_FOUND";
+    /** The variables a viewer link may carry (ImagingReportMapper substitutes exactly these). */
+    private static final java.util.regex.Pattern TEMPLATE_VARIABLE = java.util.regex.Pattern.compile("\\{([^{}]*)\\}");
+    private static final java.util.Set<String> TEMPLATE_VARIABLES = java.util.Set.of("studyInstanceUid", "accessionNumber");
     private static final String FIELD_BASE_URL = "dicomwebBaseUrl";
 
     private final HospitalRepository hospitalRepository;
@@ -94,7 +99,7 @@ public class PacsSettingsService {
     private void requireAcceptable(String baseUrl, String template) {
         if (baseUrl != null) {
             try {
-                PacsUrlPolicy.requireCallable(baseUrl, resolver.allowPrivateHosts());
+                PacsUrlPolicy.requireSavable(baseUrl, resolver.allowPrivateHosts());
             } catch (PacsUrlPolicy.RejectedException ex) {
                 throw urlRefusal(ex);
             }
@@ -175,7 +180,11 @@ public class PacsSettingsService {
             gateway.ping(resolution.connection());
             return new PacsConnectionTestDTO("OK", source);
         } catch (PacsUrlPolicy.RejectedException ex) {
-            return new PacsConnectionTestDTO(PacsUnavailableException.Reason.URL_REFUSED.name(), source);
+            // QA D2460: an address saved before its host resolved is reported as such, not as refused.
+            String result = PacsUrlPolicy.HOST_NOT_FOUND.equals(ex.messageKey())
+                ? HOST_NOT_FOUND_RESULT
+                : PacsUnavailableException.Reason.URL_REFUSED.name();
+            return new PacsConnectionTestDTO(result, source);
         } catch (PacsUnavailableException ex) {
             return new PacsConnectionTestDTO(ex.reason().name(), source);
         }
@@ -194,6 +203,14 @@ public class PacsSettingsService {
 
     /** The template with sample values must be an http(s) link: the browser opens it, never a script. */
     private static void requireViewerTemplate(String template) {
+        // QA D2460: an unknown variable is named, not reported as "not an http(s) address".
+        java.util.regex.Matcher variable = TEMPLATE_VARIABLE.matcher(template);
+        while (variable.find()) {
+            if (!TEMPLATE_VARIABLES.contains(variable.group(1))) {
+                throw new FieldBusinessException("viewerUrlTemplate", "imaging.pacs.viewerUrl.unknownVariable",
+                    "{" + variable.group(1) + "}");
+            }
+        }
         String sample = template.replace("{studyInstanceUid}", "1.2.3").replace("{accessionNumber}", "A1");
         try {
             PacsUrlPolicy.requireWebUrl(sample, true);

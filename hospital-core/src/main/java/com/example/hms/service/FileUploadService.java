@@ -122,6 +122,21 @@ public class FileUploadService {
     public static final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024;
     /** Shown in refusals; must describe {@link #MAX_UPLOAD_BYTES}. */
     public static final String MAX_UPLOAD_LABEL = "10 MB";
+
+    /**
+     * QA D2465 (r64): {@link #MAX_UPLOAD_LABEL} in the reader's language
+     * (« 10 Mo » in French): every refusal names the limit through this, never
+     * the English constant. Falls back to the constant without a bundle.
+     */
+    public static String maxUploadLabel(java.util.Locale locale) {
+        String label = com.example.hms.utility.MessageUtil.resolveOrNull(locale, "upload.limit.label");
+        return label != null ? label : MAX_UPLOAD_LABEL;
+    }
+
+    /** {@link #maxUploadLabel(java.util.Locale)} in the caller's locale. */
+    public static String maxUploadLabel() {
+        return maxUploadLabel(org.springframework.context.i18n.LocaleContextHolder.getLocale());
+    }
     private static final String EXT_JPEG = ".jpeg";
     private static final String EXT_TIFF = ".tiff";
     private static final String EXT_DOCX = ".docx";
@@ -372,7 +387,7 @@ public class FileUploadService {
         }
 
         if (file.getSize() > MAX_REFERRAL_ATTACHMENT_SIZE) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.tooLarge", MAX_UPLOAD_LABEL));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.tooLarge", maxUploadLabel()));
         }
 
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
@@ -571,7 +586,7 @@ public class FileUploadService {
         }
 
         if (file.getSize() > MAX_PATIENT_DOCUMENT_SIZE) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.document.tooLarge", MAX_UPLOAD_LABEL));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.document.tooLarge", maxUploadLabel()));
         }
 
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
@@ -853,7 +868,7 @@ public class FileUploadService {
         }
         if (file.getSize() > MAX_UPLOAD_BYTES) {
             throw new IllegalArgumentException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.image.tooLarge", MAX_UPLOAD_LABEL));
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.image.tooLarge", maxUploadLabel()));
         }
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase(java.util.Locale.ROOT);
         if (!ALLOWED_IMAGING_IMAGE_EXTENSIONS.contains(extension)) {

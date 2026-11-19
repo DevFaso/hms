@@ -56,6 +56,8 @@ class PatientSubjectReadCoverageTest {
 
     /** Reads that admit a patient by id and already hold them to their own record, and where. */
     private static final Map<String, String> OWNED_ELSEWHERE = Map.ofEntries(
+        entry("PatientImagingPortalController#getMyImagingImage",
+            "QA D2342: PatientImagingPortalService.openImage, the patient id from the token; another patient's image is 404"),
         entry("EncounterController#getById", "EncounterServiceImpl.requireEncounterReadable (#746/#754)"),
         entry("EncounterController#getAfterVisitSummary", "EncounterServiceImpl.requireEncounterReadable (#746/#754)"),
         entry("PrescriptionController#getById", "PrescriptionServiceImpl ownership via PrescriptionReaderRoles"),
