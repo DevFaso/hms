@@ -209,6 +209,8 @@ class GuardDriftRatchetTest {
         listed.put("ImagingResultController.updateReportStatus", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingStudyImageController.delete", IMAGINGSTUDYIMAGECONTROLLER_REASON);
         listed.put("ImagingStudyImageController.upload", IMAGINGSTUDYIMAGECONTROLLER_REASON);
+        listed.put("ImagingStudyImageController.updateCaption", IMAGINGSTUDYIMAGECONTROLLER_REASON);
+        listed.put("ImagingStudyImageController.withdraw", IMAGINGSTUDYIMAGECONTROLLER_REASON);
         listed.put("LabResultController.signLabResult", LABRESULTCONTROLLER_REASON);
         listed.put("MaternalHistoryController.calculateRiskScore", MATERNALHISTORYCONTROLLER_REASON);
         listed.put("MaternalHistoryController.getPendingReview", MATERNALHISTORYCONTROLLER_REASON);

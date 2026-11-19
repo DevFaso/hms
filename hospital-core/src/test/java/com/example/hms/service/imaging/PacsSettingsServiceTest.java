@@ -168,4 +168,27 @@ class PacsSettingsServiceTest {
             assertThat(r.source()).isEqualTo("HOSPITAL");
         });
     }
+
+    @Test
+    @DisplayName("QA D2460: an unresolvable https host is saved and the test says it is not found")
+    void unresolvableHostSavedAndReported() {
+        String url = "https://pacs.e-keneya-unresolvable.invalid/dicom-web";
+        properties.setEnabled(true);
+        doThrow(new PacsUrlPolicy.RejectedException(PacsUrlPolicy.HOST_NOT_FOUND)).when(gateway).ping(any());
+
+        PacsSettingsDTO dto = service.set(hospital.getId(), body(true, url, null, null, null, null), null);
+
+        assertThat(hospital.getPacsDicomwebBaseUrl()).isEqualTo(url);
+        assertThat(dto.enabled()).isTrue();
+        assertThat(service.test(hospital.getId()).result()).isEqualTo("HOST_NOT_FOUND");
+    }
+
+    @Test
+    @DisplayName("QA D2460: an unknown viewer-link variable is named, not called a bad address")
+    void unknownTemplateVariable() {
+        assertThatThrownBy(() -> service.set(hospital.getId(),
+            body(false, null, "https://pacs.example.org/view?acc={accession}", null, null, null), null))
+            .isInstanceOfSatisfying(BusinessException.class,
+                ex -> assertThat(ex.getMessageKey()).isEqualTo("imaging.pacs.viewerUrl.unknownVariable"));
+    }
 }

@@ -3750,4 +3750,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V313: a key image withdrawn after signing, with its reason, and
+         the last caption correction (QA D2464 / D2466, r64). Number
+         pre-allocated to wave 1; registered after V317. Additive: five
+         nullable columns, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V313-imaging-study-image-withdrawal" author="hms-team" runOnChange="false">
+        <sqlFile path="V313__imaging_study_image_withdrawal.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

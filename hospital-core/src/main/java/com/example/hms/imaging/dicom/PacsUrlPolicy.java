@@ -31,6 +31,8 @@ public final class PacsUrlPolicy {
     public static final String INVALID = "imaging.pacs.url.invalid";
     public static final String PRIVATE_HOST = "imaging.pacs.url.privateHost";
     public static final String HTTPS_REQUIRED = "imaging.pacs.url.httpsOnly";
+    /** QA D2460 (r64): the host does not resolve (yet): accepted on save, refused on every call. */
+    public static final String HOST_NOT_FOUND = "imaging.pacs.url.hostNotFound";
 
     private PacsUrlPolicy() {
     }
@@ -81,6 +83,20 @@ public final class PacsUrlPolicy {
 
     /** The full check for a URL the backend will call. */
     public static void requireCallable(String url, boolean allowPrivateHosts) {
+        check(url, allowPrivateHosts, false);
+    }
+
+    /**
+     * QA D2460 (r64): the check when the address is saved. A well-formed https address whose
+     * host does not resolve yet (a PACS being set up) is saved; every call still runs
+     * {@link #requireCallable}, which refuses it, and « Tester la connexion » says why. An
+     * address that does resolve is held to the full fence here too.
+     */
+    public static void requireSavable(String url, boolean allowPrivateHosts) {
+        check(url, allowPrivateHosts, true);
+    }
+
+    private static void check(String url, boolean allowPrivateHosts, boolean acceptUnresolved) {
         URI uri = requireWebUrl(url, allowPrivateHosts);
         if (uri.getRawQuery() != null || uri.getRawFragment() != null) {
             throw new RejectedException(INVALID);
@@ -91,7 +107,12 @@ public final class PacsUrlPolicy {
         InetAddress[] addresses;
         try {
             addresses = InetAddress.getAllByName(IDN.toASCII(uri.getHost()));
-        } catch (UnknownHostException | IllegalArgumentException ex) {
+        } catch (UnknownHostException ex) {
+            if (acceptUnresolved) {
+                return;
+            }
+            throw new RejectedException(HOST_NOT_FOUND);
+        } catch (IllegalArgumentException ex) {
             throw new RejectedException(INVALID);
         }
         for (InetAddress address : addresses) {

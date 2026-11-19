@@ -261,4 +261,19 @@ class PatientImagingPortalServiceTest {
         assertThat(audit.getValue().getEventDescription()).isEqualTo("Imaging image " + image.getId()
             + " of imaging order " + order.getId() + " viewed on the patient portal");
     }
+
+    @Test
+    @DisplayName("QA D2464: a withdrawn image reaches neither the patient's page nor their image read")
+    void aWithdrawnImageIsGone() {
+        report(1, ImagingReportStatus.FINAL, true);
+        ImagingStudyImage kept = image(null);
+        ImagingStudyImage withdrawn = image(null);
+        withdrawn.setWithdrawnAt(LocalDateTime.now());
+        when(imageRepository.findById(withdrawn.getId())).thenReturn(Optional.of(withdrawn));
+
+        assertThat(service.studiesOf(patientId, Reader.PATIENT).get(0).images()).extracting(i -> i.id())
+            .containsExactly(kept.getId());
+        assertThatThrownBy(() -> service.openImage(patientId, withdrawn.getId(), Reader.PATIENT))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
 }

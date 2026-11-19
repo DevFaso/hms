@@ -76,6 +76,8 @@ class ImagingReadRoleGuardTest {
         "image pixel data (the viewer manifest): a clinical role of the caller's own, see the pixel test",
         "DicomProxyController.renderedFrame",
         "image pixel data (a rendered frame): a clinical role of the caller's own, see the pixel test",
+        "DicomProxyController.viewerReady",
+        "r64 D2467: whether the pixel viewer can be offered, gated exactly as the viewer it announces",
         "ImagingResultController.getReportsToSign",
         "r63 D2306: the reads waiting for the caller's own signature; only an author signs, so only a role that"
             + " authors reports (createReport's) has a list",

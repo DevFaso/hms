@@ -103,6 +103,44 @@ public class ImagingStudyImageController {
         return ResponseEntity.noContent().build();
     }
 
+    /** QA D2464 (r64): the reason a locked image is withdrawn. */
+    public record WithdrawRequest(@jakarta.validation.constraints.NotBlank
+                                  @jakarta.validation.constraints.Size(max = 500) String reason) {
+    }
+
+    /** QA D2466 (r64): an image's corrected caption (blank clears it). */
+    public record CaptionRequest(@jakarta.validation.constraints.Size(max = 500) String caption) {
+    }
+
+    @GetMapping("/orders/{orderId}/images/withdrawn")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
+    @Operation(summary = "The study's withdrawn key images, for the record",
+        description = "When, by whom and why each was withdrawn; never the bytes. Hospital-scoped.")
+    public ResponseEntity<List<com.example.hms.payload.dto.imaging.ImagingStudyImageWithdrawalDTO>> withdrawn(
+            @PathVariable UUID orderId) {
+        return ResponseEntity.ok(imageService.withdrawn(orderId));
+    }
+
+    @PostMapping("/images/{imageId}/withdraw")
+    @PreAuthorize(WRITE_ROLES)
+    @Operation(summary = "Withdraw a key image after signing",
+        description = "A radiologist or the report's signer, with a reason. The file and the record are kept and "
+            + "audited; every reader, the patient included, stops seeing the image.")
+    public ResponseEntity<Void> withdraw(@PathVariable UUID imageId,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody WithdrawRequest request) {
+        imageService.withdraw(imageId, request != null ? request.reason() : null);
+        return ResponseEntity.noContent().build();
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/images/{imageId}/caption")
+    @PreAuthorize(WRITE_ROLES)
+    @Operation(summary = "Correct a key image's caption",
+        description = "Its uploader or a radiologist; every correction is audited.")
+    public ResponseEntity<ImagingStudyImageDTO> updateCaption(@PathVariable UUID imageId,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody CaptionRequest request) {
+        return ResponseEntity.ok(imageService.updateCaption(imageId, request != null ? request.caption() : null));
+    }
+
     private static String extensionOf(String contentType) {
         return switch (contentType) {
             case "image/png" -> ".png";

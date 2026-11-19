@@ -107,7 +107,8 @@ public class PatientImagingPortalService {
         ImagingStudyImage image = imageRepository.findById(imageId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId));
         ImagingOrder order = image.getImagingOrder();
-        if (order == null || order.getPatient() == null || !Objects.equals(order.getPatient().getId(), patientId)) {
+        if (image.isWithdrawn() || order == null || order.getPatient() == null
+                || !Objects.equals(order.getPatient().getId(), patientId)) {
             throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
         }
         boolean studyReleased = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(order.getId())
@@ -133,6 +134,8 @@ public class PatientImagingPortalService {
         // The study is released (it is listed only with a released report): an image on the
         // study itself is shown, an image on a report only when that report is released.
         List<ImagingStudyImageDTO> shown = studyImages.stream()
+            // QA D2464: a withdrawn image (a wrong image, a wrong patient's) never reaches the patient.
+            .filter(image -> !image.isWithdrawn())
             .filter(image -> ImagingStudyImageService.released(image, true))
             .map(PatientImagingPortalService::toPatientImage)
             .toList();
@@ -145,7 +148,7 @@ public class PatientImagingPortalService {
         return new ImagingStudyImageDTO(image.getId(), image.getImagingOrder().getId(),
             image.getImagingReport() != null ? image.getImagingReport().getId() : null,
             image.getContentType(), image.getSizeBytes(), image.getCaption(), image.getCreatedAt(),
-            null, true, false);
+            null, true, false, false, false);
     }
 
     private static String readDescription(UUID patientId, Reader reader, int studies) {
