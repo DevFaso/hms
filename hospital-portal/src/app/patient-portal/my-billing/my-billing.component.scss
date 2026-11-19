@@ -340,3 +340,34 @@
     color: #334155;
   }
 }
+
+/* QA D2355: how to pay, under the balance. */
+.pay-howto {
+  margin: 0 0 20px;
+  padding: 16px 18px;
+  border: 1px solid #bfe3da;
+  border-radius: 12px;
+  background: #f0fbf8;
+  color: #134e48;
+}
+
+.pay-howto-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.pay-howto-steps {
+  margin: 0 0 8px;
+  padding-left: 20px;
+  line-height: 1.5;
+}
+
+.pay-howto-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.pay-reference {
+  font-weight: 600;
+}

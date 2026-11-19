@@ -14572,5 +14572,59 @@
       "CARD_ACTION": "Configurar el PACS",
       "BASE_URL_REQUIRED": "Introduzca la dirección DICOMweb del PACS para activar el visor."
     }
+  },
+  "CONNECTIVITY": {
+    "OFFLINE_TITLE": "No Internet connection.",
+    "UNREACHABLE_TITLE": "The server is not answering: the connection seems to be down.",
+    "KEEP_INPUT": "What you typed stays on the page. Try again when the connection is back.",
+    "STILL_DOWN": "Still no connection. Try again in a moment.",
+    "RETRY": "Try again",
+    "RETRYING": "Trying again…",
+    "RESTORED": "Connection restored.",
+    "PAGE_OFFLINE_TITLE": "This page could not open: no connection",
+    "PAGE_OFFLINE_MESSAGE": "You stay on the previous page, and what you typed there is kept. When the connection is back, press \"Try again\"."
+  },
+  "PORTAL_RX_DOC": {
+    "OPEN": "View and print the prescription",
+    "TITLE": "Prescription",
+    "HEADING": "Medical prescription",
+    "HOSPITAL_UNKNOWN": "Health facility",
+    "DATE": "Prescription date",
+    "PRESCRIBER": "Prescriber",
+    "PATIENT": "Patient name",
+    "ROUTE": "Route",
+    "DURATION": "Treatment duration",
+    "QUANTITY": "Quantity",
+    "REFILLS": "Refills allowed",
+    "INSTRUCTIONS": "Instructions",
+    "SIGNED": "Electronically signed by {{name}} on {{date}}.",
+    "COPY_NOTE": "Copy given to the patient from their e-Keneya account. Show it to the pharmacist.",
+    "PRINT": "Print or save as PDF"
+  },
+  "PORTAL_REFILL": {
+    "CONFIRM_TITLE": "Request a refill of {{name}}?",
+    "CONFIRM_MESSAGE": "Your request goes to your prescriber. You will see the answer here, and you can cancel while it is pending.",
+    "CONFIRM_SEND": "Send the request",
+    "WAITING_SINCE": "Pending since {{date}}",
+    "NEXT_STEP": "Your prescriber has to review it. You will be told the answer.",
+    "CANCEL": "Cancel the request",
+    "CANCELLING": "Cancelling…",
+    "KEEP": "Keep the request",
+    "CANCEL_CONFIRM_TITLE": "Cancel the refill request for {{name}}?",
+    "CANCEL_CONFIRM_MESSAGE": "Your prescriber will not process it. You can send a new one later.",
+    "CANCELLED": "Refill request cancelled.",
+    "CANCEL_FAILED": "The request could not be cancelled. Try again."
+  },
+  "PORTAL_PAY_HOWTO": {
+    "TITLE": "How to pay",
+    "WHERE": "Pay {{amount}} at the hospital cashier, in cash or by mobile money (Orange Money, Moov Money).",
+    "REFERENCE": "Give the cashier the invoice number: it is your payment reference.",
+    "RECEIPT": "The cashier records the payment and gives you a receipt; it then shows here.",
+    "NO_ONLINE": "Online payment is not available in the portal. If you already paid by mobile money, declare it with the transaction reference so the cashier can match it.",
+    "INVOICE_REFERENCE": "Reference for the cashier: no. {{number}}",
+    "DECLARE_BUTTON": "Declare a payment",
+    "DECLARE_TITLE": "Declare a payment already made",
+    "DECLARE_ONLY": "This form takes no money: it tells the cashier about a payment you already made.",
+    "DECLARE_SUBMIT": "Declare"
   }
 }

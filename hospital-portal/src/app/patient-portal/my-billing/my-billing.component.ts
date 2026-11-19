@@ -150,7 +150,8 @@ export class MyBillingComponent implements OnInit {
   // Payment dialog state
   payingInvoice = signal<PortalInvoice | null>(null);
   payAmount = 0;
-  payMethod = 'CARD';
+  /** QA D2355: mobile money or cash, the two ways the cashier takes; never a card. */
+  payMethod = 'MOBILE_MONEY';
   payReference = '';
   /** Billing plan PR 9: the operator of a Mobile Money declaration (Orange Money, Moov Money, other). */
   payOperator: MobileMoneyOperator | null = null;
@@ -225,7 +226,7 @@ export class MyBillingComponent implements OnInit {
     // QA D421: prefilled with what is left to declare, not the full balance
     // (which the server refused whenever a declaration was pending).
     this.payAmount = this.declarable(inv);
-    this.payMethod = 'CARD';
+    this.payMethod = 'MOBILE_MONEY';
     this.payReference = '';
     this.payOperator = null;
     this.payError.set('');
