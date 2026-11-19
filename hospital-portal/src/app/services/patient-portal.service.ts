@@ -583,6 +583,21 @@ export interface InvoiceApiResponse {
   pendingDeclaredAmount?: number | null;
   /** QA D428: the visit invoice a folded check-in copay was credited to. */
   creditedToInvoiceNumber?: string | null;
+  /** Billing-money plan PR 7: what the insurer pays ("Part assureur") and the patient's share ("Part patient"). */
+  insuranceCoverageAmount?: number | null;
+  patientResponsibilityAmount?: number | null;
+  /** Billing-money plan PR 7: the insurer's shares on the detail, a rejected one with the insurer's reason. */
+  payerShares?: PortalPayerShare[] | null;
+}
+
+/** Billing-money plan PR 7: an insurer's share of my invoice, as I see it. */
+export interface PortalPayerShare {
+  id: string;
+  payerName?: string | null;
+  planName?: string | null;
+  amount: number;
+  status: 'OPEN' | 'CLAIMED' | 'PAID' | 'REJECTED' | 'CANCELLED' | string;
+  rejectionReason?: string | null;
 }
 
 export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
@@ -609,6 +624,12 @@ export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
     refundDue: Number(api.refundDue ?? 0),
     pending: Number(api.pendingDeclaredAmount ?? 0),
     creditedTo: api.creditedToInvoiceNumber ?? null,
+    payerShare: Number(api.insuranceCoverageAmount ?? 0),
+    patientShare: Number(api.patientResponsibilityAmount ?? total),
+    payerShares: (api.payerShares ?? []).map((share) => ({
+      ...share,
+      amount: Number(share.amount ?? 0),
+    })),
   };
 }
 
@@ -680,6 +701,12 @@ export interface PortalInvoice {
   pending?: number;
   /** QA D428: the invoice a folded check-in copay was credited to. */
   creditedTo?: string | null;
+  /** Billing-money plan PR 7: what my insurer pays on it ("Part assureur"); 0 when none. */
+  payerShare?: number;
+  /** Billing-money plan PR 7: my share of the bill before payments ("Part patient"). */
+  patientShare?: number;
+  /** Billing-money plan PR 7: my insurer's shares (on the detail), a rejected one with its reason. */
+  payerShares?: PortalPayerShare[];
 }
 
 /**

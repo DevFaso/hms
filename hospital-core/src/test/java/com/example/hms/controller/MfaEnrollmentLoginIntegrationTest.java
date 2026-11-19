@@ -163,8 +163,8 @@ class MfaEnrollmentLoginIntegrationTest {
         when(userDetailsService.loadUserByUsername(user.getUsername())).thenReturn(details);
         when(tokenBlacklistService.isBlacklisted(any())).thenAnswer(invocation -> spentChallenges.contains(invocation.getArgument(0)));
         when(tokenBlacklistService.claim(any(), anyLong())).thenAnswer(invocation -> spentChallenges.add(invocation.getArgument(0)));
-        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), any(java.time.Instant.class))).thenReturn("cdx-full-access");
-        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), any(java.time.Instant.class))).thenReturn("cdx-full-refresh");
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), any(java.time.Instant.class), any())).thenReturn("cdx-full-access");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), any(java.time.Instant.class), any())).thenReturn("cdx-full-refresh");
     }
 
     @org.junit.jupiter.api.AfterEach
@@ -199,8 +199,8 @@ class MfaEnrollmentLoginIntegrationTest {
     }
 
     private void noSessionIssued() {
-        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class), any(java.time.Instant.class));
-        verify(jwtTokenProvider, never()).generateRefreshToken(any(TokenUserDescriptor.class), any(java.time.Instant.class));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class), any(java.time.Instant.class), any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any(TokenUserDescriptor.class), any(java.time.Instant.class), any());
         verify(refreshTokenCookieService, never()).write(any(), any(), anyLong());
     }
 
@@ -224,8 +224,8 @@ class MfaEnrollmentLoginIntegrationTest {
             .isGreaterThan(loginStep);
         refused("cdx-challenge-one", fresh, "mfa.token.invalid");
         var descriptor = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
-        verify(jwtTokenProvider, org.mockito.Mockito.times(1)).generateAccessToken(descriptor.capture(), any(java.time.Instant.class));
-        verify(jwtTokenProvider, org.mockito.Mockito.times(1)).generateRefreshToken(any(TokenUserDescriptor.class), any(java.time.Instant.class));
+        verify(jwtTokenProvider, org.mockito.Mockito.times(1)).generateAccessToken(descriptor.capture(), any(java.time.Instant.class), any());
+        verify(jwtTokenProvider, org.mockito.Mockito.times(1)).generateRefreshToken(any(TokenUserDescriptor.class), any(java.time.Instant.class), any());
         org.assertj.core.api.Assertions.assertThat(descriptor.getValue().roles()).containsExactly("ROLE_SUPER_ADMIN");
         org.assertj.core.api.Assertions.assertThat(saved.get().getLastTotpStep()).isEqualTo(loginStep);
     }
@@ -292,7 +292,7 @@ class MfaEnrollmentLoginIntegrationTest {
         org.assertj.core.api.Assertions.assertThat(saved.get().getLastTotpStep()).isEqualTo(afterConfirm);
         noSessionIssued();
         verifyLogin(fresh, codes.generate(secret, FIXED_STEP)).andExpect(status().isOk());
-        verify(jwtTokenProvider).generateAccessToken(any(TokenUserDescriptor.class), any(java.time.Instant.class));
-        verify(jwtTokenProvider).generateRefreshToken(any(TokenUserDescriptor.class), any(java.time.Instant.class));
+        verify(jwtTokenProvider).generateAccessToken(any(TokenUserDescriptor.class), any(java.time.Instant.class), any());
+        verify(jwtTokenProvider).generateRefreshToken(any(TokenUserDescriptor.class), any(java.time.Instant.class), any());
     }
 }

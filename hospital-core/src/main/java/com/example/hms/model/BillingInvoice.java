@@ -97,6 +97,16 @@ public class BillingInvoice extends BaseEntity {
     @Column(name = "amount_refunded", nullable = false, precision = 12, scale = 2)
     private BigDecimal amountRefunded = BigDecimal.ZERO;
 
+    /**
+     * Billing-money plan PR 7 (V306): what the payers owe on the invoice, the sum of its live shares
+     * ({@code InvoicePayerShare} OPEN, CLAIMED or PAID). What the patient owes is {@code InvoiceBalance.dueOf}: the
+     * total less this, less what the hospital holds. Set only by {@code InvoiceCoverageService}.
+     */
+    @Builder.Default
+    @NotNull @DecimalMin("0.00") @Digits(integer = 10, fraction = 2)
+    @Column(name = "payer_share_total", nullable = false, precision = 12, scale = 2)
+    private BigDecimal payerShareTotal = BigDecimal.ZERO;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
@@ -230,6 +240,7 @@ public class BillingInvoice extends BaseEntity {
         if (dueDate == null)    dueDate = invoiceDate.plusDays(30);
         if (amountPaid == null) amountPaid = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         if (totalAmount == null) totalAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        if (payerShareTotal == null) payerShareTotal = BigDecimal.ZERO; // PR 7
         if (status == null) status = InvoiceStatus.DRAFT;
         // QA D72: no recompute here. It summed the in-memory line collection,
         // which is empty on a create and unloaded on an update, so it wrote

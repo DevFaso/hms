@@ -133,6 +133,17 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         this.refundRepository = refundRepository;
     }
 
+    /**
+     * Billing-money plan PR 7: the payer's coverage applied when an invoice is issued, recomputed when a credit note
+     * changes a line, cancelled with the invoice. Optional so the hand-built unit tests keep working.
+     */
+    private com.example.hms.service.billing.InvoiceCoverageService coverageService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCoverageService(com.example.hms.service.billing.InvoiceCoverageService coverageService) {
+        this.coverageService = coverageService;
+    }
+
     private void attachCreator(BillingInvoice invoice, UUID creatorId) {
         if (creatorId != null && userRepository != null) {
             userRepository.findById(creatorId).ifPresent(invoice::setCreatedByUser);
@@ -264,9 +275,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal credit = copayCredit(copay);
         // Nothing is owed on an invoice already settled, so a second copay of the visit stays apart.
         // Billing-money plan PR 8: money refunded since is no longer held against the bill.
-        BigDecimal paid = com.example.hms.utility.InvoiceBalance.keptOf(target);
-        BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid)
-            .subtract(reserved);
+        // Billing-money plan PR 7: against the patient's share; the payers' share is never the copay's to pay.
+        BigDecimal owed = com.example.hms.utility.InvoiceBalance.dueOf(target).subtract(reserved);
         if (credit.signum() <= 0 || owed.signum() <= 0) {
             return null;
         }
@@ -560,7 +570,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, id); // 404, not 403
         }
-        return invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        BillingInvoiceResponseDTO dto = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        // Billing-money plan PR 7: the payers' shares with their history (a rejected one with the payer's reason).
+        dto.setPayerShares(payerSharesOf(invoice));
+        return dto;
+    }
+
+    /** Billing-money plan PR 7: the invoice's payer shares, oldest first; none when coverage is not wired. */
+    private List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> payerSharesOf(BillingInvoice invoice) {
+        return coverageService != null ? coverageService.sharesOf(invoice) : List.of();
     }
 
 
@@ -653,8 +671,19 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (amount.compareTo(total) > 0) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.adjustment.moreThanTotal", formatFrancs(total, locale));
         }
+        // Billing-money plan PR 7 (owner default D-6): a discount or a waiver lowers the patient's share only, so it
+        // can never take more than that share; the payer pays its rate on the tariff.
+        BigDecimal patientShare = com.example.hms.utility.InvoiceBalance.patientShareOf(invoice);
+        if (!creditNote && com.example.hms.utility.InvoiceBalance.payerShareOf(invoice).signum() > 0
+                && amount.compareTo(patientShare) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT,
+                "billing.adjustment.moreThanPatientShare", formatFrancs(patientShare, locale));
+        }
         BigDecimal newTotal = total.subtract(amount);
-        requireRoomUnderPayments(newTotal, paid, pending);
+        if (!creditNote) {
+            requireRoomUnderPayments(newTotal.subtract(com.example.hms.utility.InvoiceBalance.payerShareOf(invoice)),
+                paid, pending);
+        }
         adjustmentRepository.save(com.example.hms.model.InvoiceAdjustment.builder()
             .invoice(invoice)
             .invoiceItem(line)
@@ -664,7 +693,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .createdBy(staffId)
             .build());
         invoice.setTotalAmount(newTotal);
-        if (paid.compareTo(newTotal) >= 0) {
+        if (creditNote) {
+            // PR 7: the payer's share follows the credited line (a share already claimed or paid refuses it), and
+            // only then is the patient's share judged against the money received.
+            recomputeCoverage(invoice, staffId);
+            requireRoomUnderPayments(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice), paid, pending);
+        }
+        if (paid.compareTo(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice)) >= 0) {
             invoice.setStatus(InvoiceStatus.PAID);
         } else if (paid.signum() > 0) {
             invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
@@ -680,6 +715,17 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     private static BigDecimal nz(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
+    }
+
+    /** Billing-money plan PR 7: a credit note made or reversed changes a line, so the payer's share is computed again. */
+    private void recomputeCoverage(BillingInvoice invoice, UUID actorId) {
+        if (coverageService != null) {
+            // The adjustment row is read by the recomputation.
+            if (entityManager != null) {
+                entityManager.flush();
+            }
+            coverageService.recomputeAfterLineChange(invoice, actorId);
+        }
     }
 
     /** The line the adjustment names; it must be a line of this invoice. */
@@ -778,8 +824,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // status follows it.
         BigDecimal newTotal = nz(invoice.getTotalAmount()).add(nz(adjustment.getAmount()));
         invoice.setTotalAmount(newTotal);
+        if (adjustment.getType() == com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE) {
+            // PR 7: the line is whole again, so the payer's share is computed again on it.
+            recomputeCoverage(invoice, staffId);
+        }
         BigDecimal paid = com.example.hms.utility.InvoiceBalance.keptOf(invoice); // PR 8: less what was refunded
-        if (paid.compareTo(newTotal) >= 0) {
+        if (paid.compareTo(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice)) >= 0) {
             invoice.setStatus(InvoiceStatus.PAID);
         } else if (paid.signum() > 0) {
             invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
@@ -907,7 +957,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                     List.of(com.example.hms.enums.InvoiceRefundStatus.PAID)).stream()
                 .map(BillingInvoiceServiceImpl::portalRefund)
                 .toList();
-        return new com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO(toPortalResponse(invoice), items, payments,
+        BillingInvoiceResponseDTO header = toPortalResponse(invoice);
+        // Billing-money plan PR 7: what the payer covers, and a share it rejected with its reason (the patient owes it).
+        if (header != null) {
+            header.setPayerShares(payerSharesOf(invoice));
+        }
+        return new com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO(header, items, payments,
             adjustments, refunds);
     }
 
@@ -1045,6 +1100,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             recordCancellation(invoice, dto.getCancelReason(), wasDraft);
         }
         invoice.setStatus(nextStatus);
+        applyCoverageOnStatusMove(invoice, cancelling, wasDraft && nextStatus == InvoiceStatus.SENT);
         // D656: an issued invoice keeps its notes (checked unchanged above).
         // QA D1901: the form echoes the notes in the reader's language; an
         // echo keeps the server's code, anything else is the person's text.
@@ -1062,6 +1118,23 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D210: issuing the visit invoice takes over the check-in copay.
         creditCheckInCopays(saved);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /**
+     * Billing-money plan PR 7: an open payer share is cancelled with its invoice (it frees the annual ceiling); the
+     * payer's share is computed when the invoice is issued, before the check-in copay folds against the patient's
+     * share. A share covering the whole bill leaves nothing for the patient to pay.
+     */
+    private void applyCoverageOnStatusMove(BillingInvoice invoice, boolean cancelling, boolean issuing) {
+        if (coverageService == null) {
+            return;
+        }
+        if (cancelling) {
+            coverageService.cancelWithInvoice(invoice, roleValidator.getCurrentUserId());
+        } else if (issuing) {
+            coverageService.applyAtIssue(invoice, roleValidator.getCurrentUserId());
+            invoice.setStatus(com.example.hms.utility.InvoiceBalance.settledStatusOf(invoice));
+        }
     }
 
     /** Tenant isolation: an invoice of another hospital than the acting one is answered as not found. */
@@ -1304,7 +1377,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         invoice.setTotalAmount(total);
         // A line added after a payment re-opens the balance; one removed may settle it.
         if (paid.signum() > 0) {
-            invoice.setStatus(paid.compareTo(total) >= 0 ? InvoiceStatus.PAID : InvoiceStatus.PARTIALLY_PAID);
+            // PR 7: against the patient's share.
+            invoice.setStatus(paid.compareTo(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice)) >= 0
+                ? InvoiceStatus.PAID : InvoiceStatus.PARTIALLY_PAID);
         }
         BillingInvoice saved = invoiceRepository.save(invoice);
         // QA D210: a visit invoice issued at 0 and priced later by its lines takes the copay now.
@@ -1350,8 +1425,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                     .invoiceItem(a.getInvoiceItem()).type(a.getType()).amount(a.getAmount()).build())
                 .toList();
         }
+        // Billing-money plan PR 7: "Part assureur / Part patient" and any share the payer rejected, with its reason.
         byte[] pdf = pdfInvoiceService.generateInvoicePdf(invoice, items,
-            payments != null ? payments : List.of(), adjustments != null ? adjustments : List.of(), effectiveLocale);
+            payments != null ? payments : List.of(), adjustments != null ? adjustments : List.of(),
+            payerSharesOf(invoice), effectiveLocale);
         return new InvoicePdfResponseDTO(pdf, invoice.getInvoiceNumber(), invoice.getId());
     }
 
@@ -1408,8 +1485,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         boolean folded = isFoldedPayment(invoice, row);
         BigDecimal totalThen = !folded && row.getInvoiceTotalAtReceipt() != null
             ? row.getInvoiceTotalAtReceipt() : totalWhenReceived(invoice, row);
+        // Billing-money plan PR 7: the payers' share standing then, so the balance printed is the patient's then.
+        BigDecimal payerShareThen = coverageService != null ? coverageService.shareAt(invoice, receivedAt(row))
+            : BigDecimal.ZERO;
         byte[] pdf = pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, totalThen,
-            folded, effectiveLocale);
+            payerShareThen, folded, effectiveLocale);
         return new InvoicePdfResponseDTO(pdf, receiptNumber, invoice.getId());
     }
 
@@ -1845,7 +1925,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // is already declared, what is left), not as one sum they never typed.
         BigDecimal open = pending != null ? pending : BigDecimal.ZERO;
         if (open.signum() > 0) {
-            BigDecimal balanceDue = invoice.getTotalAmount().subtract(com.example.hms.utility.InvoiceBalance.keptOf(invoice));
+            BigDecimal balanceDue = com.example.hms.utility.InvoiceBalance.dueOf(invoice); // PR 7: the patient's share
             if (declared.compareTo(balanceDue) > 0) {
                 throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.exceedsWithPending", payment.getAmount(), open,
                     balanceDue.subtract(open).max(BigDecimal.ZERO));
@@ -1971,7 +2051,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
 
         // Billing-money plan PR 8: what is held is what came in less what was refunded.
-        BigDecimal balanceDue = invoice.getTotalAmount().subtract(com.example.hms.utility.InvoiceBalance.keptOf(invoice));
+        // PR 7: a payment is capped at the patient's share; the payers' share is claimed from them, never paid here.
+        BigDecimal balanceDue = com.example.hms.utility.InvoiceBalance.dueOf(invoice);
 
         if (amount.compareTo(balanceDue) > 0) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.exceedsBalance", amount, balanceDue);
@@ -1995,11 +2076,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         invoice.setAmountPaid(newAmountPaid);
 
         // Billing-money plan PR 8: settled by what the hospital holds (received less refunded).
-        if (com.example.hms.utility.InvoiceBalance.keptOf(invoice).compareTo(invoice.getTotalAmount()) >= 0) {
-            invoice.setStatus(InvoiceStatus.PAID);
-        } else {
-            invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
-        }
+        // PR 7: against the patient's share.
+        invoice.setStatus(com.example.hms.utility.InvoiceBalance.settledStatusOf(invoice));
 
         return invoiceRepository.save(invoice);
     }
@@ -2062,7 +2140,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (pending == null || pending.signum() <= 0 || amount == null) {
             return;
         }
-        BigDecimal balanceDue = invoice.getTotalAmount().subtract(com.example.hms.utility.InvoiceBalance.keptOf(invoice));
+        BigDecimal balanceDue = com.example.hms.utility.InvoiceBalance.dueOf(invoice); // PR 7: the patient's share
         if (amount.add(pending).compareTo(balanceDue) > 0) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.staffExceedsWithPending", amount, pending,
                 balanceDue.subtract(pending).max(BigDecimal.ZERO));
@@ -2186,13 +2264,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         claimTransition(row, invoice, PaymentStatus.CONFIRMED, PaymentStatus.REVERSED, "billing.payment.notConfirmed");
         invoice.setAmountPaid(remaining);
-        BigDecimal kept = com.example.hms.utility.InvoiceBalance.keptOf(invoice);
-        if (kept.signum() == 0) {
-            invoice.setStatus(InvoiceStatus.SENT);
-        } else {
-            invoice.setStatus(kept.compareTo(invoice.getTotalAmount()) >= 0
-                ? InvoiceStatus.PAID : InvoiceStatus.PARTIALLY_PAID);
-        }
+        // PR 7: the status follows the money held against the patient's share.
+        invoice.setStatus(com.example.hms.utility.InvoiceBalance.settledStatusOf(invoice));
         row.setStatus(PaymentStatus.REVERSED);
         row.setReversedBy(staffId);
         row.setReversedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));

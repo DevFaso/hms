@@ -91,7 +91,8 @@
 
 .order-set-item__row {
   display: grid;
-  grid-template-columns: 160px 1fr auto;
+  /* minmax(0, …): a phone-width row no longer outgrows the screen (QA D2231 class). */
+  grid-template-columns: minmax(0, 160px) minmax(0, 1fr) auto;
   gap: 0.75rem;
   align-items: end;
 

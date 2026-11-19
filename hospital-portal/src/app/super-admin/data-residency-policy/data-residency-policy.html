@@ -36,69 +36,71 @@
       </output>
     }
 
-    <table class="policy-table" data-test="policy-table">
-      <thead>
-        <tr>
-          <th>{{ 'REGION_POLICY.COL.REGION' | translate }}</th>
-          <th>{{ 'REGION_POLICY.COL.RETENTION' | translate }}</th>
-          <th>{{ 'REGION_POLICY.COL.EXPORT' | translate }}</th>
-          <th>{{ 'REGION_POLICY.COL.DEPLOYMENT' | translate }}</th>
-          <th>{{ 'REGION_POLICY.COL.UPDATED' | translate }}</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (row of rows(); track row.region) {
+    <div class="table-scroll">
+      <table class="policy-table" data-test="policy-table">
+        <thead>
           <tr>
-            <td class="region-cell">
-              <span class="region-badge" [class]="'region-badge--' + row.region.toLowerCase()">
-                {{ row.region }}
-              </span>
-              <span class="region-label">
-                {{ row.region | keyLabel: 'ORG_REGION.CODE.' }}
-              </span>
-            </td>
-            <td>
-              {{
-                row.retentionDays !== null
-                  ? row.retentionDays
-                  : ('REGION_POLICY.GLOBAL_FALLBACK' | translate)
-              }}
-            </td>
-            <td>
-              @if (!row.defaultExportFormat) {
-                {{ 'REGION_POLICY.GLOBAL_FALLBACK' | translate }}
-              } @else if (exportFormatKey(row.defaultExportFormat); as key) {
-                {{ key | translate }}
-              } @else {
-                {{ row.defaultExportFormat }}
-              }
-            </td>
-            <td>
-              {{ row.targetDeploymentUrl || ('REGION_POLICY.LOCAL_DEPLOYMENT' | translate) }}
-            </td>
-            <td class="updated-cell">
-              <div>{{ row.updatedAt | serverTime | date: 'short' }}</div>
-              <small>{{
-                isSystemActor(row.updatedBy)
-                  ? ('REGION_POLICY.SYSTEM_ACTOR' | translate)
-                  : row.updatedBy
-              }}</small>
-            </td>
-            <td>
-              <button
-                type="button"
-                class="edit-btn"
-                [attr.data-test]="'edit-' + row.region"
-                (click)="startEdit(row)"
-              >
-                {{ 'REGION_POLICY.EDIT' | translate }}
-              </button>
-            </td>
+            <th>{{ 'REGION_POLICY.COL.REGION' | translate }}</th>
+            <th>{{ 'REGION_POLICY.COL.RETENTION' | translate }}</th>
+            <th>{{ 'REGION_POLICY.COL.EXPORT' | translate }}</th>
+            <th>{{ 'REGION_POLICY.COL.DEPLOYMENT' | translate }}</th>
+            <th>{{ 'REGION_POLICY.COL.UPDATED' | translate }}</th>
+            <th></th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.region) {
+            <tr>
+              <td class="region-cell">
+                <span class="region-badge" [class]="'region-badge--' + row.region.toLowerCase()">
+                  {{ row.region }}
+                </span>
+                <span class="region-label">
+                  {{ row.region | keyLabel: 'ORG_REGION.CODE.' }}
+                </span>
+              </td>
+              <td>
+                {{
+                  row.retentionDays !== null
+                    ? row.retentionDays
+                    : ('REGION_POLICY.GLOBAL_FALLBACK' | translate)
+                }}
+              </td>
+              <td>
+                @if (!row.defaultExportFormat) {
+                  {{ 'REGION_POLICY.GLOBAL_FALLBACK' | translate }}
+                } @else if (exportFormatKey(row.defaultExportFormat); as key) {
+                  {{ key | translate }}
+                } @else {
+                  {{ row.defaultExportFormat }}
+                }
+              </td>
+              <td>
+                {{ row.targetDeploymentUrl || ('REGION_POLICY.LOCAL_DEPLOYMENT' | translate) }}
+              </td>
+              <td class="updated-cell">
+                <div>{{ row.updatedAt | serverTime | date: 'short' }}</div>
+                <small>{{
+                  isSystemActor(row.updatedBy)
+                    ? ('REGION_POLICY.SYSTEM_ACTOR' | translate)
+                    : row.updatedBy
+                }}</small>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  class="edit-btn"
+                  [attr.data-test]="'edit-' + row.region"
+                  (click)="startEdit(row)"
+                >
+                  {{ 'REGION_POLICY.EDIT' | translate }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
 
     @if (editing(); as edit) {
       <!-- QA D1230 class (round 24): the edit form closes on Escape as on

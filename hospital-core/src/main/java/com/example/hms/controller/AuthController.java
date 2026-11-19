@@ -364,8 +364,10 @@ public class AuthController {
             // A provider user (a live assignment at a pharmacy or laboratory)
             // is challenged whatever the role list says (AC-13): the token the
             // challenge mints is the only one the provider MFA gate accepts.
-            if (mfaService != null
-                    && (isMfaRequiredForUser(effectiveRoles) || isProviderUserChallenged(user.getId(), user.getUsername()))) {
+            // QA D2182: an account with an active authenticator is challenged
+            // whatever its roles. app.mfa.required-roles says who MUST enrol;
+            // having enrolled always means the code is asked at sign-in.
+            if (mfaService != null && isChallengedAtSignIn(user.getId(), user.getUsername(), effectiveRoles)) {
                 boolean mfaEnabled = mfaService.isMfaEnabled(user.getId());
                 // The roles this sign-in would mint (the one picked, or the
                 // single one held) ride the challenge to the session it opens,
@@ -392,8 +394,11 @@ public class AuthController {
                 return ResponseEntity.ok(body);
             }
 
-            String accessToken = jwtTokenProvider.generateAccessToken(descriptor);
-            String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor);
+            // QA D2184: one session id for the pair and every pair its refresh
+            // chain rotates to, so logout can revoke the whole family.
+            String sessionId = JwtTokenProvider.newSessionId();
+            String accessToken = jwtTokenProvider.generateAccessToken(descriptor, null, sessionId);
+            String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor, null, sessionId);
             log.debug("🔐 [LOGIN] Tokens generated (effectiveRoles={}); fetching profiles...", effectiveRoles);
 
             userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
@@ -699,6 +704,9 @@ public class AuthController {
                 String jti = jwtTokenProvider.getJtiFromToken(jwt);
                 long expMs = jwtTokenProvider.getExpiration(jwt).getTime();
                 username = jwtTokenProvider.getUsernameFromJWT(jwt);
+                // QA D2184: the whole sign-in session, not only this token: an
+                // access token a refresh superseded is still alive otherwise.
+                revokeSession(jwtTokenProvider.getSessionId(jwt), username, request.getRemoteAddr(), occasion);
                 if (jti != null) {
                     tokenBlacklistService.blacklist(jti, expMs);
                     log.info("[LOGOUT] Blacklisted access token jti={} ({})", jti, occasion);
@@ -755,6 +763,9 @@ public class AuthController {
                 log.warn("[LOGOUT] Refresh token not revoked: it belongs to a different user than the bearer");
                 return;
             }
+            // QA D2184: an idle client arrives with an expired bearer (no
+            // session read from it); the refresh token names the session too.
+            revokeSession(jwtTokenProvider.getSessionId(refreshToken), subject, ip, occasion);
             String jti = jwtTokenProvider.getJtiFromToken(refreshToken);
             if (jti == null) {
                 return;
@@ -771,6 +782,29 @@ public class AuthController {
         } catch (Exception ex) {
             log.debug("[LOGOUT] Could not revoke the refresh token: {}", ex.getMessage());
         }
+    }
+
+    /**
+     * QA D2184: ends the sign-in session {@code sessionId}, so every access and
+     * refresh token of it is refused (the filter and the refresh), including
+     * one a refresh superseded that this logout never saw. Kept for a refresh
+     * token's lifetime from now: no token of the session outlives that. A
+     * token minted before sessions were stamped carries none: nothing to do.
+     */
+    private void revokeSession(String sessionId, String username, String ip, String occasion) {
+        if (sessionId == null || tokenBlacklistService.isSessionRevoked(sessionId)) {
+            return;
+        }
+        tokenBlacklistService.revokeSession(sessionId,
+                System.currentTimeMillis() + jwtTokenProvider.getRefreshTokenExpirationMs());
+        log.info("[LOGOUT] Revoked session sid={} ({})", sessionId, occasion);
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.TOKEN_REVOKED)
+                .eventDescription("Session revoked on " + occasion + " (sid=" + sessionId + ")")
+                .ipAddress(ip)
+                .status(AuditStatus.SUCCESS)
+                .userName(username)
+                .build());
     }
 
     /**
@@ -797,6 +831,13 @@ public class AuthController {
         // token, which then outlives the kill switch. Refresh is rare.
         if (globalSessionRevocationService.revokesFresh(jwtTokenProvider.getIssuedAt(refreshToken))) {
             log.warn("🔄 [REFRESH] Refused — refresh token predates the last force-logout-all");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(MessageUtil.resolve(REFRESH_INVALID_MESSAGE)));
+        }
+
+        // QA D2184: its session was ended (logout, lock-screen lockout).
+        if (tokenBlacklistService.isSessionRevoked(jwtTokenProvider.getSessionId(refreshToken))) {
+            log.warn("🔄 [REFRESH] Refused — the refresh token's session was revoked");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve(REFRESH_INVALID_MESSAGE)));
         }
@@ -1016,7 +1057,11 @@ public class AuthController {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new MessageResponse(MessageUtil.resolve(REFRESH_SECOND_FACTOR_KEY)));
             }
-            String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor, secondFactor);
+            // QA D2184: the rotated pair stays in the session it continues; a
+            // refresh token minted before sessions were stamped starts one.
+            String sessionId = java.util.Optional.ofNullable(jwtTokenProvider.getSessionId(refreshToken))
+                    .orElseGet(JwtTokenProvider::newSessionId);
+            String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor, secondFactor, sessionId);
 
             // Rotate the refresh token so each use yields a fresh one
             var refreshAuth = new UsernamePasswordAuthenticationToken(
@@ -1028,7 +1073,7 @@ public class AuthController {
                     roles.stream()
                          .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
                          .toList());
-            String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth, secondFactor);
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth, secondFactor, sessionId);
 
             // ── Idle session timeout — touch on successful refresh ──────────
             // Only after the rotation has succeeded; touching pre-rotation
@@ -1741,6 +1786,18 @@ public class AuthController {
             return false;
         }
         return roles.stream().anyMatch(required::contains);
+    }
+
+    /**
+     * Whether a password sign-in must be completed with a second factor: a
+     * role in {@code app.mfa.required-roles} (which must enrol), a provider
+     * user (AC-13), or, QA D2182, any account with an active authenticator,
+     * whatever its roles: enrolling always means being asked for the code.
+     */
+    private boolean isChallengedAtSignIn(UUID userId, String username, List<String> effectiveRoles) {
+        return isMfaRequiredForUser(effectiveRoles)
+                || isProviderUserChallenged(userId, username)
+                || mfaService.isMfaEnabled(userId);
     }
 
     /** The account holds a live provider assignment, so its login is challenged (AC-13). */

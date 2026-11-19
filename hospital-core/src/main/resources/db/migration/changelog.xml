@@ -3706,6 +3706,23 @@
     </changeSet>
 
     <!-- =================================================================
+         V306 (billing-money plan PR 7, scorecard M1) - payer coverage applied
+         to the invoice: billing.invoice_payer_shares (one share per invoice
+         and coverage: amount in whole francs, coverage_year, status OPEN /
+         CLAIMED / PAID / REJECTED / CANCELLED with the decision and the
+         payer's rejection reason; one live share per invoice and coverage),
+         billing.billing_invoices.payer_share_total and
+         billing.invoice_items.payer_share_amount (NOT NULL DEFAULT 0, whole).
+         Plain idempotent DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V306-billing-invoice-payer-shares" author="hms-team" runOnChange="false">
+        <sqlFile path="V306__billing_invoice_payer_shares.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V317 (imaging, option B) - hospital.hospitals PACS connection:
          pacs_enabled, pacs_dicomweb_base_url, pacs_auth_username and
          pacs_auth_password (AES-GCM ciphertext, never returned by the API).

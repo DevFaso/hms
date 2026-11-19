@@ -413,4 +413,43 @@ class PdfInvoiceServiceTest {
             .itemCategory(ItemCategory.SERVICE).quantity(1)
             .unitPrice(new BigDecimal("0.00")).totalPrice(new BigDecimal("0.00")).build();
     }
+
+    /**
+     * Billing-money plan PR 7: an invoice a payer covers prints "Part assureur / Part patient" under the total, and
+     * the balance is the patient's; a share the payer rejected is printed with its reason.
+     */
+    @Test
+    void anInsuredInvoicePrintsBothSharesAndARejectedShareWithItsReason_pr7() throws Exception {
+        invoice.setTotalAmount(new BigDecimal("8500.00"));
+        invoice.setAmountPaid(BigDecimal.ZERO);
+        invoice.setPayerShareTotal(new BigDecimal("5600.00"));
+
+        String covered = textOf(service.generateInvoicePdf(invoice, items, List.of(), List.of(), List.of(),
+            Locale.FRENCH));
+        assertThat(covered).contains("pdf.invoice.payerShare 5", "pdf.invoice.patientShare 2",
+            "pdf.invoice.balanceDue 2");
+
+        invoice.setPayerShareTotal(BigDecimal.ZERO);
+        String rejected = textOf(service.generateInvoicePdf(invoice, items, List.of(), List.of(),
+            List.of(new com.example.hms.payload.dto.billing.InvoicePayerShareDTO(UUID.randomUUID(), "RAMU",
+                "Formule Base", new BigDecimal("5600"), 2026, "REJECTED", "Hors délai", null, null)),
+            Locale.FRENCH));
+        assertThat(rejected).contains("pdf.invoice.payerShareRejected", "Hors délai")
+            .doesNotContain("pdf.invoice.payerShare 5");
+    }
+
+    /** Billing-money plan PR 7: a receipt's balance is the patient's share then, less what was paid then. */
+    @Test
+    void aReceiptOfAnInsuredInvoiceShowsThePatientsBalanceThen_pr7() throws Exception {
+        PaymentTransaction payment = PaymentTransaction.builder()
+            .amount(new BigDecimal("2000.00")).paymentDate(LocalDate.of(2026, 11, 17))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.CONFIRMED)
+            .invoiceTotalAtReceipt(new BigDecimal("8500.00")).build();
+        payment.setId(UUID.randomUUID());
+
+        String text = textOf(service.generateReceiptPdf(invoice, payment, "INV-2042-R1", new BigDecimal("2000.00"),
+            null, new BigDecimal("5600.00"), false, Locale.FRENCH));
+
+        assertThat(text).contains("pdf.invoice.payerShare 5", "pdf.invoice.patientShare 2", "pdf.invoice.balanceDue 900");
+    }
 }

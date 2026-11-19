@@ -484,6 +484,31 @@ describe('PatientPortalService invoices', () => {
   });
 });
 
+describe('mapPortalInvoice (billing-money plan PR 7)', () => {
+  it('reads the insurer share, my share and the shares, with whole amounts', () => {
+    const mapped = mapPortalInvoice({
+      id: 'bc2',
+      totalAmount: 8500,
+      amountPaid: 0,
+      balanceDue: 2900,
+      insuranceCoverageAmount: 5600,
+      patientResponsibilityAmount: 2900,
+      payerShares: [{ id: 's1', amount: '5600' as unknown as number, status: 'OPEN' }],
+    });
+    expect(mapped.payerShare).toBe(5600);
+    expect(mapped.patientShare).toBe(2900);
+    expect(mapped.balance).toBe(2900);
+    expect(mapped.payerShares?.[0].amount).toBe(5600);
+  });
+
+  it('an invoice no insurer covers is all mine', () => {
+    const mapped = mapPortalInvoice({ id: 'x', totalAmount: 900, amountPaid: 0 });
+    expect(mapped.payerShare).toBe(0);
+    expect(mapped.patientShare).toBe(900);
+    expect(mapped.payerShares).toEqual([]);
+  });
+});
+
 describe('mapPortalInvoice (QA D1421)', () => {
   it('names the visit by type and day, and reads nothing else of the encounter', () => {
     const planted = {

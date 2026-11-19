@@ -89,6 +89,14 @@ public class JwtTokenProvider {
     /** The roles a user picked at login, carried by the MFA challenge token to the session it opens. */
     static final String MFA_SELECTED_ROLES_CLAIM = "sel_roles";
 
+    /**
+     * QA D2184: the sign-in session a token belongs to. Every access and
+     * refresh token one sign-in mints, and every pair its refresh chain
+     * rotates to, carries the same value, so logout revokes the whole family
+     * ({@link TokenBlacklistService#revokeSession}), not only the tokens it is shown.
+     */
+    public static final String SESSION_ID_CLAIM = "sid";
+
     private final HospitalUserDetailsService userDetailsService;
     private final TenantRoleAssignmentAccessor tenantRoleAssignmentAccessor;
 
@@ -306,6 +314,16 @@ public class JwtTokenProvider {
      * refresh token was minted with, may pass a time.
      */
     public String generateAccessToken(TokenUserDescriptor descriptor, Instant secondFactorAt) {
+        return generateAccessToken(descriptor, secondFactorAt, null);
+    }
+
+    /**
+     * {@link #generateAccessToken(TokenUserDescriptor, Instant)} for the sign-in
+     * session {@code sessionId} ({@link #SESSION_ID_CLAIM}). Every production
+     * caller that opens or continues a session passes one (guarded by
+     * SessionIdMintingGuardTest), so logout can revoke the family.
+     */
+    public String generateAccessToken(TokenUserDescriptor descriptor, Instant secondFactorAt, String sessionId) {
         Objects.requireNonNull(descriptor, "descriptor is required");
         UUID userId = descriptor.userId();
 
@@ -328,6 +346,9 @@ public class JwtTokenProvider {
             claims.put("uid", userId.toString());
         }
         claims.putAll(secondFactorClaims(secondFactorAt));
+        if (StringUtils.hasText(sessionId)) {
+            claims.put(SESSION_ID_CLAIM, sessionId);
+        }
         return Jwts.builder()
             .id(UUID.randomUUID().toString())
             .subject(descriptor.username())
@@ -410,6 +431,11 @@ public class JwtTokenProvider {
      * so the access tokens it later mints keep it until it is too old.
      */
     public String generateRefreshToken(Authentication authentication, Instant secondFactorAt) {
+        return generateRefreshToken(authentication, secondFactorAt, null);
+    }
+
+    /** {@link #generateRefreshToken(Authentication, Instant)} for the sign-in session {@code sessionId}. */
+    public String generateRefreshToken(Authentication authentication, Instant secondFactorAt, String sessionId) {
         HospitalUserDetails userDetails = (HospitalUserDetails) authentication.getPrincipal();
 
         List<String> roles = userDetails.getAuthorities().stream()
@@ -425,6 +451,7 @@ public class JwtTokenProvider {
             .subject(userDetails.getUsername())
             .claim(ROLES_CLAIM, roles)
             .claims(secondFactorClaims(secondFactorAt))
+            .claims(sessionClaim(sessionId))
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(signingKey)
@@ -442,6 +469,11 @@ public class JwtTokenProvider {
 
     /** {@link #generateRefreshToken(TokenUserDescriptor)}, carrying the second factor verified at {@code secondFactorAt}. */
     public String generateRefreshToken(TokenUserDescriptor descriptor, Instant secondFactorAt) {
+        return generateRefreshToken(descriptor, secondFactorAt, null);
+    }
+
+    /** {@link #generateRefreshToken(TokenUserDescriptor, Instant)} for the sign-in session {@code sessionId}. */
+    public String generateRefreshToken(TokenUserDescriptor descriptor, Instant secondFactorAt, String sessionId) {
         Objects.requireNonNull(descriptor, "descriptor is required");
 
         List<String> roles = descriptor.roles() != null
@@ -457,6 +489,7 @@ public class JwtTokenProvider {
             .subject(descriptor.username())
             .claim(ROLES_CLAIM, roles)
             .claims(secondFactorClaims(secondFactorAt))
+            .claims(sessionClaim(sessionId))
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(signingKey)
@@ -889,6 +922,37 @@ public class JwtTokenProvider {
     public Date getExpiration(String token) {
         return jwtParser()
             .parseSignedClaims(token).getPayload().getExpiration();
+    }
+
+    /** A new sign-in session id ({@link #SESSION_ID_CLAIM}). */
+    public static String newSessionId() {
+        return UUID.randomUUID().toString();
+    }
+
+    private static Map<String, Object> sessionClaim(String sessionId) {
+        return StringUtils.hasText(sessionId) ? Map.of(SESSION_ID_CLAIM, sessionId) : Map.of();
+    }
+
+    /**
+     * The sign-in session a token belongs to ({@link #SESSION_ID_CLAIM}), or
+     * {@code null} for a token minted before sessions were stamped, or one
+     * that does not parse (expired, tampered).
+     */
+    public String getSessionId(String token) {
+        if (!StringUtils.hasText(token)) {
+            return null;
+        }
+        try {
+            Object sid = jwtParser().parseSignedClaims(token).getPayload().get(SESSION_ID_CLAIM);
+            return sid instanceof String value && StringUtils.hasText(value) ? value : null;
+        } catch (RuntimeException unparsable) {
+            return null;
+        }
+    }
+
+    /** The refresh token lifetime: how long a revoked session can still have a live token. */
+    public long getRefreshTokenExpirationMs() {
+        return refreshTokenExpirationMs;
     }
 
     /**

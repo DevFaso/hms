@@ -94,6 +94,15 @@
                   >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }} {{ inv.balance | cfa }}</span
                 >
               }
+              @if (inv.payerShare) {
+                <!-- Billing-money plan PR 7: what my insurer pays, and my share -->
+                {{ ' '
+                }}<span class="pli-meta" [attr.data-testid]="'payer-share-' + inv.id"
+                  >{{ 'PORTAL.BILLING.PAYER_SHARE' | translate }} {{ inv.payerShare | cfa }} ·
+                  {{ 'PORTAL.BILLING.PATIENT_SHARE' | translate }}
+                  {{ inv.patientShare | cfa }}</span
+                >
+              }
               @if (inv.refundDue) {
                 {{ ' '
                 }}<span class="pli-meta" [attr.data-testid]="'refund-due-' + inv.id"
@@ -247,6 +256,23 @@
                             {{ 'PORTAL.BILLING.DOWNLOAD_RECEIPT' | translate }}
                           </button>
                         }
+                      </li>
+                    }
+                  </ul>
+                }
+                @if (rejectedShares(d).length > 0) {
+                  <!-- Billing-money plan PR 7: a share my insurer refused is mine to pay, with its reason. -->
+                  <ul class="detail-payments" data-testid="portal-rejected-shares">
+                    @for (share of rejectedShares(d); track share.id) {
+                      <li [attr.data-testid]="'rejected-share-' + share.id">
+                        <span>{{
+                          'PORTAL.BILLING.PAYER_SHARE_REJECTED'
+                            | translate
+                              : {
+                                  amount: (share.amount | cfa),
+                                  reason: share.rejectionReason ?? '',
+                                }
+                        }}</span>
                       </li>
                     }
                   </ul>

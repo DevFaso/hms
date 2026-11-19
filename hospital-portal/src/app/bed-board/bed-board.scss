@@ -395,8 +395,16 @@
   gap: 6px;
 }
 
+/* QA D2280 (r63): the destination ward ran over the reason at 1024/768;
+   the route wraps inside its own column instead. */
+.transfer-worklist li > * {
+  min-width: 0;
+}
+
 .transfer-route {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 6px;
   font-size: 0.85rem;

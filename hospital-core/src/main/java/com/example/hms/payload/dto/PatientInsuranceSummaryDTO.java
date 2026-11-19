@@ -6,7 +6,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Getter
@@ -25,8 +24,7 @@ public class PatientInsuranceSummaryDTO {
     private String subscriberRelationship;
     private LocalDate effectiveDate;
     private LocalDate expirationDate;
-    private BigDecimal coverageAmount; // Amount covered by this insurance
-    private BigDecimal coPayAmount; // Co-pay amount
-    private BigDecimal coInsurancePercentage; // Co-insurance percentage
-    private BigDecimal deductibleRemaining; // Remaining deductible
+    // Billing-money plan PR 7: coverageAmount, coPayAmount, coInsurancePercentage and deductibleRemaining were
+    // dropped: they were always 0. What a coverage pays on an invoice is the invoice's payer share
+    // (BillingInvoiceResponseDTO.insuranceCoverageAmount and payerShares).
 }

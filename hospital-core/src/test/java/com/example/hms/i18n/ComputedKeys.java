@@ -227,6 +227,9 @@ final class ComputedKeys {
         // TRANSFUSION_PRODUCT link is a PriceListSystemKey / BloodProductType name (PriceListLinks#normalise).
         r.put("com/example/hms/service/billing/PriceListLinks.java|\"billing.priceList.systemKey.\" + storedKey",
             enumValues("billing.priceList.systemKey.", com.example.hms.enums.PriceListSystemKey.class));
+        // Billing-money plan PR 7: a payer share that cannot take a decision names its status.
+        r.put("com/example/hms/service/billing/InvoiceCoverageService.java|\"billing.payerShare.status.\" + share.getStatus().name()",
+            enumValues("billing.payerShare.status.", com.example.hms.enums.PayerShareStatus.class));
         site(r, d, "com/example/hms/service/billing/PriceListLinks.java|\"transfusion.productType.\" + storedKey",
             "TransfusionChargeSource.java|transfusion.productType.");
         // QA D1901: renders a stored billing code; every code is written by a BillingText.of literal site of

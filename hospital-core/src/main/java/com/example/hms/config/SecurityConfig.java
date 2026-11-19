@@ -73,6 +73,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 import static com.example.hms.config.SecurityConstants.ROLE_SURGEON;
 import static com.example.hms.config.SecurityConstants.ROLE_BILLING_SPECIALIST;
 import static com.example.hms.config.SecurityConstants.ROLE_ACCOUNTANT;
+import static com.example.hms.config.SecurityConstants.ROLE_CLAIMS_REVIEWER;
 import static com.example.hms.config.SecurityConstants.ROLE_ADMIN;
 
 @Configuration
@@ -914,6 +915,14 @@ public class SecurityConfig {
                 // the body is validated (a nurse saw 400 field errors first).
                 .requestMatchers(HttpMethod.POST, "/pharmacy/payments")
                 .hasAnyAuthority(ROLE_PHARMACIST, ROLE_BILLING_SPECIALIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
+                // Billing-money plan PR 7: an invoice's payer shares, read and decided by the claims reviewer too
+                // (plan 3.8, bordereau row); mirrors InvoicePayerShareController. Before the broader patterns.
+                .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES + "/*/payer-shares")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST,
+                    ROLE_CLAIMS_REVIEWER)
+                .requestMatchers(HttpMethod.POST, API_BILLING_INVOICES + "/*/payer-shares/*/*")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST, ROLE_CLAIMS_REVIEWER)
 
                 .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST, ROLE_DOCTOR)
