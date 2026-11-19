@@ -74,3 +74,20 @@ test('triage requires an active nurse role rather than expanded administrative a
     /canTriage\(\): boolean \{\s*return this\.roleContext\.hasAnyActiveRole\(\['ROLE_NURSE'\]\);/,
   );
 });
+
+// The raw-enum guard pin covers only these two traced human-entered names.
+test('pinned nursing name options remain free-text department and clinician choices', () => {
+  assert.equal([...html.matchAll(/<option \[value\]="name">/g)].length, 2);
+  for (const list of ['boardDepartments', 'boardClinicians']) {
+    assert.ok(html.includes(`@for (name of ${list}(); track name)`));
+  }
+  const dto = readFileSync(
+    new URL(
+      '../../../hospital-core/src/main/java/com/example/hms/payload/dto/nurse/NurseWorkboardPatientDTO.java',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  assert.match(dto, /String departmentName;/);
+  assert.match(dto, /String attendingDoctor;/);
+});
