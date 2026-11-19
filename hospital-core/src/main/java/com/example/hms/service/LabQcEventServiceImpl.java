@@ -66,6 +66,13 @@ public class LabQcEventServiceImpl implements LabQcEventService {
                 request.getHospitalId(), testDef.getId(), level).orElse(null);
         }
 
+        // r63 D2304: a run is "latest" by its time, and the latest run per level decides
+        // whether results are held, so a run is never dated in the future.
+        if (request.getRecordedAt() != null
+            && request.getRecordedAt().isAfter(LocalDateTime.now().plusMinutes(5))) {
+            throw new FieldBusinessException("recordedAt", "lab.qc.recordedAtFuture");
+        }
+
         // r63 D2304: the expected value is the director's target mean when one is set.
         java.math.BigDecimal expectedValue = request.getExpectedValue() != null
             ? request.getExpectedValue()

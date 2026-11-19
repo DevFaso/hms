@@ -135,7 +135,7 @@ public class LabTestDefinitionMapper {
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }
 
-    private List<LabTestReferenceRangeDTO> mapToDtoRanges(List<LabTestReferenceRange> ranges) {
+    static List<LabTestReferenceRangeDTO> mapToDtoRanges(List<LabTestReferenceRange> ranges) {
         if (ranges == null || ranges.isEmpty()) {
             return Collections.emptyList();
         }
@@ -174,7 +174,8 @@ public class LabTestDefinitionMapper {
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }
 
-    private List<LabTestComponentDTO> mapToDtoComponents(List<LabTestComponent> components) {
+    /** r63: also used by the order payload, so result entry knows a panel's components. */
+    public static List<LabTestComponentDTO> mapToDtoComponents(List<LabTestComponent> components) {
         if (components == null || components.isEmpty()) {
             return Collections.emptyList();
         }
