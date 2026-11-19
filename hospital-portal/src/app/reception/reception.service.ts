@@ -213,6 +213,8 @@ export interface CheckInRequest {
   copayReference?: string | null;
   /** Billing plan PR 9: Orange Money, Moov Money or another operator, for a Mobile Money copay. */
   copayMobileMoneyOperator?: MobileMoneyOperator | null;
+  /** Billing plan PR 11 (QA D2430): one key per check-in dialog, sent with a copay. */
+  copayClientRequestId?: string;
   /** QA D1415: required by the server, so required here: a caller cannot forget the attestation. */
   identityConfirmed: boolean;
   insuranceVerified?: boolean;
@@ -294,12 +296,15 @@ export class ReceptionService {
     method = 'CASH',
     reference?: string,
     mobileMoneyOperator?: MobileMoneyOperator,
+    clientRequestId?: string,
   ): Observable<unknown> {
     return this.http.post(`/billing-invoices/${invoiceId}/payments`, {
       amount,
       method,
       ...(reference ? { reference } : {}),
       ...(mobileMoneyOperator ? { mobileMoneyOperator } : {}),
+      // Billing plan PR 11 (QA D2430): one key per pay dialog; a retry with it records nothing twice.
+      ...(clientRequestId ? { clientRequestId } : {}),
     });
   }
 

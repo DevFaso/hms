@@ -14572,5 +14572,9 @@
       "CARD_ACTION": "Configurar el PACS",
       "BASE_URL_REQUIRED": "Introduzca la dirección DICOMweb del PACS para activar el visor."
     }
+  },
+  "PAYMENT_OUTCOME": {
+    "UNKNOWN": "The server's answer did not arrive. The payment may already be recorded: press the button again (it will not be counted twice) or check the payment list.",
+    "CHECK_IN_UNKNOWN": "The server's answer did not arrive. The arrival and its copay may already be recorded: press the button again (nothing will be counted twice) or check the queue."
   }
 }

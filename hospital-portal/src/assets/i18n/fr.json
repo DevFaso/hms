@@ -14572,5 +14572,9 @@
       "CARD_ACTION": "Configurer le PACS",
       "BASE_URL_REQUIRED": "Saisissez l'adresse DICOMweb du PACS pour activer la visionneuse."
     }
+  },
+  "PAYMENT_OUTCOME": {
+    "UNKNOWN": "La réponse du serveur n'est pas arrivée. Le paiement est peut-être déjà enregistré : appuyez de nouveau sur le bouton (il ne sera pas compté deux fois) ou vérifiez la liste des paiements.",
+    "CHECK_IN_UNKNOWN": "La réponse du serveur n'est pas arrivée. L'arrivée et sa participation sont peut-être déjà enregistrées : appuyez de nouveau sur le bouton (rien ne sera compté deux fois) ou vérifiez la file d'attente."
   }
 }

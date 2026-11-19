@@ -698,6 +698,8 @@ export interface PharmacyPaymentRequest {
   mobileMoneyOperator?: MobileMoneyOperator;
   receivedBy: string;
   notes?: string;
+  /** Billing plan PR 11 (QA D2430): one key per checkout; a retry with it records nothing twice. */
+  clientRequestId?: string;
 }
 
 export interface PharmacyPaymentResponse {

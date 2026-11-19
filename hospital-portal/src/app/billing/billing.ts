@@ -60,6 +60,12 @@ import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.com
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { amountStillDue, pendingDeclared } from '../shared/payment-prefill';
 import { refusalReason } from '../shared/refusal-reason';
+import {
+  newPaymentRequestKey,
+  paymentOutcomeUnknown,
+  PAYMENT_OUTCOME_UNKNOWN_KEY,
+  retryPaymentWithSameKey,
+} from '../shared/payment-request-key';
 import { joinReasons } from '../shared/required-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { serverFieldErrors } from '../shared/forms/server-field-errors';
@@ -283,6 +289,8 @@ export class BillingComponent implements OnInit {
   readonly operatorLabelKey = mobileMoneyOperatorLabelKey;
   readonly isMobileMoney = isMobileMoney;
   paymentSaving = signal(false);
+  /** Billing plan PR 11 (QA D2430): one key per opening of the payment dialog, sent with every press. */
+  paymentKey: string | undefined;
   readonly paymentMethods: StaffPaymentMethod[] = STAFF_PAYMENT_METHODS;
 
   /* ── Adjustments (detail panel, QA D974) ── */
@@ -1319,6 +1327,7 @@ export class BillingComponent implements OnInit {
   paymentPending = signal(0);
 
   openPayment(inv: BillingInvoiceResponse): void {
+    this.paymentKey = newPaymentRequestKey();
     this.paymentInv.set(inv);
     this.paymentAmount.set(inv.balanceDue ?? null);
     this.paymentPending.set(0);
@@ -1372,32 +1381,46 @@ export class BillingComponent implements OnInit {
     const reference = this.paymentReference().trim();
     this.paymentSaving.set(true);
     const operator = isMobileMoney(this.paymentMethod()) ? this.paymentOperator() : null;
+    const key = this.paymentKey;
     const payment = {
       amount,
       method: this.paymentMethod(),
       reference: reference || undefined,
       ...(operator ? { mobileMoneyOperator: operator } : {}),
+      ...(key ? { clientRequestId: key } : {}),
     };
-    this.billingService.recordPayment(inv.id, payment).subscribe({
-      next: (updated) => {
-        this.paymentSaving.set(false);
-        this.toast.success(this.translate.instant('BILLING.PAYMENT_RECORDED'));
-        this.closePayment();
-        this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
-        this.refreshStats();
-        this.applyFilter();
-        if (this.selectedInvoice()?.id === updated.id) {
-          this.selectedInvoice.set(updated);
-          this.loadPayments(updated.id);
-        }
-      },
-      error: (err: HttpErrorResponse) => {
-        this.paymentSaving.set(false);
-        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.PAYMENT_FAILED'));
-        // QA D1466: a refusal may have credited the copay: the row must say what stands now.
-        this.loadInvoices(this.page());
-      },
-    });
+    this.billingService
+      .recordPayment(inv.id, payment)
+      .pipe(retryPaymentWithSameKey(key))
+      .subscribe({
+        next: (updated) => {
+          this.paymentSaving.set(false);
+          this.toast.success(this.translate.instant('BILLING.PAYMENT_RECORDED'));
+          this.closePayment();
+          this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+          this.refreshStats();
+          this.applyFilter();
+          if (this.selectedInvoice()?.id === updated.id) {
+            this.selectedInvoice.set(updated);
+            this.loadPayments(updated.id);
+          }
+        },
+        error: (err: HttpErrorResponse) => {
+          this.paymentSaving.set(false);
+          if (paymentOutcomeUnknown(err)) {
+            // QA D2430: no answer is not a failure. The dialog stays open with the same key, so pressing
+            // again cannot take the money twice; the list below is re-read to show what the server holds.
+            this.toast.warning(this.translate.instant(PAYMENT_OUTCOME_UNKNOWN_KEY));
+          } else {
+            this.toast.error(
+              err.error?.message ?? this.translate.instant('BILLING.PAYMENT_FAILED'),
+            );
+          }
+          // QA D1466: a refusal may have credited the copay: the row must say what stands now.
+          this.loadInvoices(this.page());
+          if (this.selectedInvoice()?.id === inv.id) this.loadPayments(inv.id);
+        },
+      });
   }
 
   /** The payment form's refused fields, each with its reason (empty: it may be sent). */

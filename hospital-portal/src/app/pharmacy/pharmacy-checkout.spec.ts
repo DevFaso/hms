@@ -64,6 +64,17 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
     return c;
   }
 
+  it('PR 11 (QA D2430): every press for one dispense carries the same key', () => {
+    const c = create(3600, false);
+    svc.createPayment.and.returnValue(of({ data: { id: 'pay-1' } }) as never);
+    c.submit();
+    const first = svc.createPayment.calls.mostRecent().args[0].clientRequestId;
+    expect(first).toEqual(jasmine.any(String));
+    c.loadDispense(); // the same dispense loaded again keeps its key
+    c.submit();
+    expect(svc.createPayment.calls.mostRecent().args[0].clientRequestId).toBe(first);
+  });
+
   it('takes the amount from the dispense charge and fixes it', () => {
     const c = create(2250);
     expect(c.amount).toBe(2250);

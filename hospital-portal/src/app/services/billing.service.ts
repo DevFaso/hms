@@ -185,6 +185,8 @@ export interface StaffPaymentRequest {
   notes?: string;
   /** Billing plan PR 9: required by the server when the method is MOBILE_MONEY. */
   mobileMoneyOperator?: MobileMoneyOperator;
+  /** Billing plan PR 11 (QA D2430): one key per payment dialog; a retry with it records nothing twice. */
+  clientRequestId?: string;
 }
 
 export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED';
