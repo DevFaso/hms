@@ -21,9 +21,25 @@ import type { Page } from '@playwright/test';
  *  A control inside a table row (`td`) is held to more: it must be on screen
  *  without scrolling its table sideways at all (QA D2321: the invoice list's
  *  pay / e-mail / edit buttons sat past a scrollbar at the bottom of the rows).
+ *
+ *  r64 (D2461 / D2462) adds three:
+ *  - `hidden-columns`  at 1024 px and wider, a table column is past the edge of
+ *                      its scroll box or under the sticky actions column;
+ *  - `no-scroll-cue`   narrower, a table scrolls in place with nothing showing
+ *                      that it does (no sticky-cell shadow, no fading edge);
+ *  - `dialog-overflow` a dialog is wider than the screen;
+ *  - `squeezed-text`   a text box squeezed so narrow it prints one letter per
+ *                      line (D2431: nothing spills, so `text-overflow` misses it).
  */
 export interface LayoutOffender {
-  kind: 'page-hscroll' | 'clipped' | 'text-overflow';
+  kind:
+    | 'page-hscroll'
+    | 'clipped'
+    | 'text-overflow'
+    | 'hidden-columns'
+    | 'no-scroll-cue'
+    | 'dialog-overflow'
+    | 'squeezed-text';
   selector: string;
   detail: string;
 }
@@ -175,6 +191,30 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
       );
       const cardLike = /(^|\s)[\w-]*(card|kpi|stat|tile|metric)[\w-]*(\s|$)/.test(cls);
       if (!ownText && !cardLike) return;
+      // QA D2431 (r64): a text box squeezed to a sliver prints one letter per
+      // line (the insured invoice card on a phone). Nothing spills, so the
+      // overflow test below cannot see it: a box with words in it, narrower
+      // than three letters and taller than four lines, is a failure.
+      if (ownText && (el.textContent ?? '').trim().length >= 6) {
+        const box = el.getBoundingClientRect();
+        const st = getComputedStyle(el);
+        const font = parseFloat(st.fontSize) || 14;
+        const line = parseFloat(st.lineHeight) || font * 1.3;
+        if (
+          box.height > 1 &&
+          box.width < font * 2 &&
+          box.height > line * 4 &&
+          st.writingMode.startsWith('horizontal') &&
+          !el.closest('[hidden], [aria-hidden="true"], .sr-only, .visually-hidden')
+        ) {
+          push(
+            'squeezed-text',
+            el,
+            `${Math.round(box.width)}px wide, ${Math.round(box.height)}px tall: one letter per line`,
+          );
+          return;
+        }
+      }
       if (el.scrollWidth <= el.clientWidth + 1 || el.clientWidth === 0) return;
       const style = getComputedStyle(el);
       if (style.display === 'inline' || style.display === 'contents') return;
@@ -191,11 +231,81 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
       );
     });
 
-    return out as {
-      kind: 'page-hscroll' | 'clipped' | 'text-overflow';
-      selector: string;
-      detail: string;
-    }[];
+    // (d) QA D2462 / D2321 / D2400 / D2436 (r64): a table wider than its scroll
+    // box. At a desktop width (1024 px and up) every column must be on screen —
+    // the sticky actions column must not sit over Statut and the money columns.
+    // Narrower, the table may scroll in place, but only with a visible cue: the
+    // sticky actions cell's shadow, or the scroll box's fading edge (styles.scss,
+    // "scroll cue"). A column under the sticky cell counts as hidden.
+    const desktop = window.innerWidth >= 1024;
+    document.querySelectorAll('table').forEach((table) => {
+      if (!visible(table)) return;
+      let scroller: Element | null = table.parentElement;
+      while (scroller && scroller !== document.body) {
+        if (scroller.classList.contains('content')) return; // page scroll: rule (a)
+        const ox = getComputedStyle(scroller).overflowX;
+        if (ox !== 'visible' && ox !== 'clip') break;
+        scroller = scroller.parentElement;
+      }
+      if (!scroller || scroller === document.body) return;
+      if (scroller.scrollWidth <= scroller.clientWidth + 1) return;
+      const box = scroller.getBoundingClientRect();
+      const viewRight = box.left + scroller.clientLeft + scroller.clientWidth;
+      const head = table.tHead?.rows[0] ?? table.rows[0];
+      if (!head) return;
+      const cells = Array.from(head.cells);
+      const sticky = cells.filter((c) => getComputedStyle(c).position === 'sticky');
+      const edge = Math.min(viewRight, ...sticky.map((c) => c.getBoundingClientRect().left));
+      const hidden = cells
+        .filter((c) => !sticky.includes(c) && c.getBoundingClientRect().right > edge + 2)
+        .map((c) => (c.textContent ?? '').replace(/\s+/g, ' ').trim() || '(no header)');
+      if (!hidden.length) return;
+      if (desktop) {
+        push(
+          'hidden-columns',
+          table,
+          `columns ${hidden.join(', ')} hidden in ${describe(scroller)} at a desktop width ` +
+            `(table ${scroller.scrollWidth}px in ${scroller.clientWidth}px; ` +
+            cells
+              .map(
+                (c) =>
+                  `${(c.textContent ?? '').trim().slice(0, 14)} ${Math.round(c.getBoundingClientRect().width)}`,
+              )
+              .join(' | ') +
+            ')',
+        );
+        return;
+      }
+      const shadowed = sticky.some((c) => getComputedStyle(c).boxShadow !== 'none');
+      const faded =
+        parseFloat(getComputedStyle(scroller).getPropertyValue('--scroll-fade') || '0') > 0;
+      if (!shadowed && !faded) {
+        push(
+          'no-scroll-cue',
+          table,
+          `columns ${hidden.join(', ')} scroll in ${describe(scroller)} with no visible cue`,
+        );
+      }
+    });
+
+    // (e) QA D2461 (r64): a dialog is never wider than the screen.
+    document
+      .querySelectorAll(
+        '[role="dialog"], [aria-modal="true"], .modal, .modal-content, .modal-panel, .modal-card, .modal-box, .dialog-box, .dialog-panel',
+      )
+      .forEach((el) => {
+        if (!visible(el)) return;
+        const rect = el.getBoundingClientRect();
+        if (rect.left < -1 || rect.right > window.innerWidth + 1) {
+          push(
+            'dialog-overflow',
+            el,
+            `dialog ${Math.round(rect.width)}px spans ${Math.round(rect.left)}–${Math.round(rect.right)}px in a ${window.innerWidth}px screen`,
+          );
+        }
+      });
+
+    return out as LayoutOffender[];
   });
 }
 
